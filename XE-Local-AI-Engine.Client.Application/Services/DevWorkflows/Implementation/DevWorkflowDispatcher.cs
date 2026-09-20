@@ -8,21 +8,16 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     The workflow runtime's one loop. It advances a persisted run by transitioning persisted node runs, holding no
-///     authoritative state of its own — the parsed-graph cache is a cost optimisation and nothing else, which is exactly
-///     why a restart costs at most the work in flight.
-///     <para>
-///         <b>Every node-run status write happens inside a serialized <see cref="AdvanceOnceAsync" /> call.</b> That is
-///         the invariant the whole design rests on: lane work, when it exists, only produces a pollable result and never
-///         transitions a row itself, so the only other writer to a run is the human-decision path — which is what the
-///         store's <c>Any</c> version sentinel exists for.
-///     </para>
-///     <para>
-///         Advancement is a pure database decision and takes microseconds, so one loop for every run is enough and gives
-///         one place where graph invariants are decided. Seam if the run count ever justifies it: partition by run id.
-///         Nothing here assumes it is alone.
-///     </para>
+///     The workflow runtime's one loop: it advances a persisted run by transitioning persisted node runs and holds no
+///     authoritative state, which is why a restart costs at most the work in flight.
 /// </summary>
+/// <remarks>
+///     The parsed-graph cache is a cost optimisation and nothing else. Every node-run status write happens inside a
+///     serialized <see cref="AdvanceOnceAsync" /> call — the invariant the design rests on: lane work only produces a
+///     pollable result and never transitions a row itself, so the only other writer to a run is the human-decision
+///     path, which the store's <c>Any</c> version sentinel exists for. Advancement is a pure database decision taking
+///     microseconds, so one loop serves every run. See docs/wiki/25-dev-workflows.md ("The order of a tick").
+/// </remarks>
 internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHostedService, IAsyncDisposable
 {
     /// <summary>The statuses a sweep looks at. Paused and the three terminals are not advanced by a tick.</summary>
@@ -50,10 +45,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     private const int SweepPageSize = 500;
 
     /// <summary>
-    ///     How much of an operator's decision comment reaches the node run's <c>terminal_reason</c>. The column holds
-    ///     1024 and the comment is free text a person typed, so it is cut here rather than at the store's rejection —
-    ///     a decision that could not be applied because someone was verbose is the wrong way for a run to stop.
+    ///     How much of an operator's decision comment reaches the node run's <c>terminal_reason</c>.
     /// </summary>
+    /// <remarks>
+    ///     The column holds 1024 and the comment is free text a person typed, so it is cut here rather than at the
+    ///     store's rejection: a decision that could not be applied because someone was verbose is the wrong way for a
+    ///     run to stop.
+    /// </remarks>
     private const int MaxDecisionComment = 500;
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
@@ -158,11 +156,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     /// <summary>
     ///     Advances one run by one tick, and answers how many transitions it wrote — zero meaning the run is quiescent.
-    ///     <para>
-    ///         The testable seam, and a design requirement rather than an afterthought: the production loop is a thin
-    ///         wrapper around it, so no test ever has to wait on a timer or race a background task.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The testable seam, and a design requirement rather than an afterthought: the production loop is a thin
+    ///     wrapper around it, so no test ever has to wait on a timer or race a background task.
+    /// </remarks>
     internal async Task<int> AdvanceOnceAsync(Guid runId, CancellationToken cancellationToken)
     {
         await _advanceGate.WaitAsync(cancellationToken);
@@ -217,26 +215,22 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return await FailUnroutableAsync(store, run, exception, cancellationToken);
         }
 
-        // Settle what the lanes have landed FIRST, before anything reads the node runs: a session that finished between
-        // ticks has to be seen as finished, or the run would judge its whole graph against a row that is only still
-        // Running because nothing asked.
+        // Settle what the lanes have landed FIRST, before anything reads the node runs: a session that finished between ticks has to be seen as finished, or the run would judge its
+        // whole graph against a row that is only still Running because nothing asked.
         var written = await PollAsync(store, lanes, graph, run, cancellationToken);
         var nodeRuns = await store.ListNodeRunsAsync(runId, cancellationToken);
 
-        // Settle what has landed. A recorded decision is the durable half of a human act; turning it into a transition
-        // is this step's job, and doing it here rather than at admission is what lets a decision taken during a pause
-        // apply on the first tick after the resume.
+        // A recorded decision is the durable half of a human act; turning it into a transition is this step's job, and doing it here rather than at admission is what lets a decision
+        // taken during a pause apply on the first tick after the resume.
         var (settledCount, gateRejection) = await SettleDecisionsAsync(store, run, graph, nodeRuns, cancellationToken);
         written += settledCount;
 
-        // Only an in-flight cancel supersedes it. A PAUSING run must still take this branch: the gate is already
-        // Succeeded by the time the pause settles, so nothing would ever re-detect the rejection and the run would
-        // resume and complete — the exact lie the rule exists to prevent.
+        // Only an in-flight cancel supersedes it. A PAUSING run must still take this branch: the gate is already Succeeded by the time the pause settles, so nothing would re-detect the
+        // rejection and the run would resume and complete — the exact lie the rule exists to prevent.
         if (gateRejection is { } rejection && run.Status != DevWorkflowRunStatus.Cancelling)
         {
-            // A gate answered in a way no out-edge accepts ends the run — reading it as Completed (every downstream
-            // skipped) or as Failed (nothing failed) would both lie. It goes through the drain like every other
-            // terminal, so live siblings settle and release what they hold instead of being orphaned.
+            // A gate answered in a way no out-edge accepts ends the run: reading it as Completed (every downstream skipped) or as Failed (nothing failed) would both lie. It goes through
+            // the drain like every other terminal, so live siblings settle and release what they hold instead of being orphaned.
             DevWorkflowStateMachine.EnsureLegal(run.Status, DevWorkflowRunStatus.Cancelling);
             _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
             {
@@ -256,12 +250,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return written;
         }
 
-        // A decomposition that has settled grows the graph, and the tick ENDS there: everything below judges
-        // node runs against a parsed graph, and this call has just replaced the one this tick parsed. The next tick
-        // re-parses on the bumped revision and admits what the expansion created — which is what the parse-count
-        // assertion pins, because the failure mode is silent rather than loud.
-        // The rows this tick already read, re-read ONLY if a decision moved one: the decomposition it is looking for
-        // has to be Succeeded, and a tick that settled nothing cannot have changed which rows are.
+        // A settled decomposition grows the graph and the tick ENDS there: what follows judges node runs against the graph this call just replaced, so the next tick re-parses and admits
+        // the expansion. A parse-count assertion pins that, the failure being silent. Rows are re-read only if a decision moved one — the decomposition must be Succeeded to count.
         var materialized = await _materializer.MaterializeAsync(store,
                                                   graph,
                                                   run,
@@ -279,13 +269,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     /// <summary>
     ///     Asks every lane-owned node run what became of the work it was driving, and settles the ones that landed.
-    ///     <para>
-    ///         Deliberately the executor's answer rather than this loop's memory: the dispatcher holds nothing about a
-    ///         run between ticks, so a restart loses nothing a poll cannot re-read. It runs in every non-terminal status
-    ///         including the two drains — a session asked to stop settles here, which is how the drain learns it may
-    ///         finish.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Deliberately the executor's answer rather than this loop's memory: the dispatcher holds nothing about a run
+    ///     between ticks, so a restart loses nothing a poll cannot re-read. It runs in every non-terminal status
+    ///     including the two drains — a session asked to stop settles here, which is how the drain learns it may
+    ///     finish.
+    /// </remarks>
     private async Task<int> PollAsync(IDevWorkflowStore store,
         DevWorkflowLanes lanes,
         DevWorkflowGraph graph,
@@ -298,9 +288,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         // through the lane, and a pass belonging to the attempt before is not an answer about the one the row is on now.
         await _tools.ForgetSupersededAsync(nodeRuns);
 
-        // A Tool row still reading Queued is polled too, when the lane is in fact already driving it: the Running write
-        // can fail after the slot and the registry entry were taken, and outside a drain the next admission repairs
-        // that — but a drain admits nothing, so without this the run waits on a row nothing would ever move again.
+        // A Tool row still reading Queued is polled too when the lane is already driving it: the Running write can fail after the slot and the registry entry were taken, and outside a
+        // drain the next admission repairs that — but a drain admits nothing, so without this the run waits on a row nothing would ever move again.
         var running = nodeRuns.Where(nodeRun => (nodeRun.Status == DevWorkflowNodeRunStatus.Running
                                                  && nodeRun.NodeType is DevWorkflowNodeType.Agent
                                                      or DevWorkflowNodeType.Tool
@@ -313,10 +302,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         var written = 0;
         foreach (var candidate in running)
         {
-            // One poll can move rows that are not its own: a failure routed to an upstream node resets that node's whole
-            // subtree, and the rest of this list is then a picture of a graph that has changed underneath it. So once
-            // anything has been written the rows are re-read, and one this lane no longer owns is left alone — settling
-            // it would write an answer about the round the run has just decided to do again.
+            // One poll can move rows that are not its own: a failure routed to an upstream node resets that node's whole subtree, leaving the rest of this list a picture of a graph that
+            // changed underneath it. So once anything is written the rows are re-read, and one this lane no longer owns is left alone — settling it would answer about a round being redone.
             if (written > 0)
             {
                 nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
@@ -334,9 +321,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 _ => await _tools.PollAsync(store, graph, run, current, nodeRuns, cancellationToken)
             };
 
-            // Only a row its lane had nothing to say about. A pass that landed inside its budget is settled off what it
-            // actually came to — including a sandbox timeout, which arrives with the evidence gathered before the clock
-            // ran out — and expiring it here as well would overwrite that answer with a coarser one.
+            // Only a row its lane had nothing to say about. A pass that landed inside its budget is settled off what it actually came to — including a sandbox timeout, which arrives with
+            // the evidence gathered before the clock ran out — and expiring it here as well would overwrite that answer with a coarser one.
             written += polled > 0
                 ? polled
                 : await ExpireAsync(store, lanes, graph, run, current, nodeRuns, cancellationToken);
@@ -347,13 +333,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     /// <summary>
     ///     Ends a node run that has been running longer than its node allows, and answers how many transitions it wrote.
-    ///     <para>
-    ///         The deadline is re-derived from the row every tick rather than armed once in memory, so it survives the
-    ///         restart that would otherwise leave a node run bounded by nothing. Where the expiry LEADS — another
-    ///         attempt, the node that produced what this one was judging, or a human — is the retry policy's answer, the
-    ///         same as for every other retryable failure class.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The deadline is re-derived from the row every tick rather than armed once in memory, so it survives the
+    ///     restart that would otherwise leave a node run bounded by nothing. Where the expiry LEADS — another attempt,
+    ///     the node that produced what this one was judging, or a human — is the retry policy's answer, the same as
+    ///     for every other retryable failure class.
+    /// </remarks>
     private async Task<int> ExpireAsync(IDevWorkflowStore store,
         DevWorkflowLanes lanes,
         DevWorkflowGraph graph,
@@ -367,9 +353,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return 0;
         }
 
-        // Dropped BEFORE the row is settled, and dropped rather than merely stopped: a re-attempt lands the row on a new
-        // attempt inside this same call, and this tick's admission would then find the registry still holding the pass
-        // that ran out of time — leaving the fresh attempt's pass running with nothing to poll it.
+        // Dropped BEFORE the row is settled, and dropped rather than merely stopped: a re-attempt lands the row on a new attempt inside this same call, and this tick's admission would
+        // then find the registry still holding the pass that ran out of time, leaving the fresh attempt's pass running with nothing to poll it.
         if (nodeRun.NodeType == DevWorkflowNodeType.Tool)
         {
             await _tools.DiscardAsync(nodeRun.Id);
@@ -401,12 +386,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     /// <summary>
     ///     Starts a <c>Pending</c> run, or fails it for good if its pinned graph cannot be routed.
-    ///     <para>
-    ///         The graph is validated again here rather than trusted from the definition's save, because an agent
-    ///         definition can be deleted in between. A run left <c>Pending</c> on a graph nothing can route would be
-    ///         swept forever, so the refusal is written down rather than retried.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The graph is validated again here rather than trusted from the definition's save, because an agent
+    ///     definition can be deleted in between. A run left <c>Pending</c> on a graph nothing can route would be swept
+    ///     forever, so the refusal is written down rather than retried.
+    /// </remarks>
     private async Task<int> StartPendingRunAsync(IDevWorkflowStore store, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
         try
@@ -424,13 +409,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     /// <summary>
     ///     The run's version as of right now, for a run-level write that follows this tick's own node-run writes.
-    ///     <para>
-    ///         Every node-run transition bumps the run version, so the top-of-tick version is stale by the time a drain
-    ///         or a recomputation writes — using it would make the dispatcher lose a race against itself. Re-reading
-    ///         narrows the window to what the check is actually for: a human decision or a lifecycle command landing
-    ///         between the read and the write, which must win rather than be overwritten by a status move.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Every node-run transition bumps the run version, so the top-of-tick version is stale by the time a drain or
+    ///     a recomputation writes — using it would make the dispatcher lose a race against itself. Re-reading narrows
+    ///     the window to what the check is for: a human decision or a lifecycle command landing between the read and
+    ///     the write, which must win rather than be overwritten by a status move.
+    /// </remarks>
     private static async Task<long> CurrentVersionAsync(IDevWorkflowStore store, Guid runId, CancellationToken cancellationToken) =>
         (await store.GetRunAsync(runId, cancellationToken)).Version;
 
@@ -462,10 +447,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     }
 
     /// <summary>
-    ///     Drops everything the runtime holds in memory about a run that has ended: its parsed graph, and any re-attempt
-    ///     it had promised itself but will now never ask for. Both are caches over durable rows, so a run that turns out
-    ///     to be live again simply re-derives them.
+    ///     Drops everything the runtime holds in memory about a run that has ended: its parsed graph, and any
+    ///     re-attempt it had promised itself but will now never ask for.
     /// </summary>
+    /// <remarks>
+    ///     Both are caches over durable rows, so a run that turns out to be live again simply re-derives them.
+    /// </remarks>
     private void Forget(Guid runId)
     {
         _graphs.Forget(runId);
@@ -474,13 +461,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     /// <summary>
     ///     Moves a validated <c>Pending</c> run to <c>Running</c>, if the node has room to drive another one.
-    ///     <para>
-    ///         The run's node runs already exist: they are written in the same transaction as the run row, so a run can
-    ///         no longer be found without them. Materializing here as well would re-derive seeds whose per-run inputs
-    ///         only the starting caller ever held. (A run with no node runs is therefore unreachable from any runtime
-    ///         path; the recomputation's no-rows guard stays as the belt that keeps such a row from reading Completed.)
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The run's node runs already exist — written in the same transaction as the run row, so a run cannot be
+    ///     found without them — and materializing here as well would re-derive seeds whose per-run inputs only the
+    ///     starting caller held. A run with no node runs is therefore unreachable from any runtime path; the
+    ///     recomputation's no-rows guard stays as the belt that keeps such a row from reading Completed.
+    /// </remarks>
     private static async Task<int> StartRunAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         int maxConcurrentRuns,
@@ -488,8 +475,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     {
         if (await CountActiveRunsAsync(store, maxConcurrentRuns, cancellationToken) >= maxConcurrentRuns)
         {
-            // Not refused — waiting. The run keeps its rows and its place, and the next sweep offers it again; refusing
-            // it would push a queue the node is perfectly able to work through back onto the person who started it.
+            // Not refused — waiting. The run keeps its rows and its place and the next sweep offers it again; refusing it would push a queue the node can work through back onto the
+            // person who started it.
             return 0;
         }
 
@@ -505,19 +492,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         return 1;
     }
 
-    /// <summary>
-    ///     How many runs this node is actually driving.
-    ///     <para>
-    ///         <c>Running</c> and the two drains, and deliberately nothing else. A <c>Paused</c> run is not being
-    ///         advanced and a <c>WaitingForApproval</c> one is waiting on a person who may take days — counting either
-    ///         would let one unanswered gate stop every other run on the node, which is the cap protecting nothing at
-    ///         the cost of the throughput it exists to manage.
-    ///     </para>
-    ///     <para>
-    ///         Read as summaries, not snapshots: a count must not decrypt a graph blob per live run. Each status is
-    ///         asked for one row more than the cap, which is all the answer needs.
-    ///     </para>
-    /// </summary>
+    /// <summary>How many runs this node is actually driving.</summary>
+    /// <remarks>
+    ///     <c>Running</c> and the two drains, deliberately nothing else: a <c>Paused</c> run is not being advanced and
+    ///     a <c>WaitingForApproval</c> one waits on a person who may take days, so counting either would let one
+    ///     unanswered gate stop every other run on the node — the cap protecting nothing at the cost of the throughput
+    ///     it manages. Read as summaries, not snapshots, because a count must not decrypt a graph blob per live run;
+    ///     each status is asked for one row more than the cap, which is all the answer needs.
+    /// </remarks>
     private static async Task<int> CountActiveRunsAsync(IDevWorkflowStore store, int maxConcurrentRuns, CancellationToken cancellationToken)
     {
         var active = 0;
@@ -530,13 +512,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     }
 
     /// <summary>
-    ///     Turns recorded decisions into transitions. A gate's answer succeeds it and lets the edges route; the
+    ///     Turns recorded decisions into transitions: a gate's answer succeeds it and lets the edges route, while the
     ///     retries-exhausted interventions re-attempt, route around, or give up.
-    ///     <para>
-    ///         Answers with the reason the run should end, when a gate was answered in a way none of its out-edges
-    ///         accepts. Deliberately not written here: it is the RUN's transition, and this method only moves node runs.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Answers with the reason the run should end when a gate was answered in a way none of its out-edges accepts.
+    ///     Deliberately not written here: that is the RUN's transition, and this method only moves node runs.
+    /// </remarks>
     private static async Task<(int Written, string? GateRejection)> SettleDecisionsAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraph graph,
@@ -569,9 +551,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             var (target, outcome, incrementAttempt) = Resolve(settled.Decision);
             var outputJson = target == DevWorkflowNodeRunStatus.Succeeded ? Output(settled.Decision) : null;
 
-            // A decision the node run's status forbids — an Approve recorded against a Blocked row, say — is a durable
-            // row re-read on every tick. Left to throw it would wedge the whole run, siblings included, so it is
-            // recorded against its own node run and the tick carries on.
+            // A decision the node run's status forbids — an Approve recorded against a Blocked row, say — is a durable row re-read on every tick. Left to throw it would wedge the whole
+            // run, siblings included, so it is recorded against its own node run and the tick carries on.
             if (!DevWorkflowStateMachine.IsLegal(nodeRun.Status, target))
             {
                 var reason = $"A recorded {settled.Decision} decision cannot be applied to a node run that is {nodeRun.Status}.";
@@ -596,14 +577,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 continue;
             }
 
-            // What the operator SAID travels with the attempt their decision starts, not only into the decision row a
-            // panel lists. Merged into the node run's inputs exactly as a routed failure is, because that document is
-            // where both lanes already read the next attempt's brief from — the agent objective composes it, and the
-            // DevTask lane turns it into the coder's change request. Bounded like every other decision comment: the
-            // text is free-form and a prompt is the wrong place to discover that.
-            // EVERY Retry goes through the merge, including one typed with nothing in the box: the merge is also what
-            // DROPS an earlier retry's reason, and a silent Retry that skipped it would leave the previous operator's
-            // sentence on the row for a try they said nothing about.
+            // What the operator SAID travels with the attempt their decision starts, merged into the node run's inputs exactly as a routed failure is, because both lanes read the brief
+            // there. Bounded like every decision comment. EVERY Retry merges, silent ones included: the merge also DROPS an earlier reason that would else outlive the try it was for.
             Action<Utf8JsonWriter>? writeRetryMembers = incrementAttempt
                 ? writer =>
                 {
@@ -612,10 +587,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                         writer.WriteString(DevWorkflowNodeInputs.OperatorRetryReason, DevWorkflowStateMachine.Bounded(retried, MaxDecisionComment));
                     }
 
-                    // The attempt this decision bought, written even when nothing was typed. Without it the members
-                    // would be read again by every later automatic re-attempt, quoting a person who said nothing about
-                    // that try — and a lane that acts on the RETRY rather than on the sentence (the DevTask lane widens
-                    // its task's round cap on one) could not tell a person's re-attempt from the policy's.
+                    // The attempt this decision bought, written even when nothing was typed: without it every later automatic re-attempt would read these members and quote a person
+                    // who said nothing about that try, and a lane acting on the RETRY rather than the sentence could not tell a person's re-attempt from the policy's.
                     writer.WriteNumber(DevWorkflowNodeInputs.OperatorRetryAttempt, nodeRun.Attempt + 1);
                 }
                 : null;
@@ -632,23 +605,15 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 FailureClass = target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
                 TerminalReason = DecidedReason(target, settled.Comment),
                 IncrementAttempt = incrementAttempt,
-                // EVERY Retry widens the cap by one, not only a Retry at the cap — that is the
-                // ruling as written, and the simpler rule to explain to the person clicking it.
-                // So a Retry at attempt 1 of 3 leaves a node that can now reach 4 on its own, and
-                // that fourth try is an ORDINARY automatic re-attempt: the operator's reason is
-                // scoped to the one attempt their decision started, so the attempt they bought
-                // carries it and nothing after it does. What still bounds all of this is the
-                // run-wide MaxTotalAttempts budget, which counts an operator's re-attempt and an
-                // automatic one alike and which no widening touches. Nothing else sets this flag.
+                // EVERY Retry widens the cap by one, not only one at the cap — the ruling as written. The attempt it buys carries the operator's reason; the automatic ones it enables
+                // do not. The run-wide MaxTotalAttempts budget still bounds everything, counting both alike, and no widening touches it. Nothing else sets this flag.
                 WidenMaxAttempts = incrementAttempt,
-                // A retry gets a NEW session: resuming the one that just failed resumes the context
-                // that failed with it. Releasing it here is also what stops the fresh attempt being
+                // A retry gets a NEW session: resuming the one that just failed resumes the context that failed with it. Releasing it here also stops the fresh attempt being
                 // settled straight back off the old session's answer.
                 ClearWorkSession = incrementAttempt,
                 Outcome = outcome,
-                // An answered node run may be the last thing the work item was blocked on, and the run
-                // status often does not move when it settles — so the release travels with the answer,
-                // for the same reason blocking it does.
+                // An answered node run may be the last thing the work item was blocked on, and the run status often does not move when it settles, so the release travels with the
+                // answer for the same reason blocking it does.
                 WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, settledSoFar, nodeRun.Id, target)
             },
                                cancellationToken);
@@ -663,14 +628,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             ];
             written++;
 
-            // Only a human gate can strand a run this way. Every other node's dead out-edges skip their targets, which
-            // is a route rather than a dead end; a gate answer nothing accepts leaves the run with nowhere to go, and
-            // saying so is more honest than completing a run whose approval was refused.
-            //
-            // A gate with NO out-edges counts, and that case is the seeded "Research → Plan → Approval" shape rather
-            // than a corner: rejecting its terminal approval must not read as the run having succeeded. Approve is
-            // exempt ONLY there — at a gate that HAS branches, an Approve none of them accepts is as stranded as any
-            // other answer, and completing it through skipped downstream would be the same lie in the other direction.
+            // Only a human gate strands a run this way: every other node's dead out-edges skip their targets, a route rather than a dead end. A gate with NO out-edges counts — the seeded
+            // "Research → Plan → Approval" shape, where rejecting the terminal approval must not read as success — and Approve is exempt only there, not at a gate that HAS branches.
             if (outputJson is not null
                 && nodeRun.NodeType == DevWorkflowNodeType.HumanGate
                 && (settled.Decision != DevWorkflowDecisionKind.Approve || graph.OutboundEdges(nodeRun.NodeKey).Count > 0)
@@ -699,11 +658,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         static string Output(DevWorkflowDecisionKind decision) =>
             DevWorkflowStateMachine.GateOutputJson(decision);
 
-        // What a person's decision leaves on the row. A Skip used to leave nothing, and it is the one terminal that
-        // most needs a reason: an All join now carries on past a skipped leaf, so the node downstream is handed the
-        // skip as evidence and has only this string to say WHY the work it was expecting is not there. The operator's
-        // own words are the whole of that why, so they travel — bounded, because the column is 1024 and a comment is
-        // free text an operator typed.
+        // What a person's decision leaves on the row. A Skip needs a reason most of any terminal: an All join carries on past a skipped leaf, so the node downstream is handed the skip
+        // as evidence with only this string to say WHY the work it expected is absent. The operator's words are the whole of that why, bounded because the column is 1024 of free text.
         static string? DecidedReason(DevWorkflowNodeRunStatus target, string? comment) =>
             target switch
             {
@@ -718,12 +674,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     /// <summary>
     ///     Completes a <c>Pausing</c> or <c>Cancelling</c> transition once nothing is live any more, and admits nothing
     ///     while it drains.
-    ///     <para>
-    ///         Every terminal is reached this way or through the "nothing is live" recomputation — there is no path that
-    ///         writes one directly, because doing so would strand the run's live node runs under a run no tick ever
-    ///         looks at again.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Every terminal is reached this way or through the "nothing is live" recomputation. No path writes one
+    ///     directly, because doing so would strand the run's live node runs under a run no tick looks at again.
+    /// </remarks>
     private async Task<int> DrainAsync(IDevWorkflowStore store, DevWorkflowLanes lanes, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
@@ -731,19 +686,18 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         foreach (var nodeRun in nodeRuns.Where(static nodeRun => DevWorkflowStateMachine.IsLive(nodeRun.Status)))
         {
-            // ASK, do not settle. A node run that is Running belongs to an executor, and only the executor knows what
-            // stopping it costs — so the drain requests the stop and the next tick's poll writes the terminal off what
-            // actually happened. Rows no lane owns are settled here, because for them there is nothing to ask.
+            // ASK, do not settle. A Running node run belongs to an executor and only the executor knows what stopping it costs, so the drain requests the stop and the next tick's poll
+            // writes the terminal off what actually happened. Rows no lane owns are settled here, because for them there is nothing to ask.
             written += await StopAsync(store, lanes, run, nodeRun, cancellationToken);
         }
 
-        // Re-read: the stops above may have settled every row already, and judging "is anything still live" off the
-        // snapshot taken before them would cost a whole extra tick for a drain that is in fact finished.
+        // Re-read: the stops above may have settled every row already, and judging "is anything still live" off the snapshot taken before them would cost a whole extra tick for a
+        // drain that is in fact finished.
         nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken);
         if (nodeRuns.Any(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.Queued or DevWorkflowNodeRunStatus.Running))
         {
-            // Still settling — an executor was asked to stop and has not answered yet. The command already committed
-            // its intent, so the UI can say "cancelling" honestly rather than claiming one that has not landed.
+            // Still settling — an executor was asked to stop and has not answered yet. The command already committed its intent, so the UI can say "cancelling" honestly rather than
+            // claiming one that has not landed.
             return written;
         }
 
@@ -758,8 +712,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         },
                            cancellationToken);
 
-        // A PAUSED run keeps its promised re-attempts: it is coming back, and a resume that skipped every cushion a
-        // definition asked for would be the pause spending them.
+        // A PAUSED run keeps its promised re-attempts: it is coming back, and a resume that skipped every cushion a definition asked for would be the pause spending them.
         if (DevWorkflowStateMachine.IsTerminal(settledStatus))
         {
             _retries.Forget(run.Id);
@@ -769,16 +722,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         return written + 1;
     }
 
-    /// <summary>
-    ///     Asks one live node run to stop, for whichever of the two drains is running.
-    ///     <para>
-    ///         Cancelling abandons the node run; pausing keeps the durable human waits and the not-yet-admitted rows
-    ///         exactly where they are, because a pause is meant to be resumed. The one thing a pause does move is a
-    ///         <c>Queued</c> row back to <c>Pending</c>: it is queued for a slot nothing will hand out while the run is
-    ///         draining, so leaving it would pin <c>Pausing</c> for as long as the lane stayed busy. That is the same
-    ///         collapse the startup reconciler performs, for the same reason.
-    ///     </para>
-    /// </summary>
+    /// <summary>Asks one live node run to stop, for whichever of the two drains is running.</summary>
+    /// <remarks>
+    ///     Cancelling abandons the node run; pausing keeps the durable human waits and the not-yet-admitted rows
+    ///     exactly where they are, because a pause is meant to be resumed. The one thing a pause does move is a
+    ///     <c>Queued</c> row back to <c>Pending</c>: it is queued for a slot nothing hands out while the run drains,
+    ///     so leaving it would pin <c>Pausing</c> for as long as the lane stayed busy. That is the same collapse the
+    ///     startup reconciler performs, for the same reason.
+    /// </remarks>
     private async Task<int> StopAsync(IDevWorkflowStore store,
         DevWorkflowLanes lanes,
         DevWorkflowRunSnapshot run,
@@ -787,24 +738,21 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     {
         if (nodeRun.NodeType == DevWorkflowNodeType.Tool && _tools.IsInFlight(nodeRun.Id))
         {
-            // A pause lets a build finish. It holds no model slot, it cannot be resumed halfway, and killing it would
-            // throw away minutes of work to save seconds — so the run stays Pausing until the poll settles the row,
-            // which is the same "once nothing is live" rule every other drain uses.
+            // A pause lets a build finish: it holds no model slot, cannot be resumed halfway, and killing it would throw away minutes of work to save seconds. So the run stays Pausing
+            // until the poll settles the row, the same "once nothing is live" rule every other drain uses.
             if (run.Status == DevWorkflowRunStatus.Pausing)
             {
                 return 0;
             }
 
-            // Asked, not settled: only the next tick's poll knows whether the commands stopped or finished inside the
-            // window. Counted as work so that tick comes immediately rather than a sweep later.
+            // Asked, not settled: only the next tick's poll knows whether the commands stopped or finished inside the window. Counted as work so that tick comes immediately.
             return await _tools.StopAsync(nodeRun.Id) ? 1 : 0;
         }
 
         if (nodeRun is { Status: DevWorkflowNodeRunStatus.Running, NodeType: DevWorkflowNodeType.DevTask })
         {
-            // The development chain owns what stopping ITS work costs, the same way the two other lanes do: a cancel
-            // asks the attempt to stop and the next poll settles the row on what it did, and a pause leaves the attempt
-            // to finish and parks the row where the resume can re-drive the task from.
+            // The development chain owns what stopping ITS work costs, as the two other lanes do: a cancel asks the attempt to stop and the next poll settles the row on what it did,
+            // while a pause leaves the attempt to finish and parks the row where the resume can re-drive the task from.
             return await lanes.DevTasks.StopAsync(store, run, nodeRun, run.Status == DevWorkflowRunStatus.Cancelling, cancellationToken);
         }
 
@@ -813,9 +761,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             if (owned)
             {
-                // The session checkpoints and parks, and the row collapses to Pending rather than to a terminal: a pause
-                // is meant to be RESUMED, and a Pending row with its session still attached is exactly what the resume
-                // re-admits — it finds the paused session and continues it instead of starting the work over.
+                // The session checkpoints and parks, and the row collapses to Pending rather than to a terminal: a pause is meant to be RESUMED, and a Pending row with its session
+                // still attached is exactly what the resume re-admits — it finds the paused session and continues it instead of starting the work over.
                 await lanes.Agent.StopAsync(nodeRun.WorkSessionId!.Value, cancel: false, cancellationToken);
             }
             else if (nodeRun.Status != DevWorkflowNodeRunStatus.Queued)
@@ -836,10 +783,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         if (owned)
         {
-            // Asked, not settled: only the session knows whether it landed Cancelled or finished inside the window, and
-            // the top of the NEXT tick polls it. Counted as work so that tick comes immediately — the drain re-signals
-            // on a productive tick — rather than settling it here, which would hold the advance gate, and with it every
-            // other run, for as long as the stop's grace period.
+            // Asked, not settled: only the session knows whether it landed Cancelled or finished inside the window, and the top of the NEXT tick polls it. Counted as work so that tick
+            // comes immediately rather than settling here, which would hold the advance gate — and with it every other run — for as long as the stop's grace period.
             await lanes.Agent.StopAsync(nodeRun.WorkSessionId!.Value, cancel: true, cancellationToken);
             return 1;
         }
@@ -934,17 +879,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     /// <summary>
     ///     Queues an eligible node run and, for the four node types the inline lane owns, runs it in the same tick.
-    ///     <para>
-    ///         An inline node goes <c>Pending</c> → <c>Running</c> → <c>Succeeded</c>, skipping <c>Queued</c> — see the
-    ///         remark at the inline write below. It still costs two event rows, and that is what makes the timing of a
-    ///         fan-out visible, which is the only reason Parallel and Join exist as node types at all.
-    ///     </para>
-    ///     <para>
-    ///         <b>Seam:</b> the dev-task lane attaches here. Until it does, a node run of that type is blocked for a
-    ///         human rather than left queued forever — a queue nothing drains is the one answer that would look like
-    ///         progress.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     An inline node goes <c>Pending</c> → <c>Running</c> → <c>Succeeded</c>, skipping <c>Queued</c> — see the
+    ///     remark at the inline write below. It still costs two event rows, which is what makes the timing of a
+    ///     fan-out visible, the only reason Parallel and Join exist as node types at all. The dev-task lane attaches
+    ///     here; a node run of a type no lane claims is blocked for a human rather than left queued forever, because
+    ///     a queue nothing drains is the one answer that would look like progress.
+    /// </remarks>
     private async Task<int> DispatchAsync(IDevWorkflowStore store,
         DevWorkflowLanes lanes,
         DevWorkflowRunSnapshot run,
@@ -964,9 +906,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             if (node.ToolMode == DevWorkflowToolMode.Apply && !AValidationSucceededOnThePathTaken(graph, node, byKey))
             {
-                // GRAPH-C4-3's runtime half, and it goes BEFORE the consumption record below: a blocked apply must not
-                // first record that it consumed inputs it never read. Policy rather than a failure — nothing broke,
-                // and the answer is a person's.
+                // GRAPH-C4-3's runtime half, BEFORE the consumption record below: a blocked apply must not first record that it consumed inputs it never read. Policy rather than
+                // a failure — nothing broke, and the answer is a person's.
                 return await BlockAsync(store,
                         run,
                         nodeRun,
@@ -978,14 +919,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
             if (nodeRun.Status == DevWorkflowNodeRunStatus.Pending)
             {
-                // These commands judge what the steps before them produced, so a later version of any of it makes this
-                // node run's report describe something that no longer exists. Recorded here because the lane cannot:
-                // it reads its inputs through a prepared workspace and through Dev Mode, neither of which the store can
-                // see, so without this a Tool node consumes everything and records nothing — and the whole "stale
-                // because" link is dead on every graph whose fix loop reaches past a check.
-                //
-                // Once per attempt, on the first tick that admits it: a re-attempt is a new use of whatever version is
-                // current, and the tick that only finds the lane full must not record a second.
+                // These commands judge what the steps before them produced, so a later version of any of it makes this report describe something gone. Recorded here because the lane
+                // cannot see its own inputs through the store. Once per attempt, on the first tick that admits it: a tick that only finds the lane full must not record a second.
                 _ = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken);
             }
 
@@ -997,8 +932,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return await lanes.DevTasks.DispatchAsync(store, graph, run, nodeRun, nodeRuns, cancellationToken);
         }
 
-        // No Queued hop: an inline node waits for no slot, and the three queue-reason tokens all name something real
-        // to be waiting for. A Queued row with none of them would be the row lying about why it is not running.
+        // No Queued hop: an inline node waits for no slot, and the three queue-reason tokens all name something real to wait for. A Queued row with none of them would be lying.
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
         {
@@ -1011,9 +945,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         if (node.NodeType == DevWorkflowNodeType.HumanGate)
         {
-            // The gate consumes what its predecessors produced, and recording that is what gives the approval panel its
-            // evidence list. Without it the panel renders a prompt and three buttons over nothing, and the operator
-            // approves a plan they cannot see — and the record is simply true, so it costs no new field.
+            // The gate consumes what its predecessors produced, and recording that gives the approval panel its evidence list. Without it the panel renders a prompt and three buttons
+            // over nothing, and the operator approves a plan they cannot see. The record is simply true, so it costs no new field.
             _ = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken);
 
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
@@ -1046,14 +979,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     /// <summary>
     ///     A gate's output: its upstream node's document, carried through, plus the branch the gate chose.
-    ///     <para>
-    ///         The pass-through is what keeps a Gate from adding routing power a conditional edge does not already have.
-    ///         Its out-edges are evaluated by the same generic edge rule as everything else, against this document — so
-    ///         the gate cannot decide one thing and the edges another. What it buys is <c>branch</c>: one recorded answer
-    ///         to "which way did the run go, and on what", which is otherwise only reconstructible by re-evaluating
-    ///         conditions against a document that may since have been superseded.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The pass-through keeps a Gate from adding routing power a conditional edge does not already have: its
+    ///     out-edges are evaluated by the same generic edge rule as everything else, against this document, so the
+    ///     gate cannot decide one thing and the edges another. What it buys is <c>branch</c> — one recorded answer to
+    ///     "which way did the run go, and on what", otherwise reconstructible only by re-evaluating conditions
+    ///     against a document that may since have been superseded.
+    /// </remarks>
     private static string ComposeGateOutput(DevWorkflowGraphNode node,
         DevWorkflowGraph graph,
         IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey,
@@ -1126,45 +1059,28 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     /// <summary>
     ///     The edge states <see cref="AValidationSucceededOnThePathTaken" /> walks THROUGH: the ones in which the run
-    ///     really came this way. A set rather than an equality test because the set is what the rule is about.
-    ///     <para>
-    ///         <c>Dead</c> and <c>Pending</c> are the two that must never be in it — a branch that did not run, or has
-    ///         not run yet, carries no provenance. Every other state the machine has today belongs here, <c>Waived</c>
-    ///         included: an operator's skip is waived precisely when everything behind it was satisfied or waived in
-    ///         turn, so the rows further back DID run and the walk has to be able to reach them. Leaving it out is what
-    ///         would block <c>integrate</c> on the shipped template the moment someone skips <c>verify</c>.
-    ///         <c>DevWorkflowMaterializationTests.TheProvenanceWalkCrossesEveryEdgeStateThatIsNotDeadOrPending</c>
-    ///         ENFORCES that rather than proving it: it demands an entry for every state outside those two, so a new
-    ///         one cannot be added to <see cref="DevWorkflowEdgeState" /> without this walk being told about it. A
-    ///         future state that means "undecided in some new way" is a third exclusion for that test to name, not an
-    ///         entry here — the assertion asks whoever hits it which of the two it is.
-    ///     </para>
+    ///     really came this way. A set rather than an equality test, because the set is what the rule is about.
     /// </summary>
+    /// <remarks>
+    ///     <c>Dead</c> and <c>Pending</c> must never be in it — a branch that did not run, or has not run yet, carries
+    ///     no provenance — and every other state belongs, <c>Waived</c> included: a skip is waived precisely when
+    ///     everything behind it was satisfied or waived in turn, so those rows DID run and the walk must reach them.
+    ///     A materialization test demands an entry per state outside those two, so a new state cannot be added
+    ///     silently. See docs/wiki/25-dev-workflows.md ("The provenance walk in front of an apply").
+    /// </remarks>
     private static readonly DevWorkflowEdgeState[] ProvenanceEdgeStates = [DevWorkflowEdgeState.Satisfied, DevWorkflowEdgeState.Waived];
 
     /// <summary>
-    ///     <c>GRAPH-C4-3</c>, asked of the rows a run actually landed rather than of every structural ancestor: does the
-    ///     apply node's provenance contain a <c>Tool</c>/<c>Validate</c> node whose row succeeded?
-    ///     <para>
-    ///         One backward walk over the inbound edges whose state is in <see cref="ProvenanceEdgeStates" />, which is
-    ///         what makes the rule the smaller one. A branch that did not run drops out with no special case — a
-    ///         <c>Failed</c> or <c>Cancelled</c> source, and a <c>Skipped</c> one with anything dead behind it, kills
-    ///         every out-edge — so an <c>Any</c> convergence whose other branch carried its own validation does not
-    ///         block the apply on work that was correctly not done.
-    ///     </para>
-    ///     <para>
-    ///         The candidate row is tested for <c>Succeeded</c> separately, and that test is NOT redundant with the edge
-    ///         state: a <c>Satisfied</c> edge does imply a succeeded source, but a <c>Waived</c> one does not — the rows
-    ///         BEHIND a waived edge succeeded while the waived node itself was skipped. Crossing the edge and still
-    ///         refusing to count a non-succeeded validation is the pair that stays correct either way, and it is what
-    ///         makes an operator's skip of the validation node itself still block the apply.
-    ///     </para>
-    ///     <para>
-    ///         An unmaterialized template key reads <c>Pending</c> and falls out exactly as admission's own template
-    ///         filter drops it — and the zero-task decomposition's no-op verdict row puts it back in, which is what
-    ///         makes that path pass this check without an exemption of its own.
-    ///     </para>
+    ///     <c>GRAPH-C4-3</c>, asked of the rows a run actually landed on rather than of every structural ancestor:
+    ///     does the apply node's provenance contain a <c>Tool</c>/<c>Validate</c> node whose row succeeded?
     /// </summary>
+    /// <remarks>
+    ///     One backward walk over the inbound edges whose state is in <see cref="ProvenanceEdgeStates" />. A branch
+    ///     that did not run drops out with no special case, so an <c>Any</c> convergence whose other branch carried
+    ///     its own validation is not blocked on work correctly not done. The row is tested for <c>Succeeded</c>
+    ///     separately, which a <c>Waived</c> edge does not imply — that is what makes a skip of the validation node
+    ///     block the apply. An unmaterialized template key reads <c>Pending</c>; the no-op verdict row puts it back.
+    /// </remarks>
     private static bool AValidationSucceededOnThePathTaken(DevWorkflowGraph graph,
         DevWorkflowGraphNode apply,
         IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey)
@@ -1198,14 +1114,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         return false;
     }
 
-    /// <summary>
-    ///     Stands a node run down for a human, and blocks its work item in the same transaction.
-    ///     <para>
-    ///         The work-item write has to travel HERE rather than wait for the end-of-tick recomputation: a node
-    ///         blocking while a sibling still works leaves the run <c>Running</c>, so the recomputation writes nothing
-    ///         and the item would keep reading <c>Active</c> with a node run nobody is coming to unblock.
-    ///     </para>
-    /// </summary>
+    /// <summary>Stands a node run down for a human, and blocks its work item in the same transaction.</summary>
+    /// <remarks>
+    ///     The work-item write travels HERE rather than waiting for the end-of-tick recomputation: a node blocking
+    ///     while a sibling still works leaves the run <c>Running</c>, so the recomputation writes nothing and the item
+    ///     would keep reading <c>Active</c> with a node run nobody is coming to unblock.
+    /// </remarks>
     private static async Task<int> BlockAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -1250,15 +1164,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand
         {
             RunId = run.Id,
-            // The version this decision was made against. Any would let a status move overwrite a
-            // lifecycle command that landed between the read and this write — a cancel silently
+            // The version this decision was made against. Any would let a status move overwrite a lifecycle command that landed between the read and this write — a cancel silently
             // becoming a Running again — and the run service is the second writer that makes it real.
             ExpectedVersion = current.Version,
             TargetStatus = outcome.Status,
-            // Both are null for Completed and Failed: a failing node run already carries the class that
-            // explains it, and a second, coarser copy on the run would only ever be a worse answer to
-            // the same question. A run that reached no end is the one case with no such node run —
-            // nothing failed — so there the outcome carries the whole account itself.
+            // Both are null for Completed and Failed: a failing node run already carries the class that explains it, and a second, coarser copy on the run would be a worse answer to
+            // the same question. A run that reached no end is the one case with no such node run — nothing failed — so there the outcome carries the whole account itself.
             FailureClass = outcome.FailureClass,
             SanitizedReason = outcome.TerminalReason,
             WorkItemStatus = DevWorkflowStateMachine.WorkItemStatusFor(outcome.Status, nodeRuns)
@@ -1321,9 +1232,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
             foreach (var status in LiveRunStatuses)
             {
-                // NOT MaxConcurrentRuns: that is an admission cap for the run service, and using it as a page size here
-                // orders live runs by creation date and then silently stops sweeping everything past the cap — the
-                // oldest stuck run, which is exactly the one a sweep exists to rescue.
+                // NOT MaxConcurrentRuns: that is an admission cap for the run service, and using it as a page size here orders live runs by creation date and then silently stops
+                // sweeping everything past the cap — the oldest stuck run, which is exactly the one a sweep exists to rescue.
                 var runs = await store.ListRunsAsync(workItemId: null, status, SweepPageSize, cancellationToken);
                 runIds.UnionWith(runs.Select(static run => run.Id));
             }

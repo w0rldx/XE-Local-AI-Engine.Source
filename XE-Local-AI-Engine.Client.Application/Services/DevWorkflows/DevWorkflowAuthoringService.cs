@@ -4,21 +4,16 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     The Development-Workflow AUTHORING endpoints' only door onto <see cref="IDevWorkflowStore" />: the operator's
-///     definitions, rule sets and work items — the rows a human creates, edits and retires before any run exists. An
-///     endpoint is the HTTP edge and may not take a persistence store itself (the endpoint-dependency rule), so each
-///     call arrives here unchanged. This type adds no policy of its own: no validation, no ordering, no defaulting —
-///     graph validation, the request-size refusal and the status-filter parse stay in the endpoints that own them, and
-///     the store keeps deciding not-found, version conflicts and what a null field means.
-///     <para>
-///         Deliberately off this surface: everything that MOVES a run. Start, pause, resume, cancel, the human decision
-///         and the work-item delete live on <see cref="IDevWorkflowRunService" />, which is where their fire-and-forget
-///         and operation-id discipline is documented; run-feed READS live on
-///         <see cref="DevWorkflowRunQueryService" />. Also absent, because no endpoint asks for them: the resolver's
-///         <c>ListEnabledRuleSetsAsync</c> and every node-run, event-append, artifact-write and reconciliation member
-///         the runtime drives the store with directly.
-///     </para>
+///     The Development-Workflow AUTHORING endpoints' only door onto <see cref="IDevWorkflowStore" />: the definitions,
+///     rule sets and work items a human creates, edits and retires before any run exists.
 /// </summary>
+/// <remarks>
+///     An endpoint is the HTTP edge and may not take a persistence store itself, so each call arrives here unchanged.
+///     This type adds no validation, ordering or defaulting: graph validation, the request-size refusal and the
+///     status-filter parse stay in the endpoints, and the store keeps deciding not-found, version conflicts and what
+///     a null field means. Everything that MOVES a run is deliberately elsewhere — commands on
+///     <see cref="IDevWorkflowRunService" />, run-feed reads on <see cref="DevWorkflowRunQueryService" />.
+/// </remarks>
 public sealed class DevWorkflowAuthoringService
 {
     private readonly IDevWorkflowStore _store;

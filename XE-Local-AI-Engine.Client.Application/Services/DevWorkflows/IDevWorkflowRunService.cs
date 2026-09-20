@@ -4,12 +4,13 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     A run and its node runs in one read, composed from the store's snapshots rather than re-declaring their fields.
-///     <para>
-///         The GRAPH is deliberately not in it: a caller that needs nodes and edges decrypts the run's pinned blob,
-///         which the runtime already holds parsed and has no reason to re-serialize.
-///     </para>
+///     A run and its node runs in one read, composed from the store's snapshots rather than re-declaring their
+///     fields.
 /// </summary>
+/// <remarks>
+///     The GRAPH is deliberately not in it: a caller that needs nodes and edges decrypts the run's pinned blob,
+///     which the runtime already holds parsed and has no reason to re-serialize.
+/// </remarks>
 public sealed class DevWorkflowRunDetail
 {
     public required DevWorkflowRunSnapshot Run { get; init; }
@@ -34,30 +35,14 @@ public sealed class DevWorkflowDecisionResult
     public required DevWorkflowDecisionSnapshot Decision { get; init; }
 }
 
-/// <summary>
-///     Every way a caller changes a development workflow run.
-///     <para>
-///         <b>Every method is fire-and-forget.</b> It validates, commits a durable intent, signals the dispatcher and
-///         returns the CURRENT state — which may legitimately read <c>Pending</c>, <c>Pausing</c> or <c>Cancelling</c>.
-///         Nothing here waits for the runtime to act, which is what keeps the HTTP path off the node's one invocation
-///         slot.
-///     </para>
-///     <para>
-///         <b>Every method takes a client-supplied operation id</b>, and a replay of one returns the recorded result
-///         without a second effect. That is the same discipline the store enforces one level down, lifted to the verbs
-///         a caller actually issues.
-///     </para>
-///     <para>
-///         Three KINDS of failure cross this boundary and nothing else, mirroring the work-session surface:
-///         <see cref="DevWorkflowNotFoundException" /> (404), <see cref="DevWorkflowValidationException" /> for bad
-///         input including a repo-bound graph on a work item with no project (400), and three conflict types (409) —
-///         <see cref="DevWorkflowInvalidTransitionException" /> for a command the current status forbids,
-///         <see cref="DevWorkflowRunInFlightException" /> for a second live run on one work item, and
-///         <see cref="DevWorkflowGateAlreadyDecidedException" /> for a second human act on a decided node run. The
-///         three conflicts are separate types because the operator's next move differs for each; the API maps all
-///         three to 409 with distinct discriminators.
-///     </para>
-/// </summary>
+/// <summary>Every way a caller changes a development workflow run.</summary>
+/// <remarks>
+///     Every method is FIRE-AND-FORGET: it validates, commits a durable intent, signals the dispatcher and returns
+///     the CURRENT state, which may legitimately read <c>Pending</c>, <c>Pausing</c> or <c>Cancelling</c> — nothing
+///     waits for the runtime, which keeps the HTTP path off the node's one invocation slot. Every method takes a
+///     client-supplied operation id, and a replay returns the recorded result without a second effect. Which
+///     failures cross this boundary, and how they map: docs/wiki/25-dev-workflows.md ("Human decisions").
+/// </remarks>
 public interface IDevWorkflowRunService
 {
     /// <summary>
@@ -65,9 +50,8 @@ public interface IDevWorkflowRunService
     ///     graph and creating a node run for every node in it.
     /// </summary>
     /// <param name="inputsJson">
-    ///     The caller's seed for this run, carried verbatim into every entry node run's input document and rendered into
-    ///     the first agent's objective. There is no run-level column for it: the entry rows ARE where a run's input
-    ///     lives.
+    ///     The caller's seed, carried verbatim into every entry node run's input document. There is no run-level
+    ///     column: the entry rows ARE where a run's input lives.
     /// </param>
     Task<DevWorkflowRunDetail> StartAsync(Guid workItemId, Guid definitionId, string? inputsJson, Guid operationId, CancellationToken cancellationToken = default);
 
@@ -81,23 +65,22 @@ public interface IDevWorkflowRunService
 
     /// <summary>
     ///     Removes a work item and everything under it, refusing while one of its runs is still live.
-    ///     <para>
-    ///         It lives on the RUN service because the rows are the smaller half of the job: the delete also releases
-    ///         the work sessions the agent node runs own and the artifact bytes on disk, neither of which the store can
-    ///         reach. Ordered so that a refusal costs nothing — the live-run check first, then the sessions, then the
-    ///         rows, then the bytes.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     It lives on the RUN service because the rows are the smaller half of the job: the delete also releases the
+    ///     work sessions the agent node runs own and the artifact bytes on disk, neither of which the store reaches.
+    ///     Ordered so a refusal costs nothing — the live-run check first, then sessions, then rows, then bytes.
+    /// </remarks>
     Task DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The ONE decision surface: a gate's approval and a stuck node run's intervention are the same human act —
     ///     someone unblocking a node run — so they share a table, an endpoint and this method.
-    ///     <para>
-    ///         A decision the node run's status cannot take is a conflict, not a validation error: the row moved, and
-    ///         the answer is to re-read it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A decision the node run's status cannot take is a conflict, not a validation error: the row moved, and the
+    ///     answer is to re-read it.
+    /// </remarks>
     /// <param name="decidedBySubject">
     ///     Who decided, carried rather than derived. Without it the audit can say a gate was approved but not by whom.
     /// </param>

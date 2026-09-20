@@ -10,64 +10,50 @@ using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
-/// <summary>
-///     The agent lane: one work session per agent node-run attempt, driven by the run that owns it.
-///     <para>
-///         The runtime is a CLIENT of the work-session machinery, not a fork of it — the stepwise executor, the
-///         checkpoints, the transcript and the pause/restart/resume are all one level down and already proven. What this
-///         adds is the four things a graph needs from them: an objective composed from the node's inputs, an admission
-///         that queues honestly when the node's one invocation slot is taken, a poll that turns a session status into a
-///         node-run status, and the promotion of what the session produced into the run's own audit.
-///     </para>
-///     <para>
-///         It writes node-run transitions itself, from inside the dispatcher's serialized tick — which is what keeps the
-///         "every node-run status write happens inside <c>AdvanceOnceAsync</c>" invariant true. It never starts a task
-///         of its own: the work session is already detached, so there is nothing here to detach.
-///     </para>
-/// </summary>
+/// <summary>The agent lane: one work session per agent node-run attempt, driven by the run that owns it.</summary>
+/// <remarks>
+///     A CLIENT of the work-session machinery, not a fork: the executor, checkpoints, transcript and pause/resume
+///     live one level down. This adds an objective from the node's inputs, admission that queues honestly when the
+///     one invocation slot is held, a poll turning session status into node-run status, and promotion of the output
+///     into the run's audit. Transitions are written inside the dispatcher's serialized tick, keeping the
+///     <c>AdvanceOnceAsync</c> invariant true. See docs/wiki/25-dev-workflows.md ("The agent lane").
+/// </remarks>
 internal sealed class DevWorkflowAgentExecutor
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    ///     How the completion event's detail is read. Case-INSENSITIVE deliberately: the handler writes it with bare
-    ///     defaults today (PascalCase), and a later tidy-up onto the shared Web options would silently rename the
-    ///     members to camelCase — after which a case-sensitive read binds nothing, every declared unmet objective reads
-    ///     as met, and a session that closed WITHOUT meeting its objective silently reads as a success again, with no
-    ///     exception and no log line to find it by.
+    ///     How the completion event's detail is read.
     /// </summary>
+    /// <remarks>
+    ///     Case-INSENSITIVE deliberately: the handler writes it with bare defaults (PascalCase), and a later tidy-up
+    ///     onto the shared Web options would rename the members to camelCase — after which a case-sensitive read binds
+    ///     nothing, every declared unmet objective reads as met, and a session that closed WITHOUT meeting its
+    ///     objective reads as a success, with no exception and no log line to find it by.
+    /// </remarks>
     private static readonly JsonSerializerOptions CompletionDetailOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
 
-    /// <summary>
-    ///     The ceiling this composition holds itself to, in characters.
-    ///     <para>
-    ///         <b>Coupled to <c>WorkSessionService.MaxObjectiveLength</c> (8000), which is private to that class.</b> The
-    ///         work-session layer REFUSES an over-long objective rather than trimming it, and that refusal reaches here
-    ///         as a validation failure that blocks the node run for a human — so an objective this lane composes must
-    ///         never approach it. The margin absorbs a modest reduction there without this noticing;
-    ///         <c>TheObjectiveLimit_IsTheOneTheWorkSessionLayerActuallyEnforces</c> fails if the two ever cross.
-    ///     </para>
-    ///     <para>
-    ///         Only the ARTIFACT phase is bounded by it. Instructions and inputs are appended first and uncapped: a node
-    ///         whose own instructions exceed the work-session limit is the pre-existing refusal, and silently trimming
-    ///         what an author wrote would be a worse answer than the block.
-    ///     </para>
-    /// </summary>
+    /// <summary>The ceiling this composition holds itself to, in characters.</summary>
+    /// <remarks>
+    ///     Coupled to <c>WorkSessionService.MaxObjectiveLength</c> (8000), which is private to that class: that layer
+    ///     REFUSES an over-long objective rather than trimming it, and the refusal blocks the node run for a human, so
+    ///     an objective composed here must never approach it. The margin absorbs a modest reduction there, and a test
+    ///     fails if the two ever cross. Only the ARTIFACT phase is bounded by it — instructions and inputs are
+    ///     appended first and uncapped, since trimming what an author wrote is a worse answer than the block.
+    /// </remarks>
     internal const int MaxObjectiveCharacters = 7000;
 
-    /// <summary>
-    ///     The largest artifact whose bytes are worth reading to fill an objective, in bytes.
-    ///     <para>
-    ///         Two orders of magnitude above anything <see cref="MaxObjectiveCharacters" /> could use, and two below the
-    ///         64 MiB an artifact is allowed to be: the point is not to pick the smallest workable number but to keep a
-    ///         node with several large upstream artifacts from reading — and decoding — all of them to keep a few
-    ///         thousand characters of the first.
-    ///     </para>
-    /// </summary>
+    /// <summary>The largest artifact whose bytes are worth reading to fill an objective, in bytes.</summary>
+    /// <remarks>
+    ///     Two orders of magnitude above anything <see cref="MaxObjectiveCharacters" /> could use, and two below the
+    ///     64 MiB an artifact may be: the point is not the smallest workable number but keeping a node with several
+    ///     large upstream artifacts from reading — and decoding — all of them to keep a few thousand characters of
+    ///     the first.
+    /// </remarks>
     private const int MaxInjectableArtifactBytes = 256 * 1024;
 
     /// <summary>How many blocked plan tasks a terminal reason names before it counts the rest.</summary>
@@ -105,14 +91,12 @@ internal sealed class DevWorkflowAgentExecutor
         _options = options.Value;
     }
 
-    /// <summary>
-    ///     Admits an eligible agent node run, and answers how many transitions it wrote.
-    ///     <para>
-    ///         The row goes to <c>Queued</c> first, always, even when a slot is free a line later. It costs one event and
-    ///         it is what makes the queue honest: three parallel agent nodes on a one-slot node are
-    ///         <c>Running, Queued, Queued</c>, and a reader has to be able to see that rather than infer it.
-    ///     </para>
-    /// </summary>
+    /// <summary>Admits an eligible agent node run, and answers how many transitions it wrote.</summary>
+    /// <remarks>
+    ///     The row goes to <c>Queued</c> first, always, even when a slot is free a line later. It costs one event and
+    ///     makes the queue honest: three parallel agent nodes on a one-slot node are <c>Running, Queued, Queued</c>,
+    ///     and a reader has to be able to see that rather than infer it.
+    /// </remarks>
     public async Task<int> DispatchAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -130,9 +114,8 @@ internal sealed class DevWorkflowAgentExecutor
                 Status: AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Failed or AgentWorkSessionStatus.Cancelled
             })
         {
-            // The session landed and the host died before the poll wrote what it said. Nothing needs re-running — the
-            // row is settled off the session's own answer, which is exactly what that tick would have written. A retry
-            // does not come through here: it releases its session first, precisely so it cannot.
+            // The session landed and the host died before the poll wrote what it said. Nothing needs re-running: the row is settled off the session's own answer, exactly what that tick
+            // would have written. A retry does not come through here — it releases its session first, precisely so it cannot.
             DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
             {
@@ -166,8 +149,7 @@ internal sealed class DevWorkflowAgentExecutor
 
         if (!_sessions.HasCapacity)
         {
-            // Queueing, not failure: nothing is wrong, the node's one slot is simply held. No event, no failure class —
-            // the row's reason says what it is waiting for and the next tick asks again.
+            // Queueing, not failure: nothing is wrong, the node's one slot is simply held. No event, no failure class — the row's reason says what it waits for and the next tick asks.
             return written;
         }
 
@@ -178,9 +160,8 @@ internal sealed class DevWorkflowAgentExecutor
         }
         catch (WorkSessionValidationException exception)
         {
-            // A missing agent, a model that cannot call tools, a node with work sessions switched off. A retry produces
-            // the same answer, so it goes straight to a human with the message verbatim — it is already sanitized and
-            // it already names the fix.
+            // A missing agent, a model that cannot call tools, a node with work sessions switched off. A retry produces the same answer, so it goes straight to a human with the message
+            // verbatim — it is already sanitized and already names the fix.
             return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken);
         }
         catch (DevWorkflowValidationException exception)
@@ -189,16 +170,14 @@ internal sealed class DevWorkflowAgentExecutor
         }
         catch (DevWorkflowPolicyException exception)
         {
-            // GRAPH-C4-2's runtime half. NOT Configuration: nothing is misconfigured — the node's agent may do more
-            // than the definition admits to, and only a person can say whether that is meant. Policy blocks for a
-            // human rather than failing the run, and a retry would produce the same answer.
+            // GRAPH-C4-2's runtime half. NOT Configuration: nothing is misconfigured — the node's agent may do more than the definition admits to, and only a person can say
+            // whether that is meant. Policy blocks for a human rather than failing the run, and a retry would produce the same answer.
             return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, exception.Message, cancellationToken);
         }
 
         if (!await TryDriveAsync(session, graph, node, cancellationToken))
         {
-            // Lost the admission race between the capacity read and the start. The row stays Queued with its reason and
-            // keeps the session it already owns, so the next tick starts that one rather than creating a second.
+            // Lost the admission race between the capacity read and the start. The row stays Queued with its reason and keeps the session it owns, so the next tick starts that one.
             return written;
         }
 
@@ -217,11 +196,11 @@ internal sealed class DevWorkflowAgentExecutor
     /// <summary>
     ///     Reads what the node run's session is doing and settles the row when it has landed, answering how many
     ///     transitions it wrote.
-    ///     <para>
-    ///         The session status is the only authority: this never remembers what it dispatched, which is exactly why a
-    ///         restart costs nothing but the poll that follows it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The session status is the only authority: this never remembers what it dispatched, which is why a restart
+    ///     costs nothing but the poll that follows it.
+    /// </remarks>
     public async Task<int> PollAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -261,26 +240,16 @@ internal sealed class DevWorkflowAgentExecutor
 
             case AgentWorkSessionStatus.Failed:
 
-                // GRAPH-C4-2's runtime half, read back — from the RECORD of the refusal, never re-decided here. The
-                // send refuses a turn whose own tool offer widened past what the node declared — a definition edited
-                // between two steps, or deleted so the turn falls back to the default persona — and all the session can
-                // do about it is stop. The row it wrote is what turns that stop into this lane's own refusal, carrying
-                // the class and the sentence rather than "the agent's work session failed".
-                //
-                // Asking the guard again instead would answer about the definition as it stands NOW: an operator who
-                // restored or narrowed it between the refusal and this poll would send the node run down the retryable
-                // provider-failure path, losing the Policy class for a refusal that really happened. A historical cause
-                // is read, not recomputed. The node's declaration is still consulted first, off the run's PINNED graph,
-                // so an ordinary provider failure costs nothing but a dictionary miss.
+                // GRAPH-C4-2 read BACK from the refusal's own row, never recomputed: asking the guard again answers about the definition as it stands now, losing the class.
+                // That row carries the class and sentence rather than a generic failure. The declaration is checked first off the PINNED graph, so a plain provider failure costs a miss.
                 if (DeclarationRequired(graph, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey))
                     && await ReadWriteGateRefusalAsync(sessionId, cancellationToken) is { } refusal)
                 {
                     return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, refusal, cancellationToken);
                 }
 
-                // The retry policy's answer, not this lane's: a provider failure is retryable, and whether THIS one is
-                // re-attempted depends on the node's cap, the run's budget and whether the node routes its failures
-                // upstream — none of which is the session's business.
+                // The retry policy's answer, not this lane's: a provider failure is retryable, and whether THIS one is re-attempted depends on the node's cap, the run's budget and
+                // whether the node routes its failures upstream — none of which is the session's business.
                 return await _retries.SettleFailureAsync(store,
                                          graph,
                                          run,
@@ -307,8 +276,7 @@ internal sealed class DevWorkflowAgentExecutor
 
             case AgentWorkSessionStatus.Draft or AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted:
 
-                // Never while the run is draining: under a pause the session was paused ON PURPOSE a moment ago, and
-                // resuming it here would undo the operator's command with the run still reading Pausing.
+                // Never while the run is draining: under a pause the session was paused ON PURPOSE a moment ago, and resuming here would undo the operator's command mid-Pausing.
                 return run.Status is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling
                     ? 0
                     : await ResumeAsync(store, run, graph, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey), nodeRun, session, cancellationToken);
@@ -320,9 +288,12 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     /// <summary>
-    ///     Asks the session to stop, for whichever drain the run is in. The row is deliberately NOT settled here: only
-    ///     the session knows where it lands, and the next tick's poll writes that rather than this guessing it.
+    ///     Asks the session to stop, for whichever drain the run is in.
     /// </summary>
+    /// <remarks>
+    ///     The row is deliberately NOT settled here: only the session knows where it lands, and the next tick's poll
+    ///     writes that rather than this guessing it.
+    /// </remarks>
     public async Task StopAsync(Guid sessionId, bool cancel, CancellationToken cancellationToken)
     {
         try
@@ -340,13 +311,13 @@ internal sealed class DevWorkflowAgentExecutor
 
     /// <summary>
     ///     The session this attempt owns: the one already attached if it can still be driven, otherwise a fresh one.
-    ///     <para>
-    ///         A retry always gets a NEW session — resuming the one that just failed resumes its poisoned context — but a
-    ///         session that is merely <c>Draft</c>, <c>Paused</c> or <c>Interrupted</c> is the crash window between the
-    ///         attach and the start, or a pause, and reusing it is what keeps a restart from stranding a conversation
-    ///         nobody will ever drive.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A retry always gets a NEW session — resuming the one that just failed resumes its poisoned context — but a
+    ///     session that is merely <c>Draft</c>, <c>Paused</c> or <c>Interrupted</c> is the crash window between the
+    ///     attach and the start, or a pause, and reusing it keeps a restart from stranding a conversation nobody will
+    ///     ever drive.
+    /// </remarks>
     private async Task<WorkSessionDetail> ResolveSessionAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -378,10 +349,8 @@ internal sealed class DevWorkflowAgentExecutor
         }
         catch
         {
-            // Until the attach commits, NOTHING points at this session: the next tick creates another, a work-item
-            // delete cannot find it, and the external lifecycle refuses a workflow-kind session to every other caller.
-            // So the create is undone here rather than left for the startup sweep, and the original failure is what
-            // propagates — the compensation is not the story.
+            // Until the attach commits, NOTHING points at this session: the next tick creates another, a work-item delete cannot find it, and the external lifecycle refuses a
+            // workflow-kind session to every other caller. So the create is undone here rather than left for the startup sweep, and the original failure is what propagates.
             await ReleaseUnattachedAsync(store, created.Id);
             throw;
         }
@@ -389,19 +358,14 @@ internal sealed class DevWorkflowAgentExecutor
         return created;
     }
 
-    /// <summary>
-    ///     Deletes a session no node run owns, and leaves an owned one alone.
-    ///     <para>
-    ///         Ownership is re-read across ALL node runs rather than assumed from the failure, and both directions
-    ///         matter: an attach can commit and still throw on the way back — a cancellation between the commit and
-    ///         the return — and an attach can fail precisely BECAUSE another node run already owns that session.
-    ///         Deleting in either case would take a transcript out from under a row that points at it.
-    ///     </para>
-    ///     <para>
-    ///         Runs without a cancellation token, because this is the cleanup for a call that may itself have been
-    ///         cancelled.
-    ///     </para>
-    /// </summary>
+    /// <summary>Deletes a session no node run owns, and leaves an owned one alone.</summary>
+    /// <remarks>
+    ///     Ownership is re-read across ALL node runs rather than assumed from the failure, and both directions matter:
+    ///     an attach can commit and still throw on the way back (a cancellation between the commit and the return),
+    ///     and an attach can fail precisely BECAUSE another node run already owns that session. Deleting in either
+    ///     case would take a transcript out from under a row that points at it. It runs without a cancellation token,
+    ///     because this is the cleanup for a call that may itself have been cancelled.
+    /// </remarks>
     private async Task ReleaseUnattachedAsync(IDevWorkflowStore store, Guid sessionId)
     {
         try
@@ -415,22 +379,21 @@ internal sealed class DevWorkflowAgentExecutor
         }
         catch (Exception exception)
         {
-            // Reported, never rethrown: the caller's failure is the one worth surfacing, and a session left here is
-            // exactly what the startup sweep is for.
+            // Reported, never rethrown: the caller's failure is the one worth surfacing, and a session left here is exactly what the startup sweep is for.
             _logger.LogWarning(exception, "Work session {SessionId} could not be released after its attach failed.", sessionId);
         }
     }
 
     /// <summary>
-    ///     Starts or resumes the session, whichever its status calls for. Answers <see langword="false" /> when the node
-    ///     refused the admission — which is a queue, not a failure.
-    ///     <para>
-    ///         The graph node's model and effort travel on EVERY drive, not only the create: the work-session layer
-    ///         holds them for the run it is driving rather than storing them, so a resume after a restart is what puts
-    ///         them back. The run's pinned graph is the durable copy, which is also why a definition edited mid-run
-    ///         cannot change what a running node dispatches on.
-    ///     </para>
+    ///     Starts or resumes the session, whichever its status calls for, answering <see langword="false" /> when the
+    ///     node refused the admission — which is a queue, not a failure.
     /// </summary>
+    /// <remarks>
+    ///     The graph node's model and effort travel on EVERY drive, not only the create: the work-session layer holds
+    ///     them for the run it is driving rather than storing them, so a resume after a restart is what puts them
+    ///     back. The run's pinned graph is the durable copy, which is also why a definition edited mid-run cannot
+    ///     change what a running node dispatches on.
+    /// </remarks>
     private async Task<bool> TryDriveAsync(WorkSessionDetail session, DevWorkflowGraph graph, DevWorkflowGraphNode? node, CancellationToken cancellationToken)
     {
         try
@@ -455,15 +418,14 @@ internal sealed class DevWorkflowAgentExecutor
 
     /// <summary>
     ///     What the node authored for its session to run on, plus whether that session's turns have to keep proving
-    ///     they were declared. Null when the node authored no pin and needs no proof, and the bound agent's own
-    ///     configuration is the whole answer. A node run whose key is not in the run's graph — nothing produces one, but
-    ///     the lookup is a dictionary miss away — reads as "no override" rather than failing a resume over a label.
-    ///     <para>
-    ///         Re-supplied on every start and resume, which is what makes the refusal flag the right place for
-    ///         <c>GRAPH-C4-2</c>'s per-turn half: it is read off the run's PINNED graph each time, so nothing an
-    ///         operator edits mid-run can widen what a running session is allowed to be offered.
-    ///     </para>
+    ///     they were declared, or null when the bound agent's own configuration is the whole answer.
     /// </summary>
+    /// <remarks>
+    ///     A node run whose key is not in the run's graph — nothing produces one, but the lookup is a dictionary miss
+    ///     away — reads as "no override" rather than failing a resume over a label. Re-supplied on every start and
+    ///     resume, which makes the refusal flag the right place for <c>GRAPH-C4-2</c>'s per-turn half: it is read off
+    ///     the run's PINNED graph each time, so nothing edited mid-run can widen what a running session is offered.
+    /// </remarks>
     private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraph graph, DevWorkflowGraphNode? node)
     {
         var runtime = new WorkSessionRuntimeOverride { ModelProfile = node?.ModelProfile, ReasoningEffort = node?.ReasoningEffort, RefuseUndeclaredWrites = DeclarationRequired(graph, node) };
@@ -471,24 +433,16 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     /// <summary>
-    ///     <c>GRAPH-C4-2</c>'s runtime half at the seam where the session is CREATED: an Agent node whose bound agent
-    ///     will really be offered a tool that writes or runs commands has to have SAID so, or the template has to have
-    ///     waived the rule once and in writing.
-    ///     <para>
-    ///         The structural half alone would be inert by construction — it can only bite on an apply node, which the
-    ///         parser already requires a human gate in front of, and on a declaration an author volunteered. What a node may actually do is decided when
-    ///         the binding is resolved, so the question is asked there.
-    ///     </para>
-    ///     <para>
-    ///         This one is the EARLY answer, not the whole of it. It refuses before a session exists, where the refusal
-    ///         costs nothing and reads as configuration rather than as a stopped session — but the thing it judges is
-    ///         mutable, so <see cref="ArmedFor" /> hands the same question to every turn the session then takes.
-    ///     </para>
-    ///     <para>
-    ///         A node that already declares <c>WriteExecute</c> is not asked at all: its declaration has dragged it
-    ///         into the structural rule's gate requirement at save, which is the stronger answer and the earlier one.
-    ///     </para>
+    ///     <c>GRAPH-C4-2</c>'s runtime half where the session is CREATED: an Agent node whose bound agent will really
+    ///     be offered a tool that writes or runs commands has to have SAID so, or its template waived the rule.
     /// </summary>
+    /// <remarks>
+    ///     The structural half alone is inert by construction — it bites only on an apply node, which the parser
+    ///     already gates, and on a declaration an author volunteered — so the question is asked where the binding is
+    ///     resolved. This is the EARLY answer, refusing before a session exists where it costs nothing and reads as
+    ///     configuration; what it judges is mutable, so the same question is handed to every turn the session takes.
+    ///     A node already declaring <c>WriteExecute</c> is not asked: save time gated it, which is the stronger answer.
+    /// </remarks>
     private async Task EnsureDeclaredWhatItCanWriteAsync(DevWorkflowGraph graph, DevWorkflowGraphNode node, Guid agentDefinitionId, CancellationToken cancellationToken)
     {
         if (!DeclarationRequired(graph, node))
@@ -503,10 +457,13 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     /// <summary>
-    ///     Whether this node has to declare what its agent can write: it declares no <c>WriteExecute</c> of its own and
-    ///     its template waives nothing. Both halves are read off the run's pinned graph, so an operator editing the
-    ///     definition cannot move them mid-run.
+    ///     Whether this node has to declare what its agent can write: it declares no <c>WriteExecute</c> of its own
+    ///     and its template waives nothing.
     /// </summary>
+    /// <remarks>
+    ///     Both halves are read off the run's pinned graph, so an operator editing the definition cannot move them
+    ///     mid-run.
+    /// </remarks>
     private static bool DeclarationRequired(DevWorkflowGraph graph, DevWorkflowGraphNode? node) =>
         node is { NodeType: DevWorkflowNodeType.Agent }
         && !graph.AllowUngatedWrites
@@ -530,15 +487,15 @@ internal sealed class DevWorkflowAgentExecutor
 
     /// <summary>
     ///     What the agent is asked to do: the node's own instructions, the operator's request, and the artifacts the
-    ///     nodes before it produced — recorded as consumed in the same breath, so the audit says what this attempt was
-    ///     given rather than what a later read can guess.
-    ///     <para>
-    ///         Each upstream artifact is rendered with its CONTENTS, not merely its name and id. A reference alone is
-    ///         useless to a node that has no way to dereference it: the seeded plan node is told to turn research.md
-    ///         into a plan, and handed only "Report 'research.md' (version 1, id …)" it would invent one. The bytes
-    ///         travel in the objective because that is the one channel the agent lane already has.
-    ///     </para>
+    ///     nodes before it produced, recorded as consumed in the same breath.
     /// </summary>
+    /// <remarks>
+    ///     The audit then says what this attempt was given rather than what a later read can guess. Each upstream
+    ///     artifact is rendered with its CONTENTS, not merely its name and id: a reference alone is useless to a node
+    ///     with no way to dereference it — the seeded plan node told to turn research.md into a plan, handed only
+    ///     "Report 'research.md' (version 1, id …)", would invent one. The bytes travel in the objective because that
+    ///     is the one channel the agent lane already has.
+    /// </remarks>
     private async Task<string> ComposeObjectiveAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -549,35 +506,19 @@ internal sealed class DevWorkflowAgentExecutor
         var objective = new StringBuilder();
         _ = objective.AppendLine(node.Instructions is { Length: > 0 } instructions ? instructions : $"Carry out the '{node.Label}' step of this development workflow.");
 
-        // A node whose template subtree carries a DevTask is writing work for the implementation lane, so it is told
-        // what that lane can and cannot do — in code, because it is the lane's contract rather than one template's
-        // strategy. Gated on the SAME predicate the materializer refuses a task package by: a template of Agent and
-        // Tool nodes produces no coder attempt, and telling its decomposition that every task must export a patch and
-        // add a new test file would bind it to rules nothing there enforces.
-        // Uncapped like the instructions and counted the same way: it lands before the policy phase reads
-        // objective.Length, so policy gets the room this leaves rather than overrunning the limit behind it.
+        // A node whose template subtree carries a DevTask writes work for the implementation lane, so it is told what that lane can and cannot do — in code, since that is the lane's
+        // contract — gated on the SAME predicate the materializer refuses a task package by. Uncapped, landing before the policy phase reads objective.Length, so policy gets the rest.
         if (node.Materialization is { } materialization && graph.TemplateSubtreeHasDevTask(materialization))
         {
             _ = objective.AppendLine().AppendLine(DevWorkflowDecompositionContract.Text);
         }
 
-        // The scoped rule sets, between the node's own instructions and what was asked. Their text counts
-        // against the same budget everything else does: policy that pushed the objective over the limit would crowd out
-        // the request it is supposed to govern.
-        //
-        // Read straight from what the node run RECORDED — id, name, hash and the text itself — and never from the rule
-        // set as it stands now. Editing or deleting a rule set mid-run is allowed, so a dispatch-time read would hand
-        // the agent a document the audit does not name, or nothing at all.
-        // Rendered BEFORE the policy phase though it is appended after it, because it is uncapped: instructions and the
-        // operator's request are what a node cannot do without, so policy gets the room they leave rather than the room
-        // it would like. Without this the bounded phase would fill the budget and the unbounded one would then push
-        // straight past it.
+        // The scoped rule sets sit between the node's instructions and what was asked, counted against the same budget so policy cannot crowd out the request it governs. They are read
+        // from what the node run RECORDED — id, name, hash, text — never the rule set as it stands now, which an operator may edit mid-run into something the audit does not name.
         var inputSection = new StringBuilder();
 
-        // The operator's retry reason is lifted OUT of the generic member list and given its own sentence: a person
-        // who retried this step and said why is not one more anonymous input line, and read as one it is the line a
-        // model is most likely to skim past. Only for the attempt their decision started — the reader is scoped by
-        // attempt, so a later automatic re-attempt composes an objective with no complaint in it at all.
+        // The operator's retry reason is lifted OUT of the generic member list into its own sentence: a person who retried this step and said why is not one more anonymous input line, and
+        // read as one it is what a model skims past. Only for the attempt their decision started — the reader is scoped by attempt, so a later automatic re-attempt carries no complaint.
         var input = ReadInput(nodeRun.InputJson)
                     .Where(static entry => entry.Name is not (DevWorkflowNodeInputs.OperatorRetryReason or DevWorkflowNodeInputs.OperatorRetryAttempt))
                     .ToList();
@@ -598,8 +539,8 @@ internal sealed class DevWorkflowAgentExecutor
                             .AppendLine(operatorRetry);
         }
 
-        // The fair share, the visible truncation marker and the dropped-with-a-warning are DevWorkflowPolicyText's,
-        // shared with the DevTask lane so the two cannot drift into rendering the same recorded rule sets differently.
+        // The fair share, the visible truncation marker and the dropped-with-a-warning are DevWorkflowPolicyText's, shared with the DevTask lane so the two cannot drift into rendering
+        // the same recorded rule sets differently. The ceiling subtracts the input section because that section is uncapped and appended after this one.
         var policyCeiling = MaxObjectiveCharacters - inputSection.Length;
         _ = objective.Append(DevWorkflowPolicyText.Render(DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson),
             policyCeiling,
@@ -611,18 +552,16 @@ internal sealed class DevWorkflowAgentExecutor
 
         var upstream = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken);
 
-        // What did NOT arrive belongs in the same section as what did. An All join now carries on past a leaf a person
-        // skipped, so this node can be handed four implementations where the fan-out was five wide — and with nothing
-        // saying so it would judge the four as if they were the whole job. Named here rather than left to the absence.
+        // What did NOT arrive belongs in the same section as what did. An All join carries on past a leaf a person skipped, so this node can be handed four implementations where the
+        // fan-out was five wide, and with nothing saying so it would judge the four as the whole job. Named here rather than left to the absence.
         var skipped = await DevWorkflowUpstreamArtifacts.SkippedAsync(store, graph, run.Id, nodeRun.NodeKey, cancellationToken);
         var section = $"{Environment.NewLine}## What the steps before you produced{Environment.NewLine}";
         if ((upstream.Count > 0 || skipped.Count > 0) && objective.Length + section.Length <= MaxObjectiveCharacters)
         {
             _ = objective.Append(section);
 
-            // Composed FIRST though they are appended last. One line per skipped step, carrying the reason the row
-            // kept — which for an operator's decision is the operator's own words — with the heading folded into the
-            // first line, so a budget that runs out leaves no heading promising steps it could not name.
+            // Composed FIRST though appended last. One line per skipped step carrying the reason the row kept — for an operator's decision, their own words — with the heading folded
+            // into the first line, so a budget that runs out leaves no heading promising steps it could not name.
             var lines = skipped.Select(static skip => string.Create(CultureInfo.InvariantCulture,
                                    $"- '{skip.NodeKey}' was skipped{(skip.TerminalReason is { Length: > 0 } reason ? $": {reason}" : ".")}{Environment.NewLine}"))
                                .ToList();
@@ -631,12 +570,8 @@ internal sealed class DevWorkflowAgentExecutor
                 lines[0] = $"{Environment.NewLine}### Skipped steps{Environment.NewLine}{lines[0]}";
             }
 
-            // Their room is then held BACK from what the artifacts apportion. The share below hands the bodies every
-            // remaining character, so one long document would truncate to the ceiling itself and leave the lines
-            // nothing to fit into — the node would again be told nothing about the work that did not happen, and an
-            // absence cannot be read. Reserving is cheap: a line is a node key and a reason bounded at a kilobyte.
-            // Capped at half the room so the reserve cannot invert the problem, a wide fan-out of skipped branches
-            // crowding out the branches that DID produce.
+            // Their room is held BACK from what the artifacts apportion: the share below hands the bodies every remaining character, so one long document would truncate to the ceiling
+            // and leave the lines nothing to fit into. Capped at half the room so the reserve cannot invert the problem, a wide fan-out of skips crowding out the branches that produced.
             var reserve = Math.Min(lines.Sum(static line => line.Length), (MaxObjectiveCharacters - objective.Length) / 2);
             var artifactCeiling = MaxObjectiveCharacters - reserve;
             for (var index = 0; index < upstream.Count; index++)
@@ -645,19 +580,13 @@ internal sealed class DevWorkflowAgentExecutor
                 var header = string.Create(CultureInfo.InvariantCulture,
                     $"{Environment.NewLine}### {artifact.Kind} '{artifact.Name}' (version {artifact.Version}, id {artifact.Id}){Environment.NewLine}");
 
-                // Everything still to be written shares the room left equally — the room left BELOW the reserve, not
-                // below the limit — so a long first document cannot crowd out the ones after it and a short one hands
-                // its slack on. The share has to cover this artifact's own header and marker as well as its body,
-                // which is why both come off it before the body is asked for.
+                // Everything still to be written shares the room left equally — the room BELOW the reserve, not below the limit — so a long first document cannot crowd out the ones
+                // after it and a short one hands its slack on. The share covers this artifact's own header and marker as well as its body, so both come off before the body is asked for.
                 var share = (artifactCeiling - objective.Length) / (upstream.Count - index);
                 var body = await RenderArtifactAsync(run.Id, artifact, share - header.Length - DevWorkflowPolicyText.TruncationMarkerReserve, cancellationToken);
 
-                // The bound is enforced HERE, on the FINISHED block, with the header, the body, whichever marker was
-                // rendered and the newlines all counted. Nothing reaches the objective except through this check, so
-                // no reference-only line, marker or rounding can push it past the reserved ceiling. A block that will
-                // not fit falls back to its header alone — the agent still learns the artifact exists, which is the
-                // half that matters most — and one with no room even for that is dropped rather than allowed to
-                // overrun.
+                // The bound is enforced HERE, on the FINISHED block, counting header, body, whichever marker was rendered and the newlines. Nothing reaches the objective except through
+                // this check. A block that will not fit falls back to its header alone — the agent still learns the artifact exists — and one with no room even for that is dropped.
                 foreach (var candidate in new[]
                          {
                              header + body + Environment.NewLine,
@@ -672,9 +601,8 @@ internal sealed class DevWorkflowAgentExecutor
                 }
             }
 
-            // Last, and under the SAME overall bound as everything else rather than under the reserve: whatever the
-            // artifacts left unspent is the list's to use, and a line about work that did not happen still must not
-            // push the objective past the limit.
+            // Last, and under the SAME overall bound as everything else rather than under the reserve: whatever the artifacts left unspent is the list's to use, and a line about work
+            // that did not happen still must not push the objective past the limit.
             foreach (var line in lines)
             {
                 if (objective.Length + line.Length > MaxObjectiveCharacters)
@@ -689,15 +617,13 @@ internal sealed class DevWorkflowAgentExecutor
         return objective.ToString().TrimEnd();
     }
 
-    /// <summary>
-    ///     One upstream artifact's contents, or the line that says why they are not here.
-    ///     <para>
-    ///         Text only, decided from the DECLARED media type rather than by sniffing bytes, and only once the blob
-    ///         store has verified the artifact row's own digest and size. An artifact whose bytes no longer match what
-    ///         produced them is handed over as a reference and a warning: silently injecting unverified content is how
-    ///         a tampered file would end up being reasoned about as if it were the research.
-    ///     </para>
-    /// </summary>
+    /// <summary>One upstream artifact's contents, or the line that says why they are not here.</summary>
+    /// <remarks>
+    ///     Text only, decided from the DECLARED media type rather than by sniffing bytes, and only once the blob store
+    ///     has verified the artifact row's own digest and size. An artifact whose bytes no longer match what produced
+    ///     them is handed over as a reference and a warning: silently injecting unverified content is how a tampered
+    ///     file would end up being reasoned about as if it were the research.
+    /// </remarks>
     private async Task<string> RenderArtifactAsync(Guid runId, DevWorkflowArtifactSnapshot artifact, int budget, CancellationToken cancellationToken)
     {
         if (!ArtifactMediaTypes.IsText(artifact.MediaType))
@@ -712,11 +638,8 @@ internal sealed class DevWorkflowAgentExecutor
 
         if (artifact.SizeBytes > MaxInjectableArtifactBytes)
         {
-            // Gated on the row's recorded size BEFORE the read, because reading is what costs: the blob store
-            // materialises the whole blob and the decode allocates a UTF-16 copy of it, and an artifact may be as
-            // large as DevWorkflowOptions allows — so a fan-in of them would allocate hundreds of megabytes to keep a
-            // few thousand characters. The trade is that a huge document loses even its prefix, which is the right way
-            // round: the first few thousand characters of a 64 MiB file were never grounding, and the marker says so.
+            // Gated on the row's recorded size BEFORE the read, because reading is what costs: the blob store materialises the whole blob and the decode allocates a UTF-16 copy, so a
+            // fan-in would spend hundreds of megabytes to keep a few thousand characters. A huge document loses even its prefix, which is right — and the marker says so.
             return $"(It is {artifact.SizeBytes} bytes, too large to include here, so only this reference is given.)";
         }
 
@@ -774,24 +697,14 @@ internal sealed class DevWorkflowAgentExecutor
         }
     }
 
-    /// <summary>
-    ///     What a completed session actually produced, mapped to the node run's fate.
-    ///     <para>
-    ///         A session completes for two different reasons and its status cannot tell them apart: the objective was
-    ///         met, or the step could not meet it and closed anyway because nothing else lets a step end. Reading every
-    ///         completion as a success is the regression this reading exists to stop — a verify node wrote that it had
-    ///         NOT signed the work off and
-    ///         the run still went green — so the two honest signals a stuck session leaves are read here instead: a plan
-    ///         task it moved to <c>Blocked</c>, and the <c>objectiveMet:false</c> it may declare on
-    ///         <c>complete_work_session</c>. Either stands the row down for a human, who answers on the intervention
-    ///         gate that already exists: Retry re-attempts on a fresh session carrying their reason, Skip routes around.
-    ///     </para>
-    ///     <para>
-    ///         Not filtered by session kind: every session this executor drives was created through
-    ///         <see cref="IWorkflowOwnedWorkSessionLifecycle" /> and is <c>AgentWorkSessionKind.Workflow</c> by
-    ///         construction, so a kind check here would be a condition that cannot be false.
-    ///     </para>
-    /// </summary>
+    /// <summary>What a completed session actually produced, mapped to the node run's fate.</summary>
+    /// <remarks>
+    ///     A session completes for two reasons its status cannot tell apart: the objective was met, or the step could
+    ///     not meet it and closed anyway because nothing else lets a step end. Reading every completion as a success
+    ///     lets a verify node that wrote it had NOT signed the work off still go green, so two honest signals are read
+    ///     instead — a plan task moved to <c>Blocked</c>, and an <c>objectiveMet:false</c> declared on completion.
+    ///     Either stands the row down for the intervention gate. No kind check: every session here is a workflow one.
+    /// </remarks>
     private async Task<int> CompleteAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -806,10 +719,8 @@ internal sealed class DevWorkflowAgentExecutor
             return await SucceedAsync(store, graph, run, nodeRun, nodeRuns, session, cancellationToken);
         }
 
-        // Promoted exactly as a success would be, because the STATUS carries the honesty and nothing downstream reads a
-        // Blocked row as a deliverable. The operator choosing Retry, Skip or Abandon otherwise decides on the terminal
-        // reason alone, with the report that explains the block unreadable on the session — and a Retry clears the node
-        // run's session pointer, so the run's own artifact table is the only place these survive the decision.
+        // Promoted exactly as a success would be, because the STATUS carries the honesty and nothing downstream reads a Blocked row as a deliverable. Otherwise the operator choosing
+        // Retry, Skip or Abandon decides on the terminal reason alone — and a Retry clears the session pointer, so the run's artifact table is the only place these survive the decision.
         var declaredKind = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.Materialization?.ArtifactKind;
         _ = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken);
         return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.ObjectiveNotMet, unmet, cancellationToken);
@@ -817,15 +728,15 @@ internal sealed class DevWorkflowAgentExecutor
 
     /// <summary>
     ///     Why this completion is not a success, or <see langword="null" /> when it is one.
-    ///     <para>
-    ///         The blocked plan is read first because it is the thing the step prompt asks a stuck session for by name,
-    ///         and it says WHICH piece of work stalled — which the declaration alone does not.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The blocked plan is read first because it is what the step prompt asks a stuck session for by name, and it
+    ///     says WHICH piece of work stalled — which the declaration alone does not.
+    /// </remarks>
     private async Task<string?> UnmetObjectiveAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        // The store's own order, not re-sorted: ListTasksAsync orders by CreatedStep so a task an update re-stamped
-        // does not jump the page, and re-sorting here would name the three least recently touched tasks instead.
+        // The store's own order, not re-sorted: ListTasksAsync orders by CreatedStep so a task an update re-stamped does not jump the page, and re-sorting here would name the three
+        // least recently touched tasks instead.
         var blocked = (await _sessionStore.ListTasksAsync(sessionId, sinceSequence: 0, cancellationToken))
                       .Where(static task => task.Status == AgentWorkSessionTaskStatus.Blocked)
                       .ToList();
@@ -844,20 +755,14 @@ internal sealed class DevWorkflowAgentExecutor
 
     /// <summary>
     ///     The <c>objectiveMet:false</c> a session may declare on its way out, with the summary that explains it.
-    ///     <para>
-    ///         Read off the completion EVENT rather than the session row, because the row keeps only a status — and the
-    ///         event is the same row, holding the same detail record, that the work-session supervisor reads to close
-    ///         the session at all. A completion recorded before the argument existed carries no member, which reads as
-    ///         met: an upgrade cannot retroactively block a node run that already finished.
-    ///     </para>
-    ///     <para>
-    ///         The LAST completion request answers, which pairs with the FIRST one winning inside a single step:
-    ///         <c>complete_work_session</c>'s operation id is derived from the step, so a second call in the same step
-    ///         replays the first through the store's dedupe and writes nothing, while each later step declares its own
-    ///         row. Together that means a session cannot double-append a declaration after a lost response, and a
-    ///         session that kept working after declaring is judged on what it said LAST.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Read off the completion EVENT, not the session row, which keeps only a status; the event is the same row
+    ///     the work-session supervisor reads to close the session. A completion carrying no member reads as met, so
+    ///     an upgrade cannot retroactively block a node run that already finished. The LAST completion request
+    ///     answers, pairing with the FIRST winning inside one step (the operation id is derived from the step, so a
+    ///     repeat replays through dedupe) — a session that kept working after declaring is judged on what it said last.
+    /// </remarks>
     private async Task<string?> DeclaredUnmetAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         // Targeted, not the whole log: this used to read and decrypt every event the session ever wrote to keep one row.
@@ -876,8 +781,7 @@ internal sealed class DevWorkflowAgentExecutor
         }
         catch (JsonException exception)
         {
-            // Unreadable detail is not evidence of a failure. The supervisor already completed the session on it, and
-            // inventing a block from a parse error would strand a node run a person then has to un-stick by hand.
+            // Unreadable detail is not evidence of a failure: the supervisor already completed the session on it, and inventing a block from a parse error would strand a node run.
             _logger.LogWarning(exception, "Work session {SessionId} recorded an unreadable completion detail.", sessionId);
             return null;
         }
@@ -891,12 +795,8 @@ internal sealed class DevWorkflowAgentExecutor
         WorkSessionDetail session,
         CancellationToken cancellationToken)
     {
-        // Evidence first, status last — the same order the work-session loop uses one level down. A crash in that
-        // window re-derives the same answer, because the promotion is keyed and the poll runs again.
-        //
-        // A decomposing node declares the artifact kind it produces, and that declaration is what the promotion needs:
-        // the session's own enum cannot say "task package", so without it the document this node's whole purpose is to
-        // hand downstream would land as an ordinary report and the materialization would find nothing.
+        // Evidence first, status last — the order the work-session loop uses one level down; a crash in that window re-derives the same answer, the promotion being keyed. A decomposing
+        // node declares its artifact kind because the session's enum cannot say "task package": without it the task package lands as a report and the materialization finds nothing.
         var declaredKind = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.Materialization?.ArtifactKind;
         var promoted = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken);
         var findings = await _sessionStore.ListFindingsAsync(session.Id, sinceSequence: 0, cancellationToken);
@@ -917,14 +817,12 @@ internal sealed class DevWorkflowAgentExecutor
         return await SettleAsync(store, run, nodeRun, nodeRuns, DevWorkflowNodeRunStatus.Succeeded, failureClass: null, terminalReason: null, output, cancellationToken);
     }
 
-    /// <summary>
-    ///     Resumes a session that parked, until the node run's resume budget is spent.
-    ///     <para>
-    ///         Parking is routine rather than a fault: a work session pauses on its own step budget, and a workflow node
-    ///         routinely needs more steps than one run allows. Exhausting the budget therefore asks a human rather than
-    ///         failing the node — the work so far is on the session, and a person decides whether it needs more.
-    ///     </para>
-    /// </summary>
+    /// <summary>Resumes a session that parked, until the node run's resume budget is spent.</summary>
+    /// <remarks>
+    ///     Parking is routine rather than a fault: a work session pauses on its own step budget, and a workflow node
+    ///     routinely needs more steps than one run allows. Exhausting the budget therefore asks a human rather than
+    ///     failing the node — the work so far is on the session, and a person decides whether it needs more.
+    /// </remarks>
     private async Task<int> ResumeAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraph graph,
@@ -945,13 +843,12 @@ internal sealed class DevWorkflowAgentExecutor
 
         if (!_sessions.HasCapacity || !await TryDriveAsync(session, graph, node, cancellationToken))
         {
-            // The slot is held by another session. The row stays Running — it has not stopped working, it is waiting for
-            // its own continuation — and the next tick asks again.
+            // The slot is held by another session. The row stays Running — it has not stopped working, it waits for its own continuation — and the next tick asks again.
             return 0;
         }
 
-        // Recorded AFTER the resume landed, and keyed by the resume index so a replayed tick cannot spend the budget
-        // twice. The attach event is also the per-attempt history the single-row node-run schema does not keep.
+        // Recorded AFTER the resume landed, keyed by the resume index so a replayed tick cannot spend the budget twice. The attach event is also the per-attempt history the single-row
+        // node-run schema does not keep.
         _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand
         {
             RunId = run.Id,
@@ -984,13 +881,13 @@ internal sealed class DevWorkflowAgentExecutor
     /// <summary>
     ///     The sentence the write-declaration gate stopped this session with, or <see langword="null" /> when nothing
     ///     stopped it that way.
-    ///     <para>
-    ///         Read off the step row the supervisor wrote at the moment of the refusal — the outcome tag is the stable
-    ///         code and its detail is the sentence — so the answer is a fact about what happened rather than a verdict
-    ///         about what the agent definition currently allows. The LAST such row wins for the same reason a terminal
-    ///         reason does: it is the one the session settled on.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Read off the step row the supervisor wrote at the moment of the refusal — the outcome tag is the stable
+    ///     code and its detail the sentence — so the answer is a fact about what happened rather than a verdict about
+    ///     what the agent definition currently allows. The LAST such row wins for the same reason a terminal reason
+    ///     does: it is the one the session settled on.
+    /// </remarks>
     private async Task<string?> ReadWriteGateRefusalAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         var events = await _sessionStore.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken);

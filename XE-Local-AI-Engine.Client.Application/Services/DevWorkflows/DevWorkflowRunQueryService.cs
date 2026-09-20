@@ -5,20 +5,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     The Development-Workflow READ endpoints' only door onto <see cref="IDevWorkflowStore" />: the run list, the
-///     paged event log and the artifact feed the run view is drawn from. An endpoint is the HTTP edge and may not take
-///     a persistence store itself (the endpoint-dependency rule), so each call arrives here unchanged. This type adds
-///     no policy of its own — the read-the-run-first-so-an-unknown-one-404s call, the one-over-the-limit probe, the
-///     run-ownership check on an artifact and the size ceiling all stay in the endpoints that own them.
-///     <para>
-///         Read-only by construction, and that is the point of it being separate: nothing here COMMANDS a run. Start,
-///         pause, resume, cancel, the human decision and the work-item delete live on
-///         <see cref="IDevWorkflowRunService" />; the composed run-and-node-runs detail those endpoints answer with is
-///         <c>DevWorkflowRunComposer</c>'s, not this type's. Authoring reads live on
-///         <see cref="DevWorkflowAuthoringService" />. Also absent, because nothing on the HTTP edge asks for them:
-///         <c>ListRunsAsync</c> (the dispatcher's join-free sweep), the work-session and development-task lookups,
-///         and every artifact WRITE.
-///     </para>
+///     paged event log and the artifact feed the run view is drawn from.
 /// </summary>
+/// <remarks>
+///     An endpoint is the HTTP edge and may not take a persistence store itself, so each call arrives here unchanged;
+///     this type adds no policy of its own, and the 404-first read, the one-over-the-limit probe, the run-ownership
+///     check and the size ceiling stay in the endpoints that own them. Read-only by construction, which is the point
+///     of it being separate: commands live on <see cref="IDevWorkflowRunService" />, the composed run detail on
+///     <c>DevWorkflowRunComposer</c>, and authoring reads on <see cref="DevWorkflowAuthoringService" />.
+/// </remarks>
 public sealed class DevWorkflowRunQueryService
 {
     private readonly IDevWorkflowStore _store;

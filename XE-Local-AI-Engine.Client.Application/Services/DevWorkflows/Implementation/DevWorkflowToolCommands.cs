@@ -9,32 +9,23 @@ using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
-/// <summary>
-///     Runs a Tool node's validation commands in a prepared sandbox workspace.
-///     <para>
-///         It calls the substrate BELOW <c>DevelopmentValidationRunner</c> rather than that runner, because the runner
-///         is welded to the Dev Mode task machine: it starts a validation transition on a task row, reads that task's
-///         last succeeded coder attempt, and finalizes by writing a task status. A workflow Tool node-run has none of
-///         those rows. What it does share is everything that matters — the same workspace provider, the same command
-///         profile, the same sanitizer and the same verdict — so the gate a workflow node applies is the gate Dev Mode
-///         applies, not a second one that drifted.
-///     </para>
-///     <para>
-///         The one thing that had to move is where committed credentials are reported. That write resolved the project
-///         from a task row, so it is taken through <see cref="IDevelopmentWorkspaceSecretsSink" />, and this lane hands
-///         the provider a sink that simply collects them for the tick to record.
-///     </para>
-/// </summary>
+/// <summary>Runs a Tool node's validation commands in a prepared sandbox workspace.</summary>
+/// <remarks>
+///     It calls the substrate BELOW <c>DevelopmentValidationRunner</c>, which is welded to the Dev Mode task machine,
+///     but shares the workspace provider, the command profile, the sanitizer and the verdict — so the gate a workflow
+///     node applies is Dev Mode's, not a second one that drifted. Committed credentials are reported through
+///     <see cref="IDevelopmentWorkspaceSecretsSink" />. See docs/wiki/25-dev-workflows.md ("The patch overlay").
+/// </remarks>
 internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    /// <summary>
-    ///     What the synthesized snapshot answers for the two attempt-identity fields. They exist for the cloud role
-    ///     route, which a Tool node never reaches; naming them for what this is beats borrowing a model id that would
-    ///     read as a claim about which model ran.
-    /// </summary>
+    /// <summary>What the synthesized snapshot answers for the two attempt-identity fields.</summary>
+    /// <remarks>
+    ///     They exist for the cloud role route, which a Tool node never reaches; naming them for what this is beats
+    ///     borrowing a model id that would read as a claim about which model ran.
+    /// </remarks>
     private const string ExecutorIdentity = "dev-workflow-tool-node";
 
     /// <summary>What stands in for captured output the report had no room for. See <c>Compose</c>.</summary>
@@ -95,35 +86,25 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
                                               or SandboxCapabilityNotSupportedException
                                               or KeyNotFoundException)
         {
-            // The node cannot run AS CONFIGURED: a project row that is gone, a repository that needs reconnecting, a
-            // sandbox backend that cannot hold a trusted workspace. A human changes something or nothing changes.
-            // Ahead of the security catch because the repository conflict IS one, and it is the more specific answer.
+            // The node cannot run AS CONFIGURED — a missing project, a repository needing reconnection, a sandbox that
+            // cannot hold a trusted workspace. Ahead of the security catch: a repository conflict IS one, more specific.
             return Refused(DevWorkflowFailureClasses.Configuration, Sanitized(exception), secrets);
         }
         catch (DevelopmentWorkspaceSecurityException exception)
         {
-            // A protected path, an unacknowledged repository, a command that moved the worktree off its base commit, or
-            // evidence carrying a credential no redaction can salvage. None of them is answered differently by running
-            // the same commands again, so the class is the non-retryable one.
+            // A protected path, an unacknowledged repository, a worktree moved off its base commit, or unsalvageable
+            // evidence. Running the same commands again answers none of them, so the class is the non-retryable one.
             return Refused(DevWorkflowFailureClasses.Policy, Sanitized(exception), secrets);
         }
     }
 
-    /// <summary>
-    ///     One exception's message, fit to be stored on a row and rendered on a wire. Shared with the apply variant,
-    ///     which surfaces the same kind of sentence from the same Dev Mode exceptions.
-    ///     <para>
-    ///         These sentences are the ONE thing this lane surfaces that nothing has already redacted: the sandbox
-    ///         interpolates an inner IOException's text into its own failure message, and that text can carry a host
-    ///         path. The report artifact goes through the same sanitizer, so this closes the other half.
-    ///     </para>
-    ///     <para>
-    ///         No protected roots are passed, deliberately: the generic absolute-path patterns fire on any path, and at
-    ///         this point the repository may not have resolved. A message the sanitizer REFUSES — one carrying
-    ///         credential-like material it cannot redact — is replaced wholesale rather than allowed to escape as a
-    ///         second exception, because the failure being reported is the one worth surfacing.
-    ///     </para>
-    /// </summary>
+    /// <summary>One exception's message, fit to be stored on a row and rendered on a wire.</summary>
+    /// <remarks>
+    ///     Shared with the apply variant. These sentences are the ONE thing this lane surfaces that nothing has
+    ///     already redacted: the sandbox interpolates an inner IOException's text, which can carry a host path. No
+    ///     protected roots are passed, deliberately — the generic absolute-path patterns fire on any path, and the
+    ///     repository may not have resolved. A message the sanitizer REFUSES is replaced wholesale.
+    /// </remarks>
     internal static string Sanitized(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
@@ -167,8 +148,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         }
 
         // Constructed with THIS lane's sink rather than resolved: the container's provider reports credentials through
-        // the Dev Mode store write, which resolves a task row that a node run does not have. Everything else it needs
-        // comes from the container, so the wiring cannot drift from the registered one.
+        // a Dev Mode store write that resolves a task row a node run does not have. Everything else still comes from it.
         var workspaces = ActivatorUtilities.CreateInstance<DevelopmentWorkspaceProvider>(_services, secrets);
         var snapshot = Synthesize(project, node, run, nodeRun, repository);
         var session = await workspaces.PrepareAsync(snapshot, repository, cancellationToken);
@@ -197,12 +177,8 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // The node's own budget, not the drain's — the drain's cancel propagates, because only the lane knows
-            // whether a run was cancelled or paused.
-            //
-            // The commands that DID finish are still evidence, and the report says which of them passed before the
-            // clock ran out: that is what tells an operator whether this node is slow or stuck, and it is the same
-            // artifact every other outcome leaves, so the node run that times out is not the one nobody can read.
+            // The node's own budget, not the drain's, whose cancel propagates because only the lane knows whether a run
+            // was cancelled or paused. The commands that DID finish are still evidence and the report names them.
             return Result(timedOutAfterSeconds: budgetSeconds);
         }
 
@@ -213,10 +189,8 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
             var evidence = tools.CommandEvidence.Select(command => DevelopmentArtifactSanitizer.Sanitize(command, protectedRoots)).ToArray();
 
-            // Evaluated against the list this node actually ran. The verdict's first rule is that every declared command
-            // produced evidence, and a node narrowing the profile's list would otherwise fail that rule by construction.
-            // A timed-out pass fails that same rule for a real reason — the commands it never reached — so the report
-            // names the missing evidence and the row names the clock.
+            // Evaluated against the list this node actually ran: the verdict's first rule is that every declared command
+            // produced evidence, which a node narrowing the profile's list would otherwise fail by construction.
             var verdict = DevelopmentValidationVerdict.Evaluate(profile with
             {
                 ValidationCommandIds = commandIds
@@ -245,32 +219,14 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         }
     }
 
-    /// <summary>
-    ///     Puts the implementation's OWN work into the freshly prepared workspace before anything judges it.
-    ///     <para>
-    ///         An implementation node runs through Dev Mode, which leaves its work as a STAGED patch in the attempt's
-    ///         own worktree and never touches the base branch — so a validation node that cloned
-    ///         <c>refs/heads/{baseBranch}</c> and ran the commands was judging the committed base and reporting green
-    ///         about a tree that change is not in. That voids the per-slice quality gate and makes the
-    ///         <c>retryTarget</c> fix loop unable to fire on a real implementation failure.
-    ///     </para>
-    ///     <para>
-    ///         <b>Security posture.</b> The bytes are the approved patch artifact's, read through the same immutable
-    ///         hash-and-byte-count verification the trusted host apply port reads them through, and bound to the task's
-    ///         own <c>ApprovedSubjectHash</c>; the apply is <c>git apply --index</c> under the hardened argument vector
-    ///         inside the SANDBOX workspace only — the operator's registered repository is never written to, no trust
-    ///         decision is re-asserted, and a patch that does not verify or does not apply REFUSES the node
-    ///         (<c>Policy</c>) rather than silently validating the base underneath it.
-    ///     </para>
-    ///     <para>
-    ///         Every anomaly on this path REFUSES rather than falling back to the base. A validation node runs only
-    ///         after its implementation succeeded, so an upstream implementation with no approved patch, a task carrying
-    ///         no approved subject, or a graph offering more than one implementation are all states this node cannot
-    ///         judge — and a green report over the base is exactly the silent lie the overlay exists to remove. The
-    ///         honest base-validation path is the one with no upstream implementation to judge: a Tool node whose branch
-    ///         reaches no <c>DevTask</c>, or one past an apply, whose base already IS the applied work.
-    ///     </para>
-    /// </summary>
+    /// <summary>Puts the implementation's OWN work into the freshly prepared workspace before anything judges it.</summary>
+    /// <remarks>
+    ///     The bytes are the approved patch artifact's, verified as the trusted host apply port verifies them and
+    ///     bound to the task's <c>ApprovedSubjectHash</c>; the apply is <c>git apply --index</c> inside the SANDBOX
+    ///     workspace only. Every anomaly on this path REFUSES (<c>Policy</c>) rather than falling back to the base,
+    ///     a green report over the base being the silent lie the overlay exists to remove.
+    ///     See docs/wiki/25-dev-workflows.md ("The patch overlay").
+    /// </remarks>
     internal async Task<DevWorkflowOverlay> OverlayAsync(DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         DevelopmentWorkspaceSession session,
@@ -350,32 +306,13 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     private static DevWorkflowOverlay Refuse(string sanitizedReason) =>
         new(BasedOn: null, sanitizedReason);
 
-    /// <summary>
-    ///     The implementations this validation node exists to judge, resolved from the GRAPH rather than from whether the
-    ///     node run happens to be a materialization clone.
-    ///     <para>
-    ///         For a clone that is the <c>DevTask</c> rows of the same clone group — same origin node run, same 1-based
-    ///         index — that this node sits downstream of. Derived from the graph and the rows rather than from node keys:
-    ///         a clone's key is the template's key with a suffix the decomposing agent chose, so ancestry in the
-    ///         rewritten graph is the only thing that says which implementation the validation follows.
-    ///     </para>
-    ///     <para>
-    ///         For a node run that is NOT a clone it is the nearest <c>DevTask</c> ancestors by graph edges, which is the
-    ///         same question asked of an UNDECOMPOSED graph: a plain <c>implement → validate</c> pair belongs to no clone
-    ///         group, and answering "no implementation" there made the one node whose job is to judge the patch judge the
-    ///         committed base instead and report green about a tree the change was not in.
-    ///     </para>
-    ///     <para>
-    ///         The walk stops at an <see cref="DevWorkflowToolMode.Apply" /> Tool node and never looks past one. Past an
-    ///         apply the work IS the committed base, so <c>fullvalidate</c> after <c>integrate</c> keeps validating that
-    ///         base — the v1 ceiling recorded for it — instead of re-overlaying patches the apply already landed.
-    ///     </para>
-    ///     <para>
-    ///         Answers the whole set rather than a first match, because more than one implementation feeding one
-    ///         validation is a fault to refuse rather than something to pick alphabetically. Merging a multi-child
-    ///         fan-out into one workspace stays the v1 ceiling it was ruled to be.
-    ///     </para>
-    /// </summary>
+    /// <summary>The implementations this validation node exists to judge, resolved from the GRAPH.</summary>
+    /// <remarks>
+    ///     Not from whether the node run happens to be a materialization clone. The walk stops at an
+    ///     <see cref="DevWorkflowToolMode.Apply" /> Tool node and never looks past one. It answers the whole set
+    ///     rather than a first match, more than one implementation feeding one validation being a fault to refuse.
+    ///     See docs/wiki/25-dev-workflows.md ("The patch overlay").
+    /// </remarks>
     private async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> UpstreamImplementationsAsync(DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         bool clone,
@@ -409,12 +346,11 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         ];
     }
 
-    /// <summary>
-    ///     The <c>DevTask</c> node keys a walk back up the in-edges reaches FIRST: a DevTask ends its branch, so an
-    ///     implementation further upstream of another implementation is that one's business rather than this node's, and
-    ///     an <see cref="DevWorkflowToolMode.Apply" /> node ends its branch too, because what it applied is the base
-    ///     everything past it already validates.
-    /// </summary>
+    /// <summary>The <c>DevTask</c> node keys a walk back up the in-edges reaches FIRST.</summary>
+    /// <remarks>
+    ///     A DevTask ends its branch, so an implementation upstream of another implementation is that one's business.
+    ///     An <see cref="DevWorkflowToolMode.Apply" /> node ends its branch too: what it applied is the base.
+    /// </remarks>
     private static HashSet<string> NearestImplementationKeys(DevWorkflowGraph graph, string from)
     {
         var nearest = new HashSet<string>(StringComparer.Ordinal);
@@ -439,16 +375,12 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         return nearest;
     }
 
-    /// <summary>
-    ///     The report bytes, bounded so the artifact store can always take them.
-    ///     <para>
-    ///         Each command's captured output is already capped, but a five-command profile can carry ten of those caps
-    ///         and the artifact limit is one number below that. A document that will not fit therefore keeps every
-    ///         command's identity, exit code, duration and test result and gives up only the captured text, with a line
-    ///         saying so — an evidence record that names what failed beats an artifact write that throws and leaves the
-    ///         node run with no evidence at all.
-    ///     </para>
-    /// </summary>
+    /// <summary>The report bytes, bounded so the artifact store can always take them.</summary>
+    /// <remarks>
+    ///     Each command's captured output is already capped, but a profile carries several of those caps and the
+    ///     artifact limit sits below that. A document that will not fit keeps every command's identity, exit code,
+    ///     duration and test result and gives up only the captured text, with a line saying so.
+    /// </remarks>
     private byte[] Compose(DevelopmentValidationVerdict verdict,
         DevelopmentCommandProfile profile,
         DevelopmentWorkspaceSession session,
@@ -486,34 +418,22 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         }, JsonOptions);
     }
 
-    /// <summary>
-    ///     The node's budget, the project's and the hard attempt cap, whichever is smallest. The cap is the outer bound
-    ///     it claims to be, so a node asking for more than it gets less.
-    ///     <para>
-    ///         This bounds the PASS; the row's own deadline (<see cref="DevWorkflowDeadline" />, the node's timeout from
-    ///         the instant the row started) bounds the node run. The two cannot disagree about the node's number because
-    ///         this takes the smaller of it and the sandbox's, and this one is counted from the earlier instant — so a
-    ///         pass answers with its evidence before the dispatcher would have to end the row without any.
-    ///     </para>
-    /// </summary>
+    /// <summary>The node's budget, the project's and the hard attempt cap, whichever is smallest.</summary>
+    /// <remarks>
+    ///     The cap is the outer bound it claims to be, so a node asking for more gets less. This bounds the PASS;
+    ///     <see cref="DevWorkflowDeadline" /> bounds the node run, and the two cannot disagree, since this takes the
+    ///     smaller number and counts from the earlier instant.
+    /// </remarks>
     private int BudgetSeconds(DevWorkflowGraphNode node, DevelopmentProjectSnapshot project) =>
         Math.Min(Math.Min(node.NodeTimeoutSeconds ?? int.MaxValue, project.MaxDurationSeconds ?? int.MaxValue), _developmentOptions.MaxAttemptDurationSeconds);
 
-    /// <summary>
-    ///     The execution snapshot a Tool node-run stands in for a Dev Mode attempt with.
-    ///     <para>
-    ///         <b>Both isolation keys are the ATTEMPT's, not the node run's.</b> The provider partitions its worktree by
-    ///         the task id and reuses a preserved one whole — including the base commit recorded in its manifest — so a
-    ///         node run whose identity is constant across attempts would have its second attempt re-validate the FIRST
-    ///         attempt's commit in the first attempt's tree, and report green or red about a state nothing is in any
-    ///         more. Deriving the id from the attempt is what makes a re-attempt a real second try: the directory does
-    ///         not exist, so the base branch is resolved again and the workspace is built from it.
-    ///     </para>
-    ///     <para>
-    ///         Deterministic, and the same derivation the tick's own idempotency keys use, so a poll replayed after a
-    ///         crash prepares the workspace this attempt already has rather than a second one beside it.
-    ///     </para>
-    /// </summary>
+    /// <summary>The execution snapshot a Tool node-run stands in for a Dev Mode attempt with.</summary>
+    /// <remarks>
+    ///     Both isolation keys are the ATTEMPT's, not the node run's, so a re-attempt is a real second try rather than
+    ///     a re-validation of the first attempt's commit in the first attempt's preserved tree. Deterministic, and the
+    ///     same derivation the tick's idempotency keys use, so a replayed poll prepares the same workspace.
+    ///     See docs/wiki/25-dev-workflows.md ("The patch overlay").
+    /// </remarks>
     internal static DevelopmentExecutionSnapshot Synthesize(DevelopmentProjectSnapshot project,
         DevWorkflowGraphNode node,
         DevWorkflowRunSnapshot run,
@@ -585,15 +505,12 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     }
 }
 
-/// <summary>
-///     The report a Tool node-run leaves behind: what ran, against which commit and profile, and what the deterministic
-///     gate made of it.
-///     <para>
-///         Deliberately NOT <c>DevelopmentValidationReport</c>. That record's subject, manifest and expected-result
-///         hashes describe a coder attempt's patch, and a Tool node validates a clean checkout of the base commit —
-///         filling three hash fields with placeholders would be a report claiming evidence it does not have.
-///     </para>
-/// </summary>
+/// <summary>The report a Tool node-run leaves: what ran, against which commit and profile, and the gate's verdict.</summary>
+/// <remarks>
+///     Deliberately NOT <c>DevelopmentValidationReport</c>: that record's subject, manifest and expected-result
+///     hashes describe a coder attempt's patch, and filling three hash fields with placeholders would be a report
+///     claiming evidence it does not have.
+/// </remarks>
 internal sealed record DevWorkflowValidationReport(
     bool Passed,
     string NodeKey,
@@ -613,9 +530,9 @@ internal sealed record DevWorkflowValidationReport(
 /// </summary>
 internal readonly record struct DevWorkflowOverlay(DevWorkflowValidationBasedOn? BasedOn, string? Refusal);
 
-/// <summary>
-///     What the commands were run against, when the base commit alone would not say it: the upstream implementation task
-///     whose approved patch was overlaid onto the workspace first. Absent means nothing was overlaid — either this node
-///     has no upstream implementation to judge, or the pass was refused.
-/// </summary>
+/// <summary>What the commands ran against when the base commit alone would not say it.</summary>
+/// <remarks>
+///     The upstream implementation task whose approved patch was overlaid onto the workspace first. Absent means
+///     nothing was overlaid: either this node has no upstream implementation to judge, or the pass was refused.
+/// </remarks>
 internal sealed record DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string PatchHash, string Detail);

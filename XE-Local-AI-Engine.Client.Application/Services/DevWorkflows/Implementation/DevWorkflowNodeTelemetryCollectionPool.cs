@@ -1,26 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
-/// <summary>
-///     How many cost collections may be IN FLIGHT at once, for one application.
-///     <para>
-///         <see cref="PublishingDevWorkflowStore" />'s collection deadline bounds the caller's WAIT, not the collection
-///         behind it. Without a ceiling on the collections themselves, a collector that blocks — or one that never
-///         terminates at all — keeps a thread-pool worker and a service scope for as long as the process runs, one per
-///         settle, and a wide retry route multiplies that by the graph's width. A settle that finds every slot taken
-///         goes ahead unmeasured, which is exactly the trade the deadline already makes.
-///     </para>
-///     <para>
-///         A container SINGLETON rather than a static field, and neither is an accident. The store around it is
-///         registered scoped, so a per-instance pool would bound nothing; a static one would be shared by every
-///         application a single process stands up — a ceiling meant for one runtime, applied to thirty of them at once,
-///         which is a test suite losing measurements to its own neighbours rather than to a stuck collector.
-///     </para>
-/// </summary>
+/// <summary>How many cost collections may be IN FLIGHT at once, for one application.</summary>
 /// <remarks>
-///     ponytail: a flat ceiling, no queue and no fairness — a refused settle is simply not measured. A counter rather
-///     than a <c>SemaphoreSlim</c>, because admission here never WAITS, and a zero-timeout acquire buys nothing from
-///     the semaphore's wait machinery except a handle to dispose. Raise the default if a box ever runs wide enough to
-///     lose measurements to it; a per-run or per-graph budget is the next rung, and that one needs a keyed pool.
+///     <see cref="PublishingDevWorkflowStore" />'s deadline bounds the caller's WAIT, not the collection: without a
+///     ceiling a blocked collector holds a thread-pool worker and a service scope for the life of the process, one
+///     per settle. A settle finding every slot taken goes ahead unmeasured, the trade the deadline already makes. A
+///     container SINGLETON, since the scoped store makes a per-instance pool bound nothing and a static one would
+///     span every application. ponytail: a counter, not a semaphore, because admission never waits; next rung a keyed pool.
 /// </remarks>
 internal sealed class DevWorkflowNodeTelemetryCollectionPool
 {

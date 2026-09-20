@@ -26,13 +26,13 @@ public sealed class DevWorkflowArtifactBlobReadResult
 }
 
 /// <summary>
-///     The bytes behind a workflow run's artifacts, encrypted at rest under the node key and keyed by run id. Rows live
-///     in <c>dev_workflow_artifacts</c>; only the digest and size cross between the two.
-///     <para>
-///         Callers write the blob <em>before</em> the row: a crash between the two leaks one bounded blob, where the
-///         other order would leave a row pointing at bytes that never existed.
-///     </para>
+///     The bytes behind a workflow run's artifacts, encrypted at rest under the node key and keyed by run id.
 /// </summary>
+/// <remarks>
+///     Rows live in <c>dev_workflow_artifacts</c>; only the digest and size cross between the two. Callers write the
+///     blob <em>before</em> the row: a crash between the two leaks one bounded blob, where the other order would
+///     leave a row pointing at bytes that never existed.
+/// </remarks>
 public interface IDevWorkflowArtifactBlobStore
 {
     Task<DevWorkflowArtifactBlobWriteResult> WriteAsync(Guid runId,

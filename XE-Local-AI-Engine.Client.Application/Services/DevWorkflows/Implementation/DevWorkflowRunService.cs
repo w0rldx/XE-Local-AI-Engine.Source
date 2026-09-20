@@ -40,14 +40,12 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         Guid operationId,
         CancellationToken cancellationToken = default)
     {
-        // The operation id IS the run id. A start has no run row to key idempotency against yet, and inventing a second
-        // identifier to correlate them would be a table nobody reads: a replayed start finds the run it created and
-        // answers with it, while a genuinely second start of the same work item is refused by the live-run rule below.
+        // The operation id IS the run id: a start has no run row to key idempotency against, and a second identifier
+        // would be a table nobody reads. A genuinely second start of one work item is refused by the live-run rule.
         if (await TryReadAsync(operationId, cancellationToken) is { } replayed)
         {
-            // A replay has to be a replay of THIS request. A reused operation id naming a different work item or
-            // definition is a caller bug, and answering it with another run's detail would hand out a run they never
-            // asked for — so it reads as the conflict it is.
+            // A replay has to be a replay of THIS request: a reused operation id naming a different work item or
+            // definition is a caller bug, and answering it would hand out a run nobody asked for.
             if (replayed.WorkItemId != workItemId || replayed.DefinitionId != definitionId)
             {
                 throw new DevWorkflowInvalidTransitionException($"Operation '{operationId}' already started a different run.");
@@ -99,17 +97,15 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
     public async Task<DevWorkflowRunDetail> ResumeAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default)
     {
-        // Ahead of the status check below for the same reason it runs ahead of the transition table in CommandAsync: a
-        // resume that committed and was then retried is a replay, and by then the run it resumed is legitimately
-        // Running — the one status this method refuses.
+        // Ahead of the status check below for the reason it runs ahead of CommandAsync's transition table: a resume
+        // that committed and was retried is a replay, and by then its run is legitimately Running — what this refuses.
         if (await TryReplayAsync(runId, operationId, DevWorkflowRunStatus.Running, cancellationToken) is { } replayed)
         {
             return replayed;
         }
 
-        // Checked here rather than left to the transition table, which lets a run go back to Running from a human wait
-        // BECAUSE the dispatcher's recomputation does exactly that. Only a paused run is one an operator can resume,
-        // and answering "resumed" to a run that never stopped would be a lie about what the command did.
+        // Checked here, not left to the transition table, which allows Running from a human wait BECAUSE the
+        // dispatcher does that. Answering "resumed" to a run that never stopped would misreport what the command did.
         var run = await _store.GetRunAsync(runId, cancellationToken);
         if (run.Status != DevWorkflowRunStatus.Paused)
         {
@@ -124,20 +120,12 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // Reads the item first so an unknown id answers "not found" rather than "deleted nothing".
         _ = await _store.GetWorkItemAsync(workItemId, cancellationToken);
 
-        // Rows first, and everything external after. The live-run guard lives inside this transaction, so a delete
-        // refused because a run started mid-flight cannot have destroyed that run's transcripts on the way to the
-        // refusal — and the ids come back from the commit, so there is no page for a caller to walk or forget.
+        // Rows first, everything external after: the live-run guard is inside this transaction, so a delete refused
+        // because a run started mid-flight destroyed none of its transcripts. The commit returns the ids to clean up.
         var deleted = await _store.DeleteWorkItemAsync(workItemId, cancellationToken);
 
-        // Past this line the request's token is DELIBERATELY dropped. The rows that named these sessions and these
-        // bytes have already committed, so a cancellation here undoes nothing — it only stops the cleanup partway, and
-        // what it abandons is abandoned for good: the startup sweep takes only never-driven sessions, so it will not
-        // collect a workflow session that ran, and nothing at all points at these bytes any more.
-        //
-        // Best-effort, and per item for the same reason: throwing would report a failure for a delete that in fact
-        // succeeded, and one session the work-session family refuses must not cost the sessions after it and every
-        // artifact directory behind them. What a failure leaves is a session or a directory nothing points at — never a
-        // dangling reference, and removable by hand through the owner surface.
+        // Past this line the token is DELIBERATELY dropped and each step is best-effort per item: the rows have
+        // committed. See docs/wiki/25-dev-workflows.md ("The application service seams").
         foreach (var sessionId in deleted.WorkSessionIds)
         {
             try
@@ -180,10 +168,8 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         var run = await _store.GetRunAsync(runId, cancellationToken);
         if (await _store.FindDecisionByOperationAsync(runId, operationId, cancellationToken) is { } recorded)
         {
-            // A repeated POST answers with the decision it already recorded, not with a conflict about the node run
-            // having since moved on because of it — but only if it IS the same act. A reused operation id naming a
-            // different node run, a different answer or a different person would otherwise read as a success for a
-            // decision nobody took, which is the one thing this audit trail exists to make impossible.
+            // A repeated POST answers with the decision it already recorded rather than a conflict — but only if it
+            // IS the same act, or a reused id would read as a success for a decision nobody took.
             if (recorded.NodeRunId != nodeRunId || recorded.Decision != decision || !string.Equals(recorded.DecidedBySubject, decidedBySubject, StringComparison.Ordinal))
             {
                 throw new DevWorkflowInvalidTransitionException($"Operation '{operationId}' already recorded a different decision on this run.");
@@ -202,9 +188,8 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
         if (nodeRun.Status is not (DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked))
         {
-            // A node run that moved BECAUSE it was already answered is a different refusal from one that was never
-            // waiting: the second click on a settled gate gets told what stands, rather than only that it failed. The
-            // operation id cannot say this — a new one is a new human act, which is exactly the case being refused.
+            // A node run that moved BECAUSE it was answered is a different refusal from one that was never waiting:
+            // the second click on a settled gate is told what stands. A new operation id is a new act, not a replay.
             var standing = (await _store.ListDecisionsAsync(runId, cancellationToken))
                 .LastOrDefault(decision => decision.NodeRunId == nodeRunId && decision.Attempt == nodeRun.Attempt);
             throw standing is not null
@@ -213,8 +198,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         }
 
         // The same rule the API advertises the answers from, so the endpoint cannot accept one it did not offer — a
-        // Retry on an unanswered gate, say, which has no re-attempt to schedule even though the runtime's own reset
-        // moves that row to the same place.
+        // Retry on an unanswered gate, which has no attempt to schedule though the runtime's reset moves it there.
         if (!DevWorkflowStateMachine.IsDecidable(nodeRun.Status, decision))
         {
             throw new DevWorkflowInvalidTransitionException($"Node run '{nodeRun.NodeKey}' is {nodeRun.Status} and cannot be answered {decision}.");
@@ -222,13 +206,8 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
         if (decision == DevWorkflowDecisionKind.Retry)
         {
-            // A human Retry ignores the NODE's attempt cap on purpose — that is what makes it an override — but the
-            // run-wide budget still bounds it, or a definition nobody can fix becomes a person clicking Retry for ever.
-            // The startup reconciler checks the same budget for the attempts a restart spends.
-            //
-            // This is the fast path and the friendly message, NOT the authority: it reads a count that several blocked
-            // node runs answered in the same tick window would each read as unspent. The budget therefore travels on
-            // the command and is admitted inside the transaction that records the decision, where the count is true.
+            // A human Retry overrides the NODE's cap, but the run-wide budget still bounds it. This is the friendly
+            // message, NOT the authority: the budget is admitted inside the transaction that records the decision.
             var spent = (await _store.ListNodeRunsAsync(runId, cancellationToken)).Sum(static row => row.Attempt - 1);
             if (spent >= _options.MaxTotalAttempts)
             {
@@ -262,15 +241,12 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         return new DevWorkflowDecisionResult { Detail = detail, Decision = settled };
     }
 
-    /// <summary>
-    ///     A lifecycle command: legal from where the run stands, keyed by its operation id, and signalled after it
-    ///     commits.
-    ///     <para>
-    ///         Written against the <c>Any</c> version sentinel deliberately. A command is an operator's intent and must
-    ///         win over a status move the dispatcher decided a moment earlier — the version check exists to stop the
-    ///         reverse, a recomputation overwriting a cancel that landed between its read and its write.
-    ///     </para>
-    /// </summary>
+    /// <summary>A lifecycle command: legal from where the run stands, keyed by its operation id, signalled on commit.</summary>
+    /// <remarks>
+    ///     Written against the <c>Any</c> version sentinel deliberately: an operator's intent must win over a status
+    ///     move the dispatcher decided a moment earlier, the version check existing to stop the reverse.
+    ///     See docs/wiki/25-dev-workflows.md ("The application service seams").
+    /// </remarks>
     private async Task<DevWorkflowRunDetail> CommandAsync(Guid runId, Guid operationId, DevWorkflowRunStatus target, CancellationToken cancellationToken)
     {
         if (await TryReplayAsync(runId, operationId, target, cancellationToken) is { } replayed)
@@ -285,23 +261,12 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         return await SignalAndComposeAsync(runId, cancellationToken);
     }
 
-    /// <summary>
-    ///     The run as it stands, when this operation id has already committed its command — and <see langword="null" />
-    ///     when it has not.
-    ///     <para>
-    ///         Resolved BEFORE legality by every lifecycle verb. A command that committed and whose answer the client
-    ///         never saw is retried against a run the dispatcher has meanwhile advanced — a cancel that has since
-    ///         drained to <c>Cancelled</c>, a resume whose run is now <c>Running</c> — and judging that retry against
-    ///         the status its own first attempt produced would answer a conflict to a caller that did exactly the right
-    ///         thing. The store keeps the same promise one level down; this is that promise made visible to the verbs.
-    ///     </para>
-    ///     <para>
-    ///         It is the replay of THIS verb or it is not a replay at all. An operation id names one act, so the same
-    ///         id arriving on a different verb is a caller bug — and answering it with the run would report a cancel as
-    ///         done while the run carried on, which is exactly the failure the decision replay's identity check exists
-    ///         to prevent one method up.
-    ///     </para>
-    /// </summary>
+    /// <summary>The run as it stands when this operation id has already committed its command, else null.</summary>
+    /// <remarks>
+    ///     Resolved BEFORE legality by every lifecycle verb; the store keeps the same promise one level down, and this
+    ///     is that promise made visible to the verbs. It is the replay of THIS verb or it is not a replay at all.
+    ///     See docs/wiki/25-dev-workflows.md ("The application service seams").
+    /// </remarks>
     private async Task<DevWorkflowRunDetail?> TryReplayAsync(Guid runId,
         Guid operationId,
         DevWorkflowRunStatus target,
@@ -321,14 +286,11 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         return await SignalAndComposeAsync(runId, cancellationToken);
     }
 
-    /// <summary>
-    ///     The event a lifecycle verb writes, which is what identifies that verb in the log.
-    ///     <para>
-    ///         A second spelling of the store's own status-to-event mapping rather than a shared constant, and kept
-    ///         honest by the tests instead: a true replay of each verb must still read as a replay, so a drift here
-    ///         fails those three immediately.
-    ///     </para>
-    /// </summary>
+    /// <summary>The event a lifecycle verb writes, which is what identifies that verb in the log.</summary>
+    /// <remarks>
+    ///     A second spelling of the store's own status-to-event mapping rather than a shared constant, kept honest by
+    ///     the tests instead: a true replay of each verb must still read as a replay, so a drift here fails them.
+    /// </remarks>
     private static string EventTypeFor(DevWorkflowRunStatus target) =>
         target switch
         {
@@ -358,9 +320,8 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
             Run = run,
             NodeRuns = nodeRuns,
             PendingDecisionCount = nodeRuns.Count(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked),
-            // The same rule the store's list counters use: the first node run, in sequence order, that a human has to
-            // act on — a gate awaiting its answer or a node awaiting intervention, since Blocked folds in. A narrower
-            // reading here would make the list page and the detail page disagree about the same run.
+            // The store's list counters' own rule: the first node run in sequence order a human has to act on, a gate
+            // or a Blocked node alike. A narrower reading would make the list and detail pages disagree on one run.
             BlockingGateNodeRunId = nodeRuns.Where(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)
                     .OrderBy(static nodeRun => nodeRun.Sequence)
                     .Select(static nodeRun => (Guid?)nodeRun.Id)
@@ -380,11 +341,11 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         }
     }
 
-    /// <summary>
-    ///     A graph with sandbox work in it needs a repository to do that work in, and the work item is where one is
-    ///     bound. Checked at run start rather than at save: the same definition is legitimately reusable by a work item
-    ///     that HAS a project, and a research-only workflow legitimately has none.
-    /// </summary>
+    /// <summary>A graph with sandbox work in it needs a repository, and the work item is where one is bound.</summary>
+    /// <remarks>
+    ///     Checked at run start rather than at save: the same definition is legitimately reusable by a work item that
+    ///     HAS a project, and a research-only workflow legitimately has none.
+    /// </remarks>
     private static void EnsureRepositoryBound(DevWorkflowGraph graph, DevWorkflowWorkItemSnapshot workItem)
     {
         if (workItem.DevelopmentProjectId is not null)

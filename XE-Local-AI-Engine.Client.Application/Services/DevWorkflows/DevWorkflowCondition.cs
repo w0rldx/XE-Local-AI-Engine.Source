@@ -18,15 +18,13 @@ internal enum DevWorkflowConditionOperator
     NotExists
 }
 
-/// <summary>
-///     One declarative comparison against a node's output document, carried on an EDGE (never on a node — a node-level
-///     condition would be a second way to say what a conditional edge already says).
-///     <para>
-///         <see cref="Path" /> is dot-separated property names and nothing else: no wildcards, no array indexing, no
-///         functions. If a real expression language is ever justified it replaces <see cref="Evaluate" /> behind an
-///         interface and nothing else changes.
-///     </para>
-/// </summary>
+/// <summary>One declarative comparison against a node's output document, carried on an EDGE and never on a node.</summary>
+/// <remarks>
+///     A node-level condition would be a second way to say what a conditional edge already says. <see cref="Path" /> is
+///     dot-separated property names and nothing else: no wildcards, no array indexing, no functions. If a real
+///     expression language is ever justified it replaces <see cref="Evaluate" /> behind an interface, and nothing else
+///     changes.
+/// </remarks>
 internal sealed record DevWorkflowCondition
 {
     public required string Path { get; init; }
@@ -35,15 +33,13 @@ internal sealed record DevWorkflowCondition
 
     public required JsonElement Value { get; init; }
 
-    /// <summary>
-    ///     Whether the edge carrying <paramref name="condition" /> fires. A null condition is unconditional.
-    ///     <para>
-    ///         Fail-closed on absence: a path the output does not carry answers <c>false</c> for every operator except
-    ///         <see cref="DevWorkflowConditionOperator.NotExists" />, which is the one operator whose whole purpose is to
-    ///         be true then. An edge must never fire on data that is not there — a node that produced no output at all
-    ///         would otherwise route as if it had.
-    ///     </para>
-    /// </summary>
+    /// <summary>Whether the edge carrying <paramref name="condition" /> fires. A null condition is unconditional.</summary>
+    /// <remarks>
+    ///     Fail-closed on absence: a path the output does not carry answers <c>false</c> for every operator except
+    ///     <see cref="DevWorkflowConditionOperator.NotExists" />, the one operator whose whole purpose is to be true
+    ///     then. An edge must never fire on data that is not there — a node that produced no output at all would
+    ///     otherwise route as if it had.
+    /// </remarks>
     public static bool Evaluate(DevWorkflowCondition? condition, JsonElement? output)
     {
         if (condition is null)
@@ -118,13 +114,8 @@ internal sealed record DevWorkflowCondition
     {
         if (left.ValueKind == JsonValueKind.Number && right.ValueKind == JsonValueKind.Number)
         {
-            // Mirrors GraphWorkflowCondition.Order — there are two copies of this ladder, and a change to either is a
-            // change to both. It is private there, so reusing it would mean editing the graph module to share it.
-            //
-            // Widest exact type first. Through double, 9007199254740992 and 9007199254740993 are the SAME value, so a
-            // 'gt' over ids or byte counts past 2^53 answers on a rounding artefact rather than on the numbers. Double
-            // is kept as the last resort for the tokens no exact arm reads — fractional and exponent forms out of
-            // decimal range — and a token not even double reads is not an ordering at all.
+            // Widest exact type first: through double, 9007199254740992 and 9007199254740993 are the SAME value, so a
+            // 'gt' past 2^53 answers on rounding. Mirrored in GraphWorkflowCondition.Order (private there); change both.
             if (left.TryGetInt64(out var leftLong) && right.TryGetInt64(out var rightLong))
             {
                 return leftLong.CompareTo(rightLong);
@@ -135,20 +126,16 @@ internal sealed record DevWorkflowCondition
                 return leftDecimal.CompareTo(rightDecimal);
             }
 
-            // Past decimal's range an INTEGER token still has an exact value, and only a chain that ends at double
-            // loses it: 1e29 and 1e29+1 are the same double. NumberStyles.AllowLeadingSign is the '^-?[0-9]+$' shape
-            // itself — sign and digits, nothing else — so a fractional or exponent token simply does not parse here
-            // and falls through to the line below.
+            // Past decimal's range an INTEGER token is still exact, and only a chain ending at double loses it: 1e29
+            // and 1e29+1 are one double. AllowLeadingSign is '^-?[0-9]+$', so other shapes fall through to the double.
             if (BigInteger.TryParse(left.GetRawText(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var leftInteger)
                 && BigInteger.TryParse(right.GetRawText(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var rightInteger))
             {
                 return leftInteger.CompareTo(rightInteger);
             }
 
-            // ponytail: fractional and exponent tokens beyond decimal range still round through double, so two that
-            // differ only past ~17 significant digits read as equal and an integer token compared against its own
-            // exponent form answers on the rounded pair. Upgrade path if that ever routes a real graph wrongly:
-            // normalise each token into a BigInteger significand plus a base-10 exponent and compare those.
+            // ponytail: the last resort, for the tokens no exact arm reads; a token not even double reads is no ordering
+            // at all. Two differing past ~17 digits read as equal. Upgrade: a BigInteger significand plus an exponent.
             return left.TryGetDouble(out var leftDouble) && right.TryGetDouble(out var rightDouble)
                 ? leftDouble.CompareTo(rightDouble)
                 : null;
@@ -208,11 +195,8 @@ internal sealed record DevWorkflowCondition
             throw new DevWorkflowValidationException($"The condition on edge {edgeDescription} uses '{op}' and so needs a 'value'.");
         }
 
-        // Two authoring-time refusals, both for the same reason: Evaluate fails CLOSED, so a comparison it can never
-        // make is not an error anyone sees — it is an edge that silently never fires and a run that hangs with nothing
-        // in the log to explain it. A comparison it CAN make and answers "no" is left alone; that is routing.
-        //
-        // There is no comparison against an object or an array to make at all.
+        // Both refusals below exist because Evaluate fails CLOSED: a comparison it can never make — none exists against
+        // an object or an array — is an edge that silently never fires. One it CAN make and answers "no" is routing.
         if (value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
         {
             throw new DevWorkflowValidationException($"The condition on edge {edgeDescription} compares against a {value.ValueKind}. "

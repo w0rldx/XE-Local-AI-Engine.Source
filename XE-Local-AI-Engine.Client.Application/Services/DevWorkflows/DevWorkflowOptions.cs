@@ -2,13 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>
-///     Configuration for development workflows.
-///     <para>
-///         <see cref="Enabled" /> gates <em>behaviour</em>, never registration — the same posture work sessions hold:
-///         a disabled node has to answer legibly rather than 500 out of an empty container.
-///     </para>
-/// </summary>
+/// <summary>Configuration for development workflows.</summary>
+/// <remarks>
+///     <see cref="Enabled" /> gates <em>behaviour</em>, never registration — the same posture work sessions hold: a
+///     disabled node has to answer legibly rather than 500 out of an empty container. What each option bounds:
+///     docs/wiki/25-dev-workflows.md ("Limits and options").
+/// </remarks>
 public sealed class DevWorkflowOptions
 {
     public const string Section = "DevWorkflows";
@@ -16,10 +15,12 @@ public sealed class DevWorkflowOptions
     public bool Enabled { get; init; }
 
     /// <summary>
-    ///     The cap on one definition's nodes, enforced when a definition is validated rather than when it runs. Higher
-    ///     than the graph-workflow cap because a development workflow decomposes: one materialization expands a
-    ///     template subtree up to twenty times, so a definition carries shapes a hand-drawn graph does not.
+    ///     The cap on one definition's nodes, enforced when a definition is validated rather than when it runs.
     /// </summary>
+    /// <remarks>
+    ///     Higher than the graph-workflow cap because a development workflow decomposes: one materialization expands a
+    ///     template subtree up to twenty times, so a definition carries shapes a hand-drawn graph does not.
+    /// </remarks>
     [Range(1, 10_000)]
     public int MaxNodesPerDefinition { get; init; } = 500;
 
@@ -28,27 +29,31 @@ public sealed class DevWorkflowOptions
     public int MaxArtifactBytes { get; init; } = 1024 * 1024;
 
     /// <summary>
-    ///     How often the dispatcher sweeps every live run, independently of the change signals it also listens for. A
-    ///     dropped signal costs at most one interval of latency, never correctness — which is what lets the signal
-    ///     channel drop writes rather than block a committing caller.
+    ///     How often the dispatcher sweeps every live run, independently of the change signals it also listens for.
     /// </summary>
+    /// <remarks>
+    ///     A dropped signal costs at most one interval of latency, never correctness — which is what lets the signal
+    ///     channel drop writes rather than block a committing caller.
+    /// </remarks>
     [Range(1, 3600)]
     public int SweepSeconds { get; init; } = 5;
 
-    /// <summary>
-    ///     How many tool and dev-task node-runs may hold a sandbox at once. Two because a build is already multi-core;
-    ///     the value exists because the attempt supervisor this lane copies has no cap at all, so a workflow fanning out
-    ///     eight validation nodes would otherwise start eight builds.
-    /// </summary>
-    /// <remarks>ponytail: the default is a guess. Size it from real runs, not from another guess.</remarks>
+    /// <summary>How many tool and dev-task node-runs may hold a sandbox at once.</summary>
+    /// <remarks>
+    ///     Two because a build is already multi-core. The value exists because the attempt supervisor this lane copies
+    ///     has no cap at all, so a workflow fanning out eight validation nodes would start eight builds.
+    ///     ponytail: the default is a guess. Size it from real runs, not from another guess.
+    /// </remarks>
     [Range(1, 32)]
     public int MaxParallelToolNodes { get; init; } = 2;
 
     /// <summary>
-    ///     How often one node-run may resume its work session after the session parks on its own step budget. Parking is
-    ///     routine — a workflow node needs more steps than one run allows — so this is a budget, not a failure count;
-    ///     exhausting it blocks the node-run for a human rather than failing it.
+    ///     How often one node-run may resume its work session after the session parks on its own step budget.
     /// </summary>
+    /// <remarks>
+    ///     Parking is routine — a workflow node needs more steps than one run allows — so this is a budget, not a
+    ///     failure count; exhausting it blocks the node-run for a human rather than failing it.
+    /// </remarks>
     [Range(0, 100)]
     public int MaxSessionResumesPerNodeRun { get; init; } = 4;
 
@@ -69,9 +74,12 @@ public sealed class DevWorkflowOptions
 
     /// <summary>
     ///     How many rows the read-only MCP run listing returns when the caller names no limit, and the ceiling it
-    ///     clamps a named one to. Bounded here for the same reason the agent-run listing is bounded: an MCP client
-    ///     truncates oversized tool output on its own and silently, so the server decides how much is enough.
+    ///     clamps a named one to.
     /// </summary>
+    /// <remarks>
+    ///     Bounded here for the same reason the agent-run listing is bounded: an MCP client truncates oversized tool
+    ///     output on its own and silently, so the server decides how much is enough.
+    /// </remarks>
     [Range(1, 50)]
     public int McpDefaultListLimit { get; init; } = 20;
 

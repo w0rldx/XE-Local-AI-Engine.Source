@@ -5,30 +5,13 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 
-/// <summary>
-///     The integration half of the tool lane: an <c>Apply</c> Tool node hands the tasks this run implemented to Dev
-///     Mode's own hash-locked apply gate, one after another, and reports what that gate made of each.
-///     <para>
-///         It adds NO apply mechanics. The call it makes is the call the Dev Mode apply endpoint makes —
-///         <see cref="IDevelopmentManagementService.ApplyAsync" /> onto <c>DevelopmentApplyService</c> and the
-///         coordinator's revalidated apply — so the evidence chain (independently approved subject, exact patch and
-///         manifest digests, host state inspected before and after) is the one that was already there. What is new is
-///         only WHEN it runs: downstream of a human gate the graph is required to place in front of it, never on
-///         the implementation node's own success.
-///     </para>
-///     <para>
-///         <b>Sequential, and it stops at the first refusal.</b> The gate's single-writer discipline is per TASK, so N
-///         tasks are N calls; and once one has been refused the repository is not in the state the next patch was
-///         approved against, so continuing would be applying patches to a tree nobody judged.
-///     </para>
-///     <para>
-///         Each task's apply is keyed on the run, the node, the ATTEMPT and the task — the ordinary key every other
-///         thing this lane writes uses. Re-applying is prevented on the task's own state rather than on the key, which
-///         is what makes the operator's retry work: a node standing Blocked because the gate declined a patch is
-///         retryable by hand, and a key that ignored the attempt would hand that retry the recorded refusal without
-///         asking the repository anything.
-///     </para>
-/// </summary>
+/// <summary>The integration half of the tool lane: the run's implemented tasks through Dev Mode's apply gate.</summary>
+/// <remarks>
+///     It adds NO apply mechanics — the call it makes is the one the Dev Mode apply endpoint makes,
+///     <see cref="IDevelopmentManagementService.ApplyAsync" />, so the evidence chain is the one already there. What
+///     is new is only WHEN it runs. Sequential, and it stops at the first refusal.
+///     See docs/wiki/25-dev-workflows.md ("The integration half").
+/// </remarks>
 internal sealed class DevWorkflowApplyCommands
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
@@ -53,15 +36,12 @@ internal sealed class DevWorkflowApplyCommands
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
-    /// <summary>
-    ///     Applies every task this run implemented, in order, and answers with the same value a validation pass answers
-    ///     with — because the lane above is the same lane, and only the tick writes rows.
-    ///     <para>
-    ///         What this counts as a "command" is one task's apply: the counts are what a conditional edge routes on and
-    ///         what a fix-loop objective quotes, and for this node the unit of work is a task rather than a shell
-    ///         command. The report artifact names them one by one.
-    ///     </para>
-    /// </summary>
+    /// <summary>Applies every task this run implemented, in order, answering as a validation pass would.</summary>
+    /// <remarks>
+    ///     The lane above is the same lane, and only the tick writes rows. What counts as one "command" here is one
+    ///     task's apply, and the report artifact names them one by one.
+    ///     See docs/wiki/25-dev-workflows.md ("The integration half").
+    /// </remarks>
     public async Task<DevWorkflowToolRun> RunAsync(DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         CancellationToken cancellationToken)
@@ -86,11 +66,8 @@ internal sealed class DevWorkflowApplyCommands
             var implementation = implementations[index];
             if (cancellationToken.IsCancellationRequested)
             {
-                // A stop that arrived between two patches. Answered as a RESULT rather than by letting the token throw:
-                // one patch may already be in the repository, and the sentence saying which is on a report the throwing
-                // path never writes — the poll reads cancellation off the task and settles the row without asking this
-                // for evidence. What did not happen is named too, because a report listing two of four tasks reads as a
-                // run that had two.
+                // A stop between two patches, answered as a RESULT rather than by letting the token throw: one patch
+                // may already be in the repository, and only this path writes the report that says which.
                 return Result(nodeRun,
                     [.. applied, .. implementations.Skip(index).Select(Unattempted)],
                     DevWorkflowFailureClasses.Cancelled,
@@ -118,21 +95,16 @@ internal sealed class DevWorkflowApplyCommands
         }
 
         // No tasks is a PASS, not a refusal: a decomposition may legitimately answer that no follow-up work is needed,
-        // and a run that implemented nothing has nothing to integrate. The report says so rather than leaving a reader
-        // to infer it from an empty list.
+        // and the report says so rather than leaving a reader to infer it from an empty list.
         return Result(nodeRun, applied, failureClass: null, detail: null);
     }
 
-    /// <summary>
-    ///     One task through the gate, and the failure class if the gate refused it.
-    ///     <para>
-    ///         A <c>ApplyBlocked</c> result is the gate declining on evidence rather than an error: the host repository
-    ///         is not at the exact approved base — which is what the SECOND patch of one fan-out finds, because the
-    ///         first one's applied change is sitting in the tree it was approved against. Concurrent-patch merge is
-    ///         deferred to v2, and this is where that boundary shows up at runtime, legibly, instead
-    ///         of as a patch applied onto a tree nobody judged.
-    ///     </para>
-    /// </summary>
+    /// <summary>One task through the gate, and the failure class if the gate refused it.</summary>
+    /// <remarks>
+    ///     An <c>ApplyBlocked</c> result is the gate declining on evidence rather than an error: the host repository
+    ///     is not at the exact approved base, which is what the SECOND patch of one fan-out finds.
+    ///     See docs/wiki/25-dev-workflows.md ("The integration half").
+    /// </remarks>
     private async Task<(AppliedTask Entry, string? FailureClass)> ApplyOneAsync(Guid projectId,
         DevWorkflowNodeRunSnapshot implementation,
         DevelopmentTaskSnapshot task,
@@ -141,9 +113,8 @@ internal sealed class DevWorkflowApplyCommands
         DevWorkflowNodeRunSnapshot nodeRun,
         CancellationToken cancellationToken)
     {
-        // Attempt-keyed, so a retry ASKS again. Applying twice is prevented by two things that do not need a constant
-        // attempt: the Completed short-circuit above, which is the state a landed apply leaves the task in, and Dev
-        // Mode's own idempotent arm, which recognises an exact approved result already present in the repository.
+        // Attempt-keyed, so a retry ASKS again: applying twice is prevented by the Completed short-circuit above and
+        // by Dev Mode's idempotent arm, neither of which needs a constant attempt.
         var operationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"apply-{task.Id:N}");
         try
         {
@@ -160,10 +131,8 @@ internal sealed class DevWorkflowApplyCommands
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException or DevelopmentWorkspaceSecurityException)
         {
-            // The evidence chain refused: the approved subject is no longer the current one, the review is not the one
-            // that approved it, or the repository's trust has lapsed. None of them is answered differently by asking
-            // again, so this is the class that goes straight to a human. A task the gate has already stood down gets the
-            // lane's own sentence in front of Dev Mode's, which by then is about a precondition rather than a cause.
+            // The evidence chain refused, and asking again answers none of those, so this goes straight to a human. A
+            // task already stood down gets the lane's sentence in front of Dev Mode's precondition complaint.
             return (Refusal(implementation, task, title, exception, StoodDown(task, title)), DevWorkflowFailureClasses.Policy);
         }
         catch (Exception exception) when (exception is DevelopmentRepositoryStateConflictException or KeyNotFoundException)
@@ -199,21 +168,12 @@ internal sealed class DevWorkflowApplyCommands
         };
     }
 
-    /// <summary>
-    ///     The lane's own account of the one refusal a RETRY produces, in front of Dev Mode's.
-    ///     <para>
-    ///         A patch the gate declined at the base check stands its task down, and Dev Mode's answer on the next
-    ///         attempt is then about a PRECONDITION rather than about what happened: "patch preview requires an
-    ///         independently approved task awaiting explicit apply" is true, names no cause, and reads to an operator
-    ///         who just pressed Retry as a different and less serious problem than the one they were retrying. The
-    ///         sanitized original is kept after it, because it is what the Development view says about the same task.
-    ///     </para>
-    ///     <para>
-    ///         The cause is READ off the task rather than assumed: a declined apply is the usual way one of these gets
-    ///         blocked, but not the only one, and Development already recorded which. That reason went through the same
-    ///         sanitizer on its way in and gets it again here, because a second reader is a second exposure.
-    ///     </para>
-    /// </summary>
+    /// <summary>The lane's own account of the one refusal a RETRY produces, in front of Dev Mode's.</summary>
+    /// <remarks>
+    ///     Dev Mode's answer on the next attempt is about a PRECONDITION rather than about what happened. The cause is
+    ///     READ off the task rather than assumed, and sanitized again here, a second reader being a second exposure.
+    ///     See docs/wiki/25-dev-workflows.md ("The integration half").
+    /// </remarks>
     private static string? StoodDown(DevelopmentTaskSnapshot task, string title)
     {
         if (task.Status != DevelopmentTaskStatus.Blocked)
@@ -244,15 +204,12 @@ internal sealed class DevWorkflowApplyCommands
         }
     }
 
-    /// <summary>
-    ///     A task the sequence never reached, because it was cancelled first.
-    ///     <para>
-    ///         Named rather than left out: the report is the operator's account of what this node did with the run's
-    ///         patches, and one that listed two of four tasks would read as a run that implemented two. It carries no
-    ///         title, because reading one is a store round-trip on a token that has already been cancelled — the node
-    ///         key and the task id are what identify the row anyway.
-    ///     </para>
-    /// </summary>
+    /// <summary>A task the sequence never reached, because it was cancelled first.</summary>
+    /// <remarks>
+    ///     Named rather than left out: a report listing two of four tasks would read as a run that implemented two. It
+    ///     carries no title, reading one being a store round-trip on an already-cancelled token, and the node key and
+    ///     task id identify the row anyway.
+    /// </remarks>
     private static AppliedTask Unattempted(DevWorkflowNodeRunSnapshot implementation) =>
         new()
         {
@@ -263,17 +220,12 @@ internal sealed class DevWorkflowApplyCommands
             Detail = "The run was cancelled before this patch was offered to the Development apply gate."
         };
 
-    /// <summary>
-    ///     One task title, fit to be stored on a row and rendered on a wire. A title is what the decomposing agent
-    ///     called the slice — MODEL text, arriving through a task package — and it reaches an operator both in this
-    ///     node's terminal reason and in every report entry, which is the same exposure the lane's exception messages
-    ///     have and gets the same answer.
-    ///     <para>
-    ///         A title the sanitizer REFUSES — one carrying credential-like material it will not redact — is replaced by
-    ///         the task's own id rather than allowed to escape as a second exception, because the entry is about which
-    ///         task the gate answered for and the id says that.
-    ///     </para>
-    /// </summary>
+    /// <summary>One task title, fit to be stored on a row and rendered on a wire.</summary>
+    /// <remarks>
+    ///     A title is MODEL text arriving through a task package, and it reaches an operator in the terminal reason
+    ///     and in every report entry, so it gets the same answer the lane's exception messages get. One the sanitizer
+    ///     REFUSES is replaced by the task's own id, which says which task the gate answered for.
+    /// </remarks>
     private static string Sanitized(DevelopmentTaskSnapshot task)
     {
         try
@@ -286,25 +238,13 @@ internal sealed class DevWorkflowApplyCommands
         }
     }
 
-    /// <summary>
-    ///     The tasks THIS node is the integration of: every node run upstream of it that named a development task and
-    ///     succeeded at it, in materialization order.
-    ///     <para>
-    ///         Bound to the node runs rather than to the project's task list, because the project also holds the
-    ///         operator's own task and whatever earlier runs left there — and the run may only integrate what IT
-    ///         implemented. A node run names its task exactly when the implementation lane bound it, the materialized
-    ///         children of one decomposition carry their 1-based index, and a re-attempt keeps the same pointer, so
-    ///         distinct task ids in index order is the whole enumeration.
-    ///     </para>
-    ///     <para>
-    ///         And bound to this node's own ANCESTRY rather than to the run, because a run may carry more than one
-    ///         gated apply lane: the gate the graph is required to place in front of this node displayed the work
-    ///         on the branch that reaches it, and applying a succeeded task from a PARALLEL branch would be this node
-    ///         landing a patch its approval never showed anyone. Resolved over the run's pinned graph — the same
-    ///         revision the tick routed on, so a materialization's clones are in it — where "upstream" is exactly the
-    ///         set the approval covers.
-    ///     </para>
-    /// </summary>
+    /// <summary>The tasks THIS node integrates: every node run upstream of it that named a task and succeeded.</summary>
+    /// <remarks>
+    ///     In materialization order. Bound to the node runs rather than the project's task list, and to this node's
+    ///     own ANCESTRY rather than to the run, resolved over the run's pinned graph — the revision the tick routed
+    ///     on, so a materialization's clones are in it and "upstream" is the set the approval covers.
+    ///     See docs/wiki/25-dev-workflows.md ("The integration half").
+    /// </remarks>
     private async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> ImplementedAsync(DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot applyNodeRun,
         Guid projectId,
@@ -324,16 +264,12 @@ internal sealed class DevWorkflowApplyCommands
         ];
     }
 
-    /// <summary>
-    ///     What the node run answers with, and the report an operator reads to see which patches landed.
-    ///     <para>
-    ///         The detail becomes the row's <c>terminal_reason</c>, which the schema bounds at
-    ///         <see cref="MaxTerminalReason" /> — and the composed refusals here are additive: a lead sentence, a model
-    ///         title, a stored blocked reason and an exception message. SQLite does not enforce a declared length, so an
-    ///         over-long one would break the contract silently and only bite on a provider that does. Capped in the ONE
-    ///         place every detail passes through, with the lead kept and the tail cut.
-    ///     </para>
-    /// </summary>
+    /// <summary>What the node run answers with, and the report an operator reads to see which patches landed.</summary>
+    /// <remarks>
+    ///     The detail becomes the row's <c>terminal_reason</c>, bounded at <see cref="MaxTerminalReason" />. The
+    ///     refusals composed here are additive and SQLite enforces no declared length, so it is capped in the ONE
+    ///     place every detail passes through, lead kept and tail cut.
+    /// </remarks>
     private DevWorkflowToolRun Result(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlyList<AppliedTask> applied, string? failureClass, string? detail)
     {
         detail = detail is { Length: > MaxTerminalReason } overlong ? $"{overlong[..(MaxTerminalReason - 1)]}…" : detail;
@@ -388,14 +324,12 @@ internal sealed class DevWorkflowApplyCommands
         public required string? Detail { get; init; }
     }
 
-    /// <summary>
-    ///     The report an apply node leaves behind: which task each patch belonged to, and what the gate did with it.
-    ///     <para>
-    ///         Deliberately NOT the validation report shape. That document describes commands run against a workspace,
-    ///         and filling its command list with task applies would be a report claiming evidence it does not have. It
-    ///         is written under the ordinary <c>Report</c> kind for the same reason.
-    ///     </para>
-    /// </summary>
+    /// <summary>The report an apply node leaves: which task each patch belonged to, and what the gate did with it.</summary>
+    /// <remarks>
+    ///     Deliberately NOT the validation report shape: that document describes commands run against a workspace, and
+    ///     filling its command list with task applies would claim evidence it does not have. Written under the
+    ///     ordinary <c>Report</c> kind for the same reason.
+    /// </remarks>
     private sealed record DevWorkflowApplyReport
     {
         public required bool Passed { get; init; }

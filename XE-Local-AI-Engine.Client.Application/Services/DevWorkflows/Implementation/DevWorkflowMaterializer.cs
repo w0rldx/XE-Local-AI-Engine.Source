@@ -11,29 +11,24 @@ using XE_Local_AI_Engine.Client.Services.Development;
 /// <summary>
 ///     Expands a decomposition into the work it decided on: one clone of the template subtree per task, wired into the
 ///     join, written with the rewritten graph in ONE transaction.
-///     <para>
-///         The run's pinned graph is the single source of routing truth, so growing a run means rewriting that blob —
-///         never the definition, which is what keeps re-running the same definition unaffected and walkthrough #9
-///         atomic. The rows and the rewrite therefore commit together: a rewrite without matching rows leaves the
-///         dispatcher waiting on nodes it has no row for, which HANGS rather than fails.
-///     </para>
-///     <para>
-///         It runs LAST in a tick and the tick returns immediately afterwards, because everything downstream of it
-///         would otherwise be judging the graph this call has just replaced.
-///     </para>
-///     <para>
-///         Task creation is deliberately NOT here: a materialized child's Development task is created by the
-///         implementation lane at first dispatch, so this transaction stays rows-and-graph and a crash between the two
-///         leaves nothing half-created outside the run.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The run's pinned graph is the single source of routing truth, so growing a run rewrites that blob and never
+///     the definition. Rows and rewrite commit together: a rewrite without matching rows leaves the dispatcher
+///     waiting on nodes it has no row for, which HANGS rather than fails. It runs LAST in a tick and the tick
+///     returns straight after, because everything downstream would judge the graph this call just replaced. See
+///     docs/wiki/25-dev-workflows.md ("Decomposition and materialization").
+/// </remarks>
 internal sealed class DevWorkflowMaterializer
 {
     /// <summary>
-    ///     The attempt the expansion is keyed under. Not a real attempt number — those start at one — because a
-    ///     decomposition expands ONCE for the life of the run: a second decomposition after a plan revision is named as
-    ///     v2, and keying by attempt would quietly make the fix loop do it.
+    ///     The attempt the expansion is keyed under. Not a real attempt number, because a decomposition expands ONCE
+    ///     for the life of the run.
     /// </summary>
+    /// <remarks>
+    ///     Real attempts start at one. A second decomposition after a plan revision is named as v2, and keying by
+    ///     attempt would quietly make the fix loop do it.
+    /// </remarks>
     private const int MaterializationAttempt = 0;
 
     /// <summary>Separates a template node's key from the task it was cloned for. Matches the clone-key layout the task package defines.</summary>
@@ -77,10 +72,8 @@ internal sealed class DevWorkflowMaterializer
                 continue;
             }
 
-            // The commit marker, asked for by id rather than counted off the rows: it is the ONE answer that covers
-            // both a run that grew children and one whose decomposition legitimately produced no work at all, and it
-            // survives the fix loop re-running this node — a second expansion is v2, and the first one's children are
-            // still the run's.
+            // The commit marker, asked for by id rather than counted off the rows: it is the ONE answer covering both a run that grew children and one whose decomposition legitimately
+            // produced no work, and it survives the fix loop re-running this node — a second expansion is v2, and the first one's children are still the run's.
             var operationId = DevWorkflowOperationId.For(run.Id, producer.NodeKey, MaterializationAttempt, "materialize");
             if (await store.FindOperationEventTypeAsync(run.Id, operationId, cancellationToken) is not null)
             {
@@ -122,18 +115,14 @@ internal sealed class DevWorkflowMaterializer
 
         var expansion = Compose(graph, run.GraphJson, node, materialization, tasks);
 
-        // The producer's route, RE-taken against the graph this expansion writes and carried into the same transaction
-        // as the rewrite. Its route was recorded when the node settled, before the clone-root edges existed — so left
-        // alone the persisted document lists the authored join edge and omits every root the next tick actually admits,
-        // which is a recorded route disagreeing with the routing that happened. No gate answer to record: a node
-        // carrying a materialization is never a HumanGate.
+        // The producer's route, RE-taken against the graph this expansion writes and carried into the same transaction as the rewrite. Its route was recorded when the node settled,
+        // before the clone-root edges existed, so left alone the document would list the authored join edge and omit every root the next tick admits. No gate answer: never a HumanGate.
         var producerRoute = DevWorkflowStateMachine.RouteJson(DevWorkflowStateMachine.RouteTaken(DevWorkflowGraph.Parse(expansion.GraphJson),
             producer,
             nodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal),
             decision: null));
 
-        // Read once for this expansion, after the decision to expand has been made: every clone's resolution comes off
-        // the same list, and a tick that expands nothing never touches the table at all.
+        // Read once for this expansion, after the decision to expand: every clone's resolution comes off the same list, and a tick that expands nothing never touches the table.
         var enabledRuleSets = await store.ListEnabledRuleSetsAsync(cancellationToken);
         _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
         {
@@ -150,9 +139,8 @@ internal sealed class DevWorkflowMaterializer
                                        AgentDefinitionId = clone.Node.AgentDefinitionId,
                                        DevelopmentProjectId = producer.DevelopmentProjectId,
                                        InputJson = clone.InputJson,
-                                       // The clone inherits the producer's project, so it resolves against the same
-                                       // project axis its parent did — and against its OWN node type, which is what
-                                       // makes a rule set scoped to Tool nodes reach a materialized Tool clone.
+                                       // The clone inherits the producer's project, resolving against the same project axis its parent did — and against its OWN node
+                                       // type, which is what makes a rule set scoped to Tool nodes reach a materialized Tool clone.
                                        PolicyResolutionJson = DevWorkflowRulePolicyResolver.Compose(enabledRuleSets, producer.DevelopmentProjectId, clone.Node.NodeType),
                                        MaterializedFromNodeRunId = producer.Id,
                                        MaterializationIndex = clone.Index
@@ -166,22 +154,14 @@ internal sealed class DevWorkflowMaterializer
         return expansion.Clones.Count;
     }
 
-    /// <summary>
-    ///     Stands the decomposition down over output it produced but nothing can use.
-    ///     <para>
-    ///         Through the ordinary retry policy, so the node's first answer to malformed output is another attempt
-    ///         carrying the schema error in its objective — the cheapest correction loop available, since the thing that
-    ///         wrote the document is the thing that can fix it — and the answer when that is spent is a human.
-    ///     </para>
-    ///     <para>
-    ///         Two things the stand-down does to a row that had SUCCEEDED, both deliberate. Its <c>EndedAtUtc</c> is
-    ///         the success's, and is left alone: the agent really did finish then, and re-stamping it would date the
-    ///         node's work to the moment its output was judged. And its <c>OutputJson</c> is REPLACED by the refusal,
-    ///         losing the document the node panel had been rendering — accepted, because the panel's job is to explain
-    ///         the row's current state, that state is Blocked, and the reason it is blocked is the more useful of the
-    ///         two answers. The promoted artifact still holds what the node actually produced.
-    ///     </para>
-    /// </summary>
+    /// <summary>Stands the decomposition down over output it produced but nothing can use.</summary>
+    /// <remarks>
+    ///     Through the ordinary retry policy, so the first answer to malformed output is another attempt carrying the
+    ///     schema error in its objective — the cheapest correction loop, since what wrote the document can fix it —
+    ///     and a human when that is spent. Two deliberate effects on a row that had SUCCEEDED: <c>EndedAtUtc</c> keeps
+    ///     the success's stamp, because the agent really did finish then; and <c>OutputJson</c> is REPLACED by the
+    ///     refusal, since the panel explains the row's current state and the promoted artifact still holds the output.
+    /// </remarks>
     private async Task<int> RejectAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -212,17 +192,14 @@ internal sealed class DevWorkflowMaterializer
     /// <summary>
     ///     The newest task package this node produced, parsed — or the sentence an operator and the next attempt are
     ///     both told.
-    ///     <para>
-    ///         <b>Deliberately not attempt-scoped, and this is the one place that reading is right.</b> Artifacts are
-    ///         run-scoped, so a re-attempt that saved nothing leaves attempt 1's package the newest — and judging
-    ///         attempt 2 on it is the correct answer here, because the package IS the node's output: an attempt that
-    ///         produced no new one has not corrected anything, and the second refusal is what stands the node down for
-    ///         a human. Do not "fix" this by keying on the attempt. It is the shape a node
-    ///         PANEL must NOT take — where showing a previous attempt's evidence as current is a lie — reaching the opposite verdict
-    ///         here for the same reason: there, the question is "what did this attempt do"; here, it is "is there a
-    ///         usable package on this run yet".
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Deliberately NOT attempt-scoped, and this is the one place that reading is right. Artifacts are run-scoped,
+    ///     so a re-attempt that saved nothing leaves attempt 1's package the newest, and judging attempt 2 on it is
+    ///     correct here because the package IS the node's output: an attempt producing no new one corrected nothing,
+    ///     and the second refusal stands the node down. A node PANEL takes the opposite verdict for the same reason —
+    ///     there the question is "what did this attempt do", here it is "is there a usable package on this run yet".
+    /// </remarks>
     private async Task<TaskPackage> ReadPackageAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowMaterialization materialization,
@@ -249,10 +226,14 @@ internal sealed class DevWorkflowMaterializer
     }
 
     /// <summary>
-    ///     The fixed task-package schema: an array of <c>{ id, title, goal, allowedPaths[], dependsOn[], acceptanceCriteria[] }</c>,
-    ///     at the root or under a <c>tasks</c> property — a model writing an object around its list is the commonest
-    ///     shape of the same answer, and refusing it would spend a whole re-attempt on punctuation.
+    ///     The fixed task-package schema: an array of
+    ///     <c>{ id, title, goal, allowedPaths[], dependsOn[], acceptanceCriteria[] }</c>, at the root or under a
+    ///     <c>tasks</c> property.
     /// </summary>
+    /// <remarks>
+    ///     A model writing an object around its list is the commonest shape of the same answer, and refusing it would
+    ///     spend a whole re-attempt on punctuation.
+    /// </remarks>
     private static TaskPackage Parse(string content, Guid artifactId, string name)
     {
         IReadOnlyList<TaskPackageItem>? items;
@@ -279,12 +260,8 @@ internal sealed class DevWorkflowMaterializer
             return TaskPackage.Rejected($"The task package '{name}' must be an array of tasks, or an object with a 'tasks' array.");
         }
 
-        // A JSON `null` in the array deserializes to a null ELEMENT despite the non-nullable annotation, and every
-        // reader below here — the refusal table, the composer — dereferences the entry. Refused at the parse boundary
-        // rather than in one of them, because this is the one place that makes `Tasks` element-non-null by
-        // construction: reaching any reader with the hole throws out of the tick, and a tick that throws over a
-        // decomposition that has already SUCCEEDED re-throws on every tick after it. That is the wedge this module
-        // refuses to have; the stand-down is a refusal the node can be told about instead.
+        // A JSON null in the array deserializes to a null ELEMENT despite the non-nullable annotation, and every reader below dereferences the entry. Refused at the parse boundary, the
+        // one place that makes Tasks element-non-null: a hole throws out of the tick, and a tick that throws over an already-SUCCEEDED decomposition re-throws on every tick after it.
         for (var index = 0; index < items.Count; index++)
         {
             if (items[index] is null)
@@ -298,12 +275,12 @@ internal sealed class DevWorkflowMaterializer
 
     /// <summary>
     ///     Every reason a well-formed package is still refused, in the order that names the smallest cause first.
-    ///     <para>
-    ///         All of them are answered the same way — the node that wrote the package is asked to write it again with
-    ///         the complaint in its objective — so what matters here is that the sentence is specific enough for a model
-    ///         (and a human reading the same field) to act on.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     All of them are answered the same way — the node that wrote the package is asked to write it again with the
+    ///     complaint in its objective — so what matters is that the sentence is specific enough for a model, and a
+    ///     human reading the same field, to act on.
+    /// </remarks>
     private static string? Reject(DevWorkflowGraph graph,
         DevWorkflowMaterialization materialization,
         IReadOnlyList<TaskPackageItem> tasks,
@@ -321,21 +298,14 @@ internal sealed class DevWorkflowMaterializer
             return $"Expanding {tasks.Count} tasks would take this run past the {maxNodeRunsPerRun} node runs it may carry.";
         }
 
-        // Whether the template carries a DevTask ANYWHERE decides whether a task has to name the files it changes: that
-        // is the node type whose clone becomes a Development coder attempt, and the "must export a patch" contract is
-        // the attempt's, not the decomposition's. The whole subtree rather than its root, because a custom template is
-        // free to root itself in an Agent that briefs a DevTask below it — and there the coder that cannot finish on an
-        // empty patch is exactly as real, just one node further down. Read once, because it cannot differ between tasks
-        // of one package.
+        // Whether the template carries a DevTask ANYWHERE decides whether a task must name the files it changes: that node type's clone becomes a coder attempt, whose contract is to
+        // export a patch. The whole subtree, not its root, because a template may root itself in an Agent briefing a DevTask below it. Read once: it cannot differ between tasks.
         var subtreeHasDevTask = graph.TemplateSubtreeHasDevTask(materialization);
 
         var ids = new HashSet<string>(StringComparer.Ordinal);
 
-        // Every clone key this package WOULD take, against the task that first claimed it. Built as the loop goes,
-        // because the collision that wedges a run is as easily between two tasks of one package as with an existing
-        // node: "{nodeKey}#{taskId}" is not injective — a template that carries both `a` and `a#b` generates `a#b#c`
-        // for task `b#c` and again for task `c` — and the store's unique (run_id, node_key) answers that with a refused
-        // insert, which throws out of the tick instead of standing the decomposition down.
+        // Every clone key this package WOULD take, against the task that first claimed it, built as the loop goes: the collision that wedges a run is as easily between two tasks of one
+        // package as with an existing node, since the clone key is not injective, and the store's unique (run_id, node_key) answers with a refused insert that throws out of the tick.
         var generated = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var task in tasks)
         {
@@ -354,13 +324,8 @@ internal sealed class DevWorkflowMaterializer
                 return $"The task package names '{task.Id}' twice, and two tasks cannot share one identity.";
             }
 
-            // A template carrying a DevTask only. There a task becomes a Development coder attempt, and that attempt
-            // cannot finish without exporting a NON-EMPTY patch: a slice with nothing to change — a survey, a style
-            // profile, a verification — is refused, re-attempted twice more, refused twice more, and then blocks the
-            // run in front of a human. Live, four runs went that way. 'changes' is the one signal the package carries
-            // that there IS something to change, so a package that names none is handed straight back to the node that
-            // wrote it, while it is still cheap to fix. A template with no DevTask in it keeps the old contract: its
-            // clones are ordinary sessions with no patch to export and nothing this would be judging.
+            // For a template carrying a DevTask only. There a task becomes a coder attempt that cannot finish without exporting a NON-EMPTY patch, so a slice with nothing to change is
+            // refused and re-refused until it blocks the run. 'changes' is the one signal that there IS something to change, so a package naming none is handed back while that is cheap.
             if (subtreeHasDevTask)
             {
                 var changes = (task.Changes ?? []).Where(static change => !string.IsNullOrWhiteSpace(change)).ToList();
@@ -370,9 +335,8 @@ internal sealed class DevWorkflowMaterializer
                            + "A task must change code; fold reading or surveying into the task that needs it.";
                 }
 
-                // The workspace confinement the coder's own tools enforce, asked here instead: an absolute path, one
-                // that climbs out of the workspace, or one under protected Git state is a file the coder would be
-                // refused for touching, so the decomposition is told now rather than three attempts later.
+                // The workspace confinement the coder's own tools enforce, asked here instead: an absolute path, one climbing out of the workspace, or one under protected Git state is a
+                // file the coder would be refused for touching, so the decomposition is told now rather than three attempts later.
                 if (changes.Find(static change => !DevelopmentWorkspaceSecurity.Confine(change, allowRoot: false).IsAccepted) is { } unusable)
                 {
                     return $"Task '{task.Id}' names '{unusable}' in 'changes', which is not a file a coder could touch: "
@@ -380,20 +344,16 @@ internal sealed class DevWorkflowMaterializer
                 }
             }
 
-            // Not enforced anywhere yet: the child brief carries the title, the requirements and the acceptance
-            // criteria, and Dev Mode's workspace policy has no per-task path restriction to hand this to. A
-            // decomposition that leans on it for parallel-child isolation would get none, silently, so it is refused
-            // loudly instead. The field stays in the schema and on the stored artifact — this refuses a package that
-            // DEPENDS on it, not one that mentions it.
+            // Not enforced anywhere: the child brief carries title, requirements and acceptance criteria, and Dev Mode's workspace policy has no per-task path restriction to hand this
+            // to, so a decomposition leaning on it for parallel-child isolation would get none silently. The field stays in the schema; this refuses a package that DEPENDS on it.
             if (task.AllowedPaths is { Count: > 0 })
             {
                 return $"Task '{task.Id}' restricts itself to specific paths with 'allowedPaths', which this version does not enforce. "
                        + "Remove the field and describe the boundary in the goal instead.";
             }
 
-            // EVERY node of the subtree, not just its root: a graph that happens to declare a node named like one of
-            // the other clones collides just as hard, and the collision surfaces at the store as a refused insert —
-            // which throws out of the tick and wedges the run rather than standing this node down.
+            // EVERY node of the subtree, not just its root: a graph declaring a node named like one of the other clones collides just as hard, and the collision surfaces at the store as
+            // a refused insert, which throws out of the tick and wedges the run rather than standing this node down.
             foreach (var key in subtree.Select(key => CloneKey(key, task.Id)))
             {
                 if (graph.Nodes.ContainsKey(key))
@@ -445,12 +405,12 @@ internal sealed class DevWorkflowMaterializer
 
     /// <summary>
     ///     The rewritten graph and the rows that go with it, composed together so the two cannot disagree.
-    ///     <para>
-    ///         The rewrite works on the stored JSON rather than on the parsed projection: the projection keeps only what
-    ///         the runtime routes on, and re-serialising it would silently drop every authoring field the editor put
-    ///         there. So each clone is the template node's own JSON with its key — and any retry target — rewritten.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The rewrite works on the stored JSON rather than the parsed projection: the projection keeps only what the
+    ///     runtime routes on, and re-serialising it would silently drop every authoring field the editor put there. So
+    ///     each clone is the template node's own JSON with its key — and any retry target — rewritten.
+    /// </remarks>
     private static Expansion Compose(DevWorkflowGraph graph,
         string graphJson,
         DevWorkflowGraphNode node,
@@ -477,14 +437,8 @@ internal sealed class DevWorkflowMaterializer
                               .Where(static edge => edge["condition"] is not null)
                               .ToDictionary(static edge => (edge["from"]!.GetValue<string>(), edge["to"]!.GetValue<string>()));
 
-        // A leaf of the template is what the join is actually waiting for. Computed from the template's OWN edges, so a
-        // template that already names the join keeps that edge and one that names nothing gets it — either way the join
-        // waits for every task's last node rather than firing while they run.
-        //
-        // ponytail: an `Any` join is left to the author. One task expanding into an `Any` join gives it a single live
-        // inbound edge, which parse refuses — the run then FAILS as unroutable with that sentence rather than hanging,
-        // and the seeded templates all join with `All`. Upgrade path, if a template ever wants it: relax the two-edge
-        // rule for a join a materialization names, since its real width is only known once the package is read.
+        // A leaf of the template is what the join waits for, computed from the template's OWN edges, so the join waits for every task's last node rather than firing while they run.
+        // ponytail: an `Any` join is the author's — one task through it leaves a single live inbound edge, which parse refuses, so the run fails as unroutable rather than hanging.
         var leaves = subtree.Where(key => !graph.OutboundEdges(key).Any(edge => subtree.Contains(edge.To))).ToList();
         var clones = new List<Clone>();
         var wired = new HashSet<(string From, string To)>();
@@ -528,14 +482,8 @@ internal sealed class DevWorkflowMaterializer
             }
         }
 
-        // The decomposition's OWN edge into the join is kept, and that is a fix rather than an oversight. It was removed
-        // here on the reading that a join left waiting on an already-Succeeded node would fire the moment the
-        // decomposition landed — which admission does not do: `All` waits while any inbound edge is Pending, and so
-        // does `Any`, so the clones' fresh edges hold the join exactly as they did before. What removing it DID do was
-        // take the decomposition off every path back from the join, and upstream artifact resolution walks those paths:
-        // the node behind the join was left inheriting the clones' validation reports and nothing else, so the run's
-        // verification agent judged the feature without the task package it was decomposed into. Live, it said so
-        // itself and returned "not yet".
+        // The decomposition's OWN edge into the join is KEPT. A join waiting on an already-Succeeded node does not fire early — All and Any both wait while any inbound edge is Pending —
+        // and removing it takes the decomposition off every path back from the join, which upstream artifact resolution walks: the node behind it would lose the task package.
         return new Expansion { Clones = clones, GraphJson = root.ToJsonString(JsonOptions) };
 
         void Wire(string from, string to, JsonNode? condition)
@@ -561,26 +509,14 @@ internal sealed class DevWorkflowMaterializer
 
     /// <summary>
     ///     A decomposition that legitimately answered "there is no follow-up work" (ruling D12).
-    ///     <para>
-    ///         The graph is left exactly as it is — the join keeps its edge from this node and fires on it — and what
-    ///         is written is the commit marker plus ONE already-succeeded row per validation node in the template
-    ///         subtree. Without those rows an apply downstream would be blocked by the runtime half of
-    ///         <c>GRAPH-C4-3</c>: it asks whether a <c>Tool</c>/<c>Validate</c> node SUCCEEDED on the path this run
-    ///         took, an unmaterialized template key has no row at all, and "there was nothing to validate" would read
-    ///         as "nothing validated it". One row per such node rather than an arbitrary pick, so a template carrying
-    ///         two checks shows both as not-applicable rather than one as missing.
-    ///     </para>
-    ///     <para>
-    ///         The row can never make a run look finished: <c>GRAPH-C4-1</c>'s fourth step refuses a template-subtree
-    ///         node with no out-edge, so no key seeded here is in <c>TerminalNodeKeys</c> and the completion predicate
-    ///         still asks about a node that really ends the run.
-    ///     </para>
-    ///     <para>
-    ///         A subtree with no validation node writes no row, and then the marker is the bare event this wrote
-    ///         before D12 — there is nothing to stand for, and the apply's proof was carried by another branch whose
-    ///         validation has a real row of its own.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The graph is left as it is — the join keeps its edge from this node and fires on it — and what is written is
+    ///     the commit marker plus ONE already-succeeded row per validation node in the template subtree. Without them
+    ///     <c>GRAPH-C4-3</c> blocks a downstream apply, because an unmaterialized template key has no row and "nothing
+    ///     to validate" would read as "nothing validated it". Such a row never makes a run look finished, because
+    ///     <c>GRAPH-C4-1</c>'s fourth step keeps a template-subtree node non-terminal. A subtree with none writes a bare marker.
+    /// </remarks>
     private static async Task<int> NothingToDoAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -597,9 +533,8 @@ internal sealed class DevWorkflowMaterializer
                           .ToList();
         if (checks.Count == 0)
         {
-            // The detail says so: this is the one graph.changed that changes no graph, and a consumer that refetched
-            // on the token alone would fetch the same revision back. `graphRevision` is the run's CURRENT one, which
-            // has not moved.
+            // The detail says so: this is the one graph.changed that changes no graph, and a consumer refetching on the token alone gets the same revision back. `graphRevision` is the
+            // run's CURRENT one, which has not moved.
             _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand
             {
                 RunId = run.Id,
@@ -621,10 +556,8 @@ internal sealed class DevWorkflowMaterializer
             return 1;
         }
 
-        // Under the SAME operation id as the marker would have taken, so the replay guard is unchanged and the rows
-        // and the marker commit together: there is no window in which one exists without the other. A null GraphJson
-        // is what makes the marker node.materialized rather than graph.changed — which is the honest token here,
-        // because no graph changed.
+        // Under the SAME operation id the marker would have taken, so the replay guard is unchanged and rows and marker commit together with no window in which one exists without the
+        // other. A null GraphJson is what makes the marker node.materialized rather than graph.changed, the honest token here because no graph changed.
         _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand
         {
             RunId = run.Id,
@@ -668,14 +601,13 @@ internal sealed class DevWorkflowMaterializer
 
     /// <summary>
     ///     What the coder is told to implement: the task's goal, and the files the decomposition said it would touch.
-    ///     <para>
-    ///         Folded into the requirements rather than carried as a field of its own, because <c>requirements</c> is
-    ///         the whole of what the implementation lane renders to the coder — a second field would have to be
-    ///         threaded through the brief, the executor's own reader and the Development task before it reached a
-    ///         prompt, to say something a sentence says here. It is guidance, not a boundary: nothing refuses a coder
-    ///         for touching a file this does not name.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Folded into the requirements rather than carried as a field of its own, because <c>requirements</c> is the
+    ///     whole of what the implementation lane renders to the coder: a second field would have to be threaded
+    ///     through the brief, the executor's reader and the Development task to say what a sentence says here. It is
+    ///     guidance, not a boundary — nothing refuses a coder for touching a file this does not name.
+    /// </remarks>
     private static string RequirementsFor(TaskPackageItem task)
     {
         var changes = (task.Changes ?? []).Where(static change => !string.IsNullOrWhiteSpace(change)).ToList();
@@ -760,11 +692,11 @@ internal sealed class DevWorkflowMaterializer
         public required bool RevisionBumped { get; init; }
     }
 
-    /// <summary>
-    ///     What a not-applicable validation row says it produced. <c>status</c> is the routing vocabulary's own
-    ///     <c>succeeded</c>, so a conditional out-edge on the template's validation node fires exactly as a real pass
-    ///     would; <c>verdict</c> is what keeps a reader from taking it for one.
-    /// </summary>
+    /// <summary>What a not-applicable validation row says it produced.</summary>
+    /// <remarks>
+    ///     <c>status</c> is the routing vocabulary's own <c>succeeded</c>, so a conditional out-edge on the template's
+    ///     validation node fires exactly as a real pass would; <c>verdict</c> keeps a reader from taking it for one.
+    /// </remarks>
     private sealed record NotApplicableOutput
     {
         public required string Status { get; init; }

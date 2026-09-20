@@ -5,17 +5,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     What one node-run attempt cost, assembled at the moment it settles from rows that are already PERSISTED.
-///     <para>
-///         "Already persisted" is the whole constraint. A node run terminalizes on a dispatcher tick, in a different DI
-///         scope from the work session that did the work and possibly in a different process after a restart — so
-///         nothing the run held in memory is reachable here. The work session's provider-call budget in particular is
-///         gone: its cap scope is disposed when the step that seeded it ends.
-///     </para>
-///     <para>
-///         Metadata only, under the trajectory policy: counts, ids, a served model name and tool NAMES. No prompt, no
-///         tool argument, no tool result, no transcript.
-///     </para>
 /// </summary>
+/// <remarks>
+///     "Already persisted" is the whole constraint: a node run terminalizes on a dispatcher tick, in a different DI
+///     scope from the work session that did the work and possibly in a different process, so nothing the run held in
+///     memory is reachable here. Metadata only, under the trajectory policy: counts, ids, a served model name and
+///     tool NAMES; no prompt, tool argument, tool result or transcript. See
+///     docs/wiki/25-dev-workflows.md ("Node telemetry").
+/// </remarks>
 internal interface IDevWorkflowNodeTelemetrySource
 {
     /// <summary>

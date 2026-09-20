@@ -8,24 +8,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
-/// <summary>
-///     Assembles a settling node run's cost from persisted rows. Three shapes, decided by the node run itself: a work
-///     session takes the agent path, a development task takes the DevTask path, and a node run with neither — Tool,
-///     Gate, Parallel, Join, and every <c>Skipped</c> row — has no cost rows to read and answers nothing.
-/// </summary>
+/// <summary>Assembles a settling node run's cost from persisted rows, in one of three shapes.</summary>
 /// <remarks>
-///     <paramref name="development" /> is optional BECAUSE the whole Development module is: every one of its services,
-///     <c>IDevelopmentStore</c> included, is registered only when <c>Development:Enabled</c> is true
-///     (<c>AddNodeDevelopmentExtensions</c>), while this collector is registered unconditionally beside the workflow
-///     store that every node-run transition goes through. A required dependency would therefore fail to resolve
-///     <c>IDevWorkflowStore</c> itself on a node with Development Mode switched off. The container fills a defaulted
-///     parameter with null when the service is absent, which is the same answer the DevTask lane gives for the same
-///     reason — and the node run simply reports no DevTask cost.
-///     <para>
-///         <paramref name="localModelLoads" /> is optional for the same reason: it is registered by the model-fit
-///         module, which a host composing only the workflow stack does not add. Absent, the VRAM columns stay null,
-///         which is what they say anyway for every model the node did not load itself.
-///     </para>
+///     The node run decides which: a work session takes the agent path, a development task the DevTask path, and a
+///     node run with neither — Tool, Gate, Parallel, Join, and every <c>Skipped</c> row — has no cost rows to read
+///     and answers nothing. The development store and the local-model-load telemetry are optional dependencies
+///     BECAUSE their modules are; this collector is registered unconditionally.
+///     See docs/wiki/25-dev-workflows.md ("Node telemetry").
 /// </remarks>
 internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetrySource
 {
@@ -55,11 +44,11 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
     /// <summary>The schema's own bound on the node run's <c>tool_names_json</c> (<c>DevWorkflowNodeRunConfiguration</c>).</summary>
     private const int MaxToolNamesJson = 1024;
 
-    /// <summary>
-    ///     The schema's bound on <c>served_model_name</c>. Clamped HERE, by construction, like both sibling text
-    ///     columns: <c>agent_execution_logs.model_name</c> declares no length of its own and SQLite enforces none, so a
-    ///     name copied verbatim would make the column's declared bound a lie.
-    /// </summary>
+    /// <summary>The schema's bound on <c>served_model_name</c>, clamped HERE by construction like its siblings.</summary>
+    /// <remarks>
+    ///     <c>agent_execution_logs.model_name</c> declares no length of its own and SQLite enforces none, so a name
+    ///     copied verbatim would make the column's declared bound a lie.
+    /// </remarks>
     private const int MaxServedModelName = 256;
 
     /// <summary>The final element of a trimmed name list. One character, and unmistakably not a tool.</summary>
@@ -108,24 +97,20 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
             : null;
     }
 
-    /// <summary>
-    ///     The agent path: the session's own step rows for what the loop spent, and the conversation's chat-run
-    ///     envelopes for what the provider actually reported. The two are different questions and neither substitutes
-    ///     for the other — the step rows exist even when no envelope was ever written, and only the envelopes carry
-    ///     real provider tokens.
-    /// </summary>
+    /// <summary>The agent path: the session's own step rows, and the conversation's chat-run envelopes.</summary>
+    /// <remarks>
+    ///     Two different questions, neither substituting for the other: the step rows say what the loop spent and
+    ///     exist even when no envelope was written, while only the envelopes carry real provider tokens.
+    ///     See docs/wiki/25-dev-workflows.md ("Node telemetry").
+    /// </remarks>
     private async Task<DevWorkflowNodeTelemetry> CollectFromWorkSessionAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         var session = await _workSessions.GetAsync(sessionId, cancellationToken);
         var steps = await CollectStepConsumptionAsync(sessionId, cancellationToken);
         var envelopes = await CollectEnvelopesAsync(session.ConversationId, cancellationToken);
 
-        // As of the most recent SUCCESSFUL load of the model that served this run, which is not necessarily a load this
-        // run caused: a warm run reports the earlier load's figures, and model_readiness_ms is what tells the two apart
-        // (a small/near-zero readiness there ⇒ the warmer waited for nothing ⇒ the load predates the run; null ⇒
-        // unmeasured — an exact zero is not the signal, a resident model can read a few milliseconds). Chat role,
-        // because that is the only role a work session's turns ever ask for. Null for a remote or Ollama model, and
-        // null when the node never loaded this model itself.
+        // The most recent SUCCESSFUL load of the model that served this run, not necessarily one this run caused: a
+        // near-zero model_readiness_ms means the load predates it, null means unmeasured. Chat role; null when remote.
         var vram = envelopes.ServedModelName is { } servedModel
             ? _localModelLoads?.TryGetLastReadyLoad(servedModel, ModelRole.Chat)
             : null;
@@ -150,15 +135,12 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
         };
     }
 
-    /// <summary>
-    ///     The DevTask path: the task's attempts, coder and reviewer alike, successful and failed alike — all of them
-    ///     are this node's cost.
-    ///     <para>
-    ///         Windowed on the node run's own <c>StartedAtUtc</c>, and that is required rather than tidy: a re-attempt
-    ///         keeps the same development task, so without the window a node's third attempt would re-count the first
-    ///         two attempts' tokens. A missing timestamp on either side answers nothing rather than guessing.
-    ///     </para>
-    /// </summary>
+    /// <summary>The DevTask path: the task's attempts, coder and reviewer alike, successful and failed alike.</summary>
+    /// <remarks>
+    ///     All of them are this node's cost. Windowed on the node run's own <c>StartedAtUtc</c>, which is required
+    ///     rather than tidy: a re-attempt keeps the same development task, so without the window a node's third
+    ///     attempt would re-count the first two attempts' tokens. A missing timestamp answers nothing.
+    /// </remarks>
     private async Task<DevWorkflowNodeTelemetry?> CollectFromDevelopmentTaskAsync(Guid developmentTaskId,
         long? nodeRunStartedAtUtc,
         CancellationToken cancellationToken)
@@ -181,10 +163,11 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
         return new DevWorkflowNodeTelemetry { InputTokens = inputTokens, OutputTokens = outputTokens };
     }
 
-    /// <summary>
-    ///     What the session's steps spent, off the <c>StepEnded</c> / <c>StepFailed</c> rows the supervisor wrote. A row
-    ///     whose detail will not parse is skipped rather than thrown on: a settle must not fail over a measurement.
-    /// </summary>
+    /// <summary>What the session's steps spent, off the <c>StepEnded</c> / <c>StepFailed</c> rows the supervisor wrote.</summary>
+    /// <remarks>
+    ///     A row whose detail will not parse is skipped rather than thrown on: a settle must not fail over a
+    ///     measurement.
+    /// </remarks>
     private async Task<StepTotals> CollectStepConsumptionAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         var events = await _workSessions.ListEventsAsync(sessionId, sinceSequence: 0, cancellationToken);
@@ -220,11 +203,11 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
         };
     }
 
-    /// <summary>
-    ///     What the provider reported, summed over the conversation's chat-run envelopes. Kind-scoped by the store
-    ///     itself — <c>agent_execution_logs</c> overloads its columns across several producers, so a read that did not
-    ///     filter by record kind would sum an approval audit into a node run's cost.
-    /// </summary>
+    /// <summary>What the provider reported, summed over the conversation's chat-run envelopes.</summary>
+    /// <remarks>
+    ///     Kind-scoped by the store itself: <c>agent_execution_logs</c> overloads its columns across several
+    ///     producers, so a read that did not filter by record kind would sum an approval audit into a node's cost.
+    /// </remarks>
     private async Task<EnvelopeTotals> CollectEnvelopesAsync(Guid conversationId, CancellationToken cancellationToken)
     {
         long? inputTokens = null;
@@ -243,16 +226,12 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
                 inputTokens = Add(inputTokens, envelope.PromptTokens);
                 outputTokens = Add(outputTokens, envelope.CompletionTokens);
                 reasoningTokens = Add(reasoningTokens, envelope.ReasoningTokens);
-                // The envelope's duration is the WHOLE chat run — provider rounds and the tool loop between them —
-                // so this sum is agent-turn time, not provider time. Nothing persisted here separates the two, which
-                // is why the column, the DTO member and the panel all say "turn".
+                // The envelope's duration is the WHOLE chat run — provider rounds and the tool loop between them — so
+                // this sum is agent-turn time. Nothing separates the two, which is why every reader says "turn".
                 agentTurnMs = Add(agentTurnMs, envelope.DurationMs);
 
-                // Summed beside it rather than subtracted from it: agent_turn_ms stays the whole-turn wall clock it has
-                // always been, and a reader who wants the warm-equivalent time takes the difference. Null-preserving, so
-                // a conversation no turn of which went through the local-runtime warmer records null — unmeasured —
-                // rather than a zero. A turn that DID warm always contributes a measurement, near zero when the model
-                // was already resident, because the warmer times the reuse call too and the value truncates to ms.
+                // Summed beside agent_turn_ms rather than subtracted from it, so that stays the whole-turn wall clock
+                // and a reader takes the difference. Null-preserving: no turn warmed ⇒ null (unmeasured), never zero.
                 modelReadinessMs = Add(modelReadinessMs, envelope.ModelReadinessMs);
 
                 // The store orders newest first, so the first envelope of the first page is the model that served the
@@ -292,12 +271,12 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
         }
     }
 
-    /// <summary>
-    ///     The names as the column stores them, or null when there were none — never an empty array, which would read
-    ///     as "asked and answered nothing". A set of long names that still overruns the column is trimmed from the end
-    ///     and closed with an ellipsis element, so the document stays parseable and a short list never reads as the
-    ///     whole set.
-    /// </summary>
+    /// <summary>The names as the column stores them, or null when there were none; never an empty array.</summary>
+    /// <remarks>
+    ///     An empty array would read as "asked and answered nothing". A set of long names that still overruns the
+    ///     column is trimmed from the end and closed with an ellipsis element, so the document stays parseable and a
+    ///     short list never reads as the whole set.
+    /// </remarks>
     private static string? ToolNamesJson(IReadOnlyList<string> toolNames)
     {
         if (toolNames.Count == 0)

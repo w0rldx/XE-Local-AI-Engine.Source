@@ -21,12 +21,12 @@ public enum DevWorkflowChangeKind
 
 /// <summary>
 ///     Announces a committed development-workflow change to whoever is watching the run. Called AFTER the commit that
-///     allocated <c>sequence</c>, so a subscriber that replays from the watermark can never miss the row it names.
-///     <para>
-///         The payload is content-free by design: a dropped push degrades to a late read rather than to a wrong
-///         render, because the database is the only replay authority.
-///     </para>
+///     allocated <c>sequence</c>, so a subscriber replaying from the watermark cannot miss the row it names.
 /// </summary>
+/// <remarks>
+///     The payload is content-free by design: a dropped push degrades to a late read rather than to a wrong render,
+///     because the database is the only replay authority.
+/// </remarks>
 public interface IDevWorkflowEventPublisher
 {
     Task PublishAsync(Guid runId, long sequence, DevWorkflowChangeKind kind, CancellationToken cancellationToken = default);

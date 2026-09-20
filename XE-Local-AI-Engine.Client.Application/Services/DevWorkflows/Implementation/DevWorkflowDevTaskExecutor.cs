@@ -8,29 +8,17 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 
 /// <summary>
-///     The implementation lane: a <c>DevTask</c> node run drives the Development task its work item's project owns,
-///     through the chain that already exists — coder attempt, deterministic validation, independent review — and
-///     succeeds when that task reaches <c>AwaitingApply</c>.
-///     <para>
-///         A CLIENT of Dev Mode, not a fork of it. The hash-locked apply gate is the concept's integration and
-///         independent verification, and it is built on the task and attempt rows; re-implementing any of it here would
-///         either rebuild that chain or weaken it. So this holds no execution state of its own: it asks for the next
-///         action, reads what the task became, and writes that onto the node run.
-///     </para>
-///     <para>
-///         <b>It never applies anything.</b> Reaching <c>AwaitingApply</c> IS the node's success — the patch waits
-///         behind a workflow gate, so no AI-authored change reaches a real repository without a decision recorded in
-///         this run's own audit trail.
-///     </para>
-///     <para>
-///         <b>Which task it drives is decided once and then remembered.</b> A node run that already names one drives
-///         that one — the pointer survives a reset, so a re-attempt re-drives the same task, which is Dev Mode's own
-///         rework loop and leaves the per-round evidence where the rest of it already lives. A MATERIALIZED child gets
-///         a task of its OWN in the same project, because it implements its own slice and two children sharing one task
-///         would overwrite each other's work. Anything else — the ordinary undecomposed graph — drives the project's
-///         existing task rather than creating one.
-///     </para>
+///     The implementation lane: a <c>DevTask</c> node run drives the Development task its work item's project owns —
+///     coder attempt, deterministic validation, independent review — and succeeds when it reaches
+///     <c>AwaitingApply</c>.
 /// </summary>
+/// <remarks>
+///     A client of Dev Mode, not a fork: the hash-locked apply gate is its integration and independent verification,
+///     so this keeps no execution state — it asks for the next action and writes what the task became onto the row.
+///     It never applies: <c>AwaitingApply</c> IS success, and the patch waits behind a workflow gate so no AI-authored
+///     change reaches a repository undecided. The task is chosen once — a node run naming one re-drives it, a
+///     materialized child creates its own. See docs/wiki/25-dev-workflows.md ("The implementation lane").
+/// </remarks>
 internal sealed class DevWorkflowDevTaskExecutor
 {
     /// <summary>
@@ -50,21 +38,20 @@ internal sealed class DevWorkflowDevTaskExecutor
     ];
 
     /// <summary>
-    ///     How much of the routed node's validation report a change request may carry. Generous enough for the failing
-    ///     commands and a readable tail of each, small enough that a task's rework reason stays a sentence a human and a
-    ///     model can both take in — and small enough that it cannot become the whole prompt.
+    ///     How much of the routed node's validation report a change request may carry: enough for the failing commands
+    ///     and a readable tail of each, little enough that a rework reason cannot become the whole prompt.
     /// </summary>
     private const int MaxChangeRequestReason = 4096;
 
     /// <summary>
     ///     How much rule-set text a DevTask node run may put in front of Dev Mode's coder and reviewer, in characters.
-    ///     <para>
-    ///         The same 4096 as <see cref="MaxChangeRequestReason" /> and as a rule set's own body cap, and for the same
-    ///         reason: the prompt these sections land in already carries the task's title, requirements and acceptance
-    ///         criteria uncapped, so policy gets a bounded share of it rather than the room it would like. Past this the
-    ///         sections are truncated visibly, never silently dropped.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The same 4096 as <see cref="MaxChangeRequestReason" /> and as a rule set's own body cap, for the same
+    ///     reason: the prompt these sections land in already carries the task's title, requirements and acceptance
+    ///     criteria uncapped, so policy gets a bounded share of it. Past this the sections are truncated visibly,
+    ///     never silently dropped.
+    /// </remarks>
     private const int MaxPolicyCharacters = 4096;
 
     /// <summary>How much of one failing command's captured output the change request quotes, from the END of it.</summary>
@@ -95,15 +82,13 @@ internal sealed class DevWorkflowDevTaskExecutor
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>
-    ///     Binds the node run to the task it implements and asks the chain for its next action.
-    ///     <para>
-    ///         No <c>Queued</c> hop: this lane hands out no slots, and a <c>Queued</c> row would have to name a queue
-    ///         reason for a queue that does not exist. What bounds the work is <c>MaxConcurrentRuns</c> — Dev Mode's own
-    ///         one-active-attempt rule is per TASK, so four runs on four projects legitimately drive four attempts at
-    ///         once — and each of those attempts carries the development attempt-duration budget of its own.
-    ///     </para>
-    /// </summary>
+    /// <summary>Binds the node run to the task it implements and asks the chain for its next action.</summary>
+    /// <remarks>
+    ///     No <c>Queued</c> hop: this lane hands out no slots, and a <c>Queued</c> row would have to name a queue
+    ///     reason for a queue that does not exist. What bounds the work is <c>MaxConcurrentRuns</c> — Dev Mode's own
+    ///     one-active-attempt rule is per TASK, so four runs on four projects legitimately drive four attempts at once
+    ///     — and each of those attempts carries a development attempt-duration budget of its own.
+    /// </remarks>
     public async Task<int> DispatchAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -161,26 +146,19 @@ internal sealed class DevWorkflowDevTaskExecutor
 
             taskId = resolved;
 
-            // The rule sets this node run RECORDED, put where Dev Mode's own prompts read them. On EVERY dispatch, not
-            // only the first bind: the operation id is keyed to this node-run ATTEMPT, so a replayed tick meets the
-            // store's idempotency, while a fix loop that routes the node run back around re-applies the policy the
-            // settle below cleared. INSIDE the try, because a task deleted between the resolve and this write is the
-            // same decided fact the catch below stands the node down for.
+            // The rule sets this node run RECORDED, where Dev Mode's prompts read them, on EVERY dispatch: the operation id is keyed to this node-run ATTEMPT, so a replayed tick
+            // meets the store's idempotency while a re-routed fix loop re-applies what the settle cleared. Inside the try: a task deleted between resolve and write is the catch's own fact.
             await RecordPolicyAsync(development, run, nodeRun, taskId, cancellationToken);
         }
         catch (Exception exception) when (exception is ArgumentException or KeyNotFoundException)
         {
-            // A brief this node cannot be given a task from, or a project that is gone. Both are decided facts, and an
-            // escape here would be the worst of the failure modes available: the row is still Pending, so no deadline
-            // can fire on it and the sweep would re-dispatch it every tick forever. Both messages are this engine's own
-            // text about its own rows — no host path, no model output. A DevelopmentConcurrencyException deliberately
-            // does NOT land here: a lost ledger race is transient, and the next sweep is the right answer to it.
+            // A brief this node cannot be given a task from, or a project that is gone — decided facts whose escape is the worst mode available: the row stays Pending, so no deadline
+            // fires and the sweep re-dispatches forever. Both messages are this engine's text about its own rows. A DevelopmentConcurrencyException stays out: a lost ledger race is transient.
             return await BlockAsync(store, graph, run, nodeRun, nodeRuns, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken);
         }
 
-        // Read from the same clock the store stamps the row with, and read BEFORE the write so it is a lower bound on
-        // that stamp. The dispatch path has to carry it: the row this call goes on to judge attempts against is the one
-        // composed below, and a snapshot still holding the pre-dispatch null would make that comparison vacuous.
+        // Read from the clock the store stamps the row with, and BEFORE the write so it is a lower bound on that stamp. The dispatch path has to carry it: the row this call judges
+        // attempts against is the one composed below, and a snapshot still holding the pre-dispatch null would make that comparison vacuous.
         var startedAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         // The pointer is written with the status, in the same transaction: a row reading Running with no task named is
@@ -216,22 +194,14 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// <summary>
     ///     The task this node run implements: the one it already names, its own newly created one when it is a
     ///     materialized child, or the project's existing task.
-    ///     <para>
-    ///         The pointer comes FIRST and is never second-guessed. It survives a reset by design (a previous attempt's
-    ///         task is that attempt's evidence), so re-resolving here would let a re-attempt walk away from work that
-    ///         is already under way.
-    ///     </para>
-    ///     <para>
-    ///         A materialized child implements its own slice of the project, so it gets its own task. Creating it is
-    ///         keyed on the run and node key WITHOUT the attempt — the task belongs to the node for the life of the run
-    ///         — so a crash between the create and the pointer write is answered by the same task on re-dispatch rather
-    ///         than by a second one nothing points at.
-    ///     </para>
-    ///     <para>
-    ///         Throws rather than answering null when a child's brief cannot describe a task: the caller turns both into
-    ///         the same <c>Configuration</c> stand-down, and the two conditions need different sentences.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The pointer comes FIRST and is never second-guessed: it survives a reset by design (a previous attempt's
+    ///     task is that attempt's evidence), so re-resolving would let a re-attempt walk away from work under way. A
+    ///     child's task is created keyed on the run and node key WITHOUT the attempt — it belongs to the node for the
+    ///     life of the run — so a crash between create and pointer write is answered by the same task, not a second
+    ///     one. A brief that cannot describe a task throws, so the shared stand-down gets a sentence of its own.
+    /// </remarks>
     private static async Task<Guid?> ResolveTaskAsync(DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -255,10 +225,8 @@ internal sealed class DevWorkflowDevTaskExecutor
             return tasks[0].Id;
         }
 
-        // The project's first task is the operator-authored one, and it carries the standard this project's work is
-        // judged against: the child inherits its acceptance criteria and review budget. What it must NOT inherit is the
-        // requirements — that would hand every child the whole feature, N times over, and each of them would look like
-        // a legitimately configured task while doing it.
+        // The project's first task is the operator-authored one and carries the standard this project's work is judged against, so the child inherits its acceptance criteria and review
+        // budget. What it must NOT inherit is the requirements: that would hand every child the whole feature, N times over, each looking like a legitimately configured task while doing it.
         var brief = Brief(nodeRun.InputJson);
         var requirements = Present(brief?.Requirements)
                            ?? throw new ArgumentException($"Node run '{nodeRun.NodeKey}' is a materialized development task whose input names no 'requirements' to implement.",
@@ -279,15 +247,15 @@ internal sealed class DevWorkflowDevTaskExecutor
 
     /// <summary>
     ///     Puts the node run's recorded rule-set text on the task it drives, as the one channel Dev Mode's coder and
-    ///     reviewer prompts read policy through — the same event-derived route <c>PreviousRoundFeedback</c> travels, so
-    ///     it costs no column and no migration.
-    ///     <para>
-    ///         Nothing applied records an EMPTY resolution rather than nothing at all — and so does a resolution whose
-    ///         bodies are all missing or all too long to fit, the render being what decides and what logs each section
-    ///         it dropped. Writing nothing was the leak: the snapshot answers off the latest row, so a workflow that
-    ///         resolved no policy would leave the PREVIOUS one governing rounds it never applied to.
-    ///     </para>
+    ///     reviewer prompts read policy through — the same event-derived route <c>PreviousRoundFeedback</c> travels,
+    ///     costing no column and no migration.
     /// </summary>
+    /// <remarks>
+    ///     Nothing applied records an EMPTY resolution rather than nothing at all, and so does a resolution whose
+    ///     bodies are all missing or all too long to fit — the render decides, and logs each section it dropped.
+    ///     Writing nothing leaks: the snapshot answers off the latest row, so a workflow that resolved no policy
+    ///     would leave the PREVIOUS one governing rounds it never applied to.
+    /// </remarks>
     private async Task RecordPolicyAsync(IDevelopmentStore development,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -311,21 +279,16 @@ internal sealed class DevWorkflowDevTaskExecutor
     }
 
     /// <summary>
-    ///     Revokes the injection when this node run stops driving the task, so what governed the workflow's rounds does
-    ///     not go on governing the operator's own later ones. Called from the shared writers that settle, block and
-    ///     cancel a node run rather than from their call sites — every terminal path has to revoke, and naming them one
-    ///     by one is how the attempt-cancelled settle, the stand-downs and the run cancel were missed.
-    ///     <para>
-    ///         Deliberately OVER-EAGER: a failure the retry policy re-attempts increments the node run's attempt, so the
-    ///         re-dispatch derives a new operation id and records the policy again. A PAUSE is the one stop that does
-    ///         not — it parks the row at the same attempt, whose operation id is already written — which is why only the
-    ///         cancelling half of the stop clears.
-    ///     </para>
-    ///     <para>
-    ///         Best-effort by construction: a node run that never bound a task, and a node whose Development Mode is
-    ///         switched off, have no injection to revoke.
-    ///     </para>
+    ///     Revokes the injection when this node run stops driving the task, so what governed the workflow's rounds
+    ///     does not go on governing the operator's own later ones.
     /// </summary>
+    /// <remarks>
+    ///     Called from the shared writers that settle, block and cancel a node run, not from their call sites: every
+    ///     terminal path has to revoke, and naming them one by one loses the attempt-cancelled settle, the stand-downs
+    ///     and the run cancel. Deliberately OVER-EAGER — a re-attempted failure increments the attempt, so the
+    ///     re-dispatch records policy again, while a PAUSE parks the row at the attempt whose operation id is already
+    ///     written, so only the cancelling half clears. A node run with no task, or no Dev Mode, revokes nothing.
+    /// </remarks>
     private async Task ClearPolicyAsync(DevWorkflowRunSnapshot run, DevWorkflowNodeRunSnapshot nodeRun, CancellationToken cancellationToken)
     {
         if (nodeRun.DevelopmentTaskId is not { } taskId || Resolve().Development is not { } development)
@@ -360,19 +323,14 @@ internal sealed class DevWorkflowDevTaskExecutor
     private static string? Present(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
 
-    /// <summary>
-    ///     What a materialized child was told to implement — the seam decomposition writes through.
-    ///     <para>
-    ///         <c>requirements</c> is MANDATORY: an input that is absent, unparseable, shaped for something else, or
-    ///         blank there stands the node down for a human. The only thing in this repository that writes these rows is
-    ///         decomposition, so a missing brief is a bug in the thing that materialized the child — and inheriting the
-    ///         parent's requirements would hide it behind N children each implementing the entire feature.
-    ///     </para>
-    ///     <para>
-    ///         <c>title</c> falls back to the node's own label, and <c>acceptanceCriteriaJson</c> to the project's first
-    ///         task: neither says what to build, and the project's standard of done is the right one for a slice of it.
-    ///     </para>
-    /// </summary>
+    /// <summary>What a materialized child was told to implement — the seam decomposition writes through.</summary>
+    /// <remarks>
+    ///     <c>requirements</c> is MANDATORY: an absent, unparseable, misshapen or blank one stands the node down for a
+    ///     human. Decomposition is the only writer of these rows, so a missing brief is a bug in what materialized the
+    ///     child, and inheriting the parent's requirements would hide it behind N children each implementing the whole
+    ///     feature. <c>title</c> falls back to the node's own label and <c>acceptanceCriteriaJson</c> to the project's
+    ///     first task: neither says what to build, and the project's standard of done is right for a slice of it.
+    /// </remarks>
     private static DevTaskBrief? Brief(string? inputJson)
     {
         if (string.IsNullOrWhiteSpace(inputJson))
@@ -398,12 +356,12 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// <summary>
     ///     Reads what the development chain has made of the task and settles the node run when it has finished with it,
     ///     answering how many transitions it wrote.
-    ///     <para>
-    ///         A stage boundary counts as work even though it writes no row of this module's: the chain runs one attempt
-    ///         per request, so the tick that asks for the next one has moved the run on, and saying otherwise would
-    ///         leave the whole implementation waiting a sweep interval per stage.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A stage boundary counts as work even though it writes no row of this module's: the chain runs one attempt
+    ///     per request, so the tick that asks for the next one has moved the run on, and saying otherwise would leave
+    ///     the whole implementation waiting a sweep interval per stage.
+    /// </remarks>
     public async Task<int> PollAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -446,13 +404,13 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// <summary>
     ///     Asks the node run's task to stop, for whichever drain the run is in, and answers how many transitions it
     ///     wrote.
-    ///     <para>
-    ///         A pause lets the attempt in flight finish, for the same reason it lets a build finish and a stronger one:
-    ///         a coder attempt is a model conversation with a workspace behind it, and it cannot be resumed halfway. The
-    ///         row then collapses to <c>Pending</c> exactly as a paused agent node run does, and the resume re-drives
-    ///         the task from wherever the chain left it — durably, because the task is a row rather than a process.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A pause lets the attempt in flight finish, for the same reason it lets a build finish and a stronger one: a
+    ///     coder attempt is a model conversation with a workspace behind it and cannot be resumed halfway. The row
+    ///     then collapses to <c>Pending</c> exactly as a paused agent node run does, and the resume re-drives the task
+    ///     from wherever the chain left it — durably, because the task is a row rather than a process.
+    /// </remarks>
     public async Task<int> StopAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -473,9 +431,8 @@ internal sealed class DevWorkflowDevTaskExecutor
         var target = cancel ? DevWorkflowNodeRunStatus.Cancelled : DevWorkflowNodeRunStatus.Pending;
         if (cancel)
         {
-            // Only the cancel. A pause parks the row at the SAME attempt, so the resume's re-dispatch re-derives an
-            // operation id the store has already written and would record nothing — clearing here would leave the
-            // resumed round ungoverned.
+            // Only the cancel. A pause parks the row at the SAME attempt, so the resume's re-dispatch re-derives an operation id the store has already written and would record
+            // nothing — clearing here would leave the resumed round ungoverned.
             await ClearPolicyAsync(run, nodeRun, cancellationToken);
         }
 
@@ -496,13 +453,13 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// <summary>
     ///     Answers whether the node run's task has an attempt in flight, cancelling it on the way when the caller is
     ///     ending the node run rather than parking it.
-    ///     <para>
-    ///         Deliberately does not touch the node run: a cancelled attempt is still winding down, and only the next
-    ///         tick's poll knows whether it stopped or finished inside the window. The one caller that DOES write a
-    ///         terminal off this — the node deadline — writes its own, because the clock is the reason and the attempt's
-    ///         cancellation is only the consequence.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Deliberately does not touch the node run: a cancelled attempt is still winding down, and only the next
+    ///     tick's poll knows whether it stopped or finished inside the window. The one caller that DOES write a
+    ///     terminal off this — the node deadline — writes its own, because the clock is the reason and the attempt's
+    ///     cancellation only the consequence.
+    /// </remarks>
     public async Task<bool> StopAttemptAsync(DevWorkflowNodeRunSnapshot nodeRun, bool cancel, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(nodeRun);
@@ -554,21 +511,14 @@ internal sealed class DevWorkflowDevTaskExecutor
         {
             case DevelopmentTaskStatus.AwaitingApply when rework is { } routed:
 
-                // The fix loop landed on an already-approved task. Settling it Succeeded here is what made a routed
-                // re-attempt a no-op: the loop would route, re-succeed in the same tick, and spend the target's whole
-                // attempt budget in seconds without ever asking for a different patch. So the node asks Dev Mode for
-                // rework instead, with the routed node's own validation report as the review evidence.
+                // The fix loop landed on an already-approved task. Settling it Succeeded makes a routed re-attempt a no-op: the loop routes, re-succeeds in the same tick and spends the
+                // target's whole attempt budget in seconds without asking for a different patch. So the node asks Dev Mode for rework, with the routed node's validation report as evidence.
                 return await RequestChangesAsync(store, graph, run, nodeRun, nodeRuns, development, task, routed, cancellationToken);
 
             case DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed:
 
-                // The node's job is DONE at AwaitingApply: an independent reviewer approved the exact subject, and
-                // applying it is a later act behind a gate this run records. A task somebody has already applied is the
-                // same answer arriving later.
-                //
-                // A re-attempt with no routed failure behind it succeeds immediately, and that is the honest answer
-                // rather than a shortcut: nothing has said this implementation is wrong, and the claim the node is
-                // making — this task is implemented and waiting to be applied — is still true.
+                // The node's job is DONE at AwaitingApply: an independent reviewer approved the exact subject, and applying it is a later act behind a gate this run records. A task somebody
+                // already applied is the same answer arriving later. A re-attempt with no routed failure behind it succeeds at once — nothing has said this implementation is wrong.
                 return await SettleAsync(store,
                         run,
                         nodeRun,
@@ -592,19 +542,15 @@ internal sealed class DevWorkflowDevTaskExecutor
 
             case DevelopmentTaskStatus.Blocked:
 
-                // Unless a person has just retried this node run, which is the ONE thing that changes what "not going
-                // anywhere" means: a Retry buys the task the round its cap stopped, exactly as it already buys the node
-                // one more attempt, and the round starts from ChangesRequested with whatever they said carried into it.
-                // Without this the re-dispatch re-read a task still at N of N and stood the node down again about two
-                // seconds later, twice over, spending a node attempt each time and never starting a coder round.
+                // Unless a person has just retried this node run, the ONE thing that changes what "not going anywhere" means: a Retry buys the task the round its cap stopped, exactly as it
+                // buys the node one more attempt, starting from ChangesRequested with whatever they said. Without it the re-dispatch re-reads a task at N of N and stands the node down again.
                 if (await CarryOperatorRetryAsync(development, run, nodeRun, projectId, task, attempts, cancellationToken))
                 {
                     return 1;
                 }
 
-                // The chain gave up on its own terms — its review rounds ran out, or an operator stood it down. Another
-                // node-run attempt would re-drive a task that is not going anywhere, so this is the class that goes
-                // straight to a human.
+                // The chain gave up on its own terms — review rounds ran out, or an operator stood it down. Another node-run attempt would re-drive a task that is not going
+                // anywhere, so this is the class that goes straight to a human.
                 return await SettleFailureAsync(store,
                         graph,
                         run,
@@ -624,22 +570,17 @@ internal sealed class DevWorkflowDevTaskExecutor
 
         if (attempts.Any(static attempt => ActiveAttemptStatuses.Contains(attempt.Status)))
         {
-            // The chain is working — and this counts every attempt, not only the ones this node-run attempt started,
-            // because Dev Mode's own rule is one active attempt per task and asking for another would simply be refused.
-            // It drives its own attempt to completion without being ticked, so there is nothing to do but wait.
+            // Every attempt counts here, not only the ones this node-run attempt started: Dev Mode's rule is one active attempt per task, so asking for another would be refused. It drives
+            // its own attempt to completion without being ticked, so there is nothing to do but wait.
             return 0;
         }
 
-        // Only the attempts THIS node-run attempt is answerable for. A failed attempt from a previous round is still on
-        // the task — it is the evidence of that round — and reading it as this round's answer would settle every
-        // re-attempt off the failure that caused it, spending the node's whole budget without ever asking the chain to
-        // try again. Both instants come from the same clock and the row's is taken before anything is started, so the
-        // comparison is a fact about ordering rather than a guess.
+        // Only the attempts THIS node-run attempt is answerable for. A previous round's failed attempt is still on the task as that round's evidence, and reading it as this round's answer
+        // would settle every re-attempt off the failure that caused it. Both instants come from one clock and the row's is taken first, so the comparison is ordering rather than a guess.
         if (attempts.LastOrDefault(attempt => attempt.StartedAtUtc >= nodeRun.StartedAtUtc) is { Status: not DevelopmentAttemptStatus.Succeeded } landed)
         {
-            // The attempt failed, was interrupted by a restart, or was cancelled. Where that leads — another attempt at
-            // this node, the node that produced what it was implementing, or a human — is the retry policy's answer,
-            // exactly as it is for a work session that failed.
+            // The attempt failed, was interrupted by a restart, or was cancelled. Where that leads — another attempt at this node, the node that produced what it was implementing, or a
+            // human — is the retry policy's answer, exactly as it is for a work session that failed.
             return landed.Status == DevelopmentAttemptStatus.Cancelled
                 ? await SettleAsync(store,
                         run,
@@ -666,11 +607,8 @@ internal sealed class DevWorkflowDevTaskExecutor
             return 0;
         }
 
-        // The person who retried this node said WHY, and the coder about to redo the round is the one who needs to
-        // hear it. It travels the same route a routed rejection does, and for the same reason: a task's own change
-        // request is the one channel Dev Mode composes a coder prompt out of. The node run is not settled — the next
-        // poll finds the task at ChangesRequested, where the ordinary next-action path starts the round it was going
-        // to start anyway.
+        // The person who retried this node said WHY, and the coder about to redo the round needs to hear it. It travels the route a routed rejection does, for the same reason: a task's own
+        // change request is the one channel Dev Mode composes a coder prompt from. The node run is not settled — the next poll finds ChangesRequested and starts the round it would anyway.
         if (await CarryOperatorRetryAsync(development, run, nodeRun, projectId, task, attempts, cancellationToken))
         {
             return 1;
@@ -681,58 +619,15 @@ internal sealed class DevWorkflowDevTaskExecutor
 
     /// <summary>
     ///     Hands the operator's reason for retrying this node run to the task's next coder round, and answers whether
-    ///     it wrote one. Marked <c>OperatorDirected</c>, which is what lets the coder and reviewer prompts rank a
-    ///     person's sentence above the task's own immutable requirements and above a reviewer's feedback.
-    ///     <para>
-    ///         Two shapes of the same act. From <c>InProgress</c> with a coder attempt that did NOT succeed, the next
-    ///         action is a coder round either way, so the change request adds the sentence without changing what the
-    ///         retry does. From <c>Blocked</c> AT THE ROUND CAP it does more: it widens the cap by one, which is what
-    ///         turns the retry from a no-op into a round. That widening is the single documented exception to a Dev
-    ///         Mode task being immutable, and it is bought one round at a time by a person clicking Retry — the same
-    ///         click that already widens the node's own attempt cap. Measured live before it existed: two Retries on a
-    ///         node blocked at "all 3 rounds used" re-dispatched it, re-blocked it in about two seconds each, spent two
-    ///         of the node's own attempts, and never built a coder prompt, so the operator's sentence was stored, shown
-    ///         in the panel, and unreachable by any model.
-    ///     </para>
-    ///     <para>
-    ///         The cap case fires on the ACT rather than on the sentence — <c>IsOperatorRetry</c>, not a reason — so a
-    ///         silent Retry buys the round exactly as a spoken one does, and the operator row it writes carries no
-    ///         reason, which is already how an instruction is withdrawn. Every other case is a KNOWN HOLE — the retry
-    ///         still happens, the operator's sentence simply does not reach a coder — and each is deliberate:
-    ///     </para>
-    ///     <list type="bullet">
-    ///         <item><c>InProgress</c> whose last coder attempt SUCCEEDED is on its way to deterministic validation;
-    ///             asking for changes would throw that round and its evidence away.</item>
-    ///         <item><c>Ready</c> and <c>Planned</c> have no round to brief — nothing has been implemented yet.</item>
-    ///         <item><c>ChangesRequested</c> already carries the verdict that asked for the round — a reviewer's
-    ///             feedback, or the deterministic gate's failure — and overwriting it would replace the very thing the
-    ///             round exists to answer.</item>
-    ///         <item><c>InReview</c> would have its next action CHANGED by the ask, from the re-review that is the
-    ///             right answer to a reviewer that failed into a coder round nobody asked for.</item>
-    ///         <item><c>AwaitingApply</c> never reaches here: the caller settles the node run <c>Succeeded</c> above,
-    ///             because an approved implementation waiting to be applied is still a true claim.</item>
-    ///         <item><c>Blocked</c> for any reason OTHER than the round cap — an operator stood the task down, the
-    ///             repository is gone — is left alone: the widening buys a round, and a task blocked on something a
-    ///             round cannot fix would spend it re-earning the same block.</item>
-    ///         <item><c>Validation</c> is Dev Mode's own supervisor window and holds no attempt; <c>Completed</c> and
-    ///             <c>Cancelled</c> are settled above. None of the three is a round anything can brief.</item>
-    ///     </list>
-    ///     <para>
-    ///         Nothing here has to withdraw an instruction, and that is why no branch tries. Every writer of
-    ///         <c>IncrementAttempt: true</c> targets <c>Pending</c>, and the <c>Pending → Running</c> dispatch records
-    ///         a fresh <c>WorkflowPolicyApplied</c> row BEFORE this method runs — so by the first tick of a new
-    ///         attempt the store's boundary already sits above every instruction an earlier attempt wrote, and an
-    ///         empty Retry has retracted the last one without anybody writing a retraction. Within one attempt the
-    ///         reason cannot change, because it is keyed to the attempt on the way in.
-    ///     </para>
-    ///     <para>
-    ///         One ask per (node run, ATTEMPT), and the ledger is what enforces it: the reason stays on the inputs for
-    ///         the life of the attempt, and the round asked for walks the task back through <c>InProgress</c> without
-    ///         starting an attempt this node run is answerable for — so without the operation id that tick would ask a
-    ///         second time and loop the task back to <c>ChangesRequested</c> for as long as the poll continues. The
-    ///         reason itself is scoped by attempt on the way in, so a later automatic re-attempt quotes nobody.
-    ///     </para>
+    ///     it wrote one.
     /// </summary>
+    /// <remarks>
+    ///     Marked <c>OperatorDirected</c>, so coder and reviewer prompts rank the person's sentence above the task's
+    ///     immutable requirements. It carries only where the next action is already an unbriefed coder round —
+    ///     <c>InProgress</c> after a coder attempt that did not succeed — plus <c>Blocked</c> AT THE ROUND CAP,
+    ///     which also widens the cap by one, bought per Retry. Every other status carries nothing: see
+    ///     docs/wiki/25-dev-workflows.md ("Operator retry reasons").
+    /// </remarks>
     private async Task<bool> CarryOperatorRetryAsync(IDevelopmentStore development,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -743,9 +638,8 @@ internal sealed class DevWorkflowDevTaskExecutor
     {
         var said = DevWorkflowNodeInputs.OperatorRetryReasonFor(nodeRun.InputJson, nodeRun.Attempt);
 
-        // The cap case reads the ACT, the InProgress case reads the SENTENCE, because that is what each of them is
-        // for: one buys a round whether or not anything was typed, the other only adds a sentence to a round that was
-        // going to run regardless.
+        // The cap case reads the ACT (IsOperatorRetry), the InProgress case reads the SENTENCE, because that is what each is for: one buys a round whether or not anything was typed,
+        // the other only adds a sentence to a round that was going to run regardless.
         var atTheRoundCap = task.Status == DevelopmentTaskStatus.Blocked && task.CurrentReviewRound >= task.MaxReviewRounds;
         if (atTheRoundCap
                 ? !DevWorkflowNodeInputs.IsOperatorRetry(nodeRun.InputJson, nodeRun.Attempt)
@@ -756,6 +650,8 @@ internal sealed class DevWorkflowDevTaskExecutor
             return false;
         }
 
+        // One ask per (node run, ATTEMPT), and the ledger enforces it: the reason stays on the inputs for the life of the attempt while the round asked for walks the task back through
+        // InProgress without starting an attempt this node run owns, so without the operation id every later tick would ask again and loop the task back to ChangesRequested.
         var operationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "devtask-operator-retry");
         if (await development.FindOperationAsync(projectId, operationId, DevelopmentOperationPhases.Completed, cancellationToken) is not null)
         {
@@ -770,9 +666,8 @@ internal sealed class DevWorkflowDevTaskExecutor
                 OperationId = operationId,
                 TargetStatus = DevelopmentTaskStatus.ChangesRequested,
                 ExpectedTaskVersion = task.Version,
-                // A silent Retry writes an operator row with NO reason, which is already the
-                // retraction: the round it buys is told nothing rather than told the last
-                // person's sentence.
+                // A silent Retry writes an operator row with NO reason, which IS the retraction: the round it buys is told nothing. No branch withdraws an instruction, because the
+                // Pending → Running dispatch already records a fresh policy row above every instruction an earlier attempt wrote.
                 Reason = said is null
                                              ? null
                                              : $"An operator retried the '{nodeRun.NodeKey}' step of the workflow driving this task, and said: {said}",
@@ -781,10 +676,8 @@ internal sealed class DevWorkflowDevTaskExecutor
             },
                                      cancellationToken);
 
-            // The one task status hop nothing else records. DevelopmentManagementService logs the hops IT decides,
-            // and this edge is bought by an operator's Retry in the workflow lane instead — so a live round could see
-            // the cap widen and the task move with no line saying either happened. Same literal "task status" phrase,
-            // so the one grep that finds every hop still finds this one.
+            // The one task status hop nothing else records: DevelopmentManagementService logs the hops IT decides, and this edge is bought by an operator's Retry in the workflow lane,
+            // so a live round could otherwise see the cap widen and the task move unlogged. Same literal "task status" phrase, so the one grep that finds every hop still finds this one.
             if (atTheRoundCap)
             {
                 _logger.LogInformation(
@@ -799,15 +692,8 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
         catch (DevelopmentConcurrencyException)
         {
-            // Something else moved the task between this tick's read and its ask — an operator in the Development
-            // views, or a sibling tick. Nothing is owed, and the operation id is still unwritten: the next tick reads
-            // what the task became and asks again if that is still the right thing to do.
-            //
-            // ONLY the concurrency case. TransitionTaskAsync checks the version BEFORE legality, so a task whose
-            // status moved always surfaces here rather than as an invalid transition — which means an invalid
-            // transition is a broken invariant in the table above, not a race. Swallowing it would start the coder
-            // round unbriefed and call that success; propagating it stalls this node run loudly (the dispatcher's
-            // AdvanceSafelyAsync logs it at Error and re-derives from unchanged rows next tick).
+            // Something else moved the task between this tick's read and its ask. Nothing is owed and the operation id is unwritten, so the next tick reads what the task became. ONLY the
+            // concurrency case: the version is checked BEFORE legality, so an invalid transition is a broken invariant, not a race, and stalling this node run loudly beats briefing nobody.
             return false;
         }
     }
@@ -815,12 +701,12 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// <summary>
     ///     Asks the chain for the next thing to do, and answers 1 because a stage boundary is progress even though the
     ///     row it moves belongs to Dev Mode.
-    ///     <para>
-    ///         The operation id is derived from what this tick OBSERVED — the task's status and how many attempts it has
-    ///         — so a tick replayed after a crash asks for the same action rather than a second one, and a tick that
-    ///         genuinely finds a new state asks for the next.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The operation id is derived from what this tick OBSERVED — the task's status and how many attempts it has —
+    ///     so a tick replayed after a crash asks for the same action rather than a second one, and a tick that
+    ///     genuinely finds a new state asks for the next.
+    /// </remarks>
     private async Task<int> StartNextActionAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -845,26 +731,16 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
         catch (DevelopmentInvalidTransitionException exception)
         {
-            // Either the task has no next action, or something else started one between this tick's read and its ask —
-            // the Development views can drive the same task. Re-reading tells the two apart without matching on a
-            // message: if an attempt is running now, the run is not stuck, it is simply not this tick's to advance.
+            // Either the task has no next action, or something else started one between this tick's read and its ask — the Development views drive the same task. Re-reading tells the two
+            // apart without matching on a message: if an attempt is running now, the run is not stuck, it is simply not this tick's to advance.
             if ((await development.ListAttemptsAsync(taskId, cancellationToken))
                 .Any(static attempt => ActiveAttemptStatuses.Contains(attempt.Status)))
             {
                 return 0;
             }
 
-            // An attempt row is not the only way Dev Mode is busy. Deterministic validation is a phase its own
-            // supervisor drives with NO attempt row at all — it runs the project's command profile and then moves the
-            // task on to InReview or ChangesRequested — so a tick landing inside that window is told there is no next
-            // action, which is true and is not a fault. It stood tasks down 24 ms after validation started, with a
-            // SUCCEEDED coder attempt on them and Dev Mode calmly finishing.
-            //
-            // The VERSION is what makes that general rather than a patch for one status. Naming Validation alone loses
-            // the same race one hop later: the supervisor can finish and move the task to InReview between the ask and
-            // this read, and a task that MOVED since the snapshot this tick opened with is working, whatever it moved
-            // to. Only a task sitting exactly where this tick found it, with no attempt and no next action, is
-            // genuinely stuck — and that is the one this blocks.
+            // An attempt row is not the only way Dev Mode is busy: validation runs with NO attempt row, so a tick inside that window is told there is no next action — true, not a fault.
+            // The VERSION generalises it: a task that MOVED since this tick's snapshot is working, whatever it moved to, so only one sitting exactly where this tick found it is stuck.
             var current = await development.GetTaskAsync(taskId, cancellationToken);
             if (current.Status == DevelopmentTaskStatus.Validation || current.Version != task.Version)
             {
@@ -890,8 +766,7 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // The message is NOT surfaced: an unexpected exception's text is the one string on this path nothing has
-            // sanitized, and it can carry a host path or a fragment of a prompt.
+            // The message is NOT surfaced: an unexpected exception's text is the one string on this path nothing has sanitized, and it can carry a host path or a fragment of a prompt.
             _logger.LogError(exception, "Development workflow dev-task node run {NodeRunId} of run {RunId} could not be advanced.", nodeRun.Id, run.Id);
             return await SettleFailureAsync(store,
                     graph,
@@ -910,17 +785,15 @@ internal sealed class DevWorkflowDevTaskExecutor
 
     /// <summary>
     ///     Asks Dev Mode for a new coder round on a task the workflow has just been told is wrong, and answers 1
-    ///     because a stage boundary is progress. The node run is NOT settled: it stays Running on the same attempt and
-    ///     the next poll finds the task at <c>ChangesRequested</c>, where the ordinary next-action path starts the new
-    ///     coder attempt with no special casing at all.
-    ///     <para>
-    ///         One ask per ROUTE, and the ledger is what enforces it: the transition is written under an operation id
-    ///         keyed on the route rather than on this node run's own attempt, which
-    ///         <see cref="UnconsumedPriorFailureAsync" /> reads before the branch is taken. That matters because the
-    ///         routed failure stays on the input for the life of the attempt AND across the node's own retries, so the
-    ///         SECOND round's arrival back at <c>AwaitingApply</c> would otherwise ask again forever.
-    ///     </para>
+    ///     because a stage boundary is progress.
     /// </summary>
+    /// <remarks>
+    ///     The node run is NOT settled: it stays Running on the same attempt, and the next poll finds the task at
+    ///     <c>ChangesRequested</c>, where the ordinary next-action path starts the new coder attempt unspecially. One
+    ///     ask per ROUTE, enforced by the ledger: the transition is written under an operation id keyed on the route
+    ///     rather than this node run's attempt, which <see cref="UnconsumedPriorFailureAsync" /> reads first — the
+    ///     routed failure stays on the input across the node's retries, so a second arrival would ask again forever.
+    /// </remarks>
     private async Task<int> RequestChangesAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -932,14 +805,8 @@ internal sealed class DevWorkflowDevTaskExecutor
         CancellationToken cancellationToken)
     {
         var failingNodeKey = routed.NodeKey;
-        // A workflow-driven change request does NOT consume a round. TransitionTaskAsync bumps CurrentReviewRound only
-        // on the InReview hop, and refuses it past the maximum, and this transition never enters review — so charging
-        // it one would take a round away from work nothing has judged yet. FinalizeValidationAsync DOES charge one on
-        // its failure hop, because a failed deterministic gate IS a judgement on the round, and that budget is the only
-        // thing bounding the rework loop; this ask judges nothing. What it must not do is ask for a round that cannot
-        // finish: a task that has spent them all would run a whole coder attempt and be stood down before it could
-        // reach a review, for a reason nobody can act on. So the node stands down here instead, while the reason is
-        // still legible.
+        // A workflow-driven change request does NOT consume a round: CurrentReviewRound bumps only on the InReview hop, which this never takes. A failed validation gate charges one, and
+        // that budget bounds the rework loop. But a round that cannot finish must not be asked for: a task at its cap would run a coder attempt and be stood down before any review.
         if (task.CurrentReviewRound >= task.MaxReviewRounds)
         {
             return await SettleFailureAsync(store,
@@ -960,10 +827,8 @@ internal sealed class DevWorkflowDevTaskExecutor
         var reason = await DescribePriorFailureAsync(store, run, nodeRun, routed, cancellationToken);
         if (!reason.Evidenced)
         {
-            // No readable validation report and no command or test that actually ran. Asking for a round on that is
-            // how a coder is told to redo approved work for no stated reason; SUCCEEDING on it instead would send the
-            // run straight back round the loop to re-fail the same check, spending the budget on having tried nothing.
-            // So it stands the node down where a human can read why, with the approved task untouched behind it.
+            // No readable validation report and no command or test that actually ran. Asking for a round on that tells a coder to redo approved work for no stated reason; succeeding on it
+            // sends the run back round the loop to re-fail the same check. So the node stands down where a human can read why, with the approved task untouched behind it.
             _logger.LogWarning(
                 "Development workflow node run {NodeRunId} carries a routed failure from node '{NodeKey}' with no validation report and no command counts behind it, so the node is stood down instead of asking for another round.",
                 nodeRun.Id,
@@ -1003,17 +868,14 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
     }
 
-    /// <summary>
-    ///     The routed failure this node run has not answered yet, or nothing.
-    ///     <para>
-    ///         The routed failure stays on <c>InputJson</c> for the life of the attempt — nothing clears it — so
-    ///         whether it has already been answered cannot be read off the input. It is read off the LEDGER: the change
-    ///         request is written under an operation keyed on the ROUTE, so that operation existing IS the record that
-    ///         this rejection has had its one ask. Without it the second round's arrival back at
-    ///         <c>AwaitingApply</c> would ask again, be answered by the memoized operation, move nothing, and leave the
-    ///         node run Running for as long as the dispatcher keeps polling it.
-    ///     </para>
-    /// </summary>
+    /// <summary>The routed failure this node run has not answered yet, or nothing.</summary>
+    /// <remarks>
+    ///     The routed failure stays on <c>InputJson</c> for the life of the attempt — nothing clears it — so whether
+    ///     it has been answered cannot be read off the input. It is read off the LEDGER: the change request is written
+    ///     under an operation keyed on the ROUTE, so that operation existing IS the record that this rejection has had
+    ///     its one ask. Without it a second arrival at <c>AwaitingApply</c> would ask again, be answered by the
+    ///     memoized operation, move nothing, and leave the node run Running for as long as the dispatcher polls it.
+    /// </remarks>
     private static async Task<RoutedFailure?> UnconsumedPriorFailureAsync(IDevelopmentStore development,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -1036,19 +898,14 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// <summary>
     ///     The ledger id for this route's one change request, keyed on the ROUTE — the node that refused and the
     ///     attempt of it that did — rather than on the target's own attempt.
-    ///     <para>
-    ///         The target's attempt is the wrong key because it MOVES while the same rejection is still outstanding: a
-    ///         transient failure between the change request and the round it asked for spends one of the target's
-    ///         attempts, and the next arrival back at <c>AwaitingApply</c> then looked for an id nothing had written.
-    ///         The rejection was answered twice — a second coder round against work a reviewer had already approved,
-    ///         which is how an approved patch is discarded and the task's review rounds run out.
-    ///     </para>
-    ///     <para>
-    ///         The failing node's key rides in the phase, so two checks that both route here are two routes and get one
-    ///         ask each. A payload from before this shipped carries no attempt: it keeps the id it was written under,
-    ///         because changing the key of a route already in flight would ask for its round a second time.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The target's attempt is the wrong key because it MOVES while the same rejection is outstanding: a transient
+    ///     failure between the change request and the round it asked for spends one of the target's attempts, so the
+    ///     next arrival at <c>AwaitingApply</c> looks for an id nothing wrote and answers the rejection twice — a
+    ///     second coder round against work a reviewer already approved. The failing node's key rides in the phase, so
+    ///     two checks routing here get one ask each. A payload carrying no attempt keeps the id it was written under.
+    /// </remarks>
     private static Guid ChangeRequestOperationId(DevWorkflowRunSnapshot run, DevWorkflowNodeRunSnapshot nodeRun, RoutedFailure routed) =>
         routed.Attempt is { } attempt
             ? DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, attempt, $"devtask-request-changes:{routed.NodeKey}")
@@ -1061,13 +918,13 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// <summary>
     ///     The routed failure this dispatch is carrying — the node that refused and the attempt of it that did — or
     ///     nothing when there is none.
-    ///     <para>
-    ///         Best-effort by design, like <see cref="Brief" />: an input this cannot read is an input with no routed
-    ///         failure in it, which falls through to the branch that was there before rather than throwing on a
-    ///         document nobody promised the shape of. The attempt is optional for the same reason plus one more — a
-    ///         payload written before it existed has none, and is answered exactly as it used to be.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Best-effort by design, like <see cref="Brief" />: an input this cannot read is an input with no routed
+    ///     failure in it, falling through to the unrouted branch rather than throwing on a document nobody promised
+    ///     the shape of. The attempt is optional for the same reason and one more — a payload that carries none is
+    ///     answered exactly as it was before the attempt travelled on it.
+    /// </remarks>
     private static RoutedFailure? RoutedFailureOf(string? inputJson)
     {
         if (string.IsNullOrWhiteSpace(inputJson))
@@ -1103,12 +960,12 @@ internal sealed class DevWorkflowDevTaskExecutor
     /// <summary>
     ///     Why the workflow is asking for another round, in the words of the node that refused this one: which commands
     ///     failed and the tail of what they printed, read off that node's latest validation report.
-    ///     <para>
-    ///         The report is the evidence, not the routed <c>priorFailure</c> summary — that carries only counts, and a
-    ///         coder told "1 of 4 commands failed" has been told nothing it can act on. When the report cannot be read,
-    ///         or carries material the sanitizer refuses, the counts are what is left and they are still true.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The report is the evidence, not the routed <c>priorFailure</c> summary — that carries only counts, and a
+    ///     coder told "1 of 4 commands failed" has been told nothing it can act on. When the report cannot be read,
+    ///     or carries material the sanitizer refuses, the counts are what is left and they are still true.
+    /// </remarks>
     private async Task<PriorFailureReason> DescribePriorFailureAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -1116,8 +973,7 @@ internal sealed class DevWorkflowDevTaskExecutor
         CancellationToken cancellationToken)
     {
         var failingNodeKey = routed.NodeKey;
-        // The counts go through the same bound and the same sanitizer as the report does: the node key interpolated
-        // into them comes from a stored graph definition, which is authored text like any other.
+        // The counts go through the same bound and sanitizer the report does: the node key interpolated into them comes from a stored graph definition, authored text like any other.
         var (countsText, hasCounts) = DescribeCounts(nodeRun.InputJson, failingNodeKey);
         var counts = Bounded(countsText, GenericChangeRequest);
         try
@@ -1128,20 +984,18 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or IOException or UnauthorizedAccessException)
         {
-            // A report whose shape this build cannot read, or whose bytes the filesystem would not hand over — the blob
-            // store answers a MISSING or tampered blob with a status, but a disk or permission fault still throws, and
-            // letting it escape would fail the tick and re-throw on every sweep after it. The counts are authored here
-            // from numbers, so they are always the safe answer.
+            // A report whose shape this build cannot read, or whose bytes the filesystem would not hand over: the blob store answers a MISSING or tampered blob with a status, but a disk or
+            // permission fault still throws, and letting it escape would fail the tick and re-throw on every sweep after it. The counts are authored here from numbers, so they are safe.
             _logger.LogDebug(exception, "Development workflow node run {NodeRunId} could not quote node '{NodeKey}' validation report.", nodeRun.Id, failingNodeKey);
             return new PriorFailureReason(counts, hasCounts);
         }
     }
 
     /// <summary>
-    ///     One rework reason and whether anything actually judged the work behind it — a readable validation report, or
-    ///     a routed payload carrying a command or test that really ran. A reason with neither is a sentence, not a
-    ///     verdict, and nothing may spend a coder round on it.
+    ///     One rework reason and whether anything actually judged the work behind it — a readable validation report,
+    ///     or a routed payload carrying a command or test that really ran.
     /// </summary>
+    /// <remarks>A reason with neither is a sentence, not a verdict, and nothing may spend a coder round on it.</remarks>
     [StructLayout(LayoutKind.Auto)]
     private readonly record struct PriorFailureReason(string Reason, bool Evidenced);
 
@@ -1163,17 +1017,14 @@ internal sealed class DevWorkflowDevTaskExecutor
         }
     }
 
-    /// <summary>
-    ///     The report the ROUTED attempt wrote, or nothing when there is none this build can read.
-    ///     <para>
-    ///         Correlated to the attempt, not merely to the node key. A later attempt of that node can refuse before it
-    ///         runs anything — a missing command profile, a workspace it could not prepare — and write no report at
-    ///         all; the latest report for the key is then the PREVIOUS attempt's, about an implementation that has
-    ///         since been rewritten. Quoting it makes the reason look evidenced and asks a coder to fix output nothing
-    ///         just produced. Refusing it drops through to the counts, which for a check that ran nothing say so, and
-    ///         the node stands down where a human can read why.
-    ///     </para>
-    /// </summary>
+    /// <summary>The report the ROUTED attempt wrote, or nothing when there is none this build can read.</summary>
+    /// <remarks>
+    ///     Correlated to the attempt, not merely to the node key. A later attempt of that node can refuse before it
+    ///     runs anything — a missing command profile, a workspace it could not prepare — and write no report, leaving
+    ///     the latest report for the key to be the PREVIOUS attempt's, about an implementation since rewritten.
+    ///     Quoting it makes the reason look evidenced and asks a coder to fix output nothing just produced. Refusing
+    ///     it drops through to the counts, which for a check that ran nothing say so, and the node stands down.
+    /// </remarks>
     private async Task<DevWorkflowValidationReport?> ReadValidationReportAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         RoutedFailure routed,
@@ -1235,10 +1086,12 @@ internal sealed class DevWorkflowDevTaskExecutor
     }
 
     /// <summary>
-    ///     What the ROUTED payload says, which is only counts — the fallback when the report itself cannot be quoted.
+    ///     What the ROUTED payload says, which is only counts — the fallback when the report cannot be quoted.
+    /// </summary>
+    /// <remarks>
     ///     Authored from numbers this engine wrote, so there is nothing in it to sanitize. <c>HasCounts</c> is false
     ///     when nothing ran, which is the difference between a verdict and a sentence that sounds like one.
-    /// </summary>
+    /// </remarks>
     private static (string Text, bool HasCounts) DescribeCounts(string? inputJson, string failingNodeKey)
     {
         (string Text, bool HasCounts) generic = ($"Node '{failingNodeKey}' rejected this implementation and asked for it to be done again.", false);
@@ -1261,9 +1114,8 @@ internal sealed class DevWorkflowDevTaskExecutor
             var commandsRun = Number(failure, "commandsRun");
             var testsFailed = Number(failure, "testsFailed");
 
-            // Nothing ran, so there is nothing to count. The sentence this used to author — "0 of 0 commands failed, 0
-            // tests failed" — was read live on 2026-09-02 by a coder being asked to redo approved work, and it says
-            // less than the generic line does while sounding like a measurement.
+            // Nothing ran, so there is nothing to count: a "0 of 0 commands failed, 0 tests failed" sentence says less than the generic line while sounding like a measurement, and the
+            // coder reading it is being asked to redo approved work on no evidence at all.
             return commandsRun <= 0 && commandsFailed <= 0 && testsFailed <= 0
                 ? generic
                 : (string.Create(CultureInfo.InvariantCulture,
@@ -1284,8 +1136,8 @@ internal sealed class DevWorkflowDevTaskExecutor
         DevelopmentTaskSnapshot task,
         Guid taskId)
     {
-        // A workspace policy refusing the attempt's diff is not the provider failing: it is the engine declining work on
-        // evidence, so it goes straight to a human instead of spending three more attempts to be refused identically.
+        // A workspace policy refusing the attempt's diff is not the provider failing: it is the engine declining work on evidence, so it goes straight to a human instead of
+        // spending three more attempts to be refused identically.
         var refused = DevelopmentAttemptEvidenceException.Names(attempt.TerminalReason, DevelopmentAttemptFailureCodes.WorkspacePolicyRefused)
             ? DevWorkflowFailureClasses.Policy
             : DevWorkflowFailureClasses.ProviderError;
@@ -1365,10 +1217,12 @@ internal sealed class DevWorkflowDevTaskExecutor
     }
 
     /// <summary>
-    ///     The implementation node's slice of the output document every executor writes: the verdict a conditional edge
-    ///     routes on, and the task a reader drills into. No patch and no evidence — those live on the development task,
-    ///     which is exactly why the node run names it.
+    ///     The implementation node's slice of the output document every executor writes: the verdict a conditional
+    ///     edge routes on, and the task a reader drills into.
     /// </summary>
+    /// <remarks>
+    ///     No patch and no evidence — those live on the development task, which is why the node run names it.
+    /// </remarks>
     private static string Output(DevWorkflowNodeRunSnapshot nodeRun, DevelopmentTaskSnapshot? task, Guid? taskId, string? failureClass) =>
         JsonSerializer.Serialize(new DevTaskOutput
         {

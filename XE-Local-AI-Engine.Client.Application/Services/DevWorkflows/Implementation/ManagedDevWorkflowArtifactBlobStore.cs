@@ -7,10 +7,13 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Workflow artifacts on disk at
-///     <c>{INodeDataDirectory.Root}/dev-workflows/artifacts/{runId:N}/{artifactId:N}.blob</c>, encrypted under the node
-///     key with the run and artifact ids bound into the AAD. The crypto, atomic-write and tamper-classification body
-///     lives in <see cref="ManagedEncryptedBlobStore" />; this is the folder, leaf and AAD column, and nothing else.
+///     <c>{INodeDataDirectory.Root}/dev-workflows/artifacts/{runId:N}/{artifactId:N}.blob</c>, encrypted under the
+///     node key with the run and artifact ids bound into the AAD.
 /// </summary>
+/// <remarks>
+///     The crypto, atomic-write and tamper-classification body lives in <see cref="ManagedEncryptedBlobStore" />;
+///     this is the folder, leaf and AAD column, and nothing else.
+/// </remarks>
 public sealed class ManagedDevWorkflowArtifactBlobStore : IDevWorkflowArtifactBlobStore
 {
     private readonly ManagedEncryptedBlobStore _blobs;

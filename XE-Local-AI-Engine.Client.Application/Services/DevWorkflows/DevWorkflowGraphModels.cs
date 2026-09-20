@@ -9,27 +9,26 @@ internal enum DevWorkflowJoinPolicy
     Any
 }
 
-/// <summary>
-///     What a Tool node does with the repository it names. A CONFIG field rather than a node type, because the seven
-///     types are closed (Y6) and these two are the same lane doing the same thing to the same workspace — one asks the
-///     project's command profile whether the result is good, the other asks Dev Mode's apply gate to let it out.
-/// </summary>
+/// <summary>What a Tool node does with the repository it names.</summary>
+/// <remarks>
+///     A CONFIG field rather than a node type, because the node types are closed and these two are the same lane
+///     doing the same thing to the same workspace — one asks the project's command profile whether the result is
+///     good, the other asks Dev Mode's apply gate to let it out.
+/// </remarks>
 internal enum DevWorkflowToolMode
 {
     Validate,
     Apply
 }
 
-/// <summary>
-///     What a node can change. The tokens are the tool taxonomy's — <c>ToolCategory</c> — because an author writing a
-///     capability should not have to learn a second vocabulary for the same idea, but the QUESTION is a different one:
-///     the chat taxonomy asks whether a call needs an approval round-trip, and this asks what a node can change outside
-///     its own sandbox. They share names, not meaning.
-///     <para>
-///         There is no <c>Unknown</c>. A node declaring nothing is judged by its DERIVED effects, which are total over
-///         the seven node types, so there is never a node whose reach is unanswerable.
-///     </para>
-/// </summary>
+/// <summary>What a node can change.</summary>
+/// <remarks>
+///     The tokens are the tool taxonomy's <c>ToolCategory</c>, so an author writing a capability need not learn a
+///     second vocabulary, but the QUESTION differs: that taxonomy asks whether a call needs an approval round-trip,
+///     this asks what a node can change outside its own sandbox — they share names, not meaning. There is no
+///     <c>Unknown</c>: a node declaring nothing is judged by its DERIVED effects, which are total over the node
+///     types, so no node's reach is unanswerable.
+/// </remarks>
 internal enum DevWorkflowNodeEffect
 {
     ReadLocal,
@@ -38,11 +37,11 @@ internal enum DevWorkflowNodeEffect
     Network
 }
 
-/// <summary>
-///     How far out a write reaches. One derived bit rather than a second taxonomy: a DevTask writes a worktree created
-///     under the node's own data root, and its patch reaches the operator's repository only through the apply node a
-///     human gate already stands in front of.
-/// </summary>
+/// <summary>How far out a write reaches.</summary>
+/// <remarks>
+///     One derived bit rather than a second taxonomy: a DevTask writes a worktree created under the node's own data
+///     root, and its patch reaches the operator's repository only through the apply node a human gate stands before.
+/// </remarks>
 internal enum DevWorkflowEffectScope
 {
     Sandbox,
@@ -62,21 +61,16 @@ internal sealed class DevWorkflowMaterialization
 }
 
 /// <summary>
-///     One node of the parsed graph. Only what the runtime reads; unknown properties survive in the stored blob either
-///     way, because this projection is not a re-serialization of it.
-///     <para>
-///         <see cref="RequiredCapabilities" /> is the author's DECLARED effect set. Only the effects are kept: the
-///         reason written beside each one is checked here (a token the vocabulary knows, a string, at most 200
-///         characters) and then left in the blob for the editor to render, because nothing the runtime decides reads
-///         it.
-///     </para>
-///     <para>
-///         <see cref="ModelProfile" /> and <see cref="ReasoningEffort" /> ARE read: an agent node's work session is
-///         created with them as its own pins, beating the bound agent definition's. Only their SHAPE is checked here —
-///         a model name is matched against this node's catalog at dispatch, exactly as an agent definition's pin is,
-///         so a graph does not become unsaveable because a model was uninstalled after it was authored.
-///     </para>
+///     One node of the parsed graph: only what the runtime reads, since unknown properties survive in the stored
+///     blob either way and this projection is not a re-serialization of it.
 /// </summary>
+/// <remarks>
+///     <see cref="RequiredCapabilities" /> is the author's DECLARED effect set, and only the effects are kept — the
+///     reason beside each is shape-checked and then left in the blob for the editor, because nothing the runtime
+///     decides reads it. <see cref="ModelProfile" /> and <see cref="ReasoningEffort" /> ARE read: they pin an agent
+///     node's work session, beating the bound definition's. Only their SHAPE is checked here, because a model name
+///     is matched against the catalog at dispatch, so an uninstalled model does not make a graph unsaveable.
+/// </remarks>
 internal sealed class DevWorkflowGraphNode
 {
     public required string NodeKey { get; init; }

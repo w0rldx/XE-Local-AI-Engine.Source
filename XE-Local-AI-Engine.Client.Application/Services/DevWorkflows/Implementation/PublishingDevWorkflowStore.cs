@@ -6,59 +6,33 @@ using System.Text.Json.Nodes;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     Announces every committed workflow mutation, and forwards everything else untouched.
-///     <para>
-///         The publish sits HERE rather than at each of the fifteen call sites in the runtime for one reason: a missed
-///         call site is a pane that silently stops updating, and there is no test that would notice. Every mutation
-///         returns the watermark its commit allocated, so wrapping the one interface they all go through makes the
-///         notification impossible to forget — including from code written later.
-///     </para>
-///     <para>
-///         The change kind comes from the COMMAND, not from the event row: a caller that transitions a node run into a
-///         human wait is asking for a person, and that is the one push with a consequence beyond re-rendering.
-///     </para>
-/// </summary>
+/// <summary>Announces every committed workflow mutation, and forwards everything else untouched.</summary>
 /// <remarks>
-///     ponytail: one ping per committed mutation, with no coalescing window. The seeded graphs are linear, so a tick
-///     writes one or two; a parallel stage would want a debounce here, keyed by run id, before the client turns each
-///     ping into a refetch.
+///     The publish sits HERE rather than at each call site because a missed one is a pane that silently stops
+///     updating, with no test that would notice. The change kind comes from the COMMAND, not the event row.
+///     ponytail: one ping per committed mutation, no coalescing window; a parallel stage would want a debounce here
+///     keyed by run id. See docs/wiki/25-dev-workflows.md ("Node telemetry").
 /// </remarks>
 internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
 {
-    /// <summary>
-    ///     How long a cost collection may take before the settle goes ahead without it. It runs on a dispatcher tick,
-    ///     and a measurement that delays a run is worse than a measurement that is missing.
-    ///     <para>
-    ///         It is a HARD wall-clock bound, not a request to stop: the settle stops WAITING when it expires, whether
-    ///         or not the collection notices. A collector that ignores its token, or a database call that never
-    ///         returns, therefore costs a measurement and nothing else — see <c>CollectAsync</c> for why the abandoned
-    ///         work cannot touch the mutation's own <c>DbContext</c>.
-    ///     </para>
-    ///     <para>
-    ///         It bounds the whole ASK, not one command: a retry route enriches every reset it carries under ONE
-    ///         deadline, because the graph's width is what decides how many resets there are and a per-command budget
-    ///         would multiply by it. The parameter exists so a test can prove that without waiting five real seconds;
-    ///         production takes the default.
-    ///     </para>
-    ///     <para>
-    ///         A SPENT deadline schedules nothing. Once the shared budget has expired, a route's remaining resets are
-    ///         forwarded unenriched without a collection being started at all: the answer would already be too late to
-    ///         use, so starting it would only pile up work behind a boundary the caller has stopped watching.
-    ///     </para>
-    /// </summary>
+    /// <summary>How long a cost collection may take before the settle goes ahead without it.</summary>
+    /// <remarks>
+    ///     A HARD wall-clock bound on the WAIT, not a request to stop, and it bounds the whole ask rather than one
+    ///     command; a SPENT deadline schedules nothing. The parameter exists so a test can prove that without waiting
+    ///     the real seconds; production takes the default.
+    ///     See docs/wiki/25-dev-workflows.md ("Node telemetry").
+    /// </remarks>
     private static readonly TimeSpan DefaultCollectionTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    /// <summary>
-    ///     The telemetry members that are NOT additive across attempts. A route belongs to one settle, a served model
-    ///     is a name rather than a quantity, a set of tool names does not sum, and the two VRAM figures are a READING
-    ///     of the box at one load rather than a quantity this attempt spent — adding two attempts' free-VRAM bytes
-    ///     would produce a number that describes nothing. So the retry snapshot carries everything else and only these
-    ///     five are dropped.
-    /// </summary>
+    /// <summary>The telemetry members that are NOT additive across attempts.</summary>
+    /// <remarks>
+    ///     A route belongs to one settle, a served model is a name rather than a quantity, tool names do not sum, and
+    ///     the VRAM figures are a READING of the box at one load. The retry snapshot carries everything else.
+    ///     See docs/wiki/25-dev-workflows.md ("Node telemetry").
+    /// </remarks>
     private static readonly HashSet<string> NonAdditiveTelemetryMembers = new(StringComparer.Ordinal)
     {
         "routeJson",
@@ -201,16 +175,12 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
         return await PublishAsync(_inner.TransitionNodeRunAsync(enriched, cancellationToken), kind, cancellationToken);
     }
 
-    /// <summary>
-    ///     ONE announcement for the whole route, because it is one commit. Its watermark names the routing event, and
-    ///     every reset the same transaction wrote sits after it, so a subscriber replaying from there still sees them.
-    ///     <para>
-    ///         Each reset is enriched exactly as a same-node re-attempt is: this is the OTHER write path into the store's
-    ///         node-run transition, and a cross-node retry that skipped it would lose an attempt from every cost total.
-    ///         The enrichment is re-derived on every ask and never cached, because the fix loop re-sends the same command
-    ///         object after a lost concurrency race — reading the rows again is what keeps the second pass correct.
-    ///     </para>
-    /// </summary>
+    /// <summary>ONE announcement for the whole route, because it is one commit.</summary>
+    /// <remarks>
+    ///     Its watermark names the routing event and every reset the same transaction wrote sits after it. Each reset
+    ///     is enriched exactly as a same-node re-attempt is, re-derived on every ask and never cached.
+    ///     See docs/wiki/25-dev-workflows.md ("Node telemetry").
+    /// </remarks>
     public async Task<DevWorkflowMutationResult> RouteRetryAsync(RouteDevWorkflowRetryCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -289,21 +259,12 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
         CancellationToken cancellationToken = default) =>
         _inner.ListEventsAsync(runId, sinceSequence, limit, cancellationToken);
 
-    /// <summary>
-    ///     Attaches what the settling attempt cost, or forwards the command untouched. The gate is the target STATUS,
-    ///     not the caller: a terminal, <c>Blocked</c> or <c>WaitingForApproval</c> move is where an attempt's spend
-    ///     stops changing, and a call site added later crosses this method whether or not anyone remembers it.
-    ///     <para>
-    ///         <c>Blocked</c> and <c>WaitingForApproval</c> are in the set deliberately. They are LIVE statuses, yet
-    ///         they are where the most expensive node runs land — retry-exhausted, budget-exhausted, resume-exhausted,
-    ///         session-less — and gating on terminality alone would leave every abandoned node run reporting nothing.
-    ///     </para>
-    ///     <para>
-    ///         The whole enrichment is contained: any throw, any timeout, and the ORIGINAL command goes through. It
-    ///         runs before the inner store call and never inside its transaction, so a crash mid-collect loses a
-    ///         measurement and nothing else.
-    ///     </para>
-    /// </summary>
+    /// <summary>Attaches what the settling attempt cost, or forwards the command untouched.</summary>
+    /// <remarks>
+    ///     The gate is the target STATUS, not the caller, so a call site added later crosses this method whether or
+    ///     not anyone remembers it. The whole enrichment is contained: any throw, any timeout, and the ORIGINAL
+    ///     command goes through. See docs/wiki/25-dev-workflows.md ("Node telemetry").
+    /// </remarks>
     private async Task<TransitionDevWorkflowNodeRunCommand> EnrichAsync(TransitionDevWorkflowNodeRunCommand command, CancellationToken cancellationToken)
     {
         // The deadline is opened only for a command that will actually collect, so an ordinary Running transition
@@ -317,21 +278,13 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
         return await EnrichWithinDeadlineAsync(command, deadline.Token, cancellationToken);
     }
 
-    /// <summary>
-    ///     The enrichment itself, under a deadline its CALLER owns — one per settle, one per retry route.
-    ///     <para>
-    ///         The deadline is enforced by ABANDONING THE WAIT, not by asking the collection to stop. Cancellation is
-    ///         cooperative, so a collector that never observes its token — or a database call that does not — would
-    ///         otherwise hold a terminal transition or a retry route open forever, which is a workflow that never
-    ///         settles rather than a measurement that is missing. <c>WaitAsync</c> gives back the thread when the
-    ///         deadline fires and leaves the collection to finish into <see cref="ObserveLateCollection" />, where
-    ///         its result is logged and dropped.
-    ///     </para>
-    ///     <para>
-    ///         <paramref name="cancellationToken" /> is kept only to tell an expired deadline (swallowed, the command
-    ///         goes through unenriched) from a cancelled caller (rethrown).
-    ///     </para>
-    /// </summary>
+    /// <summary>The enrichment itself, under a deadline its CALLER owns — one per settle, one per retry route.</summary>
+    /// <remarks>
+    ///     Enforced by ABANDONING THE WAIT, not by asking the collection to stop; <c>WaitAsync</c> gives the thread
+    ///     back and leaves the collection to finish into <see cref="ObserveLateCollection" />.
+    ///     <paramref name="cancellationToken" /> is kept only to tell an expired deadline (swallowed) from a
+    ///     cancelled caller (rethrown). See docs/wiki/25-dev-workflows.md ("Node telemetry").
+    /// </remarks>
     private async Task<TransitionDevWorkflowNodeRunCommand> EnrichWithinDeadlineAsync(TransitionDevWorkflowNodeRunCommand command,
         CancellationToken deadline,
         CancellationToken cancellationToken)
@@ -353,9 +306,8 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
             return command;
         }
 
-        // Admission BEFORE scheduling, because the deadline bounds the wait and not the work behind it: a collector
-        // that never terminates would otherwise keep its worker and its scope for the life of the process, one per
-        // settle. No slot free means no collection at all — the same trade an expired deadline makes.
+        // Admission BEFORE scheduling, because the deadline bounds the wait and not the work behind it. No slot free
+        // means no collection at all — the same trade an expired deadline makes.
         if (!_collections.TryEnter())
         {
             _logger.LogWarning("All {CollectionSlots} cost-collection slots are in use; node run {NodeRunId} is forwarded without a measurement.",
@@ -364,9 +316,8 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
             return command;
         }
 
-        // Task.Run, so the boundary holds even against a collector that blocks BEFORE its first await — a call on
-        // this stack would never reach the WaitAsync below. The consequence is that a reset is offered to the
-        // collector EVENTUALLY rather than synchronously, which is what the route test waits for.
+        // Task.Run, so the boundary holds even against a collector that blocks BEFORE its first await. The cost is
+        // that a reset is offered to the collector EVENTUALLY rather than synchronously.
         var startedAt = Stopwatch.GetTimestamp();
         var collection = Task.Run(async () =>
             {
@@ -376,9 +327,8 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
                 }
                 finally
                 {
-                    // The slot comes back when the COLLECTOR terminates, not when the caller stops waiting for it —
-                    // releasing it on the abandoned wait would let the next settle start work beside the stuck one,
-                    // which is the accumulation the pool exists to stop.
+                    // The slot comes back when the COLLECTOR terminates, not when the caller stops waiting: releasing
+                    // it on the abandoned wait would let the next settle start work beside the stuck one.
                     _collections.Release();
                 }
             },
@@ -395,25 +345,13 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
         }
     }
 
-    /// <summary>
-    ///     The reads a cost collection needs, on a service scope the COLLECTION owns and disposes.
-    ///     <para>
-    ///         The isolation is the point, not tidiness. This work can outlive the settle that started it, and the
-    ///         settle's next act is to write through <c>_inner</c> — so a collection reading on the mutation's own
-    ///         <c>DbContext</c> would be a second concurrent operation on it, which is a hard failure rather than a
-    ///         lost measurement. Its own scope means its own <c>DbContext</c>, disposed when it finishes, whenever
-    ///         that is.
-    ///     </para>
-    ///     <para>
-    ///         Everything here READS. Nothing an abandoned collection can still be doing writes a row: the only write
-    ///         is the enriched command it returns, and a late return is dropped by the caller.
-    ///     </para>
-    ///     <para>
-    ///         The scope's <c>IDevWorkflowStore</c> is this same decorator around a fresh inner store; its read
-    ///         methods forward untouched, and asking for the concrete inner store instead would bind this class to a
-    ///         registration rather than to the interface it already depends on.
-    ///     </para>
-    /// </summary>
+    /// <summary>The reads a cost collection needs, on a service scope the COLLECTION owns and disposes.</summary>
+    /// <remarks>
+    ///     The isolation is the point: this work can outlive the settle that started it, whose next act is to write
+    ///     through <c>_inner</c>, and a second concurrent operation on that <c>DbContext</c> is a hard failure rather
+    ///     than a lost measurement. Everything here READS; the only write is the enriched command it returns.
+    ///     See docs/wiki/25-dev-workflows.md ("Node telemetry").
+    /// </remarks>
     private async Task<TransitionDevWorkflowNodeRunCommand> CollectAsync(TransitionDevWorkflowNodeRunCommand command,
         CancellationToken deadline,
         CancellationToken cancellationToken)
@@ -445,9 +383,8 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
         IDevWorkflowNodeTelemetrySource telemetry,
         CancellationToken deadline)
     {
-        // The PRE-write row, and it is read for four things only: the work session, the development task, the
-        // attempt's start and the row's node type. Its Status and OutputJson are the previous attempt's and must
-        // never be the ones a route question is asked about.
+        // The PRE-write row, read for four things only: the work session, the development task, the attempt's start
+        // and the node type. Its Status and OutputJson are the previous attempt's.
         var snapshot = await reads.GetNodeRunAsync(command.NodeRunId, deadline);
         var routeJson = await RouteJsonAsync(command, snapshot, reads, deadline);
         var collected = await telemetry.CollectAsync(snapshot, command.TargetStatus, deadline);
@@ -466,11 +403,11 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
         };
     }
 
-    /// <summary>
-    ///     Watches a collection that outlived its deadline, so its completion is observed rather than left to the
-    ///     unobserved-exception handler — and says so once, at warning, with counts only. Whatever it answers is
-    ///     DROPPED: the transition it would have enriched has already gone through.
-    /// </summary>
+    /// <summary>Watches a collection that outlived its deadline, so its completion is observed.</summary>
+    /// <remarks>
+    ///     Rather than left to the unobserved-exception handler, and it says so once, at warning, with counts only.
+    ///     Whatever it answers is DROPPED: the transition it would have enriched has already gone through.
+    /// </remarks>
     private void ObserveLateCollection(Task<TransitionDevWorkflowNodeRunCommand> collection, Guid nodeRunId, long startedAt)
     {
         _ = collection.ContinueWith(task =>
@@ -497,16 +434,13 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
             TaskScheduler.Default);
     }
 
-    /// <summary>
-    ///     The route this settle took, or null when the move is not terminal — a node run that is <c>Blocked</c> or
-    ///     waiting on a human has not finished, so it has routed nowhere yet, and saying so with a null is honest where
-    ///     an empty document would not be.
-    ///     <para>
-    ///         The command's own target status and output are projected onto the pre-write row FIRST. Asked of the row
-    ///         as it stands, every edge would answer <c>Pending</c> — the row still reads <c>Running</c>, carrying the
-    ///         previous attempt's output — and the route document would be empty in every real run.
-    ///     </para>
-    /// </summary>
+    /// <summary>The route this settle took, or null when the move is not terminal.</summary>
+    /// <remarks>
+    ///     A <c>Blocked</c> node run or one waiting on a human has routed nowhere yet, and a null says so where an
+    ///     empty document would not. The command's target status and output are projected onto the pre-write row
+    ///     FIRST, or every edge would answer <c>Pending</c>.
+    ///     See docs/wiki/25-dev-workflows.md ("Node telemetry").
+    /// </remarks>
     private async Task<string?> RouteJsonAsync(TransitionDevWorkflowNodeRunCommand command,
         DevWorkflowNodeRunSnapshot snapshot,
         IDevWorkflowStore reads,
@@ -529,28 +463,19 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
             : null;
 
         // The run's other rows, because whether a SKIP was waived is a walk back over the graph rather than something
-        // this row carries. Without them a waived skip's out-edges would record as dead, which is the exact reading the
-        // dispatcher does not make.
+        // this row carries. Without them a waived skip's out-edges would record as dead.
         var nodeRuns = await reads.ListNodeRunsAsync(command.RunId, cancellationToken);
         var nodeRunsByKey = nodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
 
         return DevWorkflowStateMachine.RouteJson(DevWorkflowStateMachine.RouteTaken(_graphs.Resolve(run), routeSource, nodeRunsByKey, decision));
     }
 
-    /// <summary>
-    ///     Arm B: the failing attempt's cost, captured onto the retry event BEFORE the reset that empties the row.
-    ///     <para>
-    ///         The node-run row keeps the LAST attempt only, so without this a node that failed twice and succeeded on
-    ///         the third try would report one attempt of three, and every total that summed the rows would silently
-    ///         under-report. The event log is where the per-attempt history already lives, and the retry event's own
-    ///         detail is the place the event catalog names for it — so no event type is added and the retry policy,
-    ///         which is a singleton and cannot hold a scoped collector, is not touched at all.
-    ///     </para>
-    ///     <para>
-    ///         The pre-write row is also the last place the failing attempt's work session still exists: the command
-    ///         clears it, but downstream, inside the store's own transition.
-    ///     </para>
-    /// </summary>
+    /// <summary>The failing attempt's cost, captured onto the retry event BEFORE the reset that empties the row.</summary>
+    /// <remarks>
+    ///     The node-run row keeps the LAST attempt only. The pre-write row is also the last place the failing
+    ///     attempt's work session still exists: the command clears it downstream, inside the store's own transition.
+    ///     See docs/wiki/25-dev-workflows.md ("Node telemetry").
+    /// </remarks>
     private static async Task<TransitionDevWorkflowNodeRunCommand> EnrichReAttemptAsync(TransitionDevWorkflowNodeRunCommand command,
         IDevWorkflowStore reads,
         IDevWorkflowNodeTelemetrySource telemetry,
@@ -574,15 +499,12 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
             : command;
     }
 
-    /// <summary>
-    ///     Merges the COMPLETE additive cost vector into an existing retry detail, or answers null when the payload is
-    ///     not a JSON object and must be forwarded verbatim.
-    ///     <para>
-    ///         The members come from the telemetry record itself minus the five that cannot be added up — the route,
-    ///         the served model, the tool names and the two VRAM readings. A column added to that record later
-    ///         therefore rides here automatically, or it is not additive; nothing enumerates the ten by hand.
-    ///     </para>
-    /// </summary>
+    /// <summary>Merges the COMPLETE additive cost vector into an existing retry detail, or answers null.</summary>
+    /// <remarks>
+    ///     Null when the payload is not a JSON object and must be forwarded verbatim. The members come from the
+    ///     telemetry record itself minus the non-additive ones, so a column added to that record later rides here
+    ///     automatically, or it is not additive; nothing enumerates them by hand.
+    /// </remarks>
     private static string? MergeAttemptCost(string detailJson, DevWorkflowNodeTelemetry telemetry)
     {
         if (JsonNode.Parse(detailJson) is not JsonObject detail || JsonSerializer.SerializeToNode(telemetry, JsonOptions) is not JsonObject cost)

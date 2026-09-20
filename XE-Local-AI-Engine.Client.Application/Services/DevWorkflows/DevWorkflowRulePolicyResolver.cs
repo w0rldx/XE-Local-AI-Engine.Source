@@ -4,23 +4,13 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     Which scoped rule sets apply to a node run, and the record of that decision.
-///     <para>
-///         The predicate is stated once: each of the two axes — <c>projectIds</c> and <c>nodeTypes</c> — matches
-///         when it is EMPTY, and otherwise by exact case-insensitive membership; both must match; every match is
-///         applied, ordered by name. No globs, no precedence, no conflict resolution — a rule set either applies or it
-///         does not, and two that both apply are both injected.
-///     </para>
-///     <para>
-///         Resolution is RECORDED on every node-run type, agent or not, so <c>appliedRuleSets</c> on a node-run is an
-///         honest answer whichever node is asked. Two lanes INJECT the bodies: an Agent node's objective
-///         (<c>DevWorkflowAgentExecutor.ComposeObjectiveAsync</c>) and a DevTask node's Dev Mode prompts, which reach
-///         the coder and the reviewer through an event on the task (<c>DevWorkflowDevTaskExecutor</c>). A Tool node runs
-///         a command profile with no prose channel at all and a HumanGate asks a person; both still record, and
-///         injecting there is additive whenever those lanes grow a place to put it.
-///     </para>
-/// </summary>
+/// <summary>Which scoped rule sets apply to a node run, and the record of that decision.</summary>
+/// <remarks>
+///     The predicate is stated here once: both axes must match, an EMPTY axis matches everything, and every match is
+///     applied. Resolution is recorded on every node type; the bodies are injected by two,
+///     <c>DevWorkflowAgentExecutor.ComposeObjectiveAsync</c> and <c>DevWorkflowDevTaskExecutor</c>.
+///     See docs/wiki/25-dev-workflows.md ("Policy injection").
+/// </remarks>
 public static class DevWorkflowRulePolicyResolver
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
@@ -39,17 +29,12 @@ public static class DevWorkflowRulePolicyResolver
         return [.. enabledRuleSets.Where(ruleSet => Matches(ruleSet, developmentProjectId, nodeType))];
     }
 
-    /// <summary>
-    ///     What a node-run's <c>policy_resolution_json</c> is written with, or null when nothing applied — which is the
-    ///     honest answer for "no rule set matched" and keeps an untouched column from claiming an empty resolution.
-    ///     <para>
-    ///         The BODY is snapshotted for the node types that INJECT it, and only those. Re-reading the rule set at
-    ///         dispatch would let an edit landing between materialization and dispatch hand the agent one text while
-    ///         the audit permanently claimed another, and a delete leave nothing to inject at all. On every other node
-    ///         type the text would be a copy nothing reads, decrypted into each node-run snapshot on every list — so
-    ///         those rows record the id, the name and the hash, which is all their audit ever needed.
-    ///     </para>
-    /// </summary>
+    /// <summary>What a node-run's <c>policy_resolution_json</c> is written with, or null when nothing applied.</summary>
+    /// <remarks>
+    ///     Null is the honest answer for "no rule set matched", and keeps an untouched column from claiming an empty
+    ///     resolution. The BODY is snapshotted for the node types that inject it, and only those.
+    ///     See docs/wiki/25-dev-workflows.md ("Policy injection").
+    /// </remarks>
     public static string? Compose(IReadOnlyList<DevWorkflowRuleSetSnapshot> enabledRuleSets, Guid? developmentProjectId, DevWorkflowNodeType nodeType)
     {
         var matched = Resolve(enabledRuleSets, developmentProjectId, nodeType);
@@ -64,12 +49,11 @@ public static class DevWorkflowRulePolicyResolver
                 JsonOptions);
     }
 
-    /// <summary>
-    ///     Whether a node type renders policy text into what it dispatches — the agent lane's objective and the DevTask
-    ///     lane's coder and reviewer prompts. A Tool node runs a command profile with no prose channel at all, so it has
-    ///     nowhere to put a body, and a HumanGate asks a person rather than a model. Both still RECORD which rule sets
-    ///     applied.
-    /// </summary>
+    /// <summary>Whether a node type renders policy text into what it dispatches.</summary>
+    /// <remarks>
+    ///     The agent lane's objective and the DevTask lane's coder and reviewer prompts do. A Tool node has no prose
+    ///     channel to put a body in and a HumanGate asks a person; both still RECORD which rule sets applied.
+    /// </remarks>
     public static bool InjectsPolicyText(DevWorkflowNodeType nodeType) =>
         nodeType is DevWorkflowNodeType.Agent or DevWorkflowNodeType.DevTask;
 
@@ -95,16 +79,12 @@ public static class DevWorkflowRulePolicyResolver
         }
     }
 
-    /// <summary>
-    ///     A stored scope with each axis normalised to a list, or NULL when the column cannot be read at all.
-    ///     <para>
-    ///         The two states are kept apart on purpose, because the safe answer differs by caller: the resolver treats
-    ///         an unreadable scope as matching NOTHING — the endpoints are its only validating writer, so an unreadable
-    ///         one is a hand-edited row, and "applies to every node on this box" is the dangerous reading — while a
-    ///         read model renders it as empty axes, because a management page that cannot LOAD the row is a page nobody
-    ///         can use to fix it.
-    ///     </para>
-    /// </summary>
+    /// <summary>A stored scope with each axis normalised to a list, or NULL when the column cannot be read at all.</summary>
+    /// <remarks>
+    ///     The two states are kept apart because the safe answer differs by caller: the resolver treats an unreadable
+    ///     scope as matching NOTHING, a read model renders it as empty axes.
+    ///     See docs/wiki/25-dev-workflows.md ("Policy injection").
+    /// </remarks>
     public static DevWorkflowRuleSetScope? ReadScope(string? scopeJson)
     {
         if (string.IsNullOrWhiteSpace(scopeJson))
@@ -148,14 +128,9 @@ public sealed class DevWorkflowRuleSetScope
     public required IReadOnlyList<string> NodeTypes { get; init; }
 }
 
-/// <summary>
-///     One rule set as a node-run records it: which document applied, under what name, at which exact text — and that
-///     text itself. The hash keeps the audit truthful after the rule set is edited or deleted; the snapshotted
-///     <see cref="Body" /> is what the node was actually given, so the two can never tell different stories.
-///     <para>
-///         <see cref="Body" /> is nullable only to keep the reader honest about rows written before it existed. It
-///         never reaches the wire: the node-run response carries the id, the name and the hashes, and a reader who
-///         wants the text asks the rule set for it.
-///     </para>
-/// </summary>
+/// <summary>One rule set as a node-run records it: which document applied, under what name, at which exact text.</summary>
+/// <remarks>
+///     <see cref="Body" /> is that text, and is nullable only to keep the reader honest about rows written before it
+///     existed. It never reaches the wire. See docs/wiki/25-dev-workflows.md ("Policy injection").
+/// </remarks>
 public sealed record DevWorkflowAppliedRuleSet(Guid Id, string Name, string ContentSha256, string? Body);

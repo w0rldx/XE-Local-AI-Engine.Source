@@ -1,13 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>
-///     Why a node run failed. PascalCase, closed, and written to the node run's <c>failure_class</c> column and to its
+///     Why a node run failed. PascalCase, closed, written to the node run's <c>failure_class</c> column and to its
 ///     output document verbatim.
-///     <para>
-///         Deliberately a different vocabulary from <see cref="DevWorkflowOutcomes" />: these answer "why did it fail",
-///         those answer "how did it end". Collapsing the two is what once produced tokens that belonged to neither.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Deliberately a different vocabulary from <see cref="DevWorkflowOutcomes" />: these answer "why did it fail",
+///     those answer "how did it end". Collapsing the two produces tokens that belong to neither.
+/// </remarks>
 internal static class DevWorkflowFailureClasses
 {
     /// <summary>The agent's work session failed. Retryable — a fresh session, never the poisoned one.</summary>
@@ -26,17 +26,20 @@ internal static class DevWorkflowFailureClasses
     public const string Internal = "Internal";
 
     /// <summary>
-    ///     The node cannot run as configured: an agent that is missing or cannot call tools, a repo-bound node on a work
-    ///     item with no project, a node type this build has no executor for. NOT retryable — a retry produces the same
-    ///     answer, so it goes straight to a human.
+    ///     The node cannot run as configured: a missing agent, a repo-bound node on a work item with no project, a
+    ///     node type this build has no executor for.
     /// </summary>
+    /// <remarks>NOT retryable — a retry produces the same answer, so it goes straight to a human.</remarks>
     public const string Configuration = "Configuration";
 
     /// <summary>
     ///     A policy refused the work: a dependency-manifest touch, a protected-path violation, an unacknowledged
-    ///     repository. NOT retryable, and on evidence — the manifest check hard-fails with zero commands run and the
-    ///     sandbox has no egress to re-resolve, so a second attempt produces the byte-identical answer.
+    ///     repository.
     /// </summary>
+    /// <remarks>
+    ///     NOT retryable, and on evidence — the manifest check hard-fails with zero commands run and the sandbox has
+    ///     no egress to re-resolve, so a second attempt produces the byte-identical answer.
+    /// </remarks>
     public const string Policy = "Policy";
 
     /// <summary>A budget ran out: session resumes, total attempts, node runs per run. NOT retryable.</summary>
@@ -49,21 +52,22 @@ internal static class DevWorkflowFailureClasses
     public const string GateRejected = "GateRejected";
 
     /// <summary>
-    ///     A work session finished, and what it finished with says the objective was NOT met: it left a task Blocked, or
-    ///     it declared as much on <c>complete_work_session</c>. NOT retryable on its own — a session that gave up
-    ///     honestly gives up again on an identical second run, and the thing that changes the answer is the operator's
-    ///     retry reason. So it goes straight to a human, who decides between Retry, Skip and Abandon.
+    ///     A work session finished, and what it finished with says the objective was NOT met: it left a task Blocked,
+    ///     or it declared as much on completion.
     /// </summary>
+    /// <remarks>
+    ///     NOT retryable on its own — a session that gave up honestly gives up again on an identical second run, and
+    ///     what changes the answer is the operator's retry reason. So it goes to a human, who chooses Retry, Skip or
+    ///     Abandon.
+    /// </remarks>
     public const string ObjectiveNotMet = "ObjectiveNotMet";
 }
 
-/// <summary>
-///     How an event ended. Lowercase verbs, closed, at most 64 characters.
-///     <para>
-///         There is deliberately no token for a refused admission: a lane that will not take a node run yet is
-///         queueing, not failing, and it produces a <c>Queued</c> row with a reason rather than an event.
-///     </para>
-/// </summary>
+/// <summary>How an event ended. Lowercase verbs, closed, at most 64 characters.</summary>
+/// <remarks>
+///     There is deliberately no token for a refused admission: a lane that will not take a node run yet is queueing,
+///     not failing, and it produces a <c>Queued</c> row with a reason rather than an event.
+/// </remarks>
 internal static class DevWorkflowOutcomes
 {
     public const string Succeeded = "succeeded";
@@ -76,9 +80,9 @@ internal static class DevWorkflowOutcomes
 }
 
 /// <summary>
-///     Why a node run is <c>Queued</c> rather than <c>Running</c>. Lowercase-hyphenated, closed, and displayed verbatim:
-///     the whole point of separating the two states is that the UI can say which of these it is.
+///     Why a node run is <c>Queued</c> rather than <c>Running</c>. Lowercase-hyphenated, closed, displayed verbatim.
 /// </summary>
+/// <remarks>The point of separating the two states is that the UI can say which of these it is.</remarks>
 internal static class DevWorkflowQueueReasons
 {
     /// <summary>The work-session admission cap is full — the honest name for "one node, one invocation slot".</summary>
@@ -94,13 +98,13 @@ internal static class DevWorkflowQueueReasons
 /// <summary>
 ///     The <c>status</c> of a node run's output document — the two values a condition on an out-edge may compare it
 ///     against.
-///     <para>
-///         Deliberately not <see cref="DevWorkflowOutcomes" />, which two of these strings happen to match: an event's
-///         outcome describes how one event ended, while this describes what the node produced, and a definition author
-///         writing <c>status eq "succeeded"</c> is reading THIS. Sharing the constants would make a later change to
-///         either vocabulary silently reach into the other.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Deliberately not <see cref="DevWorkflowOutcomes" />, which two of these strings happen to match: an event's
+///     outcome describes how one event ended, while this describes what the node produced, and a definition author
+///     writing a status comparison is reading THIS. Sharing the constants would make a later change to either
+///     vocabulary silently reach into the other.
+/// </remarks>
 internal static class DevWorkflowNodeOutputStatuses
 {
     public const string Succeeded = "succeeded";
@@ -109,14 +113,13 @@ internal static class DevWorkflowNodeOutputStatuses
 
 /// <summary>
 ///     The <c>verdict</c> of a node run's output document, for the answers a status alone cannot carry.
-///     <para>
-///         One value today. A zero-task decomposition writes an already-succeeded row at each of its template's
-///         validation nodes — so an apply downstream reads a validation that really did run for this run — and that
-///         row has to say it validated NOTHING rather than let a reader take it for a check that passed. The
-///         <c>status</c> stays <c>succeeded</c> because routing reads it and a conditional out-edge on the template's
-///         validation node must fire exactly as a real pass would.
-///     </para>
 /// </summary>
+/// <remarks>
+///     One value today. A zero-task decomposition writes an already-succeeded row at each of its template's validation
+///     nodes, so an apply downstream reads a validation that really did run, and that row has to say it validated
+///     NOTHING rather than be taken for a check that passed. The <c>status</c> stays <c>succeeded</c> because routing
+///     reads it and a conditional out-edge on that node must fire exactly as a real pass would.
+/// </remarks>
 internal static class DevWorkflowNodeOutputVerdicts
 {
     public const string ValidationNotApplicable = "validation-not-applicable";

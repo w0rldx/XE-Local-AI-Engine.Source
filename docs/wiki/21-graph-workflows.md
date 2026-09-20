@@ -42,7 +42,7 @@ canvases you care about.
   invocation stack a scheduled saved-agent run uses.
 - **Not a write surface for agents.** A `Tool` node may only run a built-in read-local tool that needs no approval
   (§4.3). A node runs unattended, so there is nobody to ask.
-- **Not Dev Workflows.** [Development Workflows](10-react-client.md) run a fixed template over a code work item with
+- **Not Dev Workflows.** [Development Workflows](25-dev-workflows.md) run a fixed template over a code work item with
   gates, interventions and artifacts. Graph Workflows are free-form graphs with no work item and no artifacts, and
   several of their types are deliberate copies trimmed of what has no meaning here — there is no `Blocked` node-run
   state and no `Waived` edge state, because v1 has neither retry routing nor a waiving decision.

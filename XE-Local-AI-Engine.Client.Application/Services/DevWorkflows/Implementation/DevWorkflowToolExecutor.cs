@@ -7,21 +7,12 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     The sandbox lane: a bounded number of Tool node-runs may hold a prepared workspace at once, each driven by a
-///     detached task that produces a result and never writes a row.
-///     <para>
-///         A singleton, and that is the whole reason this is a class of its own rather than a method on the dispatcher:
-///         the slot count and the in-flight registry outlive a tick and a scope, and a second instance would hand out
-///         the same slots twice. The dispatcher resolves it once and asks it three questions — dispatch this, has this
-///         landed, stop this — exactly as it asks the agent executor.
-///     </para>
-///     <para>
-///         The slot is taken BEFORE the row moves to <c>Running</c> and released in the detached task's <c>finally</c>,
-///         which is the shape the work-session admission uses, so the cap holds across concurrent admissions rather
-///         than merely looking like it does.
-///     </para>
-/// </summary>
+/// <summary>The sandbox lane: a bounded number of Tool node-runs may hold a prepared workspace at once.</summary>
+/// <remarks>
+///     Each is driven by a detached task that produces a result and never writes a row. A SINGLETON, which is why
+///     this is a class of its own rather than a method on the dispatcher: the slot count and the in-flight registry
+///     outlive a tick and a scope. See docs/wiki/25-dev-workflows.md ("The tool lane").
+/// </remarks>
 internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
@@ -54,14 +45,11 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     public bool IsInFlight(Guid nodeRunId) =>
         _inflight.ContainsKey(nodeRunId);
 
-    /// <summary>
-    ///     Admits an eligible tool node-run, and answers how many transitions it wrote.
-    ///     <para>
-    ///         The row goes to <c>Queued</c> first even when a slot is free a line later, for the same reason the agent
-    ///         lane does it: three validation nodes on a two-slot lane are <c>Running, Running, Queued</c>, and a reader
-    ///         has to be able to see that rather than infer it from timing.
-    ///     </para>
-    /// </summary>
+    /// <summary>Admits an eligible tool node-run, and answers how many transitions it wrote.</summary>
+    /// <remarks>
+    ///     The row goes to <c>Queued</c> first even when a slot is free a line later, for the reason the agent lane
+    ///     does it. See docs/wiki/25-dev-workflows.md ("The tool lane").
+    /// </remarks>
     public async Task<int> DispatchAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraphNode node,
@@ -75,13 +63,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         if (_inflight.TryGetValue(nodeRun.Id, out var inflight) && inflight.Attempt == nodeRun.Attempt)
         {
-            // THIS attempt's commands are already running: the only thing that can have left the row behind them is the
-            // Running write below having failed. Re-running them would spend a whole build to arrive at the answer
-            // already in hand, so the row is caught up instead and the next poll settles it.
-            //
-            // The attempt is compared rather than assumed: a fix loop can reset a row this lane is driving, and nothing
-            // in this method's own ordering rules that out. Admitting such a row against the pass belonging to the
-            // attempt before it would settle one attempt off another's answer.
+            // THIS attempt's commands are already running, the Running write below having failed, so the row is caught
+            // up rather than re-run. The ATTEMPT is compared, not assumed: a fix loop can reset a row this lane drives.
             return nodeRun.Status == DevWorkflowNodeRunStatus.Running
                 ? 0
                 : await RunningAsync(store, run, nodeRun, cancellationToken);
@@ -133,10 +116,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         if (!_inflight.TryGetValue(nodeRun.Id, out var flight))
         {
-            // Nothing on this node is driving this row, and nothing ever will: the lane holds no memory across a
-            // restart, which is precisely why the startup reconciler collapses such rows before the dispatcher runs.
-            // Reaching here means it did not, so the row is judged for what it is rather than swept forever — and an
-            // interrupted sandbox pass is retryable, so what that costs is the retry policy's answer.
+            // Nothing is driving this row and nothing ever will: the lane holds no memory across a restart, and the
+            // startup reconciler did not collapse it. Judged here rather than swept forever; an interrupted pass retries.
             return await _retries.SettleFailureAsync(store,
                                      graph,
                                      run,
@@ -155,9 +136,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         var written = 0;
         if (nodeRun.Status == DevWorkflowNodeRunStatus.Queued)
         {
-            // The row never caught up with the pass already running for it — the Running write failed after the slot
-            // and the registry entry were taken. Outside a drain the next admission repairs it; inside one nothing
-            // admits, so the poll has to, or the drain waits forever on a row nobody will ever move.
+            // The row never caught up with its pass: the Running write failed after the slot and entry were taken.
+            // Outside a drain the next admission repairs it; inside one nothing admits, so the poll has to.
             written = await RunningAsync(store, run, nodeRun, cancellationToken);
             nodeRun = nodeRun with
             {
@@ -184,10 +164,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     cancellationToken)
             : await SettleLandedAsync(store, graph, run, nodeRun, nodeRuns, await flight.Work, cancellationToken);
 
-        // Consumed only once the settle has COMMITTED. Doing it first would spend the result on a write that may throw
-        // — an over-budget blob, a lost version race — and the next poll would then find no entry, take the branch
-        // above and record "the host stopped" about a pass that finished perfectly. The settle is idempotent, so a
-        // replayed poll re-derives the same answer instead.
+        // Consumed only once the settle has COMMITTED: doing it first would spend the result on a write that may
+        // throw, and the next poll would report "the host stopped" about a pass that finished perfectly.
         _ = _inflight.TryRemove(nodeRun.Id, out _);
         flight.Cancellation.Dispose();
         return written;
@@ -224,11 +202,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         if (string.Equals(result.FailureClass, DevWorkflowFailureClasses.Cancelled, StringComparison.Ordinal))
         {
-            // A pass that stopped because it was ASKED to, and answered with an account of what it had already done
-            // instead of letting the token throw. It reaches the same terminal the cancelled arm above writes — being
-            // stopped is not a failure for the retry policy to route — and the only reason it comes through here is
-            // that the evidence had to come with it. The apply lane is the one that has any: a sequence interrupted
-            // between two patches has left one in the repository, and its report is written just above.
+            // A pass ASKED to stop, which answered with an account of what it had done rather than letting the token
+            // throw. Same terminal as the cancelled arm; it comes through here only so the evidence comes with it.
             return await SettleAsync(store,
                     run,
                     nodeRun,
@@ -259,29 +234,16 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                  cancellationToken);
     }
 
-    /// <summary>
-    ///     Asks a node run's commands to stop. Answers whether there was anything to ask — a pass that has ALREADY been
-    ///     asked has nothing left to ask of it, so the answer is no.
-    ///     <para>
-    ///         The row is deliberately NOT settled here: a build asked to stop is still winding down, and only the next
-    ///         tick's poll knows whether it landed cancelled or finished inside the window. Settling it here would also
-    ///         hold the advance gate — and with it every other run — for as long as the stop took.
-    ///     </para>
-    ///     <para>
-    ///         Which is exactly why the already-asked case has to answer no. The entry lives until a poll SEES the pass
-    ///         land, so a cancelling drain reaches this every tick until then; the caller counts a yes as a written
-    ///         transition, and the dispatcher re-signals itself after any productive tick — so answering yes each time
-    ///         spun the drain for as long as the commands took, and a build's worth of ticks landed on whatever else
-    ///         shared the thread pool.
-    ///     </para>
-    /// </summary>
+    /// <summary>Asks a node run's commands to stop, and answers whether there was anything to ask.</summary>
+    /// <remarks>
+    ///     A pass ALREADY asked has nothing left to ask of it, so the answer is no — which is load-bearing, not tidy:
+    ///     a yes each tick spins a cancelling drain for as long as the commands take. The row is deliberately NOT
+    ///     settled here. See docs/wiki/25-dev-workflows.md ("The tool lane").
+    /// </remarks>
     public async Task<bool> StopAsync(Guid nodeRunId)
     {
-        // ponytail: the run now waits up to one sweep (DevWorkflowOptions.SweepSeconds, 5s) to notice a stopped pass
-        // landed, where the spin noticed immediately. Signalling from the pass's own continuation would mean injecting
-        // the dispatcher here, and the dispatcher already takes THIS type in its constructor — the agent lane carries
-        // the same ceiling for the same reason. Break the cycle (a settable signal, or a lane-completion channel) if
-        // five seconds of cancel latency ever measures.
+        // ponytail: the run waits up to one sweep (DevWorkflowOptions.SweepSeconds) to notice a stopped pass landed,
+        // since signalling from its continuation needs the dispatcher, which takes THIS type. Fix: a settable signal.
         if (!_inflight.TryGetValue(nodeRunId, out var flight) || flight.Cancellation.IsCancellationRequested)
         {
             return false;
@@ -291,16 +253,11 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         return true;
     }
 
-    /// <summary>
-    ///     Drops every pass whose row has moved on: re-attempted by a fix loop resetting the subtree it belongs to, or
-    ///     otherwise no longer this lane's to settle.
-    ///     <para>
-    ///         Called once a tick before anything is polled, because a reset reaches rows this lane is driving WITHOUT
-    ///         coming through it — the node that routes a failure need not be the node whose pass is in flight. Without
-    ///         it the registry would claim to be driving a row that has been re-attempted, and the answer in hand would
-    ///         eventually be settled onto an attempt it never ran.
-    ///     </para>
-    /// </summary>
+    /// <summary>Drops every pass whose row has moved on and is no longer this lane's to settle.</summary>
+    /// <remarks>
+    ///     Called once a tick before anything is polled, because a reset reaches rows this lane is driving WITHOUT
+    ///     coming through it. See docs/wiki/25-dev-workflows.md ("The tool lane").
+    /// </remarks>
     public async Task ForgetSupersededAsync(IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
     {
         ArgumentNullException.ThrowIfNull(nodeRuns);
@@ -315,20 +272,11 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         }
     }
 
-    /// <summary>
-    ///     Drops a pass whose row has moved on, so nothing settles an attempt from an answer about the one before it.
-    ///     <para>
-    ///         The result is thrown away deliberately: it describes work the run has decided to do again. The pass is
-    ///         cancelled and left to unwind on its own — it releases its own lane slot in its <c>finally</c>, and waiting
-    ///         for that here would hold the advance gate, and with it every other run, for as long as a build takes to
-    ///         notice it has been cancelled.
-    ///     </para>
-    ///     <para>
-    ///         Removing the entry is the load-bearing half, not the cancel: a row settled with its entry left behind
-    ///         would refuse the next attempt's admission its place in the registry, and that attempt's pass would then
-    ///         run with nothing polling it.
-    ///     </para>
-    /// </summary>
+    /// <summary>Drops one pass whose row has moved on, so no attempt settles from an answer about the one before.</summary>
+    /// <remarks>
+    ///     Removing the entry is the load-bearing half, not the cancel. The result is thrown away deliberately and
+    ///     the pass is left to unwind on its own. See docs/wiki/25-dev-workflows.md ("The tool lane").
+    /// </remarks>
     public async Task DiscardAsync(Guid nodeRunId)
     {
         if (!_inflight.TryRemove(nodeRunId, out var flight))
@@ -395,10 +343,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             await using var scope = _scopeFactory.CreateAsyncScope();
             if (node.ToolMode == DevWorkflowToolMode.Apply)
             {
-                // The integration variant takes the same lane slot as a validation pass, deliberately: it goes through
-                // the same workspace machinery against the same repository, which is the resource the slot count bounds
-                // — and it is the ONE difference from the DevTask lane, which takes no slot because what it drives is a
-                // Dev Mode attempt with a bound of its own.
+                // The integration variant takes the same lane slot as a validation pass, deliberately: same workspace
+                // machinery, same repository, which is the resource the slot count bounds.
                 return scope.ServiceProvider.GetService<DevWorkflowApplyCommands>() is { } apply
                     ? await apply.RunAsync(run, nodeRun, cancellationToken)
                     : Refused(DevWorkflowFailureClasses.Configuration,
@@ -427,9 +373,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             // sanitized, and it can carry a host path or a fragment of captured output.
             _logger.LogError(exception, "Development workflow tool node run {NodeRunId} of run {RunId} failed unexpectedly.", nodeRun.Id, run.Id);
 
-            // Said in the node's own terms. An operator reading "validation commands stopped" about the node that puts
-            // approved patches into their repository is told the wrong thing about the one node where what was and was
-            // not done matters most — and this lane runs both kinds.
+            // Said in the node's own terms: this lane runs both kinds, and "validation commands stopped" is the wrong
+            // account of the node that puts approved patches into the operator's repository.
             return Refused(DevWorkflowFailureClasses.Internal,
                 node.ToolMode == DevWorkflowToolMode.Apply
                     ? "This node run stopped on an unexpected error while applying approved patches. The engine log has the detail."
@@ -448,11 +393,11 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     private static bool IsApplying(DevWorkflowGraph graph, DevWorkflowNodeRunSnapshot nodeRun) =>
         graph.Nodes.TryGetValue(nodeRun.NodeKey, out var node) && node.ToolMode == DevWorkflowToolMode.Apply;
 
-    /// <summary>
-    ///     What a pass that was stopped from outside is told to have been doing, in the node's OWN terms. This lane runs
-    ///     two kinds of work, and "validation commands" is the wrong account of the node that puts approved patches into
-    ///     a repository — the one node where what was and was not done matters most to whoever reads the row.
-    /// </summary>
+    /// <summary>What a pass stopped from outside is told to have been doing, in the node's OWN terms.</summary>
+    /// <remarks>
+    ///     This lane runs two kinds of work, and "validation commands" is the wrong account of the node that puts
+    ///     approved patches into a repository — the node where what was and was not done matters most.
+    /// </remarks>
     private static string StoppedReason(DevWorkflowGraph graph, DevWorkflowNodeRunSnapshot nodeRun, string what) =>
         IsApplying(graph, nodeRun)
             ? $"{what} while this node run was applying approved patches."
@@ -517,16 +462,13 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                            cancellationToken);
     }
 
-    /// <summary>
-    ///     Writes the node run's report into the run's own artifact record, so the evidence outlives the workspace it
-    ///     was produced in. Keyed on <c>(run, node key, attempt)</c>, so a replayed poll rewrites the same blob and the
-    ///     store's query-first check returns the recorded result instead of appending a second version.
-    ///     <para>
-    ///         An apply node's report is a different document about a different act, so it is written under the ordinary
-    ///         <c>Report</c> kind and its own name: a reader that decodes a validation report would otherwise be handed
-    ///         one that is not, and render it as unreadable evidence rather than as the list of patches it is.
-    ///     </para>
-    /// </summary>
+    /// <summary>Writes the node run's report into the run's artifacts, so the evidence outlives its workspace.</summary>
+    /// <remarks>
+    ///     Keyed on <c>(run, node key, attempt)</c>, so a replayed poll rewrites the same blob and the store's
+    ///     query-first check returns the recorded result instead of appending a second version. An apply node's
+    ///     report is a different document about a different act, written under the ordinary <c>Report</c> kind and
+    ///     its own name, so a reader decoding a validation report is never handed one that is not.
+    /// </remarks>
     private async Task PromoteReportAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -610,11 +552,11 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         return 1;
     }
 
-    /// <summary>
-    ///     The tool node's slice of the output document every executor writes: the verdict a conditional edge routes on,
-    ///     and the counts a fix-loop objective quotes. No command text — an output document is routing data, and the
-    ///     evidence lives in the report artifact.
-    /// </summary>
+    /// <summary>The tool node's slice of the output document every executor writes.</summary>
+    /// <remarks>
+    ///     The verdict a conditional edge routes on, and the counts a fix-loop objective quotes. No command text: an
+    ///     output document is routing data, and the evidence lives in the report artifact.
+    /// </remarks>
     private static string Output(DevWorkflowNodeRunSnapshot nodeRun, string? failureClass, DevWorkflowToolRun? run) =>
         JsonSerializer.Serialize(new ToolOutput
         {

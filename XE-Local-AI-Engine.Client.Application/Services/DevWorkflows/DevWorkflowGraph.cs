@@ -5,38 +5,39 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
-/// <summary>
-///     The parsed, in-memory projection of a run's pinned <c>graph_json</c> — the single source of routing truth. Never
-///     persisted separately: there is no run-edge table, and materialization rewrites the run's own blob rather than
-///     adding rows to one.
-/// </summary>
+/// <summary>The parsed, in-memory projection of a run's pinned <c>graph_json</c> — the source of routing truth.</summary>
+/// <remarks>
+///     Never persisted separately: there is no run-edge table, and materialization rewrites the run's own blob rather
+///     than adding rows to one.
+/// </remarks>
 internal sealed class DevWorkflowGraph
 {
     private const int SupportedSchemaVersion = 1;
 
-    /// <summary>
-    ///     The reasoning efforts a node may name, which are the ones an agent definition may pin
-    ///     (<c>AgentDefinitionService</c>'s own list) — the override has to be sayable in the same vocabulary as the
+    /// <summary>The reasoning efforts a node may name, which are the ones an agent definition may pin.</summary>
+    /// <remarks>
+    ///     <c>AgentDefinitionService</c> holds that list; the override has to be sayable in the same vocabulary as the
     ///     pin it replaces. Not an enum: this travels to the provider as the string it is written as, except
     ///     <c>auto</c>, which the node resolves per turn into one of the others before anything is sent.
-    /// </summary>
+    /// </remarks>
     private static readonly string[] ReasoningEfforts = ["none", "low", "medium", "high", "auto"];
 
     /// <summary>Defaults for a node that names none. Human waits and inline decisions get one try; work gets three.</summary>
     private const int DefaultWorkNodeMaxAttempts = 3;
 
-    /// <summary>
-    ///     The most children one decomposition may expand into. The materialization transaction rewrites the
-    ///     run's whole encrypted graph blob, so the width of a fan-out is the size of that write — bounded here, at the
-    ///     one place a definition can ask for it, rather than discovered when a run tries to commit it.
-    /// </summary>
+    /// <summary>The most children one decomposition may expand into.</summary>
+    /// <remarks>
+    ///     The materialization transaction rewrites the run's whole encrypted graph blob, so the width of a fan-out is
+    ///     the size of that write — bounded here, at the one place a definition can ask for it, rather than discovered
+    ///     when a run tries to commit it.
+    /// </remarks>
     private const int MaxTemplateChildren = 20;
 
-    /// <summary>
-    ///     The longest reason an author may write beside a declared capability. It is a one-line justification a
-    ///     reviewer reads next to the node, and the whole graph document is encrypted and rewritten on every
-    ///     materialization, so it is bounded where it is authored rather than where it is stored.
-    /// </summary>
+    /// <summary>The longest reason an author may write beside a declared capability.</summary>
+    /// <remarks>
+    ///     It is a one-line justification a reviewer reads next to the node, and the whole graph document is encrypted
+    ///     and rewritten on every materialization, so it is bounded where it is authored, not where it is stored.
+    /// </remarks>
     private const int MaxCapabilityReasonLength = 200;
 
     /// <summary>What a node that routes rather than acts can change: nothing.</summary>
@@ -88,38 +89,34 @@ internal sealed class DevWorkflowGraph
 
     public IReadOnlyList<DevWorkflowGraphEdge> Edges { get; }
 
-    /// <summary>
-    ///     The template's own opt-out of the gate requirement on a repository-scoped write. Absent means <c>false</c>,
-    ///     which is what keeps a definition written before this field byte-identical: the rule it waives is new, so
-    ///     nothing already stored can be relying on the waiver.
-    /// </summary>
+    /// <summary>The template's own opt-out of the gate requirement on a repository-scoped write.</summary>
+    /// <remarks>
+    ///     Absent means <c>false</c>, which keeps a definition written before this field byte-identical: the rule it
+    ///     waives is new, so nothing already stored can be relying on the waiver.
+    /// </remarks>
     public bool AllowUngatedWrites { get; }
 
-    /// <summary>
-    ///     Nodes with no inbound edge. Start is implicit, so this is what "entry node" means — and it is also why a
-    ///     materialization template node, which is deliberately unreachable, must be excluded before this is read as the
-    ///     set to materialize at run start.
-    /// </summary>
+    /// <summary>Nodes with no inbound edge — Start being implicit, this is what "entry node" means.</summary>
+    /// <remarks>
+    ///     It is also why a materialization template node, which is deliberately unreachable, must be excluded before
+    ///     this is read as the set to materialize at run start.
+    /// </remarks>
     public IReadOnlyList<string> EntryNodeKeys { get; }
 
-    /// <summary>
-    ///     Every node of every materialization template SUBTREE — each template root plus what it reaches short of its
-    ///     join node. These are the nodes a run does NOT give a row to at start: they are clones-in-waiting, and one
-    ///     given a row would wait forever on a source the run never instantiates.
-    /// </summary>
+    /// <summary>Every node of every template SUBTREE — each template root plus what it reaches short of its join.</summary>
+    /// <remarks>
+    ///     These are the nodes a run does NOT give a row to at start: they are clones-in-waiting, and one given a row
+    ///     would wait forever on a source the run never instantiates.
+    /// </remarks>
     public IReadOnlySet<string> TemplateKeys { get; }
 
-    /// <summary>
-    ///     Nodes no edge leaves — what "the run got somewhere" means. A run is <c>Completed</c> only once one of
-    ///     these SUCCEEDED, so a tail that was skipped or abandoned cannot read as the run having done its job.
-    ///     <para>
-    ///         Read off the graph AS MATERIALIZED, which is what makes it right for a decomposing run: a clone's leaf
-    ///         edge is wired to the join when it is created, so success routes through the join rather than through
-    ///         any one clone. Whether a <see cref="TemplateKeys" /> node lands in this set is moot rather than ruled
-    ///         out — a template never gets a node run, and the completion predicate reads node-run ROWS, so a template
-    ///         key can neither satisfy it nor block it however the definition happens to wire it.
-    ///     </para>
-    /// </summary>
+    /// <summary>Nodes no edge leaves — what "the run got somewhere" means.</summary>
+    /// <remarks>
+    ///     A run is <c>Completed</c> only once one of these SUCCEEDED, so a tail that was skipped or abandoned cannot
+    ///     read as the run having done its job. Read off the graph AS MATERIALIZED: a clone's leaf edge is wired to
+    ///     the join when it is created, so success routes through the join rather than through any one clone. Whether
+    ///     a <see cref="TemplateKeys" /> node lands here is moot — the completion predicate reads node-run ROWS.
+    /// </remarks>
     public IReadOnlySet<string> TerminalNodeKeys { get; }
 
     public IReadOnlyList<DevWorkflowGraphEdge> InboundEdges(string nodeKey) =>
@@ -146,14 +143,12 @@ internal sealed class DevWorkflowGraph
         return seen;
     }
 
-    /// <summary>
-    ///     Every node that reaches <paramref name="to" /> by following out-edges, excluding itself — the mirror of
-    ///     <see cref="Descendants" />, over the inbound index.
-    ///     <para>
-    ///         This is what "upstream of" means on a graph with more than one branch: a node on a PARALLEL branch is
-    ///         neither an ancestor nor a descendant, and the whole point of asking is to leave it alone.
-    ///     </para>
-    /// </summary>
+    /// <summary>Every node that reaches <paramref name="to" /> by following out-edges, excluding itself.</summary>
+    /// <remarks>
+    ///     The mirror of <see cref="Descendants" />, over the inbound index. This is what "upstream of" means on a
+    ///     graph with more than one branch: a node on a PARALLEL branch is neither an ancestor nor a descendant, and
+    ///     the whole point of asking is to leave it alone.
+    /// </remarks>
     public IReadOnlySet<string> Ancestors(string to)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -171,14 +166,12 @@ internal sealed class DevWorkflowGraph
         return seen;
     }
 
-    /// <summary>
-    ///     One template's nodes: its root and everything reachable from it WITHOUT passing through the join.
-    ///     <para>
-    ///         The join is where a template subtree hands its work back to the graph, so it belongs to the graph and not
-    ///         to the template — walking through it would swallow the whole rest of the run into the set of nodes a run
-    ///         start refuses to instantiate.
-    ///     </para>
-    /// </summary>
+    /// <summary>One template's nodes: its root and everything reachable from it WITHOUT passing through the join.</summary>
+    /// <remarks>
+    ///     The join is where a template subtree hands its work back to the graph, so it belongs to the graph and not
+    ///     to the template — walking through it would swallow the whole rest of the run into the set of nodes a run
+    ///     start refuses to instantiate.
+    /// </remarks>
     public HashSet<string> TemplateSubtree(DevWorkflowMaterialization materialization)
     {
         ArgumentNullException.ThrowIfNull(materialization);
@@ -201,18 +194,14 @@ internal sealed class DevWorkflowGraph
         return subtree;
     }
 
-    /// <summary>
-    ///     What a node can change. DECLARED for an Agent and derived for everything else, because those are the two
-    ///     honest answers: an agent node's reach follows from the definition it binds, which is resolved at dispatch and
-    ///     unknowable here, so an author who declares a write is declaring a real one — while every other node type says
-    ///     what it does in the node itself.
-    ///     <para>
-    ///         A <c>Tool</c> in <c>Validate</c> mode reads, and reaches the network when it names the restore command
-    ///         OR names no command at all: a node naming none inherits the project profile's set, which is chosen when
-    ///         the run picks a project up, so the answer here fails toward the wider set rather than guessing the
-    ///         narrower one.
-    ///     </para>
-    /// </summary>
+    /// <summary>What a node can change: DECLARED for an Agent, derived for every other node type.</summary>
+    /// <remarks>
+    ///     Those are the two honest answers: an agent node's reach follows from the definition it binds, resolved at
+    ///     dispatch and unknowable here, so a declared write is a real one, while every other type says what it does
+    ///     in the node itself. A <c>Tool</c> in <c>Validate</c> mode reads, and reaches the network when it names the
+    ///     restore command or names none — a node naming none inherits the project profile's set, chosen when the run
+    ///     picks a project up, so this fails toward the wider set rather than guessing the narrower one.
+    /// </remarks>
     public static IReadOnlySet<DevWorkflowNodeEffect> Effects(DevWorkflowGraphNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -230,12 +219,13 @@ internal sealed class DevWorkflowGraph
         };
     }
 
-    /// <summary>
-    ///     How far a node's write reaches. The one derived bit that separates work done inside the node's own sandbox
-    ///     from work done to the operator's repository: a <c>DevTask</c> runs against a worktree created under this
-    ///     node's data root and its patch reaches a real repository only through an apply node (D8), while an apply
-    ///     node — and an Agent that declares a write — reaches the repository itself.
-    /// </summary>
+    /// <summary>How far a node's write reaches.</summary>
+    /// <remarks>
+    ///     The one derived bit separating work done inside the node's own sandbox from work done to the operator's
+    ///     repository (ruling D8): a <c>DevTask</c> runs against a worktree under this node's data root and its patch
+    ///     reaches a real repository only through an apply node, while an apply node — and an Agent that declares a
+    ///     write — reaches the repository itself.
+    /// </remarks>
     public static DevWorkflowEffectScope ScopeOf(DevWorkflowGraphNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -243,38 +233,24 @@ internal sealed class DevWorkflowGraph
         return node.NodeType == DevWorkflowNodeType.DevTask ? DevWorkflowEffectScope.Sandbox : DevWorkflowEffectScope.Repository;
     }
 
-    /// <summary>
-    ///     Whether a materialization's template carries a <c>DevTask</c> ANYWHERE. That is the node type whose clone
-    ///     becomes a Development coder attempt, so it is what decides whether the coder's contract applies at all: the
-    ///     attempt must export a NON-EMPTY patch, and a task written for it has to name the files it changes.
-    ///     <para>
-    ///         The whole subtree rather than its root, because a custom template is free to root itself in an Agent that
-    ///         briefs a DevTask below it. Shared between the materializer, which REFUSES a task package on it, and the
-    ///         agent executor, which appends the contract text on it, so what a decomposition is judged by cannot drift
-    ///         from what it was told.
-    ///     </para>
-    /// </summary>
+    /// <summary>Whether a materialization's template carries a <c>DevTask</c> ANYWHERE.</summary>
+    /// <remarks>
+    ///     That node type's clone becomes a Development coder attempt, so it decides whether the coder's contract
+    ///     applies at all. Shared between the materializer, which REFUSES a task package on it, and the agent
+    ///     executor, which appends the contract text on it, so what a decomposition is judged by cannot drift from
+    ///     what it was told. See docs/wiki/25-dev-workflows.md ("The clones, the join, and the zero-task case").
+    /// </remarks>
     public bool TemplateSubtreeHasDevTask(DevWorkflowMaterialization materialization) =>
         TemplateSubtree(materialization).Any(key => Nodes.TryGetValue(key, out var node) && node.NodeType == DevWorkflowNodeType.DevTask);
 
-    /// <summary>
-    ///     Parses the graph and enforces every structural rule. One method, because parsing IS the validation here: a
-    ///     graph that survives this is one the dispatcher can route without a second opinion.
-    ///     <para>
-    ///         Today its only caller is the dispatcher's graph cache, so a bad graph is refused at RUN START. The
-    ///         definition endpoints call it at save time too once they exist, which is where the same rules become an
-    ///         author-time 400 rather than a failed run — and re-validating at run start stays necessary either way,
-    ///         because an agent definition can be deleted between the save and the start.
-    ///     </para>
-    ///     <para>
-    ///         <paramref name="maxNodes" /> is the caller's node cap, checked against the declared array BEFORE any
-    ///         node is read or any edge walked — the cap is what bounds the work this parse does, so enforcing it
-    ///         afterwards would bound nothing. It is passed as a number rather than read from options, so this stays
-    ///         testable without a container. A caller that omits it parses a graph that was already capped when it was
-    ///         saved: the graph cache and run start re-parse stored graphs, and a cap lowered since would make a live
-    ///         run unroutable rather than merely unsaveable.
-    ///     </para>
-    /// </summary>
+    /// <summary>Parses the graph and enforces every structural rule; parsing IS the validation here.</summary>
+    /// <remarks>
+    ///     A graph that survives this is one the dispatcher can route without a second opinion. Run start re-validates
+    ///     whatever validated the definition at save time, because an agent definition can be deleted in between. A
+    ///     caller that OMITS the cap parses a graph already capped when it was saved: the graph cache and run start
+    ///     re-parse stored graphs, and a cap lowered since would make a live run unroutable, not merely unsaveable.
+    /// </remarks>
+    /// <param name="maxNodes">Node cap, checked against the declared array before any node is read: the cap bounds this parse's work. A number, not an option, so this stays testable.</param>
     public static DevWorkflowGraph Parse(string graphJson, int maxNodes = int.MaxValue)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(graphJson);
@@ -318,9 +294,8 @@ internal sealed class DevWorkflowGraph
             throw new DevWorkflowValidationException("A workflow graph needs a 'nodes' array.");
         }
 
-        // The cap bites on the DECLARED length, before a single node is read: everything after this walks the graph,
-        // and only the body size would otherwise bound how far. Duplicate keys are refused below, so this length and
-        // the parsed node count are the same number wherever the parse survives.
+        // The cap bites on the DECLARED length, before a single node is read: everything after this walks the graph, and
+        // only the body size would otherwise bound it. Duplicate keys are refused below, so length and count agree here.
         var declared = nodesElement.GetArrayLength();
         if (declared > maxNodes)
         {
@@ -382,18 +357,13 @@ internal sealed class DevWorkflowGraph
         };
     }
 
-    /// <summary>
-    ///     The node's DECLARED effects: an object whose keys are effect tokens and whose values are the author's
-    ///     one-line reason for each. An object rather than an array because the reason is the half that makes a
-    ///     declaration reviewable, and it is the shape the wire contract has carried since v1. An <c>Agent</c> node
-    ///     only — every other node type's effects follow from what it runs, so a declaration on one is refused the way
-    ///     <see cref="ParseToolMode" /> refuses a mode on a node that runs none.
-    ///     <para>
-    ///         Only the keys are kept. The reason is bounded here and then left in the stored blob for the editor,
-    ///         because no routing decision reads it — and, for the same reason, it is never quoted back in a validation
-    ///         message: these messages name node keys and vocabulary tokens only.
-    ///     </para>
-    /// </summary>
+    /// <summary>The node's DECLARED effects: effect tokens keyed to the author's one-line reason for each.</summary>
+    /// <remarks>
+    ///     An object rather than an array because the reason is the half that makes a declaration reviewable, and it
+    ///     is the shape the wire contract has carried since v1. An <c>Agent</c> node only: every other type's effects
+    ///     follow from what it runs. Only the keys are kept — the reason is bounded here and then left in the stored
+    ///     blob for the editor, and never quoted back in a validation message, which names keys and tokens only.
+    /// </remarks>
     private static IReadOnlySet<DevWorkflowNodeEffect> ParseRequiredCapabilities(JsonElement element, string nodeKey, DevWorkflowNodeType nodeType)
     {
         if (!element.TryGetProperty("requiredCapabilities", out var declared) || declared.ValueKind == JsonValueKind.Null)
@@ -443,21 +413,17 @@ internal sealed class DevWorkflowGraph
         return effects;
     }
 
-    /// <summary>
-    ///     How many times this node's fix loop may re-run before the run stops and asks a human. Refused on a node that
-    ///     names no <c>retryTarget</c>, the way <see cref="ParseToolMode" /> refuses a mode on a node that runs none: a
-    ///     field that does nothing where it is written is a definition saying something the runtime will not do.
-    ///     <para>
-    ///         Absent means NO per-loop cap (D9). A parse-time default would tighten routing on every already-stored
-    ///         definition at run start, silently and with no author having asked for it — and, because an operator
-    ///         <c>Retry</c> raises the same attempt counter, would cap human retries on nodes that have no cap today.
-    ///     </para>
-    /// </summary>
+    /// <summary>How many times this node's fix loop may re-run before the run stops and asks a human.</summary>
+    /// <remarks>
+    ///     Refused on a node that names no <c>retryTarget</c>, the way <see cref="ParseToolMode" /> refuses a mode on
+    ///     a node that runs none: a field that does nothing where it is written is a definition saying something the
+    ///     runtime will not do. Absent means NO per-loop cap (ruling D9) — a parse-time default would silently tighten
+    ///     routing on every stored definition, and cap human retries, which raise the same counter, on nodes without one.
+    /// </remarks>
     private static int? ParseMaxLoopIterations(JsonElement element, string nodeKey, string? retryTarget)
     {
         // Every refusal about the cap carries the invariant id, the shared number parsers' own included: the id is what
-        // the operator quotes and what the tests assert on, and a bare "must be positive" would be the one C4-4
-        // complaint that cannot be traced back to the rule that raised it.
+        // the operator quotes and what the tests assert on, and a bare "must be positive" traces back to no rule.
         int? maxLoopIterations;
         try
         {
@@ -477,11 +443,11 @@ internal sealed class DevWorkflowGraph
         return maxLoopIterations;
     }
 
-    /// <summary>
-    ///     The node's reasoning-effort override, checked against the four the agent surface itself accepts
-    ///     (<c>AgentDefinitionService</c>'s own set). An unknown token is refused here rather than dropped at dispatch:
-    ///     unlike a model name, this vocabulary is closed and cannot go stale between authoring and a run.
-    /// </summary>
+    /// <summary>The node's reasoning-effort override, checked against the set the agent surface itself accepts.</summary>
+    /// <remarks>
+    ///     <c>AgentDefinitionService</c> owns that set. An unknown token is refused here rather than dropped at
+    ///     dispatch: unlike a model name, this vocabulary is closed and cannot go stale between authoring and a run.
+    /// </remarks>
     private static string? ParseReasoningEffort(JsonElement element, string nodeKey)
     {
         var effort = TrimmedOptionalString(element, "reasoningEffort");
@@ -575,10 +541,8 @@ internal sealed class DevWorkflowGraph
                 throw new DevWorkflowValidationException($"Edge {edge} names a node the graph does not declare.");
             }
 
-            // One edge per pair of nodes. Two of them cannot mean what an author writing two would intend: the
-            // admission rule judges every inbound edge on its own, so a second edge whose condition does not fire is
-            // DEAD and skips the target — an "or" written this way routes the opposite of the way it reads. Refusing
-            // it here is also what keeps the pair usable as a key, which the materialization's edge rewrite relies on.
+            // One edge per pair. Admission judges every inbound edge on its own, so a second edge whose condition does
+            // not fire is DEAD and skips the target; refusing it also keeps the pair usable as the edge rewrite's key.
             if (!pairs.Add((from, to)))
             {
                 throw new DevWorkflowValidationException($"The workflow graph declares edge {edge} twice. A second edge between the same two nodes "
@@ -591,17 +555,16 @@ internal sealed class DevWorkflowGraph
         return edges;
     }
 
-    /// <summary>
-    ///     The structural rules, all of which exist because breaking one produces a run that hangs rather than one that
-    ///     fails: a cycle never terminates, an unreachable node never becomes eligible, a one-edge <c>Any</c> is an
-    ///     <c>All</c> written confusingly, and a retry target that is not an ancestor is the cycle by another name.
-    /// </summary>
+    /// <summary>The structural rules, each of which exists because breaking it produces a run that hangs.</summary>
+    /// <remarks>
+    ///     A run that hangs rather than one that fails: a cycle never terminates, an unreachable node never becomes
+    ///     eligible, a one-edge <c>Any</c> is an <c>All</c> written confusingly, and a retry target that is not an
+    ///     ancestor is the cycle by another name.
+    /// </remarks>
     private void Validate()
     {
-        // Which materializer owns each template node. A template subtree is cloned once per task by the node that owns
-        // it, and the zero-task decomposition writes its no-op verdict row under the template's OWN key — so a node
-        // two materializers both claim would be seeded twice under one key, and the second producer would fail on the
-        // store's existing-key refusal on every tick from then on.
+        // Which materializer owns each template node: a subtree is cloned once per task by its owner, and a zero-task
+        // decomposition writes under the template's OWN key, so two claimants would seed one key twice and then refuse.
         var templateOwner = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var node in Nodes.Values)
@@ -616,11 +579,8 @@ internal sealed class DevWorkflowGraph
                                                              + $"more than the {MaxTemplateChildren} one decomposition may expand into.");
                 }
 
-                // The join is where the clones hand their work back, so it has to FOLLOW the node that decomposes it.
-                // Naming that node itself, or one of its ancestors, is the one materialization shape that reads as a
-                // cycle: expansion wires every clone's leaf to the join, so the expanded graph would route the clones'
-                // output back into the run that produced them — and the virtual template edge the invariants below walk
-                // closes the same loop where EnsureAcyclic, which sees the AUTHORED edges only, cannot see it.
+                // The join has to FOLLOW the node that decomposes it: expansion wires every clone's leaf to the join, so
+                // naming it or an ancestor is a cycle — one EnsureAcyclic, seeing the AUTHORED edges only, cannot see.
                 if (string.Equals(materialization.JoinNodeKey, node.NodeKey, StringComparison.Ordinal)
                     || Ancestors(node.NodeKey).Contains(materialization.JoinNodeKey))
                 {
@@ -679,11 +639,8 @@ internal sealed class DevWorkflowGraph
                                                          + "Routing a failure to a node that does not lead back here would livelock the run.");
             }
 
-            // A template node is never instantiated under its own key — the seeding skips it and the materializer gives
-            // each clone a key of its own, rewriting a retryTarget only for the clones INSIDE the subtree. So a node
-            // outside one naming a template key names a node run no run ever has, and the route would block on
-            // Configuration rather than re-attempt anything: a fix loop that reads correctly and cannot fire. The
-            // clone-internal case is the one this is for, and it stays legal because both keys are rewritten together.
+            // A template node never runs under its own key, so a node OUTSIDE the subtree naming one names a node run
+            // that never exists. The clone-internal case stays legal: both keys are rewritten together.
             if (TemplateKeys.Contains(node.RetryTarget!) && !TemplateKeys.Contains(node.NodeKey))
             {
                 throw new DevWorkflowValidationException($"Node '{node.NodeKey}' declares retryTarget '{node.RetryTarget}', which is a materialization template node. "
@@ -693,31 +650,14 @@ internal sealed class DevWorkflowGraph
         }
     }
 
-    /// <summary>
-    ///     <c>GRAPH-C4-1</c> — every path reaches an end of the run.
-    ///     <para>
-    ///         Read literally the rule is implied by acyclicity, since a node with no out-edge IS an end. The
-    ///         non-vacuous version is over the edges a run can TAKE, which is narrower: an out-edge of a human gate
-    ///         that is false for all three answers can never fire, so the branch behind it is written but unreachable.
-    ///         <c>{"path":"decision","op":"eq","value":"Approved"}</c> — the past participle — validates today and
-    ///         silently kills the branch at run time, which is precisely what
-    ///         <see cref="DevWorkflowCondition" /> refuses for a provably dead comparison elsewhere.
-    ///     </para>
-    ///     <para>
-    ///         Three steps, in this order, because the order decides which complaint the operator gets. The dead edges
-    ///         are found first; then the live subgraph is asked whether anything is stranded, which is the complaint
-    ///         that names the real damage; then a dead edge that stranded nothing is reported on its own. Step two can
-    ///         only fire once step one has found something — over the whole edge set, acyclicity already guarantees
-    ///         every node reaches an end — and it is kept anyway, because it is the invariant asked for, it costs one
-    ///         walk, and it is the guard if a later change prunes edges for some other reason.
-    ///     </para>
-    ///     <para>
-    ///         Decidable for a human gate only. A <c>Gate</c> node's output document is whatever the node produced, so
-    ///         no definition-time reading of its conditions can say which of them will fire. It is deliberately NOT the
-    ///         rule that every gate ANSWER has somewhere to go: both seeded gates carry an <c>Approve</c> edge and
-    ///         nothing else, and a rejection ending the run is X10 working as designed.
-    ///     </para>
-    /// </summary>
+    /// <summary><c>GRAPH-C4-1</c> — every path reaches an end, over the edges a run can TAKE, not every authored one.</summary>
+    /// <remarks>
+    ///     An out-edge of a human gate that is false for all three answers can never fire, so the branch behind it is
+    ///     written but unreachable. Three steps, in this order, because the order decides which complaint the operator
+    ///     gets. Decidable for a HUMAN gate only: a <c>Gate</c> node's output is whatever it produced, so no
+    ///     definition-time reading says which of its conditions will fire.
+    ///     See docs/wiki/25-dev-workflows.md ("Edges, joins and the pinned graph").
+    /// </remarks>
     private void EnsureEveryPathReachesAnEnd()
     {
         var dead = DeadGateEdges();
@@ -728,9 +668,8 @@ internal sealed class DevWorkflowGraph
 
         var reachesAnEnd = NodesThatReachAnEnd(dead);
 
-        // The gates that own a dead edge come first, and only they get the sentence that says so. Chain two gates and
-        // strand the downstream one, and every gate above it is stranded too — an ordinal tie-break would then name a
-        // gate whose own edge is fine and send the operator to fix the wrong line.
+        // The gates that own a dead edge come first, and only they get the sentence that says so: chaining two gates
+        // strands every gate above the broken one, and an ordinal tie-break would name the wrong line to fix.
         var culprits = dead.Select(static edge => edge.From).ToHashSet(StringComparer.Ordinal);
         if (Nodes.Values.Where(node => !TemplateKeys.Contains(node.NodeKey) && !reachesAnEnd.Contains(node.NodeKey))
                  .OrderBy(node => culprits.Contains(node.NodeKey) ? 0 : 1)
@@ -749,20 +688,13 @@ internal sealed class DevWorkflowGraph
                                                  + "Condition it on an answer the gate can give (invariant GRAPH-C4-1).");
     }
 
-    /// <summary>
-    ///     <c>GRAPH-C4-2</c> — a node that writes outside its sandbox is reached through a human gate.
-    ///     <para>
-    ///         The structural half. Y3 (<see cref="EnsureAppliesAreGated" />) is kept exactly as it is and is strictly
-    ///         stronger for an apply node — an IMMEDIATE gate predecessor carrying only the approval — so this rule
-    ///         never weakens it; approval policy here is tighten-only. What this adds is the DECLARED case: an Agent
-    ///         node whose author wrote <c>WriteExecute</c> into <c>requiredCapabilities</c> is taken at their word, and
-    ///         a run must not be able to reach it without an operator having been asked.
-    ///     </para>
-    ///     <para>
-    ///         The waiver is the graph's own <c>allowUngatedWrites</c>, which is a template saying so once and in
-    ///         writing rather than each node quietly opting itself out.
-    ///     </para>
-    /// </summary>
+    /// <summary><c>GRAPH-C4-2</c> — a node that writes outside its sandbox is reached through a human gate.</summary>
+    /// <remarks>
+    ///     <see cref="EnsureAppliesAreGated" /> is strictly stronger for an apply node, so this never weakens it;
+    ///     approval policy is tighten-only. What this adds is the DECLARED case: an Agent node whose author wrote
+    ///     <c>WriteExecute</c> into <c>requiredCapabilities</c> is taken at their word. The waiver is the graph's own
+    ///     <c>allowUngatedWrites</c>. See docs/wiki/25-dev-workflows.md ("Edges, joins and the pinned graph").
+    /// </remarks>
     private void EnsureDeclaredWritesAreGated()
     {
         if (AllowUngatedWrites)
@@ -787,18 +719,13 @@ internal sealed class DevWorkflowGraph
         }
     }
 
-    /// <summary>
-    ///     <c>GRAPH-C4-3</c> — an apply follows a validation.
-    ///     <para>
-    ///         The structural half: every path into a <c>toolMode: Apply</c> node passes a Tool node in
-    ///         <c>Validate</c> mode. It is deliberately optimistic in one place, and this says so rather than claiming
-    ///         an airtight proof — admission drops inbound edges whose source is a template key, so the
-    ///         <c>validate(template) → join</c> edge that carries the property in the definition graph is not a
-    ///         run-time dependency. The gap is closed operationally rather than structurally: the materialized graph
-    ///         carries the clones' real validate edges, and the dispatcher re-asks the question over the rows a run
-    ///         actually landed.
-    ///     </para>
-    /// </summary>
+    /// <summary><c>GRAPH-C4-3</c> — an apply follows a validation: every path into an <c>Apply</c> node passes a <c>Validate</c> Tool.</summary>
+    /// <remarks>
+    ///     Deliberately optimistic in one place rather than claiming an airtight proof: admission drops inbound edges
+    ///     whose source is a template key, so the <c>validate(template) → join</c> edge is not a run-time dependency.
+    ///     The dispatcher closes that gap operationally, re-asking the question over the rows a run actually landed.
+    ///     See docs/wiki/25-dev-workflows.md ("Edges, joins and the pinned graph").
+    /// </remarks>
     private void EnsureAppliesFollowAValidation()
     {
         var applies = Nodes.Values.Where(static node => node.ToolMode == DevWorkflowToolMode.Apply).ToList();
@@ -815,28 +742,14 @@ internal sealed class DevWorkflowGraph
         }
     }
 
-    /// <summary>
-    ///     "Has EVERY run that reaches this node already passed a node with property <paramref name="property" />?"
-    ///     — one forward fixpoint in topological order, shared by both invariants above, because both ask that one
-    ///     question and two implementations of it would drift.
-    ///     <para>
-    ///         One recurrence, no special case: <c>Assured(v) = P(v) || Combine(inbound of v)</c> with
-    ///         <c>Combine(∅) = false</c>, so an entry node evaluates to <c>P(entry)</c> and is NOT initialised false.
-    ///         Initialising it false erases the property on the entry node itself, which rejects two perfectly valid
-    ///         shapes — a definition whose entry IS the gate guarding the write, and one whose entry is the validation
-    ///         ahead of the gate and the apply. The inclusive reading is safe because nothing can be at once the
-    ///         property and the thing checked: a gate carries no effects at all, and a Tool node is <c>Validate</c> or
-    ///         <c>Apply</c>, never both.
-    ///     </para>
-    ///     <para>
-    ///         <c>Combine</c> is keyed on the node's <c>joinPolicy</c> and never on its node TYPE: <b>OR</b> when
-    ///         <c>All</c>, because every inbound branch must complete and one of them carrying the property is enough,
-    ///         and <b>AND</b> when <c>Any</c>, because only one branch may have run. This is the runtime's own
-    ///         semantics — admission reads <c>joinPolicy</c> for every node type and the parser defaults it to
-    ///         <c>All</c> everywhere. Keying on <c>NodeType == Join</c> rejects the shipped template, whose
-    ///         verification node is an AGENT with two inbound edges.
-    ///     </para>
-    /// </summary>
+    /// <summary>Has EVERY run reaching this node already passed one with <paramref name="property" />?</summary>
+    /// <remarks>
+    ///     One forward fixpoint in topological order, shared by both invariants above, because two implementations of
+    ///     the question would drift. <c>Assured(v) = P(v) || Combine(inbound of v)</c> with <c>Combine(∅) = false</c>,
+    ///     so an entry node evaluates to <c>P(entry)</c>. <c>Combine</c> is keyed on <c>joinPolicy</c> and never on
+    ///     node TYPE: OR under <c>All</c>, AND under <c>Any</c>.
+    ///     See docs/wiki/25-dev-workflows.md ("Edges, joins and the pinned graph").
+    /// </remarks>
     private HashSet<string> Assured(Func<DevWorkflowGraphNode, bool> property)
     {
         var inbound = AugmentedEdges().ToLookup(static edge => edge.To, StringComparer.Ordinal);
@@ -858,16 +771,16 @@ internal sealed class DevWorkflowGraph
     }
 
     /// <summary>
-    ///     A topological order of the augmented graph — every node after all of its inbound sources — so one pass
-    ///     computes the fixpoint. Safe because acyclicity is already proven before any of this runs.
-    ///     <para>
-    ///         On an EXPLICIT stack for the reason <see cref="EnsureAcyclic(IReadOnlyList{DevWorkflowGraphEdge},
-    ///         Func{string, IReadOnlyList{string}, string})" /> is: one frame per node is a process kill on a long
-    ///         chain, and this walk is reached by any definition that declares a write or an apply. The frame carries
-    ///         how far through the node's inbound edges the walk has got, which is what keeps the order the recursive
-    ///         one produced — a source has to be EMITTED before the next source is started, not merely marked.
-    ///     </para>
+    ///     A topological order of the augmented graph — every node after all its inbound sources — so one pass
+    ///     computes the fixpoint.
     /// </summary>
+    /// <remarks>
+    ///     Safe because acyclicity is proven before any of this runs. On an EXPLICIT stack for the reason
+    ///     <see cref="EnsureAcyclic(IReadOnlyList{DevWorkflowGraphEdge}, Func{string, IReadOnlyList{string}, string})" />
+    ///     is: one frame per node is a process kill on a long chain, and any definition declaring a write or an apply
+    ///     reaches this walk. The frame carries how far through the node's inbound edges the walk has got, which keeps
+    ///     the order the recursive one produced — a source is EMITTED before the next is started, not merely marked.
+    /// </remarks>
     private List<string> AncestorsFirst(ILookup<string, DevWorkflowGraphEdge> inbound)
     {
         var sources = Nodes.Keys.ToDictionary(key => key, key => inbound[key].ToList(), StringComparer.Ordinal);
@@ -898,21 +811,21 @@ internal sealed class DevWorkflowGraph
         return order;
     }
 
-    /// <summary>
-    ///     The out-edges of a human gate that no answer would take, asked of the dispatcher's own routing rather than
-    ///     re-derived by reading the condition — the same reason <see cref="EnsureCarriesOnlyTheApproval" /> asks it
-    ///     that way, and the same drift it avoids.
-    /// </summary>
+    /// <summary>The out-edges of a human gate that no answer would take, asked of the dispatcher's own routing.</summary>
+    /// <remarks>
+    ///     Rather than re-derived by reading the condition — the same reason
+    ///     <see cref="EnsureCarriesOnlyTheApproval" /> asks it that way, and the same drift it avoids.
+    /// </remarks>
     private HashSet<DevWorkflowGraphEdge> DeadGateEdges() =>
     [
         .. Edges.Where(edge => Nodes[edge.From].NodeType == DevWorkflowNodeType.HumanGate
                                && !DevWorkflowStateMachine.GateAnswers.Any(answer => DevWorkflowStateMachine.GateEdgeFires(edge, answer)))
     ];
 
-    /// <summary>
-    ///     Which nodes can still reach a member of <see cref="TerminalNodeKeys" /> once the dead edges are taken out —
-    ///     walked backwards from the ends over the live edge set, which is one traversal rather than one per node.
-    /// </summary>
+    /// <summary>Which nodes can still reach a member of <see cref="TerminalNodeKeys" /> once the dead edges are out.</summary>
+    /// <remarks>
+    ///     Walked backwards from the ends over the live edge set, which is one traversal rather than one per node.
+    /// </remarks>
     private HashSet<string> NodesThatReachAnEnd(HashSet<DevWorkflowGraphEdge> dead)
     {
         var inbound = AugmentedEdges().Where(edge => !dead.Contains(edge)).ToLookup(static edge => edge.To, StringComparer.Ordinal);
@@ -929,26 +842,14 @@ internal sealed class DevWorkflowGraph
         return reachesAnEnd;
     }
 
-    /// <summary>
-    ///     The authored edges plus one VIRTUAL edge from each materializing node to its template root.
-    ///     <para>
-    ///         Not an invention: after expansion the materializer wires exactly that edge for every dependency-free
-    ///         task, chains dependent clones off their dependency's leaves and wires each clone's leaf to the join. The
-    ///         virtual edge is the definition-time image of a real run-time one, which is why the invariants below give
-    ///         the same answer before and after materialization — and why they can be checked at save, when the author
-    ///         is still there to fix what they say.
-    ///     </para>
-    ///     <para>
-    ///         A node may name ITSELF as its own template root — <see cref="ValidateTemplateSubtree" /> exempts that
-    ///         case from the nested-materialization refusal — so a self-edge is skipped. With it skipped the augmented
-    ///         graph is acyclic, and that rests on two rules rather than on one: a template subtree's only exit is its
-    ///         join, by construction, so the only way a template root could reach its materializing node is through
-    ///         that join — and <see cref="Validate" /> refuses a join that IS the materializing node or one of its
-    ///         ancestors. Without that second rule the virtual edge closes a loop over which
-    ///         <see cref="EnsureAcyclic" />, which walks the authored edges only, is silent, and
-    ///         <see cref="AncestorsFirst" /> would answer with an order that is not topological.
-    ///     </para>
-    /// </summary>
+    /// <summary>The authored edges plus one VIRTUAL edge from each materializing node to its template root.</summary>
+    /// <remarks>
+    ///     Not an invention: expansion wires exactly that edge, so the virtual one is the definition-time image of a
+    ///     real run-time one and the invariants answer the same before and after materialization. A node may name
+    ///     ITSELF as its own template root, so a self-edge is skipped; with it skipped the augmented graph is acyclic,
+    ///     which rests on <see cref="Validate" />'s refusal of a join that IS the materializing node or an ancestor.
+    ///     See docs/wiki/25-dev-workflows.md ("Edges, joins and the pinned graph").
+    /// </remarks>
     private List<DevWorkflowGraphEdge> AugmentedEdges() =>
     [
         .. Edges,
@@ -957,28 +858,14 @@ internal sealed class DevWorkflowGraph
                 .Where(static edge => !string.Equals(edge.From, edge.To, StringComparison.Ordinal))
     ];
 
-    /// <summary>
-    ///     Y3 made structural: an apply node is reached from a human gate and from nothing else.
-    ///     <para>
-    ///         The rule the whole integration stage rests on is that no AI-authored patch reaches a real repository
-    ///         without an operator decision recorded in the run's own audit trail. A definition is the only place that
-    ///         can be checked before the fact: by the time an ungated apply runs, the approval it should have waited
-    ///         for does not exist to be missed.
-    ///     </para>
-    ///     <para>
-    ///         Stated as "every inbound edge comes from a human gate" rather than as "some gate lies on every path",
-    ///         which is weaker in the way that matters: an approval given before the patches existed — a plan gate, say
-    ///         — would satisfy the path reading while approving something else entirely. The immediate reading also
-    ///         leaves no window between the answer and the act for a node run to change what is being applied.
-    ///     </para>
-    ///     <para>
-    ///         The SOURCE being a gate is only half of it, and on its own it is not the rule at all: all three answers a
-    ///         gate takes leave it <c>Succeeded</c> — a rejection reaches the run through an out-edge that matches
-    ///         nothing, never through a node failure — so an unconditional gate-to-apply edge fires on a REJECTION and
-    ///         applies the patches the operator declined. The condition is therefore checked too, and checked by asking
-    ///         the dispatcher's own routing what it would do with each answer.
-    ///     </para>
-    /// </summary>
+    /// <summary><c>Y3</c> made structural: an apply node is reached from a human gate and from nothing else.</summary>
+    /// <remarks>
+    ///     No AI-authored patch reaches a real repository without an operator decision in the run's own audit trail.
+    ///     Stated as "every inbound edge comes from a human gate" rather than "some gate lies on every path", which
+    ///     would let an approval given before the patches existed satisfy it. The SOURCE being a gate is only half:
+    ///     all three answers leave a gate <c>Succeeded</c>, so the edge's condition is checked too.
+    ///     See docs/wiki/25-dev-workflows.md ("Edges, joins and the pinned graph").
+    /// </remarks>
     private void EnsureAppliesAreGated()
     {
         foreach (var apply in Nodes.Values.Where(static node => node.ToolMode == DevWorkflowToolMode.Apply).Select(static node => node.NodeKey))
@@ -1000,17 +887,13 @@ internal sealed class DevWorkflowGraph
         }
     }
 
-    /// <summary>
-    ///     The condition half of the rule above: an apply's inbound edges carry the approval and carry nothing else.
-    ///     <para>
-    ///         Asked through <see cref="DevWorkflowStateMachine.GateEdgeFires" />, over the set of answers
-    ///         <see cref="DevWorkflowStateMachine.GateAnswers" /> derives from the transition table — so the document
-    ///         evaluated here is the document the tick composes, the evaluation is the one the tick performs, and the
-    ///         three answers are the three the tick can route. Re-deriving any of it — reading the condition and asking
-    ///         whether it compares <c>decision</c> to <c>Approve</c> — would be a second account of routing that could
-    ///         drift from the first, and that drift would be silent and would end in an apply.
-    ///     </para>
-    /// </summary>
+    /// <summary>The condition half of the rule above: an apply's inbound edges carry the approval and nothing else.</summary>
+    /// <remarks>
+    ///     Asked through <see cref="DevWorkflowStateMachine.GateEdgeFires" />, over
+    ///     <see cref="DevWorkflowStateMachine.GateAnswers" />, so the document, the evaluation and the answers are the
+    ///     tick's own. Re-deriving any of it would be a second account of routing, and that drift would be silent and
+    ///     would end in an apply.
+    /// </remarks>
     private static void EnsureCarriesOnlyTheApproval(string apply, IReadOnlyList<DevWorkflowGraphEdge> inbound)
     {
         foreach (var edge in inbound)
@@ -1034,26 +917,20 @@ internal sealed class DevWorkflowGraph
         }
     }
 
-    /// <summary>
-    ///     The structural rule on a template SUBTREE: nothing outside it points into it.
-    ///     <para>
-    ///         It exists because breaking it HANGS rather than fails — a node outside the template that depended on it
-    ///         would wait, at run start and forever, on the one node deliberately never instantiated. It is also the
-    ///         whole of the rule the plan states in two halves: because the subtree is defined as everything the
-    ///         template reaches SHORT OF the join, "no edge leaves it except to the join" is true by construction, and
-    ///         the only way a live node could be swallowed into a template is by being pointed at from outside it,
-    ///         which is what this refuses.
-    ///     </para>
-    /// </summary>
+    /// <summary>The structural rule on a template SUBTREE: nothing outside it points into it.</summary>
+    /// <remarks>
+    ///     Breaking it HANGS rather than fails: a node outside the template that depended on it would wait, at run
+    ///     start and forever, on the one node deliberately never instantiated. "No edge leaves the subtree except to
+    ///     the join" is true by construction, the subtree being everything the template reaches short of the join, so
+    ///     the only way a live node is swallowed into a template is by being pointed at from outside it.
+    /// </remarks>
     private void ValidateTemplateSubtree(string nodeKey, DevWorkflowMaterialization materialization, Dictionary<string, string> templateOwner)
     {
         var subtree = TemplateSubtree(materialization);
         foreach (var key in subtree)
         {
-            // Exactly one materializer owns each template node. Two that share a subtree stay structurally legal only
-            // until a decomposition finds no work: each producer then seeds the SAME template key with its own no-op
-            // verdict row under its own operation id, the first commits, and the second is refused by the store for
-            // the life of the run — a deadlock authored at save time, so it is refused at save time.
+            // Exactly one materializer owns each template node: two sharing a subtree would both seed the SAME key with
+            // a no-op verdict row once a decomposition found no work, deadlocking the run. Authored at save, refused there.
             if (!templateOwner.TryAdd(key, nodeKey) && !string.Equals(templateOwner[key], nodeKey, StringComparison.Ordinal))
             {
                 throw new DevWorkflowValidationException($"Node '{key}' is inside the materialization template of '{templateOwner[key]}' and of '{nodeKey}'. A template "
@@ -1074,23 +951,8 @@ internal sealed class DevWorkflowGraph
                                                          + "subtree is cloned once per task, so nothing outside it may depend on the copy that is never run.");
             }
 
-            // GRAPH-C4-1, step four. TerminalNodeKeys is "every node with no out-edge", template keys included, and
-            // the doc there calls that moot because a template never gets a node run. The zero-task decomposition's
-            // no-op verdict row is the exception that falsifies the premise: a template leaf would take a Succeeded row
-            // at a key the completion predicate reads, and the run would report Completed though its real tail never
-            // ran. Refusing the shape at save is cheaper than teaching two runtime rules about each other.
-            //
-            // Scoped to the nodes that row is written FOR, which is what the premise it restores is about: the
-            // materializer seeds one row per Tool/Validate node of the subtree and none for anything else, so an
-            // edge-less DevTask or Agent template stays rowless and can neither satisfy nor block the completion
-            // predicate — exactly as the doc says. Widening the rule to every node type would refuse a shape that has
-            // always been legal and is still harmless, the baseline decomposition template among them.
-            //
-            // "Has an out-edge" implies "reaches the join" because the subtree pulls every non-join edge target back
-            // into itself, so the only edge that can leave one is the edge to the declared join — an argument that
-            // leans on acyclicity, which this call runs BEFORE EnsureAcyclic proves. Nothing unsound follows: a cyclic
-            // graph is refused a few lines later either way, and it simply reads this complaint rather than the cycle
-            // one.
+            // GRAPH-C4-1, step four: an edge-less template leaf would take the zero-task verdict row at a key the
+            // completion predicate reads. Scoped to Tool/Validate, the only nodes that row is written for.
             if (Nodes[key] is { NodeType: DevWorkflowNodeType.Tool, ToolMode: DevWorkflowToolMode.Validate } && OutboundEdges(key).Count == 0)
             {
                 throw new DevWorkflowValidationException($"Node '{key}' validates inside the materialization template of '{nodeKey}' and no edge leaves it, so it "
@@ -1101,22 +963,14 @@ internal sealed class DevWorkflowGraph
         }
     }
 
-    /// <summary>
-    ///     No cycle in the authored graph, and none in the AUGMENTED one either.
-    ///     <para>
-    ///         The second walk is not a duplicate of the first. Each materializer's own join is already refused as
-    ///         itself or one of its ancestors, which closes the loop ONE virtual edge can make — but two materializers
-    ///         whose templates lead into each other close a loop no single-materializer rule can see: authored the
-    ///         graph is acyclic, and only the virtual edges together make it a cycle. That matters twice over.
-    ///         <see cref="AncestorsFirst" /> would answer with an order that is not topological, so
-    ///         <see cref="Assured" /> would compute a one-pass fixpoint over it and give an order-dependent answer;
-    ///         and at run time the clone edges each expansion wires turn the virtual cycle into a real one.
-    ///     </para>
-    ///     <para>
-    ///         Authored first, so a plain back edge still reads as the plain complaint. A graph with no materialization
-    ///         has the same edge set twice and skips the second walk entirely.
-    ///     </para>
-    /// </summary>
+    /// <summary>No cycle in the authored graph, and none in the AUGMENTED one either.</summary>
+    /// <remarks>
+    ///     The second walk is not a duplicate: two materializers whose templates lead into each other close a loop no
+    ///     single-materializer rule can see, since only the virtual edges together make it a cycle. That would leave
+    ///     <see cref="AncestorsFirst" /> answering out of topological order, and at run time the clone edges each
+    ///     expansion wires turn it into a real cycle. Authored first, so a plain back edge reads as the plain
+    ///     complaint; a graph with no materialization has one edge set and skips the second walk.
+    /// </remarks>
     private void EnsureAcyclic()
     {
         EnsureAcyclic(Edges,
@@ -1138,16 +992,13 @@ internal sealed class DevWorkflowGraph
             });
     }
 
-    /// <summary>
-    ///     Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.
-    ///     <para>
-    ///         Walked on an EXPLICIT stack rather than by recursion, so a long chain costs heap rather than one stack
-    ///         frame per node — a stack overflow is a process kill nothing can catch, and this parse runs on a
-    ///         thread-pool thread on behalf of a request body. The frame is the node plus how far through its
-    ///         out-edges the walk has got, which is what makes the iterative walk visit in the same order the
-    ///         recursive one did: one edge finished before the next is started.
-    ///     </para>
-    /// </summary>
+    /// <summary>Depth-first colouring: white unvisited, grey on the current path, black finished; a grey hit is a cycle.</summary>
+    /// <remarks>
+    ///     Walked on an EXPLICIT stack rather than by recursion, so a long chain costs heap rather than a frame per
+    ///     node: a stack overflow is a process kill nothing can catch, and this parse runs on a thread-pool thread on
+    ///     behalf of a request body. The frame is the node plus how far through its out-edges the walk has got, which
+    ///     makes the iterative walk visit in the recursive order — one edge finished before the next is started.
+    /// </remarks>
     private void EnsureAcyclic(IReadOnlyList<DevWorkflowGraphEdge> edges, Func<string, IReadOnlyList<string>, string> message)
     {
         // Keyed by every declared node rather than only by the ones an edge leaves, so a leaf is a lookup that answers
@@ -1218,19 +1069,19 @@ internal sealed class DevWorkflowGraph
     private static string? OptionalString(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
-    /// <summary>
-    ///     An optional string, trimmed, with a blank one read as ABSENT rather than refused. A cleared picker sends
-    ///     <c>""</c> and older documents already hold one, and a run that cannot be routed because a field says nothing
-    ///     is a worse answer than the field simply not applying.
-    /// </summary>
+    /// <summary>An optional string, trimmed, with a blank one read as ABSENT rather than refused.</summary>
+    /// <remarks>
+    ///     A cleared picker sends <c>""</c> and older documents already hold one, and a run that cannot be routed
+    ///     because a field says nothing is a worse answer than the field simply not applying.
+    /// </remarks>
     private static string? TrimmedOptionalString(JsonElement element, string name) =>
         OptionalString(element, name)?.Trim() is { Length: > 0 } value ? value : null;
 
-    /// <summary>
-    ///     A boolean that is absent, null or <c>false</c> reads as false, and anything that is not a boolean at all is
-    ///     refused rather than read as one. A graph-level waiver written as <c>"true"</c> must not silently be no
-    ///     waiver, and it must not silently be one either.
-    /// </summary>
+    /// <summary>A boolean that is absent, null or <c>false</c> reads as false; a non-boolean is refused.</summary>
+    /// <remarks>
+    ///     A graph-level waiver written as <c>"true"</c> must not silently be no waiver, and must not silently be one
+    ///     either.
+    /// </remarks>
     private static bool OptionalFlag(JsonElement element, string name)
     {
         if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
@@ -1246,11 +1097,11 @@ internal sealed class DevWorkflowGraph
         };
     }
 
-    /// <summary>
-    ///     A required enum member BY NAME. Never <c>Enum.TryParse</c> on its own: that accepts a numeric token, so
-    ///     <c>"nodeType": "3"</c> would parse into a value no member has and reach the per-type config table as a
-    ///     missing key rather than as the refusal an author can read.
-    /// </summary>
+    /// <summary>A required enum member BY NAME, never <c>Enum.TryParse</c> on its own.</summary>
+    /// <remarks>
+    ///     That accepts a numeric token, so <c>"nodeType": "3"</c> would parse into a value no member has and reach
+    ///     the per-type config table as a missing key rather than as the refusal an author can read.
+    /// </remarks>
     private static TEnum RequiredEnum<TEnum>(JsonElement element, string name, string owner)
         where TEnum : struct, Enum =>
         GraphWorkflowTokens.TryParseName<TEnum>(OptionalString(element, name), out var parsed)

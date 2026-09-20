@@ -4,20 +4,14 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
-/// <summary>
-///     Copies what an agent node run's work session produced into the run's own artifact record.
-///     <para>
-///         An application-layer composition rather than a store method, because it spans three things no store can
-///         reach at once: the work session's bytes, the run's blob store, and the run's artifact rows. The session is
-///         execution scratch and can be deleted with its node run; the run's artifacts are the audit and outlive it, so
-///         the bytes are copied rather than referenced.
-///     </para>
-///     <para>
-///         Idempotent by construction: both the artifact id and the append's operation id are derived from
-///         <c>(run, node key, attempt, artifact name)</c>, so a promotion replayed after a crash rewrites the same blob
-///         and the store's query-first check returns the recorded result instead of appending a second version.
-///     </para>
-/// </summary>
+/// <summary>Copies what an agent node run's work session produced into the run's own artifact record.</summary>
+/// <remarks>
+///     An application-layer composition rather than a store method, because it spans three things no store reaches
+///     at once: the session's bytes, the run's blob store and the run's artifact rows. The bytes are copied rather
+///     than referenced. Idempotent by construction: artifact id and operation id both derive from
+///     <c>(run, node key, attempt, artifact name)</c>, so a replay rewrites the same blob and appends no second
+///     version. See docs/wiki/25-dev-workflows.md ("Artifacts").
+/// </remarks>
 internal sealed class DevWorkflowArtifactPromotion
 {
     private readonly ILogger<DevWorkflowArtifactPromotion> _logger;
@@ -39,14 +33,11 @@ internal sealed class DevWorkflowArtifactPromotion
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>
-    ///     Promotes every readable artifact of the session and answers how many landed on the run.
-    ///     <para>
-    ///         <paramref name="declaredKind" /> is what the NODE says it produces, which is the only place that fact can
-    ///         come from: the work session's own four kinds have no word for a task package or a plan, so a node that
-    ///         another node reads a specific kind from has to declare it. See <see cref="MapKind" />.
-    ///     </para>
-    /// </summary>
+    /// <summary>Promotes every readable artifact of the session and answers how many landed on the run.</summary>
+    /// <param name="declaredKind">
+    ///     What the NODE says it produces, the only place that fact can come from: the work session's own four kinds
+    ///     have no word for a task package or a plan. See <see cref="MapKind" />.
+    /// </param>
     public async Task<int> PromoteAsync(DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         Guid sessionId,
@@ -100,9 +91,8 @@ internal sealed class DevWorkflowArtifactPromotion
                 continue;
             }
 
-            // Mark-only propagation: a node run that consumed the version this one just replaced is flagged, and a
-            // human decides what to do about it. Nothing is regenerated, and the superseded bytes stay — versioning is
-            // the point.
+            // Mark-only propagation: a node run that consumed the version this one just replaced is flagged and a human decides what to do. Nothing is regenerated, and the
+            // superseded bytes stay — versioning is the point.
             _ = await _store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand
             {
                 RunId = run.Id,
@@ -117,16 +107,13 @@ internal sealed class DevWorkflowArtifactPromotion
         return promoted;
     }
 
-    /// <summary>
-    ///     The session's four artifact kinds onto the run's ten.
-    ///     <para>
-    ///         <c>Patch</c> maps exactly. <c>Report</c> is the session's word for "the structured result of this work",
-    ///         so it — and only it — takes the node's DECLARED kind when the node declares one: that is how the richer
-    ///         kinds (<c>TaskPackage</c>, <c>Plan</c>, <c>Specification</c>) become reachable at all, since the work
-    ///         session enum has no member for any of them and inferring one from the bytes would be guessing. Note and
-    ///         File are the session's scratch, and a node's declared output is not what they are.
-    ///     </para>
-    /// </summary>
+    /// <summary>The session's four artifact kinds onto the run's ten.</summary>
+    /// <remarks>
+    ///     <c>Patch</c> maps exactly. <c>Report</c> is the session's word for "the structured result of this work", so
+    ///     it alone takes the node's DECLARED kind when there is one: that is how <c>TaskPackage</c>, <c>Plan</c> and
+    ///     <c>Specification</c> become reachable, since the session enum has no member for any of them and inferring
+    ///     one from the bytes would be guessing. Note and File are session scratch, not a node's declared output.
+    /// </remarks>
     private static DevWorkflowArtifactKind MapKind(AgentWorkSessionArtifactKind kind, DevWorkflowArtifactKind? declaredKind) =>
         kind switch
         {

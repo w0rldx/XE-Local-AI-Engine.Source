@@ -3,30 +3,24 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     The node runs a graph gets at run start.
-///     <para>
-///         EVERY node except a materialization template gets a row up front, not just the entry ones. Creating them as
-///         their branches settle reads well until terminalization: a run whose remaining rows do not exist yet has
-///         "nothing live" and completes before it has run anything. A row that does not exist is still the right answer
-///         for a decomposition's children — which is why an absent source reads as a pending edge — but for a graph
-///         known at run start there is nothing to wait for.
-///     </para>
-///     <para>
-///         Shared by the run service and the dispatcher rather than duplicated: the service composes them because it is
-///         the only thing holding the caller's inputs, and the dispatcher composes them for a run created any other way.
-///     </para>
-/// </summary>
+/// <summary>The node runs a graph gets at run start.</summary>
+/// <remarks>
+///     EVERY node except a materialization template gets a row up front, not just the entry ones: creating them as
+///     their branches settle reads well until terminalization, where a run whose remaining rows do not exist has
+///     "nothing live" and completes before running anything. A missing row is still right for a decomposition's
+///     children — which is why an absent source reads as a pending edge — but a graph known at run start has nothing
+///     to wait for. Shared by the run service, which holds the caller's inputs, and the dispatcher, for every other run.
+/// </remarks>
 internal static class DevWorkflowRunSeeds
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    /// <summary>
-    ///     <paramref name="enabledRuleSets" /> is read once by the CALLER, which is the only thing here that touches
-    ///     the store — keeping this composition static and testable, exactly as <c>maxNodeRunsPerRun</c> is passed in
-    ///     as a plain value rather than looked up.
-    /// </summary>
+    /// <param name="enabledRuleSets">Read once by the CALLER, the only thing here that touches the store.</param>
+    /// <remarks>
+    ///     That keeps this composition static and testable, exactly as <c>maxNodeRunsPerRun</c> being a plain value
+    ///     rather than a lookup does.
+    /// </remarks>
     public static IReadOnlyList<DevWorkflowNodeRunSeed> Compose(DevWorkflowGraph graph,
         DevWorkflowWorkItemSnapshot workItem,
         string? inputsJson,
@@ -53,9 +47,8 @@ internal static class DevWorkflowRunSeeds
                              AgentDefinitionId = node.AgentDefinitionId,
                              DevelopmentProjectId = workItem.DevelopmentProjectId,
                              InputJson = entryKeys.Contains(node.NodeKey) ? entryInput : null,
-                             // Recorded on EVERY node run, not only the entry ones and not only the agent ones: the
-                             // resolution is what the node-run detail answers "which rules applied" with, and a row
-                             // that skipped it would read as "none did".
+                             // Recorded on EVERY node run, not only the entry or agent ones: the resolution is what the node-run detail answers "which rules
+                             // applied" with, and a row that skipped it would read as "none did".
                              PolicyResolutionJson = DevWorkflowRulePolicyResolver.Compose(enabledRuleSets, workItem.DevelopmentProjectId, node.NodeType)
                          })
                          .ToList();

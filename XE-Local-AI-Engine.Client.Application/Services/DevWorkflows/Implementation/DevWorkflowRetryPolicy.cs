@@ -23,19 +23,16 @@ internal sealed class DevWorkflowFailure
 }
 
 /// <summary>
-///     Where a failed node run's next move is decided: re-attempt it, re-run the upstream node that produced what it was
-///     judging, or stand it down for a human.
-///     <para>
-///         One class rather than a branch in each executor, because the agent lane and the sandbox lane must answer this
-///         question identically — a build failing three times and an agent failing three times differ in what produced
-///         the failure and in nothing else — and because the cross-node fix loop reaches rows neither lane owns.
-///     </para>
-///     <para>
-///         Every write it makes goes through the store inside the dispatcher's serialized tick, exactly as the executors'
-///         own settles do. It holds one piece of non-authoritative state: when a re-attempt may be admitted, for the
-///         nodes that ask for a delay.
-///     </para>
+///     Where a failed node run's next move is decided: re-attempt it, re-run the upstream node that produced what it
+///     was judging, or stand it down for a human.
 /// </summary>
+/// <remarks>
+///     One class rather than a branch in each executor, because the agent lane and the sandbox lane must answer this
+///     identically, and because the cross-node fix loop reaches rows neither lane owns. Every write goes through the
+///     store inside the dispatcher's serialized tick, exactly as the executors' own settles do. It holds one piece of
+///     non-authoritative state: when a re-attempt may be admitted, for the nodes that ask for a delay. See
+///     docs/wiki/25-dev-workflows.md ("The retry policy").
+/// </remarks>
 internal sealed class DevWorkflowRetryPolicy
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
@@ -56,18 +53,16 @@ internal sealed class DevWorkflowRetryPolicy
     };
 
     /// <summary>
-    ///     When a re-attempt may be admitted, for the node runs whose node asks for a delay. Keyed by node run, and each
+    ///     When a re-attempt may be admitted, for the node runs whose node asks for a delay. Keyed by node run, each
     ///     entry naming its run so a run that ends mid-delay can be forgotten in one call.
-    ///     <para>
-    ///         ponytail: in memory, so a restart re-admits immediately, and that is the answer rather than a gap in it.
-    ///         A delay is a CUSHION, never a bound — the bounds are <c>Attempt</c> on the row and the run's total, both
-    ///         durable — so re-admitting a node run early can only shorten a wait, in the one situation (a restart) that
-    ///         has already cost more wall-clock than any delay a definition would ask for. The durable record exists
-    ///         either way: <c>node.retry.scheduled</c> carries <c>delayUntil</c>, so the log says what was promised even
-    ///         though nothing re-arms it. Upgrade path, if a definition ever asks for a delay long enough to matter:
-    ///         re-read that event for the node runs whose node declares a delay, at startup, rather than adding a column.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     ponytail: in memory, so a restart re-admits immediately, which is the answer rather than a gap in it. A
+    ///     delay is a CUSHION, never a bound — the bounds are <c>Attempt</c> on the row and the run's total, both
+    ///     durable — so early re-admission can only shorten a wait, in the one situation that already cost more
+    ///     wall-clock than any delay a definition asks for. <c>node.retry.scheduled</c> carries <c>delayUntil</c>, so
+    ///     the log says what was promised; the upgrade path is to re-read that event at startup, not to add a column.
+    /// </remarks>
     private readonly ConcurrentDictionary<Guid, ScheduledRetry> _notBefore = new();
 
     private readonly ILogger<DevWorkflowRetryPolicy> _logger;
@@ -111,17 +106,14 @@ internal sealed class DevWorkflowRetryPolicy
         return true;
     }
 
-    /// <summary>
-    ///     Drops what this run had promised itself, because it will never ask again.
-    ///     <para>
-    ///         Called wherever the dispatcher forgets a run's parsed graph, for the same reason and at the same moments:
-    ///         a run that is cancelled or fails while one of its node runs is waiting out a delay never reaches
-    ///         <see cref="IsReady" /> again, so the entry would otherwise sit here until the process restarted. A PAUSED
-    ///         run is deliberately not forgotten — it is coming back, and its cushions still stand. Deleting a work item
-    ///         needs nothing of its own: the store refuses a delete while any run of the item is non-terminal, so a
-    ///         deletable run has already been through here.
-    ///     </para>
-    /// </summary>
+    /// <summary>Drops what this run had promised itself, because it will never ask again.</summary>
+    /// <remarks>
+    ///     Called wherever the dispatcher forgets a run's parsed graph, at the same moments and for the same reason: a
+    ///     run cancelled or failed while a node run waits out a delay never reaches <see cref="IsReady" /> again, so
+    ///     the entry would sit here until the process restarted. A PAUSED run is deliberately not forgotten — it is
+    ///     coming back and its cushions stand. Deleting a work item needs nothing of its own: the store refuses a
+    ///     delete while any run of the item is non-terminal, so a deletable run has already been through here.
+    /// </remarks>
     public void Forget(Guid runId)
     {
         foreach (var (nodeRunId, scheduled) in _notBefore)
@@ -134,15 +126,15 @@ internal sealed class DevWorkflowRetryPolicy
     }
 
     /// <summary>
-    ///     Settles a node run whose work failed: another attempt at it, another attempt at the node it was judging, or a
-    ///     stand-down for a human.
-    ///     <para>
-    ///         A run that is CANCELLING is exempt: it has been told to stop, and re-attempting anything under it would be
-    ///         the runtime resurrecting work an operator asked it to abandon. Such a failure settles <c>Failed</c> and the
-    ///         drain takes it from there. A run that is PAUSING is not exempt — a re-attempt lands the row at
-    ///         <c>Pending</c>, which is exactly where the pause drain parks work anyway.
-    ///     </para>
+    ///     Settles a node run whose work failed: another attempt at it, another attempt at the node it was judging, or
+    ///     a stand-down for a human.
     /// </summary>
+    /// <remarks>
+    ///     A run that is CANCELLING is exempt: it has been told to stop, and re-attempting anything under it would be
+    ///     the runtime resurrecting work an operator asked it to abandon, so such a failure settles <c>Failed</c> and
+    ///     the drain takes it from there. A run that is PAUSING is not exempt — a re-attempt lands the row at
+    ///     <c>Pending</c>, which is exactly where the pause drain parks work anyway.
+    /// </remarks>
     public async Task<int> SettleFailureAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -187,17 +179,16 @@ internal sealed class DevWorkflowRetryPolicy
     }
 
     /// <summary>
-    ///     <c>Internal</c> is retryable exactly once: an executor that threw something nobody predicted may have
-    ///     hit a transient, but a second identical throw is a defect, and spending a node's whole attempt budget on it
-    ///     only delays the human who has to read the log.
-    ///     <para>
-    ///         A DECOMPOSING node's <c>Configuration</c> failure is retryable once for the same reason, the one named
-    ///         exception to <c>Configuration</c> being non-retryable: the thing that wrote the unusable task package is the thing that can rewrite it, and the
-    ///         re-attempt carries the complaint into its objective. Scoped to the node rather than to the failure
-    ///         because the failure class is all a lane hands over — the cost of the wider reading is one spent attempt
-    ///         on a decomposing node that is misconfigured in some other way, and the answer after it is the same human.
-    ///     </para>
+    ///     <c>Internal</c> is retryable exactly once: an executor that threw something nobody predicted may have hit a
+    ///     transient, but a second identical throw is a defect.
     /// </summary>
+    /// <remarks>
+    ///     Spending a node's whole attempt budget on a defect only delays the human who has to read the log. A
+    ///     DECOMPOSING node's <c>Configuration</c> failure is retryable once for the same reason, and is the one named
+    ///     exception to <c>Configuration</c> being non-retryable: what wrote the unusable task package can rewrite it,
+    ///     and the re-attempt carries the complaint into its objective. Scoped to the node rather than the failure
+    ///     because the class is all a lane hands over; the cost is one spent attempt, and the answer after it a human.
+    /// </remarks>
     private static bool IsRetryable(DevWorkflowGraphNode node, string failureClass, int attempt) =>
         (RetryableFailureClasses.Contains(failureClass) && (failureClass != DevWorkflowFailureClasses.Internal || attempt < 2))
         || (failureClass == DevWorkflowFailureClasses.Configuration && node.Materialization is not null && attempt < 2);
@@ -227,16 +218,8 @@ internal sealed class DevWorkflowRetryPolicy
             return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken);
         }
 
-        // The next attempt is told what the last one came to, or the agent composes a byte-identical objective
-        // and does the same thing again. Read off the failure in hand rather than the row, which the Pending write is
-        // about to clear; the helper strips any earlier priorFailure, so rounds replace rather than nest.
-        //
-        // NO priorFailureNode: that key names the OTHER node whose verdict sent the run back here, and only RouteAsync
-        // has one. Writing this node's own key into it made a same-node retry indistinguishable from a cross-node
-        // rejection — measured live on 2026-09-02, a transient reviewer failure on a DevTask node then had the
-        // executor ask an ALREADY-APPROVED task to be implemented again, quoting a verdict nothing had reached, until
-        // the task's review rounds ran out and its approved patch was discarded. An earlier genuine route's key is left
-        // in place: a transient retry in the middle of a fix loop must not lose the rework the loop asked for.
+        // The next attempt is told what the last one came to, read off the failure in hand rather than the row the Pending write is about to clear; the helper strips any earlier
+        // priorFailure so rounds replace rather than nest. NO priorFailureNode here — see the remarks on PriorFailure for why this node's own key there reads as a cross-node rejection.
         try
         {
             return await ReAttemptAsync(store,
@@ -250,10 +233,8 @@ internal sealed class DevWorkflowRetryPolicy
         }
         catch (DevWorkflowRetryBudgetExceededException refused)
         {
-            // The budget check the store takes under its writer lock refused this attempt: a human Retry committed
-            // between the PromisedAsync pre-check above and this write, and it spent the slot this re-attempt was
-            // counting on. The pre-check stays as the cheap fast path; THIS is the authority, and its answer is the
-            // same block the pre-check would have written.
+            // The budget check the store takes under its writer lock refused this attempt: a human Retry committed between the PromisedAsync pre-check above and this write, spending
+            // the slot it was counting on. The pre-check stays as the cheap fast path; THIS is the authority, and its answer is the same block the pre-check would have written.
             _logger.LogInformation(refused,
                 "Development workflow run {RunId} could not re-attempt '{NodeKey}': the run's re-attempt budget was spent under the write.",
                 run.Id,
@@ -263,15 +244,14 @@ internal sealed class DevWorkflowRetryPolicy
     }
 
     /// <summary>
-    ///     The cross-node fix loop: the node that failed is not the node that is re-run. The named upstream target
-    ///     re-runs with this failure in its inputs, and every node run downstream of it re-runs with it — including the
-    ///     one that failed, which is a descendant by the ancestry rule the graph validates at parse.
-    ///     <para>
-    ///         The reset set is ALL descendants rather than the path back to the failure, because a <c>Succeeded</c>
-    ///         sibling holds an answer about an implementation that no longer exists. Leaving it would be a stale result
-    ///         presented as a current one, and a re-run that was not needed is the cheaper mistake.
-    ///     </para>
+    ///     The cross-node fix loop: the named upstream target re-runs with this failure in its inputs, and every node
+    ///     run downstream of it re-runs with it — the one that failed included, being a descendant by the parse rule.
     /// </summary>
+    /// <remarks>
+    ///     The reset set is ALL descendants rather than the path back to the failure, because a <c>Succeeded</c>
+    ///     sibling holds an answer about an implementation that no longer exists. Leaving it would be a stale result
+    ///     presented as a current one, and a re-run that was not needed is the cheaper mistake.
+    /// </remarks>
     private async Task<int> RouteAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
@@ -284,13 +264,11 @@ internal sealed class DevWorkflowRetryPolicy
     {
         var byKey = nodeRuns.ToDictionary(static row => row.NodeKey, StringComparer.Ordinal);
 
-        // The caller's row, not the tick's opening copy of it: a lane may have caught its row up to Running since, and
-        // the reset has to judge the status it is actually moving from.
+        // The caller's row, not the tick's opening copy: a lane may have caught its row up to Running since, and the reset has to judge the status it is actually moving from.
         byKey[nodeRun.NodeKey] = nodeRun;
         if (!byKey.TryGetValue(retryTarget, out var target))
         {
-            // Declared and validated as an ancestor at parse, so the row exists in every run this build materializes.
-            // Reaching here means the graph and the rows disagree, which nothing downstream should guess about.
+            // Declared and validated as an ancestor at parse, so the row exists in every run this build materializes. Reaching here means graph and rows disagree — nothing to guess at.
             return await BlockAsync(store,
                     run,
                     nodeRun,
@@ -321,15 +299,8 @@ internal sealed class DevWorkflowRetryPolicy
                     cancellationToken);
         }
 
-        // GRAPH-C4-4: this node's own fix loop, bounded by what the definition said. Absent means no cap (ruling D9) —
-        // a parse-time default would tighten routing on every already-stored definition at run start, silently.
-        //
-        // Attempt is the right base and needs no column of its own: a node with a retryTarget never takes the
-        // same-node path, and each route re-attempts the whole descendant set including this node. An operator Retry
-        // raises the same counter and is bounded only by the run-wide budget, so it is subtracted. The count still
-        // over-attributes when two nodes route to one target and the reset bumps both rows — which errs toward
-        // blocking, the direction every budget here errs, and is why the message does not claim this node looped N
-        // times.
+        // GRAPH-C4-4: this node's own fix loop, bounded by what the definition said; absent means no cap (ruling D9), a parse-time default silently tightening every stored definition.
+        // Attempt is the right base and needs no column, an operator Retry is subtracted from it, and two nodes routing to one target over-attributes — which errs toward blocking.
         if (node.MaxLoopIterations is { } maxLoopIterations)
         {
             var decisions = await store.ListDecisionsAsync(run.Id, cancellationToken);
@@ -347,23 +318,20 @@ internal sealed class DevWorkflowRetryPolicy
             }
         }
 
-        // The WHOLE cascade has to fit, not just the target's own attempt. Admitting a fan-out one attempt at a time is
-        // how a run spends more re-attempts than it allows by the width of its graph — the same accounting the startup
-        // reconciler does for the same reason.
+        // The WHOLE cascade has to fit, not just the target's own attempt: admitting a fan-out one attempt at a time is how a run spends more re-attempts than it allows by the width of
+        // its graph. The same accounting the startup reconciler does, for the same reason.
         var cost = reset.Count + 1;
         if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken) + cost > _options.MaxTotalAttempts)
         {
             return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken);
         }
 
-        // Composed before anything is touched, so an illegal move is refused while the run still stands where it did.
-        // The target is built LAST so the event log reads decision, then the answers being discarded, then the node
-        // being re-run — the order a person reconstructs the round in.
+        // Composed before anything is touched, so an illegal move is refused while the run still stands where it did. The target is built LAST so the event log reads decision, then the
+        // answers being discarded, then the node being re-run — the order a person reconstructs the round in.
         var moves = new List<(TransitionDevWorkflowNodeRunCommand Command, Guid NodeRunId, DateTimeOffset? DelayUntil)>(reset.Count + 1);
         foreach (var row in reset)
         {
-            // Only the node that failed ended failed. The rest are being re-run because the answer they gave is about
-            // to describe something that no longer exists, and stamping their event "failed" would say they broke.
+            // Only the node that failed ended failed. The rest are re-run because the answer they gave is about to describe something gone, and stamping "failed" would say they broke.
             var (command, delayUntil) = row.Id == nodeRun.Id
                 ? ReAttempt(run, row, delaySeconds: 0, DetailFor(row, failure), failure.Outcome ?? DevWorkflowOutcomes.Failed, inputJson: null)
                 : ReAttempt(run,
@@ -389,17 +357,8 @@ internal sealed class DevWorkflowRetryPolicy
             PriorFailure(target.InputJson, nodeRun.NodeKey, nodeRun.Attempt, failure.OutputJson));
         moves.Add((targetCommand, target.Id, targetDelay));
 
-        // Quiesce EVERY row the route supersedes before the transaction opens. Stopping a live session is not something
-        // a rollback can undo, so it cannot sit inside the write — and a lane still driving a row the reset is about to
-        // take would otherwise settle it back off the answer being discarded.
-        //
-        // The target is almost always Succeeded by the time anything downstream of it can fail, so its pass is almost
-        // always a no-op — but an Any join lets a descendant run on a sibling branch while the target is still working,
-        // and that target is as live as any other row the reset moves.
-        // Asked AGAIN, immediately before anything is stopped. The first check ran before the moves were composed and
-        // the rows were read; a human Retry committing since then makes this route unaffordable, and the transactional
-        // refusal below arrives too late to give the quiesced lanes their work back. Narrowing the window to the
-        // transaction itself is the whole of the fix — the store stays the authority.
+        // Quiesce EVERY superseded row before the transaction opens: a rollback cannot undo a stopped session, and a lane still driving one would settle it back off the discarded
+        // answer — an Any join can leave the target itself live. Asked AGAIN here, because the first check ran before the moves were composed and the refusal below lands too late.
         if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken) + cost > _options.MaxTotalAttempts)
         {
             return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken);
@@ -412,12 +371,8 @@ internal sealed class DevWorkflowRetryPolicy
 
         await QuiesceAsync(target, cancellationToken);
 
-        // ONE transaction for the routing event and every reset under it. Committing them a row at a time left a crash
-        // window in which the failed check was Pending again while the verification and gate approval beside it still
-        // read Succeeded — and nothing reconciles that, because startup recovery only judges rows left Queued or
-        // Running. The run would then repeat the check and complete on evidence and an approval about an implementation
-        // that no longer existed. All or nothing means a crash leaves the failure still recorded, which the next sweep
-        // re-derives and re-routes.
+        // ONE transaction for the routing event and every reset under it. A row at a time leaves a crash window where the failed check is Pending again while the gate approval beside it
+        // still reads Succeeded, which startup recovery never judges. All or nothing leaves the failure recorded instead, and the next sweep re-derives and re-routes it.
         var route = new RouteDevWorkflowRetryCommand
         {
             Route = new AppendDevWorkflowEventCommand
@@ -439,10 +394,8 @@ internal sealed class DevWorkflowRetryPolicy
         }
         catch (DevWorkflowRetryBudgetExceededException refused)
         {
-            // A budget refusal that got past BOTH pre-checks: a human Retry committed inside the transaction's own
-            // window. Warning, not Information, because the lanes above are already stopped and this answer does not
-            // reset them — unlike a concurrency clash, a refusal has no next route to redo them, so the rows named
-            // here are the ones a human has to look at.
+            // A budget refusal past BOTH pre-checks: a human Retry committed inside the transaction's own window. Warning, not Information, because the lanes above are already stopped
+            // and this answer does not reset them — unlike a concurrency clash, a refusal has no next route to redo them, so the rows named here are the ones a human has to look at.
             _logger.LogWarning(refused,
                 "Development workflow run {RunId} could not route '{NodeKey}' back to '{RetryTarget}': the run's re-attempt budget was spent inside the write, "
                 + "after node run(s) {QuiescedNodeKeys} had already been asked to stop for it. They are left as their own lanes settle them.",
@@ -462,27 +415,14 @@ internal sealed class DevWorkflowRetryPolicy
         return moves.Count + 1;
     }
 
-    /// <summary>
-    ///     Writes the route, and on a lost race asks EXACTLY once more before giving up on this tick.
-    ///     <para>
-    ///         The immediate re-ask exists because the lanes this route supersedes are already stopped by the time the
-    ///         write is attempted, and a clash rolls that write back whole. Leaving it to the next sweep would leave
-    ///         cancelled attempts with nothing reset — and a cancelled DevTask attempt is read by that lane as a
-    ///         cancellation rather than as a round to redo, so the fix loop would come back as a cancelled run.
-    ///     </para>
-    ///     <para>
-    ///         The SAME command, deliberately, rather than one re-derived from re-read rows. Every part of it already
-    ///         carries <see cref="DevWorkflowVersions.Any" />, so a re-read cannot change a single field; it could only
-    ///         change which rows are in the reset set, and a row that moved into that set after the snapshot was taken
-    ///         is the same race the first attempt runs anyway. Re-sending it unchanged also makes the operation id do
-    ///         its job: if the first attempt did commit and only its answer was lost, this is a replay, not a second
-    ///         route.
-    ///     </para>
-    ///     <para>
-    ///         Twice and no further. A third ask is a writer that is not going away, and the honest answer is the one
-    ///         that was there before: the failure is still recorded, so the next sweep re-derives it and routes again.
-    ///     </para>
-    /// </summary>
+    /// <summary>Writes the route, and on a lost race asks EXACTLY once more before giving up on this tick.</summary>
+    /// <remarks>
+    ///     The lanes this route supersedes are already stopped by the time the write is attempted and a clash rolls
+    ///     that write back whole, so leaving it to the next sweep would leave cancelled attempts with nothing reset —
+    ///     and the DevTask lane reads a cancelled attempt as a cancellation rather than a round to redo. The SAME
+    ///     command is re-sent: every part carries <see cref="DevWorkflowVersions.Any" />, so the operation id makes a
+    ///     lost answer a replay. Twice and no further; a third ask is a writer that is not going away.
+    /// </remarks>
     private async Task RouteOnceMoreOnAClashAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -522,25 +462,14 @@ internal sealed class DevWorkflowRetryPolicy
     /// <summary>
     ///     Stops the lane work a node run is about to lose, before the transaction that takes away the only row that
     ///     could ever have settled it.
-    ///     <para>
-    ///         Without this a fix loop orphans live work rather than replacing it. An agent row's re-attempt clears its
-    ///         <c>WorkSessionId</c>, so the session it was driving keeps the node's one invocation slot with nothing left
-    ///         pointing at it — and the fresh attempt then queues behind the very session it supersedes. A dev-task row
-    ///         leaves an attempt holding Dev Mode's one-active-attempt rule the same way. The sandbox lane recovers on
-    ///         its own at the next tick's <c>ForgetSupersededAsync</c>, so dropping its pass here is promptness rather
-    ///         than repair: it gives the slot back and stops a build whose answer is already being thrown away.
-    ///     </para>
-    ///     <para>
-    ///         ASKED to stop, never deleted: a superseded work session RAN, so it is audit evidence and the run's event
-    ///         log still names it. The tool lane DISCARDS instead of stopping, which is B5's expiry rule for the same
-    ///         reason it was made there — a registry entry left behind would refuse the next attempt its place and leave
-    ///         that attempt's pass with nothing polling it.
-    ///     </para>
-    ///     <para>
-    ///         Its own scope, because the two row-driving lanes are scoped and this is a singleton: it is the
-    ///         <c>Cancelling</c> drain's stop, reached from the one place that supersedes a row without draining its run.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Without this a fix loop orphans live work: an agent re-attempt clears its <c>WorkSessionId</c>, so the
+    ///     session keeps the node's one invocation slot with nothing pointing at it and the fresh attempt queues
+    ///     behind what it supersedes; a dev-task row holds Dev Mode's one-active-attempt rule the same way. Sessions
+    ///     are ASKED to stop, never deleted, because a superseded session RAN and is audit evidence; the tool lane
+    ///     discards, since a stale registry entry would refuse the next attempt. Its own scope: the lanes are scoped.
+    /// </remarks>
     private async Task QuiesceAsync(DevWorkflowNodeRunSnapshot nodeRun, CancellationToken cancellationToken)
     {
         if (nodeRun.Status is not (DevWorkflowNodeRunStatus.Running or DevWorkflowNodeRunStatus.Queued))
@@ -571,16 +500,14 @@ internal sealed class DevWorkflowRetryPolicy
         }
     }
 
-    /// <summary>
-    ///     Moves one node run back to <c>Pending</c> for another attempt.
-    ///     <para>
-    ///         <c>ClearWorkSession</c> travels with EVERY re-attempt, agent node or not: a retry that resumed the session
-    ///         that just failed would resume the context that failed with it, and the release is also what stops the
-    ///         fresh attempt being settled straight back off the old session's answer. The failure fields are cleared by
-    ///         the store, so the event this writes is the only record of what is being re-attempted — which is why it
-    ///         carries its own detail rather than the reason.
-    ///     </para>
-    /// </summary>
+    /// <summary>Moves one node run back to <c>Pending</c> for another attempt.</summary>
+    /// <remarks>
+    ///     <c>ClearWorkSession</c> travels with EVERY re-attempt, agent node or not: a retry that resumed the session
+    ///     that just failed would resume the context that failed with it, and the release also stops the fresh attempt
+    ///     being settled straight back off the old session's answer. The failure fields are cleared by the store, so
+    ///     the event this writes is the only record of what is being re-attempted — which is why it carries its own
+    ///     detail rather than the reason.
+    /// </remarks>
     private async Task<int> ReAttemptAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -623,20 +550,20 @@ internal sealed class DevWorkflowRetryPolicy
             IncrementAttempt = true,
             ClearWorkSession = true,
             Outcome = outcome,
-            // The run-wide budget travels WITH the write, so the store re-checks it under the writer lock instead of
-            // trusting the caller's earlier read (FU3-4). Inert on a reset inside a route — those go through the
-            // route's own transaction, which admits the whole cascade once against RouteDevWorkflowRetryCommand's
-            // budget rather than each reset against this one.
+            // The run-wide budget travels WITH the write, so the store re-checks it under the writer lock instead of trusting the caller's earlier read (FU3-4). Inert on a
+            // reset inside a route: those go through the route's own transaction, which admits the whole cascade once rather than each reset separately.
             MaxTotalAttempts = _options.MaxTotalAttempts
         }, delayUntil);
     }
 
     /// <summary>
-    ///     Records or clears when a re-attempt may be admitted. Written for EVERY re-attempt, including the ones that
-    ///     ask for no delay: a fix-loop reset of a row that was already waiting on a clock must not inherit the previous
-    ///     attempt's, and the removal is also what keeps the map from accumulating an entry per delayed retry for the
-    ///     life of the process.
+    ///     Records or clears when a re-attempt may be admitted.
     /// </summary>
+    /// <remarks>
+    ///     Written for EVERY re-attempt, the ones asking for no delay included: a fix-loop reset of a row already
+    ///     waiting on a clock must not inherit the previous attempt's, and the removal is also what keeps the map from
+    ///     accumulating an entry per delayed retry for the life of the process.
+    /// </remarks>
     private void Cushion(Guid runId, Guid nodeRunId, DateTimeOffset? delayUntil)
     {
         if (delayUntil is { } notBefore)
@@ -703,13 +630,13 @@ internal sealed class DevWorkflowRetryPolicy
     /// <summary>
     ///     The re-attempts this run has already made or promised — <c>Σ(Attempt − 1)</c> plus the recorded operator
     ///     retries that have not become an attempt yet.
-    ///     <para>
-    ///         Deliberately the same count the store admits a human <c>Retry</c> against, because it is the same budget:
-    ///         an automatic re-attempt and an operator's are both re-attempts of this run, and <c>MaxTotalAttempts</c>
-    ///         is the one bound over both. Counting the reservations is what stops an automatic retry from spending an
-    ///         attempt a person has already been promised in the same tick window.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Deliberately the same count the store admits a human <c>Retry</c> against, because it is the same budget:
+    ///     an automatic re-attempt and an operator's are both re-attempts of this run, and <c>MaxTotalAttempts</c> is
+    ///     the one bound over both. Counting the reservations is what stops an automatic retry from spending an
+    ///     attempt a person has already been promised in the same tick window.
+    /// </remarks>
     private static async Task<int> PromisedAsync(IDevWorkflowStore store,
         Guid runId,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
@@ -718,10 +645,12 @@ internal sealed class DevWorkflowRetryPolicy
 
     /// <summary>
     ///     The formula itself, shared with <see cref="DevWorkflowStartupReconciler" /> rather than restated there.
-    ///     Restating it is how restart recovery came to count only <c>Σ(Attempt − 1)</c> and hand an interrupted row
-    ///     the slot a recorded-but-unapplied <c>Retry</c> had already reserved (FU3-4). One definition, three callers:
-    ///     this policy, the reconciler, and — in its own SQL — the store's transactional admission.
     /// </summary>
+    /// <remarks>
+    ///     Restating it lets restart recovery count only <c>Σ(Attempt − 1)</c> and hand an interrupted row the slot a
+    ///     recorded-but-unapplied <c>Retry</c> had reserved (FU3-4). One definition, three callers: this policy, the
+    ///     reconciler, and — in its own SQL — the store's transactional admission.
+    /// </remarks>
     internal static int Promised(IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns, IReadOnlyList<DevWorkflowDecisionSnapshot> decisions) =>
         nodeRuns.Sum(static row => row.Attempt - 1)
         + decisions.Count(decision => decision.Decision == DevWorkflowDecisionKind.Retry
@@ -730,30 +659,22 @@ internal sealed class DevWorkflowRetryPolicy
     /// <summary>
     ///     The target's inputs with the failure that sent the run back to it, as flat members so the objective renders
     ///     them as the lines it renders every other input as.
-    ///     <para>
-    ///         <paramref name="fromNodeKey" /> is the node whose verdict routed the run back, and it is
-    ///         <see langword="null" /> for a same-node retry, which has no such node. The DevTask lane reads
-    ///         <c>priorFailureNode</c> as "a downstream node rejected this implementation", so a retry that wrote its
-    ///         own key there was read as a rejection; a null leaves whatever an earlier genuine route put there
-    ///         untouched, and adds none.
-    ///     </para>
-    ///     <para>
-    ///         <paramref name="fromAttempt" /> is that node run's attempt — the one that produced this verdict and
-    ///         wrote the report behind it. Together with the key it is the ROUTE's identity, and it is what makes the
-    ///         route answerable exactly once: the DevTask lane keys its one change request on it rather than on its own
-    ///         attempt, which a same-node retry moves while the very same rejection is still outstanding, and it
-    ///         accepts a validation report only from the attempt that actually refused.
-    ///     </para>
     /// </summary>
+    /// <param name="fromNodeKey">The node whose verdict routed the run back; null for a same-node retry.</param>
+    /// <param name="fromAttempt">That node run's attempt, which produced the verdict and wrote the report behind it.</param>
+    /// <remarks>
+    ///     The DevTask lane reads <c>priorFailureNode</c> as "a downstream node rejected this", so a retry writing its
+    ///     own key there reads as a rejection; a null leaves whatever an earlier genuine route wrote untouched and
+    ///     adds none. Key and attempt together are the ROUTE's identity, which is what makes it answerable exactly
+    ///     once: that lane keys its one change request on the route rather than on its own attempt, which a same-node
+    ///     retry moves while the same rejection is outstanding, and reads a report only from the attempt that refused.
+    /// </remarks>
     private static string PriorFailure(string? inputJson, string? fromNodeKey, int? fromAttempt, string outputJson)
     {
         if (fromNodeKey is null && CarriesRoutedFailure(inputJson))
         {
-            // A transient retry landing in the MIDDLE of a genuine fix loop. Overwriting priorFailure here would leave
-            // the routed node's name with this node's own count-less output under it, so the rework request that
-            // follows quotes a verdict it can no longer evidence. Both members stay as the route wrote them — and the
-            // merge still runs, because an operator's retry reason belongs to the attempt they retried and nothing
-            // else, this one included.
+            // A transient retry landing in the MIDDLE of a genuine fix loop. Overwriting priorFailure would leave the routed node's name over this node's count-less output, so the rework
+            // request that follows quotes a verdict it cannot evidence. Both members stay as the route wrote them; the merge still runs, an operator's reason belonging to one attempt.
             return DevWorkflowNodeInputs.Merge(inputJson, write: null);
         }
 
@@ -789,9 +710,12 @@ internal sealed class DevWorkflowRetryPolicy
         $"{failure.SanitizedReason} This run has spent every re-attempt it allows, so nothing here can try again without a decision.";
 
     /// <summary>
-    ///     What a <c>node.retry.scheduled</c> event carries. The attempt is the one that FAILED, which is what makes the
-    ///     per-attempt history readable off the log the single-row node-run schema does not keep.
+    ///     What a <c>node.retry.scheduled</c> event carries.
     /// </summary>
+    /// <remarks>
+    ///     The attempt is the one that FAILED, which is what makes the per-attempt history readable off the log the
+    ///     single-row node-run schema does not keep.
+    /// </remarks>
     private sealed record RetryDetail
     {
         public required int Attempt { get; init; }

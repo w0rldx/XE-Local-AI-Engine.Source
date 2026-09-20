@@ -5,13 +5,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     The parsed graph for each live run, keyed by run and invalidated by its <c>GraphRevision</c>.
-///     <para>
-///         No cache library, no eviction policy, no expiry: the entry count is bounded by the concurrent-run cap, one
-///         entry per run, replaced when the revision moves and dropped when the run terminalizes. It exists because
-///         decrypting and re-parsing the pinned graph on every tick of every run is the one repeated cost the
-///         DB-as-truth design would otherwise pay for nothing.
-///     </para>
 /// </summary>
+/// <remarks>
+///     No cache library, no eviction policy, no expiry: the entry count is bounded by the concurrent-run cap, one
+///     entry per run, replaced when the revision moves and dropped when the run terminalizes. It exists because
+///     decrypting and re-parsing the pinned graph on every tick of every run is the one repeated cost the DB-as-truth
+///     design would otherwise pay for nothing.
+/// </remarks>
 internal sealed class DevWorkflowGraphCache
 {
     private readonly ConcurrentDictionary<Guid, CacheEntry> _entries = new();

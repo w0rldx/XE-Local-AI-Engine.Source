@@ -9,41 +9,26 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 
 /// <summary>
-///     Seeds the definition templates a node ships with, idempotently on their seed slug, so nobody starts from a blank
-///     canvas.
-///     <para>
-///         Each template is parsed through the same validator a run start uses BEFORE it is written: a template that
-///         would fail at run start fails at startup instead, where an operator can still be told about it.
-///     </para>
-///     <para>
-///         Best-effort like every other seeder here: a node must start even when seeding fails, and the next startup
-///         re-attempts. An ARCHIVED template is never resurrected — a changed template ships under a new slug, so
-///         historical runs keep rendering from their own pinned snapshot.
-///     </para>
-///     <para>
-///         <b>An UNTOUCHED seeded row follows the shipped seed; an operator's edit never does.</b> Insert-if-absent
-///         alone left every existing installation — the operator's included — on whatever graph it was first seeded
-///         with, so a template fix reached nobody who already had the template. So a row whose slug matches is compared
-///         by graph hash, and one that differs is rewritten through the same update the definition PUT uses, which is
-///         what gives it the same validation, the same concurrency check and the same version bump.
-///     </para>
-///     <para>
-///         <b>Untouched means the row's graph is one THIS BUILD KNOWS IT SHIPPED</b> — its hash matches the current
-///         template or one of the prior revisions kept beside it. Version is deliberately not the signal: the seeder's
-///         own upgrade writes a version, so reading it would buy one catch-up per installation and then treat every
-///         later change as an operator's edit. An archived row, or one whose graph matches no revision, is left exactly
-///         as it is with the difference logged rather than silently applied. Runs are unaffected either way — a run
-///         pins its own <c>GraphJson</c> at start and renders from that.
-///     </para>
+///     Seeds the definition templates a node ships with, idempotently on their seed slug, so nobody starts from a
+///     blank canvas.
 /// </summary>
+/// <remarks>
+///     An UNTOUCHED seeded row follows the shipped seed; an operator's edit never does. Insert-if-absent alone leaves
+///     every existing installation on whatever graph it was first seeded with, so a row whose slug matches is
+///     compared by GRAPH HASH against what this build knows it shipped, and one that differs is rewritten through
+///     the same update the definition PUT uses. Best-effort: a node must start even when seeding fails. See
+///     docs/wiki/25-dev-workflows.md ("Seeded templates").
+/// </remarks>
 public sealed class DevWorkflowDefinitionSeeder : IHostedService
 {
     /// <summary>
     ///     The <c>research-plan-approval</c> template: strictly linear, no repository needed, ending on the approval
     ///     that is the point of it.
+    /// </summary>
+    /// <remarks>
     ///     Both agent nodes bind by SEED SLUG rather than by id, because the personas they name are themselves seeded
     ///     and their ids differ per node.
-    /// </summary>
+    /// </remarks>
     internal const string ResearchPlanApprovalSlug = "research-plan-approval";
 
     private const string ResearchPlanApprovalName = "Research → Plan → Approval";
@@ -80,60 +65,16 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
                                                         """;
 
     /// <summary>
-    ///     The <c>feature-development-v1</c> template: research and a plan a human approves, a decomposition that expands into one
-    ///     implementation-and-validation subtree per task, and an integration stage that applies nothing until a second
-    ///     human gate says so.
-    ///     <para>
-    ///         Both gates route on <c>decision eq "Approve"</c> and have no other branch, which is what makes a refusal
-    ///         end the run rather than continue past it — for the integration gate that is the rule that an apply node
-    ///         is reached from a human gate and from nothing else, and the parser enforces it structurally.
-    ///     </para>
-    ///     <para>
-    ///         The implementation node declares a timeout because nothing else bounds it: Dev Mode bounds each attempt
-    ///         and each review round, but not attempts back to back. Two hours is a slice of a feature, generously.
-    ///     </para>
-    ///     <para>
-    ///         <b>Two of these edges are load-bearing for EVIDENCE rather than for routing.</b> Upstream artifacts
-    ///         resolve back through structural nodes to the nearest PRODUCING ancestors, and a producing TYPE stops that
-    ///         walk on its own path whether or not it produced anything — so the join's inbound edge from the
-    ///         unmaterialized <c>validate</c> template node contributes nothing, and <c>decompose → join</c> is what
-    ///         puts the task package on a path back from the join at all. The materializer keeps it for that reason.
-    ///     </para>
-    ///     <para>
-    ///         <b>The second fix loop is what makes staleness reachable at all.</b> <c>validate</c>'s own
-    ///         <c>retryTarget</c> fires before anything downstream of it exists, so nothing has yet recorded consuming
-    ///         the work it replaces and the mark finds no dependents — every run of this template reported zero.
-    ///         <c>fullvalidate</c>'s routes a failure of the INTEGRATED result back to <c>verify</c>, by which point
-    ///         <c>integrationapproval</c> has been handed <c>verification.md</c> as its evidence and <c>integrate</c>
-    ///         has consumed it too: the re-run supersedes it, and the apply report and the full check's own report are
-    ///         flagged as written from a version that no longer exists.
-    ///     </para>
-    ///     <para>
-    ///         <b>It targets <c>verify</c> and not <c>implement</c>, and that is not a preference.</b> <c>implement</c>
-    ///         is the materialization TEMPLATE node: run seeding skips template keys and the materializer rewrites a
-    ///         retryTarget only for clones inside the subtree, so a node outside it naming <c>implement</c> names a node
-    ///         run that never exists — the route would find no row and block the run on <c>Configuration</c> instead of
-    ///         re-attempting anything. The parser now refuses that at authoring time. Targeting <c>verify</c> is also
-    ///         the safe direction: the implementations are not reset, their tasks stay Completed, and the apply node's
-    ///         re-run short-circuits per task rather than applying a patch twice.
-    ///     </para>
-    ///     <para>
-    ///         <b>v1 ceiling:</b> what a re-run does NOT flag is <c>validate</c>'s own report. Only an agent node's
-    ///         promotion and a tool node's report write a workflow artifact, and <c>implement</c> is a DevTask — the
-    ///         patch it produces is a Dev Mode artifact in another store, which the artifact-use table cannot name. So
-    ///         <c>validate</c> records consuming nothing and there is nothing for a re-run to supersede. Closing it
-    ///         means promoting the approved patch into the run's own artifacts, which is a producer this lane does not
-    ///         have yet.
-    ///     </para>
-    ///     <para>
-    ///         That edge alone does NOT carry the approved plan, and the first live run said so in its own words: the
-    ///         walk stops at <c>decompose</c>, which produced the task package, so <c>plan.md</c> is one producer
-    ///         further back and out of reach. <c>planapproval → verify</c> is the edge that carries it. It is
-    ///         conditioned on the approval like the decomposition's, so a declined plan kills both paths into the
-    ///         verification rather than leaving it half-fed, and it costs no routing: the gate has long since settled by
-    ///         the time the join lets anything through.
-    ///     </para>
+    ///     The <c>feature-development-v1</c> template: research and an approved plan, a decomposition that expands
+    ///     into one implementation-and-validation subtree per task, and an integration stage behind a second gate.
     /// </summary>
+    /// <remarks>
+    ///     Both gates route on the approve decision and carry no other branch, so a refusal ends the run — which for
+    ///     the integration gate IS the rule that an apply node is reached from a human gate and nothing else.
+    ///     <c>decompose → join</c> and <c>planapproval → verify</c> are load-bearing for EVIDENCE, not routing, and
+    ///     <c>fullvalidate</c> targets <c>verify</c> because <c>implement</c> is a template key no node run ever has.
+    ///     See docs/wiki/25-dev-workflows.md ("Seeded templates").
+    /// </remarks>
     internal const string FeatureDevelopmentSlug = "feature-development-v1";
 
     private const string FeatureDevelopmentName = "Feature Development v1";
@@ -229,12 +170,14 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
 
     /// <summary>
     ///     The <c>feature-development-v1</c> graph the first build shipped, kept so an installation still holding it
-    ///     verbatim can be brought up to the current one. Every constant below it is another such graph, and every one
-    ///     of them is passed to <c>SeedAsync</c> as a prior revision: editing the live template means copying it here
-    ///     FIRST, byte for byte, or the catch-up stops recognising the installations that are on it and silently leaves
-    ///     them behind. A revision leaves this list only when no installation could still be on it, which is not a thing
-    ///     this code can know — so they stay.
+    ///     verbatim can be brought up to the current one.
     /// </summary>
+    /// <remarks>
+    ///     Every constant below it is another such graph, and each is passed to <c>SeedAsync</c> as a prior revision:
+    ///     editing the live template means copying it here FIRST, byte for byte, or the catch-up stops recognising
+    ///     the installations that are on it and silently leaves them behind. A revision leaves this list only when no
+    ///     installation could still be on it, which is not a thing this code can know — so they stay.
+    /// </remarks>
     internal const string FeatureDevelopmentGraphRevision1 = $$"""
                                                                {
                                                                  "schemaVersion": 1,
@@ -325,10 +268,12 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
 
     /// <summary>
     ///     The revision this build replaces: <see cref="FeatureDevelopmentGraphRevision1" /> with the
-    ///     <c>fullvalidate</c> retry target added, and with the decomposition instructions that never told the model a
-    ///     slice has to change code — which is what four live runs spent themselves on. Kept for the same reason
-    ///     revision 1 is.
+    ///     <c>fullvalidate</c> retry target added.
     /// </summary>
+    /// <remarks>
+    ///     Its decomposition instructions never told the model a slice has to change code, which is what made runs
+    ///     spend themselves on slices no coder could complete. Kept for the same reason revision 1 is.
+    /// </remarks>
     internal const string FeatureDevelopmentGraphRevision2 = $$"""
                                                                {
                                                                  "schemaVersion": 1,
@@ -419,10 +364,13 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
                                                                """;
 
     /// <summary>
-    ///     Every <c>feature-development-v1</c> graph this build knows it published, which is the list an untouched row is
-    ///     recognised by. Hoisted out of the call site so a test can assert a kept revision is actually IN it: a copy that
-    ///     never reaches <see cref="SeedAsync" /> looks right in the file and silently strands every installation on it.
+    ///     Every <c>feature-development-v1</c> graph this build knows it published, the list an untouched row is
+    ///     recognised by.
     /// </summary>
+    /// <remarks>
+    ///     Hoisted out of the call site so a test can assert a kept revision is actually IN it: a copy that never
+    ///     reaches <see cref="SeedAsync" /> looks right in the file and silently strands every installation on it.
+    /// </remarks>
     internal static readonly string[] FeatureDevelopmentPriorRevisions = [FeatureDevelopmentGraphRevision1, FeatureDevelopmentGraphRevision2];
 
     private readonly ILogger<DevWorkflowDefinitionSeeder> _logger;
@@ -476,19 +424,15 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
         var existing = (await store.ListDefinitionsAsync(includeArchived: true, cancellationToken))
             .FirstOrDefault(definition => string.Equals(definition.SeedSlug, seedSlug, StringComparison.Ordinal));
 
-        // The store hashes a definition's graph bytes at every save, so this answers "is this row the graph this build
-        // ships" without decrypting a blob to read it — and it is the graph BYTES on both sides, which is the right
-        // comparison here precisely because an untouched seeded row holds a shipped constant verbatim.
+        // The store hashes a definition's graph bytes at every save, so this answers "is this row the graph this build ships" without decrypting a blob — and it is the graph BYTES on
+        // both sides, the right comparison precisely because an untouched seeded row holds a shipped constant verbatim.
         if (existing is not null && string.Equals(existing.GraphHash, GraphHash(graphJson), StringComparison.Ordinal))
         {
             return;
         }
 
-        // Untouched is "this row is a graph WE shipped", not "this row has never been written". Reading it off the
-        // version instead would let the seeder's own upgrade take the row to 2 and make every later template change
-        // look like an operator's edit — one catch-up per installation and then silence. Matching the content against
-        // the revisions this build knows it published carries across as many of them as there are, and still cannot
-        // mistake an operator's graph for one of ours: they would have had to type it byte for byte.
+        // Untouched is "this row is a graph WE shipped", not "this row has never been written": reading it off the version would let the seeder's own upgrade make every later template
+        // change look like an operator's edit. Matching content against the published revisions still cannot mistake an operator's graph for ours — they would have typed it byte for byte.
         if (existing is { } row && (row.Archived || !priorRevisions.Any(revision => string.Equals(row.GraphHash, GraphHash(revision), StringComparison.Ordinal))))
         {
             _logger.LogInformation("The {Name} workflow definition {DefinitionId} (slug {SeedSlug}) differs from the template this build ships and from every "
@@ -516,9 +460,8 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
             return;
         }
 
-        // The GRAPH only. A name is the operator's to choose — renaming a seeded template is a name-only PUT that leaves
-        // the graph one of ours, so it still qualifies for the catch-up, and passing the shipped name here would revert
-        // their label as a side effect of a fix they never asked about.
+        // The GRAPH only. A name is the operator's to choose — renaming a seeded template is a name-only PUT that leaves the graph one of ours, so it still qualifies for the catch-up,
+        // and passing the shipped name here would revert their label as a side effect of a fix they never asked about.
         var upgraded = await store.UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand { DefinitionId = existing.Id, ExpectedVersion = existing.Version, Name = null, GraphJson = graphJson, NodeCount = graph.Nodes.Count },
                                       cancellationToken);
         _logger.LogInformation("Updated the untouched {Name} workflow definition {DefinitionId} (slug {SeedSlug}) to the template this build ships, version {Version}.",

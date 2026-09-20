@@ -3,15 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using System.Text;
 using System.Text.Json;
 
-/// <summary>
-///     A node run's <c>InputJson</c> document, and the one merge every writer of it goes through.
-///     <para>
-///         Two callers add members to it — the retry policy, which tells the next attempt what the last one failed
-///         with, and the dispatcher, which tells it why a human retried it — and both must strip what the attempt
-///         before them left behind. Written once here rather than twice: a member that is dropped by one merge and
-///         carried by the other is a stale sentence handed to a model as if it were current.
-///     </para>
-/// </summary>
+/// <summary>A node run's <c>InputJson</c> document, and the one merge every writer of it goes through.</summary>
+/// <remarks>
+///     Two callers add members — the retry policy, telling the next attempt what the last one failed with, and the
+///     dispatcher, telling it why a human retried it — and both must strip what the attempt before left behind.
+///     Written once here rather than twice: a member dropped by one merge and carried by the other is a stale
+///     sentence handed to a model as if it were current.
+/// </remarks>
 internal static class DevWorkflowNodeInputs
 {
     /// <summary>What the operator said when they retried this node run, for the ONE attempt their decision started.</summary>
@@ -19,9 +17,11 @@ internal static class DevWorkflowNodeInputs
 
     /// <summary>
     ///     The attempt a person's Retry bought, so a reader can tell it is about this try rather than an earlier one.
+    /// </summary>
+    /// <remarks>
     ///     Written by EVERY Retry, a silent one included: the acts a Retry pays for do not depend on anything being
     ///     typed, so the marker cannot either.
-    /// </summary>
+    /// </remarks>
     public const string OperatorRetryAttempt = "operatorRetryAttempt";
 
     /// <summary>
@@ -33,9 +33,9 @@ internal static class DevWorkflowNodeInputs
 
     /// <summary>
     ///     The inputs with <paramref name="drop" /> and the operator-retry members removed, and whatever
-    ///     <paramref name="write" /> adds written after them — so a merge replaces its own members rather than nesting
-    ///     a round inside the one before it.
+    ///     <paramref name="write" /> adds written after them.
     /// </summary>
+    /// <remarks>A merge therefore replaces its own members rather than nesting a round inside the one before it.</remarks>
     public static string Merge(string? inputJson, Action<Utf8JsonWriter>? write, params string[] drop)
     {
         using var buffer = new MemoryStream();
@@ -106,13 +106,13 @@ internal static class DevWorkflowNodeInputs
     /// <summary>
     ///     Whether these inputs say a PERSON's Retry bought <paramref name="attempt" />, whether or not they typed
     ///     anything into the box.
-    ///     <para>
-    ///         The reason cannot answer this, because a silent Retry has none — and the DevTask lane needs the act
-    ///         rather than the sentence: a Retry on a node whose task is Blocked at its round cap widens that cap by
-    ///         one, and a silent Retry buys the round exactly as a spoken one does. Reading it off the attempt is what
-    ///         separates the act from the ordinary automatic re-attempt that follows it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The reason cannot answer this, because a silent Retry has none, and the DevTask lane needs the act rather
+    ///     than the sentence: a Retry on a node whose task is Blocked at its round cap widens that cap by one, and a
+    ///     silent Retry buys the round exactly as a spoken one does. Reading it off the attempt is what separates the
+    ///     act from the ordinary automatic re-attempt that follows it.
+    /// </remarks>
     public static bool IsOperatorRetry(string? inputJson, int attempt)
     {
         using var document = Parse(inputJson);
