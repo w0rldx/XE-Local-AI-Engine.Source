@@ -5,14 +5,15 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 /// <summary>
-///     Registers anonymous public-release self-update. The desktop-only endpoints are excluded from FastEndpoints
-///     ROUTING off the desktop flag via the <c>IDesktopOnlyEndpoint</c> filter in <c>UseFastEndpoints</c>, but their
-///     backing services are registered in every mode: FastEndpoints instantiates every discovered endpoint at startup to
-///     evaluate the routing filter, so the services must resolve even when the routes will be filtered out. Off the desktop
-///     flag the services are inert by construction — <see cref="AppUpdateHostContext.IsLocalMode" /> is false, so
-///     <see cref="IAppUpdateService" /> makes no GitHub call — and the startup check is not scheduled, so a
-///     headless / Aspire / CI run does no update work.
+///     Registers anonymous public-release self-update.
 /// </summary>
+/// <remarks>
+///     The desktop-only endpoints are excluded from FastEndpoints ROUTING off the desktop flag via the
+///     <c>IDesktopOnlyEndpoint</c> filter in <c>UseFastEndpoints</c>, but their backing services are registered in
+///     every mode, because FastEndpoints instantiates every discovered endpoint at startup to evaluate that filter.
+///     Off the desktop flag they are inert by construction — <see cref="AppUpdateHostContext.IsLocalMode" /> is false,
+///     so <see cref="IAppUpdateService" /> makes no GitHub call and the startup check is not scheduled.
+/// </remarks>
 internal static class AddAppUpdateExtensions
 {
     internal static IHostApplicationBuilder AddAppUpdate(this IHostApplicationBuilder builder,

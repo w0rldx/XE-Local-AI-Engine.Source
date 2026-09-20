@@ -8,23 +8,14 @@ using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 
 /// <summary>
 ///     Wraps NEWLY written Data Protection key-ring elements at rest with AES-256-GCM under an operator-secret-derived
-///     KEK, so that on non-Windows hosts the key-ring XML is no longer plaintext next to the ciphertext it
-///     unlocks. Registered ONLY on the non-Windows branch (Windows keeps DPAPI, unchanged).
+///     KEK, registered ONLY on the non-Windows branch.
 /// </summary>
 /// <remarks>
-///     <para>
-///         This is the WRITE side only. Data Protection invokes <see cref="Encrypt" /> when it persists a new key and
-///         records <see cref="NodeDataProtectionKeyRingDecryptor" /> as the paired decryptor on the element. It is NEVER
-///         invoked when reading existing keys, so adding this encryptor cannot affect already-persisted keys: a legacy
-///         PLAINTEXT key element has no encrypted wrapper and Data Protection reads it directly, and any previously
-///         written encrypted element is read back through its recorded decryptor. Existing <c>IDataProtector</c> payloads
-///         (cloud tokens, Codex/HF/GitHub tokens, the worker auth token, Entra caches) therefore keep decrypting.
-///     </para>
-///     <para>
-///         AES-GCM is delegated to the node's single AEAD owner (<see cref="INodeAeadCipher" />) rather than
-///         constructing <c>AesGcm</c> here, preserving the repo's single-AEAD-owner discipline. The on-disk envelope is
-///         <c>base64(nonce || ciphertext || tag)</c>; the KEK version is bound as associated data for domain separation.
-///     </para>
+///     Without it the key-ring XML would sit in plaintext next to the ciphertext it unlocks; Windows keeps DPAPI. The WRITE side only: Data Protection calls <see
+///     cref="Encrypt" /> when it persists a new key and records <see cref="NodeDataProtectionKeyRingDecryptor" /> on the element, and NEVER calls it when reading, so a
+///     legacy PLAINTEXT element still reads directly, a previously written encrypted one reads through its recorded decryptor, and every existing <c>IDataProtector</c>
+///     payload keeps decrypting. AES-GCM is delegated to <see cref="INodeAeadCipher" />, the node's single AEAD owner; the envelope is <c>base64(nonce || ciphertext ||
+///     tag)</c> with the KEK version bound as associated data.
 /// </remarks>
 public sealed class NodeDataProtectionKeyRingEncryptor : IXmlEncryptor
 {

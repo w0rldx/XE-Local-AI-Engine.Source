@@ -17,10 +17,13 @@ public static class DevWorkflowHubEvents
 }
 
 /// <summary>
-///     What changed and where the run now stands. <see cref="Kind" /> is lowercase on the wire — the client switches
-///     on the literal — and the payload deliberately carries no content: the subscriber re-reads the named feed from
-///     its own watermark, so a dropped push degrades to a late read rather than to a wrong render.
+///     What changed and where the run now stands.
 /// </summary>
+/// <remarks>
+///     <see cref="Kind" /> is lowercase on the wire — the client switches on the literal. The payload deliberately
+///     carries no content: the subscriber re-reads the named feed from its own watermark, so a dropped push degrades
+///     to a late read rather than to a wrong render.
+/// </remarks>
 public sealed class DevWorkflowChanged
 {
     public required Guid RunId { get; init; }
@@ -53,13 +56,13 @@ public sealed class DevWorkflowRunSubscriptionSnapshot
 
 /// <summary>
 ///     Operator-only live notifications for one development workflow run.
-///     <para>
-///         Modelled on <see cref="WorkSessionHub" /> and explicitly NOT on a per-run subscription hub: there is no
-///         in-memory buffer, because run events are persisted append-only with a monotonic sequence and the persisted
-///         log IS the replay authority. Nor does a disconnect cancel anything — a workflow run is durable and outlives both
-///         the browser tab and the engine, which is the property this module exists to prove.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Modelled on <see cref="WorkSessionHub" /> and explicitly NOT on a buffered per-run subscription hub: run events
+///     are persisted append-only with a monotonic sequence and the persisted log IS the replay authority. Nor does a
+///     disconnect cancel anything — a workflow run is durable and outlives both the browser tab and the engine, which
+///     is the property this module exists to prove.
+/// </remarks>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class DevWorkflowRunHub : Hub
 {
@@ -111,9 +114,8 @@ public sealed class DevWorkflowRunHub : Hub
             throw new HubException("Development workflow run was not found.");
         }
 
-        // Join BEFORE reading the replay: the other order leaves a window in which a change published between the read
-        // and the join reaches nobody. The overlap this creates is harmless — every push is an idempotent notification
-        // keyed by sequence.
+        // Join BEFORE reading the replay: the other order leaves a window in which a change published between read and
+        // join reaches nobody. The overlap is harmless — every push is an idempotent notification keyed by sequence.
         await Groups.AddToGroupAsync(Context.ConnectionId, DevWorkflowHubGroups.Run(runId), cancellationToken);
 
         // One over the cap, so "there is more" is observed rather than inferred from a full page.

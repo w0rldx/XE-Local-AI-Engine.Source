@@ -6,17 +6,15 @@ using System.Net.Sockets;
 using System.Text.Json;
 
 /// <summary>
-///     Persists and reuses the loopback port a desktop launch binds. Binding <c>http://127.0.0.1:0</c> lets the OS pick a
-///     NEW free port every launch, which changes the browser origin (scheme+host+port) and silently resets every
-///     <c>localStorage</c>-backed user preference between runs. Remembering the last bound port and re-binding it keeps
-///     the origin stable so preferences survive; if the remembered port is gone (taken or invalid), the launch falls back
-///     to <c>:0</c> and the newly assigned port is persisted instead.
-///     <para>
-///         Strictly local-mode-only: every member is reached solely for desktop or MCP-only serving, so
-///         headless/Aspire/CI runs never touch the port file and keep their byte-identical
-///         behavior. Reads are best-effort — any failure resolves to the dynamic <c>:0</c> bind rather than throwing.
-///     </para>
+///     Persists and reuses the loopback port a desktop launch binds.
 /// </summary>
+/// <remarks>
+///     Binding <c>http://127.0.0.1:0</c> lets the OS pick a NEW free port every launch, which changes the browser
+///     origin (scheme+host+port) and silently resets every <c>localStorage</c>-backed user preference between runs.
+///     Re-binding the remembered port keeps the origin stable, and a port that is gone or invalid resolves to <c>:0</c>
+///     with the newly assigned port persisted instead. Strictly local-mode-only, so headless/Aspire/CI never touch the
+///     port file, and reads are best-effort: any failure resolves to the dynamic bind rather than throwing.
+/// </remarks>
 internal static class DesktopPortStore
 {
     /// <summary>The per-user data-directory file name that records the last bound loopback port (plain text, not a secret).</summary>
@@ -31,10 +29,12 @@ internal static class DesktopPortStore
     private const int MaximumPort = 65535;
 
     /// <summary>
-    ///     Resolves the URL desktop mode should bind: the remembered port (<c>http://127.0.0.1:{port}</c>) when a valid,
-    ///     currently-free port was persisted, otherwise the dynamic <see cref="DesktopLaunch.LoopbackBindUrl" /> (<c>:0</c>).
-    ///     Never throws — any IO / parse / availability failure resolves to the dynamic bind.
+    ///     Resolves the URL desktop mode should bind: the remembered port (<c>http://127.0.0.1:{port}</c>) when a
+    ///     valid, currently-free one was persisted, otherwise <see cref="DesktopLaunch.LoopbackBindUrl" /> (<c>:0</c>).
     /// </summary>
+    /// <remarks>
+    ///     Never throws — any IO, parse or availability failure resolves to the dynamic bind.
+    /// </remarks>
     /// <param name="dataDirectory">The per-user data directory that holds the port file.</param>
     internal static async Task<string> ResolveBindUrlAsync(string dataDirectory, CancellationToken cancellationToken = default)
     {
@@ -57,10 +57,12 @@ internal static class DesktopPortStore
     }
 
     /// <summary>
-    ///     Persists the actually-bound loopback port so the next launch can re-bind it. Best-effort and non-fatal: a write
-    ///     failure is logged at Warning and swallowed (the next launch simply falls back to a dynamic port). Writes via a
-    ///     temp file + move so a crash mid-write can never leave a torn port file.
+    ///     Persists the actually-bound loopback port so the next launch can re-bind it.
     /// </summary>
+    /// <remarks>
+    ///     Best-effort and non-fatal: a write failure is logged at Warning and swallowed, and the next launch resolves
+    ///     to a dynamic port. Writes via a temp file + move, so a crash mid-write can never leave a torn port file.
+    /// </remarks>
     /// <param name="dataDirectory">The per-user data directory that holds the port file.</param>
     /// <param name="port">The loopback port Kestrel actually bound.</param>
     /// <param name="logger">Logs a non-fatal write failure with the target path for diagnostics.</param>
@@ -266,11 +268,8 @@ internal static class DesktopPortStore
 
     internal static bool IsPortAvailable(int port)
     {
-        // Probe by binding a throwaway loopback listener: if the OS rejects it, the port is already taken so we must fall
-        // back to a dynamic port. The listener is stopped before Kestrel binds, leaving a tiny TOCTOU window in which
-        // another process could grab the port between this probe and Kestrel's bind. Acceptable for a single-user
-        // loopback launch: in that rare case Kestrel would fail fast on startup — the same failure mode as today when a
-        // chosen port is unavailable — so this stays best-effort rather than holding the socket across the gap.
+        // Probe by binding a throwaway loopback listener; rejection means the port is taken and a dynamic one is used. The listener stops before Kestrel binds, leaving a TOCTOU window.
+        // Best-effort rather than holding the socket across that gap: if another process wins it, Kestrel fails fast exactly as for any unavailable chosen port.
         try
         {
             using var listener = new TcpListener(IPAddress.Loopback, port);

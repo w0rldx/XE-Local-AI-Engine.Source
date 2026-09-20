@@ -4,12 +4,15 @@ using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Hub-backed <see cref="IKnowledgeIndexingNotifier" />. Broadcasts each document status change to all connected
-///     clients under <see cref="KnowledgeBaseHubEvents.DocumentChanged" /> as the SignalR method name, so the React client
-///     subscribes by event name and invalidates the documents list. Supersedes the no-op default. The payload is already
-///     sanitized (id + coarse status only). Publishing is best-effort: a transport failure is swallowed and logged by
-///     type, never propagated, so a hub hiccup can never fail or stall the background ingestion pipeline.
+///     Hub-backed <see cref="IKnowledgeIndexingNotifier" />, superseding the no-op default.
 /// </summary>
+/// <remarks>
+///     Broadcasts each document status change to all connected clients under
+///     <see cref="KnowledgeBaseHubEvents.DocumentChanged" /> as the SignalR method name, so the React client subscribes
+///     by event name and invalidates the documents list. The payload is already sanitized (id + coarse status only).
+///     Publishing is best-effort: a transport failure is swallowed and logged by type, never propagated, so a hub
+///     hiccup can never fail or stall the background ingestion pipeline.
+/// </remarks>
 internal sealed class KnowledgeIndexingNotifier : IKnowledgeIndexingNotifier
 {
     private readonly IHubContext<KnowledgeBaseHub> _hubContext;

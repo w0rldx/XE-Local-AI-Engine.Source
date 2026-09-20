@@ -7,9 +7,8 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 
 public sealed partial class Program
 {
-    // Request-completion level for UseSerilogRequestLogging: failures stay loud (5xx/exception = Error, unexpected 4xx =
-    // Warning) while routine traffic (2xx/3xx, the 401 token-refresh dance, SPA-fallback 404s) drops to Debug so the SPA's
-    // polling does not dominate the rolling log file.
+    // Request-completion level for UseSerilogRequestLogging: failures stay loud (5xx or exception = Error, unexpected 4xx = Warning) while routine traffic
+    // — 2xx/3xx, the 401 token-refresh dance, SPA-fallback 404s — drops to Debug, so the SPA's polling cannot dominate the rolling log file.
     internal static void ConfigureRequestLogging(RequestLoggingOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -21,10 +20,8 @@ public sealed partial class Program
             diagnosticContext.Set("QueryString", redactedQuery);
         };
 
-        // Keep failures loud but drop routine traffic below the default Information floor: the SPA polls several
-        // endpoints (auth status, download/job progress, health), so at Information the request log dominates the
-        // rolling file (~60% of all lines measured) and buries the diagnostic entries the file sink exists for.
-        // 401 (routine token-refresh dance) and 404 (SPA fallback probing) stay at Debug with the successes.
+        // Keep failures loud but drop routine traffic below the default Information floor: the SPA polls auth status, download/job progress and health, so at Information
+        // the request log dominated the rolling file (~60% of all lines measured) and buried the diagnostics it exists for. 401 and 404 stay at Debug with the successes.
         options.GetLevel = static (httpContext, _, ex) => GetRequestCompletionLogLevel(httpContext, ex);
 
         // Serilog.AspNetCore derives its default completion properties directly from IHttpRequestFeature. Override

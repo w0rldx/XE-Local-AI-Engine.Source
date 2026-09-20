@@ -6,38 +6,14 @@ using Microsoft.AspNetCore.DataProtection.KeyManagement.Internal;
 
 /// <summary>
 ///     Decorates Data Protection's default <see cref="IDefaultKeyResolver" /> so a SILENT key regeneration caused by an
-///     undecryptable key-ring becomes a LOUD, fatal startup failure instead. Applied on BOTH at-rest schemes: the
-///     non-Windows AES-GCM wrapper keyed from the node operator secret, and the Windows DPAPI wrapper.
+///     undecryptable key-ring becomes a LOUD, fatal startup failure instead.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Data Protection's default resolver treats a key whose <see cref="IKey.CreateEncryptor" /> throws as merely
-///         ineligible; finding no usable default it then decides to generate a fresh key — silently orphaning every
-///         existing <c>IDataProtector</c> payload (cloud / Codex / HF / GitHub / worker OAuth tokens, Entra caches)
-///         protected under the old ring. Both wrappers fail all-or-nothing, so one bad key means every key: on
-///         non-Windows the KEK is derived deterministically from the operator secret, and on Windows the DPAPI blobs
-///         are all bound to the same user profile. This decorator detects exactly that case — a regeneration is pending
-///         AND a non-revoked key failed to materialise with a failure the scheme's own classifier recognises — and
-///         throws, so the operator sees the real cause rather than a quietly reset key-ring.
-///     </para>
-///     <para>
-///         <b>Why the Windows branch was left out originally, and why that was wrong.</b> The classifier was hardcoded
-///         to <see cref="NodeDataProtectionKeyRingDecryptionException" />, which only the non-Windows encryptor throws,
-///         so decorating the DPAPI branch would have been inert. That is a reason to make the classifier a parameter,
-///         not a reason to leave Windows failing open: the decoration is orthogonal to how keys are encrypted — it
-///         wraps the RESOLVER — and an unreadable DPAPI ring orphaned every <c>*.enc</c> credential with no hard
-///         failure and no log line. See <see cref="ForDpapiRing" /> for what that branch recognises and why it can
-///         afford to be broader.
-///     </para>
-///     <para>
-///         It is deliberately conservative and defers to the inner resolver for the decision. It only intervenes when
-///         the inner resolver has already decided to regenerate (<see cref="DefaultKeyResolution.ShouldGenerateNewKey" />),
-///         so the resolved-default hot path is untouched. A legacy PLAINTEXT key (no wrapper) decrypts without invoking
-///         any decryptor and never produces a classified failure, so it keeps reading normally; a correctly-decryptable
-///         key yields a usable default (no regeneration) and is likewise untouched; a genuine first-run/empty ring has
-///         no failing key and regenerates as before; and a ring whose keys all decrypt but have merely EXPIRED
-///         regenerates as before too, because no key fails to materialise.
-///     </para>
+///     Applied on BOTH at-rest schemes: the non-Windows AES-GCM wrapper keyed from the node operator secret, and the Windows DPAPI wrapper. The default
+///     resolver treats a key whose <see cref="IKey.CreateEncryptor" /> throws as merely ineligible and then generates a fresh one, silently orphaning every
+///     <c>IDataProtector</c> payload under the old ring — cloud, Codex, HF, GitHub and worker OAuth tokens, Entra caches. Both wrappers fail all-or-nothing,
+///     so one bad key means every key: the non-Windows KEK is derived deterministically from the operator secret, and the Windows DPAPI blobs are all bound
+///     to one user profile.
 /// </remarks>
 public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKeyResolver
 {
@@ -57,6 +33,16 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
     {
     }
 
+    /// <summary>
+    ///     The classifier and the remediation text are PARAMETERS of the decorator, not properties of one at-rest
+    ///     scheme.
+    /// </summary>
+    /// <remarks>
+    ///     Hardcoding <see cref="NodeDataProtectionKeyRingDecryptionException" />, which only the non-Windows encryptor
+    ///     throws, made the DPAPI branch inert and left Windows failing open: an unreadable DPAPI ring orphaned every
+    ///     <c>*.enc</c> credential with no hard failure and no log line. The decoration is orthogonal to how keys are
+    ///     encrypted, because it wraps the RESOLVER. See <see cref="ForDpapiRing" /> for what that branch recognises.
+    /// </remarks>
     private NodeDataProtectionKeyRingFailClosedKeyResolver(IDefaultKeyResolver inner,
         Func<Exception, bool> isRingDecryptionFailure,
         string remediation)
@@ -69,19 +55,13 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
     /// <summary>
     ///     The Windows DPAPI form: recognises a <see cref="CryptographicException" /> anywhere in the failure chain,
     ///     which is what <c>ProtectedData.Unprotect</c> raises when the blob cannot be unwrapped for the current user.
-    ///     <para>
-    ///         Broader than the non-Windows classifier, and it can afford to be: on this branch EVERY key in the ring
-    ///         is DPAPI-wrapped by <c>ProtectKeysWithDpapi</c>, and the wrapper is unwrapped lazily by the very call
-    ///         this decorator probes — so a cryptographic failure materialising a key is a ring-unwrap failure. The
-    ///         alternative, matching a framework-internal exception type, would bind this to a shape the framework does
-    ///         not promise.
-    ///     </para>
-    ///     <para>
-    ///         Note the remediation genuinely differs from the non-Windows one and that is why it is not shared text.
-    ///         There is no secret to restore here: a DPAPI CurrentUser blob is bound to the Windows account, so the
-    ///         recoveries are to run as that account again, or to accept the loss and delete the ring.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Broader than the non-Windows classifier, and it can afford to be: EVERY key in this ring is DPAPI-wrapped by <c>ProtectKeysWithDpapi</c> and unwrapped
+    ///     lazily by the very call this decorator probes, so a cryptographic failure materialising a key IS a ring-unwrap failure; matching a framework-internal
+    ///     exception type would bind this to a shape the framework does not promise. The remediation is not shared text because there is no secret to restore: a
+    ///     CurrentUser blob is bound to the account, so the recoveries are to run as it or to accept the loss and delete the ring.
+    /// </remarks>
     public static NodeDataProtectionKeyRingFailClosedKeyResolver ForDpapiRing(IDefaultKeyResolver inner)
     {
         return new NodeDataProtectionKeyRingFailClosedKeyResolver(inner,
@@ -91,6 +71,17 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
             + "credential and OAuth token protected under the old ring will have to be entered again.");
     }
 
+    /// <summary>
+    ///     Defers to the inner resolver and intervenes only when it has already decided to regenerate AND a non-revoked
+    ///     key failed to materialise with a failure this scheme's classifier recognises.
+    /// </summary>
+    /// <remarks>
+    ///     Deliberately conservative, so the resolved-default hot path is untouched. A legacy PLAINTEXT key decrypts
+    ///     without invoking any decryptor and never produces a classified failure, so it keeps reading; a
+    ///     correctly-decryptable key yields a usable default and is likewise untouched; a genuine first-run or empty
+    ///     ring has no failing key and regenerates as before; and a ring whose keys all decrypt but have merely EXPIRED
+    ///     regenerates as before too, because no key fails to materialise.
+    /// </remarks>
     public DefaultKeyResolution ResolveDefaultKeyPolicy(DateTimeOffset now, IEnumerable<IKey> allKeys)
     {
         ArgumentNullException.ThrowIfNull(allKeys);
@@ -125,9 +116,8 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
         return resolution;
     }
 
-    // Probes a key by materializing its encryptor (which unwraps the at-rest key material). Returns true only when the
-    // failure is one this scheme's classifier recognises; any other outcome (success, or an unrelated failure the inner
-    // resolver already accounted for) returns false so probing continues without masking it as a ring problem.
+    // Probes a key by materializing its encryptor, which unwraps the at-rest key material. True only for a failure this scheme's
+    // classifier recognises; success, or one the inner resolver already accounted for, returns false so probing continues unmasked.
     private bool TryDetectKeyRingDecryptionFailure(IKey key, out Exception failure)
     {
         try

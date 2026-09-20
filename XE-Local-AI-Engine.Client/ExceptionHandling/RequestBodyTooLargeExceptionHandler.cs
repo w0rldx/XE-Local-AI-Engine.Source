@@ -4,19 +4,13 @@ using Microsoft.AspNetCore.Diagnostics;
 
 /// <summary>
 ///     Answers the 413 a capped route DECLARES when the host is the one that refuses the body.
-///     <para>
-///         A route carrying <c>IRequestSizeLimitMetadata</c> has two refusal paths and only one of them was answered.
-///         The endpoint's own early exit reads Content-Length and sends the declared 413 — but Kestrel enforces the
-///         cap as it READS, and it does that inside model binding, before any handler code runs. Its refusal is a
-///         <see cref="BadHttpRequestException" /> carrying status 413, nothing in the pipeline mapped it, and
-///         <c>DefaultExceptionHandler</c> turned the one refusal a real connection actually takes into a 500.
-///     </para>
-///     <para>
-///         Transport-level rather than per-family, so it is one handler rather than one per capped route: every route
-///         that declares a body cap — the graph-workflow four, the development-workflow two, and any added later —
-///         reaches the same throw and now the same answer.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Kestrel enforces the cap as it READS, inside model binding and before any handler code runs, and its refusal is
+///     a <see cref="BadHttpRequestException" /> carrying status 413. Transport-level rather than per-family, so every
+///     route that declares a body cap reaches the same throw and the same answer. See
+///     docs/wiki/09-api-and-hubs.md ("Status choices worth their reasons").
+/// </remarks>
 public sealed class RequestBodyTooLargeExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<RequestBodyTooLargeExceptionHandler> _logger;
@@ -31,9 +25,8 @@ public sealed class RequestBodyTooLargeExceptionHandler : IExceptionHandler
         ArgumentNullException.ThrowIfNull(httpContext);
         ArgumentNullException.ThrowIfNull(exception);
 
-        // The STATUS is the discriminator, not the type: BadHttpRequestException is also how the host reports a
-        // malformed request line, a bad chunk and a too-long header, and every one of those is a 400 this must leave
-        // to the handler that owns it.
+        // The STATUS is the discriminator, not the type: BadHttpRequestException is also how the host reports a malformed
+        // request line, a bad chunk and a too-long header, each a 400 this must leave to the handler that owns it.
         if (exception is not BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge })
         {
             return false;

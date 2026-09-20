@@ -6,18 +6,14 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// <summary>
 ///     Runs ONE app self-update check per app start, off the startup path: after a short non-blocking delay it asks
 ///     <see cref="IAppUpdateService" /> to check GitHub for a newer release and record the result in
-///     <see cref="IAppUpdateState" />, so the status endpoint can surface "update available" without re-hitting GitHub on
-///     every poll. Modeled on <c>LlamaCppUpdateCheckService</c>.
+///     <see cref="IAppUpdateState" />. Modeled on <c>LlamaCppUpdateCheckService</c>.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Desktop + configured only, offline-tolerant.</b> The service itself is only registered in desktop mode;
-///         <see cref="IAppUpdateService.RefreshIfStaleAsync" /> additionally no-ops when unconfigured and degrades an
-///         offline or malformed feed to a recorded snapshot — never a crash.
-///     </para>
-///     <para>
-///         <b>Notify-only.</b> It never downloads or applies — apply is always operator-initiated via the update endpoint.
-///     </para>
+///     Recording the result is what lets the status endpoint surface "update available" without re-hitting GitHub on
+///     every poll. <b>Desktop + configured only, offline-tolerant:</b> the service is registered only in desktop mode,
+///     and <see cref="IAppUpdateService.RefreshIfStaleAsync" /> additionally no-ops when unconfigured and degrades an
+///     offline or malformed feed to a recorded snapshot rather than a crash. <b>Notify-only:</b> it never downloads or
+///     applies — an apply is always operator-initiated through the update endpoint.
 /// </remarks>
 public sealed class AppUpdateCheckService : BackgroundService
 {

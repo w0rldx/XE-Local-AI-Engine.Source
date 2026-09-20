@@ -66,17 +66,8 @@ public static class ConfigureServices
 
     public static void AddServices(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
-        // Serilog. Console is always on; a date-rolled file sink is added under the per-user data dir (same resolution as
-        // the Data Protection key-ring below) so desktop/dev logs survive the console window closing and a tester bug
-        // report has on-disk history. Disabled in Testing (many parallel hosts would contend for the exclusive file).
-        //
-        // writeToProviders MUST stay true. It defaults to false, which makes Serilog the terminus of the logging
-        // pipeline: events reach Serilog's own sinks and no other registered ILoggerProvider. The OpenTelemetry logger
-        // provider that ConfigureOpenTelemetry registers (ServiceDefaults/Extensions.cs) is one of those, so with the
-        // default every ILogger call dead-ends before the OTLP log exporter and the Aspire dashboard shows zero
-        // structured logs while traces/metrics still flow (those bypass ILoggerFactory entirely). Program.cs calls
-        // Logging.ClearProviders() before AddServiceDefaults, so OpenTelemetry is the only other provider in the chain
-        // and forwarding cannot resurrect a duplicate console logger.
+        // Serilog: console always on, a date-rolled file sink under the per-user data dir, and writeToProviders MUST stay true — its false default makes
+        // Serilog the terminus and dead-ends every ILogger call before the OTLP exporter. See docs/wiki/11-hosting-and-deployment.md ("Logging and the Data Protection key-ring at registration time").
         var logFileDirectory = LoggerExtensions.ResolveLogFileDirectory(builder.Environment, configuration);
         _ = builder.Services.AddSerilog((serviceCollection, lc) =>
             {
@@ -92,15 +83,8 @@ public static class ConfigureServices
             },
             writeToProviders: true);
 
-        // Explicit, stable Data Protection key-ring. The framework already auto-registers Data Protection (so the
-        // encrypted token stores — CloudCredentialStore, CodexTokenStore and HfTokenStore — plus the auth
-        // TokenStore — are protected today); this is DEFENSIVE stability hardening, not a confidentiality fix. It pins
-        // a STABLE application-name discriminator so the key-ring never shifts between Velopack updates, and persists
-        // the keys under the SAME per-user data directory the rest of the node state uses (the NodeData:Directory key
-        // DesktopBootstrap layers in for desktop mode; ContentRoot otherwise — preserving the off-flag byte-behavior
-        // invariant), so the key-ring is co-located with node.sqlite/node.key and survives reinstalls instead of
-        // landing in the volatile default location. AddDataProtection() is idempotent (TryAdd-based), so this does not
-        // double-register or change the IDataProtectionProvider existing consumers resolve.
+        // Explicit, stable Data Protection key-ring: a pinned application-name discriminator and the per-user data directory, so the
+        // ring survives Velopack updates and reinstalls. AddDataProtection() is idempotent, so this re-registers nothing.
         var dataProtectionRoot = configuration[DesktopBootstrap.NodeDataDirectoryKey];
         if (string.IsNullOrWhiteSpace(dataProtectionRoot))
         {
@@ -111,16 +95,8 @@ public static class ConfigureServices
                                     .SetApplicationName("XE-Local-AI-Engine")
                                     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataProtectionRoot, "dp-keys")));
 
-        // Encrypt the key-ring at rest. On Windows, DPAPI (CurrentUser) — unchanged. On non-Windows, wrap NEW
-        // key-ring elements with AES-256-GCM under a KEK derived from the node operator secret (HKDF-SHA256, distinct
-        // info string), so the key-ring inherits the same env/secret-file protection as node.sqlite instead of sitting
-        // in plaintext beside the ciphertext it unlocks. The encryptor is WRITE-side only: existing plaintext keys and
-        // existing IDataProtector payloads keep reading, because Data Protection reads each key in whatever form it was
-        // written (no proactive re-wrap of the current active key — deferred, and safer that way). A wrong/missing
-        // operator secret fails closed (the AES-GCM tag will not authenticate). node.sqlite is PLAIN SQLite with
-        // application-level COLUMN encryption (not SQLCipher/whole-file), so a wrong secret does NOT reliably fail
-        // startup on its own — the loud backstop is the fail-closed key resolver wired below, which refuses to
-        // regenerate the ring when an encrypted key cannot be decrypted.
+        // Encrypt the key-ring at rest: DPAPI (CurrentUser) on Windows, AES-256-GCM under an operator-secret KEK elsewhere. WRITE-side
+        // only, so existing plaintext keys and payloads keep reading, and a wrong or missing secret fails closed on the GCM tag.
         var isWindows = OperatingSystem.IsWindows();
         if (isWindows)
         {
@@ -134,36 +110,25 @@ public static class ConfigureServices
                           .Configure<NodeDataProtectionKeyRingEncryptor>((options, encryptor) => options.XmlEncryptor = encryptor);
         }
 
-        // Hard-fail instead of silently regenerating the ring when an at-rest key cannot be decrypted. Data Protection's
-        // DefaultKeyResolver swallows a per-key decrypt failure and, finding no usable default, generates a fresh key —
-        // orphaning every stored credential/token.
-        //
-        // Applied on BOTH schemes, and deliberately OUTSIDE the branch above. It used to sit inside the non-Windows
-        // arm, which left Windows failing OPEN: an unreadable DPAPI ring quietly minted a new key and made every *.enc
-        // credential (HF token, GitHub auth, cloud creds) undecryptable with no hard failure and no log line. The
-        // decoration wraps the RESOLVER and is orthogonal to how keys are encrypted, so the only thing that has to
-        // differ is which failure counts as a ring failure and what the operator can do about it.
+        // Hard-fail instead of silently regenerating the ring when an at-rest key cannot be decrypted, which would orphan every stored
+        // credential. Applied on BOTH schemes and deliberately OUTSIDE the branch above — inside it, Windows fails OPEN.
         _ = NodeDataProtectionKeyRingFailClosed.Decorate(dataProtection.Services,
             NodeDataProtectionKeyRingFailClosed.ResolverFactoryFor(isWindows));
 
-        // The one wall-clock seam. Every service that needs "now" takes TimeProvider in its constructor and calls
-        // GetUtcNow(); DateTimeOffset.UtcNow is banned in production code (BannedSymbols.txt, RS0030). Registered
-        // here, once, at the composition root; a test class that needs a controlled clock overrides it through
-        // TestServerWebAppFactory.ConfigureAdditionalTestServices.
+        // The one wall-clock seam: every service needing "now" takes TimeProvider and calls GetUtcNow(), and DateTimeOffset.UtcNow is
+        // banned (BannedSymbols.txt, RS0030). A test overrides it through TestServerWebAppFactory.ConfigureAdditionalTestServices.
         builder.Services.TryAddSingleton(TimeProvider.System);
 
-        // Application layer (services, options, persistence, runtime) lives in the
-        // XE-Local-AI-Engine.Client.Application class library. The host only wires web-framework
-        // concerns below (FastEndpoints, auth, SignalR, rate limiting, health checks, hosted services).
+        // The application layer (services, options, persistence, runtime) lives in XE-Local-AI-Engine.Client.Application; the host wires
+        // only web-framework concerns below — FastEndpoints, auth, SignalR, rate limiting, health checks, hosted services.
         builder.AddNodeApplication(configuration);
 
         // Quartz scheduler runtime (persistent store + hosted service + dispatcher). Registers nothing when
         // Scheduler:Enabled is false. The QRTZ_ tables are created by the same node-chat EF migration.
         builder.AddNodeScheduler(configuration);
 
-        // This node's INBOUND MCP server: the Streamable HTTP surface an external MCP client connects to in order to
-        // delegate a task to the local model. Registration is unconditional, but the endpoint authenticates nobody
-        // until the operator generates a key, so a node that never opts in exposes no reachable tool.
+        // This node's INBOUND MCP server, the Streamable HTTP surface an external MCP client delegates work through. Registration is
+        // unconditional, but the endpoint authenticates nobody until the operator generates a key, so opting out exposes no tool.
         builder.AddNodeMcpServer();
 
         // Hub-backed scheduler event publisher — supersedes the no-op default registered in AddNodeScheduler so
@@ -181,36 +146,29 @@ public static class ConfigureServices
         // And again for training runs: the run buffer owns replay, this only bridges to the Operator-scoped run hub.
         builder.Services.AddHostedService<TrainingRunHubEventRelay>();
 
-        // Hub-backed GGUF download event publisher — supersedes the no-op default registered in AddNodeModelFit so
-        // download status changes push live to operator clients (GgufDownloadHub mapped in Program), replacing the
-        // per-second downloads poll. IHubContext is singleton-safe, so the singleton coordinator can resolve it.
+        // Hub-backed GGUF download event publisher, superseding the no-op AddNodeModelFit registers so status changes push live on
+        // GgufDownloadHub instead of a per-second poll. IHubContext is singleton-safe, so the singleton coordinator can resolve it.
         builder.Services.AddSingleton<IGgufDownloadEventPublisher, GgufDownloadEventPublisher>();
 
-        // Hub-backed in-app source-build event publisher — supersedes the no-op default the provider registers so build
-        // phase + log lines push live to operator clients (LlamaCppSourceBuildHub mapped in Program). IHubContext is
-        // singleton-safe.
+        // Hub-backed in-app source-build event publisher, superseding the no-op the provider registers so build phase and log lines
+        // push live on LlamaCppSourceBuildHub. IHubContext is singleton-safe.
         builder.Services.AddSingleton<ILlamaCppSourceBuildEventPublisher, LlamaCppSourceBuildEventPublisher>();
 
-        // Hub-backed first-run runtime-acquisition event publisher — supersedes the no-op default the provider registers
-        // (a plain AddSingleton, so it wins over that TryAdd) and turns the previously-silent GPU probe / archive download
-        // / verify / extract sequence into live pushes on RuntimeAcquisitionHub. IHubContext is singleton-safe, so the
-        // singleton status registry can resolve it.
+        // Hub-backed runtime-acquisition publisher: a plain AddSingleton, so it wins over the provider's TryAdd, turning the silent GPU
+        // probe / download / verify / extract sequence into live pushes. IHubContext is singleton-safe for the status registry.
         builder.Services.AddSingleton<IRuntimeAcquisitionEventPublisher, RuntimeAcquisitionEventPublisher>();
 
-        // Hub-backed knowledge-base indexing notifier — supersedes the no-op default registered in AddNodeKnowledgeBase so
-        // document status changes push live to operator clients (KnowledgeBaseHub mapped in Program). IHubContext is
-        // singleton-safe, so the scoped ingestion service can resolve this singleton.
+        // Hub-backed knowledge-base indexing notifier, superseding the no-op AddNodeKnowledgeBase registers so document status changes
+        // push live on KnowledgeBaseHub. IHubContext is singleton-safe, so the scoped ingestion service can resolve this singleton.
         builder.Services.AddSingleton<IKnowledgeIndexingNotifier, KnowledgeIndexingNotifier>();
 
-        // Hub-backed image-job event publisher — supersedes the no-op default registered in AddNodeImages so coarse job
-        // status transitions push live to operator clients (ImageJobHub mapped in Program). IHubContext is singleton-safe,
-        // so the singleton image-job coordinator can resolve it.
+        // Hub-backed image-job event publisher, superseding the no-op AddNodeImages registers so coarse status transitions push live on
+        // ImageJobHub. IHubContext is singleton-safe, so the singleton image-job coordinator can resolve it.
         builder.Services.AddSingleton<IImageJobEventPublisher, ImageJobEventPublisher>();
         builder.Services.AddSingleton<IStableDiffusionCppSourceBuildEventPublisher, StableDiffusionCppSourceBuildEventPublisher>();
 
-        // Hub-backed training-runtime event publisher — supersedes the no-op default the provider registers (a plain
-        // AddSingleton, so it wins over that TryAdd) so uv install phase + log lines push live to operator clients
-        // (TrainingRuntimeHub mapped in Program). IHubContext is singleton-safe.
+        // Hub-backed training-runtime event publisher: a plain AddSingleton, so it wins over the provider's TryAdd, pushing uv install
+        // phase and log lines live on TrainingRuntimeHub. IHubContext is singleton-safe.
         builder.Services.AddSingleton<ITrainingRuntimeEventPublisher, TrainingRuntimeEventPublisher>();
 
         // Hub-backed work-session event publisher — supersedes the no-op the work-session module registers with
@@ -228,9 +186,8 @@ public static class ConfigureServices
         // TryAddSingleton, so every committed live segment, partial and end reason reaches an open session view.
         builder.Services.AddSingleton<ITranscriptionEventPublisher, TranscriptionEventPublisher>();
 
-        // External apps: the hub-backed publisher supersedes the no-op AddNodeExternalApps registers with
-        // TryAddSingleton, so a pull, a state change observed by the daemon watcher and the boot reconciler's
-        // adoptions all reach an open instance view live.
+        // External apps: the hub-backed publisher supersedes the no-op AddNodeExternalApps registers with TryAddSingleton, so a pull, a
+        // daemon-watcher state change and the boot reconciler's adoptions all reach an open instance view live.
         builder.Services.AddSingleton<IExternalAppEventPublisher, ExternalAppEventPublisher>();
 
         // Composes the run-detail and node-detail read shapes, which need the pinned graph and the agent names beside
@@ -271,14 +228,8 @@ public static class ConfigureServices
             options.DisableAutoDiscovery = true;
             options.Assemblies = [typeof(ConfigureServices).Assembly];
 
-            // Development Mode's endpoints are kept out of DISCOVERY — not out of routing — when the feature is off.
-            // The routing filter in UseFastEndpoints is too late: FastEndpoints instantiates every discovered endpoint
-            // at startup before evaluating that filter, and AddNodeDevelopment registers the services those endpoints
-            // take through their constructors only when the feature is on, so a discovered-but-unrouted Development
-            // endpoint would fail the node's boot. GetDevelopmentCapabilityEndpoint deliberately does not carry the
-            // marker: it stays discoverable and answers the disabled state. The 404 the other routes give while the
-            // feature is off still comes from the request-path middleware in Program, which runs before authentication
-            // and so is unaffected by whether the route exists.
+            // Development Mode's endpoints are kept out of DISCOVERY, not out of routing, when the feature is off: the routing filter in
+            // UseFastEndpoints is too late. See docs/wiki/09-api-and-hubs.md ("Dev-only surfaces").
             options.Filter = type => developmentEnabled || !typeof(IDevelopmentEndpoint).IsAssignableFrom(type);
         });
         builder.Services.AddSignalR(options =>
@@ -286,26 +237,13 @@ public static class ConfigureServices
             options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
             options.HandshakeTimeout = TimeSpan.FromSeconds(15);
             options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-            // Transport ceiling for ONE hub-invocation payload (a SendMessage envelope: content plus ids, model name,
-            // selected-path map, attachment ids). Kept deliberately above Security:MaxMessageSizeKb (256 KB of content
-            // by default) so an oversized paste is rejected by that app-level check with a legible message, rather than
-            // by SignalR tearing the connection down with an opaque frame-size error. Raise the two together.
+            // Transport ceiling for ONE hub-invocation payload, kept deliberately above Security:MaxMessageSizeKb so an oversized paste is
+            // refused by that app-level check with a legible message rather than by SignalR's opaque frame-size error. Raise the two together.
             options.MaximumReceiveMessageSize = 512 * 1024;
             options.StreamBufferCapacity = 1;
         });
-        // The OpenAPI document is generated against a COPY of the FastEndpoints serializer global
-        // (FastEndpoints.Swagger's SwaggerDocument registration does `new JsonSerializerOptions(Config.SerOpts.Options)`),
-        // and NSwag's UseOpenApi resolves that registration EAGERLY while the pipeline is being built whenever the
-        // document path contains "{documentName}" — which ours does. UseFastEndpoints, which is what normally
-        // populates that global from IOptions<JsonOptions>, has not run at that point, so the generator would describe
-        // a camelCase API with PascalCase property and parameter names. Seeding the global here, at registration time,
-        // makes the document correct no matter where the middleware sits in the pipeline; UseFastEndpoints later
-        // replaces the instance outright, so runtime serialization is unaffected.
-        //
-        // The global is process-wide and shared with every other host in the process, so it must not be mutated once
-        // it has been used: System.Text.Json seals an options instance on first (de)serialization. Read-only here
-        // means an earlier host already ran UseFastEndpoints and served with it, which is exactly the case where the
-        // instance already carries the camelCase policy it took from IOptions<JsonOptions> — nothing to seed.
+        // Seed the FastEndpoints serializer global HERE, at registration time, or the OpenAPI generator snapshots a PascalCase copy. The global is
+        // process-wide, so a read-only one has been served with already. See docs/wiki/09-api-and-hubs.md ("Why the FastEndpoints serializer global is seeded at registration time").
         var fastEndpointsSerializerOptions = new Config().Serializer.Options;
         if (!fastEndpointsSerializerOptions.IsReadOnly)
         {
@@ -326,10 +264,8 @@ public static class ConfigureServices
                     BearerFormat = "JWT"
                 });
 
-                // NJsonSchema emits CLR member names for string enums; honor [JsonStringEnumMemberName]
-                // so the OpenAPI enum values match the wire format (e.g. host-agent runtime-status enums
-                // serialize "running"/"managed", not "Running"/"Managed"). Without this, generated client
-                // validators reject valid responses.
+                // NJsonSchema emits CLR member names for string enums; honour [JsonStringEnumMemberName] so the OpenAPI enum values
+                // match the wire format ("running", not "Running"). Without this, generated client validators reject valid responses.
                 settings.SchemaSettings.SchemaProcessors.Add(new JsonStringEnumMemberNameSchemaProcessor());
                 settings.OperationProcessors.Add(new McpServerApiKeyOpenApiOperationProcessor());
                 settings.DocumentProcessors.Add(new DevelopmentOpenApiDocumentProcessor());
@@ -357,13 +293,11 @@ public static class ConfigureServices
                // Second scheme, applied ONLY by the McpServer policy on the inbound MCP endpoint. JWT bearer stays the
                // default scheme, so every existing endpoint and hub keeps its current behavior unchanged.
                .AddScheme<AuthenticationSchemeOptions, McpApiKeyAuthenticationHandler>(McpApiKeyAuthenticationHandler.SchemeName, configureOptions: null)
-               // Third scheme, applied ONLY by the LocalModelProxy policy on the inbound OpenAI-compatible model proxy.
-               // Independent of both JWT bearer and the MCP key so an external tool that consumes only the raw model
-               // never gains the operator's admin reach nor the MCP client's agent-tool reach.
+               // Third scheme, applied ONLY by the LocalModelProxy policy: independent of JWT bearer and the MCP key, so a tool that
+               // consumes only the raw model gains neither the operator's admin reach nor the MCP client's agent-tool reach.
                .AddScheme<AuthenticationSchemeOptions, LocalModelProxyApiKeyAuthenticationHandler>(LocalModelProxyApiKeyAuthenticationHandler.SchemeName, configureOptions: null)
-               // Fourth scheme, applied ONLY by the IntegrationApi policy on the hand-mapped external integration
-               // routes. Independent of all three above so an integrator gains neither the operator's admin reach, the
-               // MCP client's tool reach, nor the proxy client's raw-model reach.
+               // Fourth scheme, applied ONLY by the IntegrationApi policy on the hand-mapped integration routes: independent of all three
+               // above, so an integrator gains neither the operator's admin reach, the MCP client's tool reach, nor the proxy's raw model.
                .AddScheme<AuthenticationSchemeOptions, IntegrationApiKeyAuthenticationHandler>(IntegrationApiKeyAuthenticationHandler.SchemeName, configureOptions: null);
         builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
                .Configure<IOptions<NodeAuthOptions>, INodeJwtKeyProvider>((options, nodeAuthOptions, jwtKeyProvider) =>
@@ -400,10 +334,8 @@ public static class ConfigureServices
 
                            return Task.CompletedTask;
                        },
-                       // Stateless JWTs carry no revocation state, so enforce the user's current ASP.NET Identity security
-                       // stamp here: password resets and changes rotate the stamp, which must immediately invalidate every
-                       // access token minted before the change rather than letting it live out its lifetime. One indexed
-                       // lookup per authenticated request — negligible for a single-operator local node.
+                       // Stateless JWTs carry no revocation state, so enforce the user's current Identity security stamp here: a password
+                       // reset rotates it and must invalidate every token minted before the change. One indexed lookup per request.
                        OnTokenValidated = static async context =>
                        {
                            var userId = context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -412,10 +344,8 @@ public static class ConfigureServices
                                return;
                            }
 
-                           // Fail CLOSED when the token carries no stamp: every access token this version mints for a
-                           // persisted user binds one, so an unstamped-but-validly-signed token is either a pre-upgrade
-                           // (legacy) token that must not outlive a password reset, or a forgery that already implies
-                           // signing-key compromise. Reject it either way rather than leaving a stamp-check bypass.
+                           // Fail CLOSED when the token carries no stamp: every token minted for a persisted user binds one, so an unstamped
+                           // but validly-signed token is a legacy token that must not outlive a reset, or a forgery. Never a bypass.
                            var tokenStamp = context.Principal?.FindFirst(NodeAuthorizationPolicies.SecurityStampClaimType)?.Value;
                            if (string.IsNullOrEmpty(tokenStamp))
                            {
@@ -426,9 +356,8 @@ public static class ConfigureServices
                            var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<NodeUser>>();
                            var user = await userManager.FindByIdAsync(userId);
 
-                           // No persisted row for the subject: preserve the base stateless-JWT posture (the token
-                           // authenticates and each endpoint resolves the user itself). The stamp is a revocation signal
-                           // for existing users, not an existence check — the single operator always exists after setup.
+                           // No persisted row for the subject: preserve the base stateless-JWT posture, where the token authenticates and each
+                           // endpoint resolves the user. The stamp is a revocation signal, not an existence check.
                            if (user is not null
                                && !string.Equals(await userManager.GetSecurityStampAsync(user), tokenStamp, StringComparison.Ordinal))
                            {
@@ -439,14 +368,8 @@ public static class ConfigureServices
                });
         builder.Services.AddAuthorization(options =>
         {
-            // Deny by default at the framework layer, behind the FastEndpoints Configurator: this catches every
-            // routed surface the Configurator cannot reach — the hand-mapped minimal APIs, the hubs, the SPA
-            // fallback, the health probes — and it also answers a request that routing matched to NO endpoint at
-            // all, so an unrecognised path fails closed instead of leaking a 404 body. It is deliberately weaker
-            // than Operator (a valid JWT, no Admin role): it is the second layer, not a replacement for the first.
-            // Anything that must stay reachable without a token needs an explicit .AllowAnonymous() on its Map*
-            // call; a surface served by raw middleware has no endpoint to attach that to and must instead run
-            // before UseAuthentication() (see the UseSwaggerGen placement in Program.cs).
+            // Deny by default at the framework layer, behind the FastEndpoints Configurator, and deliberately weaker than Operator: the
+            // second layer, not a replacement. See docs/wiki/09-api-and-hubs.md ("Security middleware & auth ordering").
             options.FallbackPolicy = new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
                                      .RequireAuthenticatedUser()
                                      .Build();
@@ -456,9 +379,8 @@ public static class ConfigureServices
                                 .RequireAuthenticatedUser()
                                 .RequireRole(NodeAuthorizationPolicies.AdminRole));
 
-            // The inbound MCP endpoint accepts ONLY the MCP API key scheme — never the operator's JWT. Listing just the
-            // one scheme is what stops a browser session (or a stolen operator token) from driving the MCP surface, and
-            // stops an MCP client from ever presenting as the operator. No role requirement: the key IS the authorization.
+            // The inbound MCP endpoint accepts ONLY the MCP API key scheme, never the operator's JWT: listing one scheme stops a browser
+            // session or a stolen token from driving it, and an MCP client from presenting as the operator. The key IS the authorization.
             options.AddPolicy(NodeAuthorizationPolicies.McpServer,
                 policy => policy.AddAuthenticationSchemes(McpApiKeyAuthenticationHandler.SchemeName)
                                 .RequireAuthenticatedUser());
@@ -468,17 +390,14 @@ public static class ConfigureServices
                                 .RequireAuthenticatedUser()
                                 .RequireClaim(NodeAuthorizationPolicies.McpScopeClaimType, NodeAuthorizationPolicies.McpAgenticScope));
 
-            // The inbound model proxy accepts ONLY the model-proxy API key scheme — never the operator's JWT and never
-            // the MCP key. One scheme, no role: the key IS the authorization, and a browser session, a stolen operator
-            // token, or the MCP client can none of them drive the raw-model surface.
+            // The inbound model proxy accepts ONLY the model-proxy API key scheme, never the operator's JWT and never the MCP key. One
+            // scheme, no role: the key IS the authorization, so none of those can drive the raw-model surface.
             options.AddPolicy(NodeAuthorizationPolicies.LocalModelProxy,
                 policy => policy.AddAuthenticationSchemes(LocalModelProxyApiKeyAuthenticationHandler.SchemeName)
                                 .RequireAuthenticatedUser());
 
-            // The external integration API accepts ONLY the integration key scheme. One scheme, no role and no claim
-            // requirement: the key IS the authorization, and every finer-grained decision (which triggers this key may
-            // invoke, which rows this principal owns) is made against the freshly re-read key row rather than against a
-            // claim minted at authentication time.
+            // The external integration API accepts ONLY the integration key scheme, with no role and no claim requirement: every finer
+            // decision — which triggers this key may invoke, which rows it owns — reads the key row afresh, never a minted claim.
             options.AddPolicy(NodeAuthorizationPolicies.IntegrationApi,
                 policy => policy.AddAuthenticationSchemes(IntegrationApiKeyAuthenticationHandler.SchemeName)
                                 .RequireAuthenticatedUser());
@@ -497,24 +416,15 @@ public static class ConfigureServices
         // cap, which is no cap at all.
         builder.Services.AddSingleton<IntegrationSseWriter>();
 
-        // Production limit is 10/min per client IP. Test environments drive many auth calls from a
-        // single loopback IP (one partition), so relax the cap there to keep E2E/integration runs
-        // deterministic without weakening the production control.
-        //
-        // All three permit limits are computed HERE, outside the AddRateLimiter lambda, so its closure captures three
-        // ints and never `builder`. This is load-bearing for test hosts: the rate-limiting middleware's partitioned
-        // limiter runs a replenishment timer that is never disposed with the host, and a closure over `builder` let
-        // that immortal timer root the builder -> ServiceCollection -> the entire disposed host graph (measured
-        // ~20 MB per test host; gcroot evidence in docs/agent-knowledge.md §1).
+        // Production is 10/min per client IP; Testing drives many auth calls from one loopback partition, so it is relaxed there without weakening production. Every
+        // permit limit is computed HERE, outside the AddRateLimiter lambda, so its closure captures ints, never `builder`. Why: docs/wiki/11-hosting-and-deployment.md ("Registration-time closures").
         var isTestingEnvironment = builder.Environment.IsEnvironment("Testing");
         var authPermitLimit = isTestingEnvironment ? 10_000 : 10;
         var mcpPermitLimit = isTestingEnvironment ? 100_000 : 120;
         var proxyPermitLimit = isTestingEnvironment ? 100_000 : 6_000;
 
-        // The external integration API's COARSE PER-IP CEILING — 6,000/min, the proxy's number for the proxy's reason.
-        // Deliberately NOT IntegrationOptions.RateLimitPerMinute (600): that is the PER-PRINCIPAL budget and it is
-        // spent by IntegrationPrincipalRateLimiter inside the handler, where a principal exists to partition on. Read
-        // from configuration so a test host can lower it; computed here, outside the lambda, like the three above.
+        // The integration API's COARSE PER-IP ceiling, deliberately NOT IntegrationOptions.RateLimitPerMinute: that is the PER-PRINCIPAL budget,
+        // spent by IntegrationPrincipalRateLimiter where a principal exists to partition on. From configuration, computed outside the lambda.
         var integrationPermitLimit = isTestingEnvironment
             ? 100_000
             : builder.Configuration.GetValue($"{IntegrationOptions.Section}:{nameof(IntegrationOptions.IpRateLimitPerMinute)}", defaultValue: 6_000);
@@ -536,11 +446,8 @@ public static class ConfigureServices
                         Window = TimeSpan.FromMinutes(1)
                     }));
 
-            // Inbound MCP. The key is 256 bits, so this is not what makes guessing infeasible — it bounds the attempt
-            // rate so a local process cannot grind at it, and it turns a runaway/misconfigured client into a 429 rather
-            // than an unbounded load on the node. Sized for real MCP traffic (a connect does tools/list, then a call per
-            // delegated task), which is why it is 120/min rather than the auth endpoints' 10/min. Testing gets the same
-            // relaxed treatment as AuthPolicy so integration/E2E runs from one loopback partition stay deterministic.
+            // Inbound MCP. The 256-bit key is what makes guessing infeasible, not this: the cap bounds the attempt rate and turns a runaway client into a 429 rather than unbounded load.
+            // Sized for real MCP traffic — a connect does tools/list, then a call per delegated task — which is why it is well above the auth endpoints'. Testing is relaxed like AuthPolicy.
             options.AddPolicy(NodeAuthRateLimits.McpPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
                     _ => new FixedWindowRateLimiterOptions
@@ -551,12 +458,8 @@ public static class ConfigureServices
                         Window = TimeSpan.FromMinutes(1)
                     }));
 
-            // Inbound model proxy. This is NOT a key-guessing defense — a 256-bit key is uncrackable no matter the cap —
-            // so unlike a login throttle it must not shape legitimate inference traffic. A single authenticated client
-            // doing RAG/document indexing legitimately issues far more than the MCP surface's 120/min of embedding calls,
-            // so the cap is sized for that (100/s) and exists only to bound a runaway/misbehaving local client; real
-            // per-model compute is already bounded by the loaded-cap and inference leases. Testing gets the same relaxed
-            // treatment so integration runs from one loopback partition stay deterministic.
+            // Inbound model proxy. NOT a key-guessing defense — a 256-bit key is uncrackable at any cap — so unlike a login throttle it must not shape legitimate inference traffic:
+            // one client doing RAG indexing issues far more than the MCP surface does, so this bounds only a runaway client. Per-model compute is bounded by the loaded-cap and leases.
             options.AddPolicy(NodeAuthRateLimits.LocalModelProxyPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
                     _ => new FixedWindowRateLimiterOptions
@@ -567,10 +470,8 @@ public static class ConfigureServices
                         Window = TimeSpan.FromMinutes(1)
                     }));
 
-            // External integration API. Same shared IP partition function as the three above, deliberately: this
-            // middleware runs BEFORE UseAuthentication, so no integration claim exists at partition time and a
-            // claim-reading partition function would ship with a branch that can never fire. Per-principal fairness is
-            // IntegrationPrincipalRateLimiter, plus the per-principal admission cap inside the accept transaction.
+            // External integration API, on the same shared IP partition function as the three above: this middleware runs BEFORE UseAuthentication, so no
+            // claim exists to partition on. Per-principal fairness is IntegrationPrincipalRateLimiter plus the admission cap inside the accept transaction.
             options.AddPolicy(NodeAuthRateLimits.IntegrationApiPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
                     _ => new FixedWindowRateLimiterOptions
@@ -587,10 +488,8 @@ public static class ConfigureServices
                 context.HttpContext.Response.ContentType = "application/json";
                 context.HttpContext.Response.Headers["Retry-After"] = "60";
 
-                // OnRejected is SHARED by every policy above, so the body has to name the policy that actually
-                // rejected. Only AuthPolicy throttles sign-in attempts; telling an integrator whose invoke hit the
-                // coarse per-IP ceiling that it made "too many auth attempts" sends it to rotate a credential that was
-                // never the problem. The neutral sentence is the one the SPA already renders for a 429.
+                // OnRejected is SHARED by every policy above, so the body must name the policy that actually rejected: only AuthPolicy throttles
+                // sign-in, and telling an integrator it made "too many auth attempts" sends it to rotate a credential that was never the problem.
                 var policyName = context.HttpContext.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
                 await context.HttpContext.Response.WriteAsJsonAsync(new
                 {
@@ -601,56 +500,39 @@ public static class ConfigureServices
             };
         });
 
-        // Seeds the enabled, on-demand (Manual) model-recommendation-check schedule so the React "Refresh now" button
-        // works out of the box. Registered AFTER AddNodeScheduler so the scheduler factory/job store are available when
-        // the seeder's StartAsync runs (it calls IScheduledJobManagementService, which AddNodeScheduler registers).
+        // Seeds the enabled on-demand (Manual) model-recommendation-check schedule so the React "Refresh now" button works out of the box. AFTER
+        // AddNodeScheduler, so the factory and job store exist when the seeder's StartAsync calls IScheduledJobManagementService.
         builder.Services.AddHostedService<ModelRecommendationScheduleSeeder>();
         // Seeds the node-local "Default Assistant" agent definition (mode-off persona) so every send resolves through a
         // real, uniformly-selectable definition. Idempotent by slug and self-healing across boots.
         builder.Services.AddHostedService<DefaultAgentSeeder>();
-        // Seeds the node-local "Coder (read-only)" agent definition (read/list/search project access) so the read-only
-        // coder profile is selectable out of the box. Idempotent by slug and self-healing across boots, like the
-        // Default Assistant seeder above.
+        // Seeds the node-local "Coder (read-only)" agent definition, with read/list/search project access, so the profile is selectable out of
+        // the box. Idempotent by slug and self-healing across boots, like the Default Assistant seeder above.
         builder.Services.AddHostedService<CoderAgentSeeder>();
-        // Seeds the node-local "Mathematician" agent definition — the one persona that opts into the sandboxed
-        // run_python compute tool, which is profile-opt-in only and therefore unreachable without a definition naming
-        // it. Idempotent by slug and self-healing across boots, like the two seeders above. Registered
-        // unconditionally, but the seeder itself skips when Compute:Enabled is false (its only tool is refused on a
-        // disabled node), so the gate reads the validated ComputeOptions rather than the raw configuration here.
+        // Seeds the node-local "Mathematician" agent definition, the one persona opting into the sandboxed run_python compute tool, which is profile-opt-in only and unreachable without it.
+        // Idempotent by slug and registered unconditionally, but the seeder skips when Compute:Enabled is false, so the gate reads the validated ComputeOptions rather than raw configuration.
         builder.Services.AddHostedService<MathematicianAgentSeeder>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
-        // Encrypts any legacy plaintext message rows (content + metadata_json written before content encryption
-        // shipped) into the read-both at-rest envelope. Batched, transactional, resumable, and idempotent — a
-        // re-run over an already-encrypted table is a no-op. Registered before the title backfill so titles are
-        // re-derived from rows that are already migrated when possible (both are read-both, so order is not required).
+        // Encrypts legacy plaintext message rows (content + metadata_json) into the read-both at-rest envelope. Batched, transactional, resumable and
+        // idempotent. Before the title backfill so titles re-derive from migrated rows where possible; both are read-both, so order is not required.
         builder.Services.AddHostedService<NodeChatContentEncryptionBackfillService>();
-        // One-time L2-normalization of legacy (pre-normalization) chunk vectors so the managed cosine search can score
-        // with a dot product. Batched, transactional, resumable, idempotent (re-normalizing a unit vector is a no-op) and
-        // safe on an empty database; marker-tracked in chat_maintenance_state. Registered in the Client host only (not the
-        // shared KB module) so it never races a test host's fixtures — the search stays correct on the cosine path until
-        // it completes, then this flips the singleton IKnowledgeVectorNormalizationState latch to the dot-product path.
+        // One-time L2-normalization of legacy chunk vectors so cosine search scores by dot product: batched, transactional, resumable, idempotent, marker-tracked in chat_maintenance_state.
+        // Client host only, never the shared KB module, so it cannot race a test host's fixtures: search stays on the cosine path until it completes, then flips IKnowledgeVectorNormalizationState.
         builder.Services.AddHostedService<KnowledgeVectorNormalizationBackfillService>();
         // Re-derives and re-encrypts conversation titles that were NULLed by the EncryptConversationTitle migration
         // (migrations cannot access the node key; this service runs once per startup and is idempotent).
         builder.Services.AddHostedService<NodeChatTitleEncryptionBackfillService>();
-        // Upgrade backfill for the external-access profile: a node that already completed setup but predates the profile
-        // is stamped "recommended" (all three automatic checks on) so it keeps today's behaviour instead of parking on an
-        // undecided profile. Idempotent, node-local, and NOT desktop-gated (an upgrading node exists on every launch
-        // mode). It does its work in StartAsync rather than ExecuteAsync so the decision is durable before Kestrel
-        // accepts a request — the SPA must never read a null profile from a node that has been running for months.
+        // Upgrade backfill for the external-access profile, stamping "recommended" on a node that completed setup but predates the profile. Idempotent,
+        // node-local, not desktop-gated, and in StartAsync so the decision is durable before Kestrel accepts a request.
         builder.Services.AddHostedService<ExternalAccessProfileBackfillService>();
-        // Upgrade backfill for the navigation mode, in StartAsync for the same reason: a node whose operator is past the
-        // first-run external-access step but has no interface mode is stamped "advanced" so the navigation stays exactly
-        // as it was. Its discriminator is the stored external-access profile, not this service's output, so it does not
-        // depend on running after the one above.
+        // Upgrade backfill for the navigation mode, in StartAsync for the same reason. Its discriminator is the STORED external-access profile, not the
+        // service above's output, so it does not depend on running after it.
         builder.Services.AddHostedService<UiModeBackfillService>();
-        // FRR-2 upgrade backfill: maps any Ollama model pulled on an EARLIER build (which never wrote a provider-map row)
-        // to the ollama provider so the flipped llamacpp default does not silently re-route it. Idempotent + offline-
-        // tolerant; not desktop-gated (a pre-existing Ollama install can exist on any launch mode).
+        // FRR-2 upgrade backfill: maps an Ollama model pulled on an EARLIER build, which wrote no provider-map row, to the ollama provider, so the flipped
+        // llamacpp default does not silently re-route it. Idempotent, offline-tolerant and not desktop-gated.
         builder.Services.AddHostedService<OllamaProviderMapBackfillService>();
-        // Desktop-only first-run model provisioning: ensures a small node-local GGUF chat model is installed (via the
-        // bundled llama.cpp runtime) and selected so a fresh double-click install can chat out of the box. Gated behind
-        // desktop launch mode and offline-tolerant — headless/Aspire/CI never auto-download (off-flag invariant).
+        // Desktop-only first-run model provisioning: installs and selects a small node-local GGUF through the bundled llama.cpp runtime, so a fresh
+        // double-click install can chat out of the box. Offline-tolerant; headless/Aspire/CI never auto-download (off-flag invariant).
         builder.Services.AddHostedService<FirstRunModelProvisioningService>();
         // Readiness = essential node-local persistence: a dead or unwritable SQLite store must flip /health/ready.
         builder.Services.AddHealthChecks()
@@ -661,10 +543,8 @@ public static class ConfigureServices
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        // Stated rather than inherited. Every options instance this is applied to at runtime already carries the
-        // camelCase policy from JsonSerializerDefaults.Web, but the FastEndpoints serializer global starts life as a
-        // bare JsonSerializerOptions (PascalCase), and the OpenAPI document generator snapshots THAT — see the
-        // SwaggerDocument registration below. Setting it here makes this method self-sufficient for both.
+        // Stated rather than inherited: a runtime options instance already carries camelCase from JsonSerializerDefaults.Web, but the FastEndpoints
+        // serializer global starts as a bare PascalCase JsonSerializerOptions and the OpenAPI generator snapshots THAT.
         options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.PropertyNameCaseInsensitive = true;
         options.DefaultIgnoreCondition = JsonIgnoreCondition.Never;

@@ -33,9 +33,8 @@ internal static class WindowsLauncherApplication
 
     internal static async Task<int> RunAsync(string[] arguments)
     {
-        // Reached only on a normal launch: a Velopack lifecycle-hook invocation is handled by VelopackApp.Run() in
-        // Main (which exits the process internally) and never gets here. Recording this proves the launcher started and
-        // Velopack did not consume the launch, so a subsequent silent exit can be localized to the managed host.
+        // Reached only on a normal launch: a Velopack lifecycle-hook invocation is handled by VelopackApp.Run() in Main, which exits
+        // internally. Recording it proves Velopack did not consume the launch, so a later silent exit localizes to the managed host.
         StartupDiagnostics.Record("Launcher started (Velopack lifecycle hooks not triggered).");
 
         if (!OperatingSystem.IsWindows() || RuntimeInformation.ProcessArchitecture != Architecture.X64)
@@ -104,9 +103,8 @@ internal static class WindowsLauncherApplication
 
             await process.WaitForExitAsync(CancellationToken.None);
 
-            // The managed host inherits this console, so a non-zero exit whose cause never reached disk (a crash before
-            // its Serilog file sink is built) would otherwise leave only a vanished console. Record the code so the
-            // launcher.log always shows how the child ended, even when the managed side wrote nothing itself.
+            // The managed host inherits this console, so a non-zero exit whose cause never reached disk — a crash before its Serilog
+            // file sink is built — would leave only a vanished console. Recording the code keeps launcher.log showing how the child ended.
             if (process.ExitCode != 0)
             {
                 StartupDiagnostics.Record($"Managed application exited with code {process.ExitCode.ToString(CultureInfo.InvariantCulture)}.");

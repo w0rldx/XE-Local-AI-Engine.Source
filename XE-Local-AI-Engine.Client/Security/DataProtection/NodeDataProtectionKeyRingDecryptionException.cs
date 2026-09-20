@@ -4,12 +4,14 @@ using System.Security.Cryptography;
 
 /// <summary>
 ///     Raised by <see cref="NodeDataProtectionKeyRingDecryptor" /> when an ENCRYPTED Data Protection key-ring element
-///     cannot be unwrapped — a wrong/rotated node operator secret (KEK) or a corrupt envelope. It derives from
-///     <see cref="CryptographicException" /> so the fail-closed posture is preserved for any catch-all, and it is a
-///     DISTINCTIVE type so <see cref="NodeDataProtectionKeyRingFailClosedKeyResolver" /> can tell an undecryptable
-///     encrypted key apart from an unrelated key failure and hard-fail startup rather than let Data Protection silently
-///     regenerate the ring (which would orphan every existing <c>IDataProtector</c> payload).
+///     cannot be unwrapped — a wrong/rotated node operator secret (KEK) or a corrupt envelope.
 /// </summary>
+/// <remarks>
+///     Derives from <see cref="CryptographicException" /> so the fail-closed posture is preserved for any catch-all,
+///     and is a DISTINCTIVE type so <see cref="NodeDataProtectionKeyRingFailClosedKeyResolver" /> can tell an
+///     undecryptable encrypted key apart from an unrelated key failure and hard-fail startup rather than let Data
+///     Protection silently regenerate the ring, which would orphan every existing <c>IDataProtector</c> payload.
+/// </remarks>
 public sealed class NodeDataProtectionKeyRingDecryptionException : CryptographicException
 {
     public NodeDataProtectionKeyRingDecryptionException(string message)

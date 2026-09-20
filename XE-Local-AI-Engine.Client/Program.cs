@@ -1,16 +1,12 @@
 using Serilog;
 using XE_Local_AI_Engine.Client.Hosting;
 
-// IMPORTANT: Velopack hook dispatch must be the first executable statement and remain outside the top-level catch.
-// The Windows distribution uses the adjacent C# launcher as its managed executable locator. Linux and development
-// hosts retain the default locator. Hook-driven exits must not be logged as startup failures.
+// IMPORTANT: Velopack hook dispatch must be the first executable statement and stay outside the top-level catch, because hook-driven exits must not be
+// logged as startup failures. The Windows distribution uses the adjacent C# launcher as its managed executable locator; Linux and dev keep the default.
 FrameworkDependentVelopackBootstrap.Run(args);
 
-// Tracks whether Serilog's real sink (console + rolling file) has been installed yet (see
-// Program.StartupLoggerReady). Everything above and the desktop bootstrap inside CreateAppAsync runs while Log.Logger
-// is still the silent default, so an exception there would be caught but never written to disk — the "flashes then
-// closes, empty logs folder" report. The top-level catch uses the flag to fall back to StartupCrashLog for that
-// pre-logger window.
+// Everything above, and the desktop bootstrap inside CreateAppAsync, runs while Log.Logger is still the silent default, so an exception there would be caught
+// but never written to disk — the "flashes then closes, empty logs folder" report. Program.StartupLoggerReady is what routes that window to StartupCrashLog.
 try
 {
     var start = await XE_Local_AI_Engine.Client.Program.CreateAppAsync(args);
@@ -27,10 +23,8 @@ catch (HostAbortedException)
 }
 catch (Exception ex)
 {
-    // Before the startup logger is installed, Log.Fatal writes nothing (silent default logger), so a crash in the
-    // Velopack / desktop bootstrap window would vanish with no console and no log file. Capture it directly to the
-    // per-user logs directory so the failure is always diagnosable; once the logger is ready this is redundant with the
-    // rolling file and is skipped.
+    // Before the startup logger is installed Log.Fatal writes nothing, so a crash in the Velopack / desktop bootstrap window would vanish with no console and
+    // no log file. Capture it directly to the per-user logs directory; once the logger is ready this is redundant with the rolling file and is skipped.
     if (!XE_Local_AI_Engine.Client.Program.StartupLoggerReady)
     {
         await StartupCrashLog.RecordAsync("The application failed during early startup, before logging was initialized", ex, CancellationToken.None);
@@ -103,11 +97,14 @@ namespace XE_Local_AI_Engine.Client
 
         /// <summary>
         ///     Builds the fully configured (but unstarted) application: services, migrations, pipeline, endpoint and
-        ///     hub mapping — everything the entry point does short of running the server. The entry point calls it with
-        ///     no customization; test fixtures pass one to layer test configuration/services and swap in TestServer.
-        ///     Returns a null <see cref="ProgramStartResult.App" /> plus exit code for the CLI early-exit paths
-        ///     (second desktop instance, knowledge-downgrade commands, admin password reset).
+        ///     hub mapping — everything the entry point does short of running the server.
         /// </summary>
+        /// <remarks>
+        ///     The entry point calls it with no customization; test fixtures pass one to layer test configuration and
+        ///     services and to swap in TestServer. Returns a null <see cref="ProgramStartResult.App" /> plus an exit
+        ///     code for the CLI early-exit paths: a second desktop instance, the knowledge-downgrade commands, and the
+        ///     admin password reset.
+        /// </remarks>
         public static async Task<ProgramStartResult> CreateAppAsync(string[] args, ProgramAppCustomization? customization = null)
         {
             ArgumentNullException.ThrowIfNull(args);
@@ -195,15 +192,8 @@ namespace XE_Local_AI_Engine.Client
             // Held for the process lifetime once acquired in the desktop branch below; disposed after the host is built.
             SingleInstanceLease? instanceLease = null;
 
-            // Desktop mode (packaged double-click launch) is enabled by env XE_LAUNCH_MODE=desktop / --desktop, AND is
-            // implied by a Velopack-managed install (installer or portable): that packaged flavor IS the desktop app — its in-app
-            // updater is desktop-only — but the Velopack stub launches the managed entry point without the env/arg a manual
-            // launcher sets, so the install itself is the opt-in signal. FrameworkDependentVelopackBootstrap.Run(args) above
-            // established the locator this reads. Resolved once, early — BEFORE the builder — so it can pin the content root just
-            // below, gate the loopback bind, and gate the HTTPS pipeline further down. A raw DLL/dev/Aspire/CI run is not a
-            // Velopack install and sets no env/arg, so every desktop-gated call is skipped and the pipeline is byte-identical.
-            // A customized (test-fixture) app is never the packaged desktop app, and VelopackLocator throws unless the
-            // entry point's FrameworkDependentVelopackBootstrap.Run established it — so don't consult it on the test path.
+            // Desktop mode comes from XE_LAUNCH_MODE=desktop / --desktop and is implied by a Velopack-managed install, whose stub sets neither, so the install is the opt-in signal.
+            // Resolved once BEFORE the builder, so it can pin the content root, the loopback bind and the HTTPS pipeline. Never consulted on the test path: VelopackLocator THROWS there.
             var launchMode = customization is null
                 ? DesktopLaunch.ResolveLaunchMode(args, VelopackInstall.IsManaged())
                 : LaunchMode.Headless;
@@ -216,12 +206,8 @@ namespace XE_Local_AI_Engine.Client
                 hostArgs = DesktopLaunch.HasExplicitLocalModeArgument(args) ? [.. stableRestartArgs] : [];
             }
 
-            // In desktop mode the app is launched from an arbitrary working directory (a double-click, or the documented
-            // `cd ~/Applications && ./XE-Local-AI-Engine.AppImage`), so pin the content root to the executable's own directory —
-            // where the shipped appsettings.json and wwwroot live — instead of the default current directory. Windows was masked
-            // by its C# launcher forcing WorkingDirectory to the base dir; the Linux AppImage has no launcher, so without this the
-            // shipped appsettings.json is never found and startup fails on WorkerNode:NodeName. Off the flag we leave the default
-            // current-directory content root so headless/Aspire/CI/dev behavior is byte-identical.
+            // A desktop launch starts from an arbitrary working directory, so pin the content root to the executable's own directory, where the shipped appsettings.json and
+            // wwwroot live. Windows was masked by its launcher forcing WorkingDirectory; the Linux AppImage has none, so without this startup fails on WorkerNode:NodeName.
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
             {
                 Args = hostArgs,
@@ -230,11 +216,8 @@ namespace XE_Local_AI_Engine.Client
                 WebRootPath = customization?.WebRootPath,
             });
 
-            // App self-update build flavor: layer the baked, channel-specific update config (repo URL +
-            // stable/RC release track) over the appsettings defaults. The publish output renames the active
-            // appsettings.AppUpdate.{flavor}.json to appsettings.AppUpdate.json (see the Client .csproj), so exactly one
-            // channel file is present and it can never point a tester build at the main repo. Optional: absent in dev/CI, where
-            // the empty appsettings.json defaults leave the updater inert.
+            // Layer the baked, channel-specific update config (repo URL + stable/RC track) over the appsettings defaults. The publish output renames the active
+            // appsettings.AppUpdate.{flavor}.json, so exactly one channel file is present and a tester build can never point at the main repo. Absent in dev/CI.
             builder.Configuration.AddJsonFile("appsettings.AppUpdate.json", optional: true, reloadOnChange: false);
 
             if (customization?.Configuration is { Count: > 0 } configurationOverrides)
@@ -247,11 +230,8 @@ namespace XE_Local_AI_Engine.Client
                 // Resolve (and create) the per-user data dir up front so both the bind below and the config layer share it.
                 var desktopDataDirectory = DesktopBootstrap.ResolveDataDirectory();
 
-                // Acquire the exclusive per-data-root lease BEFORE any key/DB initialization (the operator key is generated in
-                // EnsureLocalDataConfiguration just below). A second concurrent instance sharing this data directory would each
-                // generate its own encryption key and split the DB, so fail fast here with a clear message and a non-zero exit
-                // rather than proceeding. Held for the process lifetime; disposed on shutdown after the host is built. Off the
-                // desktop flag this is never reached — headless/Aspire/CI do not share this per-user data root.
+                // Acquire the exclusive per-data-root lease BEFORE any key/DB initialization, which happens in EnsureLocalDataConfiguration just below: two concurrent instances
+                // sharing this directory would each generate a key and split the DB. Held for the process lifetime and disposed on shutdown; never reached off the desktop flag.
 #pragma warning disable CA2000 // Ownership is transferred to the host lifetime (disposed via ApplicationStopped below).
                 instanceLease = SingleInstanceLease.TryAcquire(desktopDataDirectory);
 #pragma warning restore CA2000
@@ -271,9 +251,8 @@ namespace XE_Local_AI_Engine.Client
                     return new ProgramStartResult { App = null, ExitCode = setupRequested || mcpKeyRequested ? 4 : 1 };
                 }
 
-                // Re-bind the loopback port remembered from the last launch when it is still free, so the browser origin
-                // (scheme+host+port) stays stable and localStorage-backed user prefs survive between runs; otherwise fall back to
-                // a fresh OS-assigned port (:0). The actually-bound port is read post-bind and persisted for next time.
+                // Re-bind the remembered loopback port while it is still free, so the browser origin stays stable and localStorage-backed prefs survive between
+                // runs; otherwise take a fresh OS-assigned port. The actually-bound port is read post-bind and persisted for next time.
                 if (requestedPort is { } port)
                 {
                     if (!DesktopPortStore.IsPortAvailable(port))
@@ -295,10 +274,8 @@ namespace XE_Local_AI_Engine.Client
                     builder.WebHost.UseUrls(await DesktopPortStore.ResolveBindUrlAsync(desktopDataDirectory, CancellationToken.None));
                 }
 
-                // Desktop double-click launch supplies neither the node SQLite connection string nor the operator secret via
-                // env/Aspire, so fill them from the per-user data directory here — BEFORE AddServices reads configuration below.
-                // Each key is layered in only when absent, so any value already supplied wins and the off-flag (headless/Aspire/
-                // CI) path is byte-identical: this branch is never entered without the desktop flag.
+                // A double-click launch supplies neither the node SQLite connection string nor the operator secret, so fill them from the per-user data directory
+                // BEFORE AddServices reads configuration below. Each key is layered in only when absent, so any value already supplied wins.
                 DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration);
             }
 
@@ -317,12 +294,8 @@ namespace XE_Local_AI_Engine.Client
             // Aspire services
             builder.AddServiceDefaults();
 
-            // Operator hint: purely informational, fires once at startup, never gates or alters telemetry
-            // registration. AddServiceDefaults/ConfigureOpenTelemetry above always instruments gen_ai spans/metrics; only the
-            // OTLP exporter is conditional on OTEL_EXPORTER_OTLP_ENDPOINT (AddOpenTelemetryExporters,
-            // XE-Local-AI-Engine.ServiceDefaults/Extensions.cs). Aspire auto-injects that variable, so this stays silent
-            // there; desktop/RC and other headless launches leave it unset by default, so telemetry stays in-process only and
-            // is lost on exit unless the operator sets it. See docs/runbooks/otel-export-operator-runbook.md.
+            // Operator hint: informational only, once at startup, never gating telemetry registration — only the OTLP exporter is conditional on this variable. Aspire
+            // auto-injects it, so this stays silent there; a headless launch leaves it unset, so telemetry is lost on exit. See docs/runbooks/otel-export-operator-runbook.md.
             if (string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
             {
                 Log.Information("Telemetry export is OFF (OTEL_EXPORTER_OTLP_ENDPOINT is not set): gen_ai spans/metrics are "
@@ -337,42 +310,25 @@ namespace XE_Local_AI_Engine.Client
             var isTranscriptionEnabled = builder.Configuration.GetValue($"{TranscriptionOptions.Section}:Enabled", defaultValue: true);
             var areExternalAppsEnabled = builder.Configuration.GetValue($"{ExternalAppsOptions.SectionName}:Enabled", defaultValue: false);
 
-            // The container bridge: the engine's ONE deliberately non-loopback listener, opened so an application
-            // container on an engine-owned network can reach this node's inference surface (a container cannot reach
-            // the host's loopback, which is where everything else the engine serves lives). Both flags, because the
-            // bridge exists for application containers and a node with External Apps off has none; the code default
-            // for each is false, so a node whose configuration is missing opens no routable listener at all.
+            // The container bridge, the engine's ONE deliberately non-loopback listener, so an application container can reach this node's inference surface — a container
+            // cannot reach the host's loopback. BOTH flags, because a node with External Apps off has no containers, and each defaults to false, so a missing config opens nothing.
             var bridgeEndpoint = areExternalAppsEnabled
                 ? ResolveContainerBridgeEndpoint(builder)
                 : null;
 
-            // Published BEFORE AddServices, because the bind address is resolved during host construction and the
-            // services that tell a container about the bridge are built after this line. Registered even when the
-            // bridge did not open: the services ask whether there is one, and a missing registration would be a
-            // startup failure rather than the honest "this node has no bridge".
+            // Published BEFORE AddServices, because the bind address resolves during host construction and the services that tell a container about the bridge are built after
+            // this line. Registered even when the bridge did not open: a missing registration would be a startup failure rather than the honest "this node has no bridge".
             builder.Services.AddSingleton(new ContainerBridgeEndpointSource(bridgeEndpoint));
             builder.AddServices(builder.Configuration);
 
-            // App self-update (Velopack + anonymous public GitHub releases). Desktop-mode only: off the flag this registers nothing and the
-            // desktop-only endpoints are filtered out of FastEndpoints above. The process args are re-passed on relaunch so the
-            // new version comes back up in desktop mode and re-binds the persisted loopback port.
+            // App self-update (Velopack + anonymous public GitHub releases), desktop-mode only: off the flag this registers nothing and the desktop-only endpoints are
+            // filtered out of FastEndpoints above. The process args are re-passed on relaunch, so the new version comes back up in desktop mode on the persisted port.
             builder.AddAppUpdate(builder.Configuration,
                 launchMode,
                 stableRestartArgs);
 
-            // W3C trace correlation that works with Aspire/OpenTelemetry OFF (the desktop/RC default). Forcing the W3C
-            // Activity id format and registering a listener for the ASP.NET Core hosting source makes ASP.NET create a request
-            // Activity from an inbound `traceparent` header even when no OTel listener is present; otherwise Activity.Current
-            // would be null in the request pipeline and the emitted trace id would regress to the Kestrel connection id
-            // (TraceIdentifier). The listener is scoped to "Microsoft.AspNetCore" — the only source that produces the request
-            // activities this correlation needs — rather than every source in the process. AllData makes the listener request
-            // all data for activities that scoped source creates, so their W3C trace/span ids are populated; it does not by
-            // itself record them (that would need AllDataAndRecorded). The emitted traceresponse trace-flags byte follows the
-            // activity's actual recorded state: with only this listener attached (no started TracerProvider) activities are
-            // never recorded, so the byte is "00" regardless of the inbound sampled flag. In the normal host the OpenTelemetry
-            // TracerProvider is also running (AddServiceDefaults/ConfigureOpenTelemetry registers it in every mode), and its
-            // default ParentBased(AlwaysOn) sampler DOES record — a sampled inbound parent then yields "01", an unsampled
-            // parent stays "00". Process-global, so set once before Build().
+            // W3C trace correlation that works with Aspire/OpenTelemetry OFF, the desktop/RC default: without it Activity.Current is null in the request pipeline and the
+            // emitted trace id regresses to the Kestrel connection id. Process-global, set once before Build(). See docs/wiki/11-hosting-and-deployment.md ("The node host pipeline (`Program.cs`)").
             Activity.DefaultIdFormat = ActivityIdFormat.W3C;
             Activity.ForceDefaultIdFormat = true;
 #pragma warning disable CA2000 // The listener is owned by the static ActivitySource registry for the app's lifetime.
@@ -389,9 +345,8 @@ namespace XE_Local_AI_Engine.Client
 
             var app = builder.Build();
 
-            // Transfer the single-instance lease to the host lifetime: it lives until shutdown and releases the exclusive lock
-            // on ApplicationStopped. The OS also releases it on a crash, so this is graceful cleanup rather than a correctness
-            // requirement. Null off the desktop flag (no lease is acquired there).
+            // Transfer the single-instance lease to the host lifetime: it lives until shutdown and releases the exclusive lock on ApplicationStopped. The OS releases it on a
+            // crash too, so this is graceful cleanup rather than a correctness requirement. Null off the desktop flag, where no lease is acquired.
             if (instanceLease is not null)
             {
                 app.Lifetime.ApplicationStopped.Register(instanceLease.Dispose);
@@ -407,9 +362,8 @@ namespace XE_Local_AI_Engine.Client
                 return new ProgramStartResult { App = null, ExitCode = downgradeExitCode };
             }
 
-            // Loopback-only bind guard (defense-in-depth behind LocalApiSecurityMiddleware): shut down if the server bound a
-            // routable address without the Security:AllowNonLoopbackBind opt-out. A no-op on every supported launch (desktop
-            // binds 127.0.0.1; Aspire binds localhost and exposes externally via the DCP proxy).
+            // Loopback-only bind guard, defense-in-depth behind LocalApiSecurityMiddleware: shut down if the server bound a routable address without the
+            // Security:AllowNonLoopbackBind opt-out. A no-op on every supported launch — desktop binds 127.0.0.1, Aspire binds localhost behind the DCP proxy.
             LoopbackBindGuard.Guard(app,
                 bridgeEndpoint is null
                     ? []
@@ -420,11 +374,8 @@ namespace XE_Local_AI_Engine.Client
 
             try
             {
-                // Split around the migration pass on purpose: DropCanvasWorkflows removes the table the saved Open
-                // Canvas workflows live in, and no migration can decrypt their graph blob. Read first, write after —
-                // and write IMMEDIATELY after the node-chat pass: the identity pass runs against a different database,
-                // and a throw there would otherwise crash startup with the canvases already dropped and not yet
-                // written, which the next start could never recover (the table's absence is the one-shot marker).
+                // Split around the migration pass on purpose, and written IMMEDIATELY after the node-chat pass. See
+                // docs/wiki/11-hosting-and-deployment.md ("The node host pipeline (`Program.cs`)").
                 var pendingCanvasWorkflows = await ReadPendingCanvasWorkflowsAsync(app.Services);
 
                 commandContext?.SetStage(OneShotCommandStage.Migrations);
@@ -441,11 +392,8 @@ namespace XE_Local_AI_Engine.Client
                 throw;
             }
 
-            // Local admin password recovery (operator-run, single-user machine). Handled here — after identity migrations
-            // guarantee the tables + Admin role exist, and BEFORE the web host serves — so the reset runs against the SAME
-            // database the app uses (the desktop branch above already filled the connection string + operator key) and the
-            // single-instance lease already proved no other instance is holding that data directory. Resets the admin password
-            // without the old one, revokes all refresh tokens, then exits; off the flag this is a no-op and startup continues.
+            // Local admin password recovery, handled AFTER identity migrations guarantee the tables and Admin role and BEFORE the web host serves, so it runs against the SAME
+            // database the app uses and the single-instance lease has already proved nothing else holds the directory. Resets without the old password, revokes refresh tokens, exits.
             if (DesktopLaunch.TryGetResetAdminPassword(args, out var resetPassword))
             {
                 var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword);
@@ -487,25 +435,19 @@ namespace XE_Local_AI_Engine.Client
 
             app.UseSerilogRequestLogging(ConfigureRequestLogging);
 
-            // Configure the HTTP request pipeline.
-            // Central exception handling preserves each typed family contract: Training handlers write their custom
-            // JSON shapes, while Benchmark and other ProblemDetails handlers use RFC 7807. Registered before
-            // UseFastEndpoints so it wraps endpoints.
+            // Central exception handling preserves each typed family contract: Training handlers write their custom JSON shapes, while Benchmark and other
+            // ProblemDetails handlers use RFC 7807. Registered before UseFastEndpoints, so it wraps endpoints.
             app.UseExceptionHandler();
 
-            // FIRST branch in the pipeline, and first for a load-bearing reason: everything registered below — the
-            // security headers, the HTTPS redirect, antiforgery, the SPA bundle, the health checks, the five feature
-            // 404-gates, LocalApiSecurityMiddleware, authentication and every endpoint — belongs to the loopback
-            // listener alone. Branching the bridge port out here is what keeps the routable listener from serving any
-            // of it, and the predicate is the arrival port, so nothing inside the branch is reachable from outside it.
+            // FIRST branch in the pipeline, and first for a load-bearing reason: everything registered below belongs to the loopback listener alone. See
+            // docs/wiki/11-hosting-and-deployment.md ("The container bridge listener").
             if (bridgeEndpoint is not null)
             {
                 ContainerBridgePipeline.Map(app, bridgeEndpoint);
             }
 
-            // Apply response-wide security/correlation headers at the shared boundary before static files, health checks,
-            // authentication, endpoints and SPA fallback. OnStarting ensures even short-circuit responses carry the
-            // anti-framing defense. An existing trace header is never overwritten.
+            // Apply response-wide security/correlation headers at the shared boundary, before static files, health checks, authentication, endpoints and the SPA
+            // fallback. OnStarting is what makes even a short-circuit response carry the anti-framing defense. An existing trace header is never overwritten.
             app.Use(static async (context, next) =>
             {
                 var activity = Activity.Current;
@@ -550,11 +492,8 @@ namespace XE_Local_AI_Engine.Client
             app.MapHealthChecks("/health/ready", new HealthCheckOptions
             {
                 Predicate = r => r.Tags.Contains("ready"),
-                // Make the status→HTTP mapping explicit and intentional. Healthy and Degraded both return 200 —
-                // a Degraded worker (e.g. an expired platform-pairing token) is still serving local inference, so readiness
-                // consumers (Aspire's WithHttpHealthCheck poll) must keep it in rotation — but the payload now distinguishes it
-                // with per-check status + description + reason data, so "degraded" is never a silent 200. Only Unhealthy (a dead
-                // node-SQLite store) fails readiness with 503.
+                // Explicit and intentional: Healthy and Degraded both return 200, because a Degraded worker is still serving local inference and readiness consumers such as
+                // Aspire's WithHttpHealthCheck poll must keep it in rotation, while the payload distinguishes it per check. Only Unhealthy — a dead node-SQLite store — is 503.
                 ResultStatusCodes = new Dictionary<HealthStatus, int>
                 {
                     [HealthStatus.Healthy] = StatusCodes.Status200OK,
@@ -568,9 +507,8 @@ namespace XE_Local_AI_Engine.Client
             {
                 var developmentPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Root}");
                 var capabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Capability}");
-                // Endpoint discovery is per host (the EndpointDiscoveryOptions.Filter in ConfigureServices), so these routes
-                // are genuinely absent on a disabled node. This middleware still answers first — ahead of local API security
-                // and authentication below — so the disabled capability cannot be probed by status code (404 here, never 401).
+                // Endpoint discovery is per host (the EndpointDiscoveryOptions.Filter in ConfigureServices), so these routes are genuinely absent on a disabled node.
+                // This middleware still answers FIRST, ahead of local API security and authentication, so the disabled capability cannot be probed by status code.
                 app.Use(async (context, next) =>
                 {
                     if (context.Request.Path.StartsWithSegments(developmentPath, StringComparison.OrdinalIgnoreCase)
@@ -586,12 +524,8 @@ namespace XE_Local_AI_Engine.Client
 
             if (!areWorkSessionsEnabled)
             {
-                // Unlike Development, the work-session endpoints and hub stay DISCOVERED when the feature is off — their
-                // dependencies are registered unconditionally, and dropping them from discovery would drop all sixteen
-                // paths out of the OpenAPI document and therefore out of the generated client. Behaviour is gated here
-                // instead: without this, a disabled node would reach the service and answer 500 where the honest answer
-                // is "no such surface". Ahead of local API security and authentication, like the Development gate, so the
-                // switch cannot be probed by status code.
+                // Unlike Development, the work-session endpoints and hub stay DISCOVERED when the feature is off, because dropping them would drop the whole family out of
+                // the OpenAPI document and the generated client; only behaviour is gated, here, ahead of security and authentication so the switch cannot be probed.
                 var workSessionPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.WorkSessions.Root}");
                 // The one carve-out, like Development's: the capability GET stays reachable so the SPA can say the
                 // feature is switched off rather than rendering this bodyless 404 as a load failure.
@@ -611,10 +545,8 @@ namespace XE_Local_AI_Engine.Client
 
             if (!areDevWorkflowsEnabled)
             {
-                // Same posture as work sessions, and for the same reason: the endpoints and the hub stay discovered so
-                // the OpenAPI document — and therefore the generated client — is the same on every node, and behaviour
-                // is gated here instead. Ahead of local API security and authentication, so the switch cannot be probed
-                // by status code.
+                // Same posture as work sessions, and for the same reason: the endpoints and the hub stay discovered so the OpenAPI document, and the client generated from
+                // it, is the same on every node. Behaviour is gated here instead, ahead of local API security and authentication, so the switch cannot be probed.
                 var devWorkflowPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.DevelopmentWorkflows.Root}");
                 // The one carve-out, like Development's: the capability GET stays reachable so the SPA can say the
                 // feature is switched off rather than rendering this bodyless 404 as a load failure.
@@ -634,11 +566,8 @@ namespace XE_Local_AI_Engine.Client
 
             if (!areGraphWorkflowsEnabled)
             {
-                // The graph-workflow family holds the same posture as the two blocks above. Its endpoints and hub stay
-                // DISCOVERED with the feature off, so the OpenAPI document — and the client generated from it — is
-                // identical on every node; only behaviour is gated, and it is gated here. Registered ahead of local API
-                // security and authentication so the switch answers 404 before anything else can answer 403, which is
-                // what keeps it from being probed by status code.
+                // The graph-workflow family holds the same posture as the two blocks above: discovered with the feature off, so the document and the generated client are
+                // identical on every node, with only behaviour gated here — ahead of security and authentication, so it answers 404 before anything can answer 403.
                 var graphWorkflowPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.GraphWorkflows.Root}");
                 app.Use(async (context, next) =>
                 {
@@ -654,11 +583,8 @@ namespace XE_Local_AI_Engine.Client
 
             if (!isTranscriptionEnabled)
             {
-                // The same posture as the three blocks above, and for the same reasons. The endpoints and the session
-                // routes a later slice adds stay DISCOVERED with the feature off, so the OpenAPI document — and the
-                // client generated from it — is identical on every node; only behaviour is gated. Registered ahead of
-                // local API security and authentication so the switch answers 404 before anything can answer 403,
-                // which is what keeps it from being probed by status code.
+                // The same posture as the three blocks above and for the same reasons: the endpoints stay DISCOVERED with the feature off, so the document and the generated
+                // client are identical on every node, with only behaviour gated — ahead of security and authentication, so it answers 404 before anything can answer 403.
                 var transcriptionPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Transcription.Root}");
                 app.Use(async (context, next) =>
                 {
@@ -674,11 +600,8 @@ namespace XE_Local_AI_Engine.Client
 
             if (!areExternalAppsEnabled)
             {
-                // The external-apps family holds the same posture as the three blocks above. Its endpoints and its hub
-                // stay DISCOVERED with the feature off, so the OpenAPI document — and the client generated from it — is
-                // identical on every node; only behaviour is gated, and it is gated here. The prefix check covers the
-                // hub's negotiate too, since that path shares the family's first segment, and sitting ahead of local API
-                // security and authentication is what makes the switch answer 404 before anything can answer 401 or 403.
+                // The external-apps family holds the same posture as the three blocks above, and the prefix check covers the hub's negotiate too, since that path shares the
+                // family's first segment. Sitting ahead of local API security and authentication is what makes the switch answer 404 before anything can answer 401 or 403.
                 var externalAppsPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.ExternalApps.Root}");
                 app.Use(async (context, next) =>
                 {
@@ -695,19 +618,8 @@ namespace XE_Local_AI_Engine.Client
             app.UseMiddleware<LocalApiSecurityMiddleware>();
             app.UseRouting();
 
-            // The SPA shell must not answer for the local API. MapFallbackToFile's {*path:nonfile} pattern matches
-            // every unmatched extensionless path, so a mistyped or removed /api/local/v1/... route was answered with
-            // 200 text/html — a JSON client (the generated hey-api client included) reads that as success for a route
-            // that does not exist. Detaching the selected endpoint here, rather than mapping a second fallback over
-            // the prefix, is deliberate: a routed catch-all under /api/local/v1 joins the candidate set of every real
-            // route below it and suppresses routing's own 405, turning every wrong-verb request on a real API route
-            // into a 404 (measured against ValidateExecutableEndpointTests). With no endpoint selected the request
-            // takes exactly the path an unmatched DOTTED path already takes: UseAuthorization's FallbackPolicy
-            // challenges an anonymous caller (401, so it still learns nothing about which paths exist) and an
-            // operator token falls through to the pipeline's bare 404. Only the SPA fallback is detached, so real
-            // endpoints under the prefix — the hubs and their negotiate, MapMcp, the model proxy, the integration
-            // API — and routing's 405 are untouched, and the feature-switch gates still answer 404 above, before
-            // routing runs at all.
+            // The SPA shell must not answer for the local API: detaching the selected endpoint here, rather than mapping a second fallback over the prefix, is
+            // deliberate and is pinned by ValidateExecutableEndpointTests. See docs/wiki/09-api-and-hubs.md ("Static SPA fallback").
             var localApiPrefixPath = new PathString($"/{LocalApiRoutes.Prefix}");
             app.Use(async (context, next) =>
             {
@@ -719,26 +631,15 @@ namespace XE_Local_AI_Engine.Client
 
                 await next(context);
             });
-            // Skipped in the Testing environment, where the permit limits are relaxed to non-limits anyway (see
-            // ConfigureServices): RateLimitingMiddleware never disposes its PartitionedRateLimiter (verified against
-            // Microsoft.AspNetCore.RateLimiting 10.0), so its 100ms replenishment RunTimer outlives host disposal and
-            // GC-roots the middleware pipeline — logger → DI root scope → the ENTIRE host — for the process lifetime.
-            // That immortal-timer root is one of the reasons every disposed test host leaked ~20 MB (gcroot evidence in
-            // docs/agent-knowledge.md §1). RequireRateLimiting endpoint metadata stays registered and is inert without
-            // the middleware; no test asserts 429s.
+            // Skipped in the Testing environment, where the permit limits are relaxed to non-limits anyway: the middleware's undisposed replenishment timer GC-roots the
+            // whole host. See docs/wiki/11-hosting-and-deployment.md ("The node host pipeline (`Program.cs`)") and docs/agent-knowledge.md §1.
             if (!app.Environment.IsEnvironment("Testing"))
             {
                 app.UseRateLimiter();
             }
 
-            // Ahead of authentication on purpose. UseSwaggerGen is raw middleware, not an endpoint-convention
-            // builder, so it registers no endpoint for .AllowAnonymous() to attach to — and the FallbackPolicy is
-            // evaluated even when routing selects no endpoint, which would 401 the dev-only OpenAPI document if it
-            // ran after UseAuthorization(). Moving it is the only fix available to a middleware-served surface.
-            // MapScalarApiReference below stays where it is: it is an endpoint-convention call already chained with
-            // .AllowAnonymous(), and a Map* call's textual position never decides which middleware wraps it.
-            // Outside Production the OpenAPI document is deliberately served unauthenticated — the early position is
-            // how that is achieved, not an accident of ordering; in Production it is not served at all.
+            // Ahead of authentication ON PURPOSE: UseSwaggerGen is raw middleware with no endpoint for .AllowAnonymous() to attach to, and the early position is how the
+            // dev-only document is served unauthenticated, not an accident. See docs/wiki/09-api-and-hubs.md ("Dev-only surfaces").
             if (!app.Environment.IsProduction())
             {
                 app.UseSwaggerGen(static options =>
@@ -754,41 +655,16 @@ namespace XE_Local_AI_Engine.Client
             {
                 config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix;
 
-                // Deny by default: every discovered endpoint gets the Operator policy whether or not its own
-                // Configure() asked for it, so a forgotten Policies() call can never ship an anonymous route.
-                // Applied unconditionally rather than "only when AnonymousVerbs is empty" on purpose: the order
-                // between this Configurator and an endpoint's own Configure() is unspecified, and the unconditional
-                // call needs no such guarantee — FastEndpoints suppresses AuthorizeAttribute metadata entirely for
-                // an endpoint whose AnonymousVerbs cover the verb, so the four AllowAnonymous() endpoints in
-                // NodeAuthEndpoints stay anonymous regardless. ConfiguratorCanaryProbeEndpoint exists solely to
-                // make the deletion of this line fail EndpointAuthorizationPolicyTests.
-                //
-                // One documented side effect: because this sets PreBuiltUserPolicies on EVERY endpoint, FastEndpoints'
-                // Swagger generator treats every endpoint as RequiresAuthorization() and adds an auto-403 — including
-                // to the four anonymous auth operations (login, setup, status, refresh), whose auto-401 the same
-                // generator does suppress off AnonymousVerbs. The asymmetry is the library's, not ours. The 403 is
-                // kept because it is TRUE: LocalApiSecurityMiddleware answers a real 403 on every /api/local/v1/*
-                // route, anonymous ones included, for a foreign Origin/Host or a non-loopback peer, so an anonymous
-                // login request can and does get one. Suppressing it would mean unsetting the very policy the canary
-                // endpoint above pins, which would trade a truthful declaration for a deny-by-default hole.
-                // OpenApiDocumentTests asserts the 403 is on every operation.
+                // Deny by default: every discovered endpoint gets the Operator policy whether or not its own Configure() asked for it, so a forgotten Policies() call can
+                // never ship an anonymous route. See docs/wiki/09-api-and-hubs.md ("Security middleware & auth ordering") for why it is unconditional and what it costs.
                 config.Endpoints.Configurator = ep => ep.Policies(NodeAuthorizationPolicies.Operator);
 
-                // Desktop-only app self-update surface: off the desktop flag these endpoints are excluded from
-                // registration entirely, so the routes are absent (a request 404s) rather than throwing a 500 for a missing
-                // service. Mirrors the invariant that the updater is desktop-mode only. On the desktop flag the filter is a
-                // no-op (returns true for every endpoint).
-                // Note this filter cannot gate an endpoint whose SERVICES are conditionally registered: FastEndpoints
-                // instantiates every discovered endpoint before evaluating it (which is why the AppUpdate services are
-                // registered in every mode). Development Mode's endpoints are excluded at DISCOVERY instead — see the
-                // EndpointDiscoveryOptions.Filter in ConfigureServices.
+                // Desktop-only app self-update surface: off the flag these routes are absent rather than 500ing on a missing service. This filter cannot gate an endpoint whose
+                // SERVICES are conditionally registered, because FastEndpoints instantiates every discovered endpoint before evaluating it — that is EndpointDiscoveryOptions.Filter's job.
                 config.Endpoints.Filter = ep => isLocalMode || !typeof(IDesktopOnlyEndpoint).IsAssignableFrom(ep.EndpointType);
 
-                // Single source of truth for OpenAPI operationIds (consumed by the generated hey-api React SDK):
-                // derive a clean, camelCase name from the endpoint class name, e.g. CreateScheduledJobEndpoint ->
-                // "createScheduledJob". Applied globally (not per-endpoint Description(WithName)) so that FastEndpoints'
-                // type-safe Send.CreatedAtAsync<TEndpoint>() Location resolution keeps working — it resolves the target
-                // name through this same generator. Class names are unique across the assembly, so operationIds are unique.
+                // Single source of truth for OpenAPI operationIds, consumed by the generated hey-api React SDK: a camelCase name derived from the endpoint class name. Applied
+                // globally, not per-endpoint, so FastEndpoints' type-safe Send.CreatedAtAsync<TEndpoint>() Location resolution keeps working through this same generator.
                 config.Endpoints.NameGenerator = static ctx =>
                 {
                     var name = ctx.EndpointType.Name;
@@ -853,26 +729,14 @@ namespace XE_Local_AI_Engine.Client
                    .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             }
 
-            // The inbound MCP Streamable HTTP endpoint. Mapped here, beside the hubs, for two reasons that are both
-            // load-bearing:
-            //   1. The path sits INSIDE /api/local/v1, so LocalApiSecurityMiddleware (registered well above, before
-            //      UseRouting) has already enforced loopback peer + allowed Host + same-origin Origin on it. That middleware
-            //      matches on the /api/local/v1 prefix ALONE — mapping this at a bare "/mcp" would silently drop the entire
-            //      loopback gate and leave the bearer key as the only control. Do not move it out of the prefix.
-            //   2. It is mapped outside UseFastEndpoints (like MapHub) because MapMcp owns its own JSON-RPC transport rather
-            //      than being a FastEndpoints endpoint; it therefore does not appear in the OpenAPI document, and the React
-            //      client never talks to it — only external MCP clients do.
-            // The McpServer policy accepts ONLY the MCP API key scheme, never the operator's JWT.
+            // The inbound MCP Streamable HTTP endpoint, mapped beside the hubs. Its path MUST stay inside /api/local/v1 — do not move it — and the McpServer policy accepts
+            // ONLY the MCP API key scheme, never the operator's JWT. See docs/wiki/09-api-and-hubs.md ("Notable non-typed routes").
             app.MapMcp($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Mcp.ServerEndpoint}")
                .RequireAuthorization(NodeAuthorizationPolicies.McpServer)
                .RequireRateLimiting(NodeAuthRateLimits.McpPolicy);
 
-            // The inbound OpenAI-compatible model proxy. Hand-mapped here (like MapMcp) rather than as FastEndpoints, for the
-            // same load-bearing reasons: (1) the paths sit INSIDE /api/local/v1 so LocalApiSecurityMiddleware's loopback +
-            // Host + Origin gate already covers them — moving them out of the prefix would silently drop that gate and leave the
-            // bearer key as the only control; (2) the request/response is arbitrary OpenAI JSON + SSE, not a node DTO, so it
-            // must NOT appear in the OpenAPI document or the generated React SDK — only external tools talk to it. The
-            // LocalModelProxy policy accepts ONLY the model-proxy API key scheme, never the operator's JWT or the MCP key.
+            // The inbound OpenAI-compatible model proxy, hand-mapped like MapMcp and for the same reasons; its paths MUST stay inside /api/local/v1. The LocalModelProxy
+            // policy accepts ONLY the model-proxy API key scheme, never the operator's JWT or the MCP key. See docs/wiki/09-api-and-hubs.md ("Notable non-typed routes").
             var proxyRoutePrefix = $"/{LocalApiRoutes.Prefix}/";
             app.MapGet(proxyRoutePrefix + LocalApiRoutes.Proxy.Models,
                    static (HttpContext context, LocalModelProxyForwarder forwarder) => forwarder.WriteModelsAsync(context))
@@ -887,22 +751,12 @@ namespace XE_Local_AI_Engine.Client
                .RequireAuthorization(NodeAuthorizationPolicies.LocalModelProxy)
                .RequireRateLimiting(NodeAuthRateLimits.LocalModelProxyPolicy);
 
-            // The inbound EXTERNAL integration API. Hand-mapped here (like MapMcp and the model proxy) for the same
-            // load-bearing reasons: (1) the paths sit INSIDE /api/local/v1 so LocalApiSecurityMiddleware's loopback
-            // peer + Host + Origin gate already covers them — moving them out of the prefix would silently drop that
-            // gate and leave the bearer key as the ONLY control; (2) the request/response is an external integration
-            // envelope, not a node DTO, so it must NOT appear in the OpenAPI document or the generated React SDK. The
-            // IntegrationApi policy accepts ONLY the integration key scheme, never the operator's JWT, the MCP key or
-            // the proxy key.
-            //
-            // The route-level rate limit is the COARSE PER-IP abuse ceiling; per-principal fairness is the limiter the
-            // handler consults after authentication, which is the only place a principal exists to partition on.
+            // The inbound EXTERNAL integration API, hand-mapped like MapMcp and the model proxy and for the same reasons; its paths MUST stay inside /api/local/v1. The
+            // IntegrationApi policy accepts ONLY the integration key scheme. See docs/wiki/09-api-and-hubs.md ("Notable non-typed routes").
             var integrationRoutePrefix = $"/{LocalApiRoutes.Prefix}/";
 
-            // Composition-time value with ONE authority: endpoint metadata is baked at map time, so the cap must not
-            // come from an IOptions<IntegrationOptions> instance resolved per request — that would be a second source
-            // that can disagree with what the route already carries. Read from configuration here, the same shape the
-            // rate-limit permit constants use.
+            // Composition-time value with ONE authority: endpoint metadata is baked at map time, so the cap must not come from an IOptions<IntegrationOptions> resolved per
+            // request, which would be a second source that can disagree with what the route already carries. From configuration, the same shape the permit constants use.
             var integrationMaxRequestBodyBytes = app.Configuration.GetValue($"{IntegrationOptions.Section}:{nameof(IntegrationOptions.MaxRequestBodyBytes)}",
                 defaultValue: 1024L * 1024L);
 
@@ -940,15 +794,12 @@ namespace XE_Local_AI_Engine.Client
                 }).AllowAnonymous();
             }
 
-            // The login page has to load before anyone can hold a token, so the SPA shell opts out of the
-            // FallbackPolicy explicitly. Static assets are served by UseStaticFiles middleware ahead of routing and
-            // are unaffected either way. The marker is what the middleware just after UseRouting matches on to keep
-            // the shell off the local API prefix — see SpaFallbackMarker.
+            // The login page has to load before anyone can hold a token, so the SPA shell opts out of the FallbackPolicy explicitly; static assets are served by
+            // UseStaticFiles ahead of routing and are unaffected. The marker is what the middleware just after UseRouting matches on to keep the shell off the API prefix.
             app.MapFallbackToFile("index.html").AllowAnonymous().WithMetadata(new SpaFallbackMarker());
 
-            // Desktop mode only: install console-close → graceful-stop triggers and the on-started browser launch. Off-flag this
-            // is never reached, so no signal handler / P/Invoke is installed. The lifecycle is rooted for the
-            // app's lifetime via the lifetime token registration; it disposes when the host stops.
+            // Desktop mode only: install the console-close graceful-stop triggers and the on-started browser launch. Off the flag this is never reached, so no signal
+            // handler or P/Invoke is installed. The lifecycle is rooted for the app's lifetime through the lifetime token registration and disposes with the host.
             if (isLocalMode)
             {
                 ActivateDesktopLifecycle(app, launchMode, DesktopLaunch.HasNoBrowserFlag(args));
@@ -960,16 +811,15 @@ namespace XE_Local_AI_Engine.Client
 
         /// <summary>
         ///     Resolves the container bridge's listener and adds it to the host's bind URLs, or returns
-        ///     <see langword="null" /> when the bridge must not start. Never throws: a node with no usable interface
-        ///     still boots without a bridge.
-        ///     <para>
-        ///         The bridge is APPENDED to the hosting URLs rather than declared through
-        ///         <c>ConfigureKestrel(o =&gt; o.Listen(...))</c>, and that is not a style choice: an explicit Kestrel
-        ///         endpoint OVERRIDES the addresses a host was given, so a Listen call here would silently drop the
-        ///         loopback listener desktop mode and Aspire both configure through UseUrls, leaving the bridge as the
-        ///         only listener the node has. Both binds have to travel through the same mechanism.
-        ///     </para>
+        ///     <see langword="null" /> when the bridge must not start. Never throws.
         /// </summary>
+        /// <remarks>
+        ///     A node with no usable interface still boots, without a bridge. The bridge is APPENDED to the hosting
+        ///     URLs rather than declared through <c>ConfigureKestrel(o =&gt; o.Listen(...))</c>, and that is not a
+        ///     style choice: an explicit Kestrel endpoint OVERRIDES the addresses a host was given, so a Listen call
+        ///     here would silently drop the loopback listener desktop mode and Aspire both configure through UseUrls,
+        ///     leaving the bridge as the only listener the node has. Both binds travel through the same mechanism.
+        /// </remarks>
         private static ResolvedContainerBridgeEndpoint? ResolveContainerBridgeEndpoint(WebApplicationBuilder builder)
         {
             var options = builder.Configuration.GetSection(ContainerBridgeOptions.SectionName).Get<ContainerBridgeOptions>()
@@ -982,11 +832,8 @@ namespace XE_Local_AI_Engine.Client
             var hostingUrls = builder.WebHost.GetSetting(WebHostDefaults.ServerUrlsKey);
             if (string.IsNullOrWhiteSpace(hostingUrls))
             {
-                // Nothing to append to, and appending would then make the bridge the node's ONLY listener. Refusing
-                // to start the bridge is the fail-closed answer; the loopback surface is the one that must survive.
-                // Debug, not Warning: every supported launch configures bind URLs (desktop through UseUrls, Aspire
-                // through ASPNETCORE_URLS), so the host that reaches this is the in-memory TestServer — which has no
-                // listener for a container to reach in the first place, and must not log a warning on every boot.
+                // Nothing to append to, and appending would make the bridge the node's ONLY listener, so refusing it is the fail-closed answer. Debug, not Warning: every
+                // supported launch configures bind URLs, so the host reaching this is the in-memory TestServer, which has no listener for a container to reach anyway.
                 Log.Debug("The container bridge is enabled but the host has no configured bind URLs to extend, so it was not opened.");
                 return null;
             }
@@ -1002,9 +849,8 @@ namespace XE_Local_AI_Engine.Client
 
             var urls = hostingUrls.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            // Before the URL is appended, two things this machine has to agree to. Both refuse the BRIDGE and keep
-            // the node, because the loopback surface is the one that must survive: a bridge URL that cannot bind
-            // fails the whole host, since it travels in the same bind list as the loopback listener.
+            // Before the URL is appended, two things this machine has to agree to. Both refuse the BRIDGE and keep the node, because a bridge URL that cannot bind fails
+            // the whole host: it travels in the same bind list as the loopback listener, and that surface is the one that must survive.
             if (ContainerBridgeListenerProbe.CollidesWithHostingUrls(urls, endpoint.Port))
             {
                 Log.Warning("The container bridge is enabled but its port {Port} is already one of this node's own bind URLs ({HostingUrls}), "
@@ -1076,10 +922,13 @@ namespace XE_Local_AI_Engine.Client
     }
 
     /// <summary>
-    ///     Projects a readiness <see cref="HealthReport" /> into the <c>/health/ready</c> JSON payload. Each
-    ///     check reports its own status, description, and structured reason data, so a Degraded worker that still returns
-    ///     HTTP 200 (it is serving local inference) is nonetheless distinguishable by an inspecting operator or dashboard.
+    ///     Projects a readiness <see cref="HealthReport" /> into the <c>/health/ready</c> JSON payload.
     /// </summary>
+    /// <remarks>
+    ///     Each check reports its own status, description and structured reason data, so a Degraded worker that still
+    ///     returns HTTP 200 — it is serving local inference — is nonetheless distinguishable by an inspecting operator
+    ///     or dashboard.
+    /// </remarks>
     public static class ReadinessHealthResponse
     {
         public static object BuildPayload(HealthReport report)

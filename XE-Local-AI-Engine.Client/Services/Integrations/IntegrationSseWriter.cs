@@ -23,17 +23,13 @@ internal enum IntegrationSseWriteOutcome
 
 /// <summary>
 ///     Frames an execution's events onto the response as <c>text/event-stream</c>.
-///     <para>
-///         <b>Every refusal happens before a byte is written.</b> ASP.NET Core cannot change a status once the response
-///         has started, so deciding 410 by starting the enumerator — and catching the gap at the first
-///         <c>MoveNextAsync</c> — would reset the connection instead of answering it. That is exactly the failure the
-///         410-then-poll contract exists to avoid.
-///     </para>
-///     <para>
-///         <b>The caller's token ends forwarding and nothing else.</b> It is never linked to the run: an integrator
-///         that closes its stream to poll instead must not thereby cancel a generation the node is paying for.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <b>Every refusal happens before a byte is written.</b> ASP.NET Core cannot change a status once the response has started, so deciding 410 by starting
+///     the enumerator — and catching the gap at the first <c>MoveNextAsync</c> — would reset the connection instead of answering it, which is exactly the
+///     failure the 410-then-poll contract exists to avoid. <b>The caller's token ends forwarding and nothing else:</b> it is never linked to the run, because
+///     an integrator that closes its stream to poll instead must not thereby cancel a generation the node is paying for.
+/// </remarks>
 internal sealed class IntegrationSseWriter : IDisposable
 {
     private const int KeepaliveSeconds = 15;
@@ -47,10 +43,12 @@ internal sealed class IntegrationSseWriter : IDisposable
     private readonly ILogger<IntegrationSseWriter> _logger;
 
     /// <summary>
-    ///     Concurrent open streams, bounded by the SAME option that bounds tracked executions. Many readers can attach
-    ///     to one execution, so the buffer's cap bounds executions and the fixed-window limiter bounds attach RATE;
-    ///     neither bounds concurrency, which is what this does.
+    ///     Concurrent open streams, bounded by the SAME option that bounds tracked executions.
     /// </summary>
+    /// <remarks>
+    ///     Many readers can attach to one execution, so the buffer's cap bounds executions and the fixed-window
+    ///     limiter bounds attach RATE; neither bounds concurrency, which is what this does.
+    /// </remarks>
     private readonly SemaphoreSlim _openStreams;
 
     private readonly TimeProvider _timeProvider;
@@ -79,10 +77,8 @@ internal sealed class IntegrationSseWriter : IDisposable
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        // Step 0. Non-blocking admission: a caller that cannot be served now is told so, rather than parked holding a
-        // connection until one of the sixty-four ahead of it finishes.
-        // TimeSpan.Zero, and CancellationToken.None on purpose: this is a try-acquire, not a wait, so there is nothing
-        // for the caller's token to cancel.
+        // Step 0. Non-blocking admission: a caller that cannot be served now is told so, rather than parked holding a connection until one ahead of it finishes.
+        // TimeSpan.Zero, and CancellationToken.None on purpose: this is a try-acquire, not a wait, so there is nothing for the caller's token to cancel.
         if (!await _openStreams.WaitAsync(TimeSpan.Zero, CancellationToken.None))
         {
             return IntegrationSseWriteOutcome.Busy;
@@ -147,9 +143,8 @@ internal sealed class IntegrationSseWriter : IDisposable
         // frame — which on a cold model load can be minutes away.
         await context.Response.Body.FlushAsync(cancellationToken);
 
-        // The reader gets OUR token, linked to the caller's. A write failure that is not an abort — a dead peer
-        // surfacing as IOException — leaves the caller's token uncancelled, and the outstanding move would then park
-        // forever; cancelling this one is what bounds the drain in the finally.
+        // The reader gets OUR token, linked to the caller's: a write failure that is not an abort — a dead peer surfacing as
+        // IOException — leaves the caller's token uncancelled and the outstanding move parked, so cancelling this one bounds the drain.
         using var readCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var readToken = readCancellation.Token;
         var source = _buffer.ReadAsync(executionId, sinceSequence, readToken).GetAsyncEnumerator(readToken);
@@ -158,9 +153,8 @@ internal sealed class IntegrationSseWriter : IDisposable
         {
             while (true)
             {
-                // ONE pending move, held across any number of keepalives. MoveNextAsync may be called only once at a
-                // time on an enumerator, and re-issuing it after a timeout would drop the event the first call is about
-                // to return.
+                // ONE pending move, held across any number of keepalives: MoveNextAsync may be called only once at a time on
+                // an enumerator, and re-issuing it after a timeout would drop the event the first call is about to return.
                 pending ??= source.MoveNextAsync().AsTask();
 
                 using var keepaliveCancellation = CancellationTokenSource.CreateLinkedTokenSource(readToken);
@@ -186,23 +180,20 @@ internal sealed class IntegrationSseWriter : IDisposable
         }
         catch (IntegrationEventGapException)
         {
-            // The status is already on the wire, so this cannot become a 410. End the response cleanly and write no
-            // frame: none of the eleven locked event types means "you were cut". The caller re-attaches with
-            // Last-Event-ID and THAT attach answers 410 with the recovery route.
+            // The status is already on the wire, so this cannot become a 410. End cleanly and write no frame: none of the locked
+            // event types means "you were cut". The caller re-attaches with Last-Event-ID and THAT attach answers 410 with the recovery route.
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException
                                           || (exception is OperationCanceledException && cancellationToken.IsCancellationRequested))
         {
-            // The caller went away: an abort, a dead peer Kestrel surfaces as IOException or a connection torn down
-            // under the write. Forwarding stops; the run does not. The proxy forwarder swallows the same family for
-            // the same reason, and on a response that already sent 200 there is no status left to say it with.
+            // The caller went away: an abort, a dead peer Kestrel surfaces as IOException, or a connection torn down under the write.
+            // Forwarding stops, the run does not — the proxy forwarder swallows the same family, and a response that sent 200 has no status left.
             _logger.LogDebug(exception, "The integration event stream for execution {ExecutionId} ended early.", executionId);
         }
         finally
         {
-            // NEVER dispose the enumerator with a move in flight: a compiler-generated async iterator answers that with
-            // NotSupportedException, thrown outside every catch above and onto a response that already sent its 200.
-            // Cancelling our own token ends the reader's wait, so the drain is bounded by us and not by the peer.
+            // NEVER dispose the enumerator with a move in flight: a compiler-generated async iterator answers that with NotSupportedException,
+            // thrown outside every catch above. Cancelling our own token ends the reader's wait, so the drain is bounded by us, not the peer.
             if (pending is { IsCompleted: false })
             {
                 await readCancellation.CancelAsync();

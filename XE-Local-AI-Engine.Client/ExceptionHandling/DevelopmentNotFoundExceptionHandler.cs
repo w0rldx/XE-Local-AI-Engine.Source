@@ -5,11 +5,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Maps missing Development resources to the surface's bodyless 404 response, exactly as
-///     <see cref="WorkSessionNotFoundExceptionHandler" /> and <see cref="DevWorkflowNotFoundExceptionHandler" /> do for
-///     their families. It answers the TYPED family only: a bare <see cref="KeyNotFoundException" /> from anywhere else
-///     in the pipeline still reaches the default 500, so an unrelated dictionary miss cannot present itself as
-///     "not found".
+///     <see cref="WorkSessionNotFoundExceptionHandler" /> and <see cref="DevWorkflowNotFoundExceptionHandler" /> do.
 /// </summary>
+/// <remarks>
+///     It answers the TYPED family only: a bare <see cref="KeyNotFoundException" /> from anywhere else in the pipeline
+///     still reaches the default 500, so an unrelated dictionary miss cannot present itself as "not found".
+/// </remarks>
 public sealed class DevelopmentNotFoundExceptionHandler : IExceptionHandler
 {
     public ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)

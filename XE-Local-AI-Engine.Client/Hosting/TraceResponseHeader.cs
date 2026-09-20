@@ -12,11 +12,13 @@ internal static class TraceResponseHeader
     internal const string HeaderName = "traceresponse";
 
     /// <summary>
-    ///     Formats the <c>traceresponse</c> value for <paramref name="activity" />. The trace-flags byte reflects the
-    ///     activity's actual <see cref="ActivityTraceFlags.Recorded" /> state rather than a hardcoded <c>01</c>, so a
-    ///     downstream reader is not told the span was sampled when it was not: a recorded activity yields the <c>-01</c>
-    ///     suffix and a not-recorded one yields <c>-00</c>.
+    ///     Formats the <c>traceresponse</c> value for <paramref name="activity" />.
     /// </summary>
+    /// <remarks>
+    ///     The trace-flags byte reflects the activity's actual <see cref="ActivityTraceFlags.Recorded" /> state rather
+    ///     than a hardcoded <c>01</c>, so a downstream reader is not told the span was sampled when it was not: a
+    ///     recorded activity yields the <c>-01</c> suffix and a not-recorded one yields <c>-00</c>.
+    /// </remarks>
     internal static string Build(Activity activity)
     {
         ArgumentNullException.ThrowIfNull(activity);

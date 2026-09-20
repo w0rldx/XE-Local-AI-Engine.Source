@@ -6,19 +6,15 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 /// <summary>
-///     Fills the two configuration values a packaged desktop launch needs but that no env/Aspire source supplies:
-///     the node SQLite connection string (SEC-1) and the operator secret (SEC-2). Everything here is strictly
-///     local-mode-only — the caller invokes it solely for desktop or MCP-only serving
-///     branch — and each key is layered into in-memory configuration ONLY when it is not already supplied. That keeps the
-///     headless / Aspire / CI configuration byte-identical: outside local mode this type is never reached, and even on
-///     it, a value that was already provided via env or Aspire is left untouched.
+///     Fills the two configuration values a packaged desktop launch needs but that no env/Aspire source supplies: the
+///     node SQLite connection string (SEC-1) and the operator secret (SEC-2).
 /// </summary>
 /// <remarks>
-///     The operator key is generated once and persisted to a per-user file so it is DETERMINISTIC across launches: a
-///     fresh random key on every start would brick the encrypted node database. The connection string targets a per-user
-///     data directory under <see cref="Environment.SpecialFolder.LocalApplicationData" /> (Windows
-///     <c>%LOCALAPPDATA%</c>; Linux <c>$XDG_DATA_HOME</c> or <c>~/.local/share</c>) so application replacement or Linux
-///     single-file extraction never relocates or deletes persistent data.
+///     Strictly local-mode-only, and each key is layered in ONLY when not already supplied, so headless / Aspire / CI
+///     configuration stays byte-identical. The operator key is generated once and persisted per user so it is
+///     DETERMINISTIC across launches: a fresh random key on every start would brick the encrypted node database. The
+///     data directory sits under <see cref="Environment.SpecialFolder.LocalApplicationData" />, so application
+///     replacement or Linux single-file extraction never relocates or deletes persistent data.
 /// </remarks>
 internal static class DesktopBootstrap
 {
@@ -28,11 +24,13 @@ internal static class DesktopBootstrap
     internal const string NodeSqliteConnectionStringKey = "ConnectionStrings:node-sqlite";
 
     /// <summary>
-    ///     Configuration key the node-data-directory abstraction (<c>INodeDataDirectory</c>) reads. Set to the per-user
-    ///     data dir so every per-node runtime artifact (settings, the encrypted credential stores, cert pins, the
-    ///     AgentHome workspace, the hardware-profile cache) lands beside <c>node.sqlite</c>/<c>node.key</c> rather than in
-    ///     the shared/shipped install directory.
+    ///     Configuration key the node-data-directory abstraction (<c>INodeDataDirectory</c>) reads.
     /// </summary>
+    /// <remarks>
+    ///     Set to the per-user data dir so every per-node runtime artifact (settings, the encrypted credential stores,
+    ///     cert pins, the AgentHome workspace, the hardware-profile cache) lands beside
+    ///     <c>node.sqlite</c>/<c>node.key</c> rather than in the shared/shipped install directory.
+    /// </remarks>
     internal const string NodeDataDirectoryKey = "NodeData:Directory";
 
     /// <summary>The per-user application data sub-directory that holds the desktop database, key, and models.</summary>
@@ -61,10 +59,13 @@ internal static class DesktopBootstrap
 
     /// <summary>
     ///     Ensures the desktop data directory, connection string, operator secret, and models directory are present in
-    ///     configuration. Each value is filled only when absent, so an env/Aspire-supplied value always wins. The folder
-    ///     resolver is injected (mirroring <see cref="DesktopLaunch.ResolveLaunchMode(string[], Func{string, string?}, bool)" />)
-    ///     so tests never touch the real <c>%LOCALAPPDATA%</c>.
+    ///     configuration.
     /// </summary>
+    /// <remarks>
+    ///     Each value is filled only when absent, so an env/Aspire-supplied value always wins. The folder resolver is
+    ///     injected (mirroring <see cref="DesktopLaunch.ResolveLaunchMode(string[], Func{string, string?}, bool)" />)
+    ///     so tests never touch the real <c>%LOCALAPPDATA%</c>.
+    /// </remarks>
     /// <param name="configuration">
     ///     The builder configuration. A <c>WebApplicationBuilder.Configuration</c> is an
     ///     <see cref="IConfigurationManager" />, which is both an <see cref="IConfiguration" /> (read) and an
@@ -82,10 +83,8 @@ internal static class DesktopBootstrap
 
         var overrides = new Dictionary<string, string?>(StringComparer.Ordinal);
 
-        // Point the node-data-directory abstraction at the same per-user data dir the DB/key/models already use, so all
-        // per-node runtime state is co-located there instead of the shared install/ContentRoot dir. Local-mode-only and
-        // unconditional: this in-memory layer is only reached behind a local serve mode, so headless/Aspire/CI never set it
-        // and INodeDataDirectory falls back to ContentRootPath (the off-flag byte-behavior invariant).
+        // Point the node-data-directory abstraction at the same per-user data dir the DB/key/models use, so per-node state
+        // is co-located. Local-mode-only: elsewhere INodeDataDirectory falls back to ContentRootPath (off-flag invariant).
         overrides[NodeDataDirectoryKey] = dataDirectory;
 
         if (string.IsNullOrWhiteSpace(configuration.GetConnectionString("node-sqlite")))
@@ -112,14 +111,8 @@ internal static class DesktopBootstrap
             overrides[HuggingFaceModelsDirectoryKey] = Path.Combine(dataDirectory, ModelsFolderName);
         }
 
-        // Point the default chat model at the GGUF starter model desktop mode actually provisions. The stock
-        // Agent:LocalChat:DefaultModel ("qwen3:0.6b") is an Ollama-era id that desktop mode never installs; until
-        // first-run provisioning persists the selected model (only AFTER the multi-hundred-MB download completes), the
-        // chat composer falls back to this default — and a first send against the uninstalled Ollama id fails with
-        // "the requested model is not installed". The override is derived from FirstRunModel:{RepoId,Quant} so it stays
-        // in lockstep with the exact identity provisioning installs ("repo:quant"). Local-mode-only and unconditional: this
-        // in-memory layer (added last) intentionally wins over appsettings, but is only reached for desktop or MCP-only,
-        // so headless/Aspire keep the Ollama default untouched.
+        // Point the default chat model at the GGUF starter model desktop provisions: Agent:LocalChat:DefaultModel ships an Ollama-era id desktop never installs,
+        // so a send before provisioning ends fails as "not installed". From FirstRunModel:{RepoId,Quant}; added last, so it wins over appsettings while headless/Aspire keep Ollama.
         var firstRunModel = ResolveFirstRunModelIdentity(configuration);
         if (!string.IsNullOrWhiteSpace(firstRunModel))
         {
@@ -134,10 +127,12 @@ internal static class DesktopBootstrap
 
     /// <summary>
     ///     The canonical identity of the first-run GGUF starter model (<c>repo:quant</c>, or just <c>repo</c> when no
-    ///     quant is configured), matching what <c>FirstRunModelProvisioningService</c> installs and selects. Returns
-    ///     <c>null</c> when first-run provisioning is disabled or no repo id is configured, in which case the stock
-    ///     default chat model is left in place.
+    ///     quant is configured), matching what <c>FirstRunModelProvisioningService</c> installs and selects.
     /// </summary>
+    /// <remarks>
+    ///     Returns <c>null</c> when first-run provisioning is disabled or no repo id is configured, in which case the
+    ///     stock default chat model is left in place.
+    /// </remarks>
     private static string? ResolveFirstRunModelIdentity(IConfiguration configuration)
     {
         if (!configuration.GetValue(FirstRunModelEnabledKey, defaultValue: true))
@@ -163,10 +158,13 @@ internal static class DesktopBootstrap
 
     /// <summary>
     ///     Resolves the per-user desktop data directory (creating it when absent) reading from the real process
-    ///     environment. Used by <c>Program.cs</c> so the desktop branch can locate co-located runtime artifacts (e.g. the
-    ///     persisted loopback port) before the configuration layer is built. Local-mode-only: only ever called for desktop
-    ///     or MCP-only serving, so the off-mode path is unaffected.
+    ///     environment.
     /// </summary>
+    /// <remarks>
+    ///     Used by <c>Program.cs</c> so the desktop branch can locate co-located runtime artifacts, such as the
+    ///     persisted loopback port, before the configuration layer is built. Local-mode-only: only ever called for
+    ///     desktop or MCP-only serving, so the off-mode path is unaffected.
+    /// </remarks>
     internal static string ResolveDataDirectory()
     {
         var dataDirectory = ResolveDataDirectoryPath();
@@ -263,9 +261,8 @@ internal static class DesktopBootstrap
     {
         if (File.Exists(keyPath))
         {
-            // The exists-check can observe a concurrent first launch's just-created key BEFORE its (tiny) content has
-            // been written, so this read must tolerate a transiently torn file exactly like the lost-create-race path.
-            // A genuinely corrupt persisted key still fails loudly — after the short retry budget instead of instantly.
+            // The exists-check can observe a concurrent first launch's just-created key BEFORE its (tiny) content lands, so
+            // this read tolerates a torn file like the lost-race path. A corrupt key still fails loudly, after the retry budget.
             return ReadWinnerSecretWithRetry(keyPath);
         }
 
@@ -302,9 +299,8 @@ internal static class DesktopBootstrap
                 exception);
         }
 
-        // At-rest format: on Windows the raw secret is wrapped with DPAPI (CurrentUser); on *nix it is stored as raw
-        // base64 guarded by 0600 perms. Existing installs predate the Windows wrap and hold the PLAINTEXT secret, so
-        // unwrap-first and fall back to treating the decoded bytes as the legacy raw secret (then migrate below).
+        // At-rest format: Windows wraps the raw secret with DPAPI (CurrentUser), *nix stores raw base64 guarded by 0600.
+        // A legacy install holds the PLAINTEXT secret, so unwrap first and fall back to the decoded bytes (migrated below).
         var (secret, wasProtected) = UnwrapSecretBytes(fileBytes);
 
         if (secret.Length != NodeOperatorSecretProvider.ExpectedSecretLength)
@@ -315,9 +311,8 @@ internal static class DesktopBootstrap
                                                 + "losing data.");
         }
 
-        // Backward-compatible migration: an existing install stored an unwrapped (legacy plaintext) key. On Windows,
-        // transparently re-write it DPAPI-wrapped so it is encrypted at rest going forward. Best-effort — the in-memory
-        // secret is already valid for this run, so a failed re-wrap leaves the working plaintext key untouched.
+        // A legacy install stored an unwrapped plaintext key: on Windows re-write it DPAPI-wrapped so it is encrypted at
+        // rest. Best-effort — the in-memory secret is already valid, so a failed re-wrap leaves the plaintext key working.
         if (!wasProtected && OperatingSystem.IsWindows())
         {
             TryRewriteProtected(keyPath, secret);
@@ -330,11 +325,8 @@ internal static class DesktopBootstrap
     {
         var secret = RandomNumberGenerator.GetBytes(NodeOperatorSecretProvider.ExpectedSecretLength);
 
-        // Atomic create — independent of the single-instance lease. Two concurrent first launches must NOT each keep
-        // their own freshly-generated secret in memory: one process's encrypted writes would then be unreadable under
-        // the other's key. Create the key file with create-new semantics; when another process won the race, discard the
-        // just-generated candidate and adopt the winner's on-disk secret. A secret is never returned unless it is the one
-        // persisted to disk.
+        // Atomic create, independent of the single-instance lease: two concurrent first launches must NOT each keep their own
+        // secret, or one's encrypted writes become unreadable under the other's key. A loser adopts the winner's on-disk secret.
         if (TryCreateNewSecretFile(keyPath, secret))
         {
             return Convert.ToBase64String(secret);
@@ -344,11 +336,14 @@ internal static class DesktopBootstrap
     }
 
     /// <summary>
-    ///     Reads the winning process's key after this process lost the atomic create race, or after the exists-check saw
-    ///     a concurrently-created key. Because the winner may still be holding its exclusive create handle or may not yet
-    ///     have flushed its (tiny) content, a read can transiently fail; retry within a short budget before surfacing the
-    ///     error. A genuinely corrupt persisted key still fails loudly via the final unretried read below.
+    ///     Reads the winning process's key after this process lost the atomic create race, or after the exists-check
+    ///     saw a concurrently-created key.
     /// </summary>
+    /// <remarks>
+    ///     The winner may still hold its exclusive create handle or may not yet have flushed its (tiny) content, so a
+    ///     read can transiently fail; retry within a short budget before surfacing the error. A genuinely corrupt
+    ///     persisted key still fails loudly via the final unretried read below.
+    /// </remarks>
     private static string ReadWinnerSecretWithRetry(string keyPath)
     {
         string? secret = null;
@@ -378,15 +373,15 @@ internal static class DesktopBootstrap
 
     /// <summary>
     ///     Persists <paramref name="secret" /> to <paramref name="keyPath" /> with create-new semantics, returning
-    ///     <c>false</c> when a concurrent process already created the key (the caller then adopts the winner). The
-    ///     election is a single atomic <see cref="FileMode.CreateNew" /> open — <c>O_CREAT|O_EXCL</c> on *nix,
-    ///     <c>CREATE_NEW</c> on Windows — so exactly one of any number of concurrent first launches wins. Deliberately NOT
-    ///     a temp-file + <c>File.Move(overwrite:false)</c>: on *nix that move is a non-atomic exists-check-then-rename,
-    ///     under which two racing launches can both "win" and split the DB-encryption key. On *nix the file is created
-    ///     0600 atomically via <see cref="FileStreamOptions.UnixCreateMode" /> so the secret is never written to a
-    ///     world-readable handle. The content is a single small write; a crash mid-write is caught loudly by the length /
-    ///     base64 validation on the next launch (never a silent brick).
+    ///     <c>false</c> when a concurrent process already created the key (the caller then adopts the winner).
     /// </summary>
+    /// <remarks>
+    ///     The election is a single atomic <see cref="FileMode.CreateNew" /> open — <c>O_CREAT|O_EXCL</c> on *nix,
+    ///     <c>CREATE_NEW</c> on Windows — so exactly one of any number of concurrent first launches wins. Deliberately
+    ///     NOT a temp-file + <c>File.Move(overwrite:false)</c>: on *nix that is a non-atomic exists-check-then-rename,
+    ///     under which two racing launches both "win" and split the DB-encryption key. The file is created 0600 via
+    ///     <see cref="FileStreamOptions.UnixCreateMode" />; a torn write fails the next launch's validation loudly.
+    /// </remarks>
     private static bool TryCreateNewSecretFile(string keyPath, byte[] secret)
     {
         var fileContent = Convert.ToBase64String(ProtectSecretForAtRest(secret));
@@ -395,10 +390,8 @@ internal static class DesktopBootstrap
         {
             Mode = FileMode.CreateNew,
             Access = FileAccess.Write,
-            // Deliberately NOT FileShare.None: the atomic election is O_CREAT|O_EXCL (FileMode.CreateNew), not the share
-            // mode. FileShare.None takes an exclusive flock on *nix, which livelocks against the losers' concurrent
-            // read-backs (and can even fail the winner's own create). FileShare.Read keeps a compatible shared lock, so a
-            // loser that reads before the winner's tiny content lands simply fails validation and retries.
+            // Deliberately NOT FileShare.None: the atomic election is O_CREAT|O_EXCL (FileMode.CreateNew), not the share mode,
+            // and FileShare.None's exclusive *nix flock livelocks the losers' read-backs. FileShare.Read shares compatibly.
             Share = FileShare.Read
         };
 
@@ -461,10 +454,13 @@ internal static class DesktopBootstrap
     }
 
     /// <summary>
-    ///     Decodes the persisted key file into the raw operator secret. On Windows the file is DPAPI-wrapped, so unwrap
-    ///     first; a legacy plaintext file (or any non-Windows file) fails the unwrap and is returned verbatim as the raw
-    ///     secret. The boolean reports whether the bytes were DPAPI-protected, so the caller can migrate legacy files.
+    ///     Decodes the persisted key file into the raw operator secret.
     /// </summary>
+    /// <remarks>
+    ///     On Windows the file is DPAPI-wrapped, so unwrap first; a legacy plaintext file (or any non-Windows file)
+    ///     fails the unwrap and is returned verbatim as the raw secret. The boolean reports whether the bytes were
+    ///     DPAPI-protected, so the caller can migrate legacy files.
+    /// </remarks>
     private static UnwrappedSecret UnwrapSecretBytes(byte[] fileBytes)
     {
         if (OperatingSystem.IsWindows())
@@ -485,12 +481,15 @@ internal static class DesktopBootstrap
     }
 
     /// <summary>
-    ///     Overwrites the key file in place, used only by the legacy plaintext -> DPAPI at-rest upgrade (the key already
-    ///     exists, so this deliberately overwrites rather than create-new; fresh-key creation goes through
-    ///     <see cref="TryCreateNewSecretFile" />). On Windows the secret is DPAPI-wrapped (CurrentUser) before encoding so
-    ///     it is encrypted at rest; on *nix the raw secret is written and protected by 0600 owner-only perms. Written
-    ///     atomically (temp file + move) so a crash mid-write can never leave a torn key that bricks the DB.
+    ///     Overwrites the key file in place, used only by the legacy plaintext to DPAPI at-rest upgrade.
     /// </summary>
+    /// <remarks>
+    ///     The key already exists, so this deliberately overwrites rather than create-new; fresh-key creation goes
+    ///     through <see cref="TryCreateNewSecretFile" />. On Windows the secret is DPAPI-wrapped (CurrentUser) before
+    ///     encoding so it is encrypted at rest; on *nix the raw secret is written and protected by 0600 owner-only
+    ///     perms. Written atomically (temp file + move) so a crash mid-write can never leave a torn key that bricks
+    ///     the DB.
+    /// </remarks>
     private static void WriteSecretFile(string keyPath, byte[] secret)
     {
         var fileContent = Convert.ToBase64String(ProtectSecretForAtRest(secret));

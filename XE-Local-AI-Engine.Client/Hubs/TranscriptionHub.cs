@@ -21,10 +21,13 @@ public static class TranscriptionHubEvents
 }
 
 /// <summary>
-///     The refusal codes this hub throws as <see cref="HubException" /> messages. Stable strings the client matches
-///     on: a live capture UI has to tell "your session ended" apart from "your frame was malformed", and an exception
-///     message written inline would change the contract the next time somebody reworded it.
+///     The refusal codes this hub throws as <see cref="HubException" /> messages.
 /// </summary>
+/// <remarks>
+///     Stable strings the client matches on: a live capture UI has to tell "your session ended" apart from "your frame
+///     was malformed", and an exception message written inline would change the contract the next time somebody
+///     reworded it.
+/// </remarks>
 public static class TranscriptionHubErrors
 {
     public const string Disabled = "transcription-disabled";
@@ -104,18 +107,14 @@ public sealed class TranscriptionSessionStatusPush
 
 /// <summary>
 ///     Operator-only live transcription: the browser's audio goes in here and committed segments come back out.
-///     <para>
-///         <b>A disconnect IS meaningful on this hub</b> — the opposite of <see cref="GraphWorkflowRunHub" />, whose
-///         doc comment says a run outlives the tab. A live session is fed by the tab that opened it: once every
-///         connection watching it is gone, nothing will ever push another frame, so losing the last connection arms
-///         the abandonment grace in the registry and the session ends rather than idling forever.
-///     </para>
-///     <para>
-///         The hub itself holds no audio state. It validates a frame and forwards it to
-///         <see cref="ILiveTranscriptionSessionRegistry.PushAudioAsync" />, which an in-host capture source calls
-///         directly — two callers of one method rather than two paths.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <b>A disconnect IS meaningful on this hub</b>, the opposite of <see cref="GraphWorkflowRunHub" />: a live
+///     session is fed by the tab that opened it, so once every connection watching it is gone nothing will ever push
+///     another frame, and losing the last one arms the abandonment grace in the registry rather than idling forever.
+///     The hub itself holds no audio state — it validates a frame and forwards it to
+///     <see cref="ILiveTranscriptionSessionRegistry.PushAudioAsync" />, which an in-host capture source calls directly.
+/// </remarks>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class TranscriptionHub : Hub
 {
@@ -175,9 +174,8 @@ public sealed class TranscriptionHub : Hub
 
         var cancellationToken = Context.ConnectionAborted;
 
-        // Join BEFORE anything is read — the status as well as the replay. Reading first leaves a window in which a
-        // session that ends in between publishes its terminal status to nobody, and the snapshot this caller gets
-        // says Transcribing forever. Joining first can only duplicate, and the client merges by exact Seq.
+        // Join BEFORE anything is read, status as well as replay: reading first leaves a window in which a session that ends
+        // in between tells nobody, and the snapshot says Transcribing forever. Joining first can only duplicate, and the client merges by exact Seq.
         await Groups.AddToGroupAsync(Context.ConnectionId, TranscriptionHubGroups.Session(sessionId), cancellationToken);
 
         // The summary, not the session with its transcript: this needs a status and nothing else, and the replay
@@ -192,9 +190,8 @@ public sealed class TranscriptionHub : Hub
             throw new HubException(TranscriptionHubErrors.SessionNotFound);
         }
 
-        // Registered on SUBSCRIBE, not on the first frame: a connection that subscribes and is then denied its
-        // microphone never pushes anything, and registering it on push would leave that session with no browser
-        // attached, so its disconnect would arm nothing.
+        // Registered on SUBSCRIBE, not on the first frame: a connection that subscribes and is then denied its microphone
+        // never pushes anything, and registering on push would leave that session with no browser attached, so its disconnect would arm nothing.
         Track(sessionId);
         _live.NoteBrowserAttached(sessionId, Context.ConnectionId);
 
@@ -216,9 +213,8 @@ public sealed class TranscriptionHub : Hub
         var segments = await _sessions.ListSegmentsAfterAsync(sessionId, afterSeq, replayLimit + 1, cancellationToken);
         var replayed = segments.Take(replayLimit).ToList();
 
-        // The watermark is the last row the subscriber was actually HANDED. Taking the session's own maximum would
-        // skip every row the cap cut off, for good: nothing replays them a second time. An empty page keeps the
-        // caller's own watermark, because it has seen nothing new and has therefore moved nowhere.
+        // The watermark is the last row the subscriber was actually HANDED: the session's own maximum would skip every
+        // row the cap cut off, for good — nothing replays them a second time. An empty page keeps the caller's own watermark: it has seen nothing new and has therefore moved nowhere.
         var lastSeq = replayed.Count == 0 ? afterSeq : replayed[^1].Seq;
         return new TranscriptionSessionSubscriptionSnapshot
         {
@@ -301,9 +297,8 @@ public sealed class TranscriptionHub : Hub
         }
         catch (ArgumentException)
         {
-            // A channel this session does not carry — a client sending You to a Microphone session. Defined here
-            // rather than left as an unhandled argument error, so the client gets the same typed code it gets for a
-            // channel no member exists for.
+            // A channel this session does not carry — a client sending You to a Microphone session. Defined here rather
+            // than left as an unhandled argument error, so the client gets the same typed code as for an unknown channel.
             throw new HubException(TranscriptionHubErrors.UnknownChannel);
         }
     }

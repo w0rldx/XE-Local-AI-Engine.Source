@@ -14,17 +14,15 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     The ONE place a typed domain exception becomes a 409. Endpoints must not hand-build conflict bodies: every
-///     mapped exception answers with the same <see cref="ConflictProblemDetails" /> envelope, and the SPA
-///     discriminates on <c>conflictType</c> (see <c>NodeChatConflict.ts</c>). Conflict payload beyond the message is a
-///     typed, null-omitted member of that same envelope (declared on endpoints via <c>ProducesConflictProblemDetails()</c>),
-///     so the envelope itself stays one shape and the OpenAPI schema names every member.
-///     <para>
-///         That rule governs domain conflicts. An <b>operational block</b> — a runtime, child process, build or
-///         prerequisite standing in the way, which the service reports as a returned outcome rather than by throwing —
-///         keeps its own typed <c>*BlockedResponse</c> body and never reaches this handler; see ADR 0009.
-///     </para>
+///     The ONE place a typed domain exception becomes a 409.
 /// </summary>
+/// <remarks>
+///     Endpoints must not hand-build conflict bodies: every mapped exception answers with the same
+///     <see cref="ConflictProblemDetails" /> envelope, declared via <c>ProducesConflictProblemDetails()</c>, and the SPA
+///     discriminates on <c>conflictType</c> (see <c>NodeChatConflict.ts</c>). That rule governs domain conflicts: an
+///     <b>operational block</b>, which the service reports as a returned outcome rather than by throwing, keeps its own
+///     typed <c>*BlockedResponse</c> body and never reaches this handler — see ADR 0009.
+/// </remarks>
 public class ConflictExceptionHandler : IExceptionHandler
 {
     /// <summary>Same string FastEndpoints' ResponseSerializer writes, so a 409 looks like every other problem body.</summary>
@@ -66,9 +64,8 @@ public class ConflictExceptionHandler : IExceptionHandler
             ExternalAppManifestChangedException => NodeConflictProblemType.ExternalAppManifestChanged,
             ExternalAppConcurrencyException => NodeConflictProblemType.ExternalAppVersionConflict,
 
-            // The store's own rejection channel, under the same member: a stale ExpectedVersion, a lost concurrency
-            // race and a request id reused on another definition all reach a client as "re-read the run", and giving
-            // them a member each would be three names for one instruction.
+            // The store's own rejection channel, under the same member: a stale ExpectedVersion, a lost concurrency race and
+            // a request id reused on another definition all reach a client as "re-read the run", one instruction, one name.
             GraphWorkflowInvalidTransitionException => NodeConflictProblemType.GraphWorkflowRunConflict,
             _ => (NodeConflictProblemType?)null
         };
@@ -92,12 +89,8 @@ public class ConflictExceptionHandler : IExceptionHandler
         var problemDetails = new ConflictProblemDetails
         {
             Status = StatusCodes.Status409Conflict,
-            // Do NOT "fix" this to FastEndpoints' www.rfc-editor.org/rfc/ base, which DevelopmentConflictExceptionHandler
-            // reaches by setting no Type at all. This host is ALSO what ASP.NET Core's own ProblemDetailsDefaults
-            // emits, and the API already serves those strings unmodified wherever Results.Problem builds the body
-            // (BenchmarkEndpointSupport.Problem), so aligning this line would move it AWAY from the framework's.
-            // One canonical `type` across the API is unreachable; DevelopmentExceptionHandlerTests pins the
-            // divergence, and docs/adr/0009-conflict-envelope-versus-operational-block.md records why it stands.
+            // Do NOT "fix" this host to FastEndpoints' www.rfc-editor.org/rfc/ base: it is ALSO what ASP.NET Core's ProblemDetailsDefaults emits, so aligning moves this AWAY from the framework's.
+            // Divergence pinned by DevelopmentExceptionHandlerTests; see docs/wiki/09-api-and-hubs.md ("Status choices worth their reasons").
             Type = "https://tools.ietf.org/html/rfc7231#section-6.5.8",
             Title = "Conflict",
             ConflictType = conflictType.Value.ToString(),
@@ -115,10 +108,12 @@ public class ConflictExceptionHandler : IExceptionHandler
 
     /// <summary>
     ///     Carries the detail an operator needs to act on the refusal — the decision that already stands, or the
-    ///     permissions the refused update would add. Each is a typed member of the one conflict envelope (omitted when
-    ///     null) so the OpenAPI schema names it; the wire body is the same as when they rode as problem-details
-    ///     extensions.
+    ///     permissions the refused update would add.
     /// </summary>
+    /// <remarks>
+    ///     Each is a typed member of the one conflict envelope, omitted when null, so the OpenAPI schema names it; the
+    ///     wire body is the same as when they rode as problem-details extensions.
+    /// </remarks>
     private static void SetTypedMembers(ConflictProblemDetails problemDetails, Exception exception)
     {
         switch (exception)

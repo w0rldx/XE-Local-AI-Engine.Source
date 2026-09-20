@@ -24,17 +24,15 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
 ///     Maps the single-message domain validation exceptions to a 400 whose body is byte-identical to the
-///     <c>AddError(exception.Message) + Send.ErrorsAsync()</c> pair the endpoints used to write by hand — see
-///     <see cref="FastEndpointsProblemWriter" />, which owns that reproduction. New single-message validation
-///     exceptions belong in the switch below rather than in a per-endpoint catch. Multi-error types
-///     (<c>GraphWorkflowValidationException</c>) and aggregate ones (<c>SelectedFolderValidationException</c>) are
-///     deliberately out of scope — they do not map to one failure at one status.
-///     <para>
-///         A type whose status is not the same at every endpoint that raises it also stays out:
-///         <c>DevelopmentWorkspaceSecurityException</c> is answered 409 by the patch/next-action endpoints and 400 by
-///         the register/create ones, so a global 400 would silently move three routes.
-///     </para>
+///     <c>AddError(exception.Message) + Send.ErrorsAsync()</c> pair the endpoints used to write by hand.
 /// </summary>
+/// <remarks>
+///     <see cref="FastEndpointsProblemWriter" /> owns that reproduction; new single-message validation exceptions
+///     belong in the switch below rather than in a per-endpoint catch. Multi-error types
+///     (<c>GraphWorkflowValidationException</c>) and aggregate ones (<c>SelectedFolderValidationException</c>) stay out:
+///     they do not map to one failure at one status. So does a type whose status differs per endpoint —
+///     <c>DevelopmentWorkspaceSecurityException</c> is 409 at patch/next-action and 400 at register/create.
+/// </remarks>
 public sealed class DomainValidationExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<DomainValidationExceptionHandler> _logger;

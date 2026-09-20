@@ -5,26 +5,16 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 
 /// <summary>
-///     Desktop-mode host lifecycle: routes a closed console window into a graceful application stop (so the singleton
-///     <c>LlamaServerProcessSupervisor</c> disposes and tree-kills its child — no orphan), and auto-opens the default
-///     browser at the bound loopback URL once the host has started.
-///     <para>
-///         Two OS gaps are filled (the rest — SIGINT/SIGTERM/SIGQUIT — are already handled by ConsoleLifetime):
-///         <list type="bullet">
-///             <item>
-///                 Linux <c>SIGHUP</c> (terminal close): a <see cref="PosixSignalRegistration" /> calls
-///                 <see cref="IHostApplicationLifetime.StopApplication" />.
-///             </item>
-///             <item>
-///                 Windows <c>CTRL_CLOSE_EVENT</c> (console-window close): a <c>SetConsoleCtrlHandler</c> handler runs
-///                 on a separate OS thread, calls <c>StopApplication</c>, then BLOCKS until the host has stopped (or a
-///                 sub-5s budget elapses) — returning early would let Windows force-kill the process before the drain runs.
-///                 The Job Object remains the hard-kill safety net regardless.
-///             </item>
-///         </list>
-///     </para>
-///     Only activated in desktop mode (invariant: with the desktop flag off, nothing here is installed).
+///     Desktop-mode host lifecycle: routes a closed console window into a graceful application stop, so the singleton
+///     <c>LlamaServerProcessSupervisor</c> disposes and tree-kills its child, and opens the browser once started.
 /// </summary>
+/// <remarks>
+///     Two OS gaps are filled; SIGINT/SIGTERM/SIGQUIT are already handled by ConsoleLifetime. Linux <c>SIGHUP</c>
+///     (terminal close) reaches <see cref="IHostApplicationLifetime.StopApplication" /> through a
+///     <see cref="PosixSignalRegistration" />; Windows <c>CTRL_CLOSE_EVENT</c> reaches it through a
+///     <c>SetConsoleCtrlHandler</c> handler, which then BLOCKS for the drain. Only activated in desktop mode: with the
+///     flag off, nothing here is installed. See docs/wiki/11-hosting-and-deployment.md ("No-orphan shutdown (the load-bearing invariant)").
+/// </remarks>
 internal sealed class DesktopLifecycle : IDisposable
 {
     // Win32 console control event codes (see learn.microsoft.com/windows/console/handlerroutine).
@@ -176,9 +166,8 @@ internal sealed class DesktopLifecycle : IDisposable
             return false;
         }
 
-        // This handler runs on a separate OS thread; Windows force-kills the process when it returns (or after ~5s).
-        // So: request the stop, then BLOCK until the host has stopped or the budget elapses. Returning early aborts the
-        // drain — the Job Object then hard-kills the child tree (still no orphan), but we prefer the graceful path.
+        // This handler runs on a separate OS thread and Windows force-kills the process when it returns (or after ~5s), so
+        // request the stop and BLOCK until the host stops or the budget elapses; returning early aborts the drain.
         try
         {
             TriggerGracefulStop();
@@ -210,10 +199,8 @@ internal sealed class DesktopLifecycle : IDisposable
                 return;
             }
 
-            // Persist the port Kestrel actually bound so the next launch can re-bind it for a stable browser origin.
-            // This runs on every start, so a :0-fallback launch still records its freshly assigned port for next time.
-            // Persistence is best-effort (DesktopPortStore swallows IO failures) and is inside this try, so it can never
-            // abort startup.
+            // Persist the port Kestrel actually bound so the next launch re-binds it for a stable browser origin; a :0 launch
+            // records its assigned port too. Best-effort and inside this try, so persistence can never abort startup.
             if (_dataDirectory is not null && Uri.TryCreate(url, UriKind.Absolute, out var boundUri))
             {
                 DesktopPortStore.Persist(_dataDirectory, boundUri.Port, _logger);

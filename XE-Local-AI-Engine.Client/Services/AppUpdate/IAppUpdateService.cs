@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 /// <summary>
-///     Orchestrates app self-update: runs an anonymous public GitHub release check in desktop mode, records the result in
-///     <see cref="IAppUpdateState" />, and applies an available update (download → apply → relaunch). Wraps the Velopack
-///     manager behind <see cref="IVelopackUpdateManager" /> so it can be tested without real network.
+///     Orchestrates app self-update: an anonymous public GitHub release check in desktop mode, recorded in
+///     <see cref="IAppUpdateState" />, then download, apply and relaunch.
 /// </summary>
+/// <remarks>
+///     Wraps the Velopack manager behind <see cref="IVelopackUpdateManager" /> so it can be tested without real
+///     network.
+/// </remarks>
 public interface IAppUpdateService
 {
     /// <summary>
@@ -20,10 +23,13 @@ public interface IAppUpdateService
     Task<AppUpdateSnapshot> RefreshIfStaleAsync(TimeSpan minInterval, CancellationToken ct);
 
     /// <summary>
-    ///     Downloads the available update and schedules Velopack to apply it after host exit. No-op when not desktop, not
-    ///     configured, or no update is available (including when a live re-check finds nothing). The endpoint completes a
-    ///     successful response before it stops the host, allowing the browser to enter restart polling reliably.
+    ///     Downloads the available update and schedules Velopack to apply it after host exit.
     /// </summary>
+    /// <remarks>
+    ///     No-op when not desktop, not configured, or no update is available, including when a live re-check finds
+    ///     nothing. The endpoint completes a successful response before it stops the host, so the browser can enter
+    ///     restart polling reliably.
+    /// </remarks>
     /// <returns><see langword="true" /> when an apply was actually initiated; <see langword="false" /> when nothing was applied.</returns>
     /// <exception cref="AppUpdateException">The apply failed (sanitized message — no path or feed URL).</exception>
     Task<bool> ApplyAsync(CancellationToken ct);

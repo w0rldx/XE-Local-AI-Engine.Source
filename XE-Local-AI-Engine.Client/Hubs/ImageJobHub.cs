@@ -7,14 +7,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
 /// <summary>
-///     Server-push hub for image-job progress. Clients drive jobs through the REST endpoints and receive coarse status
-///     transitions (each carrying its jobId + monotonic seq) broadcast via <see cref="ImageJobEventPublisher" />.
-///     <see cref="Subscribe" /> opts a connection into a per-job group for scoped delivery, THEN replays the job's buffered
-///     events to the caller — join-then-replay closes the subscribe-after-publish race, and the client dedupes any event
-///     delivered both via replay (Caller) and live (Group) on the payload's <c>seq</c>. Unlike the preview hub, a
-///     disconnect does NOT cancel the job — image generation is a durable job that outlives the tab. Protected with the
-///     same Operator policy as the other local hubs.
+///     Server-push hub for image-job progress, protected with the same Operator policy as the other local hubs.
 /// </summary>
+/// <remarks>
+///     Clients drive jobs through REST and receive coarse status transitions (each carrying its jobId + monotonic seq)
+///     via <see cref="ImageJobEventPublisher" />. <see cref="Subscribe" /> opts a connection into a per-job group THEN
+///     replays that job's buffered events — join-then-replay closes the subscribe-after-publish race, and the client
+///     dedupes an event delivered both via replay (Caller) and live (Group) on the payload's <c>seq</c>. A disconnect
+///     does NOT cancel the job: image generation is durable and outlives the tab.
+/// </remarks>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class ImageJobHub : Hub
 {

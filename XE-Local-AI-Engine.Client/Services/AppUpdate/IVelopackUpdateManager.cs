@@ -42,11 +42,13 @@ public sealed class VelopackCheckResult
 }
 
 /// <summary>
-///     The seam over Velopack's <c>UpdateManager</c> for a single build flavor's GitHub source. It keeps every Velopack
-///     type (UpdateManager, GithubSource, UpdateInfo, VelopackAsset) inside the implementation so the update service and
-///     its tests depend only on this interface — no real network, no Velopack types, in unit tests. One instance is
-///     created for the baked anonymous public source policy.
+///     The seam over Velopack's <c>UpdateManager</c> for a single build flavor's GitHub source.
 /// </summary>
+/// <remarks>
+///     Keeps every Velopack type (UpdateManager, GithubSource, UpdateInfo, VelopackAsset) inside the implementation, so
+///     the update service and its tests depend only on this interface — no real network, no Velopack types, in unit
+///     tests. One instance is created for the baked anonymous public source policy.
+/// </remarks>
 public interface IVelopackUpdateManager
 {
     /// <summary><see langword="true" /> only when the app is running from a Velopack install (not a raw-exe / dev run).</summary>
@@ -59,11 +61,14 @@ public interface IVelopackUpdateManager
     Task<VelopackCheckResult> CheckForUpdateAsync(CancellationToken ct);
 
     /// <summary>
-    ///     Downloads the latest release and asks Velopack to wait for this host to exit before applying it and restarting
-    ///     into the new version. Re-uses <paramref name="restartArgs" /> so desktop mode + the persisted loopback port
-    ///     survive. This method deliberately does not terminate the process: the endpoint must first complete its
-    ///     <c>{ applying: true }</c> response, then stop the host gracefully.
+    ///     Downloads the latest release and asks Velopack to wait for this host to exit before applying it and
+    ///     restarting into the new version.
     /// </summary>
+    /// <remarks>
+    ///     Re-uses <paramref name="restartArgs" /> so desktop mode and the persisted loopback port survive. It
+    ///     deliberately does not terminate the process: the endpoint must first complete its
+    ///     <c>{ applying: true }</c> response, then stop the host gracefully.
+    /// </remarks>
     /// <returns><see langword="true" /> after the updater is waiting for host exit; <see langword="false" /> when no update was available.</returns>
     Task<bool> PrepareUpdateAndRestartAsync(IReadOnlyList<string> restartArgs, CancellationToken ct);
 }

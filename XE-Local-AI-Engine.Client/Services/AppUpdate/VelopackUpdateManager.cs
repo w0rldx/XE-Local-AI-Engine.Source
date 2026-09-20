@@ -10,12 +10,14 @@ using Velopack.Exceptions;
 using Velopack.Sources;
 
 /// <summary>
-///     The real Velopack-backed <see cref="IVelopackUpdateManager" />. Wraps a <see cref="UpdateManager" /> over a
-///     <see cref="GithubSource" /> for the baked public repo and explicit stable/RC track, with a null access token. All
-///     Velopack types stay inside this class. Check failures are reduced to sanitized categories so transport outages
-///     can be distinguished from malformed feeds, integrity failures, and unexpected faults without retaining their
-///     potentially sensitive exception messages.
+///     The real Velopack-backed <see cref="IVelopackUpdateManager" />, wrapping an <see cref="UpdateManager" /> over a
+///     <see cref="GithubSource" /> for the baked public repo and explicit stable/RC track, with a null access token.
 /// </summary>
+/// <remarks>
+///     All Velopack types stay inside this class. Check failures are reduced to sanitized categories so transport
+///     outages can be distinguished from malformed feeds, integrity failures and unexpected faults without retaining
+///     their potentially sensitive exception messages.
+/// </remarks>
 public sealed class VelopackUpdateManager : IVelopackUpdateManager
 {
     private readonly Action<UpdateManager, VelopackAsset, string[]> _scheduleApplyAfterExit;
@@ -89,9 +91,8 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
 
         await _updateManager.DownloadUpdatesAsync(updateInfo, progress: null, ct);
 
-        // Start the updater in wait-for-exit mode, but do NOT terminate this host here. ApplyUpdatesAndRestart exits the
-        // process synchronously in Velopack 1.2.0, which aborts the HTTP response that tells React to begin restart
-        // polling. The endpoint completes { applying: true } first and then requests graceful host shutdown.
+        // Start the updater in wait-for-exit mode, but do NOT terminate this host here: ApplyUpdatesAndRestart exits the process
+        // synchronously in Velopack 1.2.0, aborting the response that tells React to poll. The endpoint answers first, then stops the host.
         _scheduleApplyAfterExit(_updateManager, updateInfo.TargetFullRelease, [.. restartArgs]);
         return true;
     }

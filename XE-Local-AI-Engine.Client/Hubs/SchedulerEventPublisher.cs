@@ -4,11 +4,13 @@ using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     Hub-backed <see cref="ISchedulerEventPublisher" />. Broadcasts each sanitized scheduler event to all connected
-///     clients under its <c>EventType</c> as the SignalR method name, so the React client subscribes per event. Replaces
-///     the no-op default in the Client host. Payloads are already sanitized by the callers (no parameters, details, or
-///     stack traces).
+///     Hub-backed <see cref="ISchedulerEventPublisher" />, replacing the no-op default in the Client host.
 /// </summary>
+/// <remarks>
+///     Broadcasts each sanitized scheduler event to all connected clients under its <c>EventType</c> as the SignalR
+///     method name, so the React client subscribes per event. Payloads are already sanitized by the callers: no
+///     parameters, details, or stack traces.
+/// </remarks>
 internal sealed class SchedulerEventPublisher : ISchedulerEventPublisher
 {
     private readonly IHubContext<SchedulerHub> _hubContext;

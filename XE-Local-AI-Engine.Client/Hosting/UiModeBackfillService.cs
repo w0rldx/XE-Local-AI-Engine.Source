@@ -6,40 +6,14 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     One-time upgrade backfill for the navigation mode: a node whose operator has already been through first-run
-///     onboarding and carries no <c>UiMode</c> is stamped <c>advanced</c>, which is exactly the navigation it showed
-///     before the mode existed. A node still inside first-run onboarding is left undecided, so the first-run mode step
-///     owns the choice, and a node that already holds a mode is left alone.
+///     onboarding and carries no <c>UiMode</c> is stamped <c>advanced</c>.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Why the discriminator is not "an administrator exists".</b> That is the moment first-run onboarding
-///         STARTS, not the moment it finishes: the setup endpoint persists the administrator and stamps the
-///         external-access profile <c>pending</c> in the same call, and the operator then answers the external-access
-///         step and the mode step. Keying on the administrator alone would stamp <c>advanced</c> on a brand-new node
-///         that restarted while its operator was still looking at the external-access chooser, and that operator would
-///         never be asked. So the discriminator is the SUCCESSOR state of the step before this one: an administrator
-///         exists AND the external-access profile is anything other than <c>pending</c>.
-///     </para>
-///     <para>
-///         That deliberately includes a null profile, which is what an upgraded node carries until
-///         <see cref="ExternalAccessProfileBackfillService" /> stamps it, and what a node that answered its switches by
-///         hand keeps for good (see that service's remarks). Both are installs whose operator has long since finished
-///         whatever onboarding existed for them, so both want <c>advanced</c> — and reading the state rather than the
-///         other service's output is what keeps these two backfills independent of their start order.
-///     </para>
-///     <para>
-///         <b>The one window this leaves.</b> A node that is restarted between the external-access answer and the mode
-///         answer is stamped <c>advanced</c> and not asked again. Closing it would need a third <c>pending</c>-style
-///         literal, which the mode does not otherwise need; the cost of leaving it open is that such an operator sees
-///         the full navigation and changes it on the Node Settings page, which is what the step's own copy tells them.
-///     </para>
-///     <para>
-///         <b>Why the work runs in <see cref="StartAsync" />.</b> Same reason as
-///         <see cref="ExternalAccessProfileBackfillService" />: one node-local identity read and at most one settings
-///         write, no network, and blocking start is the point — a background loop would leave a window in which the SPA
-///         could read <c>uiMode: null</c> from a node that has been running for months and send its operator to a
-///         first-run step they already passed. Not desktop-gated; an upgrading node exists on every launch mode.
-///     </para>
+///     A node still inside first-run onboarding is left undecided, so the first-run mode step owns the choice, and a
+///     node that already holds a mode is left alone. The discriminator is the SUCCESSOR state of the step before this
+///     one — an administrator exists AND the external-access profile is anything other than <c>pending</c> — which is
+///     what keeps this independent of <see cref="ExternalAccessProfileBackfillService" />'s start order. Not
+///     desktop-gated. See docs/wiki/11-hosting-and-deployment.md ("Upgrade backfills and their discriminators").
 /// </remarks>
 public sealed class UiModeBackfillService : IHostedService
 {
@@ -66,10 +40,8 @@ public sealed class UiModeBackfillService : IHostedService
         }
         catch (Exception exception)
         {
-            // This runs on the startup path, so an unswallowed failure would stop the host from starting at all. A node
-            // that cannot read its identity database or its settings file must still come up; the backfill is idempotent
-            // and the next boot retries.
-            // Warning, not Debug: Debug is off in production, so a real defect here would leave no trace at all.
+            // This runs on the startup path, so an unswallowed failure would stop the host starting at all; the backfill is
+            // idempotent and the next boot retries. Warning, not Debug: Debug is off in production and would leave no trace.
             _logger.LogWarning(exception, "Skipping the interface-mode backfill: it could not be completed.");
         }
     }
@@ -80,10 +52,12 @@ public sealed class UiModeBackfillService : IHostedService
     }
 
     /// <summary>
-    ///     Stamps <c>advanced</c> on a node whose operator has finished first-run onboarding and has no mode yet. Any
-    ///     record that already holds a mode is left exactly as it is. Exposed as <see langword="internal" /> so it is
-    ///     unit-testable without standing up the hosted-service lifecycle.
+    ///     Stamps <c>advanced</c> on a node whose operator has finished first-run onboarding and has no mode yet.
     /// </summary>
+    /// <remarks>
+    ///     Any record that already holds a mode is left exactly as it is. Exposed as <see langword="internal" /> so it
+    ///     is unit-testable without standing up the hosted-service lifecycle.
+    /// </remarks>
     internal static async Task BackfillAsync(IServiceScopeFactory scopeFactory, ILogger logger, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(scopeFactory);
@@ -92,9 +66,8 @@ public sealed class UiModeBackfillService : IHostedService
         await using var scope = scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
 
-        // The STRICT load, not LoadAsync: a present-but-unreadable settings file must not be read as "no mode yet". The
-        // safe failure is leaving it undecided — the navigation reads an absent mode as advanced anyway, so nothing
-        // disappears, and repairing the file lets the next boot decide properly.
+        // The STRICT load, not LoadAsync: a present-but-unreadable settings file must not read as "no mode yet". Undecided
+        // is the safe failure — navigation reads an absent mode as advanced, and repairing the file lets the next boot decide.
         var stored = await store.LoadStrictAsync(cancellationToken);
         if (stored is null)
         {

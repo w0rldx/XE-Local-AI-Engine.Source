@@ -8,46 +8,19 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     First-run provisioning for the packaged desktop launch: ensures a small node-local GGUF chat model is
-///     installed (via the bundled llama.cpp runtime) and selected, so a fresh double-click install can chat without the
-///     operator first downloading a model or running Ollama.
+///     First-run provisioning for the packaged desktop launch: ensures a small node-local GGUF chat model is installed
+///     through the bundled llama.cpp runtime and selected, so a fresh double-click install can chat right away.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Why it stays in the host.</b> The desktop-launch decision it gates on is a host fact — the process's own
-///         command line plus the Velopack install kind — that the application layer cannot resolve, so this service
-///         cannot move down with the other background services. The three llama.cpp contracts it needs (the GPU-variant
-///         probe, the binary ensure and the acquisition-status report) therefore arrive through
-///         <see cref="LlamaCppRuntimeOrchestrationService" />, the one door a host type may take, exactly as the
-///         inbound model proxy's forwarder does.
-///     </para>
-///     <para>
-///         <b>Desktop-gated.</b> The whole flow runs only when the process was launched in desktop mode
-///         (<c>XE_LAUNCH_MODE=desktop</c> / <c>--desktop</c>). Headless, Aspire, and CI runs are byte-behavior-unchanged
-///         — they never auto-download a model.
-///     </para>
-///     <para>
-///         <b>Non-blocking + offline-tolerant.</b> All work runs in <see cref="ExecuteAsync" /> off the startup path; a
-///         multi-GB binary/model download never blocks the host from coming up. Any transport failure (HF unreachable,
-///         binary acquisition failure) is caught and logged, leaving the empty-picker onboarding as the fallback — the
-///         service never crashes startup.
-///     </para>
-///     <para>
-///         <b>Idempotent.</b> It no-ops when a GGUF is already installed or a non-default <c>DefaultModelName</c> is set,
-///         so it provisions at most once and is safe to run on every boot.
-///     </para>
-///     <para>
-///         <b>Acquisition visibility.</b> The GPU-probe segment reports to the acquisition-status registry so the
-///         operator sees why a fresh install sits idle; the binary manager reports the download/verify/extract phases
-///         itself. This service owns the terminal <see cref="RuntimeAcquisitionPhase.Failed" /> for the probe segment
-///         ALONE — never for the whole flow.
-///     </para>
+///     Desktop-gated, non-blocking, offline-tolerant and idempotent; the three llama.cpp contracts it needs arrive
+///     through <see cref="LlamaCppRuntimeOrchestrationService" />, the one door a host type may take. It owns the
+///     terminal <see cref="RuntimeAcquisitionPhase.Failed" /> for the GPU-probe segment ALONE — never for the whole
+///     flow. See docs/wiki/11-hosting-and-deployment.md ("First-run model provisioning (desktop)").
 /// </remarks>
 public sealed class FirstRunModelProvisioningService : BackgroundService
 {
-    // Whole-probe ceiling: the single wall-clock bound on GPU-variant detection. The probe itself enforces a shorter
-    // per-tool timeout (ProcessGpuVendorProbe.ProbeTimeout, 8s) and reaps its child; this ceiling covers the rare case
-    // where the fast path + both shelling probes chain. Generous so a slow-but-working detection still succeeds.
+    // Whole-probe ceiling: the single wall-clock bound on GPU-variant detection. The probe enforces a shorter per-tool timeout
+    // (ProcessGpuVendorProbe.ProbeTimeout, 8s) and reaps its child; this covers the fast path chaining both shelling probes.
     private static readonly TimeSpan DefaultGpuProbeCeiling = TimeSpan.FromSeconds(25);
 
     private readonly IConfiguration _configuration;
@@ -84,10 +57,8 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     {
     }
 
-    // Test seam: injects the desktop-mode decision, the download-poll interval, and the GPU-probe ceiling so the
-    // provisioning sequence (including the probe-overrun fallback) is exercisable without mutating real process
-    // args/env, without a 2s/tick wait, and without a 25s ceiling wait. Mirrors DesktopLaunch's injectable-reader
-    // pattern. Production uses the public ctor, which resolves the real desktop decision.
+    // Test seam injecting the desktop-mode decision, the download-poll interval and the GPU-probe ceiling, so the sequence
+    // (probe overrun included) runs without touching real args/env and without the tick or ceiling waits. Production uses the public ctor.
     internal FirstRunModelProvisioningService(IConfiguration configuration,
         IGgufModelStore ggufModelStore,
         IGgufDownloadCoordinator downloadCoordinator,
@@ -182,45 +153,30 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
 
         var quant = _configuration.GetValue<string>("FirstRunModel:Quant");
 
-        // Ensure the llama.cpp binary for this host BEFORE downloading the model so the model is immediately runnable.
-        // A binary acquisition failure surfaces a sanitized LlamaRuntimeException that the caller's catch turns into the
-        // empty-picker fallback.
-        //
-        // GPU-variant detection prefers a non-shelling NVML driver-presence signal and only shells out to vendor tools
-        // (nvidia-smi / wmic) as a fallback; those can hang on some Windows hosts. ONE timeout governs the whole
-        // selection: a linked CancellationTokenSource with a hard ceiling. The probe is cancellation-linked and reaps
-        // any child process it spawned in a finally block, so cancelling it here can NEVER leave an orphaned process —
-        // there is no second wall-clock race and no abandoned probe task. On timeout/failure we fall back to the CPU
-        // runtime, which always works (just slower) — provisioning reaching the download is the priority.
+        // Ensure the llama.cpp binary BEFORE downloading the model, so the model is immediately runnable; an acquisition failure surfaces a
+        // sanitized LlamaRuntimeException the caller's catch turns into the empty-picker fallback. ONE linked CancellationTokenSource governs the whole GPU-variant selection.
         _logger.LogInformation("First-run provisioning detecting the GPU runtime variant.");
         GpuVariant variant;
         using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         probeCts.CancelAfter(_gpuProbeCeiling);
         try
         {
-            // The acquisition channel opens HERE, not at the top of ProvisionAsync: this probe is the first of the two
-            // silent multi-second phases the operator sees no explanation for (the archive download is the other, and the
-            // binary manager reports that one itself). Reporting is fire-and-forget inside the registry, so it adds no
-            // await to the startup path.
+            // The acquisition channel opens HERE, not at the top of ProvisionAsync: this probe is the first silent multi-second
+            // phase an operator sees no explanation for. Reporting is fire-and-forget inside the registry, so it adds no await.
             _runtime.ReportRuntimeAcquisition(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.DetectingGpu });
             variant = await _runtime.SelectGpuVariantAsync(probeCts.Token);
         }
         catch (OperationCanceledException) when (probeCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            // The probe overran the ceiling (a wedged vendor tool); the probe's own finally reaped its child. Fall back
-            // to the CPU runtime so a stuck probe never blocks first-run provisioning beyond the ceiling. This is a
-            // FALLBACK, not a failure — publishing Failed here would show an error banner for a run that goes on to
-            // acquire the CPU runtime and provision normally.
+            // The probe overran the ceiling (a wedged vendor tool) and its own finally reaped the child. The CPU runtime keeps
+            // provisioning moving: a FALLBACK, not a failure, so publishing Failed here would banner a run that succeeds.
             _logger.LogWarning("First-run provisioning: GPU runtime detection did not complete within {Ceiling}; falling back to the CPU runtime.", _gpuProbeCeiling);
             variant = GpuVariant.Cpu;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Terminal state is scoped to the ONE segment this service owns. The manager owns Failed for the phases it
-            // performs (download/verify/extract), and the outer ExecuteAsync catch must never publish it: that catch also
-            // spans the model download and the settings save, so a throw from either would overwrite a legitimate
-            // Completed with a false runtime failure — and the banner's retry would then be a dead button attached to a
-            // wrong diagnosis. Cancellation is excluded above because a shutting-down host is not an acquisition failure.
+            // Terminal state is scoped to the ONE segment this service owns; the manager owns Failed for download/verify/extract and the
+            // outer ExecuteAsync catch must never publish it. Cancellation is excluded: a shutting-down host is not an acquisition failure.
             _runtime.ReportRuntimeAcquisition(new RuntimeAcquisitionUpdate
             {
                 Phase = RuntimeAcquisitionPhase.Failed,
@@ -237,9 +193,8 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         var binary = await _runtime.EnsureBinaryAsync(variant, ct);
         _logger.LogInformation("First-run provisioning ensured the llama.cpp runtime ({Variant}, version {Version}).", variant, binary.Version);
 
-        // Download the default GGUF through the coordinator's detached path so progress/cancel AND the llamacpp
-        // model_provider_map write happen through the SAME code as an operator-initiated download (FRR-2). The ticket
-        // carries the canonical {repo:quant} identity the model is installed under.
+        // Download the default GGUF through the coordinator's detached path, so progress/cancel AND the llamacpp model_provider_map
+        // write happen through the SAME code as an operator-initiated download (FRR-2), under the canonical {repo:quant} identity.
         var request = new GgufModelRequest
         {
             RepoId = repoId.Trim(),
@@ -259,15 +214,8 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             return;
         }
 
-        // Select the freshly-installed GGUF as the node default so the chat composer opens on a ready model. The write
-        // is a read-modify-write under the store's lock rather than a save of the record loaded above: the download
-        // wait between the two can run for MINUTES, and the settings record is whole-file, so saving the stale copy
-        // would silently roll back everything written meanwhile (a machine key minted at boot, an operator's edit).
-        //
-        // The skip precondition is re-checked against that write-time record, not only against the pre-download load:
-        // the operator can pick a model from the picker DURING those minutes, and assigning unconditionally here
-        // reverted their choice to the auto-provisioned one. Returning `latest` still writes — the store has no
-        // no-change early return — which is one redundant write on a first run and not worth a second load to avoid.
+        // Select the freshly-installed GGUF as the node default: a read-modify-write under the store's lock, with the skip precondition re-checked against the
+        // WRITE-time record. Returning `latest` still writes, because the store has no no-change early return — one redundant write on a first run.
         string? operatorSelection = null;
         await _nodeSettingsStore.UpdateAsync(latest =>
         {
@@ -295,19 +243,24 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
 
     /// <summary>
     ///     Whether first-run provisioning owns <c>DefaultModelName</c>: nothing is selected yet, or what is selected is
-    ///     the configured fallback this service exists to replace. Anything else is an operator's own pick and must
-    ///     survive. Shared by the pre-download skip and the post-download write so the two cannot drift.
+    ///     the configured fallback this service exists to replace.
     /// </summary>
+    /// <remarks>
+    ///     Anything else is an operator's own pick and must survive. Shared by the pre-download skip and the
+    ///     post-download write so the two cannot drift.
+    /// </remarks>
     private static bool MayAutoSelectDefaultModel(string? selected, string? configuredDefault) =>
         string.IsNullOrWhiteSpace(selected)
         || string.Equals(selected, configuredDefault, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     ///     Reduces a GPU-probe failure to operator-safe text for the acquisition banner.
-    ///     <see cref="LlamaRuntimeException" /> messages are user-safe by contract, so they pass through; anything else is
-    ///     collapsed to a generic reason rather than surfaced verbatim, since an arbitrary exception message can carry an
-    ///     absolute path or a command line.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="LlamaRuntimeException" /> messages are user-safe by contract, so they pass through; anything else
+    ///     is collapsed to a generic reason rather than surfaced verbatim, since an arbitrary exception message can
+    ///     carry an absolute path or a command line.
+    /// </remarks>
     private static string SanitizeAcquisitionFailure(Exception exception)
     {
         return exception is LlamaRuntimeException runtimeException
@@ -316,11 +269,13 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     }
 
     /// <summary>
-    ///     Polls the download coordinator's sanitized status until the named download reaches a terminal phase. Returns
-    ///     <see langword="true" /> only when it completed (the file is present); <see langword="false" /> on cancel or
-    ///     failure. Polls rather than blocks because the coordinator runs the download detached and exposes progress via
-    ///     a status registry.
+    ///     Polls the download coordinator's sanitized status until the named download reaches a terminal phase.
     /// </summary>
+    /// <remarks>
+    ///     Returns <see langword="true" /> only when it completed and the file is present, <see langword="false" /> on
+    ///     cancel or failure. It polls rather than blocks because the coordinator runs the download detached and
+    ///     exposes progress through a status registry.
+    /// </remarks>
     private async Task<bool> WaitForDownloadAsync(string modelName, CancellationToken ct)
     {
         using var timer = new PeriodicTimer(_pollInterval);

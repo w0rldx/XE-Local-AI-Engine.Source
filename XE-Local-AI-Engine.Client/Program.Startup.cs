@@ -20,14 +20,14 @@ public sealed partial class Program
 {
     /// <summary>
     ///     Reads every saved Open Canvas workflow BEFORE migrations, because the <c>DropCanvasWorkflows</c> migration
-    ///     removes the table they live in and no migration can decrypt the graph blob. The write half runs after
-    ///     migrations, once the Graph Workflow tables exist.
-    ///     <para>
-    ///         A read that throws is reported and answered with an empty snapshot: the import is best-effort and must
-    ///         never block startup. It logs at Error rather than staying quiet, because "the read threw" and "there
-    ///         were no rows" must not look alike in the log.
-    ///     </para>
+    ///     removes the table they live in and no migration can decrypt the graph blob.
     /// </summary>
+    /// <remarks>
+    ///     The write half runs after migrations, once the Graph Workflow tables exist. A read that throws is reported
+    ///     and answered with an empty snapshot, because the import is best-effort and must never block startup; it
+    ///     logs at Error rather than staying quiet, because "the read threw" and "there were no rows" must not look
+    ///     alike in the log.
+    /// </remarks>
     private static async Task<CanvasWorkflowImportSnapshot> ReadPendingCanvasWorkflowsAsync(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -85,10 +85,8 @@ public sealed partial class Program
 
         await using var scope = services.CreateAsyncScope();
 
-        // Snapshot the node database before applying pending migrations, in the same scope. Best-effort — a backup
-        // failure is logged and swallowed inside the service, so it can never block migration or brick startup.
-        // CancellationToken.None throughout the migration path: no token exists before the host is built, and a
-        // half-applied schema migration is worse than a slow one.
+        // Snapshot the node database before applying pending migrations, in the same scope. Best-effort: a backup failure is logged and swallowed inside the service, so
+        // it can never block migration or brick startup. CancellationToken.None throughout — no token exists before the host is built, and a half-applied migration is worse.
         var backupService = scope.ServiceProvider.GetRequiredService<INodeDbBackupService>();
         await backupService.BackupBeforeMigrationAsync(CancellationToken.None);
 
@@ -123,9 +121,8 @@ public sealed partial class Program
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // A previous process may have died mid-run, leaving Queued/Running rows whose in-memory cancellation registry is
-        // gone. Reconcile them to a sanitized terminal state BEFORE the Quartz hosted service starts firing recovery work,
-        // so the history never shows a run stuck Running forever. Cheap no-op when there is no scheduler history.
+        // A previous process may have died mid-run, leaving Queued/Running rows whose in-memory cancellation registry is gone. Reconcile them to a sanitized terminal
+        // state BEFORE the Quartz hosted service starts firing recovery work, so the history never shows a run stuck Running forever. A no-op with no history.
         await using var scope = services.CreateAsyncScope();
         var runStore = scope.ServiceProvider.GetRequiredService<IScheduledJobRunStore>();
 
@@ -153,9 +150,8 @@ public sealed partial class Program
         // there post-start so the next launch can re-bind it for a stable browser origin.
         var desktopDataDirectory = app.Configuration[DesktopBootstrap.NodeDataDirectoryKey];
 
-        // Ownership is transferred to the host lifetime: the instance lives for the app's lifetime (rooting the native
-        // console-ctrl delegate held inside it) and is disposed when the host stops. CA2000 can't see the deferred disposal
-        // through the lifetime registration, so it is suppressed with that justification.
+        // Ownership is transferred to the host lifetime: the instance lives for the app's lifetime, rooting the native console-ctrl delegate held inside it, and is
+        // disposed when the host stops. CA2000 cannot see the deferred disposal through the lifetime registration, so it is suppressed with that justification.
 #pragma warning disable CA2000 // Disposal is deferred to and owned by ApplicationStopped below.
         var desktopLifecycle = new DesktopLifecycle(lifetime,
             server,

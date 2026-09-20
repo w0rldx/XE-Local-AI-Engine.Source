@@ -22,10 +22,13 @@ internal sealed class LlamaCppSourceBuildEventPublisher : ILlamaCppSourceBuildEv
 }
 
 /// <summary>
-///     Stable SignalR wire shape. Provider contracts intentionally remain transport-agnostic; this projection keeps
-///     their CLR enums from leaking as numeric or Pascal-cased values and can absorb future descriptor fields without
-///     changing the provider event contract.
+///     Stable SignalR wire shape for a source-build status push.
 /// </summary>
+/// <remarks>
+///     Provider contracts intentionally remain transport-agnostic; this projection keeps their CLR enums from leaking
+///     as numeric or Pascal-cased values and can absorb further descriptor fields without changing the provider event
+///     contract.
+/// </remarks>
 internal sealed class LlamaCppSourceBuildStatusHubMessage
 {
     public required string Phase { get; init; }

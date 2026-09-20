@@ -7,12 +7,15 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 
 /// <summary>
-///     Derives and holds the Data Protection key-ring KEK. Mirrors <c>NodeSqliteKeyHolder</c> and
-///     <c>NodeJwtKeyProvider</c> exactly — same HKDF-SHA256 derivation, same operator-secret source, same
-///     zero-on-dispose discipline — but with a Data Protection-specific info string so the three keys never collide.
-///     The at-rest (<c>c0re-node-sqlite</c>), auth (<c>c0re-node-jwt</c>), and key-ring (<c>c0re-node-dpkeyring</c>)
-///     derivations MUST keep distinct info strings; collapsing them would let one key material stand in for another.
+///     Derives and holds the Data Protection key-ring KEK.
 /// </summary>
+/// <remarks>
+///     Mirrors <c>NodeSqliteKeyHolder</c> and <c>NodeJwtKeyProvider</c> exactly — same HKDF-SHA256 derivation, same
+///     operator-secret source, same zero-on-dispose discipline — but with a Data Protection-specific info string so
+///     the three keys never collide. The at-rest (<c>c0re-node-sqlite</c>), auth (<c>c0re-node-jwt</c>) and key-ring
+///     (<c>c0re-node-dpkeyring</c>) derivations MUST keep distinct info strings; collapsing them would let one key
+///     material stand in for another.
+/// </remarks>
 public sealed class NodeDataProtectionKeyProvider : INodeDataProtectionKeyProvider
 {
     private const int ExpectedKeyLength = 32;
@@ -31,11 +34,8 @@ public sealed class NodeDataProtectionKeyProvider : INodeDataProtectionKeyProvid
             throw new InvalidOperationException("WorkerNode:NodeName must be configured.");
         }
 
-        // A missing operator secret throws here (fail-closed): the key-ring cannot be wrapped or unwrapped without it.
-        // Note the node store is PLAIN SQLite with application-level COLUMN encryption (not SQLCipher/whole-file), so a
-        // wrong (rather than missing) secret does not necessarily fail startup — an encrypted column only fails when it
-        // is actually read. The loud backstop for the key-ring is NodeDataProtectionKeyRingFailClosedKeyResolver, which
-        // hard-fails on an undecryptable encrypted key instead of relying on the SQLite store to surface a bad secret.
+        // Fail-closed: a MISSING operator secret throws here, because the key-ring cannot be wrapped or unwrapped without it. A WRONG one need not fail startup —
+        // the node store is PLAIN SQLite with application-level COLUMN encryption, so a column fails only when read, and NodeDataProtectionKeyRingFailClosedKeyResolver is the loud backstop.
         var operatorSecret = operatorSecretProvider.GetOperatorSecret();
         try
         {

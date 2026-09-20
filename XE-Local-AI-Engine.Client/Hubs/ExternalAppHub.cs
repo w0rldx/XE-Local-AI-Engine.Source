@@ -17,10 +17,12 @@ public static class ExternalAppHubEvents
 }
 
 /// <summary>
-///     A content-free ping: what happened, where the instance now stands, and the sequence it was minted at. The
-///     subscriber re-reads the feed from its own watermark, so a dropped push degrades to a late read rather than to a
-///     wrong render — and nothing an instance's variables could reach ever rides on the hub.
+///     A content-free ping: what happened, where the instance now stands, and the sequence it was minted at.
 /// </summary>
+/// <remarks>
+///     The subscriber re-reads the feed from its own watermark, so a dropped push degrades to a late read rather than
+///     to a wrong render — and nothing an instance's variables could reach ever rides on the hub.
+/// </remarks>
 public sealed class ExternalAppChanged
 {
     public required Guid InstanceId { get; init; }
@@ -68,13 +70,13 @@ public sealed class ExternalAppSubscriptionSnapshot
 
 /// <summary>
 ///     Operator-only live notifications for one external application instance.
-///     <para>
-///         There is no in-memory buffer: instance events are persisted append-only with a monotonic sequence and
-///         <see cref="IExternalAppService.ListEventsAsync" /> IS the replay authority — literally the same member the
-///         events endpoint pages, so a subscription and the History tab cannot show two different pasts. Nor does a
-///         disconnect cancel anything: an install outlives the browser tab that started it.
-///     </para>
 /// </summary>
+/// <remarks>
+///     There is no in-memory buffer: instance events are persisted append-only with a monotonic sequence and
+///     <see cref="IExternalAppService.ListEventsAsync" /> IS the replay authority — literally the same member the
+///     events endpoint pages, so a subscription and the History tab cannot show two different pasts. Nor does a
+///     disconnect cancel anything: an install outlives the browser tab that started it.
+/// </remarks>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class ExternalAppHub : Hub
 {
@@ -129,9 +131,8 @@ public sealed class ExternalAppHub : Hub
             throw new HubException(InstanceNotFoundMessage);
         }
 
-        // Join BEFORE reading the replay: the other order leaves a window in which a change published between the read
-        // and the join reaches nobody. The overlap this creates is harmless — every push is an idempotent notification
-        // keyed by sequence.
+        // Join BEFORE reading the replay: the other order leaves a window in which a change published between read and
+        // join reaches nobody. The overlap is harmless — every push is an idempotent notification keyed by sequence.
         await Groups.AddToGroupAsync(Context.ConnectionId, ExternalAppHubGroups.Instance(instanceId), cancellationToken);
 
         try
@@ -168,11 +169,14 @@ public sealed class ExternalAppHub : Hub
         Groups.RemoveFromGroupAsync(Context.ConnectionId, ExternalAppHubGroups.Instance(instanceId), Context.ConnectionAborted);
 
     /// <summary>
+    ///     Leaves the instance group again after a subscribe that threw.
+    /// </summary>
+    /// <remarks>
     ///     A subscribe that threw hands its caller no watermark and no handle to unsubscribe with, so a membership left
     ///     behind would push this instance's changes at a connection that never received its replay. Rolled back with
     ///     <see cref="CancellationToken.None" />: the failure being an aborted connection is exactly the case where the
     ///     rollback must still run rather than inherit the cancellation and mask the original exception.
-    /// </summary>
+    /// </remarks>
     private Task LeaveAfterFailedSubscribeAsync(Guid instanceId) =>
         Groups.RemoveFromGroupAsync(Context.ConnectionId, ExternalAppHubGroups.Instance(instanceId), CancellationToken.None);
 }

@@ -17,10 +17,13 @@ public static class GraphWorkflowHubEvents
 }
 
 /// <summary>
-///     What changed and where the run now stands. <see cref="Kind" /> is lowercase on the wire — the client switches
-///     on the literal — and the payload deliberately carries no content: the subscriber re-reads the named feed from
-///     its own watermark, so a dropped push degrades to a late read rather than to a wrong render.
+///     What changed and where the run now stands.
 /// </summary>
+/// <remarks>
+///     <see cref="Kind" /> is lowercase on the wire — the client switches on the literal. The payload deliberately
+///     carries no content: the subscriber re-reads the named feed from its own watermark, so a dropped push degrades
+///     to a late read rather than to a wrong render.
+/// </remarks>
 public sealed class GraphWorkflowChanged
 {
     public required Guid RunId { get; init; }
@@ -51,13 +54,13 @@ public sealed class GraphWorkflowRunSubscriptionSnapshot
 
 /// <summary>
 ///     Operator-only live notifications for one graph workflow run.
-///     <para>
-///         Modelled on <see cref="DevWorkflowRunHub" /> and explicitly NOT on a per-run subscription hub: there is no
-///         in-memory buffer, because run events are persisted append-only with a monotonic sequence and the persisted
-///         log IS the replay authority. Nor does a disconnect cancel anything — a workflow run is durable and outlives both
-///         the browser tab and the engine, which is the property this module exists to prove.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Modelled on <see cref="DevWorkflowRunHub" /> and explicitly NOT on a buffered per-run subscription hub: run
+///     events are persisted append-only with a monotonic sequence and the persisted log IS the replay authority. Nor
+///     does a disconnect cancel anything — a workflow run is durable and outlives both the browser tab and the engine,
+///     which is the property this module exists to prove.
+/// </remarks>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class GraphWorkflowRunHub : Hub
 {
@@ -99,16 +102,12 @@ public sealed class GraphWorkflowRunHub : Hub
             throw new HubException("Graph workflow run was not found.");
         }
 
-        // Join BEFORE reading the replay: the other order leaves a window in which a change published between the read
-        // and the join reaches nobody. The overlap this creates is harmless — every push is an idempotent notification
-        // keyed by sequence.
+        // Join BEFORE reading the replay: the other order leaves a window in which a change published between read and
+        // join reaches nobody. The overlap is harmless — every push is an idempotent notification keyed by sequence.
         await Groups.AddToGroupAsync(Context.ConnectionId, GraphWorkflowHubGroups.Run(runId), cancellationToken);
 
-        // The same paged read the event endpoint answers with, capped at the same configured window and carrying the
-        // same watermark: a client can move between a subscription and the feed without a gap or a repeat, because
-        // neither side owns a copy of that arithmetic. The watermark is the last row actually HANDED over — never the
-        // run's own sequence, which on a truncated page is past events this snapshot did not carry and nothing ever
-        // replays again.
+        // The same paged read the event endpoint answers with, at the same window: neither side owns that arithmetic, so a client moves between subscription and feed without a gap or a repeat.
+        // The watermark is the last row actually HANDED over, never the run's own sequence: on a truncated page that is past events nothing replays again.
         var replay = await _runs.ListEventsAsync(runId, afterSeq, cancellationToken);
         return new GraphWorkflowRunSubscriptionSnapshot
         {

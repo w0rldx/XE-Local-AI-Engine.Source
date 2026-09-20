@@ -3,15 +3,16 @@ namespace XE_Local_AI_Engine.WindowsLauncher;
 using System.Globalization;
 
 /// <summary>
-///     Best-effort, dependency-free crash breadcrumb for the launcher. The launcher is a plain console process whose
-///     window vanishes the instant it exits on a double-click, so every diagnostic it writes only to
-///     <see cref="Console.Error" /> is lost before a user can read it — leaving a "flashes then closes, no logs"
-///     report with nothing on disk to act on. This appends a timestamped line to the SAME per-user logs directory the
-///     managed host's rolling Serilog file uses (<c>%LOCALAPPDATA%\XE-Local-AI-Engine\logs</c>), so a launcher-side
-///     failure (missing runtime, incomplete payload, a non-zero managed exit) survives in the place a bug report
-///     already looks. Never throws: a diagnostics failure must not become a second failure on top of the one it is
-///     trying to record.
+///     Best-effort, dependency-free crash breadcrumb for the launcher. Never throws: a diagnostics failure must not
+///     become a second failure on top of the one it is trying to record.
 /// </summary>
+/// <remarks>
+///     The launcher is a plain console process whose window vanishes the instant it exits on a double-click, so every
+///     diagnostic written only to <see cref="Console.Error" /> is lost before a user can read it, leaving a "flashes
+///     then closes, no logs" report with nothing on disk to act on. This appends a timestamped line to the SAME
+///     per-user logs directory the managed host's rolling Serilog file uses
+///     (<c>%LOCALAPPDATA%\XE-Local-AI-Engine\logs</c>), where a bug report already looks.
+/// </remarks>
 internal static class StartupDiagnostics
 {
     // Mirrors DesktopBootstrap.ApplicationDataFolderName in the managed Client (a separate assembly this launcher does

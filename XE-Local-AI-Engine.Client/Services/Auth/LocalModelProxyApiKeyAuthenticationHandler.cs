@@ -8,22 +8,14 @@ using XE_Local_AI_Engine.Client.Services.Proxy;
 
 /// <summary>
 ///     Authenticates an EXTERNAL tool against the node's inbound OpenAI-compatible model proxy using the single
-///     operator-generated bearer key. Registered as a THIRD authentication scheme beside JWT bearer and the MCP key,
-///     and applied only by the model-proxy authorization policy, so the browser-facing surface keeps its JWT/Operator
-///     posture and the MCP surface keeps its own key untouched.
-///     <para>
-///         <b>Why a bearer key.</b> External OpenAI-compatible clients (LiteLLM, Continue, a Hermes-style agent) already
-///         accept a static <c>Authorization: Bearer …</c> header as the API key — it is the OpenAI wire convention — so
-///         a pre-shared bearer over a loopback-only, single-user surface is both the proportionate control and the one
-///         these clients speak natively.
-///     </para>
-///     <para>
-///         <b>This is not the only gate.</b> The endpoints are mounted inside <c>/api/local/v1</c>, so
-///         <c>LocalApiSecurityMiddleware</c> has already rejected any non-loopback peer, foreign Host or cross-origin
-///         request before this handler runs. Mounting them outside that prefix would silently remove that layer and
-///         leave this key as the ONLY control — don't.
-///     </para>
+///     operator-generated bearer key.
 /// </summary>
+/// <remarks>
+///     A THIRD authentication scheme beside JWT bearer and the MCP key, applied only by the model-proxy authorization policy, so the browser-facing surface
+///     keeps its JWT/Operator posture and the MCP surface its own key. <b>Why a bearer key:</b> external OpenAI-compatible clients (LiteLLM, Continue, a
+///     Hermes-style agent) already accept a static <c>Authorization: Bearer …</c> header as the API key — it is the OpenAI wire convention — so a pre-shared
+///     bearer over a loopback-only, single-user surface is both the proportionate control and the one these clients speak natively.
+/// </remarks>
 internal sealed class LocalModelProxyApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     /// <summary>The scheme name. Referenced by <see cref="NodeAuthorizationPolicies.LocalModelProxy" />.</summary>
@@ -42,6 +34,15 @@ internal sealed class LocalModelProxyApiKeyAuthenticationHandler : Authenticatio
         _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
     }
 
+    /// <summary>
+    ///     Validates the presented bearer key against the operator-generated model-proxy key.
+    /// </summary>
+    /// <remarks>
+    ///     <b>This is not the only gate.</b> The endpoints are mounted inside <c>/api/local/v1</c>, so
+    ///     <c>LocalApiSecurityMiddleware</c> has already rejected any non-loopback peer, foreign Host or cross-origin
+    ///     request before this handler runs. Mounting them outside that prefix would silently remove that layer and
+    ///     leave this key as the ONLY control — don't.
+    /// </remarks>
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var header = Request.Headers.Authorization.ToString();
@@ -74,9 +75,8 @@ internal sealed class LocalModelProxyApiKeyAuthenticationHandler : Authenticatio
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
         Response.StatusCode = StatusCodes.Status401Unauthorized;
-        // RFC 6750 bearer challenge. No OAuth / resource-metadata parameter: this proxy accepts only a static pre-shared
-        // key, exactly as OpenAI-compatible clients expect, so advertising a discovery document that does not exist
-        // would only mislead a client.
+        // RFC 6750 bearer challenge. No OAuth / resource-metadata parameter: this proxy accepts only a static pre-shared key,
+        // exactly as OpenAI-compatible clients expect, so advertising a discovery document that does not exist would mislead.
         Response.Headers.WWWAuthenticate = "Bearer realm=\"xe-local-ai-engine-model-proxy\"";
         return Task.CompletedTask;
     }

@@ -4,11 +4,14 @@ using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
-///     Hub-backed <see cref="IGgufDownloadEventPublisher" />. Broadcasts each sanitized download status to all connected
-///     clients under <see cref="GgufDownloadHubEvents.StatusChanged" /> as the SignalR method name, so the React client
-///     subscribes once and reconciles each push by model name. Replaces the no-op default in the Client host. Payloads
-///     are already sanitized by the coordinator at the broadcast boundary (no path, URL, or token).
+///     Hub-backed <see cref="IGgufDownloadEventPublisher" />, replacing the no-op default in the Client host.
 /// </summary>
+/// <remarks>
+///     Broadcasts each sanitized download status to all connected clients under
+///     <see cref="GgufDownloadHubEvents.StatusChanged" /> as the SignalR method name, so the React client subscribes
+///     once and reconciles each push by model name. The coordinator sanitizes payloads at the broadcast boundary: no
+///     path, URL, or token.
+/// </remarks>
 internal sealed class GgufDownloadEventPublisher : IGgufDownloadEventPublisher
 {
     private readonly IHubContext<GgufDownloadHub> _hubContext;

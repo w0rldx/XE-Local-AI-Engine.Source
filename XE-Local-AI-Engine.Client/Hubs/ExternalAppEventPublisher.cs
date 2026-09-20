@@ -5,10 +5,13 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 
 /// <summary>
-///     Pushes a committed external-app change to that instance's group. Supersedes the no-op the application module
-///     registers, so a host without this hub stays resolvable. Both messages are content-free by contract: neither
-///     carries a variable, a value or anything else the engine holds on the operator's behalf.
+///     Pushes a committed external-app change to that instance's group, superseding the no-op the application module
+///     registers so a host without this hub stays resolvable.
 /// </summary>
+/// <remarks>
+///     Both messages are content-free by contract: neither carries a variable, a value or anything else the engine
+///     holds on the operator's behalf.
+/// </remarks>
 internal sealed class ExternalAppEventPublisher : IExternalAppEventPublisher
 {
     private readonly IHubContext<ExternalAppHub> _hubContext;
@@ -40,10 +43,12 @@ internal sealed class ExternalAppEventPublisher : IExternalAppEventPublisher
                       cancellationToken);
 
     /// <summary>
-    ///     The wire spelling of an event kind, written out rather than derived from the enum name. The subscriber
-    ///     switches on these literals: a capitalised name matches no arm and silently stops updating the view, and
-    ///     renaming an enum member must not be able to change the wire contract by accident.
+    ///     The wire spelling of an event kind, written out rather than derived from the enum name.
     /// </summary>
+    /// <remarks>
+    ///     The subscriber switches on these literals: a capitalised name matches no arm and silently stops updating
+    ///     the view, so renaming an enum member must not be able to change the wire contract by accident.
+    /// </remarks>
     private static string ToWireKind(ExternalAppInstanceEventKind kind) =>
         kind switch
         {

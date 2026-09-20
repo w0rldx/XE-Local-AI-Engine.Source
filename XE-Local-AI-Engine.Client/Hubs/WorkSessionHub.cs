@@ -15,10 +15,13 @@ public static class WorkSessionHubEvents
 }
 
 /// <summary>
-///     What changed and where the store now stands. <see cref="Kind" /> is lowercase on the wire — the client switches
-///     on the literal — and the payload deliberately carries no content: the subscriber re-reads the named feed from
-///     its own watermark, so a dropped push degrades to a late read rather than to a wrong render.
+///     What changed and where the store now stands.
 /// </summary>
+/// <remarks>
+///     <see cref="Kind" /> is lowercase on the wire — the client switches on the literal. The payload deliberately
+///     carries no content: the subscriber re-reads the named feed from its own watermark, so a dropped push degrades
+///     to a late read rather than to a wrong render.
+/// </remarks>
 public sealed class WorkSessionChanged
 {
     public required Guid SessionId { get; init; }
@@ -47,21 +50,23 @@ public sealed class WorkSessionSubscriptionSnapshot
 
 /// <summary>
 ///     Operator-only live notifications for one work session.
-///     <para>
-///         There is no in-memory event buffer behind this hub, unlike the four transient-output hubs beside it: work
-///         session events are persisted append-only with a monotonic sequence, so the store IS the replay authority and
-///         a buffer would only be a cache in front of it that can fall out of step. A client absent for a day replays
-///         correctly by passing the highest sequence it has seen.
-///     </para>
 /// </summary>
+/// <remarks>
+///     There is no in-memory event buffer behind this hub, unlike the transient-output hubs beside it: work session
+///     events are persisted append-only with a monotonic sequence, so the store IS the replay authority and a buffer
+///     would only be a cache in front of it that can fall out of step. A client absent for a day replays correctly by
+///     passing the highest sequence it has seen.
+/// </remarks>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class WorkSessionHub : Hub
 {
     /// <summary>
-    ///     How many persisted events one subscribe hands back. Past this the snapshot says so and the client pages the
-    ///     event feed by <c>sinceSeq</c> — one extra round trip on a session left running for a long time, against an
-    ///     unbounded first frame for every subscriber.
+    ///     How many persisted events one subscribe hands back.
     /// </summary>
+    /// <remarks>
+    ///     Past this the snapshot says so and the client pages the event feed by <c>sinceSeq</c> — one extra round trip
+    ///     on a session left running for a long time, against an unbounded first frame for every subscriber.
+    /// </remarks>
     private const int ReplayCap = 200;
 
     private readonly WorkSessionOptions _options;
@@ -102,9 +107,8 @@ public sealed class WorkSessionHub : Hub
             throw new HubException("Work session was not found.");
         }
 
-        // Join BEFORE reading the replay: the other order leaves a window in which a change published between the read
-        // and the join reaches nobody. The overlap this creates is harmless — every push is an idempotent notification
-        // keyed by sequence.
+        // Join BEFORE reading the replay: the other order leaves a window in which a change published between read and
+        // join reaches nobody. The overlap is harmless — every push is an idempotent notification keyed by sequence.
         await Groups.AddToGroupAsync(Context.ConnectionId, WorkSessionHubGroups.Session(sessionId), cancellationToken);
 
         // One over the cap, so "there is more" is observed rather than inferred from a full page.

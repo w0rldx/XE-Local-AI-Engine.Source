@@ -9,17 +9,10 @@ using OpenTelemetry;
 /// </summary>
 /// <remarks>
 ///     MEAI's telemetry hop records a failure with
-///     <c>activity.AddTag("error.type", …).SetStatus(ActivityStatusCode.Error, error.Message)</c> — unconditionally,
-///     with no regard for <c>EnableSensitiveData</c>. Provider exception messages are not metadata: a
-///     <c>ClientResultException</c> from llama-server or any OpenAI-compatible endpoint embeds the raw HTTP response
-///     body, and other provider exceptions quote the request text. Every gen_ai span in this node would therefore ship
-///     conversation content in <see cref="Activity.StatusDescription" /> the moment a call failed — including the three
-///     background sites (conversation summarizer, memory extraction, playbook analysis) that exist to hold a
-///     node-boundary invariant on conversation content, and the two embedding hops over memory and knowledge-base text.
-///     Those sites must stay metadata-only on their failure paths too, so the description is rewritten at the export
-///     boundary. <c>error.type</c> is the semantic-convention low-cardinality marker (an exception type name), which is
-///     what a dashboard actually groups on; with no such tag there is nothing safe to say and the description is
-///     cleared. Tags and events are left exactly as recorded.
+///     <c>activity.AddTag("error.type", …).SetStatus(ActivityStatusCode.Error, error.Message)</c> — unconditionally, with no regard for
+///     <c>EnableSensitiveData</c>. Provider exception messages are not metadata: a <c>ClientResultException</c> from llama-server or any
+///     OpenAI-compatible endpoint embeds the raw HTTP response body, and other provider exceptions quote the request text, so every gen_ai
+///     span would ship conversation content in <see cref="Activity.StatusDescription" /> the moment a call failed.
 /// </remarks>
 public sealed class GenAiErrorDescriptionRedactionProcessor : BaseProcessor<Activity>
 {
@@ -27,6 +20,16 @@ public sealed class GenAiErrorDescriptionRedactionProcessor : BaseProcessor<Acti
     // a prefix match also covers any versioned/suffixed variant of it.
     private const string GenAiSourcePrefix = "Microsoft.Extensions.AI";
 
+    /// <summary>
+    ///     Rewrites a failed gen_ai span's description at the export boundary, leaving tags and events as recorded.
+    /// </summary>
+    /// <remarks>
+    ///     The sites that must stay metadata-only on their failure paths include the three background ones —
+    ///     conversation summarizer, memory extraction, playbook analysis — that exist to hold a node-boundary
+    ///     invariant on conversation content, and the two embedding hops over memory and knowledge-base text.
+    ///     <c>error.type</c> is the semantic-convention low-cardinality marker, an exception type name, which is what a
+    ///     dashboard actually groups on; with no such tag there is nothing safe to say and the description is cleared.
+    /// </remarks>
     public override void OnEnd(Activity data)
     {
         ArgumentNullException.ThrowIfNull(data);

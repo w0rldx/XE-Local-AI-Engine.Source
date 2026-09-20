@@ -14,17 +14,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
 /// <summary>
-///     The three hand-mapped external integration routes: invoke, status and cancel. The analogue of
-///     <c>LocalModelProxyForwarder</c> — a request/response contract an external caller owns, deliberately outside
-///     FastEndpoints so it never reaches the OpenAPI document or the generated React client.
-///     <para>
-///         <b>There is no 403 on this family.</b> A missing, malformed, unknown or revoked credential is the
-///         authentication handler's 401. Everything authorisation-shaped — a trigger this key may not fire, an
-///         execution belonging to another integrator, an execution under a trigger this key is not scoped to — is a
-///         404 byte-identical to "unknown". The id is the capability, so a row a caller may not see must not be
-///         confirmable.
-///     </para>
+///     The three hand-mapped external integration routes: invoke, status and cancel.
 /// </summary>
+/// <remarks>
+///     The analogue of <c>LocalModelProxyForwarder</c> — a request/response contract an external caller owns, deliberately outside FastEndpoints so it never
+///     reaches the OpenAPI document or the generated React client. <b>There is no 403 on this family:</b> a missing, malformed, unknown or revoked credential
+///     is the authentication handler's 401, and everything authorisation-shaped — a trigger this key may not fire, an execution owned by another integrator,
+///     an execution under a trigger this key is not scoped to — is a 404 byte-identical to "unknown", because the id is the capability.
+/// </remarks>
 internal sealed class IntegrationApiHandler
 {
     private const string EventStreamMediaType = "text/event-stream";
@@ -36,13 +33,13 @@ internal sealed class IntegrationApiHandler
 
     /// <summary>
     ///     The machine-readable half of the two session refusals a caller can actually act on: retry after the running
-    ///     execution ends, or start a new session. Prose alone made an integrator match on the sentence.
-    ///     <para>
-    ///         NOT members of <c>IntegrationFailureCategories</c>: nothing here failed a RUN, and that vocabulary is
-    ///         asserted closed. The masked 404 and the 401 stay code-free — a discriminator there is the leak the whole
-    ///         family is shaped to avoid.
-    ///     </para>
+    ///     execution ends, or start a new session.
     /// </summary>
+    /// <remarks>
+    ///     Prose alone made an integrator match on the sentence. NOT members of <c>IntegrationFailureCategories</c>:
+    ///     nothing here failed a RUN, and that vocabulary is asserted closed. The masked 404 and the 401 stay
+    ///     code-free — a discriminator there is the leak the whole family is shaped to avoid.
+    /// </remarks>
     private const string SessionBusyCode = "session-busy";
 
     private const string SessionClosedCode = "session-closed";
@@ -73,14 +70,13 @@ internal sealed class IntegrationApiHandler
 
     /// <summary>
     ///     The integrator's own session status.
-    ///     <para>
-    ///         Its ENTIRE authorisation decision is <c>IntegrationSessionService.GetForExternalCallerAsync</c>, which is
-    ///         the shared access helper and nothing else: unknown, owned by another principal, and belonging to a
-    ///         trigger this key's allowlist excludes all come back <see langword="null" /> and map to ONE 404 with a
-    ///         byte-identical body. No masking is assembled here, because separate <c>if</c>s in a handler are separate
-    ///         chances to return a distinguishable answer.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Its ENTIRE authorisation decision is <c>IntegrationSessionService.GetForExternalCallerAsync</c>, the shared access helper and nothing else:
+    ///     unknown, owned by another principal, and belonging to a trigger this key's allowlist excludes all come back <see langword="null" /> and map to ONE
+    ///     404 with a byte-identical body. No masking is assembled here, because separate <c>if</c>s in a handler are separate chances to return a
+    ///     distinguishable answer.
+    /// </remarks>
     public async Task GetSessionAsync(HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -127,6 +123,17 @@ internal sealed class IntegrationApiHandler
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown integration session status.")
         };
 
+    /// <summary>
+    ///     Accepts an invocation and, when the caller asked for one, hands back the live event stream instead of the
+    ///     accept body.
+    /// </summary>
+    /// <remarks>
+    ///     Every rejection before the accept answers with a real status on a response that has not started, which is
+    ///     what lets a 503 or a 409 still be JSON even when the caller asked for a stream. Once the accept transaction
+    ///     has committed, a stream refusal is no longer the accept's answer: 503 ("not admitted") or 410 would
+    ///     contradict an execution that is running and holding the node's lease. Only the GET route, where a refusal
+    ///     really is the whole answer, maps an outcome to a status.
+    /// </remarks>
     public async Task InvokeAsync(HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -142,10 +149,8 @@ internal sealed class IntegrationApiHandler
         var cap = context.GetEndpoint()?.Metadata.GetMetadata<IntegrationRequestSizeLimit>()?.MaxRequestBodySize
                   ?? throw new InvalidOperationException("The integration invoke route is missing its request-size metadata.");
 
-        // Mechanism 2: raise or lower the HOST cap before the body is touched. This is what covers a CHUNKED body,
-        // which has no Content-Length to inspect at all. Kestrel enforces it as the body is consumed; the feature
-        // rejects a set once reading has started, and this handler is not the only thing that may have touched the
-        // request.
+        // Mechanism 2: raise or lower the HOST cap before the body is touched, which is what covers a CHUNKED body with no Content-Length to inspect.
+        // Kestrel enforces it as the body is consumed, and the feature rejects a set once reading has started — this handler is not the only toucher.
         var sizeFeature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
         if (sizeFeature is { IsReadOnly: false })
         {
@@ -219,13 +224,8 @@ internal sealed class IntegrationApiHandler
         },
                                            context.RequestAborted);
 
-        // The stream is offered only for an admitted execution. Every rejection above answered with a real status on a
-        // response that has not started, which is the property that lets a 503 or a 409 still be JSON even when the
-        // caller asked for a stream.
-        // A refusal here is NOT the accept's answer. The accept transaction has already committed, so answering 503
-        // ("not admitted") or 410 would contradict an execution that is running and holding the node's lease: fall
-        // through to the ordinary accept body, which names the execution and the events route to attach to instead.
-        // Only the GET route, where a refusal really is the whole answer, maps an outcome to a status.
+        // The stream is offered only for an admitted execution, and a refusal here is NOT the accept's answer: fall through to the
+        // ordinary accept body, which names the execution and the events route to attach to instead. See this method's remarks.
         if (result.Outcome is IntegrationAcceptOutcome.Accepted or IntegrationAcceptOutcome.Duplicate
             && WantsEventStream(context)
             && result.ExecutionId is { } admitted
@@ -239,10 +239,13 @@ internal sealed class IntegrationApiHandler
     }
 
     /// <summary>
-    ///     The live stream, resumable through <c>Last-Event-ID</c>. Authorisation runs FIRST and in full — principal and
-    ///     the current key's trigger allowlist, through the one shared helper — so a caller that may not see this
-    ///     execution gets the masked 404 before any header is written, and never a partially written stream.
+    ///     The live stream, resumable through <c>Last-Event-ID</c>.
     /// </summary>
+    /// <remarks>
+    ///     Authorisation runs FIRST and in full — principal and the current key's trigger allowlist, through the one
+    ///     shared helper — so a caller that may not see this execution gets the masked 404 before any header is
+    ///     written, and never a partially written stream.
+    /// </remarks>
     public async Task GetExecutionEventsAsync(HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -272,9 +275,8 @@ internal sealed class IntegrationApiHandler
             return;
         }
 
-        // The persisted rows: the same route, the same masking, the database rather than the ring. It is what a caller
-        // answered 410 on the stream falls back to, so it never answers 410 itself — after a restart the ring is empty
-        // and the rows are not.
+        // The persisted rows: the same route, the same masking, the database rather than the ring. It is where a caller answered
+        // 410 on the stream goes next, so it never answers 410 itself — after a restart the ring is empty and the rows are not.
         var rows = await _executions.ListEventsAsync(executionId,
                                         Math.Max(ReadLong(context, "sinceSeq"), val2: 0),
                                         IntegrationEventPage.ClampLimit(ReadLimit(context)),
@@ -291,10 +293,13 @@ internal sealed class IntegrationApiHandler
         int.TryParse(context.Request.Query["limit"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var limit) ? limit : null;
 
     /// <summary>
-    ///     Hands the response to the writer and maps its answer. GET only: on the invoke route the execution is already
-    ///     admitted, so a refusal falls through to the accept body instead. The writer refuses before any byte is
-    ///     written, which is what keeps 410 and 503 real statuses rather than a reset connection.
+    ///     Hands the response to the writer and maps its answer.
     /// </summary>
+    /// <remarks>
+    ///     GET only: on the invoke route the execution is already admitted, so a refusal falls through to the accept
+    ///     body instead. The writer refuses before any byte is written, which is what keeps 410 and 503 real statuses
+    ///     rather than a reset connection.
+    /// </remarks>
     private async Task WriteStreamAsync(HttpContext context, Guid executionId, long sinceSequence)
     {
         var outcome = await _writer.WriteAsync(context, executionId, sinceSequence, context.RequestAborted);
@@ -419,12 +424,14 @@ internal sealed class IntegrationApiHandler
     }
 
     /// <summary>
-    ///     The two guards every route opens with, in this order. Identity first, because there is nothing to partition
-    ///     on before it; then the per-principal budget, BEFORE any store read and before the body is read, so an
-    ///     oversized body from a principal already over its budget costs one dictionary lookup rather than a megabyte
-    ///     of buffered reads. It runs on all three routes: a caller must not be able to dodge it by polling status in a
-    ///     loop instead of invoking.
+    ///     The two guards every route opens with, in this order.
     /// </summary>
+    /// <remarks>
+    ///     Identity first, because there is nothing to partition on before it; then the per-principal budget, BEFORE
+    ///     any store read and before the body is read, so an oversized body from a principal already over its budget
+    ///     costs one dictionary lookup rather than a megabyte of buffered reads. It runs on all three routes: a caller
+    ///     must not be able to dodge it by polling status in a loop instead of invoking.
+    /// </remarks>
     private async Task<IntegrationCallerIdentity?> AuthorizeAsync(HttpContext context)
     {
         var caller = IntegrationCallerIdentity.FromPrincipal(context.User);
@@ -583,10 +590,13 @@ internal sealed class IntegrationApiHandler
         $"/{LocalApiRoutes.Prefix}/{route.Replace("{executionId}", executionId.ToString("D"), StringComparison.Ordinal)}";
 
     /// <summary>
-    ///     The wire spelling of a status. An explicit map rather than a lower-cased <c>ToString</c>: the strings are the
-    ///     external contract every caller branches on, so a renamed enum member must break the build here rather than
-    ///     silently change what an integrator reads.
+    ///     The wire spelling of a status.
     /// </summary>
+    /// <remarks>
+    ///     An explicit map rather than a lower-cased <c>ToString</c>: the strings are the external contract every
+    ///     caller branches on, so a renamed enum member must break the build here rather than silently change what an
+    ///     integrator reads.
+    /// </remarks>
     private static string StatusName(IntegrationExecutionStatus status) =>
         status switch
         {

@@ -3,6 +3,11 @@ namespace XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 /// <summary>
 ///     Enumerates supported node conflict problem type values.
 /// </summary>
+/// <remarks>
+///     This enum crosses the wire as the member's NAME — <c>ConflictExceptionHandler</c> writes
+///     <c>conflictType.Value.ToString()</c> — and clients may have persisted its ordinals, so a new member is APPENDED:
+///     inserting one above an existing member would shift every name's ordinal after it.
+/// </remarks>
 public enum NodeConflictProblemType
 {
     ReadOnlyConversation,
@@ -38,10 +43,12 @@ public enum NodeConflictProblemType
     InstalledModelProviderMapSuperseded,
 
     /// <summary>
-    ///     A model-lifecycle operation was asked of a runtime provider that does not own it — deleting a model served
-    ///     by an operator-registered external endpoint, which is removed by unregistering it on its connection
-    ///     instead. Not retryable: the request names the wrong lifecycle, not a transient state.
+    ///     A model-lifecycle operation was asked of a runtime provider that does not own it.
     /// </summary>
+    /// <remarks>
+    ///     Deleting a model served by an operator-registered external endpoint, which is removed by unregistering it on
+    ///     its connection instead. Not retryable: the request names the wrong lifecycle, not a transient state.
+    /// </remarks>
     ModelOperationNotSupportedByProvider,
 
     /// <summary>
@@ -51,10 +58,12 @@ public enum NodeConflictProblemType
     WorkSessionInvalidTransition,
 
     /// <summary>
-    ///     A work-session write lost a race with a concurrent one. Two writers touch a running session by design (the
-    ///     supervisor moves the status while the state tools write tasks and findings), so this is ordinary rather than
-    ///     exceptional: refresh and retry.
+    ///     A work-session write lost a race with a concurrent one.
     /// </summary>
+    /// <remarks>
+    ///     Two writers touch a running session by design (the supervisor moves the status while the state tools write
+    ///     tasks and findings), so this is ordinary rather than exceptional: refresh and retry.
+    /// </remarks>
     WorkSessionVersionConflict,
 
     /// <summary>
@@ -71,9 +80,12 @@ public enum NodeConflictProblemType
 
     /// <summary>
     ///     A second human act on a node-run that is already answered — a NEW operation id, which is not the idempotent
-    ///     replay a repeated one is. The body carries <c>standingDecision</c>, so the UI can say what was decided
-    ///     instead of only that the click failed.
+    ///     replay a repeated one is.
     /// </summary>
+    /// <remarks>
+    ///     The body carries <c>standingDecision</c>, so the UI can say what was decided instead of only that the click
+    ///     failed.
+    /// </remarks>
     DevWorkflowGateAlreadyDecided,
 
     /// <summary>
@@ -84,48 +96,38 @@ public enum NodeConflictProblemType
 
     /// <summary>
     ///     Both ways a graph-workflow definition write can lose, under one member because from the client's side they
-    ///     are one story — somebody else got there first: a stale <c>version</c> on an update, and a delete refused
-    ///     while a live run still pins the definition. Refresh the definition, or cancel the run, and retry.
-    ///     <para>
-    ///         APPENDED deliberately. This enum crosses the wire as the member's NAME — <c>ConflictExceptionHandler</c>
-    ///         writes <c>conflictType.Value.ToString()</c> — so appending leaves every name that already ships
-    ///         unchanged, and leaves the ordinals a client may have persisted unchanged with them. Inserting a member
-    ///         above this one would shift both.
-    ///     </para>
+    ///     are one story — somebody else got there first.
     /// </summary>
+    /// <remarks>
+    ///     A stale <c>version</c> on an update, and a delete refused while a live run still pins the definition.
+    ///     Refresh the definition, or cancel the run, and retry.
+    /// </remarks>
     GraphWorkflowDefinitionConflict,
 
     /// <summary>
     ///     Every way a graph-workflow RUN write can lose, under one member for the same reason the definition member
-    ///     above holds two stories: from the client's side they are one — you are acting on a version of this run that
-    ///     no longer exists. A stale <c>definitionVersion</c> at start, a cancel of a run that has already finished, a
-    ///     request id reused on a different definition, and a status move a concurrent writer got to first. Re-read the
-    ///     run and decide again.
-    ///     <para>
-    ///         APPENDED, like the member above and for the same reason: this enum crosses the wire as the member's NAME
-    ///         and clients may have persisted its ordinal, so inserting above either one would shift both.
-    ///     </para>
+    ///     above holds two stories: you are acting on a version of this run that no longer exists.
     /// </summary>
+    /// <remarks>
+    ///     A stale <c>definitionVersion</c> at start, a cancel of a run that has already finished, a request id reused
+    ///     on a different definition, and a status move a concurrent writer got to first. Re-read the run and decide
+    ///     again.
+    /// </remarks>
     GraphWorkflowRunConflict,
 
     /// <summary>
     ///     A second human act on a graph-workflow pause that is already answered — a NEW operation id on a decided
-    ///     row, or an id that already decided a different pause of the same run. The body carries
-    ///     <c>standingDecision</c>, so the UI can say what was decided instead of only that the click failed.
-    ///     <para>
-    ///         APPENDED, like the two members above and for the same reason: this enum crosses the wire as the
-    ///         member's NAME and clients may have persisted its ordinal.
-    ///     </para>
+    ///     row, or an id that already decided a different pause of the same run.
     /// </summary>
+    /// <remarks>
+    ///     The body carries <c>standingDecision</c>, so the UI can say what was decided instead of only that the click
+    ///     failed.
+    /// </remarks>
     GraphWorkflowGateAlreadyDecided,
 
     /// <summary>
-    ///     A second lifecycle command on an external-app instance whose per-instance gate is already held. Wait, or
+    ///     A second lifecycle command on an external-app instance whose per-instance gate is already held — wait, or
     ///     cancel the operation that holds it.
-    ///     <para>
-    ///         APPENDED, like the three members above and for the same reason: this enum crosses the wire as the
-    ///         member's NAME and clients may have persisted its ordinal.
-    ///     </para>
     /// </summary>
     ExternalAppOperationInFlight,
 
@@ -149,9 +151,12 @@ public enum NodeConflictProblemType
 
     /// <summary>
     ///     The manifest moved between the preview and the command: the version or the sha256 the request echoed is not
-    ///     what the catalog now serves. Nothing was changed — the client re-fetches the preview and re-shows the
-    ///     permissions step, because an acceptance only ever covers the manifest that was read.
+    ///     what the catalog now serves.
     /// </summary>
+    /// <remarks>
+    ///     Nothing was changed — the client re-fetches the preview and re-shows the permissions step, because an
+    ///     acceptance only ever covers the manifest that was read.
+    /// </remarks>
     ExternalAppManifestChanged,
 
     /// <summary>

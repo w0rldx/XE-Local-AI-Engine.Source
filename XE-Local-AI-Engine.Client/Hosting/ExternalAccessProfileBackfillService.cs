@@ -5,41 +5,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     One-time upgrade backfill for the external-access profile: a node that has already completed first-run setup and
-///     carries NO external-access member at all is stamped <c>recommended</c> with all three automatic-check switches on,
-///     which is exactly the behaviour it had before the profile existed. A fresh install (no administrator yet) is left
-///     undecided so the first-run profile step owns the choice, and a node already holding any profile — including the
-///     <c>pending</c> one first-run setup writes — is left alone.
+///     One-time upgrade backfill that stamps the external-access profile <c>recommended</c> on a node that predates the
+///     feature and carries none of its members.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>A null profile alone is NOT the discriminator.</b> The legacy install this backfill exists for predates
-///         every external-access member, so all four are absent. A record whose profile is null but which carries any of
-///         the three switches has been touched by an operator or by a hand edit, so keying on the profile alone would
-///         backfill all three switches to <c>true</c> over persisted <c>false</c> opt-outs and restart the update checks
-///         and the starter-model download the operator had turned off. <c>IsUntouchedByTheFeature</c> is what guards
-///         that switches-without-profile case; such a node stays undecided until an operator answers on the Node
-///         Settings page. An unrecognised profile (<c>"Offline"</c>, say) never reaches here as null:
-///         <c>NodeSettingsStore</c>'s <c>NormalizeExternalAccessProfile</c> loads it as <c>pending</c>, a non-null
-///         profile this backfill leaves alone by the ordinary rule.
-///     </para>
-///     <para>
-///         <b>Why the work runs in <see cref="StartAsync" /> rather than a background loop.</b>
-///         <c>OllamaProviderMapBackfillService</c> is the precedent for this service's shape, scoping, idempotence and
-///         swallowed failures, but its justification for being OFF the startup path — Ollama may be slow or unreachable —
-///         does not apply here: this is one node-local identity read and at most one settings write, no network, so
-///         blocking start costs milliseconds. Blocking is the POINT. Under minimal hosting
-///         (<c>Program.CreateAppCoreAsync</c> builds with <c>WebApplication.CreateBuilder</c>) the web-host service is
-///         registered last, so a user-registered hosted service's <see cref="StartAsync" /> completes before Kestrel
-///         accepts a request; a background loop would leave a window in which the SPA could read
-///         <c>externalAccessProfile: null</c> from a node that has been running for months and offer it a first-run
-///         choice it already made. <c>Program.CreateAppAsync</c> additionally runs
-///         <c>ApplyNodeIdentityMigrationsAsync</c> before <c>app.RunAsync()</c>, so the identity read below cannot race
-///         the identity migration.
-///     </para>
-///     <para>
-///         <b>Not desktop-gated.</b> An upgrading node exists on every launch mode.
-///     </para>
+///     A null profile alone is NOT the discriminator: a record with a switch but no profile was touched by an operator,
+///     and backfilling it would restart update checks and downloads that were turned off, so
+///     <see cref="IsUntouchedByTheFeature" /> guards that case and such a node stays undecided. The work runs in
+///     <see cref="StartAsync" /> rather than a background loop, and reads settings STRICTLY. Not desktop-gated. See
+///     docs/wiki/11-hosting-and-deployment.md ("Upgrade backfills and their discriminators").
 /// </remarks>
 public sealed class ExternalAccessProfileBackfillService : IHostedService
 {
@@ -68,10 +42,8 @@ public sealed class ExternalAccessProfileBackfillService : IHostedService
         }
         catch (Exception exception)
         {
-            // This runs on the startup path, so an unswallowed failure would stop the host from starting at all. A node
-            // that cannot read its identity database or its settings file must still come up; the backfill is idempotent
-            // and the next boot retries.
-            // Warning, not Debug: Debug is off in production, so a real defect here would leave no trace at all.
+            // This runs on the startup path, so an unswallowed failure would stop the host starting at all; the backfill is
+            // idempotent and the next boot retries. Warning, not Debug: Debug is off in production and would leave no trace.
             _logger.LogWarning(exception, "Skipping the external-access profile backfill: it could not be completed.");
         }
     }
@@ -82,10 +54,13 @@ public sealed class ExternalAccessProfileBackfillService : IHostedService
     }
 
     /// <summary>
-    ///     Stamps <c>recommended</c> on an upgraded node that carries no external-access member at all. Any record that
-    ///     already holds one — a profile, or a single switch with the profile still null — is left exactly as it is.
-    ///     Exposed as <see langword="internal" /> so it is unit-testable without standing up the hosted-service lifecycle.
+    ///     Stamps <c>recommended</c> on an upgraded node that carries no external-access member at all.
     /// </summary>
+    /// <remarks>
+    ///     Any record that already holds one — a profile, or a single switch with the profile still null — is left
+    ///     exactly as it is. Exposed as <see langword="internal" /> so it is unit-testable without standing up the
+    ///     hosted-service lifecycle.
+    /// </remarks>
     internal static async Task BackfillAsync(IServiceScopeFactory scopeFactory, ILogger logger, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(scopeFactory);
@@ -94,11 +69,8 @@ public sealed class ExternalAccessProfileBackfillService : IHostedService
         await using var scope = scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
 
-        // The STRICT load, not LoadAsync: a present-but-unreadable settings file must not be read as "no profile yet".
-        // LoadAsync would hand back a default record whose profile is null and this backfill would then "decide"
-        // recommended on the strength of a corrupt file, silently re-enabling outbound checks an operator had turned
-        // off. Leaving it undecided is the safe failure — the gated services keep waiting, the SPA does not show the
-        // first-run step (that keys on "pending"), and Node Settings renders the profile as not chosen.
+        // The STRICT load, not LoadAsync: a present-but-unreadable settings file must not read as "no profile yet", or this backfill
+        // decides recommended on a corrupt file and re-enables outbound checks an operator turned off. Undecided is the safe failure.
         var stored = await store.LoadStrictAsync(cancellationToken);
         if (stored is null)
         {
@@ -158,10 +130,13 @@ public sealed class ExternalAccessProfileBackfillService : IHostedService
     }
 
     /// <summary>
-    ///     The legacy-install discriminator: all four external-access members absent. A null profile on its own is not
-    ///     enough, because <c>NodeSettingsStore.NormalizeExternalAccessProfile</c> nulls an unrecognised profile while
-    ///     keeping the switches beside it — see the type's remarks.
+    ///     The legacy-install discriminator: all four external-access members absent.
     /// </summary>
+    /// <remarks>
+    ///     A null profile on its own is not enough, because
+    ///     <c>NodeSettingsStore.NormalizeExternalAccessProfile</c> nulls an unrecognised profile while keeping the
+    ///     switches beside it — see the type's remarks.
+    /// </remarks>
     private static bool IsUntouchedByTheFeature(StoredNodeSettings settings)
     {
         return settings.ExternalAccessProfile is null

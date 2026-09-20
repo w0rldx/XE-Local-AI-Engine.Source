@@ -8,9 +8,12 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Server;
 
 /// <summary>
 ///     Registers this node's INBOUND MCP server — the surface an external MCP client (Claude Code, Claude Desktop, an
-///     IDE) connects to in order to delegate work to the local model. The OUTBOUND direction (this node connecting to
-///     third-party MCP servers) is registered separately in <c>AddNodeModelCapabilitiesAndMcpExtensions</c>.
+///     IDE) connects to in order to delegate work to the local model.
 /// </summary>
+/// <remarks>
+///     The OUTBOUND direction, this node connecting to third-party MCP servers, is registered separately in
+///     <c>AddNodeModelCapabilitiesAndMcpExtensions</c>.
+/// </remarks>
 internal static class AddNodeMcpServerExtensions
 {
     /// <summary>
@@ -22,6 +25,16 @@ internal static class AddNodeMcpServerExtensions
         ?? typeof(AddNodeMcpServerExtensions).Assembly.GetName().Version?.ToString()
         ?? "0.0.0";
 
+    /// <summary>
+    ///     Registers the MCP server, its stateless HTTP transport, the authorization filters and the two tool sets.
+    /// </summary>
+    /// <remarks>
+    ///     The tools are registered with a per-host COPY of the SDK's default serializer options, not the shared static instance, and that is load-bearing
+    ///     for memory: Microsoft.Extensions.AI caches every reflection-built tool descriptor in a static <c>ConditionalWeakTable</c> keyed by the
+    ///     <c>JsonSerializerOptions</c> used at registration, and each descriptor's parameter-binding delegate captures this host's root
+    ///     <see cref="IServiceProvider" />. With the SDK's immortal static options that entry pins every host that ever registered tools (the
+    ///     ~20 MB-per-test-host leak of docs/agent-knowledge.md §1); a per-host key is collected with the host.
+    /// </remarks>
     public static IHostApplicationBuilder AddNodeMcpServer(this IHostApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -41,21 +54,13 @@ internal static class AddNodeMcpServerExtensions
                    })
                    .WithHttpTransport(transport =>
                    {
-                       // Stateless is the 2026-07-28 default (SEP-2567 removed protocol-level sessions). Held explicitly
-                       // rather than left implicit because it is load-bearing here: a stateless server keeps no
-                       // per-connection state, so an MCP client reconnecting mid-run cannot resume into a half-applied
-                       // session, and there is no session table to bound or evict.
+                       // Stateless is the 2026-07-28 default (SEP-2567 removed protocol-level sessions), held explicitly because it is
+                       // load-bearing: no per-connection state means no resume into a half-applied session and no session table to bound.
                        transport.Stateless = true;
                    })
                    .AddAuthorizationFilters()
-                   // A per-host COPY of the SDK's default serializer options, not the shared static instance. This is
-                   // load-bearing for memory: Microsoft.Extensions.AI caches every reflection-built tool descriptor in
-                   // a static ConditionalWeakTable keyed by the JsonSerializerOptions used at registration, and each
-                   // descriptor's parameter-binding delegate captures this host's root IServiceProvider. Registered
-                   // with the SDK's immortal static options, that cache entry pins every host that ever registered
-                   // tools (the ~20 MB-per-test-host leak of docs/agent-knowledge.md §1). With a per-host key the
-                   // entry is weakly keyed to THIS host's options and is collected with the host. The copy is
-                   // behavior-identical (same converters and type-info resolver as the default).
+                   // A per-host COPY of the SDK's default serializer options, not the shared static instance — see this method's
+                   // remarks. Behavior-identical: same converters and type-info resolver as the default.
                    .WithTools<NodeAgentMcpTools>(toolJsonOptions)
                    .WithTools<NodeAdminMcpTools>(toolJsonOptions);
 

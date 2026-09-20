@@ -21,10 +21,12 @@ internal sealed class WorkSessionEventPublisher : IWorkSessionEventPublisher
                   .SendAsync(WorkSessionHubEvents.Changed, new WorkSessionChanged { SessionId = sessionId, Seq = sequence, Kind = ToWireKind(kind) }, cancellationToken);
 
     /// <summary>
-    ///     The wire spelling of a change kind, written out rather than derived from the enum name. The subscriber
-    ///     switches on these literals: a capitalised name matches no arm and silently stops updating the pane, and
-    ///     renaming an enum member must not be able to change the wire contract by accident.
+    ///     The wire spelling of a change kind, written out rather than derived from the enum name.
     /// </summary>
+    /// <remarks>
+    ///     The subscriber switches on these literals: a capitalised name matches no arm and silently stops updating
+    ///     the pane, so renaming an enum member must not be able to change the wire contract by accident.
+    /// </remarks>
     private static string ToWireKind(WorkSessionChangeKind kind) =>
         kind switch
         {

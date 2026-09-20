@@ -4,18 +4,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
 
-// Build-time transform: vendored agency-agents .md  ->  agent-templates.seed.json
-//
-// Usage:
-//   dotnet run --project tools/AgentTemplateGenerator -- <sourcesRoot> <outputJson> <upstreamSha>
-//
-//   <sourcesRoot> = .../Templates/sources/agency-agents   (contains <division>/<slug>.md)
-//   <outputJson>  = .../Templates/agent-templates.seed.json  (embedded resource, do not hand-edit)
-//   <upstreamSha> = the pinned commit SHA the .md were vendored from
-//
-// The vendored set IS the curation: every .md under <sourcesRoot> becomes one template.
-// Bodies are emitted VERBATIM (preserve the audited base). Output is sorted by slug for a
-// stable, reviewable diff. Malformed files are skipped + logged, never fatal.
+// Build-time transform: vendored agency-agents <division>/<slug>.md under <sourcesRoot> become <outputJson>, embedded and never hand-edited, stamped with the pinned <upstreamSha> it came from.
+// Vendored set IS the curation: every .md becomes one template, bodies VERBATIM to preserve the audited base, output sorted by slug for a stable diff, malformed files logged and skipped, never fatal.
 
 if (args.Length < 3)
 {

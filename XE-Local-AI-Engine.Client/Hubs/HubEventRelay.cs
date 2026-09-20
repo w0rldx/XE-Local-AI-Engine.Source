@@ -7,10 +7,12 @@ using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 /// <summary>
-///     Bounded, ordered transport relay from an application event buffer to per-scope SignalR groups. When the relay is
-///     saturated it drops only the live transport copy; the sequence gap makes the client replay or refetch. The buffer
-///     stays the replay authority — a relay only bridges what the buffer already published.
+///     Bounded, ordered transport relay from an application event buffer to per-scope SignalR groups.
 /// </summary>
+/// <remarks>
+///     When the relay is saturated it drops only the live transport copy; the sequence gap makes the client replay or
+///     refetch. The buffer stays the replay authority — a relay only bridges what the buffer already published.
+/// </remarks>
 internal abstract class HubEventRelay<TEvent, THub> : BackgroundService
     where THub : Hub
 {

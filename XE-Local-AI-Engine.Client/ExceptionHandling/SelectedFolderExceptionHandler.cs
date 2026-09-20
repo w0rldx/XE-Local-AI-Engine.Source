@@ -5,16 +5,15 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
 ///     The single selected-folder exception → HTTP mapping, for every endpoint that registers or resolves a selected
-///     folder. The exception TYPE carries the status — unknown id → 404, alias/state conflict → 409, any other
-///     rejection the aggregate type reports → 400 — so the same rejection cannot answer differently depending on which
-///     endpoint produced it. It replaces <c>SelectedFolderEndpointSupport</c>, which held this mapping but needed an
-///     endpoint's <c>Send</c> to write it, so eight endpoints carried the identical catch to call it.
-///     <para>
-///         The arm order is load-bearing: both specific types derive from the aggregate, so they must be matched before
-///         it. That inheritance is also why the family stays out of <see cref="DomainValidationExceptionHandler" /> — a
-///         global 400 there would flatten all three statuses into one.
-///     </para>
+///     folder.
 /// </summary>
+/// <remarks>
+///     The exception TYPE carries the status — unknown id → 404, alias/state conflict → 409, any other rejection the
+///     aggregate type reports → 400 — so the same rejection cannot answer differently per endpoint. The arm order is
+///     load-bearing: both specific types derive from the aggregate and must be matched before it. That inheritance is
+///     also why the family stays out of <see cref="DomainValidationExceptionHandler" />, whose global 400 would flatten
+///     all three statuses into one.
+/// </remarks>
 public sealed class SelectedFolderExceptionHandler : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)

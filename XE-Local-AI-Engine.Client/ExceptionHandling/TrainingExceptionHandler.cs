@@ -5,10 +5,12 @@ using XE_Local_AI_Engine.Client.Endpoints.Training.V1;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Maps the Training store exception family through its existing wire-contract helper. Contextual exceptions such
-///     as runtime/install failures, operator-facing rejections, and <see cref="KeyNotFoundException" /> deliberately
-///     fall through to later handlers or stay at their endpoint.
+///     Maps the Training store exception family through its existing wire-contract helper.
 /// </summary>
+/// <remarks>
+///     Contextual exceptions such as runtime/install failures, operator-facing rejections, and
+///     <see cref="KeyNotFoundException" /> deliberately fall through to later handlers or stay at their endpoint.
+/// </remarks>
 public sealed class TrainingExceptionHandler : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)

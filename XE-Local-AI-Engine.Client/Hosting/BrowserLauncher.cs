@@ -3,10 +3,13 @@ namespace XE_Local_AI_Engine.Client.Hosting;
 using System.Diagnostics;
 
 /// <summary>
-///     Opens the default browser at the desktop loopback URL. The per-OS command is built by a pure function so it can be
-///     unit-tested without launching a process, and the launch is non-fatal: if the browser cannot be started the server
-///     keeps serving and the URL is logged so the user can open it manually.
+///     Opens the default browser at the desktop loopback URL.
 /// </summary>
+/// <remarks>
+///     The per-OS command is built by a pure function so it can be unit-tested without launching a process, and the
+///     launch is non-fatal: if the browser cannot be started the server keeps serving and the URL is logged so the
+///     user can open it manually.
+/// </remarks>
 internal static class BrowserLauncher
 {
     /// <summary>
@@ -32,9 +35,8 @@ internal static class BrowserLauncher
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(url);
 
-        // Windows: "explorer <url>" opens the default handler. NOTE: explorer.exe returns exit code 1 even on success,
-        // so callers must never treat a non-zero exit as failure.
-        // Linux: "xdg-open <url>" defers to the desktop's default browser.
+        // Windows: "explorer <url>" opens the default handler, and explorer.exe returns exit code 1 even on success, so a
+        // caller must never treat a non-zero exit as failure. Linux: "xdg-open <url>" defers to the default browser.
         return isWindows
             ? new OpenCommand("explorer", url)
             : new OpenCommand("xdg-open", url);

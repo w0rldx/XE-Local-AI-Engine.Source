@@ -6,10 +6,13 @@ using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Server-push hub for scheduler lifecycle notifications. Clients connect and receive sanitized run/definition
-///     events broadcast via <see cref="SchedulerEventPublisher" /> (<see cref="IHubContext{T}" />); there are no
-///     client-callable server methods. Protected with the same operator policy as the other local hubs.
+///     Server-push hub for scheduler lifecycle notifications.
 /// </summary>
+/// <remarks>
+///     Clients receive sanitized run/definition events broadcast via <see cref="SchedulerEventPublisher" />
+///     (<see cref="IHubContext{T}" />); there are no client-callable server methods. Protected with the same operator
+///     policy as the other local hubs.
+/// </remarks>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class SchedulerHub : Hub
 {

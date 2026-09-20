@@ -7,22 +7,14 @@ using Microsoft.AspNetCore.DataProtection.XmlEncryption;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 
 /// <summary>
-///     Unwraps key-ring elements written by <see cref="NodeDataProtectionKeyRingEncryptor" />. Data Protection
-///     records this type by name on each encrypted element and activates it at key-ring read time through its
-///     internal activator, which supplies the application <see cref="IServiceProvider" /> to the single-argument
-///     constructor — the same contract the framework's own <c>DpapiXmlDecryptor</c> uses. The KEK and AEAD primitive
-///     are resolved from that provider so the operator secret is obtained lazily, at read time, from live DI.
+///     Unwraps key-ring elements written by <see cref="NodeDataProtectionKeyRingEncryptor" />.
 /// </summary>
 /// <remarks>
-///     Fail-closed: a wrong operator secret yields a KEK that cannot authenticate the GCM tag, so
-///     <see cref="INodeAeadCipher.Decrypt" /> throws an <see cref="AuthenticationTagMismatchException" />, which this
-///     decryptor re-surfaces as a <see cref="NodeDataProtectionKeyRingDecryptionException" /> (a distinctive
-///     <see cref="CryptographicException" />) so <see cref="NodeDataProtectionKeyRingFailClosedKeyResolver" /> can
-///     hard-fail startup instead of letting Data Protection silently regenerate the ring. The key is never silently
-///     accepted with garbage material. The node store is PLAIN SQLite with application-level COLUMN encryption (not
-///     SQLCipher/whole-file), so a wrong secret does not necessarily fail startup — that is exactly why the resolver is
-///     the loud backstop rather than "the SQLite store already gates it." This decryptor is read-only over the KEK
-///     material and holds no key state of its own, so it needs no dispose.
+///     Data Protection records this type by name on each encrypted element and activates it at read time through its internal activator, which supplies
+///     the application <see cref="IServiceProvider" /> to the single-argument constructor — the same contract <c>DpapiXmlDecryptor</c> uses — so the KEK
+///     and AEAD primitive are resolved lazily from live DI. Fail-closed: a wrong operator secret cannot authenticate the GCM tag, and the resulting <see
+///     cref="AuthenticationTagMismatchException" /> is re-surfaced as a <see cref="NodeDataProtectionKeyRingDecryptionException" />, never silently
+///     accepted with garbage material. Read-only over the KEK, so it needs no dispose.
 /// </remarks>
 public sealed class NodeDataProtectionKeyRingDecryptor : IXmlDecryptor
 {
@@ -39,9 +31,8 @@ public sealed class NodeDataProtectionKeyRingDecryptor : IXmlDecryptor
     {
         ArgumentNullException.ThrowIfNull(encryptedElement);
 
-        // Every failure below is surfaced as NodeDataProtectionKeyRingDecryptionException so the fail-closed key
-        // resolver (NodeDataProtectionKeyRingFailClosedKeyResolver) can tell an undecryptable ENCRYPTED key apart from
-        // an unrelated key failure and hard-fail startup instead of letting Data Protection silently regenerate the ring.
+        // Every failure below is surfaced as NodeDataProtectionKeyRingDecryptionException, so NodeDataProtectionKeyRingFailClosedKeyResolver
+        // can tell an undecryptable ENCRYPTED key from an unrelated one and hard-fail startup rather than let the ring be regenerated.
         var valueElement = encryptedElement.Element(NodeDataProtectionKeyRingEncryptor.ValueElementName)
                            ?? throw new NodeDataProtectionKeyRingDecryptionException($"The encrypted key-ring element is missing its <{NodeDataProtectionKeyRingEncryptor.ValueElementName}> child.");
         byte[] envelope;
@@ -68,9 +59,8 @@ public sealed class NodeDataProtectionKeyRingDecryptor : IXmlDecryptor
         var tag = envelope.AsSpan(envelope.Length - tagSize, tagSize);
         var ciphertext = envelope.AsSpan(nonceSize, envelope.Length - nonceSize - tagSize);
 
-        // A wrong KEK (wrong/rotated operator secret) fails the AES-GCM tag here — the fail-closed guarantee. Surface it
-        // as our distinctive typed failure (still a CryptographicException) rather than silently accepting garbage. The
-        // recovered plaintext is the key-ring master-key material, so it is zeroed once re-parsed into the element.
+        // A wrong or rotated operator secret fails the AES-GCM tag here — the fail-closed guarantee — and is surfaced as the distinctive
+        // typed failure (still a CryptographicException). The plaintext is key-ring master-key material, so it is zeroed once re-parsed.
         byte[] plaintextBytes;
         try
         {

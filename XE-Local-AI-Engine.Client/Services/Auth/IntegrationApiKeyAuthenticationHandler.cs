@@ -8,30 +8,14 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 
 /// <summary>
 ///     Authenticates an EXTERNAL integrator against the node's hand-mapped integration API using one of the
-///     operator-generated <c>xeint_</c> bearer keys. Registered as a FOURTH authentication scheme beside JWT bearer, the
-///     MCP key and the model-proxy key, and applied only by the integration authorization policy, so every other
-///     surface keeps its own posture untouched.
-///     <para>
-///         <b>Two claims, one authority.</b> The identity carries the integrator's <c>PrincipalId</c> and the
-///         credential's display prefix. Every ownership, uniqueness and masking decision downstream reads the
-///         PRINCIPAL; the prefix is attribution only, so an operator can still see which credential made a call. The
-///         trigger allowlist is deliberately NOT a claim — the accept path and the access helper re-read the key row,
-///         so re-scoping a key takes effect on the next request instead of at the next token mint.
-///     </para>
-///     <para>
-///         <b>There is no 403 on this family.</b> A missing, malformed, unknown or REVOKED key are the same
-///         <see cref="AuthenticateResult.Fail(string)" /> and the same 401 with no distinguishing body: telling a caller
-///         its key was real but revoked would confirm it holds a genuine credential. Every authorisation-shaped outcome
-///         further downstream — a trigger the key is not allowlisted for, another principal's execution — is a 404
-///         identical to "unknown" (rulings R1-4 and R2-6).
-///     </para>
-///     <para>
-///         <b>This is not the only gate.</b> The routes are mounted inside <c>/api/local/v1</c>, so
-///         <c>LocalApiSecurityMiddleware</c> has already rejected any non-loopback peer, foreign Host or cross-origin
-///         request before this handler runs. Mounting them outside that prefix would silently remove that layer and
-///         leave this key as the ONLY control — don't.
-///     </para>
+///     operator-generated <c>xeint_</c> bearer keys.
 /// </summary>
+/// <remarks>
+///     Registered as a FOURTH authentication scheme beside JWT bearer, the MCP key and the model-proxy key, and applied only by the integration
+///     authorization policy, so every other surface keeps its own posture untouched. <b>This is not the only gate:</b> the routes are mounted inside
+///     <c>/api/local/v1</c>, so <c>LocalApiSecurityMiddleware</c> has already rejected any non-loopback peer, foreign Host or cross-origin request before this
+///     handler runs — mounting them outside that prefix removes that layer and leaves this key as the ONLY control.
+/// </remarks>
 internal sealed class IntegrationApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     /// <summary>The scheme name. Referenced by <see cref="NodeAuthorizationPolicies.IntegrationApi" />.</summary>
@@ -56,6 +40,17 @@ internal sealed class IntegrationApiKeyAuthenticationHandler : AuthenticationHan
         _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
     }
 
+    /// <summary>
+    ///     Two claims, one authority: the identity carries the integrator's <c>PrincipalId</c> and the credential's
+    ///     display prefix, and there is no 403 on this family.
+    /// </summary>
+    /// <remarks>
+    ///     Every ownership, uniqueness and masking decision downstream reads the PRINCIPAL; the prefix is attribution only, so an operator can see which
+    ///     credential made a call. The trigger allowlist is deliberately NOT a claim — the accept path and the access helper re-read the key row, so
+    ///     re-scoping takes effect on the next request, not at the next token mint. A missing, malformed, unknown or REVOKED key are one
+    ///     <see cref="AuthenticateResult.Fail(string)" /> and one 401 with no distinguishing body: saying a key was real but revoked confirms a real
+    ///     credential. Authorisation-shaped outcomes downstream are a 404 identical to "unknown" (R1-4, R2-6).
+    /// </remarks>
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var header = Request.Headers.Authorization.ToString();

@@ -76,9 +76,8 @@ public sealed partial class Program
         }
         catch (NodeSettingsUnreadableException exception)
         {
-            // The HTTP setup endpoint gets this mapped to a 400 by DomainValidationExceptionHandler; the CLI has no such
-            // mapper, so without this catch a corrupt node-settings.json would take --setup out through the top-level
-            // fatal handler instead of the documented exit code 5.
+            // The HTTP setup endpoint has DomainValidationExceptionHandler to map this to a 400; the CLI has no such mapper, so without this catch a corrupt
+            // node-settings.json would take --setup out through the top-level fatal handler instead of the documented exit code 5.
             await standardError.WriteLineAsync(exception.Message);
             return 5;
         }
@@ -177,9 +176,8 @@ public sealed partial class Program
             try
             {
                 using var injectedClient = httpClientFactory?.Invoke();
-                // Pre-DI: this command runs before the host is built so a status check never takes the instance lease
-                // (see the call site's own comment in Program.cs); no IHttpClientFactory exists yet, and the process
-                // exits right after, so a raw client here is not a pooling concern.
+                // Pre-DI: this command runs before the host is built, so a status check never takes the instance lease. No IHttpClientFactory exists yet and the
+                // process exits right after, so a raw client here is not a pooling concern.
                 using var fallbackClient = injectedClient is null ? new HttpClient() : null;
                 var client = injectedClient ?? fallbackClient!;
                 client.Timeout = TimeSpan.FromSeconds(2);

@@ -63,10 +63,13 @@ internal sealed class TranscriptionEventPublisher : ITranscriptionEventPublisher
                        cancellationToken);
 
     /// <summary>
-    ///     The status a client sees for an end reason. <see cref="LiveEndReason.NeverAttached" /> is reported as
-    ///     <c>Abandoned</c>: from the browser's side "no audio ever arrived" and "you went away" are the same outcome,
-    ///     and the distinction that matters to the engine does not need a fifth case in every client switch.
+    ///     The status a client sees for an end reason.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="LiveEndReason.NeverAttached" /> is reported as <c>Abandoned</c>: from the browser's side "no audio
+    ///     ever arrived" and "you went away" are the same outcome, and the distinction that matters to the engine does
+    ///     not need a fifth case in every client switch.
+    /// </remarks>
     private static string ToWireStatus(LiveEndReason reason) =>
         reason switch
         {

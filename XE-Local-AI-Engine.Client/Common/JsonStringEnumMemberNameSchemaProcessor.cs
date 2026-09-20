@@ -6,21 +6,14 @@ using NJsonSchema.Generation;
 
 /// <summary>
 ///     Rewrites generated enum schema values to honor <see cref="JsonStringEnumMemberNameAttribute" />.
-///     <para>
-///         The NJsonSchema generator used by FastEndpoints.Swagger emits the CLR member names
-///         (e.g. <c>Running</c>) as the OpenAPI enum values, but the runtime
-///         <see cref="JsonStringEnumConverter{T}" /> serializes the attribute value (e.g. <c>running</c>).
-///         That mismatch makes the OpenAPI document — and every client generated from it (the React
-///         zod response validators) — reject valid responses as an "unexpected shape" (observed on the
-///         host-agent runtime-status enums: state/desiredState/runtimeLifecycle).
-///     </para>
-///     <para>
-///         For each enum type carrying <see cref="JsonStringEnumMemberNameAttribute" /> on its members,
-///         this processor replaces the schema's enumeration values with the attribute values so the
-///         document matches the wire format. Enums without the attribute (member name == wire value)
-///         are left untouched.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The NJsonSchema generator FastEndpoints.Swagger uses emits the CLR member names (<c>Running</c>) as the OpenAPI
+///     enum values, while the runtime <see cref="JsonStringEnumConverter{T}" /> serializes the attribute value
+///     (<c>running</c>); the React zod validators then reject valid responses as an "unexpected shape", as the
+///     host-agent runtime-status enums (state/desiredState/runtimeLifecycle) showed. For an enum carrying the
+///     attribute the schema's values become the attribute values; enums without it are left untouched.
+/// </remarks>
 public sealed class JsonStringEnumMemberNameSchemaProcessor : ISchemaProcessor
 {
     public void Process(SchemaProcessorContext context)

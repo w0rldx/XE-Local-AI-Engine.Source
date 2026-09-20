@@ -1,18 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
 /// <summary>
-///     A process-lifetime, per-data-root exclusive lease. Two concurrent first launches sharing one per-user data
-///     directory each generate and persist their own operator key and DB, so one process's encrypted writes become
-///     unreadable after a restart under the other's key. Acquiring this lease BEFORE any key/DB initialization makes a
-///     second instance fail fast instead of silently splitting the encryption key.
-///     <para>
-///         The primitive is a lease file inside the data directory opened with <see cref="FileShare.None" /> and held
-///         open for the process lifetime. On .NET, <see cref="FileShare.None" /> takes an OS-level exclusive lock (an
-///         exclusive <c>flock</c> on *nix, a share-mode denial on Windows), so a second open from any process on the
-///         machine fails with <see cref="IOException" />. The OS releases the lock when the handle closes — including on
-///         a crash — so no stale-lease recovery protocol is needed.
-///     </para>
+///     A process-lifetime, per-data-root exclusive lease.
 /// </summary>
+/// <remarks>
+///     Two concurrent first launches sharing one per-user data directory each persist their own operator key and DB, so
+///     one process's encrypted writes become unreadable after a restart under the other's key. Acquiring this lease
+///     BEFORE any key/DB initialization makes a second instance fail fast instead of silently splitting the key. The
+///     primitive is a lease file opened with <see cref="FileShare.None" /> — an exclusive <c>flock</c> on *nix, a
+///     share-mode denial on Windows — released by the OS when the handle closes, crash included.
+/// </remarks>
 internal sealed class SingleInstanceLease : IDisposable
 {
     /// <summary>The per-user data-directory file name whose exclusive open serializes instances (contents are irrelevant).</summary>
@@ -31,15 +28,16 @@ internal sealed class SingleInstanceLease : IDisposable
     private const int HResultLockViolation = unchecked((int)0x80070021); // ERROR_LOCK_VIOLATION
 
     /// <summary>
-    ///     Attempts to acquire the exclusive lease for <paramref name="dataDirectory" />. Returns the held lease on
-    ///     success (the caller keeps it for the process lifetime and disposes it on shutdown), or <c>null</c> only when
-    ///     another instance already holds it. A genuinely broken data directory fails loudly rather than masquerading as a
-    ///     running instance: <see cref="UnauthorizedAccessException" /> (permission denied — not an
-    ///     <see cref="IOException" />, so uncaught), a missing parent directory
-    ///     (<see cref="DirectoryNotFoundException" />), and an over-long path (<see cref="PathTooLongException" />) all
-    ///     propagate, as does any other Windows IO fault such as disk-full. Only a Windows sharing/lock violation, or a
-    ///     Unix <c>flock</c> conflict (which surfaces as a plain <see cref="IOException" />), is treated as contention.
+    ///     Attempts to acquire the exclusive lease for <paramref name="dataDirectory" />, returning the held lease or
+    ///     <c>null</c> only when another instance already holds it.
     /// </summary>
+    /// <remarks>
+    ///     The caller keeps the lease for the process lifetime and disposes it on shutdown. A genuinely broken data
+    ///     directory fails loudly rather than masquerading as a running instance:
+    ///     <see cref="UnauthorizedAccessException" />, <see cref="DirectoryNotFoundException" /> and
+    ///     <see cref="PathTooLongException" /> all propagate, as does any other Windows IO fault such as disk-full.
+    ///     Only a Windows sharing/lock violation or a Unix <c>flock</c> conflict counts as contention.
+    /// </remarks>
     /// <param name="dataDirectory">The per-user data directory whose lease serializes process instances.</param>
     internal static SingleInstanceLease? TryAcquire(string dataDirectory)
     {
@@ -75,10 +73,8 @@ internal sealed class SingleInstanceLease : IDisposable
         }
         catch (IOException)
         {
-            // A Windows sharing/lock violation, or a Unix flock conflict (surfaced as a plain IOException with no
-            // portable distinguishing HResult): the exclusive lock is held by another live instance (or, transiently, a
-            // not-yet-released crashed one the OS is still cleaning up). Either way this process must not proceed to touch
-            // the shared key/DB.
+            // A Windows sharing/lock violation, or a Unix flock conflict (a plain IOException, no portable HResult): the lock
+            // is held by another live instance, or a crashed one the OS is still cleaning up. Do not touch the shared key/DB.
             return null;
         }
 

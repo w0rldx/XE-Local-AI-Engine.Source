@@ -14,11 +14,13 @@ public static class LoggerExtensions
     private const string OutputTemplate = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj}{NewLine}{Exception}";
 
     /// <summary>
-    ///     Rolling-file template: as <see cref="OutputTemplate" /> but with the W3C <c>TraceId</c>/<c>SpanId</c> that
-    ///     Serilog attaches from the ambient <see cref="System.Diagnostics.Activity" />, so a file log line correlates
-    ///     with the trace id surfaced to the client in <c>ProblemDetails</c> and with distributed traces. Both render
-    ///     empty for logs raised outside a request (e.g. startup) that have no active Activity.
+    ///     Rolling-file template: as <see cref="OutputTemplate" /> but with the W3C <c>TraceId</c>/<c>SpanId</c>.
     /// </summary>
+    /// <remarks>
+    ///     Serilog attaches both from the ambient <see cref="System.Diagnostics.Activity" />, so a file log line
+    ///     correlates with the trace id surfaced to the client in <c>ProblemDetails</c> and with distributed traces.
+    ///     Both render empty for logs raised outside a request (startup, for instance) that have no active Activity.
+    /// </remarks>
     private const string FileOutputTemplate = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] [trace:{TraceId} span:{SpanId}] {Message:lj}{NewLine}{Exception}";
 
     /// <summary>Rolled-file cap (50 MB) — a wedged component cannot fill the disk before the size roll + retention kick in.</summary>
@@ -58,12 +60,15 @@ public static class LoggerExtensions
 
     /// <summary>
     ///     Resolves the directory the rolling log file is written to, or <see langword="null" /> when the file sink
-    ///     should be disabled. Reuses the SAME per-user data-dir resolution the Data Protection key-ring uses (the
+    ///     should be disabled.
+    /// </summary>
+    /// <remarks>
+    ///     Reuses the SAME per-user data-dir resolution the Data Protection key-ring uses (the
     ///     <see cref="DesktopBootstrap.NodeDataDirectoryKey" /> desktop mode layers in; the content root otherwise), so
     ///     logs land beside <c>node.sqlite</c>/<c>node.key</c> and survive a Velopack update. The <c>Testing</c>
-    ///     environment is excluded: the integration/E2E suite spins up many parallel web hosts that would contend for the
-    ///     same exclusive log file.
-    /// </summary>
+    ///     environment is excluded: the integration/E2E suite spins up many parallel web hosts that would contend for
+    ///     the same exclusive log file.
+    /// </remarks>
     internal static string? ResolveLogFileDirectory(IHostEnvironment environment, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(environment);
@@ -86,11 +91,13 @@ public static class LoggerExtensions
     }
 
     /// <summary>
-    ///     Adds the shared date-rolled file sink under <paramref name="logDirectory" /> (<c>xe-node-.log</c> → the date is
-    ///     inserted at the trailing dash). Also rolls on the 50 MB size cap and retains ~7 files. The Serilog file sink
-    ///     creates the directory on demand and degrades gracefully (via <c>SelfLog</c>) if it cannot open the file, so a
-    ///     bad path never crashes startup.
+    ///     Adds the shared date-rolled file sink under <paramref name="logDirectory" /> (<c>xe-node-.log</c> → the
+    ///     date is inserted at the trailing dash).
     /// </summary>
+    /// <remarks>
+    ///     Also rolls on the 50 MB size cap and retains ~7 files. The Serilog file sink creates the directory on demand
+    ///     and degrades gracefully (via <c>SelfLog</c>) if it cannot open the file, so a bad path never crashes startup.
+    /// </remarks>
     internal static LoggerConfiguration WriteToRollingFile(this LoggerConfiguration loggerConfiguration, string logDirectory)
     {
         ArgumentNullException.ThrowIfNull(loggerConfiguration);

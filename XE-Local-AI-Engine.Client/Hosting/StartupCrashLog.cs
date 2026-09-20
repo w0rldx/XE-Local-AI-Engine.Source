@@ -4,13 +4,15 @@ using System.Globalization;
 
 /// <summary>
 ///     Last-resort, dependency-free crash breadcrumb for the managed host's earliest startup — the region that runs
-///     BEFORE <c>Log.Logger</c> is assigned a real sink (the Velopack bootstrap and the desktop data-dir / operator-key
-///     bootstrap). An exception there is caught by the top-level handler, but <c>Serilog.Log</c> is still the silent
-///     default logger, so nothing reaches disk and the process dies with an empty logs folder. This writes straight to
-///     the SAME per-user logs directory the rolling Serilog file uses
-///     (<c>%LOCALAPPDATA%\XE-Local-AI-Engine\logs</c> on Windows, <c>$XDG_DATA_HOME|~/.local/share/...</c> on *nix),
-///     so an early crash still leaves an actionable line where a bug report already looks. Never throws.
+///     BEFORE <c>Log.Logger</c> is assigned a real sink. Never throws.
 /// </summary>
+/// <remarks>
+///     That region is the Velopack bootstrap and the desktop data-dir / operator-key bootstrap. An exception there is
+///     caught by the top-level handler, but <c>Serilog.Log</c> is still the silent default logger, so nothing reaches
+///     disk and the process dies with an empty logs folder. This writes straight to the SAME per-user logs directory
+///     the rolling Serilog file uses (<c>%LOCALAPPDATA%\XE-Local-AI-Engine\logs</c> on Windows,
+///     <c>$XDG_DATA_HOME|~/.local/share/...</c> on *nix), where a bug report already looks.
+/// </remarks>
 internal static class StartupCrashLog
 {
     private const string LogFileName = "startup-crash.log";

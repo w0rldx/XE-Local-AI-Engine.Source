@@ -3,27 +3,15 @@ namespace XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.Models;
 
 /// <summary>
-///     One-time startup backfill that closes the FRR-2 upgrade gap: before the unmapped-routing default was flipped to
-///     <c>llamacpp</c>, the Ollama pull endpoints never wrote a <c>model_provider_map</c> row, so every model pulled on an
-///     EARLIER build is unmapped. Under the flipped default those models would silently re-route to llama.cpp and fail to
-///     dial Ollama on the next send. This service maps each currently-installed Ollama model that lacks a map row to
-///     <c>ollama</c>, restoring its routing. New pulls already write the row at pull time, so this is purely a migration
-///     for pre-existing data — it leaves already-mapped models untouched.
+///     One-time startup backfill that closes the FRR-2 upgrade gap: every installed Ollama model pulled on an earlier
+///     build carries no <c>model_provider_map</c> row, and is mapped to <c>ollama</c> here.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Not desktop-gated.</b> A pre-existing Ollama install can exist on any launch mode, so the backfill runs on
-///         every boot. It is a node-local read of installed models followed by additive upserts — it never starts an
-///         advisor run, downloads anything, or contacts the central platform.
-///     </para>
-///     <para>
-///         <b>Non-blocking + offline-tolerant + idempotent.</b> It runs in <see cref="ExecuteAsync" /> off the startup
-///         path (mirroring <c>NodeChatTitleEncryptionBackfillService</c> and <c>FirstRunModelProvisioningService</c>), so
-///         a slow/unreachable Ollama never blocks the host from coming up. Listing failures (Ollama absent/unreachable)
-///         are swallowed and logged rather than surfaced, and each model is mapped only when it has no existing row, so
-///         re-running on every boot is a cheap no-op once the rows exist. As an <see cref="IHostedService" /> it is also
-///         removed by the test host's <c>RemoveAll&lt;IHostedService&gt;()</c>, so it never perturbs request-path tests.
-///     </para>
+///     Under the <c>llamacpp</c> unmapped-routing default those models would silently re-route to llama.cpp and fail to
+///     dial Ollama on the next send. Already-mapped models are left untouched, so this is purely a migration for
+///     pre-existing data. It runs in <see cref="ExecuteAsync" />, off the startup path, so a slow or unreachable Ollama
+///     never blocks the host coming up; it is offline-tolerant and idempotent, and not desktop-gated. See
+///     docs/wiki/11-hosting-and-deployment.md ("Upgrade backfills and their discriminators").
 /// </remarks>
 public sealed class OllamaProviderMapBackfillService : BackgroundService
 {
@@ -53,11 +41,13 @@ public sealed class OllamaProviderMapBackfillService : BackgroundService
     }
 
     /// <summary>
-    ///     Maps every installed Ollama model that has no <c>model_provider_map</c> row to the Ollama provider. Best-effort:
-    ///     a failure to list (Ollama absent/unreachable) or to upsert a single row is logged and skipped rather than
-    ///     surfaced, so the backfill never blocks startup. Exposed as <see langword="internal" /> so it is unit-testable
-    ///     without standing up the hosted-service lifecycle.
+    ///     Maps every installed Ollama model that has no <c>model_provider_map</c> row to the Ollama provider.
     /// </summary>
+    /// <remarks>
+    ///     Best-effort: a failure to list (Ollama absent or unreachable) or to upsert a single row is logged and
+    ///     skipped rather than surfaced, so the backfill never blocks startup. Exposed as <see langword="internal" />
+    ///     so it is unit-testable without standing up the hosted-service lifecycle.
+    /// </remarks>
     internal static async Task BackfillAsync(IServiceScopeFactory scopeFactory, ILogger logger, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(scopeFactory);

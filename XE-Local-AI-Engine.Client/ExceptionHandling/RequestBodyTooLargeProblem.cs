@@ -6,20 +6,13 @@ using XE_Local_AI_Engine.Client.Common.Extensions;
 /// <summary>
 ///     The ONE 413 answer a capped route gives — status, headers and body — written here so the two emitters cannot
 ///     drift apart.
-///     <para>
-///         A capped route has two refusal paths and they used to write two different shapes for the same status:
-///         <see cref="RequestBodyTooLargeExceptionHandler" /> wrote ASP.NET <see cref="ProblemDetails" /> when Kestrel
-///         refused the body mid-read, while the endpoint's own Content-Length exit sent FastEndpoints' <c>errors[]</c>
-///         body. Both routes DECLARE <c>ProducesProblem(413)</c> — the ProblemDetails schema — so the second one was a
-///         contract lie the generated client encodes.
-///     </para>
-///     <para>
-///         Both now go through <see cref="WriteAsync" />, the single writer: the handler awaits it, and an endpoint
-///         sends <see cref="Result" /> — whose only job is to call it — through <c>Send.ResultAsync</c>. Only
-///         <see cref="ProblemDetails.Detail" /> differs between them, because the host knows nothing but "too large"
-///         while an endpoint can name the cap it enforces.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Both refusal paths go through <see cref="WriteAsync" />: the handler awaits it, and an endpoint sends
+///     <see cref="Result" /> — whose only job is to call it — through <c>Send.ResultAsync</c>. Only
+///     <see cref="ProblemDetails.Detail" /> differs, because the host knows nothing but "too large" while an endpoint
+///     can name the cap it enforces. See docs/wiki/09-api-and-hubs.md ("Status choices worth their reasons").
+/// </remarks>
 public static class RequestBodyTooLargeProblem
 {
     /// <summary>Same string every other problem body on this surface is written with.</summary>

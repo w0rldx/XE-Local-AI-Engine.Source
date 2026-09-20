@@ -8,22 +8,15 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>
 ///     Authenticates an EXTERNAL MCP client against the node's inbound MCP endpoint using the single operator-generated
-///     bearer key. Registered as a SECOND authentication scheme beside JWT bearer and applied only by the MCP
-///     authorization policy, so the browser-facing surface keeps its JWT/Operator posture untouched.
-///     <para>
-///         <b>Why a bearer key and not OAuth.</b> MCP specification revision 2026-07-28 states that authorization is
-///         OPTIONAL for MCP implementations; the OAuth 2.1 / RFC 9728 profile binds only an implementation that opts
-///         into it. This node deliberately does not, and therefore advertises no Protected Resource Metadata — a
-///         pre-shared bearer over a loopback-only, single-user surface is the proportionate control, and it is what
-///         external clients accept directly (Claude Code: <c>--header "Authorization: Bearer …"</c>).
-///     </para>
-///     <para>
-///         <b>This is not the only gate.</b> The endpoint is mounted inside <c>/api/local/v1</c>, so
-///         <c>LocalApiSecurityMiddleware</c> has already rejected any non-loopback peer, foreign Host or cross-origin
-///         request before this handler runs. Mounting the MCP endpoint outside that prefix would silently remove that
-///         layer and leave this key as the ONLY control — don't.
-///     </para>
+///     bearer key.
 /// </summary>
+/// <remarks>
+///     A SECOND authentication scheme beside JWT bearer, applied only by the MCP authorization policy, so the browser-facing surface keeps its JWT/Operator
+///     posture. <b>Why a bearer key and not OAuth:</b> MCP specification revision 2026-07-28 makes authorization OPTIONAL and binds the OAuth 2.1 / RFC 9728
+///     profile only to an implementation that opts in. This node does not, so it advertises no Protected Resource Metadata — a pre-shared bearer over a
+///     loopback-only, single-user surface is the proportionate control, and what external clients accept directly
+///     (Claude Code: <c>--header "Authorization: Bearer …"</c>).
+/// </remarks>
 internal sealed class McpApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     /// <summary>The scheme name. Referenced by <see cref="NodeAuthorizationPolicies.McpServer" />.</summary>
@@ -42,6 +35,15 @@ internal sealed class McpApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         _apiKeyService = apiKeyService ?? throw new ArgumentNullException(nameof(apiKeyService));
     }
 
+    /// <summary>
+    ///     Validates the presented bearer key against the operator-generated MCP key.
+    /// </summary>
+    /// <remarks>
+    ///     <b>This is not the only gate.</b> The endpoint is mounted inside <c>/api/local/v1</c>, so
+    ///     <c>LocalApiSecurityMiddleware</c> has already rejected any non-loopback peer, foreign Host or cross-origin
+    ///     request before this handler runs. Mounting the MCP endpoint outside that prefix would silently remove that layer and
+    ///     leave this key as the ONLY control — don't.
+    /// </remarks>
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var header = Request.Headers.Authorization.ToString();
@@ -79,17 +81,20 @@ internal sealed class McpApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         return AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName));
     }
 
+    /// <summary>
+    ///     The RFC 6750 bearer challenge, whose ABSENCE of a <c>resource_metadata</c> parameter is deliberate and
+    ///     load-bearing — do not "complete" this header by adding one.
+    /// </summary>
+    /// <remarks>
+    ///     This server does not implement the spec's optional OAuth profile, so advertising Protected Resource Metadata
+    ///     would point clients at a discovery document that does not exist. And Claude Code has an open defect
+    ///     (anthropics/claude-code#59467) where a server that advertises OAuth <i>while also</i> accepting a static
+    ///     header can make the client discard its configured Authorization header and fall back to OAuth discovery, so
+    ///     advertising PRM here would break the very clients this endpoint exists to serve.
+    /// </remarks>
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
         Response.StatusCode = StatusCodes.Status401Unauthorized;
-        // RFC 6750 bearer challenge. The ABSENCE of a `resource_metadata` parameter is deliberate and load-bearing, for
-        // two reasons — do not "complete" this header by adding one:
-        //   1. This server does not implement the spec's optional OAuth profile, so advertising Protected Resource
-        //      Metadata would point clients at a discovery document that does not exist.
-        //   2. Claude Code has an open defect (anthropics/claude-code#59467) where a server that advertises OAuth
-        //      *while also* accepting a static header can make the client discard its configured Authorization header
-        //      and fall back to OAuth discovery — i.e. advertising PRM here would break the very clients this endpoint
-        //      exists to serve.
         Response.Headers.WWWAuthenticate = "Bearer realm=\"xe-local-ai-engine-mcp\"";
         return Task.CompletedTask;
     }
