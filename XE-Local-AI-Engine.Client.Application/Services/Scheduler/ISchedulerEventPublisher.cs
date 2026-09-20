@@ -3,12 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Publishes scheduler lifecycle notifications to connected clients. SignalR messages are notifications, not the
-///     source of truth — React refetches authoritative state through TanStack Query after important events. All payloads
-///     are sanitized DTOs: never the raw <c>parameter_json</c>, <c>details_json</c>, event <c>data_json</c>, prompts,
-///     credentials, or stack traces. The default implementation is a no-op (<see cref="Implementation.NullSchedulerEventPublisher" />);
-///     the Client host swaps in a hub-backed publisher.
+///     Publishes scheduler lifecycle notifications to connected clients.
 /// </summary>
+/// <remarks>
+///     These messages are notifications, not the source of truth — React refetches authoritative state through TanStack
+///     Query after important events. Every payload is a sanitized DTO: never the raw <c>parameter_json</c>,
+///     <c>details_json</c>, event <c>data_json</c>, prompts, credentials or stack traces. The default implementation is
+///     a no-op (<see cref="Implementation.NullSchedulerEventPublisher" />); the Client host swaps in a hub-backed one.
+/// </remarks>
 public interface ISchedulerEventPublisher
 {
     /// <summary>Publishes a run lifecycle transition (<c>runStarted</c>/<c>runCompleted</c>/<c>runFailed</c>/<c>runCancelled</c>).</summary>

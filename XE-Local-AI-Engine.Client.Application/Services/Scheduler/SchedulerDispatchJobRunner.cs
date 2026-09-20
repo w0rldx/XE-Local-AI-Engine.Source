@@ -4,12 +4,14 @@ using Quartz;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Shared fire-extraction logic for the two dispatch <see cref="IJob" /> variants (overlapping and
-///     non-overlapping). Reads the definition id from the merged <c>JobDataMap</c>, then delegates to the executor
-///     with the fire metadata. A malformed / missing id is logged (sanitized) and swallowed rather than thrown, so a
-///     single corrupt trigger cannot fault the scheduler; <see cref="OperationCanceledException" /> from the executor
-///     is allowed to propagate so Quartz observes interrupt / shutdown.
+///     Shared fire-extraction logic for the two dispatch <see cref="IJob" /> variants: it reads the definition id from
+///     the merged <c>JobDataMap</c>, then delegates to the executor with the fire metadata.
 /// </summary>
+/// <remarks>
+///     A malformed or missing id is logged sanitized and swallowed rather than thrown, so a single corrupt trigger
+///     cannot fault the scheduler. <see cref="OperationCanceledException" /> from the executor propagates instead, so
+///     Quartz observes an interrupt or shutdown.
+/// </remarks>
 internal static class SchedulerDispatchJobRunner
 {
     public static async Task RunAsync(ISchedulerDispatchExecutor dispatchExecutor,
@@ -30,9 +32,8 @@ internal static class SchedulerDispatchJobRunner
             return;
         }
 
-        // A manual fire may carry per-fire overrides on the firing trigger's data map (merged into MergedJobDataMap by
-        // Quartz). Forward ONLY the whitelisted keys to the executor; a cron/no-override fire has none and dispatches the
-        // stored parameters unchanged. The executor decides whether/how to apply them.
+        // A manual fire may carry per-fire overrides on the firing trigger's data map. Forward ONLY the whitelisted keys, which the
+        // executor decides how to apply; a cron fire has none and dispatches the stored parameters unchanged.
         var parameterOverrides = ExtractParameterOverrides(context);
 
         // Only TriggerNowAsync stamps the manual marker, so its absence means Quartz fired the definition's own trigger.
@@ -50,10 +51,13 @@ internal static class SchedulerDispatchJobRunner
     }
 
     /// <summary>
-    ///     Reads the whitelisted per-fire override keys (the model-fit use-case, breadth limit, quant and context target)
-    ///     from the merged data map. Returns <c>null</c> when none are present so a normal (cron / no-override) fire
-    ///     dispatches the stored parameters unchanged. No other data-map key is ever surfaced as an override.
+    ///     Reads the whitelisted per-fire override keys — the model-fit use-case, breadth limit, quant and context
+    ///     target — from the merged data map.
     /// </summary>
+    /// <remarks>
+    ///     It returns <c>null</c> when none are present, so a normal cron fire dispatches the stored parameters
+    ///     unchanged. No other data-map key is ever surfaced as an override.
+    /// </remarks>
     private static IReadOnlyDictionary<string, string>? ExtractParameterOverrides(IJobExecutionContext context)
     {
         var overrides = new Dictionary<string, string>(StringComparer.Ordinal);

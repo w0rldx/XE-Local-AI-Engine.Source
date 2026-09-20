@@ -3,12 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Default <see cref="INodeDataDirectory" />: resolves the per-node runtime-state root from the
-///     <c>NodeData:Directory</c> configuration key (layered in only by <c>DesktopBootstrap</c> in desktop mode) and falls
-///     back to <see cref="IHostEnvironment.ContentRootPath" /> when the key is absent. Off the desktop flag the key is
-///     never set, so <see cref="Root" /> equals the content root and every consuming store reads/writes exactly where it
-///     did before — the off-flag byte-behavior invariant.
+///     Default <see cref="INodeDataDirectory" />: resolves the per-node runtime-state root from the <c>NodeData:Directory</c> configuration
+///     key (layered in only by <c>DesktopBootstrap</c> in desktop mode) and falls back to <see cref="IHostEnvironment.ContentRootPath" />
+///     when the key is absent.
 /// </summary>
+/// <remarks>
+///     Off the desktop flag the key is never set, so <see cref="Root" /> equals the content root and every consuming store reads/writes
+///     exactly where it did before — the off-flag byte-behavior invariant.
+/// </remarks>
 public sealed class NodeDataDirectory : INodeDataDirectory
 {
     /// <summary>Configuration key <c>DesktopBootstrap</c> layers in (in desktop mode) with the per-user data directory.</summary>
@@ -37,9 +39,8 @@ public sealed class NodeDataDirectory : INodeDataDirectory
 
         Root = string.IsNullOrWhiteSpace(configuredRoot) ? contentRoot : configuredRoot;
 
-        // First-launch migration: when the data dir is distinct from the content root (i.e. desktop mode relocated it),
-        // best-effort move any artifact a previously-broken RC wrote into the shared install dir so a tester keeps their
-        // credentials/selection. Swallow IO errors at Debug — a missed copy degrades to "re-enter the token", never a crash.
+        // First-launch migration: when the data dir is distinct from the content root (i.e. desktop mode relocated it), best-effort move any artifact a previously-broken RC wrote
+        // into the shared install dir so a tester keeps their credentials/selection. Swallow IO errors at Debug — a missed copy degrades to "re-enter the token", never a crash.
         if (!string.Equals(Root, contentRoot, StringComparison.Ordinal))
         {
             MigrateContentRootArtifacts(contentRoot, Root, logger);

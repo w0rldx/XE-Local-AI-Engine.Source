@@ -16,9 +16,8 @@ internal static class AddNodeDocumentIngestionExtensions
         // simultaneous uploads cannot aggregate to an out-of-memory condition. Singleton — the semaphore is shared.
         builder.Services.AddSingleton<IDocumentExtractionAdmissionGate, DocumentExtractionAdmissionGate>();
 
-        // Durable per-conversation uploaded-file store. Singleton: it opens its own DbContext scope per operation and
-        // depends only on singletons (data directory, sqlite key holder, time provider), so it can be injected into the
-        // singleton chat persistence service that hooks conversation-delete disk cleanup.
+        // Durable per-conversation uploaded-file store. Singleton: it opens its own DbContext scope per operation and depends only on
+        // singletons (data directory, sqlite key holder, time provider), so the singleton chat persistence service can hook delete cleanup.
         builder.Services.AddSingleton<IConversationUploadedFileStore, ConversationUploadedFileStore>();
 
         // Gate → buffer → extract → persist orchestration behind the conversation upload endpoint. Singleton: stateless

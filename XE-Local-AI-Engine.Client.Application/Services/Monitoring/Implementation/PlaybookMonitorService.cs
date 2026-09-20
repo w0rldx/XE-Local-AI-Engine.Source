@@ -4,13 +4,15 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Default <see cref="IPlaybookMonitorService" /> (relevance retrieval and cohort monitoring, the cohort-monitor verdict rules). For every Enabled action of the agent
-///     that carries an <c>EnabledAtUtc</c> clock, it reads the agent's before/after feedback cohort from
-///     <see cref="IPlaybookMonitorStore" /> (faceted by the action's tool scope when set), derives the before/after
-///     down-vote rates, and classifies the change against the configured epsilon and minimum sample size. The verdict is
-///     advisory: Flat/Regressed flag the action for human review (never an auto-disable), and a cohort below the minimum
-///     sample size is InsufficientData and never flagged. Computed on read, off the hot path, model-free and deterministic.
+///     Default <see cref="IPlaybookMonitorService" /> (relevance retrieval and cohort monitoring, the cohort-monitor verdict rules).
 /// </summary>
+/// <remarks>
+///     For every Enabled action of the agent that carries an <c>EnabledAtUtc</c> clock, it reads the agent's before/after feedback cohort
+///     from <see cref="IPlaybookMonitorStore" /> (faceted by the action's tool scope when set), derives the before/after down-vote rates,
+///     and classifies the change against the configured epsilon and minimum sample size. The verdict is advisory: Flat/Regressed flag the
+///     action for human review (never an auto-disable), and a cohort below the minimum sample size is InsufficientData and never flagged.
+///     Computed on read, off the hot path, model-free and deterministic.
+/// </remarks>
 public sealed class PlaybookMonitorService : IPlaybookMonitorService
 {
     private readonly IPlaybookMonitorStore _monitorStore;
@@ -43,10 +45,8 @@ public sealed class PlaybookMonitorService : IPlaybookMonitorService
                 continue;
             }
 
-            // A blank scope is the overall (agent-level) cohort; a non-blank scope requests the per-tool facet. The
-            // store treats any non-null toolScope as a facet, so blank must be normalised to null here.
-            // Note: the per-tool facet only lights up when Scope equals an actual tool_events.tool_name. A free-text
-            // scope yields an empty facet cohort, which classifies as InsufficientData and is never flagged — benign by design.
+            // A blank scope is the overall (agent-level) cohort; a non-blank one requests the per-tool facet, which lights up only when Scope names an actual tool_events.tool_name.
+            // The store reads any non-null toolScope as a facet, so blank normalises to null; free text yields an empty, never-flagged InsufficientData cohort.
             var facetToolName = string.IsNullOrWhiteSpace(action.Scope) ? null : action.Scope;
 
             var comparison = await _monitorStore.GetCohortComparisonAsync(agentDefinitionId, enabledAtUtc, facetToolName, cancellationToken);

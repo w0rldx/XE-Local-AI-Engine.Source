@@ -15,46 +15,28 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     Quartz template handler for the <c>run-agent</c> template: runs a saved node-local agent on a schedule
-///     with a fixed prompt. On each fire it loads the bound agent definition, resolves its COMPLETE
-///     runtime (scaffold + persona + folded playbook memory, curated tools, skills, reasoning, version — never
-///     the raw <c>Instructions</c>), builds a headless loopback <see cref="RuntimePackage" /> with the prompt as the seed
-///     user turn, and drives it through the SAME <see cref="IInvocationRunner" /> the local chat send path uses — minus
-///     the chat conversation/persistence pump. No new runtime-package builder is introduced; the assembly reuses
-///     <see cref="IAgentDefinitionResolver" /> + <see cref="ILocalChatRuntimePackageBuilder" /> +
-///     <see cref="InvocationExecutionContext.CreatePlain" /> verbatim.
-///     <para>
-///         <b>Singleton.</b> The registry captures every handler in a <c>FrozenDictionary</c> at construction, so this
-///         handler is effectively a singleton and CANNOT inject scoped services. It injects
-///         <see cref="IServiceScopeFactory" /> and creates a scope per <see cref="ExecuteAsync" />, resolving the scoped
-///         collaborators inside (mirrors <see cref="ModelRecommendationCheckHandler" />).
-///     </para>
-///     <para>
-///         <b>Node-local only (security invariant).</b> Unattended scheduled work never egresses to a cloud provider:
-///         the EFFECTIVE model (after the agent's pinned <c>ModelProfile</c>) is classified through the shared
-///         <see cref="IModelCapabilityResolver" /> and a cloud/remote effective model is rejected UP FRONT — before the
-///         capacity gate or any invocation — so node-local prompt/agent content is never handed to a cloud model on an
-///         unattended run.
-///     </para>
-///     <para>
-///         <b>Owns no scheduler state.</b> It never writes scheduler run rows and never publishes SignalR — the dispatcher
-///         owns those (durability + restart reconciliation are inherited). It records a CONTENT-SAFE run summary
-///         (status/model/tokens/duration — never message content) through
-///         <see cref="ScheduledJobExecutionContext.ReportProgressAsync" />, lets <see cref="OperationCanceledException" />
-///         propagate (dispatcher records Cancelled/TimedOut), and throws a <see cref="ScheduledJobExecutionException" />
-///         with an operator-safe reason on any failure.
-///     </para>
+///     Quartz template handler for the <c>run-agent</c> template: it runs a saved node-local agent on a schedule with
+///     a fixed prompt, through the SAME <see cref="IInvocationRunner" /> the local chat send path uses.
 /// </summary>
+/// <remarks>
+///     <b>Node-local only, a security invariant:</b> the EFFECTIVE model, after the agent's pinned
+///     <c>ModelProfile</c>, is classified through <see cref="IModelCapabilityResolver" /> and a cloud or remote one is
+///     rejected UP FRONT, before capacity or any invocation, so unattended work never hands node-local content to a
+///     cloud model. The handler is a singleton the registry captures at construction, scoping per fire, and owns no
+///     scheduler state: no run rows, no notifications. See docs/wiki/06-scheduler.md ("Shipped templates").
+/// </remarks>
 public sealed class RunSavedAgentHandler : IScheduledJobHandler
 {
     /// <summary>The reserved scheduler template id this handler claims.</summary>
     public const string TemplateIdValue = "run-agent";
 
     /// <summary>
-    ///     JSON-Schema (draft-07) for the decrypted <c>run-agent</c> parameters: the saved agent to run
-    ///     (<c>agentDefinitionId</c>), the fixed prompt fed as the seed user turn (<c>prompt</c>), and an optional
-    ///     reasoning-effort override that wins over the agent's own effort. Values are validated again in code before use.
+    ///     JSON-Schema (draft-07) for the decrypted <c>run-agent</c> parameters: the saved agent to run, the fixed
+    ///     prompt fed as the seed user turn, and an optional reasoning-effort override.
     /// </summary>
+    /// <remarks>
+    ///     The override wins over the agent's own effort, and every value is validated again in code before use.
+    /// </remarks>
     private const string ParameterSchemaJson =
         """
         {
@@ -99,12 +81,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         // supported for a one-off or an operator-triggered "Run now".
         DefaultScheduleKind = ScheduleKind.Cron,
         DefaultMisfirePolicy = SchedulerMisfirePolicy.SkipMissed,
-        // No template default. A value here becomes the form's pre-filled per-schedule ceiling, and a fixed 600 s
-        // silently capped every unattended run below a raised node "Maximum message request timeout": Quartz's
-        // auto-interrupt fired before the run's own invocation deadline could. Left blank, the schedule carries no
-        // explicit ceiling and the management service derives one from that node setting instead (see
-        // ScheduledJobManagementService.ResolveImplicitMaxRuntimeSecondsAsync). An operator who types a value still
-        // gets exactly that value.
+        // No template default: a value here becomes the form's pre-filled ceiling, and a fixed one caps every unattended run below a
+        // raised node "Maximum message request timeout". Blank, the management service derives the ceiling from that node setting.
         DefaultMaxRuntimeSeconds = null,
         AllowManualTrigger = true,
         // This is the whole point of the run-agent template: the AI agent is permitted to schedule saved-agent runs.
@@ -138,11 +116,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             throw new ScheduledJobExecutionException("The scheduled agent could not be found. It may have been deleted.");
         }
 
-        // 2. Resolve the EFFECTIVE model: the agent's pinned ModelProfile when set, otherwise the node's local-default
-        //    installed GGUF chat model (never Ollama, never cloud). An unattended run has no user-picked model, so the
-        //    pin — or the local default — is the authoritative model the turn binds via ChatOptions.ModelId. A null
-        //    effective model (no pin AND no installed local chat model) fails clearly rather than silently falling back
-        //    to a dead provider.
+        // 2. Resolve the EFFECTIVE model: the agent's pinned ModelProfile when set, else the node's local-default installed GGUF chat
+        //    model. An unattended run has no user-picked model, and a null effective model fails clearly rather than reaching a dead provider.
         var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken);
         var localDefaultModel = await localDefaultResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
         var pinnedModel = string.IsNullOrWhiteSpace(definition.ModelProfile) ? null : definition.ModelProfile;
@@ -152,9 +127,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             throw new ScheduledJobExecutionException("No local chat model is available to run the scheduled agent. Install a local model or pin one to the agent.");
         }
 
-        // 3. LOCALITY GATE (security invariant): classify the effective model and reject a cloud/remote model UP FRONT —
-        //    before capacity or any invocation — so unattended scheduled work stays node-local-only. This is the SAME
-        //    effective-model classification the chat locality gate uses (IModelCapabilityResolver).
+        // 3. LOCALITY GATE (security invariant): classify the effective model and reject a cloud or remote one UP FRONT, before
+        //    capacity or any invocation, so unattended work stays node-local. Same classification the chat locality gate uses.
         var capabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
         if (effectiveModelIsCloud)
@@ -164,10 +138,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             throw new ScheduledJobExecutionException("Scheduled agent runs are restricted to node-local models. This agent is configured to use a cloud model, so it will not run unattended.");
         }
 
-        // 4. CAPACITY / GPU admission for the effective model. A RejectInsufficient verdict fails with the sanitized
-        //    reason constant; a local Allow carries a footprint reservation that MUST be disposed on completion (a leaked
-        //    reservation wrongly rejects later spawns); QueueSameModel means the model is already resident, so the run
-        //    reuses it with no second load (null reservation). GPU load serialization is inherited from the supervisor.
+        // 4. CAPACITY / GPU admission for the effective model. RejectInsufficient fails with the sanitized reason; a local Allow carries
+        //    a footprint reservation that MUST be disposed, or later spawns are wrongly rejected; QueueSameModel reuses a resident model.
         var decision = await capacityService.DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
         if (decision.Verdict == CapacityVerdict.RejectInsufficient)
         {
@@ -177,10 +149,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         var reservation = decision.Reservation;
         try
         {
-            // 5. Resolve the agent's COMPLETE runtime and build the headless package. Passing the effective model as the
-            //    active model with honorModelProfile:true keeps the resolver's effective model identical to the one gated
-            //    above (pin ?? effectiveModel). The resolved prompt (scaffold + persona + folded playbook memory), curated
-            //    tools, skills, reasoning, and version are threaded verbatim — NOT the raw definition.Instructions.
+            // 5. Resolve the agent's COMPLETE runtime and build the headless package. Passing the effective model as the active model
+            //    keeps the resolver's model identical to the gated one, and the resolved prompt is threaded verbatim, never raw Instructions.
             var resolved = await agentDefinitionResolver.ResolveAsync(definition.Id,
                                                             effectiveModel,
                                                             retrievalQuery: parameters.Prompt,
@@ -215,16 +185,16 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
     }
 
     /// <summary>
-    ///     Builds the headless loopback runtime package from the agent's resolved runtime with the prompt as the single
-    ///     seed user turn. Approval-required tools are stripped from the offer: an unattended scheduled run has no
-    ///     human-in-the-loop approval round-trip, so an approval-gated tool (e.g. an MCP tool, which ships
-    ///     approval-required by default) would surface a tool-approval request nobody can answer and hang the run until
-    ///     its max-runtime interrupt — the same no-HITL rationale by which a spawned sub-agent drops approval-required
-    ///     tools. The effective model is bound as a concrete <c>ModelProfile</c> so the runner never
-    ///     silently falls back to the node default. The whole-turn deadline is the operator's node-level "Maximum
-    ///     message request timeout" — the same knob that bounds a local chat send/regenerate — so an unattended run and
-    ///     an interactive turn agree on the ceiling instead of the builder's own <see cref="TimeoutSettings" /> default.
+    ///     Builds the headless loopback runtime package from the agent's resolved runtime, with the prompt as the
+    ///     single seed user turn.
     /// </summary>
+    /// <remarks>
+    ///     Approval-required tools are stripped from the offer: an unattended run has no human-in-the-loop round-trip,
+    ///     so an approval-gated tool — an MCP tool ships approval-required by default — would raise a request nobody
+    ///     can answer and hang the run until its max-runtime interrupt, the same rationale by which a spawned sub-agent
+    ///     drops them. The effective model is bound as a concrete <c>ModelProfile</c>, so the runner never falls back
+    ///     to the node default, and the whole-turn deadline is the node "Maximum message request timeout".
+    /// </remarks>
     private RuntimePackage BuildPackage(ILocalChatRuntimePackageBuilder packageBuilder,
         ResolvedAgentRuntime resolved,
         string effectiveModel,
@@ -245,10 +215,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
                 string.Join(", ", strippedTools.Select(static tool => tool.Name)));
         }
 
-        // A per-run reasoning-effort override wins over the agent's own effort ONLY when it is a recognized effort.
-        // Normalize returns null for a blank OR unrecognized override, so both fall back to the agent's resolved
-        // effort here — an invalid override (e.g. "banana") must never reach the builder, whose own normalize step
-        // would silently drop it to null and suppress reasoning instead of honoring the agent's own effort.
+        // A per-run reasoning-effort override wins over the agent's own effort ONLY when it is a recognized effort: Normalize returns
+        // null for a blank or unrecognized one, so both fall back here, where the builder's own normalize would suppress reasoning.
         var overrideEffort = ReasoningEffortNormalizer.Normalize(parameters.ReasoningEffort);
         var reasoningEffort = overrideEffort ?? resolved.ReasoningEffort;
 
@@ -270,9 +238,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             AgentDefinitionVersion = resolved.AgentDefinitionVersion,
             ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools = offeredTools,
-            // Only the invocation timeout is operator-controlled; tool-call and stream-idle keep their defaults. When the
-            // setting equals the TimeoutSettings default the package — and its config hash — is byte-identical to one
-            // built without an explicit Timeouts.
+            // Only the invocation timeout is operator-controlled, tool-call and stream-idle keeping their defaults. At the default
+            // setting the package, and its config hash, stay byte-identical to one built without explicit timeouts.
             Timeouts = new TimeoutSettings
             {
                 InvocationTimeoutSeconds = maxMessageRequestTimeoutSeconds
@@ -281,24 +248,23 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             SupportsThinking = supportsThinking,
             ReasoningBudgetEnforceable = reasoningBudgetEnforceable,
             Skills = resolved.Skills,
-            // The one place this flag is set. Stripping approval-required tools from the OFFER above cannot cover the
-            // skill tools: they arrive through MAF's AIContextProviders (progressive disclosure), never through the
-            // offer, so an assigned skill still surfaces an approval request here. The flag lets the runner fail that
-            // request immediately with an explicit reason instead of parking the scheduled run on the full
-            // MaxPendingToolCallAge window first.
+            // The one place this flag is set: stripping approval-required tools from the OFFER cannot cover skill tools, which arrive
+            // through MAF's AIContextProviders, so the flag fails their approval request at once instead of parking the run for MaxPendingToolCallAge.
             IsUnattended = true
         });
     }
 
     /// <summary>
-    ///     Runs the headless package through the shared <see cref="IInvocationRunner" />, holding the node-wide invocation
-    ///     slot for the duration so a scheduled run serializes against in-flight chat/platform turns (no concurrent model
-    ///     loads). The slot registration also makes the runner's terminal report fire
-    ///     <see cref="IWorkerEventDispatcher.InvocationStateChanged" />, which is captured here to record a content-safe
-    ///     summary. The runner SWALLOWS <see cref="OperationCanceledException" /> (it reports Cancelled to the dispatcher
-    ///     and returns), so cancellation is re-surfaced explicitly after the run; a terminal failure throws an
-    ///     operator-safe <see cref="ScheduledJobExecutionException" /> WITHOUT leaking the raw runner error.
+    ///     Runs the headless package through the shared <see cref="IInvocationRunner" />, holding the node-wide
+    ///     invocation slot so a scheduled run serializes against in-flight chat turns, with no concurrent model loads.
     /// </summary>
+    /// <remarks>
+    ///     The slot registration also makes the runner's terminal report fire
+    ///     <see cref="IWorkerEventDispatcher.InvocationStateChanged" />, captured here for a content-safe summary. The
+    ///     runner SWALLOWS <see cref="OperationCanceledException" />, reporting Cancelled and returning, so
+    ///     cancellation is re-surfaced explicitly after the run; a terminal failure throws an operator-safe
+    ///     <see cref="ScheduledJobExecutionException" /> WITHOUT leaking the raw runner error.
+    /// </remarks>
     private static async Task RunAndSummarizeAsync(IWorkerEventDispatcher eventDispatcher,
         IInvocationRunner invocationRunner,
         RuntimePackage package,
@@ -306,9 +272,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         string effectiveModel,
         CancellationToken cancellationToken)
     {
-        // Captured through a reference holder rather than a plain local: the terminal is assigned only inside the
-        // event handler below, which flow analysis cannot see fires synchronously from RunAsync's completion report, so a
-        // plain local would be (wrongly) proven always-null. The holder's field write breaks that false inference.
+        // Captured through a reference holder rather than a plain local: the terminal is assigned only inside the event handler below,
+        // which flow analysis cannot see fires synchronously, so a plain local would be wrongly proven always-null.
         var terminalState = new StrongBox<InvocationState?>(null);
 
         void OnInvocationStateChanged(object? sender, InvocationStateChangedEventArgs args)
@@ -345,9 +310,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
                 // The raw terminal error may carry provider text; never surface it. The full detail is in the node logs.
                 throw new ScheduledJobExecutionException("The scheduled agent run failed. See the node logs for details.");
             case InvocationStatus.Cancelled:
-                // Cancelled without our own token firing (e.g. an operator force-eject of the model mid-run). Record a
-                // sanitized failure rather than throwing a token-less OperationCanceledException (which the dispatcher
-                // would mis-record as a max-runtime TimedOut).
+                // Cancelled without our own token firing, as an operator force-eject of the model mid-run does. Record a sanitized
+                // failure rather than a token-less OperationCanceledException, which the dispatcher would mis-record as TimedOut.
                 throw new ScheduledJobExecutionException("The scheduled agent run was interrupted before it completed.");
             default:
                 await ReportRunSummaryAsync(context, effectiveModel, terminalState.Value, cancellationToken);
@@ -356,11 +320,13 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
     }
 
     /// <summary>
-    ///     Records a CONTENT-SAFE run summary (effective model + token totals + generation duration — never any message
-    ///     content or prompt text) through the dispatcher-supplied progress callback, which appends a run-history event.
-    ///     The callback may be null (Summary-level dispatch); a null terminal state (e.g. a run whose completion never
-    ///     reached the slot) still records a bare model-only summary.
+    ///     Records a CONTENT-SAFE run summary — effective model, token totals, generation duration, never message
+    ///     content or prompt text — through the dispatcher-supplied progress callback.
     /// </summary>
+    /// <remarks>
+    ///     The callback appends a run-history event and may be null on Summary-level dispatch. A null terminal state,
+    ///     from a run whose completion never reached the slot, still records a bare model-only summary.
+    /// </remarks>
     private static Task ReportRunSummaryAsync(ScheduledJobExecutionContext context,
         string effectiveModel,
         InvocationState? terminalState,

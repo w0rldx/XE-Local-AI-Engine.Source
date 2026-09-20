@@ -81,9 +81,8 @@ internal sealed class McpAgentRunCancellationRegistry
         {
             try
             {
-                // Forced sync: CancellationTokenSource.CancelAsync runs registered callbacks on the thread pool and
-                // surfaces a failing callback as the first inner exception rather than the AggregateException the
-                // catch below is written against, so switching would change this path's error and ordering contract.
+                // Forced sync: CancellationTokenSource.CancelAsync runs callbacks on the thread pool and surfaces a failing one as the
+                // first inner exception, not the AggregateException the catch below expects, changing this path's error and ordering contract.
 #pragma warning disable MA0045 // forced sync: synchronous cancellation contract (see comment above)
                 Source.Cancel();
 #pragma warning restore MA0045

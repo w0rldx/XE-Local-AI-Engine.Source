@@ -47,11 +47,13 @@ public sealed record InstalledModelSnapshot(
     string ModelContentFingerprint);
 
 /// <summary>
-///     The registry-RECORDED view of an installed model: what a catalog listing needs to judge a model without
-///     verifying a byte of it. Reading these facts costs one registry read plus one provider-map read, whereas
-///     <see cref="IInstalledModelSnapshotCoordinator.AcquireReadSnapshotAsync" /> re-hashes every member file — minutes
-///     per call on a real models directory.
+///     The registry-RECORDED view of an installed model: what a catalog listing needs to judge a model without verifying a byte of it.
 /// </summary>
+/// <remarks>
+///     Reading these facts costs one registry read plus one provider-map read, whereas
+///     <see cref="IInstalledModelSnapshotCoordinator.AcquireReadSnapshotAsync" /> re-hashes every member file — minutes per call on a real
+///     models directory.
+/// </remarks>
 public sealed class InstalledModelFacts
 {
     public required string ModelName { get; init; }
@@ -188,9 +190,8 @@ public sealed class InstalledModelSnapshotCoordinator : IInstalledModelSnapshotC
     /// <inheritdoc />
     public async Task<InstalledModelFacts?> ReadFactsAsync(string modelName, CancellationToken cancellationToken = default)
     {
-        // Discovery reads the registry (and its sidecars) only; nothing here opens a weight file, which is the whole
-        // point — a listing must not pay the verification cost that belongs to a run freeze. No re-read/retry loop
-        // either: there is no verification to race, and a listing that observed a model mid-delete is simply stale.
+        // Discovery reads the registry (and its sidecars) only; nothing here opens a weight file, because a listing must not pay the
+        // verification cost that belongs to a run freeze. No retry loop either: nothing to race, and a mid-delete listing is simply stale.
         var candidate = await _snapshotStore.DiscoverCandidateAsync(modelName, cancellationToken);
         if (candidate is null)
         {
@@ -307,15 +308,14 @@ public sealed class InstalledModelSnapshotCoordinator : IInstalledModelSnapshotC
             snapshot.ModelContentFingerprint);
     }
 
-    /// <summary>
-    ///     The provider serving an installed GGUF. The <c>model_provider_map</c> is an OVERRIDE map, not a census: only
-    ///     a model acquired THROUGH this node (or an Ollama name repaired by the startup backfill) ever gets a row, so a
-    ///     GGUF this node merely found on disk — after a reinstall, a node reset, a moved data directory or a restored
-    ///     models folder — has none. Chat has always read that as llama.cpp (the resolver's documented
-    ///     "unmapped → default provider = llamacpp" rule); returning null here instead made every such model
-    ///     permanently benchmark-ineligible while it stayed perfectly chattable. A row that names another provider is
-    ///     still returned verbatim, so an Ollama name collision keeps refusing exactly as before.
-    /// </summary>
+    /// <summary>The provider serving an installed GGUF.</summary>
+    /// <remarks>
+    ///     The <c>model_provider_map</c> is an OVERRIDE map, not a census: only a model acquired THROUGH this node (or an Ollama name
+    ///     repaired by the startup backfill) ever gets a row, so a GGUF this node merely found on disk — after a reinstall, a node reset, a
+    ///     moved data directory or a restored models folder — has none. Chat reads that as llama.cpp (the resolver's documented
+    ///     "unmapped → default provider = llamacpp" rule), so returning null here would make every such model permanently
+    ///     benchmark-ineligible while it stays perfectly chattable. A row naming another provider is still returned verbatim.
+    /// </remarks>
     private static string ResolveProviderName(ModelProviderMapRecord? mapping) =>
         mapping?.ProviderName ?? LlamaServerProviderConstants.ProviderName;
 

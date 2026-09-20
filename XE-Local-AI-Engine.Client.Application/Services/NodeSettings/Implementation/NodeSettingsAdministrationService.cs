@@ -71,19 +71,8 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         ArgumentNullException.ThrowIfNull(merge);
         var current = await GetTrustedSettingsAsync(cancellationToken);
 
-        // The MERGE, not a merged record: the wire DTO looks whole but is optional field by optional field, so the
-        // caller resolves every omitted one from the record it is handed. Handing it a pre-validation snapshot made a
-        // request that changes one knob write that snapshot's value back over every field a sibling writer had
-        // changed in the window — a tool-capable-model registration, a default-model selection. Re-applied to the
-        // write-time record below, an omitted field keeps what is actually stored.
-        //
-        // LOCAL-ONLY members ride along from that record instead of from the caller. MachineKey is minted node-side by
-        // IMachineKeyProvider and is deliberately absent from the wire DTO, so a caller that builds a
-        // StoredNodeSettings out of a request has no value to supply and saving its record verbatim would erase the
-        // key. That is silent data loss: the next start mints a fresh key, and every frozen inference profile — keyed
-        // by machine key — is orphaned while still reading as frozen. Applied here rather than only at the
-        // persistence boundary in ValidateAndSaveAsync so the record this call VALIDATES and RETURNS carries the key
-        // too, including on the rejection paths that never reach a write.
+        // The MERGE, not a merged record, so an omitted field keeps what is stored; and the LOCAL-ONLY members ride along from that record
+        // rather than from the caller — applied here, not only at the write, so a rejection path returns the key too. See ValidateAndSaveAsync.
         return await ValidateAndSaveAsync(record => merge(record) with
             {
                 MachineKey = record.MachineKey,
@@ -115,17 +104,12 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             ]);
         }
 
-        // The default model the cache invalidation below treats as the PREVIOUS one, captured inside the projection
-        // rather than read off the snapshot: the transition to invalidate is the one that actually happened on disk,
-        // and the record the write lands on is not necessarily the one this call validated. The projection runs more
-        // than once per save (the validation preview, then the write, and once more per re-validation), and each run
-        // overwrites this — which is what makes the surviving value the one from the invocation that was persisted.
+        // The PREVIOUS default model for the cache invalidation below, captured inside the projection rather than off the snapshot: the
+        // transition to invalidate is the one that happened on disk, and the surviving value is the persisted run's (the projection reruns).
         var previousDefaultModelName = current.DefaultModelName;
 
-        // The projection, not its result: a PARTIAL patch names only the fields it supplies, so every other field must
-        // come from the record the write actually lands on. Applying this to the snapshot loaded above and saving THAT
-        // whole record wrote back the snapshot's value for every unnamed field, silently reverting any sibling writer
-        // — a tool-capable-model registration, a default-model selection — that landed while this call validated.
+        // The projection, not its result: a PARTIAL patch names only the fields it supplies, so every other field must come from the record
+        // the write actually lands on, or a sibling writer that landed during validation is silently reverted.
         StoredNodeSettings Apply(StoredNodeSettings record)
         {
             previousDefaultModelName = record.DefaultModelName;
@@ -168,26 +152,11 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     ///     to have changed under the validation.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         Validation necessarily runs against a snapshot: the policy checks are async (they resolve models) and
-    ///         the store's mutation must stay pure and synchronous under its lock. The write therefore re-applies
-    ///         <paramref name="apply" /> rather than saving the validated preview, so fields the caller never supplied
-    ///         come from the write-time record instead of a stale copy.
-    ///     </para>
-    ///     <para>
-    ///         Rebasing onto a record that moved can compose two individually valid updates into an invalid one — a
-    ///         patch that validated "keep model warm on" against a stored warm model, rebased onto a sibling write
-    ///         that cleared that model, persists keep-warm enabled with nothing selected. So the mutation compares the
-    ///         write-time record with the one that was validated and declines to project on a difference; this method
-    ///         then reloads, re-validates and tries again, up to <see cref="MaxSaveAttempts" /> times. After that many
-    ///         conflicts in a row the save is REFUSED and the caller gets a conflict result: nothing is ever written
-    ///         that was not validated against the record it landed on.
-    ///     </para>
-    ///     <para>
-    ///         <paramref name="apply" /> is therefore invoked several times per save, and a caller that captures a
-    ///         value out of it gets the LAST invocation's value rather than an accumulation of all of them: each run
-    ///         overwrites the captured local, and the run that produced the persisted record is the last one.
-    ///     </para>
+    ///     Nothing is ever written that was not validated against the record it landed on: on a difference the mutation declines to project,
+    ///     this method reloads and re-validates, and after <see cref="MaxSaveAttempts" /> conflicts the save is REFUSED. <paramref name="apply" />
+    ///     is therefore invoked several times per save, and a caller that captures a value out of it gets the LAST invocation's value rather
+    ///     than an accumulation — the run that produced the persisted record is the last one. Full protocol, and why a rebase is refused
+    ///     rather than risked: docs/wiki/08-data-and-persistence.md ("`node-settings.json`: the save protocol").
     /// </remarks>
     private async Task<NodeSettingsAdministrationResult> ValidateAndSaveAsync(Func<StoredNodeSettings, StoredNodeSettings> apply,
         StoredNodeSettings current,
@@ -198,17 +167,8 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         {
             var settings = apply(validatedAgainst);
 
-            // Enforcement point 1 of the node-locality gate, on BOTH save paths (the endpoint's merged save and the
-            // MCP patch) rather than only the patch: the runner's dispatcher may move an `auto` turn onto this model,
-            // and the turn's data was admitted upstream against a node-local one. A cloud id, an `ext:` id or an
-            // Ollama name would carry that data somewhere no egress gate authorised, so it is refused before it can
-            // ever be stored.
-            //
-            // Only on a CHANGE to the value, though. Both save paths validate the merged result, so re-validating an
-            // unchanged stored value would reject every save of every other setting once the configured fast model is
-            // uninstalled — with a message naming a field the operator never touched. The dispatcher re-checks the
-            // same pair per turn (enforcement point 2), so an already-stored value that stops being node-local is
-            // refused where it would actually be used rather than blocking the settings page.
+            // Enforcement point 1 of the node-locality gate, on BOTH save paths: a cloud id, an `ext:` id or an Ollama name here would carry
+            // turn data somewhere no egress gate authorised. Only on a CHANGE — point 2 (the dispatcher) re-checks per turn. Wiki 08.
             if (!string.Equals(settings.AutoEffortFastModelName, validatedAgainst.AutoEffortFastModelName, StringComparison.Ordinal)
                 && !string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName)
                 && !await IsInstalledNodeLocalModelAsync(settings.AutoEffortFastModelName, cancellationToken))
@@ -225,24 +185,16 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
                 return NodeSettingsAdministrationResult.Rejected(settings, errors);
             }
 
-            // Read-modify-write under the store's own lock, never a load here and a save there. The settings file is
-            // written WHOLE, so the projection is re-applied to the LATEST record: every field the caller did not
-            // supply then comes from what is actually stored rather than from this request's snapshot. MachineKey is
-            // the one member no save carries a value for — a key minted between this request's load and this line,
-            // since IMachineKeyProvider races every settings save on the same node — so it is taken from the latest
-            // record too, ahead of whatever the projection produced, orphaning no frozen profile.
+            // Read-modify-write under the store's own lock, never a load here and a save there: the file is written WHOLE, so the projection
+            // is re-applied to the LATEST record, MachineKey included (IMachineKeyProvider races every save on this node).
             var changedUnderTheValidation = false;
             var persisted = await _store.UpdateAsync(latest =>
                                             {
                                                 changedUnderTheValidation = !SameExceptMachineKey(latest, validatedAgainst);
                                                 if (changedUnderTheValidation)
                                                 {
-                                                    // Nothing may be projected onto a record this attempt never
-                                                    // validated — on the last attempt as much as on the first. Returning
-                                                    // `latest` unchanged still costs one redundant write, because
-                                                    // UpdateAsync always persists — that is the price of reading the
-                                                    // write-time record under the store's own lock, and the file it
-                                                    // rewrites is byte-identical.
+                                                    // Nothing may be projected onto a record this attempt never validated — on the last
+                                                    // attempt as much as the first. Returning `latest` costs one redundant, byte-identical write.
                                                     return latest;
                                                 }
 
@@ -264,22 +216,21 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             return NodeSettingsAdministrationResult.Saved(persisted);
         }
 
-        // ponytail: the ceiling is a fixed attempt count, and reaching it refuses the save rather than serializing
-        // the writers. A version/etag on INodeSettingsStore.UpdateAsync would be the upgrade if a real workload ever
-        // hits this.
+        // The ceiling is a fixed attempt count, and reaching it refuses the save rather than serializing the writers. A version/etag on
+        // INodeSettingsStore.UpdateAsync is the upgrade path if a real workload ever hits this.
         _logger.LogWarning("Node settings changed under this save on all {AttemptLimit} attempts. Nothing was written.",
             MaxSaveAttempts);
         return NodeSettingsAdministrationResult.Conflict(validatedAgainst);
     }
 
-    // Whether the write-time record still is the one that was validated. MachineKey is excluded because the projection
-    // above already takes it from the write-time record, so a key minted in the window is not a conflict to resolve.
-    //
-    // Serialize-and-compare rather than the record's own equality: StoredNodeSettings holds an IReadOnlyList<string>
-    // and nested records, whose compiler-generated equality is by REFERENCE, so two loads of the same stored
-    // allow-list would read as a change and burn every attempt on a difference that does not exist.
-    // ponytail: two serializations of a tiny record per save attempt; a hand-written comparer if it ever shows up in
-    // a profile.
+    /// <summary>Whether the write-time record still is the one that was validated.</summary>
+    /// <remarks>
+    ///     MachineKey is excluded because the projection already takes it from the write-time record, so a key minted in the window is not a
+    ///     conflict to resolve. Serialize-and-compare rather than the record's own equality: <see cref="StoredNodeSettings" /> holds an
+    ///     <c>IReadOnlyList&lt;string&gt;</c> and nested records, whose compiler-generated equality is by REFERENCE, so two loads of the same
+    ///     stored allow-list would read as a change and burn every attempt on a difference that does not exist. The cost is two serializations
+    ///     of a tiny record per save attempt; a hand-written comparer is the upgrade if it ever shows up in a profile.
+    /// </remarks>
     private static bool SameExceptMachineKey(StoredNodeSettings first, StoredNodeSettings second) =>
         string.Equals(SerializeWithoutMachineKey(first), SerializeWithoutMachineKey(second), StringComparison.Ordinal);
 
@@ -293,10 +244,8 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         return JsonSerializer.Serialize(withoutMachineKey, ComparisonSerializerOptions);
     }
 
-    // Enforcement point 1's predicate. Shared verbatim with enforcement point 2 (the dispatcher's per-turn re-check)
-    // so a value this save accepts is exactly a value that turn admits, and the registry membership test is what stops
-    // an arbitrary string — a cloud model id included — from passing two resolvers that both default the unknown to
-    // "node-local llama.cpp".
+    // Enforcement point 1's predicate, shared verbatim with point 2 (the dispatcher's per-turn re-check) so a value this save accepts is
+    // exactly a value that turn admits; the registry membership test is what stops an arbitrary string passing as "node-local llama.cpp".
     private Task<bool> IsInstalledNodeLocalModelAsync(string modelName, CancellationToken cancellationToken) =>
         NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(modelName,
             _ggufModelStore,

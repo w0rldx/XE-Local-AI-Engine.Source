@@ -19,6 +19,13 @@ public sealed class ModelNameValidator
         _allowedPattern = new Regex(pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    ///     An external id (<c>ext:{connectionId}/{wireId}</c>) is validated by its OWN grammar and returns unconditionally: the general allow-pattern
+    ///     cannot express the namespaced form (its first slash segment may not contain a colon, and two slashes fail outright), and widening it would
+    ///     loosen validation for every other provider. <c>ExternalModelId</c> enforces both charsets, the <c>ext:</c>-only 165-character bound (longer
+    ///     than any other provider's, which is why the general 150 bound must not apply), and the same traversal and empty-segment refusals.
+    /// </remarks>
     public string? GetValidationError(string? modelName)
     {
         if (string.IsNullOrWhiteSpace(modelName))
@@ -26,13 +33,7 @@ public sealed class ModelNameValidator
             return null;
         }
 
-        // An external OpenAI-compatible model id (ext:{connectionId}/{wireId}) is validated by its OWN grammar and
-        // nothing else. This branch is deliberately isolated and returns unconditionally: the general allow-pattern
-        // below cannot express the namespaced form (its first slash segment may not contain a colon, and two slashes
-        // fail outright), and widening that shared pattern to admit it would loosen validation for every other
-        // provider. ExternalModelId enforces the connection-slug charset, the wire-id charset, the ext:-only 165-char
-        // bound (a longer id than any other provider's, which is why the general 150 bound must not apply), and the
-        // same traversal / empty-segment refusals the guards below make for the rest.
+        // The ext: branch is validated by ExternalModelId's own grammar and returns unconditionally. See this method's remarks.
         if (ExternalModelId.HasExternalScheme(modelName))
         {
             return ExternalModelId.TryParse(modelName, out _, out _) ? null : InvalidModelIdentifier;

@@ -215,6 +215,12 @@ db.ConnectionStringName = "node-sqlite"; // looked up in IConfiguration's Connec
 
 Quartz resolves the connection **by name at scheduler start (post-config-build)**, exactly like the `NodeChatDbContext` registration reads it lazily. **Reading the literal connection string at registration time would throw under `WebApplicationFactory`**, whose connection string is layered in *after* services are registered. Always reference `node-sqlite` by name here, never inline the value.
 
+### Concurrency posture — the scheduler shares `node.sqlite`
+
+The scheduler deliberately shares the `node.sqlite` file with chat/KB rather than owning its own database. WAL is a persistent, file-level property that `NodeSqlitePragmas` sets **once** — via the EF connection interceptor during the startup migration, before the Quartz hosted service begins firing jobs — so Quartz's connections run under WAL automatically: its frequent polling reads never block, and never get blocked by, a concurrent chat/KB writer, which is the dominant contention pattern here. On the write side (infrequent job-store updates) the contention resilience comes from `Microsoft.Data.Sqlite`'s command-level busy retry plus the shared connection pool — Quartz reuses the same connection string, hence the same pool, whose handles already carry `busy_timeout`.
+
+Quartz's fluent config exposes **no per-connection PRAGMA hook**. If evidence of scheduler write starvation ever appears, the escape hatch is a custom `IDbProvider` via `db.UseConnectionProvider<T>()`.
+
 ### Gotcha 2 — `AddJob`/durable reconcile with `replace: true` self-heals a stale `JOB_CLASS_NAME`
 
 `ReconcileDurableJobsAsync` (`IScheduledJobManagementService.cs`) re-adds the durable Quartz `JobDetail` **with `replace=true`** for every persisted, enabled, non-deleted definition that already has a Quartz job. This heals a stale persisted `JOB_CLASS_NAME` — e.g. one written before the dispatch job changed namespaces/type. It never changes a trigger's schedule and never fires a job; unknown-template definitions are skipped. It is intended to run **once at startup**. Without this, a persisted Quartz row pointing at a moved/renamed `IJob` type would fail to materialize at fire time.

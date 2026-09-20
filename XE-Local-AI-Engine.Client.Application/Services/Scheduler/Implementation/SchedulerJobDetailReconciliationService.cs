@@ -5,18 +5,15 @@ using Quartz;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     Startup self-heal for persisted Quartz job details whose stored <c>JOB_CLASS_NAME</c> no longer resolves. When the
-///     dispatch <see cref="Quartz.IJob" /> types move namespaces, every <c>QRTZ_JOB_DETAILS</c> row written by an older
-///     build still references the old type name, so Quartz fails to load the job (manual trigger 500s, recurring fires
-///     fault). This hosted service re-adds every enabled, non-deleted definition's durable JobDetail with
-///     <c>replace=true</c> so the class name refreshes to the current <c>typeof(...)</c> value — covering recurring jobs
-///     that are never manually triggered. It never changes a trigger's schedule and never fires a job.
-///     <para>
-///         <b>Best-effort.</b> A node must still start even if reconciliation fails (e.g. a transient DB error), so the
-///         expected failures are logged and swallowed; manual triggering still self-heals on demand. Registered in the
-///         Client host AFTER <c>AddNodeScheduler</c> so the scheduler factory/job store are available when this runs.
-///     </para>
+///     Startup self-heal for persisted Quartz job details whose stored <c>JOB_CLASS_NAME</c> no longer resolves.
 /// </summary>
+/// <remarks>
+///     A <c>QRTZ_JOB_DETAILS</c> row written by an older build still names the dispatch <see cref="Quartz.IJob" />
+///     type's old namespace, and Quartz then fails to load the job (manual trigger 500s, recurring fires fault). This
+///     hosted service re-adds every enabled, non-deleted definition's durable JobDetail with <c>replace=true</c>, so
+///     the class name refreshes, covering recurring jobs nobody triggers manually; it never changes a schedule or
+///     fires a job. Best-effort: failures are logged and swallowed, since a node must start regardless.
+/// </remarks>
 public sealed class SchedulerJobDetailReconciliationService : IHostedService
 {
     private readonly ILogger<SchedulerJobDetailReconciliationService> _logger;

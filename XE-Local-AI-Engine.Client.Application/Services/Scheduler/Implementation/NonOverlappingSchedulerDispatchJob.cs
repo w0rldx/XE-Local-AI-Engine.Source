@@ -4,12 +4,13 @@ using Quartz;
 
 /// <summary>
 ///     Quartz job that fires a scheduled definition, preventing concurrent executions of the same definition.
-///     <see cref="DisallowConcurrentExecutionAttribute" /> is keyed per <c>JobKey</c>, so distinct definitions still
-///     run independently — only re-entrant fires of the same definition are serialized. The management service
-///     selects this job for definitions whose <c>PreventOverlap == true</c>; otherwise it uses
-///     <see cref="SchedulerDispatchJob" />. Kept thin: all guard rails and handler invocation live in
-///     <see cref="ISchedulerDispatchExecutor" />.
 /// </summary>
+/// <remarks>
+///     <see cref="DisallowConcurrentExecutionAttribute" /> is keyed per <c>JobKey</c>, so distinct definitions still
+///     run independently and only re-entrant fires of one definition are serialized. The management service selects
+///     this job for definitions that prevent overlap, and <see cref="SchedulerDispatchJob" /> otherwise. Kept thin:
+///     all guard rails and handler invocation live in <see cref="ISchedulerDispatchExecutor" />.
+/// </remarks>
 [DisallowConcurrentExecution]
 internal sealed class NonOverlappingSchedulerDispatchJob : IJob
 {

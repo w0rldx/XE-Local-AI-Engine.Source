@@ -3,11 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     The default <see cref="IUsageRateResolver" />. Holds the operator override map (seeded once per instance from node
-///     settings) over a small built-in default rate table, and gates the local runtimes to free. Construct via
-///     <see cref="FromSettings" /> from the current node settings so operator edits apply on the next usage-summary read
-///     (no restart) — the composition root registers a scoped factory that reads the cached node settings per request.
+///     The default <see cref="IUsageRateResolver" />: the operator override map, seeded once per instance, over a small
+///     built-in default rate table, with the local runtimes gated to free.
 /// </summary>
+/// <remarks>
+///     Construct it through <see cref="FromSettings" /> from the current node settings, so operator edits apply on the
+///     next usage-summary read without a restart: the composition root registers a scoped factory that reads the
+///     cached node settings per request.
+/// </remarks>
 public sealed class UsageRateResolver : IUsageRateResolver
 {
     /// <summary>The free rate returned for local runtimes and unknown / unpriced (provider, model) pairs.</summary>
@@ -18,11 +21,14 @@ public sealed class UsageRateResolver : IUsageRateResolver
     };
 
     /// <summary>
-    ///     Built-in default rates for a FEW well-known hosted models, in APPROXIMATE US dollars per 1M tokens. These are
-    ///     deliberately round, ballpark figures for a first-pass estimate — NOT authoritative pricing: verify against your
-    ///     provider's current price sheet, and override any model via the node-settings usage-rate editor. Keyed
-    ///     case-insensitively to match the run-envelope model name. Reasoning tokens bill at the output rate.
+    ///     Built-in default rates for a FEW well-known hosted models, in APPROXIMATE US dollars per 1M tokens.
     /// </summary>
+    /// <remarks>
+    ///     They are deliberately round, ballpark figures for a first-pass estimate, NOT authoritative pricing: verify
+    ///     against the provider's current price sheet, and override any model through the node-settings usage-rate
+    ///     editor. Keys match the run-envelope model name case-insensitively, and reasoning tokens bill at the output
+    ///     rate.
+    /// </remarks>
     private static readonly IReadOnlyDictionary<string, ModelRate> DefaultRates =
         new Dictionary<string, ModelRate>(StringComparer.OrdinalIgnoreCase)
         {
@@ -90,11 +96,13 @@ public sealed class UsageRateResolver : IUsageRateResolver
     }
 
     /// <summary>
-    ///     Builds a resolver from the persisted operator override. Rebuilds the override map with a case-insensitive
-    ///     comparer (a JSON round-trip loses the store's comparer) and defensively skips blank keys / invalid rates — the
-    ///     store's <c>Normalize</c> is the authority, this is belt-and-suspenders. A <see langword="null" /> / empty
-    ///     override yields a resolver that uses the default table alone.
+    ///     Builds a resolver from the persisted operator override.
     /// </summary>
+    /// <remarks>
+    ///     It rebuilds the override map with a case-insensitive comparer, which a JSON round-trip loses, and
+    ///     defensively skips blank keys and invalid rates, the store's <c>Normalize</c> being the authority. An empty
+    ///     override yields a resolver that uses the default table alone.
+    /// </remarks>
     public static UsageRateResolver FromSettings(NodeUsageRateSettings? settings)
     {
         var overrides = new Dictionary<string, ModelRate>(StringComparer.OrdinalIgnoreCase);

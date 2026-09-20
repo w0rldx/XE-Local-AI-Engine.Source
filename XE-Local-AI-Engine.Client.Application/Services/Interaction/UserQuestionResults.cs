@@ -2,18 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.Interaction;
 
 using System.Text.Json;
 
-/// <summary>
-///     Builds the MODEL-visible result of an <c>ask_user</c> call. Centralised here because two seams produce it — the
-///     runner (which owns the human round-trip and therefore every not-answered outcome) and the tool handler (which
-///     returns the stashed value, or the fail-safe when nothing was stashed) — and a model that has to branch on the
-///     result cannot afford the two to drift.
-///     <para>
-///         Every shape carries <c>answered</c>, so "the user chose nothing" and "the user was never asked" are never
-///         confusable: an empty <c>selected</c> under <c>answered:true</c> is a deliberate empty choice, whereas
-///         <c>answered:false</c> always names a <c>reason</c> and carries a plain sentence telling the model what to do
-///         next. Small models branch far more reliably on a present boolean than on the absence of a field.
-///     </para>
-/// </summary>
+/// <summary>Builds the MODEL-visible result of an <c>ask_user</c> call.</summary>
+/// <remarks>
+///     Centralised because two seams produce it — the runner, which owns every not-answered outcome, and the tool handler, which returns the stashed
+///     value or the fail-safe — and a model branching on the result cannot afford the two to drift. Every shape carries <c>answered</c>, so "the user
+///     chose nothing" and "the user was never asked" are never confusable: an empty <c>selected</c> under <c>answered:true</c> is a deliberate empty
+///     choice, while <c>answered:false</c> always names a <c>reason</c> and a sentence telling the model what to do next. Small models branch far more
+///     reliably on a present boolean than on a missing field.
+/// </remarks>
 internal static class UserQuestionResults
 {
     /// <summary>The wait ran and the operator did not answer before the pending-question cap elapsed.</summary>
@@ -25,12 +21,12 @@ internal static class UserQuestionResults
     /// <summary>The tool executed with no stashed answer — a defect or a torn-down turn, never a user action.</summary>
     public const string NotCollectedReason = "not_collected";
 
-    /// <summary>
-    ///     The run is unattended (scheduled/headless), so there is nobody to prompt and the question was never shown.
-    ///     Distinct from <see cref="TimeoutReason" />: no wait happened at all, and telling the model it timed out when
-    ///     the prompt was never displayed would be a lie it might act on by re-asking. Falls through to the generic
-    ///     proceed-on-your-own message below, which is exactly the guidance this case needs.
-    /// </summary>
+    /// <summary>The run is unattended (scheduled/headless), so there is nobody to prompt and the question was never shown.</summary>
+    /// <remarks>
+    ///     Distinct from <see cref="TimeoutReason" />: no wait happened at all, and telling the model it timed out when the prompt was
+    ///     never displayed would be a lie it might act on by re-asking. Falls through to the generic proceed-on-your-own message below,
+    ///     which is exactly the guidance this case needs.
+    /// </remarks>
     public const string UnattendedReason = "unattended";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);

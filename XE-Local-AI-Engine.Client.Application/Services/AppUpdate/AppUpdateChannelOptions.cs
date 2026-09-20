@@ -10,11 +10,11 @@ public enum AppUpdateReleaseTrack
     Rc
 }
 
-/// <summary>
-///     Immutable public update-source policy. The absence of an authentication setting is deliberate: official builds
-///     consume public GitHub releases anonymously, while Velopack independently selects the OS package channel from the
-///     installed package metadata.
-/// </summary>
+/// <summary>Immutable public update-source policy.</summary>
+/// <remarks>
+///     The absence of an authentication setting is deliberate: official builds consume public GitHub releases anonymously, while Velopack
+///     independently selects the OS package channel from the installed package metadata.
+/// </remarks>
 public sealed class AppUpdateSourcePolicy
 {
     public required string GitHubRepositoryUrl { get; init; }

@@ -28,56 +28,42 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
-        // Feeds template-detected tool capability INTO the allow-list the gate below reads, so a model the app itself
-        // recommended and downloaded is admitted without the operator hand-typing its name. See
-        // IToolCapableModelRegistrar for why the list is fed rather than the gate replaced. The backfill runs at startup
-        // so models installed before this existed are corrected too.
+        // Feeds template-detected tool capability INTO the allow-list the gate below reads (see IToolCapableModelRegistrar for why the
+        // list is fed, not the gate replaced), so a recommended download is admitted unnamed; the startup backfill corrects older installs.
         builder.Services.AddSingleton<IToolCapableModelRegistrar, ToolCapableModelRegistrar>();
         builder.Services.AddHostedService<ToolCapableModelBackfillService>();
-        // LocalToolOfferProvider takes INodeRuntimeSettings itself and reads the migrated AgentHome:ToolCapableModels
-        // allow-list LIVE on each offer (see LocalToolOfferProvider.IsToolCapable). It used to be seeded here once, which
-        // meant an operator could add their model in Node Settings, save successfully, and still get no tools until the
-        // node restarted — with no restart hint on that field. Do NOT re-introduce the seed: the read goes
-        // through CachedNodeSettingsStore (a memory-cache hit that SaveAsync re-primes), and two other consumers of this
-        // same setting already read it live per request.
+        // LocalToolOfferProvider takes INodeRuntimeSettings itself and reads the migrated AgentHome:ToolCapableModels allow-list LIVE
+        // per offer through CachedNodeSettingsStore, whose cache SaveAsync re-primes. Never seed it here: a seed leaves a model saved in Node Settings toolless until restart.
         builder.Services.AddSingleton<ILocalToolOfferProvider>(sp =>
         {
-            // Seed the knowledge-tool cloud-locality gate from KnowledgeBase:AllowCloudModelAccess (default false):
-            // knowledge tools are offered only to node-local models unless the operator explicitly opts a cloud model in.
-            // This one IS a genuine appsettings knob (not a node setting), so seeding it here is correct.
+            // Seed the knowledge-tool cloud-locality gate from KnowledgeBase:AllowCloudModelAccess (default false): knowledge tools go
+            // to node-local models unless the operator opts a cloud model in. A genuine appsettings knob, not a node setting, so seeding is right.
             var knowledgeOptions = sp.GetRequiredService<IOptions<KnowledgeBaseOptions>>().Value;
             return new LocalToolOfferProvider(sp.GetRequiredService<IAgentToolRegistry>(),
                 sp.GetRequiredService<IMcpToolRegistry>(),
                 sp.GetRequiredService<INodeRuntimeSettings>(),
                 // Singleton provider → the scoped, DbContext-backed custom-tool catalog is resolved per offer from a fresh scope.
                 sp.GetRequiredService<IServiceScopeFactory>(),
-                // Answers the three locality gates for an ext: id, which the threaded per-turn cloud flag cannot see:
-                // an external id falls THROUGH cloud selection by design, so without this a declared-cloud endpoint
-                // would be offered the workspace, the knowledge base, custom tools and run_python.
+                // Answers the three locality gates for an external id, which the threaded per-turn cloud flag cannot see: such an id
+                // falls THROUGH cloud selection by design, so without it a declared-cloud endpoint would be offered workspace, KB and run_python.
                 sp.GetRequiredService<IModelTrustResolver>(),
                 knowledgeOptions.AllowCloudModelAccess);
         });
         // The catalog read composed with the node approval policy, which the provider above deliberately never consults.
         // Singleton, like both seams it composes.
         builder.Services.AddSingleton<ToolCatalogService>();
-        // The single-named-tool invocation seam, next to the catalog it reads. Registration is UNCONDITIONAL: a
-        // feature flag gates behaviour, never registration, and this service is feature-neutral — a later caller must
-        // not have to reason about whether some other module's flag was on. Singleton, like every seam it composes.
+        // The single-named-tool invocation seam, next to the catalog it reads. Registration is UNCONDITIONAL — a feature flag gates
+        // behaviour, never registration — so no later caller reasons about another module's flag. Singleton, like every seam it composes.
         builder.Services.AddSingleton<IToolInvocationService, ToolInvocationService>();
-        // The always-on tool names a relevance filter may never hide: the work-session state tools plus every
-        // approval-bearing built-in from the catalog above. Composed here because both inputs are node-side; the agent
-        // assembly only ever consumes the resulting name set.
+        // The always-on tool names a relevance filter may never hide: the work-session state tools plus every approval-bearing built-in
+        // from the catalog above. Composed here because both inputs are node-side; the agent assembly consumes only the name set.
         builder.Services.AddSingleton<IToolRelevanceCoreSet, ToolRelevanceCoreSet>();
-        // The node's relevance selector. The agent assembly registers the model-free lexical one with TryAdd; node-side
-        // this REPLACES it with the embedding-backed selector, which resolves the concrete lexical one for its own
-        // degrade path and only reaches a model when EmbeddingModelName is configured. Replace rather than a second
-        // AddSingleton so the winner does not depend on module order. AI.Agent-only tests keep the lexical
-        // registration. Both singletons: the vector cache is a long-lived RAM-only store.
+        // The node's relevance selector: the agent assembly TryAdds the model-free lexical one, and node-side this REPLACES it — never
+        // a second AddSingleton, so the winner is not module-order dependent — with the embedding selector, which degrades to the lexical one unless EmbeddingModelName is set.
         builder.Services.AddSingleton<LexicalToolRelevanceSelector>();
         builder.Services.Replace(ServiceDescriptor.Singleton<IToolRelevanceSelector, EmbeddingToolRelevanceSelector>());
-        // MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the dynamic
-        // tool snapshot into the registry consumed by offered-tool resolution. The startup connector triggers an
-        // initial refresh off the hot path; the manager stays singleton because it owns long-lived connections.
+        // MCP tool extensibility: the connection manager owns the MCP client lifecycle and republishes the dynamic tool snapshot into
+        // the registry offered-tool resolution reads, the startup connector refreshing off the hot path. Singleton: long-lived connections.
         builder.Services.AddOptions<McpOptions>()
                .Bind(configuration.GetSection(McpOptions.SectionName))
                .ValidateOnStart();

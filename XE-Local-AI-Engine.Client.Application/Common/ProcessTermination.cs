@@ -11,11 +11,13 @@ using System.Diagnostics;
 internal static class ProcessTermination
 {
     /// <summary>
-    ///     Tree-kills <paramref name="process" />, swallowing only the two outcomes that mean "there is nothing left to
-    ///     kill or nothing more we can do": the process exited between the decision and the kill
-    ///     (<see cref="InvalidOperationException" />) and the OS refusing the signal (<see cref="Win32Exception" />).
-    ///     Every other exception still surfaces — a kill failing for an unexpected reason is not cleanup noise.
+    ///     Tree-kills <paramref name="process" />, swallowing only the two outcomes that mean "there is nothing left to kill or nothing
+    ///     more we can do": the process exited between the decision and the kill (<see cref="InvalidOperationException" />) and the OS
+    ///     refusing the signal (<see cref="Win32Exception" />).
     /// </summary>
+    /// <remarks>
+    ///     Every other exception still surfaces — a kill failing for an unexpected reason is not cleanup noise.
+    /// </remarks>
     public static void TryKill(Process process)
     {
         try

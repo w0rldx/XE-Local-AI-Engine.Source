@@ -9,17 +9,14 @@ using XE_Local_AI_Engine.Client.Services.Containers.Implementation;
 /// <summary>
 ///     Registers the application-container runtime layer (ADR 0010): its options plus validation, the runtime factory
 ///     and the resolver every application-container operation passes through.
-///     <para>
-///         A module of its own rather than an addition to <c>AddNodeContainerSandbox</c>, even though both end up
-///         talking to the same daemon. Development Mode's sandbox and a user-managed application have opposite time
-///         budgets and different failure prose, and the one thing they genuinely share — the daemon attestation — is
-///         registered by that module and taken from the container here.
-///     </para>
-///     <para>
-///         Everything registered here is inert until an application instance resolves a runtime: the resolver probes
-///         no daemon at startup, so a node with no Docker installed pays nothing for these registrations.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A module of its own rather than an addition to <c>AddNodeContainerSandbox</c>, though both talk to the same
+///     daemon: Development Mode's sandbox and a user-managed application have opposite time budgets and different
+///     failure prose, and the one thing they genuinely share — the daemon attestation — is registered by that module
+///     and taken from the container here. Everything registered here is inert until an application instance resolves a
+///     runtime, so a node with no Docker installed pays nothing: the resolver probes no daemon at startup.
+/// </remarks>
 internal static class AddNodeContainerRuntimeExtensions
 {
     public static IHostApplicationBuilder AddNodeContainerRuntime(this IHostApplicationBuilder builder, IConfiguration configuration)
@@ -37,17 +34,15 @@ internal static class AddNodeContainerRuntimeExtensions
         builder.Services.AddSingleton<IContainerRuntimeFactory, DockerContainerRuntimeFactory>();
         builder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
 
-        // The container bridge (the one deliberately non-loopback listener). Registered here, with the rest of the
-        // runtime layer, and NOT with External Apps: the bridge must never depend on that feature, only be opened
-        // alongside it. The annotation on the port is the only bound the options carry.
+        // The container bridge (the one deliberately non-loopback listener) registers here with the runtime layer and NOT with
+        // External Apps: the bridge must never depend on that feature, only be opened alongside it. Its only bound is the port annotation.
         builder.Services.AddOptions<ContainerBridgeOptions>()
                .BindConfiguration(ContainerBridgeOptions.SectionName)
                .ValidateDataAnnotations()
                .ValidateOnStart();
 
-        // TryAdd, and the default says "this node has no bridge". The composition root resolves the real listener
-        // during host construction and registers it BEFORE this module runs, so its value wins; the default is what
-        // keeps the module standing up on its own, for a host that composes the services without opening a listener.
+        // TryAdd, with a default that says "this node has no bridge": the composition root resolves the real listener during host
+        // construction and registers it BEFORE this module, so its value wins; the default keeps the module standing up alone.
         builder.Services.TryAddSingleton(new ContainerBridgeEndpointSource(endpoint: null));
 
         // ONE watcher in two roles: the hosted service that keeps this computer's own addresses current, and the
@@ -55,10 +50,8 @@ internal static class AddNodeContainerRuntimeExtensions
         builder.Services.AddSingleton<ContainerBridgeAddressWatcher>();
         builder.Services.AddHostedService(static services => services.GetRequiredService<ContainerBridgeAddressWatcher>());
 
-        // IMiddleware, so each is resolved from the container rather than closed over at pipeline-build time. The
-        // peer guard is a singleton because it asks only the watcher; the token middleware is SCOPED because its
-        // verifier reads the node database through a scoped store, and a singleton would capture one context for the
-        // life of the process.
+        // Both are IMiddleware, so each resolves from the container rather than being closed over at pipeline-build time. The peer
+        // guard is a singleton because it asks only the watcher; the token middleware is SCOPED, its verifier reading a scoped store.
         builder.Services.AddSingleton<ContainerBridgePeerGuardMiddleware>();
         builder.Services.AddScoped<ContainerBridgeTokenMiddleware>();
 

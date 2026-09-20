@@ -1,12 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     The wait-until-decided gate the three automatic outbound checks share: it returns once the node's external-access
-///     profile has been chosen, and blocks until then. A stateless function over <see cref="INodeRuntimeSettings" /> and
-///     a <see cref="TimeProvider" />, so it needs no interface, no lifetime and no registration.
+///     The wait-until-decided gate the three automatic outbound checks share: it returns once the node's
+///     external-access profile has been chosen, and blocks until then.
 /// </summary>
 /// <remarks>
-///     Both <see langword="null" /> and <see cref="StoredNodeSettings.ExternalAccessProfilePending" /> are UNDECIDED:
+///     A stateless function over <see cref="INodeRuntimeSettings" /> and a <see cref="TimeProvider" />, needing no
+///     interface, lifetime or registration. Both <see langword="null" /> and <c>ExternalAccessProfilePending</c> are UNDECIDED:
 ///     <see langword="null" /> means no administrator exists yet, so there is nobody to ask, and <c>pending</c> means an
 ///     administrator exists and the first-run choice has not been made. After the boot backfill an upgraded node is
 ///     always decided before the host accepts a request, so this wait is only ever paid on a fresh install.

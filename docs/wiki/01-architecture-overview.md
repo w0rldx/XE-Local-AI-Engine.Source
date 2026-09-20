@@ -89,6 +89,17 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
   (`ConfigureServices.cs`, `Program.cs`).
 - The SPA itself is served as static files with `MapFallbackToFile("index.html")`.
 
+**Message size on this surface is anchored to the transport.** `AddSignalR` sets
+`MaximumReceiveMessageSize = 512 KB` for the whole hub-invocation payload (`ConfigureServices`), and
+`Security:MaxMessageSizeKb` defaults to 256 KB of message content — half of it. That leaves ample room for the
+JSON envelope around the content *and* guarantees the app-level check fires first, with a legible "your message
+is too large", instead of the transport tearing the connection down with an opaque frame-size error. 256 KB of
+text is also roughly the byte size of the ~65k-token context window the budgeter trims against, so a paste that
+gets through is a paste the rest of the pipeline can actually work with; larger documents belong on the
+attachment upload path (`Security:MaxUploadFileSizeMb`), which extracts and inlines them under its own budget.
+The cap is enforced at the entry seams only and never re-applied to stored history — see the
+`SecurityOptions.MaxMessageSizeKb` remarks for why.
+
 See [API & Hubs](09-api-and-hubs.md) and [React Client](10-react-client.md).
 
 ---
@@ -268,6 +279,15 @@ and `Training` (`ITrainingRuntimeService`, the uv-provisioned Python fine-tuning
 [Training](18-training.md)).
 See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 
+**Provider options are seeded at the composition root.** `Providers.*` reference only `Providers.Abstractions` and
+never `Client.Application`, so a provider option object cannot read `INodeRuntimeSettings` itself. The `AddNode*`
+modules build each seeded options instance from the accessor and register it **before** the provider's own
+extension method, whose `TryAddSingleton` default then becomes a no-op. The same last-registration-wins shape runs
+the other way for implementations: a plain `AddSingleton` in `Client.Application` overrides a provider's
+`TryAddSingleton` floor (the DB-backed `IInferenceProfileResolver` over the explore-only in-provider default, the
+real GPU-load admission gate over each provider's no-op). Seeded values are read once at host build, so an operator
+edit applies on the next process restart.
+
 ### Launch-args seam — the inference profile resolver
 Inside the LlamaServer provider stack the supervisor no longer hard-codes placement: `LlamaServerProcessSupervisor`
 resolves the launch arguments for each `(model, role, backend)` spawn through a second seam,
@@ -286,6 +306,15 @@ Because llama.cpp is **spawn-per-model** (one process/port per model, unlike Oll
 endpoint), the runtime client selects/routes per send rather than caching one baked-in client —
 `RuntimeChatClient` (`Client.Application/Services/CloudProviders/Implementation/RuntimeChatClient.cs`)
 re-selects local vs cloud and the target llama-server process by `ChatOptions.ModelId` on each request.
+
+`LocalModelProviderResolver` maps `ModelName` → `ProviderName` over the persisted `model_provider_map` and then
+`ProviderName` → `ILocalModelProvider` over the registered set. **An unmapped name defaults to `llamacpp`**: Ollama
+is the optional secondary runtime and the shipped default model is a GGUF, so a name with no map row — a
+pre-existing GGUF install, or a registry/map divergence — still routes to llama.cpp. Genuine Ollama models are
+mapped to `ollama` at pull time by the symmetric upsert on the Ollama pull endpoints, and a model pulled before
+that upsert existed is repaired once at startup by `OllamaProviderMapBackfill`, so the default only ever governs
+truly unmapped names. The resolver constructor validates that its default provider is registered, and `llamacpp`
+always is. The supervisor's loaded-cap is surfaced through the same resolver for the preview reject-at-start check.
 See [Chat](05-chat.md) and [Agent Mode](04-agent-mode.md).
 
 ---

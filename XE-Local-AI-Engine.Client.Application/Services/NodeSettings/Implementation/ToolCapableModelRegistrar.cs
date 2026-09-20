@@ -82,18 +82,11 @@ internal sealed class ToolCapableModelRegistrar : IToolCapableModelRegistrar
     ///     Returns the number of names added.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         The no-change early return matters: a write evicts the cached settings entry and leaves the next reader
-    ///         to repopulate it, and is reached on every completed download and every startup, so writing an identical
-    ///         list would churn the cache (and the file) for nothing. That is what the pre-check load is for — <see cref="INodeSettingsStore.UpdateAsync" />
-    ///         persists even when the mutation returns the record unchanged.
-    ///     </para>
-    ///     <para>
-    ///         The merge is nevertheless recomputed from the record the store holds AT WRITE TIME, not from the
-    ///         pre-check snapshot: the settings file is whole-record, so a list built from a stale load would silently
-    ///         drop every field (a freshly minted machine key, a default-model selection) another writer changed in
-    ///         between. The returned count is what was actually added against that record.
-    ///     </para>
+    ///     The pre-check load is what makes the no-change early return possible: <see cref="INodeSettingsStore.UpdateAsync" /> persists even
+    ///     when the mutation returns the record unchanged, and this runs on every completed download and every startup, so writing an identical
+    ///     list would churn the cache and the file for nothing. The merge is nevertheless recomputed from the record the store holds AT WRITE
+    ///     TIME: the settings file is whole-record, so a list built from the stale pre-check snapshot would silently drop every field another
+    ///     writer changed in between. The returned count is what was actually added against that record.
     /// </remarks>
     private async Task<int> AddAsync(IReadOnlyList<string> modelNames, CancellationToken cancellationToken)
     {

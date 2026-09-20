@@ -59,9 +59,8 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton<INodeDbBackupService, NodeDbBackupService>();
         builder.Services.AddSingleton<IKnowledgeDowngradeSafetyService, KnowledgeDowngradeSafetyService>();
 
-        // Node SQLite concurrency posture. Resolve the connection-time pragma settings once and (a) publish them
-        // to the static raw-open helpers (NodeSqlitePragmas.Configure — the raw-ADO OpenIfNeeded path cannot take injected
-        // options) and (b) register the interceptors that apply the pragmas on EF-initiated opens and account contention.
+        // Node SQLite concurrency posture, resolved once: publish the pragma settings to the static raw-open helpers
+        // (NodeSqlitePragmas.Configure — the raw-ADO OpenIfNeeded path takes no injected options) and register the interceptors applying them.
         var sqlitePragmaSettings = (configuration.GetSection(NodeSqliteOptions.Section).Get<NodeSqliteOptions>() ?? new NodeSqliteOptions()).ToSettings();
         NodeSqlitePragmas.Configure(sqlitePragmaSettings);
         builder.Services.AddSingleton(sqlitePragmaSettings);
@@ -75,11 +74,8 @@ internal static class AddNodeModelRuntimeExtensions
 
             options.UseSqlite(connectionString)
                    .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-                   // EF's STATIC ServiceProviderCache keys on the options (incl. this connection string) and each entry
-                   // strongly roots the whole application ServiceProvider. The product builds one host with one
-                   // connection string, so the default caching is a single entry and stays on. Test hosts use a fresh
-                   // per-host SQLite path, so every host would add a new immortal entry — the fixtures set this flag
-                   // to false, which bypasses the static cache entirely (docs/agent-knowledge.md §1).
+                   // EF's STATIC ServiceProviderCache keys on the options (incl. this connection string) and each entry roots the whole
+                   // ServiceProvider: one host means one entry, while test hosts set this false to bypass the cache (docs/agent-knowledge.md §1).
                    .EnableServiceProviderCaching(configuration.GetValue("EntityFramework:ServiceProviderCaching", defaultValue: true))
                    .AddInterceptors(serviceProvider.GetRequiredService<NodeSqliteConnectionInterceptor>(),
                        serviceProvider.GetRequiredService<NodeSqliteCommandInterceptor>(),
@@ -100,35 +96,22 @@ internal static class AddNodeModelRuntimeExtensions
                        serviceProvider.GetRequiredService<NodeSqliteCommandInterceptor>());
         });
 
-        // Embeddings are provider-routed: EmbeddingPlaybookRetrievalRanker resolves the embedding provider
-        // by PlaybookRetrievalOptions.EmbeddingProviderName via ILocalModelProviderResolver and builds/owns its own
-        // generator per send (node-local; ollama or llamacpp). There is intentionally no standalone DI-registered
-        // IEmbeddingGenerator — the previous Ollama hardwire and its only consumer (the unused LocalEmbeddingService
-        // adapter) were removed so nothing contradicts the multi-provider design.
+        // Embeddings are provider-routed: EmbeddingPlaybookRetrievalRanker resolves the provider by PlaybookRetrievalOptions
+        // .EmbeddingProviderName through ILocalModelProviderResolver and owns its generator per send. No IEmbeddingGenerator is DI-registered, by design.
 
-        // Ollama is an OPTIONAL secondary local runtime (Decision #1: keep + isolate). ALL Ollama-specific wiring lives
-        // in AddOllamaRuntime, so this module is the single seam that references Providers.Ollama — runtime selection has
-        // one capability gate, never a second provider-direct code path. Enabled by default, so the registration is
-        // byte-identical to the previous inline call unless an operator opts out.
+        // Ollama is an OPTIONAL secondary local runtime: ALL Ollama-specific wiring lives in AddOllamaRuntime, so this module is the
+        // single seam referencing Providers.Ollama — runtime selection keeps one capability gate, never a second provider-direct path.
         AddOllamaRuntime(builder, configuration);
 
-        // Register the llama-server provider stack ALONGSIDE Ollama so the resolver can
-        // dispatch a model to either runtime. AddLlamaServerLocalModelProvider adds the binary manager, the GPU
-        // variant probe, the process supervisor, and the "llamacpp" ILocalModelProvider into the provider set.
-        // Caller-contract dependencies (the provider project intentionally takes them from the host):
-        //   • an HttpClient for binary downloads + health probes (AddHttpClient),
-        //   • an IGgufModelStore — the Hugging Face GGUF store, registered just below by AddHuggingFaceGgufStore.
-        // AddHuggingFaceGgufStore provides the real IGgufModelStore (HF discovery + download + disk
-        // guard + registry); the optional HF token rides the encrypted HfTokenStore (third IDataProtector .enc store).
+        // The llama-server provider stack registers ALONGSIDE Ollama so the resolver can dispatch to either runtime: binary manager,
+        // GPU variant probe, supervisor and the "llamacpp" provider. It takes two things from the host, an HttpClient and IGgufModelStore.
         builder.Services.AddHttpClient();
+        // AddHuggingFaceGgufStore below provides the real IGgufModelStore (discovery, download, disk guard, registry); the optional
+        // Hugging Face token rides the encrypted HfTokenStore, the third IDataProtector .enc store.
         builder.Services.AddSingleton<IHfTokenStore, HfTokenStore>();
 
-        // Dependency direction: the Providers.* projects reference ONLY Providers.Abstractions and must NOT depend on
-        // Client.Application (where INodeRuntimeSettings lives). The provider option objects are therefore SEEDED from
-        // the accessor here, at the composition root (Client.Application legitimately references both). Both options are
-        // read at host build, so an operator edit applies on the next process restart. Each seeded instance
-        // is registered BEFORE the provider extension so its own TryAddSingleton default becomes a no-op (no
-        // double-registration). The one-time blocking accessor read runs once at singleton construction — not a hot path.
+        // Providers.* reference ONLY Providers.Abstractions, never Client.Application, so provider option objects are SEEDED from
+        // INodeRuntimeSettings here at the composition root, each BEFORE its provider extension, whose TryAddSingleton default then no-ops.
         builder.Services.AddSingleton(sp => BuildSeededHuggingFaceOptions(sp, configuration));
         builder.Services.AddHuggingFaceGgufStore(configuration);
 
@@ -137,61 +120,39 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddLlamaServerLocalModelProvider();
         builder.Services.AddSingleton<ILlamaCppRuntimeAdministrationService, LlamaCppRuntimeAdministrationService>();
 
-        // The llama.cpp runtime / source-build / running-model endpoints' door onto the provider contracts, so no
-        // endpoint takes one itself (the endpoint-dependency rule). Every contract it wraps —
-        // IInstalledRuntimeStore, ILlamaCppBinaryManager,
-        // ILlamaCppSourceBuildActivity, ILlamaCppSourceBuildPrerequisiteProbe, ILlamaCppSourceBuildService,
-        // ILlamaCppUpdateState and ILlamaServerProcessSupervisor — is a TryAddSingleton of
-        // AddLlamaServerLocalModelProvider above, so this wrapper is a Singleton too.
+        // The llama.cpp runtime / source-build / running-model endpoints' door onto the provider contracts, so no endpoint takes one
+        // itself (the endpoint-dependency rule). Singleton, like all seven contracts it wraps, each a TryAddSingleton of the provider above.
         builder.Services.AddSingleton<LlamaCppRuntimeOrchestrationService>();
 
-        // Opt-in local-model residency keeper. It polls live node settings and periodically touches the selected model so
-        // the provider reuses its resident process and refreshes idle age without blocking startup. Registered here
-        // rather than in the host because it takes the supervisor contract directly, and only this layer may.
+        // Opt-in local-model residency keeper: it polls live node settings and periodically touches the selected model, so the provider
+        // reuses its resident process and refreshes idle age without blocking startup. Here, not in the host: it takes the supervisor contract.
         builder.Services.AddHostedService<KeepModelWarmBackgroundService>();
 
-        // One-shot llama.cpp runtime update check: after a short non-blocking delay, resolves the recommended tag against
-        // the live release catalog and compares it to the installed runtime, recording an "update available" snapshot
-        // (read by the runtime-status endpoint). Notify-only + offline-tolerant; never downloads a binary on its own.
+        // One-shot llama.cpp runtime update check: after a short non-blocking delay it resolves the recommended tag against the live
+        // release catalog and records an "update available" snapshot for the runtime-status endpoint. Notify-only, offline-tolerant.
         builder.Services.AddHostedService<LlamaCppUpdateCheckService>();
 
-        // The process-wide GPU-load admission gate — the REAL, metric-emitting singleton shared by the
-        // llama-server and stable-diffusion.cpp supervisors, so no two GPU loads race their --fit / free-VRAM reads. A
-        // plain AddSingleton wins over each provider's TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>()
-        // floor (last registration wins). The bounded max-wait is a backstop the size-aware readiness timeouts already
-        // make rare; captured at host build, applied on the next process restart.
+        // The process-wide GPU-load admission gate: the REAL metric-emitting singleton shared by the llama-server and
+        // stable-diffusion.cpp supervisors, so no two GPU loads race their --fit reads. A plain AddSingleton beats each provider's NoOpGpuModelLoadAdmission floor.
         builder.Services.AddSingleton(new GpuModelLoadAdmissionOptions());
         builder.Services.AddSingleton<IGpuModelLoadAdmission, GpuModelLoadAdmission>();
 
-        // Inference Optimizer: profile-driven launch-arg replay. Registered AFTER AddLlamaServerLocalModelProvider so
-        // the real DB-backed resolver OVERRIDES the provider's explore-only DefaultInferenceProfileResolver — a plain
-        // AddSingleton beats the provider's TryAddSingleton (last registration wins), keeping the layer arrow
-        // Application → Providers (the interface is defined in Providers, implemented here). The resolver is a singleton
-        // on the cold spawn path; it opens a fresh scope per resolve to reach the SCOPED IInferenceProfileStore.
-        // IMachineKeyProvider + IInferenceInvalidationEvaluator are singletons it injects. This registers the
-        // UnknownProcessVramBudgetProbe as a TryAddSingleton fallback only: the real --list-devices probe has shipped
-        // (LlamaListDevicesProcessVramBudgetProbe, registered by the LlamaServer provider) and overrides this floor over the same
-        // seam, so the invalidation evaluator's live-VRAM check runs on supported backends and only this fallback skips.
+        // Inference Optimizer: profile-driven launch-arg replay, registered AFTER AddLlamaServerLocalModelProvider so the DB-backed
+        // resolver OVERRIDES the provider's explore-only default (AddSingleton beats TryAddSingleton), keeping the arrow Application → Providers.
         builder.Services.AddSingleton<IMachineKeyProvider, MachineKeyProvider>();
+        // A floor only: LlamaListDevicesProcessVramBudgetProbe from the LlamaServer provider overrides it over the same seam, so the
+        // invalidation evaluator's live-VRAM check runs on supported backends and only this fallback skips it.
         builder.Services.TryAddSingleton<IProcessVramBudgetProbe, UnknownProcessVramBudgetProbe>();
         builder.Services.AddSingleton<IInferenceInvalidationEvaluator, InferenceInvalidationEvaluator>();
+        // A singleton on the cold spawn path; it opens a fresh scope per resolve to reach the SCOPED IInferenceProfileStore.
         builder.Services.AddSingleton<IInferenceProfileResolver, InferenceProfileResolver>();
 
         // Per-model developer/advanced extra-launch-arg override, read on the cold spawn path. Registered last so it wins
         // over the provider's empty default; singleton that reads the scoped override store through a fresh scope per call.
         builder.Services.AddSingleton<ILlamaServerExtraLaunchArgumentsResolver, LlamaServerExtraLaunchArgumentsResolver>();
 
-        // The provider resolver maps ModelName→ProviderName (over the persisted model_provider_map,
-        // unmapped → default) then ProviderName→ILocalModelProvider (over the registered set). Singleton; reads the
-        // scoped map store through a fresh scope per lookup. DEFAULT for unmapped models = "llamacpp" — Ollama
-        // is an OPTIONAL secondary runtime and the shipped default model is a GGUF, so a name that somehow lacks a map
-        // row (a pre-existing GGUF install, or a registry/map divergence) still routes to llama.cpp. Genuine Ollama
-        // models are explicitly mapped to "ollama" at pull time (the symmetric upsert on the Ollama pull endpoints) going
-        // FORWARD, and any model pulled on an EARLIER build (before that upsert existed) is repaired once at startup by
-        // OllamaProviderMapBackfill, so the flipped default only ever governs truly-unmapped names — which on a fresh box
-        // are GGUFs. The resolver ctor
-        // validates the default is registered; llamacpp is always registered above, so the flip cannot throw. The
-        // supervisor's loaded-cap is surfaced for the preview reject-at-start check.
+        // The provider resolver maps ModelName to ProviderName over the persisted model_provider_map, then ProviderName to an
+        // ILocalModelProvider. Singleton, reading the scoped map store per lookup; unmapped names default to "llamacpp" (see docs/wiki/01-architecture-overview.md).
         builder.Services.AddSingleton<ILocalModelProviderResolver>(sp =>
         {
             var supervisorOptions = sp.GetRequiredService<LlamaServerSupervisorOptions>();
@@ -202,21 +163,16 @@ internal static class AddNodeModelRuntimeExtensions
                 sp.GetRequiredService<TimeProvider>());
         });
 
-        // The local-branch router is registered as its own singleton so its (provider, model) chat-client cache can be
-        // invalidated out-of-band (the runtime-update endpoint clears it after switching the llama.cpp variant, otherwise
-        // a cached deferred client keeps pointing at the now-gone endpoint and the next send connection-times-out). The
-        // same instance backs both the IChatClient local branch below and ILocalChatClientCacheInvalidator, so clearing
-        // the cache and serving sends operate on one cache. Disposal is idempotent, so the container disposing this
-        // singleton and RuntimeChatClient disposing its local branch is safe.
+        // The local-branch router is its own singleton so its (provider, model) chat-client cache can be invalidated out-of-band: the
+        // runtime-update endpoint clears it after a variant switch, or a cached deferred client keeps dialling the now-gone endpoint.
         builder.Services.AddSingleton(sp => CreateLocalChatClient(sp, configuration));
+        // The SAME instance backs the IChatClient local branch below, so invalidation and sends share one cache. Disposal is idempotent,
+        // so the container disposing this singleton and RuntimeChatClient disposing its local branch is safe.
         builder.Services.AddSingleton<ILocalChatClientCacheInvalidator>(sp => sp.GetRequiredService<ModelRoutingLocalChatClient>());
         builder.Services.TryAddSingleton<ICloudEgressAuthorizer, DenyDevelopmentCloudEgressAuthorizer>();
 
-        // Register a runtime-re-selecting IChatClient rather than capturing the
-        // cloud-vs-local choice once at startup. The wrapper re-evaluates the active provider per send via
-        // IActiveCloudChatClientFactory, so signing in/out at runtime takes effect without a node restart.
-        // The local branch is the ModelRoutingLocalChatClient — it routes per-send by
-        // ChatOptions.ModelId across providers/processes rather than a single fixed-model client.
+        // A runtime-re-selecting IChatClient rather than one capturing the cloud-vs-local choice at startup: the wrapper re-evaluates the
+        // active provider per send, so signing in or out needs no restart, and its local branch routes by ChatOptions.ModelId.
         builder.Services.AddSingleton<IChatClient>(sp =>
         {
             var activeCloudFactory = sp.GetRequiredService<IActiveCloudChatClientFactory>();
@@ -230,28 +186,20 @@ internal static class AddNodeModelRuntimeExtensions
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);
 
-        // The node-configured, TIGHTEN-ONLY tool-approval policy. A plain AddSingleton so it wins over the
-        // AI.Agent PermissiveToolApprovalPolicy floor (registered via TryAddSingleton inside AddLocalAiAgentRuntime
-        // above; last registration wins). The node-default policy is JSON in node settings, read ONCE synchronously at
-        // singleton construction (the sync INodeSettingsStore.Load twin, like the tool-capable allow-list seed) so the
-        // hot resolve path stays a dictionary lookup; an operator edit applies on the next node restart.
+        // The node-configured, TIGHTEN-ONLY tool-approval policy. A plain AddSingleton, so it wins over the AI.Agent
+        // PermissiveToolApprovalPolicy floor. Its JSON is read ONCE at construction, keeping the resolve path a lookup; edits need a restart.
 #pragma warning disable MA0045 // DI factory delegate is synchronous by contract; INodeSettingsStore.Load is the documented sync twin of LoadAsync for the composition path.
         builder.Services.AddSingleton<IToolApprovalPolicy>(sp =>
             NodeToolApprovalPolicy.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load(CancellationToken.None)?.ToolApprovalPolicy));
 
-        // The usage-summary cost resolver. Scoped (NOT singleton, unlike the approval policy above) so each
-        // usage-summary read reflects the CURRENT operator rate override — the cached node-settings store makes Load() a
-        // sub-millisecond in-memory hit, so per-request construction is cheap and rate edits apply without a node restart.
+        // The usage-summary cost resolver. Scoped, NOT singleton like the approval policy above, so each read reflects the CURRENT
+        // operator rate override — the cached settings store makes Load() an in-memory hit, so rate edits apply without a restart.
         builder.Services.AddScoped<IUsageRateResolver>(sp =>
             UsageRateResolver.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load(CancellationToken.None)?.UsageRates));
 #pragma warning restore MA0045
 
-        // OrchestrationAgentOptions lives in AI.Agent (no reference to Client.Application), so OrchestrationAgentFactory
-        // cannot inject INodeRuntimeSettings. Seed the migrated IdleTimeoutSeconds from the accessor here at the
-        // composition root via a DI-resolved Configure action — it is appended after the AI.Agent Bind, so a stored
-        // value overrides the appsettings seed. The factory caches options.Value at construction (operator edits apply
-        // on the next process restart); the blocking accessor read runs once during options materialization, not on any hot path. The
-        // accessor is resolved from the real container (no second ServiceProvider build).
+        // OrchestrationAgentOptions lives in AI.Agent, so its factory cannot inject INodeRuntimeSettings: the migrated IdleTimeoutSeconds
+        // is seeded here through a DI-resolved Configure appended after the AI.Agent Bind, so a stored value wins over the appsettings seed.
         builder.Services.AddOptions<OrchestrationAgentOptions>()
 #pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
                .Configure<INodeRuntimeSettings>((options, runtimeSettings) =>
@@ -268,18 +216,11 @@ internal static class AddNodeModelRuntimeExtensions
     ///     <see cref="IExternalProviderRegistry" /> is already in the container.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         The guard exists because the provider has no meaningful behavior without the registry that holds the
-    ///         operator's connections, and registering an empty stand-in in production would be worse than not
-    ///         registering at all: the resolver would happily route an <c>ext:</c> id to a provider that reports zero
-    ///         models, which is indistinguishable from "my connections were silently dropped".
-    ///     </para>
-    ///     <para>
-    ///         Because this is a registration-TIME decision it reads the service collection as built so far, so it runs
-    ///         last in this module — any composition root adding the encrypted external-provider store must do so before
-    ///         <c>AddNodeModelRuntime</c> returns. The provider resolver is unaffected by ordering: it enumerates
-    ///         <see cref="ILocalModelProvider" /> at resolution time, not registration time.
-    ///     </para>
+    ///     The guard exists because the provider has no behavior without the registry holding the operator's connections:
+    ///     the resolver would route an <c>ext:</c> id to a provider reporting zero models, indistinguishable from "my
+    ///     connections were silently dropped". Being a registration-TIME decision it reads the collection as built so
+    ///     far and runs last in this module, so a composition root adding the external-provider store must do so before
+    ///     <c>AddNodeModelRuntime</c> returns; the provider resolver enumerates providers at resolution time instead.
     /// </remarks>
     private static void AddExternalOpenAiRuntime(IHostApplicationBuilder builder)
     {
@@ -292,17 +233,15 @@ internal static class AddNodeModelRuntimeExtensions
     }
 
     /// <summary>
-    ///     Registers the OPTIONAL Ollama local-model runtime as one cohesive, capability-gated block (Decision #1:
-    ///     keep + isolate). This is the only place that references <c>Providers.Ollama</c>, so the resolver dispatches a
-    ///     model to either this provider or llama.cpp through a single seam. The runtime is enabled unless
-    ///     <c>XE_OLLAMA_RUNTIME_ENABLED=false</c>, so the default registration is byte-identical to the previous inline
-    ///     call. The resolved endpoint is loopback-guarded (see <see cref="GuardOllamaEndpointIsLoopback" />).
-    ///     When the gate is OFF the provider stack is skipped, so this method supplies the two services whose only
-    ///     Ollama-side dependencies live inside that stack: <see cref="UnavailableModelCapabilityClient" /> for
-    ///     <see cref="IModelCapabilityClient" /> (without it the container cannot activate <c>ModelCapabilityProber</c>)
-    ///     and <see cref="UnavailableOllamaModelService" /> for <see cref="IOllamaModelService" /> (without it every
-    ///     model-catalog, capacity, classification, model-fit and local-model-endpoint resolve throws).
+    ///     Registers the OPTIONAL Ollama local-model runtime as one cohesive, capability-gated block.
     /// </summary>
+    /// <remarks>
+    ///     This is the only place that references <c>Providers.Ollama</c>, so the resolver dispatches a model to this
+    ///     provider or to llama.cpp through a single seam. The runtime is enabled unless <c>XE_OLLAMA_RUNTIME_ENABLED</c>
+    ///     is false, and the resolved endpoint is loopback-guarded (<see cref="GuardOllamaEndpointIsLoopback" />). With
+    ///     the gate OFF the provider stack is skipped, so this method supplies the two services whose Ollama-side
+    ///     dependencies live inside it: <see cref="UnavailableModelCapabilityClient" /> and <see cref="UnavailableOllamaModelService" />.
+    /// </remarks>
     private static void AddOllamaRuntime(IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -311,10 +250,8 @@ internal static class AddNodeModelRuntimeExtensions
         // Capability gate: enabled unless explicitly disabled, so an un-flagged box keeps today's behavior exactly.
         if (!configuration.GetValue(OllamaRuntimeEnabledConfigurationKey, defaultValue: true))
         {
-            // Opting out of a SECONDARY runtime must not make the host unbuildable: the capability prober and the model
-            // service are mandatory singletons whose Ollama-side dependencies (IModelCapabilityClient, IOllamaApiClient)
-            // have no registration outside the provider stack above. Both no-ops report "nothing there", which is what
-            // a box without an Ollama daemon already reports.
+            // Opting out of a SECONDARY runtime must not make the host unbuildable: ModelCapabilityProber and the model service are
+            // mandatory singletons whose Ollama-side dependencies exist only in the skipped stack. Both no-ops report "nothing there".
             builder.Services.AddSingleton<IModelCapabilityClient, UnavailableModelCapabilityClient>();
             builder.Services.AddSingleton<IOllamaModelService, UnavailableOllamaModelService>();
             return;
@@ -327,16 +264,17 @@ internal static class AddNodeModelRuntimeExtensions
             return new OllamaLocalModelProviderRegistration { Endpoint = chatConnectionSettings.Endpoint, Model = chatConnectionSettings.Model };
         });
 
-        // IOllamaModelService's real registration now rides inside AddOllamaLocalModelProvider, next to the
-        // IOllamaApiClient it wraps — still exactly once on this branch, and still the mirror of the gate-off branch's
-        // UnavailableOllamaModelService above.
+        // IOllamaModelService's real registration rides inside AddOllamaLocalModelProvider, next to the IOllamaApiClient it wraps —
+        // exactly once on this branch, mirroring the gate-off branch's UnavailableOllamaModelService above.
     }
 
     /// <summary>
-    ///     Rejects a non-loopback Ollama endpoint (SSRF). The local Ollama HTTP API is unauthenticated,
-    ///     so a stray non-loopback endpoint value would route prompts to an arbitrary host. An operator can opt in to a
-    ///     remote endpoint with <c>XE_OLLAMA_ALLOW_REMOTE_ENDPOINT=true</c>.
+    ///     Rejects a non-loopback Ollama endpoint (SSRF): the local Ollama HTTP API is unauthenticated, so a stray
+    ///     non-loopback value would route prompts to an arbitrary host.
     /// </summary>
+    /// <remarks>
+    ///     An operator can opt in to a remote endpoint with <c>XE_OLLAMA_ALLOW_REMOTE_ENDPOINT</c> set to true.
+    /// </remarks>
     private static void GuardOllamaEndpointIsLoopback(Uri endpoint, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -355,15 +293,11 @@ internal static class AddNodeModelRuntimeExtensions
     {
         var chatConnectionSettings = ResolveChatConnectionSettings(serviceProvider, configuration);
 
-        // The local branch is the ModelRoutingLocalChatClient. It routes per-send by
-        // ChatOptions.ModelId through the provider resolver, so it supersedes BOTH the old fixed-model
-        // ILocalModelProvider.CreateChatClient path and the raw-IOllamaApiClient-as-IChatClient fallback (the latter
-        // could not route by ModelId for llama-server). XE_USE_LOCAL_MODEL_PROVIDER is still honored: when it is unset
-        // the router's default provider (ollama) + the configured default model reproduce the previous single-daemon
-        // behavior byte-for-byte for an un-mapped model; when set, the same router additionally honors any
-        // llamacpp model_provider_map rows. The configured chat model is the fallback ModelId for requests that omit
-        // ChatOptions.ModelId (mirrors the previous CreateLocalChatClient default).
+        // XE_USE_LOCAL_MODEL_PROVIDER is honored: unset, the router's default provider and the configured default model serve an
+        // un-mapped model as a single daemon would; set, the same router additionally honors llamacpp model_provider_map rows.
         _ = UseLocalModelProvider(configuration);
+        // The local branch routes per-send by ChatOptions.ModelId through the provider resolver, superseding the fixed-model
+        // ILocalModelProvider.CreateChatClient path; the configured chat model is the fallback ModelId when a request omits one.
         return new ModelRoutingLocalChatClient(serviceProvider.GetRequiredService<ILocalModelProviderResolver>(),
             chatConnectionSettings.Model);
     }
@@ -394,10 +328,8 @@ internal static class AddNodeModelRuntimeExtensions
             }
         }
 
-        // Migrated knobs: the Ollama endpoint and the local-chat default model come from INodeRuntimeSettings
-        // (stored > appsettings seed > hardcoded default). Read once at host build — an operator edit applies on the
-        // next process restart. Ollama:ChatModel (an out-of-band runtime override, not a migrated setting)
-        // still takes precedence over the migrated default model when configured.
+        // Migrated knobs: the Ollama endpoint and the local-chat default model come from INodeRuntimeSettings (stored > appsettings
+        // seed > hardcoded default), read once at host build. Ollama:ChatModel, an out-of-band override, still wins over that default.
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
 #pragma warning disable MA0045 // The containing method is only ever reached from an AddSingleton(sp => …) DI factory delegate, which is synchronous by contract; the INodeRuntimeSettings sync twins are the designated composition-path reads.
         var fallbackEndpoint = runtimeSettings.GetOllamaEndpoint();
@@ -410,11 +342,13 @@ internal static class AddNodeModelRuntimeExtensions
 
     /// <summary>
     ///     Builds the <see cref="HuggingFaceOptions" /> the HF GGUF store stack consumes, seeded from
-    ///     <see cref="INodeRuntimeSettings" /> for the migrated knobs (<c>DefaultQuant</c>, <c>DiskMarginBytes</c>). The
-    ///     config binding + <c>ModelsDirectory</c> defaulting mirror <c>AddHuggingFaceGgufStore</c> so the non-migrated
-    ///     fields keep today's behavior; only the two migrated fields come from the accessor (stored &gt; seed &gt;
-    ///     default). Resolved once at singleton construction — the blocking accessor read is not on any hot path.
+    ///     <see cref="INodeRuntimeSettings" /> for the migrated <c>DefaultQuant</c> and <c>DiskMarginBytes</c>.
     /// </summary>
+    /// <remarks>
+    ///     The config binding and <c>ModelsDirectory</c> defaulting mirror <c>AddHuggingFaceGgufStore</c>, so the
+    ///     non-migrated fields keep today's behavior and only the two migrated ones come from the accessor
+    ///     (stored &gt; seed &gt; default). Resolved once at singleton construction, off every hot path.
+    /// </remarks>
     private static HuggingFaceOptions BuildSeededHuggingFaceOptions(IServiceProvider serviceProvider, IConfiguration configuration)
     {
         var options = new HuggingFaceOptions();
@@ -434,12 +368,14 @@ internal static class AddNodeModelRuntimeExtensions
     }
 
     /// <summary>
-    ///     Builds the <see cref="LlamaServerSupervisorOptions" /> the process supervisor + the provider resolver's
-    ///     loaded-cap consume, with the migrated cap/TTL seeded from <see cref="INodeRuntimeSettings" /> (stored &gt;
-    ///     seed &gt; default). The non-migrated port-range/restart fields keep their defaults. The supervisor reads these
-    ///     as plain value-object fields on its hot reaper/spawn loop, so the one-time read here keeps that loop
-    ///     allocation- and await-free; an operator cap/TTL edit applies on the next process restart.
+    ///     Builds the <see cref="LlamaServerSupervisorOptions" /> the process supervisor and the resolver's loaded-cap
+    ///     consume, with the migrated cap/TTL seeded from <see cref="INodeRuntimeSettings" /> (stored &gt; seed &gt; default).
     /// </summary>
+    /// <remarks>
+    ///     The non-migrated port-range and restart fields keep their defaults. The supervisor reads these as plain
+    ///     value-object fields on its hot reaper and spawn loop, so the one-time read here keeps that loop allocation-
+    ///     and await-free; an operator cap or TTL edit applies on the next process restart.
+    /// </remarks>
     private static LlamaServerSupervisorOptions BuildSeededLlamaServerSupervisorOptions(IServiceProvider serviceProvider)
     {
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
@@ -449,11 +385,8 @@ internal static class AddNodeModelRuntimeExtensions
             MaxLoadedProcesses = runtimeSettings.GetLlamaMaxLoadedProcesses(),
             IdleTimeToLive = runtimeSettings.GetLlamaIdleTimeToLive(),
 
-            // Chat-role launch flags: prompt-cache reuse + speculative decoding. Seeded here (like the cap/TTL) because
-            // the provider option object cannot reach INodeRuntimeSettings (layer arrow Application → Providers). The
-            // draft model is stored as a NAME and resolved to its GGUF path on the supervisor spawn path, the same way
-            // the target model is — so the UI offers installed model names without knowing file paths. All of these are
-            // captured at host build, so an operator edit applies on the next node restart.
+            // Chat-role launch flags: prompt-cache reuse and speculative decoding, seeded here (like the cap/TTL) because the provider
+            // option object cannot reach INodeRuntimeSettings. The draft model is stored as a NAME, resolved to its GGUF path when spawning.
             ChatCacheReuse = runtimeSettings.GetChatCacheReuse(),
             SpeculativeMode = runtimeSettings.GetSpeculativeMode(),
             SpeculativeDraftModelName = runtimeSettings.GetSpeculativeDraftModelName(),
@@ -465,13 +398,15 @@ internal static class AddNodeModelRuntimeExtensions
 
     /// <summary>
     ///     Seeds <see cref="LlamaServerLaunchPolicyOptions" /> from the node's KV-cache-type setting, registered before
-    ///     <c>AddLlamaServerLocalModelProvider()</c> so the provider's own <c>TryAddSingleton</c> default becomes a
-    ///     no-op. Every other member keeps its initializer default, so with the setting unset this object is equal to
-    ///     <c>new LlamaServerLaunchPolicyOptions()</c> on every field its consumers read — the argv, the launch identity
-    ///     and the inference-profile fingerprint are then byte-identical to a node that never had this knob.
-    ///     <c>f16</c> collapses to <c>EnableGpuKvCacheQuantization = false</c>, which is exactly the
-    ///     no-<c>-ctk</c>/<c>-ctv</c>/<c>-fa</c> vector a CPU spawn already emits.
+    ///     <c>AddLlamaServerLocalModelProvider()</c> so the provider's own <c>TryAddSingleton</c> default becomes a no-op.
     /// </summary>
+    /// <remarks>
+    ///     Every other member keeps its initializer default, so with the setting unset this object equals
+    ///     <c>new LlamaServerLaunchPolicyOptions()</c> on every field its consumers read: the argv, the launch identity
+    ///     and the inference-profile fingerprint stay byte-identical to a node that never had this knob. <c>f16</c>
+    ///     collapses to GPU KV-cache quantization disabled, exactly the no-<c>-ctk</c>/<c>-ctv</c>/<c>-fa</c> vector a
+    ///     CPU spawn already emits.
+    /// </remarks>
     internal static LlamaServerLaunchPolicyOptions BuildSeededLlamaServerLaunchPolicyOptions(IServiceProvider serviceProvider)
     {
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();

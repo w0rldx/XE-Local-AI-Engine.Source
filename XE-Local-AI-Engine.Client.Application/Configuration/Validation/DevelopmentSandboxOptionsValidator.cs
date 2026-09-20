@@ -6,13 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
-/// <summary>
-///     Fail-loud startup guard for the Development Mode sandbox provider name. Mirrors
-///     <see cref="SandboxOptionsValidator" />'s shape, but guards the opposite failure: an unset value here is
-///     legitimate (it means "use whatever the agent role resolved"), while a MISSPELLED one is not — and without this
-///     it would surface as an <see cref="InvalidOperationException" /> from the DI factory at the first Development
-///     attempt, i.e. under a user action, long after the config was edited. Wired with <c>ValidateOnStart</c>.
-/// </summary>
+/// <summary>Fail-loud startup guard for the Development Mode sandbox provider name.</summary>
+/// <remarks>
+///     Mirrors <see cref="SandboxOptionsValidator" />'s shape, but guards the opposite failure: an unset value here is legitimate (it means
+///     "use whatever the agent role resolved"), while a MISSPELLED one is not — and without this it would surface as an
+///     <see cref="InvalidOperationException" /> from the DI factory at the first Development attempt, i.e. under a user action, long after
+///     the config was edited. Wired with <c>ValidateOnStart</c>.
+/// </remarks>
 public sealed class DevelopmentSandboxOptionsValidator : IValidateOptions<DevelopmentSandboxOptions>
 {
     private static readonly string[] KnownProviders =

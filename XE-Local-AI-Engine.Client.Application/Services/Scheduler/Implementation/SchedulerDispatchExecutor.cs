@@ -7,29 +7,15 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Default <see cref="ISchedulerDispatchExecutor" />. Scoped so the stores (and their DbContext) are resolved per
-///     fire. Guards every fire — missing / disabled / soft-deleted definition, or a template with no registered handler —
-///     by logging a sanitized skip and returning <em>without</em> writing a run row; raw parameters are never logged.
-///     <para>
-///         <b>Run history.</b> Once a fire passes the guards it is recorded: an idempotent
-///         <see cref="IScheduledJobRunStore.UpsertByFireInstanceAsync" /> (keyed on the Quartz fire-instance id) opens a
-///         <see cref="ScheduledRunStatus.Running" /> row, the handler runs with a live progress callback that appends
-///         <see cref="ScheduledRunEventLevel.Progress" /> events, and a terminal lifecycle update records the outcome:
-///         <see cref="ScheduledRunStatus.Succeeded" /> (recording the handler's own
-///         <see cref="ScheduledJobExecutionContext.Summary" /> when it set one, else a generic "Completed."),
-///         <see cref="ScheduledRunStatus.Failed" /> (sanitized — no message
-///         text or stack trace leaves the process), <see cref="ScheduledRunStatus.Cancelled" /> (operator cancel) or
-///         <see cref="ScheduledRunStatus.TimedOut" /> (auto-interrupt). Cancellation is re-thrown so Quartz still
-///         observes the interrupt / shutdown; ordinary failures are swallowed (the run row is the record of failure) so a
-///         single faulting handler cannot fault the scheduler. Terminal writes use <see cref="CancellationToken.None" />
-///         because the run is ending precisely <em>because</em> its own token was cancelled.
-///     </para>
-///     <para>
-///         <b>Realtime events.</b> Each lifecycle transition (started / progress / completed / failed / cancelled)
-///         is published through <see cref="ISchedulerEventPublisher" /> as a sanitized DTO. Publishing is best-effort:
-///         failures are logged and swallowed so a broken notification never corrupts run handling or masks a cancellation.
-///     </para>
+///     Default <see cref="ISchedulerDispatchExecutor" />, Scoped so the stores and their DbContext resolve per fire.
 /// </summary>
+/// <remarks>
+///     A fire that fails a guard — missing, disabled or soft-deleted definition, or a template with no registered
+///     handler — is a sanitized log line and a return, with no run row written and no raw parameters logged. One that
+///     passes is recorded: an idempotent upsert keyed on the Quartz fire-instance id, progress events while the handler
+///     runs, then a terminal lifecycle update. Cancellation is re-thrown so Quartz observes the interrupt, while
+///     ordinary failures are swallowed, the run row being the record of failure. See docs/wiki/06-scheduler.md.
+/// </remarks>
 internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
 {
     /// <summary>
@@ -151,9 +137,8 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
 
         await SafePublishRunAsync(run, SchedulerHubEvents.RunStarted);
 
-        // The stored definition is NEVER mutated. A per-fire override (manual refresh) is merged onto a copy of the
-        // parameters that the handler sees — only the whitelisted use-case key. A cron/no-override fire passes the stored
-        // parameters through unchanged.
+        // The stored definition is NEVER mutated: a per-fire override is merged, whitelisted keys only, onto the copy of the
+        // parameters the handler sees. A cron fire without overrides passes the stored parameters through unchanged.
         var effectiveParameters = ApplyParameterOverrides(definition.ParameterJson, parameterOverrides);
 
         var context = new ScheduledJobExecutionContext
@@ -175,9 +160,8 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
 
             var completedMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-            // The handler's own summary is what the run list is worth reading for — "3/4 cell(s) enqueued" or
-            // "Skipped: ..." rather than a constant that reads identically for a real fire and a no-op. Handlers that
-            // set nothing keep the generic constant.
+            // The handler's own summary is what makes the run list worth reading — "3/4 cell(s) enqueued" rather than a constant
+            // that reads identically for a real fire and a no-op. A handler that sets nothing keeps the generic constant.
             var summary = string.IsNullOrWhiteSpace(context.Summary) ? "Completed." : context.Summary.Trim();
 
             var updated = await _runStore.UpdateLifecycleAsync(run.Id,
@@ -245,14 +229,16 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
     }
 
     /// <summary>
-    ///     Returns <paramref name="storedParametersJson" /> with ONLY the whitelisted <c>useCase</c> and/or <c>limit</c>
-    ///     properties replaced by the per-fire override, leaving every other property untouched. The stored definition is
-    ///     never mutated — this works on a parsed copy. No override, no whitelisted key in the override, or
-    ///     unparseable/empty stored JSON returns the stored JSON verbatim (the handler then validates it exactly as it
-    ///     would a normal fire), so an override can never fabricate parameters or override anything other than the two
-    ///     whitelisted keys. The <c>limit</c> override is written back as a JSON number (the stored shape), so the
-    ///     handler's numeric parse is unchanged.
+    ///     Returns <paramref name="storedParametersJson" /> with ONLY the whitelisted <c>useCase</c> and <c>limit</c>
+    ///     properties replaced by the per-fire override, every other property untouched.
     /// </summary>
+    /// <remarks>
+    ///     It works on a parsed copy, so the stored definition is never mutated. No override, no whitelisted key in the
+    ///     override, or unparseable or empty stored JSON returns the stored JSON verbatim, which the handler then
+    ///     validates exactly as it would a normal fire: an override can neither fabricate parameters nor reach a
+    ///     non-whitelisted key. The <c>limit</c> override is written back as a JSON number, the stored shape, so the
+    ///     handler's numeric parse is unchanged.
+    /// </remarks>
     private static string? ApplyParameterOverrides(string? storedParametersJson,
         IReadOnlyDictionary<string, string>? parameterOverrides)
     {
@@ -364,9 +350,8 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
                 ? string.Create(CultureInfo.InvariantCulture, $"{{\"percent\":{value}}}")
                 : null;
 
-            // Persist the progress event with CancellationToken.None — same policy as the terminal writes. A handler
-            // reporting progress on its way out of a cancelled run forwards its (already-cancelled) token; honoring it
-            // here would throw a second OperationCanceledException from SaveChanges that masks the real cancellation.
+            // Persist the progress event with CancellationToken.None, the policy the terminal writes use: a handler reporting
+            // progress out of a cancelled run forwards an already-cancelled token, whose second throw would mask the real cancellation.
             _ = await _runEventStore.AddAsync(new ScheduledJobRunEventInput { RunId = runId, Sequence = nextSequence, Level = ScheduledRunEventLevel.Progress, Message = message, DataJson = dataJson },
                 CancellationToken.None);
 

@@ -5,10 +5,12 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 
 /// <summary>
-///     Observes SQLITE_BUSY / SQLITE_LOCKED failures on EF-issued commands (migrations, EF queries/saves) and records
-///     them on <see cref="NodeMetrics.SqliteBusyTotal" /> via <see cref="NodeSqliteContention" />. The raw-ADO chat-write
-///     path is instrumented separately at its own boundary (it does not flow through EF's command pipeline).
+///     Observes SQLITE_BUSY / SQLITE_LOCKED failures on EF-issued commands (migrations, EF queries/saves) and records them on
+///     <see cref="NodeMetrics.SqliteBusyTotal" /> via <see cref="NodeSqliteContention" />.
 /// </summary>
+/// <remarks>
+///     The raw-ADO chat-write path is instrumented separately at its own boundary (it does not flow through EF's command pipeline).
+/// </remarks>
 public sealed class NodeSqliteCommandInterceptor : DbCommandInterceptor
 {
     private readonly ILogger<NodeSqliteCommandInterceptor> _logger;

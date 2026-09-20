@@ -1,21 +1,24 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>
-///     Owns the lifecycle of the node's MCP client connections. On <see cref="RefreshAsync" /> it reconciles the set of
-///     live <c>McpClient</c>s against the enabled registrations (connecting new/changed servers, disposing
-///     removed/disabled/version-changed ones), discovers each server's tools, renames them to collision-free qualified
-///     names, wraps them for approval, and pushes the resulting immutable snapshot into the MCP tool registry that the
-///     invocation factory and loopback offer provider read. A failed server is isolated: it contributes zero tools and
-///     never aborts the others or the refresh. The CRUD service calls <see cref="RefreshAsync" /> after any change that
-///     alters the enabled set; <see cref="GetStatuses" /> exposes per-server connection state to the management UI.
+///     Owns the lifecycle of the node's MCP client connections.
 /// </summary>
+/// <remarks>
+///     <see cref="RefreshAsync" /> reconciles the live <c>McpClient</c>s against the enabled registrations, discovers
+///     each server's tools, renames them to collision-free qualified names, wraps them for approval and pushes the
+///     immutable snapshot into the MCP tool registry the invocation factory and loopback offer provider read. A failed
+///     server is isolated: it contributes zero tools and never aborts the others or the refresh. The CRUD service
+///     refreshes after any change to the enabled set; <see cref="GetStatuses" /> feeds the management UI.
+/// </remarks>
 public interface IMcpServerConnectionManager
 {
     /// <summary>
-    ///     Reconciles live connections against the enabled registrations and republishes the MCP tool snapshot. Serialized
-    ///     so concurrent callers (startup connector + a CRUD mutation) cannot interleave; a per-server connect/list
-    ///     timeout and per-server failure isolation keep one bad server from stalling or aborting the refresh.
+    ///     Reconciles live connections against the enabled registrations and republishes the MCP tool snapshot.
     /// </summary>
+    /// <remarks>
+    ///     It is serialized, so the startup connector and a CRUD mutation cannot interleave, and a per-server connect
+    ///     and list timeout plus per-server failure isolation keep one bad server from stalling or aborting a refresh.
+    /// </remarks>
     Task RefreshAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -27,11 +30,14 @@ public interface IMcpServerConnectionManager
 }
 
 /// <summary>
-///     Per-server connection state surfaced to the management UI. <see cref="LastError" /> carries a short, redacted
-///     reason when the last connect/list attempt failed (no host paths or secrets); it is <c>null</c> when the server is
-///     connected. <see cref="Tools" /> lists the server's discovered tools (the qualified names + descriptions +
-///     approval flags the management panel renders); it is empty for a disabled or errored server.
+///     Per-server connection state surfaced to the management UI.
 /// </summary>
+/// <remarks>
+///     <see cref="LastError" /> carries a short, redacted reason when the last connect or list attempt failed, with no
+///     host paths or secrets, and is <c>null</c> for a connected server. <see cref="Tools" /> lists the discovered
+///     tools the management panel renders — qualified names, descriptions, approval flags — and is empty for a
+///     disabled or errored server.
+/// </remarks>
 public sealed record McpServerConnectionStatus
 {
     public required Guid ServerId { get; init; }
@@ -48,10 +54,13 @@ public sealed record McpServerConnectionStatus
 }
 
 /// <summary>
-///     One discovered tool on a connected MCP server, for the management panel. <see cref="Name" /> is the qualified
-///     tool name (<c>mcp__{serverSlug}__{tool}</c>) — the authoritative offered/executable name; a client may strip the
-///     prefix for display. Every MCP tool ships <see cref="RequiresApproval" /> = <c>true</c> by default.
+///     One discovered tool on a connected MCP server, for the management panel.
 /// </summary>
+/// <remarks>
+///     <see cref="Name" /> is the qualified tool name, <c>mcp__{serverSlug}__{tool}</c>, which is the authoritative
+///     offered and executable name; a client may strip the prefix for display. Every MCP tool ships requiring
+///     approval by default.
+/// </remarks>
 public sealed record McpServerToolInfo
 {
     public required string Name { get; init; }

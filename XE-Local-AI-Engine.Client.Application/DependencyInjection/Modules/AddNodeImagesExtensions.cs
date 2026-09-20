@@ -10,10 +10,13 @@ using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 
 /// <summary>
-///     Wires the local image-generation stack (jobs/store/hub-publisher) on top of the image-model store + the sd-server
-///     runtime adapter. Must run AFTER <c>AddNodeModelRuntime</c> so the shared Hugging Face download client
-///     (registered by <c>AddHuggingFaceGgufStore</c>) the image model store reuses is present.
+///     Wires the local image-generation stack (jobs, store, hub publisher) on top of the image-model store and the
+///     sd-server runtime adapter.
 /// </summary>
+/// <remarks>
+///     Must run AFTER <c>AddNodeModelRuntime</c>, so the shared Hugging Face download client that
+///     <c>AddHuggingFaceGgufStore</c> registers, and the image model store reuses, is already present.
+/// </remarks>
 internal static class AddNodeImagesExtensions
 {
     public static IHostApplicationBuilder AddNodeImages(this IHostApplicationBuilder builder, IConfiguration configuration)
@@ -27,11 +30,8 @@ internal static class AddNodeImagesExtensions
         builder.Services.AddStableDiffusionCppImageProvider();
         builder.Services.AddStableDiffusionCppImageRuntime();
 
-        // The image runtime/source-build endpoints' application-layer door onto the provider contracts registered just
-        // above: IStableDiffusionCppSourceBuildService, IStableDiffusionCppSourceBuildPrerequisiteProbe,
-        // IStableDiffusionInstalledRuntimeStore and IImageRuntimeActivityGate (AddStableDiffusionCppImageProvider),
-        // plus IImageServerSupervisor (AddStableDiffusionCppImageRuntime). Singleton because all five are
-        // TryAddSingleton and this type is a stateless pass-through over them.
+        // The image runtime/source-build endpoints' door onto IStableDiffusionCppSourceBuildService, its prerequisite probe,
+        // IStableDiffusionInstalledRuntimeStore, IImageRuntimeActivityGate and IImageServerSupervisor. Singleton: stateless over their TryAddSingletons.
         builder.Services.AddSingleton<ImageRuntimeOrchestrationService>();
 
         // Curated image-model catalog (embedded seed). Singleton: the document is immutable and loading it means
@@ -42,9 +42,8 @@ internal static class AddNodeImagesExtensions
         // encrypted at rest by the node encryption interceptor on save).
         builder.Services.AddScoped<IImageJobStore, ImageJobStore>();
 
-        // Encrypted-at-rest generated-image blob store. Singleton: it opens its own DbContext scope per operation and
-        // depends only on singletons (data directory, sqlite key holder, time provider) — same posture as the uploaded
-        // file store.
+        // Encrypted-at-rest generated-image blob store. Singleton: it opens its own DbContext scope per operation and depends only
+        // on singletons (data directory, sqlite key holder, time provider) — the same posture as the uploaded-file store.
         builder.Services.AddSingleton<IGeneratedImageStore, GeneratedImageStore>();
 
         // No-op default image-job event publisher; the Client host supersedes it with the hub-backed publisher.
@@ -58,11 +57,8 @@ internal static class AddNodeImagesExtensions
         // job (generation runs detached), and it composes the singleton runtime + blob store + IHubContext-safe publisher.
         builder.Services.AddSingleton<IImageJobCoordinator, ImageJobCoordinator>();
 
-        // Startup reconciliation: a previous process may have died with jobs still Queued/Generating; the coordinator's
-        // in-memory registry is gone after a restart, so those rows would otherwise stay stuck forever. Interrupted jobs
-        // are NOT auto-retried (image generation is expensive/nondeterministic) — they are marked Failed with a
-        // content-free reason and a status event is pushed. Runs before Kestrel accepts requests (hosted services start
-        // before the web host), so it cannot race a newly enqueued job.
+        // Startup reconciliation: after a death with jobs still Queued/Generating the coordinator's in-memory registry is gone, so
+        // those rows are marked Failed with a content-free reason and an event — never auto-retried — before Kestrel accepts requests.
         builder.Services.AddHostedService<ImageJobStartupReconciler>();
 
         return builder;

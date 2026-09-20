@@ -1,14 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-/// <summary>
-///     The single read surface migrated consumers use for user-editable runtime knobs (the
-///     appsettings-to-node-settings migration). Each getter resolves the effective value with the precedence
-///     <c>stored value &gt; appsettings seed &gt; hardcoded default</c>: it reads the cached
-///     <see cref="INodeSettingsStore" /> (a sub-millisecond hit after the first load) and falls back to the appsettings
-///     seed captured from the bound <c>IOptions&lt;T&gt;</c>/<c>IConfiguration</c> at construction, then to a hardcoded
-///     default. Consumers must read migrated values through this surface, never via <c>IOptions&lt;T&gt;</c> of a
-///     migrated field — the appsettings binding of a migrated section is the seed only.
-/// </summary>
+/// <summary>The single read surface migrated consumers use for user-editable runtime knobs.</summary>
+/// <remarks>
+///     Each getter resolves the effective value with the precedence <c>stored value &gt; appsettings seed &gt; hardcoded default</c>: it reads
+///     the cached <see cref="INodeSettingsStore" /> (a sub-millisecond hit after the first load) and falls back to the appsettings seed
+///     captured from the bound <c>IOptions&lt;T&gt;</c>/<c>IConfiguration</c> at construction, then to a hardcoded default. Consumers must read
+///     migrated values through this surface, never via <c>IOptions&lt;T&gt;</c> of a migrated field — the appsettings binding of a migrated
+///     section is the seed only.
+/// </remarks>
 public interface INodeRuntimeSettings
 {
     /// <summary>The effective local-chat default model id (stored &gt; <c>Agent:LocalChat:DefaultModel</c>).</summary>
@@ -117,10 +116,12 @@ public interface INodeRuntimeSettings
 
     /// <summary>
     ///     Which external-access preset was last applied, verbatim and with NO fallback: <see langword="null" /> is the
-    ///     answer (nobody has decided), not a missing one. <c>"pending"</c> means an administrator exists and the choice
-    ///     has not been made. Read only to tell a decided node from an undecided one — the three switches below are what
-    ///     every gate reads.
+    ///     answer (nobody has decided), not a missing one.
     /// </summary>
+    /// <remarks>
+    ///     <c>"pending"</c> means an administrator exists and the choice has not been made. Read only to tell a decided
+    ///     node from an undecided one — the three switches below are what every gate reads.
+    /// </remarks>
     Task<string?> GetExternalAccessProfileAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -136,23 +137,15 @@ public interface INodeRuntimeSettings
     /// </summary>
     Task<bool> GetAutoCheckRuntimeUpdatesAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Whether the node provisions a first-run model on its own (stored &gt; on). Gates
-    ///     <c>FirstRunModelProvisioningService</c>, AFTER the existing <c>FirstRunModel:Enabled</c> config gate rather
-    ///     than instead of it; a manual model download or install never consults it.
-    /// </summary>
+    /// <summary>Whether the node provisions a first-run model on its own (stored &gt; on).</summary>
+    /// <remarks>
+    ///     Gates <c>FirstRunModelProvisioningService</c>, AFTER the existing <c>FirstRunModel:Enabled</c> config gate
+    ///     rather than instead of it; a manual model download or install never consults it.
+    /// </remarks>
     Task<bool> GetAutoProvisionFirstRunModelAsync(CancellationToken cancellationToken = default);
 
-    // Synchronous twins for the composition/startup path (DI factory seeds + singleton constructors) and for
-    // request-time call sites that are structurally synchronous. These read the stored settings synchronously to avoid
-    // blocking on async file I/O during host startup, which starves the thread pool.
-    //
-    // Prefer the async getters. Use a sync twin at request time ONLY when the call site cannot be made async without
-    // rippling through an interface — the live example is LocalToolOfferProvider.IsToolCapable, whose whole offer seam
-    // is synchronous by design. That is safe because the read resolves through CachedNodeSettingsStore, where Load is an
-    // IMemoryCache.TryGetValue hit and SaveAsync invalidates AND re-primes the entry; the file is touched only on a cold
-    // first read. What is NOT acceptable is a sync twin on a per-TOKEN path, or capturing the result in a singleton
-    // field to avoid the read — the latter is what silently required a node restart before an edit took effect.
+    // Synchronous twins for the composition/startup path and for structurally synchronous request-time call sites. Prefer the async getters:
+    // a sync twin on a per-TOKEN path, or a captured result in a singleton field, is NOT acceptable. Rules and reasons: docs/wiki/08-data-and-persistence.md.
 
     /// <inheritdoc cref="GetDefaultModelNameAsync" />
     string GetDefaultModelName();

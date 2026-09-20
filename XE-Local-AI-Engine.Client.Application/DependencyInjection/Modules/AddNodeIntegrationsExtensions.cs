@@ -15,12 +15,12 @@ internal static class AddNodeIntegrationsExtensions
     /// <summary>
     ///     Registers the external-integration substrate: the options class, the four persistence stores and the
     ///     application services layered over them.
-    ///     <para>
-    ///         No <c>IValidateOptions&lt;IntegrationOptions&gt;</c> is registered, and deliberately so — the class has no
-    ///         cross-section invariant, so it validates itself through <see cref="System.ComponentModel.DataAnnotations.IValidatableObject" />
-    ///         for its one <c>TimeSpan</c> bound while the annotations carry the rest.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     No <c>IValidateOptions&lt;IntegrationOptions&gt;</c> is registered, and deliberately so: the class has no
+    ///     cross-section invariant, so it validates its one <c>TimeSpan</c> bound through
+    ///     <see cref="System.ComponentModel.DataAnnotations.IValidatableObject" /> while the annotations carry the rest.
+    /// </remarks>
     public static IHostApplicationBuilder AddNodeIntegrations(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -39,14 +39,12 @@ internal static class AddNodeIntegrationsExtensions
         builder.Services.AddScoped<IIntegrationTriggerService, IntegrationTriggerService>();
         builder.Services.AddScoped<IIntegrationApiKeyService, IntegrationApiKeyService>();
 
-        // ONE ring per node, and the only minter of an event sequence — a second instance would hand two readers of
-        // the same execution different numbering. Singleton, and disposed with the container because it owns a
-        // PeriodicTimer.
+        // ONE ring per node and the only minter of an event sequence — a second instance would hand two readers of the same
+        // execution different numbering. Singleton, disposed with the container because it owns a PeriodicTimer.
         builder.Services.AddSingleton<IIntegrationExecutionEventBuffer, IntegrationExecutionEventBuffer>();
 
-        // The queue between the scoped accept path and the single-consumer coordinator. FullMode.Wait, never
-        // DropWrite: under DropWrite a full channel returns TRUE and discards the id, stranding an admitted row that
-        // nothing would ever drain and that the admission count would then block a slot with forever.
+        // The queue between the scoped accept path and the single-consumer coordinator. FullMode.Wait, never DropWrite: under
+        // DropWrite a full channel returns TRUE and discards the id, stranding an admitted row nothing drains while it holds a slot.
         builder.Services.AddSingleton(static serviceProvider =>
             Channel.CreateBounded<Guid>(new BoundedChannelOptions(serviceProvider.GetRequiredService<IOptions<IntegrationOptions>>().Value.MaxQueuedExecutions)
             {
@@ -69,9 +67,8 @@ internal static class AddNodeIntegrationsExtensions
             serviceProvider.GetRequiredService<ILogger<IntegrationSessionService>>()));
         builder.Services.AddScoped<IIntegrationInvocationService, IntegrationInvocationService>();
 
-        // Two concrete classes with no interface, registered as themselves and injected as themselves: a
-        // one-implementation interface neither the brief nor a ruling asked for is scaffolding. Both take an INTERNAL
-        // collaborator, so they are constructed here rather than by the container's public-constructor activator.
+        // Two concrete classes with no interface, registered and injected as themselves: a one-implementation interface no ruling
+        // asked for is scaffolding. Both take an INTERNAL collaborator, so they are constructed here, not by the container's activator.
         builder.Services.AddScoped(static serviceProvider => new IntegrationExecutionQueryService(serviceProvider.GetRequiredService<IIntegrationExecutionStore>(),
             serviceProvider.GetRequiredService<IIntegrationTriggerStore>(),
             serviceProvider.GetRequiredService<IIntegrationExecutionEventBuffer>(),
@@ -80,10 +77,8 @@ internal static class AddNodeIntegrationsExtensions
             serviceProvider.GetRequiredService<ILogger<IntegrationExecutionQueryService>>()));
         builder.Services.AddScoped<IntegrationExternalAccess>();
 
-        // The emit_output handler. Registering it surfaces the tool in the RESOLUTION seam only; whether a run may ever
-        // call it is decided by the OFFER, which holds it out of every projection and lets the coordinator union it in.
-        // Singleton because ClientLocalToolRegistry captures the handler enumerable once at construction; it opens its
-        // own scope per call for the scoped stores.
+        // The emit_output handler. Registering it surfaces the tool in the RESOLUTION seam only; the OFFER decides whether a run may
+        // call it, holding it out of every projection for the coordinator to union in. Singleton, opening its own scope per call.
         builder.Services.AddSingleton<IClientLocalToolHandler, EmitOutputToolHandler>();
 
         // The single consumer of that channel. Hosted, so its startup sweep runs before the loop reads an id, and so

@@ -9,11 +9,13 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Resolves the effective value of each migrated runtime knob with the precedence
-///     <c>stored &gt; appsettings seed &gt; hardcoded default</c>. The stored value comes from the cached
-///     <see cref="INodeSettingsStore" />; the appsettings seed is captured from the bound options/configuration at
-///     construction (so first-run behavior is unchanged from today's appsettings). For knobs without a config section
-///     today (the llama.cpp supervisor cap/TTL) the seed IS the hardcoded default.
+///     <c>stored &gt; appsettings seed &gt; hardcoded default</c>.
 /// </summary>
+/// <remarks>
+///     The stored value comes from the cached <see cref="INodeSettingsStore" />; the appsettings seed is captured from
+///     the bound options/configuration at construction, so first-run behaviour matches plain appsettings. For knobs
+///     with no config section (the llama.cpp supervisor cap/TTL) the seed IS the hardcoded default.
+/// </remarks>
 public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 {
     private readonly bool _enableToolsSeed;
@@ -60,24 +62,20 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         _maxPendingToolCallAgeMinutesSeed = workerNode.MaxPendingToolCallAgeMinutes;
         _detachedGraceSecondsSeed = workerNode.DetachedGraceSeconds;
 
-        // Orchestration idle-timeout seed is read from configuration (not IOptions<OrchestrationAgentOptions>) to avoid a
-        // DI cycle: OrchestrationAgentOptions is itself Configure-d FROM this accessor at the composition root (so the
-        // AI.Agent factory, which cannot reference INodeRuntimeSettings, still gets the stored value). Taking
-        // IOptions<OrchestrationAgentOptions> here would make the accessor depend on the option it configures.
+        // From configuration, not IOptions<OrchestrationAgentOptions>, to avoid a DI cycle: OrchestrationAgentOptions is itself Configure-d FROM
+        // this accessor at the composition root, so taking IOptions<OrchestrationAgentOptions> here would depend on the option it configures.
         _orchestrationIdleTimeoutSeed = configuration.GetValue<int?>("Agent:Orchestration:IdleTimeoutSeconds")
                                         ?? StoredNodeSettings.DefaultOrchestrationIdleTimeoutSeconds;
 
-        // Read from configuration rather than IOptions<TranscriptionOptions> for the same reason the Hugging Face
-        // seeds are: the transcription options are registered by a module that not every host or test context runs,
-        // and this accessor is constructed in all of them.
+        // From configuration rather than IOptions<TranscriptionOptions> for the same reason the Hugging Face seeds are: the transcription
+        // options are registered by a module that not every host or test context runs, and this accessor is constructed in all of them.
         var configuredTranscriptionIdleTimeout = configuration.GetValue<int?>($"{TranscriptionOptions.Section}:IdleTimeoutMinutes");
         _transcriptionIdleTimeoutMinutesSeed = configuredTranscriptionIdleTimeout is > 0
             ? configuredTranscriptionIdleTimeout.Value
             : StoredNodeSettings.DefaultTranscriptionIdleTimeoutMinutes;
 
-        // HuggingFaceOptions is registered as a plain singleton only after AddHuggingFaceGgufStore runs, which is not
-        // guaranteed in every host/test context, so the HF seeds are read from configuration directly (mirroring the
-        // Options defaults) instead of taking an IOptions<HuggingFaceOptions> dependency.
+        // HuggingFaceOptions is registered as a plain singleton only after AddHuggingFaceGgufStore runs, which is not guaranteed in every
+        // host/test context, so the HF seeds are read from configuration directly, mirroring the Options defaults.
         var configuredQuant = configuration.GetValue<string>("HuggingFace:DefaultQuant");
         _hfQuantSeed = string.IsNullOrWhiteSpace(configuredQuant) ? StoredNodeSettings.DefaultHuggingFaceQuant : configuredQuant;
 
@@ -380,9 +378,8 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return await _store.LoadAsync(cancellationToken) ?? new StoredNodeSettings();
     }
 
-    // The synchronous property readers above cannot await, so they go through NodeSettingsStore.Load — the
-    // XML-doc-declared synchronous twin of LoadAsync kept for exactly this composition/startup path. The token is
-    // passed explicitly as None: a property getter has none to forward.
+    // The synchronous property readers above cannot await, so they go through NodeSettingsStore.Load — the XML-doc-declared synchronous twin
+    // of LoadAsync kept for exactly this composition/startup path. The token is None because a property getter has none to forward.
     private StoredNodeSettings LoadStored()
     {
 #pragma warning disable MA0045 // Documented synchronous twin (NodeSettingsStore.Load beside LoadAsync); the callers are synchronous property getters.

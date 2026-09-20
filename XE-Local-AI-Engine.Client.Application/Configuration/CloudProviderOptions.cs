@@ -14,10 +14,8 @@ public sealed class CloudProviderOptions
 
     public string ProviderName { get; set; } = ProviderNone;
 
-    // The appsettings Azure* fields below are a legacy single-deployment, API-key-only seed superseded by the
-    // DataProtection-encrypted, multi-model store (ICloudCredentialStore / StoredCloudProviderConfig). They are
-    // validated by CloudProviderOptionsValidator but are not read by the runtime — the encrypted store is the source
-    // of truth, and startup does not seed it from these values.
+    // The appsettings Azure* fields below are a legacy single-deployment, API-key-only seed superseded by the DataProtection-encrypted store
+    // (ICloudCredentialStore / StoredCloudProviderConfig, multi-model and the source of truth): validated by CloudProviderOptionsValidator, never read at runtime, never seeded into it.
 
     public string? AzureEndpoint { get; set; }
 

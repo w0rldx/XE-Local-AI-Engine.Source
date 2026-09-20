@@ -1,13 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-///     A single non-fatal, in-turn notice for an invocation: a behavior the runner would otherwise only log
-///     server-side (a model substitution, a tool disabled after repeated invalid calls, or a history truncation) is
-///     instead surfaced to the chat client as a sanitized, structured notice. Mirrors
+///     A single non-fatal, in-turn notice for an invocation: a behaviour the runner would otherwise only log
+///     server-side is instead surfaced to the chat client as a sanitized, structured notice.
+/// </summary>
+/// <remarks>
+///     A model substitution, a tool disabled after repeated invalid calls, a history truncation. Mirrors
 ///     <see cref="ToolCallLifecyclePayload" />'s shape and fan-out so the local send/regenerate/resume paths cannot
 ///     drift. <see cref="Message" /> is always a fixed, path-free, user-facing string; nothing here ever carries a raw
 ///     exception, stack trace, or file path.
-/// </summary>
+/// </remarks>
 public sealed record TurnNoticePayload
 {
     public required Guid InvocationId { get; init; }
@@ -36,44 +38,55 @@ public enum TurnNoticeKind
     HistoryTruncated = 2,
 
     /// <summary>
-    ///     Conversation attachments (and node-local file tools) were withheld from a CLOUD-hosted effective model because
-    ///     the operator has not opted in to exposing node-local private data to cloud providers
-    ///     (<c>KnowledgeBase:AllowCloudModelAccess</c>). <see cref="TurnNoticePayload.Detail" /> names the effective model.
+    ///     Conversation attachments (and node-local file tools) were withheld from a CLOUD-hosted effective model.
     /// </summary>
+    /// <remarks>
+    ///     The operator has not opted in to exposing node-local private data to cloud providers
+    ///     (<c>KnowledgeBase:AllowCloudModelAccess</c>). <see cref="TurnNoticePayload.Detail" /> names the effective model.
+    /// </remarks>
     AttachmentsWithheld = 3,
 
     /// <summary>
-    ///     Knowledge-base grounding was requested for this plain-chat turn but withheld from a CLOUD-hosted
-    ///     effective model because the operator has not opted in to exposing node-local private data to cloud providers
+    ///     Knowledge-base grounding was requested for this plain-chat turn but withheld from a CLOUD-hosted effective
+    ///     model.
+    /// </summary>
+    /// <remarks>
+    ///     The operator has not opted in to exposing node-local private data to cloud providers
     ///     (<c>KnowledgeBase:AllowCloudModelAccess</c>) — the same egress gate as attachments. The turn still runs, just
     ///     without knowledge-base context. <see cref="TurnNoticePayload.Detail" /> names the effective model.
-    /// </summary>
+    /// </remarks>
     KnowledgeWithheld = 4,
 
     /// <summary>
-    ///     The bound agent is an Orchestrator but its orchestration did not compile for this turn (invalid topology, a
-    ///     model that cannot call tools, a missing triage, or too few capable participants), so the turn ran as a single
-    ///     agent. Without this the degrade was visible only in a server log.
-    ///     <see cref="TurnNoticePayload.Detail" /> carries the
-    ///     <c>OrchestrationDegradationReason</c> name.
+    ///     The bound agent is an Orchestrator but its orchestration did not compile for this turn, so the turn ran as a
+    ///     single agent.
     /// </summary>
+    /// <remarks>
+    ///     Invalid topology, a model that cannot call tools, a missing triage, or too few capable participants. Without
+    ///     this the degrade is visible only in a server log. <see cref="TurnNoticePayload.Detail" /> carries the
+    ///     <c>OrchestrationDegradationReason</c> name.
+    /// </remarks>
     OrchestrationDegraded = 5,
 
     /// <summary>
     ///     Some of the agent's tools were held back from the model this turn to save context, and the model can list
-    ///     and use them by calling <c>list_tools</c>. Counts only — the notice never names a tool. Hiding a tool is a
-    ///     context-budget optimisation and never an authorisation change: a held-back tool the model names still
-    ///     executes under exactly the same approval rules.
+    ///     and use them by calling <c>list_tools</c>.
     /// </summary>
+    /// <remarks>
+    ///     Counts only — the notice never names a tool. Hiding a tool is a context-budget optimisation and never an
+    ///     authorisation change: a held-back tool the model names still executes under exactly the same approval rules.
+    /// </remarks>
     ToolsFiltered = 6,
 
     /// <summary>
     ///     The turn was authored with reasoning effort <c>auto</c> and the node resolved it into a concrete tier for
     ///     this turn — a different reasoning depth, and possibly a different (node-local, smaller) model.
+    /// </summary>
+    /// <remarks>
     ///     Deliberately silent on the common NORMAL, no-swap case: a notice on every ordinary turn is noise.
     ///     <see cref="TurnNoticePayload.Detail" /> carries the stable kebab-case dispatch reason code, which names a
     ///     RULE and never a signal value — no message length, no conversation depth, no score, and never any message
     ///     text.
-    /// </summary>
+    /// </remarks>
     EffortDispatched = 7
 }

@@ -3,22 +3,22 @@ namespace XE_Local_AI_Engine.Client.Configuration.Validation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
-/// <summary>
-///     Fail-closed validation for <see cref="LocalContainerOptions" />. The process sandbox bounds its whole-file
-///     copy-into transfer by <see cref="LocalContainerOptions.MaxCopyFileBytes" />, so that ceiling must be positive.
-///     <see cref="LocalContainerOptions.MaxJailDiskBytes" /> is deliberately NOT required to be positive: a
-///     non-positive value is the documented way to disable the jail disk watchdog, so rejecting it here would remove a
-///     supported configuration rather than catch a mistake.
-///     <para>
-///         <see cref="SandboxToolchainLimits" /> is the opposite case and is floored rather than merely required to be
-///         positive. On Linux those numbers become <c>MemoryMax</c> with swap denied and <c>TasksMax</c> counting
-///         threads, so a value that is positive but too small does not slow a build down — it OOM-kills it, or fails
-///         its first <c>fork</c>, on every attempt. A ceiling that can never be met is worse than no ceiling, because
-///         it reads as protection. Unset is not rejected: unset means "derive from this host".
-///     </para>
-/// </summary>
+/// <summary>Fail-closed validation for <see cref="LocalContainerOptions" />.</summary>
+/// <remarks>
+///     The process sandbox bounds its whole-file copy-into transfer by <see cref="LocalContainerOptions.MaxCopyFileBytes" />, so that ceiling
+///     must be positive. <see cref="LocalContainerOptions.MaxJailDiskBytes" /> is deliberately NOT required to be positive: a non-positive
+///     value is the documented way to disable the jail disk watchdog, so rejecting it would remove a supported configuration rather than
+///     catch a mistake.
+/// </remarks>
 public sealed class LocalContainerOptionsValidator : IValidateOptions<LocalContainerOptions>
 {
+    /// <inheritdoc />
+    /// <remarks>
+    ///     <see cref="SandboxToolchainLimits" /> is the opposite case and is floored rather than merely required to be positive. On Linux
+    ///     those numbers become <c>MemoryMax</c> with swap denied and <c>TasksMax</c> counting threads, so a value that is positive but too
+    ///     small does not slow a build down — it OOM-kills it, or fails its first <c>fork</c>, on every attempt. A ceiling that can never be
+    ///     met is worse than no ceiling, because it reads as protection. Unset is not rejected: unset means "derive from this host".
+    /// </remarks>
     public ValidateOptionsResult Validate(string? name, LocalContainerOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);

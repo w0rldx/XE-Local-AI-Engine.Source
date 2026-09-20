@@ -154,9 +154,8 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
         return new DedupKey(NormalizeText(scope), NormalizeText(behavior));
     }
 
-    // The normalized identity a proposal dedupes on. Not shared with MemoryExtractionService's same-named key: that
-    // one scopes by the MemoryScope enum, and widening either to fit the other would let an untyped playbook scope
-    // and a typed memory scope collide.
+    // The normalized identity a proposal dedupes on. Not shared with MemoryExtractionService's same-named key: that one scopes by the
+    // MemoryScope enum, and widening either to fit the other would let an untyped playbook scope and a typed memory scope collide.
     private readonly record struct DedupKey(string Scope, string Behavior);
 
     private static string NormalizeText(string? value)

@@ -10,19 +10,14 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Builds the transport for a registration and connects an <see cref="McpClient" />.
-///     <para>
-///         A stdio registration is routed by its <see cref="McpTrustTier" />: <see cref="McpTrustTier.Sandboxed" />
-///         (the default) launches the server inside the substrate through
-///         <see cref="SandboxedMcpStdioTransport" />, and <see cref="McpTrustTier.PrivilegedHost" /> keeps the plain
-///         host launch this factory has always done — now as an explicit per-server operator grant rather than as the
-///         only behaviour there is. See <c>docs/security/mcp-trust-tiers.md</c>.
-///     </para>
-///     <para>
-///         The HTTP loopback check is defence in depth: the CRUD service validates loopback on register, but
-///         re-validating here guarantees a row carrying a non-loopback URL can never cause an outbound connection to
-///         an arbitrary remote server.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A stdio registration is routed by its <see cref="McpTrustTier" />: <see cref="McpTrustTier.Sandboxed" />, the
+///     default, launches the server inside the substrate through <see cref="SandboxedMcpStdioTransport" />, while
+///     <see cref="McpTrustTier.PrivilegedHost" /> is the plain host launch, an explicit per-server operator grant. See
+///     <c>docs/security/mcp-trust-tiers.md</c>. The HTTP loopback check here is defence in depth: the CRUD service
+///     validates on register, and re-validating guarantees a non-loopback row can never reach a remote server.
+/// </remarks>
 internal sealed class McpClientFactory : IMcpClientFactory
 {
     private readonly IOptions<ComputeOptions> _ceilingDefaults;
@@ -73,20 +68,21 @@ internal sealed class McpClientFactory : IMcpClientFactory
     }
 
     /// <summary>
-    ///     The tier decides WHERE the server's process runs, and it is the only place in this factory that decides it.
-    ///     An unrecognized tier is refused rather than defaulted: a stored value nothing here understands must not be
-    ///     resolved to the privileged branch by accident, and the schema check constraint means reaching this is a
-    ///     code-versus-database mismatch worth surfacing.
+    ///     The tier decides WHERE the server's process runs, and this is the only place in the factory that decides it.
     /// </summary>
+    /// <remarks>
+    ///     An unrecognized tier is refused rather than defaulted: a stored value nothing here understands must not
+    ///     resolve to the privileged branch by accident, and the schema check constraint means reaching it at all is a
+    ///     code-versus-database mismatch worth surfacing.
+    /// </remarks>
     private IClientTransport BuildStdioTransport(McpServerRecord record)
     {
         return record.TrustTier switch
         {
             McpTrustTier.Sandboxed => new SandboxedMcpStdioTransport(record, _sandboxProvider, _identityProvider, _nodeDataDirectory, _ceilingDefaults, _nodeOptions, _loggerFactory),
             McpTrustTier.PrivilegedHost => new StdioClientTransport(BuildStdioTransportOptions(record), _loggerFactory),
-            // BuiltInTrusted names an engine-owned transport and there is no engine-owned STDIO one. A row carrying it
-            // reached the database past the CRUD refusal and the schema check, so it is a mismatch, not a tier to
-            // serve — and serving it as either of the other two would be picking a privilege level on its behalf.
+            // BuiltInTrusted names an engine-owned transport and there is no engine-owned STDIO one: a row carrying it passed both
+            // the CRUD refusal and the schema check, so serving it as either other tier would pick a privilege level on its behalf.
             _ => throw new InvalidOperationException($"Unsupported MCP trust tier '{record.TrustTier}' for a stdio server.")
         };
     }
@@ -99,17 +95,11 @@ internal sealed class McpClientFactory : IMcpClientFactory
             throw new InvalidOperationException("A stdio MCP server requires a command.");
         }
 
-        // The PrivilegedHost launch path. (The sandboxed path does not come through here: the isolated chain clears
-        // the environment inside the namespace and re-emits an allow-list plus the configured variables, so it applies
-        // the same rule by a different mechanism.)
-        //
-        // Never let a stdio MCP server inherit the node's full process environment — it can hold secrets such as
-        // XE_NODE_SQLITE_KEY when env-provisioned. ModelContextProtocol 1.4.0 defaults InheritEnvironmentVariables to
-        // true; force it off and seed only the SDK's minimal default set (PATH/HOME/etc.), then overlay the per-server
-        // configured variables on top. (Scope is the MCP transport only — the pinned native llama/sd launchers are
-        // deliberately NOT scrubbed, because they are engine-authored launches of binaries this node installed rather
-        // than operator-configured third-party executables. Do not "helpfully" extend this scrub to them.)
+        // The PrivilegedHost launch never lets a stdio MCP server inherit the node's full process environment, which can hold secrets
+        // such as XE_NODE_SQLITE_KEY: ModelContextProtocol 1.4.0 inherits by default, so it is forced off and only the SDK's minimal set seeded.
         var environment = StdioClientTransportOptions.GetDefaultEnvironmentVariables();
+        // The per-server configured variables overlay that set, as the sandboxed path re-emits them inside its cleared namespace. Scope is
+        // the MCP transport: never extend this scrub to the engine's own pinned llama and sd launchers, which run binaries this node installed.
         foreach (var pair in record.Environment)
         {
             environment[pair.Key] = pair.Value;
@@ -135,9 +125,8 @@ internal sealed class McpClientFactory : IMcpClientFactory
 
         if (!IsHttpScheme(endpoint.Scheme))
         {
-            // Re-validate the scheme at connect time (defence in depth, symmetric with the host check): a row that ever
-            // reaches connect with ftp/file/etc. must not be handed to HttpClientTransport, even if it slipped past the
-            // create-time validation (future code path, direct DB write, or a CRUD-layer regression).
+            // Re-validate the scheme at connect time, defence in depth symmetric with the host check: a row reaching connect with
+            // ftp or file must not be handed to HttpClientTransport, even if a direct DB write or CRUD regression let it through.
             throw new InvalidOperationException("An HTTP MCP server URL must use the http or https scheme.");
         }
 

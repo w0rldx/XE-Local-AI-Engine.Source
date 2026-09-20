@@ -6,18 +6,14 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 /// <summary>
 ///     Checks what the data annotations on <see cref="GraphWorkflowOptions" /> cannot: the semantic floor under each
 ///     budget, and the one relation that holds between two of them.
-///     <para>
-///         A floor is not a range bound. <c>MaxNodesPerDefinition = 1</c> passes <c>[Range(1, …)]</c> and still admits
-///         no graph, because every graph carries a Start and an End; <c>DispatchIntervalMilliseconds = 1</c> is a legal
-///         positive integer and a sweep that spends its time opening scopes. Both belong here, at startup, rather than
-///         at the first run — which is where the operator would otherwise meet them, once per node run.
-///     </para>
-///     <para>
-///         The cross-option relation is <c>MaxNodeRunsPerRun</c> against <c>MaxNodesPerDefinition</c>: a run that
-///         cannot instantiate the definition it started from would fail halfway through a graph the same node let the
-///         operator save. The ceiling is <c>EventReplayLimit</c>, bounded because one replay is one response body.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A floor is not a range bound. <c>MaxNodesPerDefinition</c> of 1 passes <c>[Range(1, …)]</c> and still admits no graph, because every
+///     graph carries a Start and an End; a <c>DispatchIntervalMilliseconds</c> of 1 is a legal positive integer and a sweep that spends its
+///     time opening scopes. Both belong at startup, not at the first run where the operator meets them once per node run. The cross-option
+///     relation is <c>MaxNodeRunsPerRun</c> against <c>MaxNodesPerDefinition</c>: a run that cannot instantiate the definition it started
+///     from fails halfway through a graph the same node let the operator save.
+/// </remarks>
 public sealed class GraphWorkflowOptionsValidator : IValidateOptions<GraphWorkflowOptions>
 {
     private const int EventReplayCeiling = 1000;
@@ -54,6 +50,7 @@ public sealed class GraphWorkflowOptionsValidator : IValidateOptions<GraphWorkfl
                          + $"({options.MaxNodesPerDefinition}), so a run could not instantiate a definition this node accepts.");
         }
 
+        // EventReplayLimit is the one budget with a ceiling as well as a floor: one replay is one response body.
         if (options.EventReplayLimit > EventReplayCeiling)
         {
             failures.Add($"{GraphWorkflowOptions.Section}:EventReplayLimit is {options.EventReplayLimit}, above the ceiling of {EventReplayCeiling}.");

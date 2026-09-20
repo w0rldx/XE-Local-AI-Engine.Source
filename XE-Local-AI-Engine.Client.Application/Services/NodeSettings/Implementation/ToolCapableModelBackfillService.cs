@@ -4,17 +4,10 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 ///     Runs <see cref="IToolCapableModelRegistrar.BackfillInstalledAsync" /> once at startup, off the critical path.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Without this, feeding capability in at download time would only ever fix models downloaded AFTER the change —
-///         every model already on the node would stay silently tool-less, which is precisely the reported state (a user
-///         had followed the app's own recommendation and downloaded a tool-capable model that the allow-list did not
-///         contain).
-///     </para>
-///     <para>
-///         Best-effort by design: the node must start even if the model registry or the settings file cannot be read, so
-///         a failure is logged and swallowed rather than taking the host down. The work is additive and idempotent, so a
-///         missed run simply corrects itself on the next start or the next download.
-///     </para>
+///     Without this, feeding capability in at download time would only ever fix models downloaded after it; every model already on the node
+///     would stay silently tool-less. Best-effort by design: the node must start even if the model registry or the settings file cannot be
+///     read, so a failure is logged and swallowed rather than taking the host down, and because the work is additive and idempotent a missed
+///     run corrects itself on the next start or the next download.
 /// </remarks>
 internal sealed class ToolCapableModelBackfillService : BackgroundService
 {

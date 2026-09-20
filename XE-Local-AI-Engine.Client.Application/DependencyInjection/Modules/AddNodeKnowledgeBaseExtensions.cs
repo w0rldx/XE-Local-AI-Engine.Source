@@ -12,15 +12,12 @@ internal static class AddNodeKnowledgeBaseExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Durable knowledge-base document store. Singleton: it opens its own DbContext scope per operation and depends
-        // only on singletons (data directory, sqlite key holder, time provider), mirroring the conversation uploaded-file
-        // store, so it can be injected into the singleton ingestion/cleanup surfaces that reach it.
+        // Durable knowledge-base document store. Singleton: it opens its own DbContext scope per operation and depends only on
+        // singletons (data directory, sqlite key holder, time provider), so the singleton ingestion and cleanup surfaces can take it.
         builder.Services.AddSingleton<IKnowledgeDocumentBlobStore, KnowledgeDocumentBlobStore>();
 
-        // Ingestion + embedding options (section "KnowledgeBase"). The reranker model name is a MIGRATED knob seeded from
-        // the node settings store the same way the llama.cpp cap/TTL + speculative knobs are: PostConfigure resolves the
-        // stored value (sync twin — startup path) and, when set, overrides the config-bound value, giving the precedence
-        // stored > config > off.
+        // Ingestion + embedding options (section "KnowledgeBase"). The reranker model name is a MIGRATED knob, like the llama.cpp
+        // cap/TTL ones: PostConfigure reads the stored node setting (sync twin, startup path) and overrides config, giving stored > config > off.
         _ = builder.Services.AddOptions<KnowledgeBaseOptions>()
                    .Bind(configuration.GetSection(KnowledgeBaseOptions.Section))
                    .PostConfigure<INodeRuntimeSettings>(static (options, runtimeSettings) =>
@@ -63,27 +60,23 @@ internal static class AddNodeKnowledgeBaseExtensions
         builder.Services.AddScoped<IKnowledgeDocumentCatalogService, KnowledgeDocumentCatalogService>();
         builder.Services.AddScoped<IKnowledgeRepositoryImportService, KnowledgeRepositoryImportService>();
 
-        // Shared admission rule for every store path — upload endpoint and repository importer (enqueue when the store
-        // wrote the document, or on a retryable dedupe hit). Scoped because it reads the document status through the
-        // scoped catalog service; it enqueues onto the singleton dispatcher below.
+        // Shared admission rule for every store path — upload endpoint and repository importer (enqueue when the store wrote the
+        // document, or on a retryable dedupe hit). Scoped: it reads status through the scoped catalog service, enqueuing on the dispatcher.
         builder.Services.AddScoped<IKnowledgeIngestionAdmissionService, KnowledgeIngestionAdmissionService>();
 
         // Reciprocal Rank Fusion is a pure, stateless function over rank lists — safe as a singleton, no DbContext.
         builder.Services.AddSingleton<IRankingFusionService, ReciprocalRankFusion>();
 
-        // Process-wide latch flipped by the vector-normalization backfill (hosted in the Client host): once every stored
-        // vector is unit length the scoped search may score with a dot product instead of full cosine. Singleton so all
-        // per-request search instances observe the same latch; default false keeps the search on the (always-correct)
-        // cosine path until the backfill for this database completes.
+        // Process-wide latch flipped by the vector-normalization backfill: once every stored vector is unit length the scoped search
+        // may score by dot product instead of full cosine. Singleton so every search sees one latch; false holds the correct cosine path.
         builder.Services.AddSingleton<IKnowledgeVectorNormalizationState, KnowledgeVectorNormalizationState>();
 
         // Bounded, RAM-only, TTL'd query-embedding cache (keyed by resolved model + query hash). Singleton so one cache
         // serves every scoped search; lets a repeated query skip the embedding round trip.
         builder.Services.AddSingleton<IKnowledgeQueryEmbeddingCache, KnowledgeQueryEmbeddingCache>();
 
-        // Search lane. SCOPED: each retrieval collaborator reads through the request-scoped NodeChatDbContext
-        // connection, so all are resolved inside the per-search scope. The vector backend is selected via the
-        // scoped-resolving IVectorSearchFactory — NOT a singleton keyed registration that would capture a scoped DbContext.
+        // Search lane, SCOPED: every retrieval collaborator reads through the request-scoped NodeChatDbContext connection. The vector
+        // backend comes from the scoped-resolving IVectorSearchFactory — NOT a singleton keyed registration capturing a scoped DbContext.
         builder.Services.AddScoped<IFtsSearch, FtsSearch>();
         builder.Services.AddScoped<IVectorSearch, ManagedCosineVectorSearch>();
         builder.Services.AddScoped<IVectorSearchFactory, VectorSearchFactory>();
@@ -103,11 +96,8 @@ internal static class AddNodeKnowledgeBaseExtensions
         // failed). Nothing else ever revisits such a file: the purge keys on the row it just deleted.
         builder.Services.AddHostedService<KnowledgeBlobOrphanSweeper>();
 
-        // Read-only knowledge-base agent tools (search_knowledge_base / read_document / read_surrounding_chunks). All
-        // Singleton: ClientLocalToolRegistry captures the IClientLocalToolHandler IEnumerable at construction, so a
-        // scoped handler would be a captive dependency; each resolves its scoped retrieval service from a fresh scope
-        // per call. They are gated by KnowledgeBase:AgentToolsEnabled (default true) and merged into the capability-gated
-        // loopback offer by LocalToolOfferProvider.
+        // Read-only knowledge-base agent tools (search_knowledge_base / read_document / read_surrounding_chunks). All Singleton, since
+        // ClientLocalToolRegistry captures its handlers at construction; gated by KnowledgeBase:AgentToolsEnabled, merged by LocalToolOfferProvider.
         builder.Services.AddSingleton<IClientLocalToolHandler, SearchKnowledgeBaseToolHandler>();
         builder.Services.AddSingleton<IClientLocalToolHandler, ReadDocumentToolHandler>();
         builder.Services.AddSingleton<IClientLocalToolHandler, ReadSurroundingChunksToolHandler>();

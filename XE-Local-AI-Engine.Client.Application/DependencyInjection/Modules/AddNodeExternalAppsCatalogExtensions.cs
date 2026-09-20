@@ -5,22 +5,26 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog.Implementation;
 
 internal static class AddNodeExternalAppsCatalogExtensions
 {
+    /// <summary>
+    ///     Registers the curated External Apps catalog: its options, the named refresh client, the cache store and the
+    ///     provider every catalog read goes through.
+    /// </summary>
+    /// <remarks>
+    ///     <c>ApplicationCatalogProvider.ReadCappedAsync</c> is the document cap that actually holds:
+    ///     <c>MaxResponseContentBufferSize</c> below is inert, because the provider reads with
+    ///     <c>HttpCompletionOption.ResponseHeadersRead</c>, and stands only as a belt for a future buffered read. The
+    ///     provider's first <c>GetCatalogAsync</c> is the first catalog request, so a disabled build makes no network call.
+    /// </remarks>
     public static IHostApplicationBuilder AddNodeExternalAppsCatalog(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Curated External Apps catalog: a bundled JSON seed plus an optional operator-configured remote refresh.
-        // RefreshUrl ships EMPTY (bundled-only, never a network call); a configured value is accepted only when it is
-        // https, or http to a loopback host, and a rejected value logs once and leaves the node bundled-only.
+        // Curated External Apps catalog: a bundled JSON seed plus an optional operator-configured remote refresh. RefreshUrl ships
+        // EMPTY (never a network call); a value is accepted only as https or http to a loopback host, and a rejected one logs once.
         builder.Services.Configure<ExternalAppCatalogOptions>(configuration.GetSection(ExternalAppCatalogOptions.SectionName));
-        // The named HttpClient is resolved via IHttpClientFactory, never injected as a bare HttpClient, so every
-        // consumer stays test-factory-safe by construction. ApplicationCatalogProvider.ReadCappedAsync is the document
-        // cap that actually holds: MaxResponseContentBufferSize below is inert because the provider reads with
-        // HttpCompletionOption.ResponseHeadersRead, so it is a belt for any future buffered read and nothing more.
-        // AllowAutoRedirect is turned OFF explicitly because the
-        // default is on: a 3xx must be a fetch failure, or the loopback-http allowance could be bounced to a public
-        // plain-http host.
+        // A named client via IHttpClientFactory, never a bare HttpClient, so every consumer stays test-factory-safe by construction.
+        // AllowAutoRedirect is OFF against the default: a 3xx must be a fetch failure, or the loopback-http allowance could be bounced to a public plain-http host.
         builder.Services.AddHttpClient(ExternalAppCatalogOptions.HttpClientName)
                .ConfigureHttpClient(static client =>
                {
@@ -31,11 +35,8 @@ internal static class AddNodeExternalAppsCatalogExtensions
                {
                    AllowAutoRedirect = false
                });
-        // The cache store persists a tiny node-local JSON file under external-apps/; the provider owns the in-memory
-        // bundled/remote/last-good snapshot plus TTL-gated refresh serialization. Both singletons, and neither is on
-        // the startup path: the provider's first GetCatalogAsync is the first catalog request, which the
-        // ExternalApps:Enabled kill switch 404s while the feature is off — so a disabled build makes no network call.
-        // Do not add an eager consumer.
+        // The cache store persists a tiny node-local JSON file under external-apps/; the provider owns the bundled/remote/last-good
+        // snapshot and TTL-gated refresh. Both singletons, neither on the startup path: the ExternalApps:Enabled kill switch 404s the first catalog request. Add no eager consumer.
         builder.Services.AddSingleton<IExternalAppCatalogCacheStore, ExternalAppCatalogCacheStore>();
         builder.Services.AddSingleton<IApplicationCatalogProvider, ApplicationCatalogProvider>();
 

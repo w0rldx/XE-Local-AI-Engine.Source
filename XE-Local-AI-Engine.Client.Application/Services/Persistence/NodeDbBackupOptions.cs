@@ -8,11 +8,11 @@ public sealed class NodeDbBackupOptions
 {
     public const string SectionName = "NodeDbBackup";
 
-    /// <summary>
-    ///     Optional absolute override for the directory the snapshots are written to. When null/blank the snapshots go under
-    ///     <c>&lt;INodeDataDirectory.Root&gt;/backups</c>, so on a self-contained desktop build they land in the per-user data
-    ///     directory rather than the (potentially read-only) install directory.
-    /// </summary>
+    /// <summary>Optional absolute override for the directory the snapshots are written to.</summary>
+    /// <remarks>
+    ///     When null/blank the snapshots go under <c>&lt;INodeDataDirectory.Root&gt;/backups</c>, so on a self-contained desktop build they
+    ///     land in the per-user data directory rather than the (potentially read-only) install directory.
+    /// </remarks>
     public string? BackupDirectory { get; set; }
 
     /// <summary>

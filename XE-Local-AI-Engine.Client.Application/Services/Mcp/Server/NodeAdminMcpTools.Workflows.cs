@@ -60,11 +60,8 @@ public sealed partial class NodeAdminMcpTools
                     parsedStatus = value;
                 }
 
-                // The work-item list IS the run list on this surface: a work item carries its latest run's status and
-                // node counters, so filtering it needs no second query and says the same thing the operator's page does.
-                // ponytail: the store filters by WORK-ITEM status and this tool filters by RUN status, which are
-                // different enums, so the status filter and the limit are applied in memory over the whole list. Ceiling
-                // is the number of work items on the node; push it down only if a store-side run-status list appears.
+                // The work-item list IS the run list here, so filtering needs no second query. Status and limit apply in memory, because the store
+                // filters by a different enum; the ceiling is the node's work-item count — push the filter down only if a store-side run-status list appears.
                 var workItems = await _devWorkflowStore.ListWorkItemsAsync(cancellationToken: cancellationToken);
                 var runs = workItems.Where(item => item.LatestRunId is not null && item.LatestRunStatus is not null)
                                     .Where(item => parsedStatus is null || item.LatestRunStatus == parsedStatus)

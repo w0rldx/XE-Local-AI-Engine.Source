@@ -2,32 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.Events;
 
 using System.Text;
 
-/// <summary>
-///     Immutable, append-only accumulator for one streamed text channel (response OR reasoning). <see cref="Append" />
-///     returns a NEW instance chained to the previous one, so an existing reference is a permanently-stable O(1) snapshot
-///     that is safe to read from any thread without a lock.
-///
-///     <para>
-///     This is what lets the hot streaming path clone an <see cref="InvocationState" /> snapshot per chunk WITHOUT
-///     materializing the whole accumulated string: a clone copies this reference (O(1)) instead of calling
-///     <c>ToString()</c> over the entire response every chunk (which was O(n) per chunk, i.e. O(n^2) over a turn). The
-///     full string is built — and cached — only when a consumer actually reads <see cref="Value" /> (the pump's debounced
-///     flush, a resume replay, or the terminal flush), so materialization happens at bounded cadence, not per token.
-///     </para>
-///
-///     <para>
-///     Because appends chain onto immutable prior nodes, consecutive snapshots share their common prefix. Once the pump
-///     reads snapshot k (caching its full value on that node), building snapshot k+1 stops at that cached ancestor and
-///     only re-walks the tokens appended since — so a steady flush cadence keeps each materialization close to O(delta).
-///     </para>
-///
-///     <para>
-///     A node that materializes also COLLAPSES its chain (drops <c>_previous</c>): it now carries the whole prefix
-///     itself, and a later build stops at the nearest materialized ancestor, so that link is never followed again. Left
-///     in place it would pin every intermediate node — and the full string each of them cached on an earlier read — for
-///     the lifetime of the invocation, which on a long turn is tens of MB of dead strings.
-///     </para>
-/// </summary>
+/// <summary>Immutable, append-only accumulator for one streamed text channel (response OR reasoning).</summary>
+/// <remarks>
+///     <see cref="Append" /> returns a NEW instance chained to the previous one, so an existing reference is a permanently-stable O(1)
+///     snapshot, safe to read from any thread without a lock. That is what lets the hot streaming path clone an
+///     <see cref="InvocationState" /> snapshot per chunk WITHOUT materializing the whole accumulated string: the clone copies this reference
+///     instead of calling <c>ToString()</c> over the entire response every chunk, which was O(n) per chunk — O(n^2) over a turn. The full
+///     string is built only when a consumer actually reads <see cref="Value" />.
+/// </remarks>
 internal sealed class StreamingText
 {
     /// <summary>The empty accumulator. Its materialized value is the empty string.</summary>
@@ -38,9 +20,8 @@ internal sealed class StreamingText
     // Cleared once this node materializes (see Value); only Build reads it, and only through Volatile.Read.
     private StreamingText? _previous;
 
-    // Cached full value, computed lazily on first read of Value. A concurrent double-compute across threads is benign:
-    // every writer produces the identical string and the reference assignment is atomic (mirrors the immutable-snapshot
-    // reasoning in WorkerEventDispatcher.PublishStateChanged).
+    // Cached full value, computed lazily on first read of Value. A concurrent double-compute across threads is benign: every writer produces
+    // the identical string and the reference assignment is atomic (mirroring WorkerEventDispatcher.PublishStateChanged's snapshot reasoning).
     private string? _materialized;
 
     private StreamingText()
@@ -61,6 +42,13 @@ internal sealed class StreamingText
     public int Length { get; }
 
     /// <summary>The full accumulated string. Built once on first read and cached, so repeated reads are O(1).</summary>
+    /// <remarks>
+    ///     Reading also COLLAPSES the chain: this node now carries the whole prefix, so the link would otherwise pin every intermediate node —
+    ///     and the full string each of them cached on an earlier read — for the lifetime of the invocation, tens of MB of dead strings on a
+    ///     long turn. Dropping it is safe against a concurrent <see cref="Build" /> walk by ordering: the release-write of <c>_previous</c>
+    ///     cannot move ahead of the plain write of <c>_materialized</c>, and <see cref="Build" /> reads <c>_previous</c> with a matching
+    ///     <c>Volatile.Read</c>, so a walker that sees the null is guaranteed to see the value published just before it.
+    /// </remarks>
     public string Value
     {
         get
@@ -74,12 +62,8 @@ internal sealed class StreamingText
             var built = Build();
             _materialized = built;
 
-            // Collapse the chain now that this node carries the whole prefix. Safe against a Build walking through this
-            // node concurrently BECAUSE of the ordering: this release-write cannot move ahead of the plain write of
-            // _materialized above, and Build reads _previous with a matching Volatile.Read — so a walker that observes
-            // the null here is guaranteed to observe the value published just before it, and re-reads _materialized
-            // instead of mistaking the missing link for the end of the chain (see Build's null-previous branch). This is
-            // the same publish-then-read discipline the benign double-compute above already relies on.
+            // Collapse the chain now that this node carries the whole prefix. A concurrent Build re-reads _materialized instead of mistaking
+            // the missing link for the chain's end (see Build's null-previous branch); the ordering that makes that safe is in the remarks.
             Volatile.Write(ref _previous, value: null);
             return built;
         }
@@ -98,11 +82,16 @@ internal sealed class StreamingText
         return string.IsNullOrEmpty(value) ? Empty : Empty.Append(value);
     }
 
+    /// <summary>Materializes the accumulated string, re-walking only the chunks appended since the last cached ancestor.</summary>
+    /// <remarks>
+    ///     Because appends chain onto immutable prior nodes, consecutive snapshots share their common prefix: once a node has cached its full
+    ///     value, a later build stops there and only re-walks the tokens appended since, so a steady flush cadence keeps each materialization
+    ///     close to O(delta). The walk is iterative, not recursive, so a very long chain cannot overflow the stack.
+    /// </remarks>
     private string Build()
     {
-        // Walk newest -> oldest collecting the uncached tail chunks, stopping at the nearest ancestor whose full value is
-        // already cached; that cached prefix becomes the base so a flush re-walks only the tokens appended since the last
-        // read. The walk is iterative (not recursive) so a very long chain cannot overflow the stack.
+        // Walk newest -> oldest collecting the uncached tail chunks, stopping at the nearest ancestor whose full value is already
+        // cached; that cached prefix becomes the base.
         List<string>? pending = null;
         var node = this;
         string? cachedBase;
@@ -117,11 +106,8 @@ internal sealed class StreamingText
 
             (pending ??= []).Add(node._chunk);
 
-            // A null link means either the Empty root (materialized in its ctor, so the branch above already took it) or
-            // an ancestor that collapsed WHILE this walk was in flight. Both mean this node's own full value is already
-            // published, and the acquire-read below guarantees we can see it — so re-read it as the base rather than
-            // treating the missing link as the end of the chain, which would silently drop everything above it. The
-            // chunk just collected is part of that value, so it comes back off the pending list.
+            // A null link means an ancestor collapsed WHILE this walk was in flight (the Empty root materializes in its ctor, so the branch above took it).
+            // This node's value is already published: re-read it as the base — a missing link read as the chain's end drops everything above — and give back the chunk it contains.
             var previous = Volatile.Read(ref node._previous);
             if (previous is null)
             {

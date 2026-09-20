@@ -4,25 +4,23 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     The separated throughput facts of one completed turn: how long the caller waited for the first token, and how
-///     the turn's tokens and milliseconds split between prompt processing (pp) and generation (tg). Every member is
-///     nullable and every member is <see langword="null" /> for a provider that reports none — only llama-server puts
-///     the underlying <c>timings</c> object on its stream, so a cloud turn carries only
-///     <see cref="TimeToFirstTokenMs" /> (measured client-side) and nothing else.
-///     <para>
-///         Why this exists at all: the blended <c>totalTokens / wall-clock</c> figure the benchmark used to report
-///         conflates prefill with decode, so the same model measured on a long prompt and a short one produced two
-///         incomparable numbers. pp and tg are the two figures <c>llama-bench</c> reports separately for exactly that
-///         reason.
-///     </para>
+///     the turn's tokens and milliseconds split between prompt processing (pp) and generation (tg).
 /// </summary>
+/// <remarks>
+///     Every member is nullable, and every member is <see langword="null" /> for a provider that reports none — only llama-server puts the
+///     underlying <c>timings</c> object on its stream, so a cloud turn carries only <see cref="TimeToFirstTokenMs" /> (measured client-side).
+///     The split exists because a blended <c>totalTokens / wall-clock</c> figure conflates prefill with decode, so the same model measured on
+///     a long prompt and a short one produces two incomparable numbers; pp and tg are the two figures <c>llama-bench</c> reports separately
+///     for exactly that reason.
+/// </remarks>
 public sealed class InvocationThroughput
 {
-    /// <summary>
-    ///     Wall-clock milliseconds from turn start to the first emitted chunk, measured client-side — so it includes
-    ///     network, adapter and deserialization overhead on top of the server's own <see cref="PromptMs" />. That is
-    ///     deliberate: it is what a caller actually waits. On a multi-segment (tool-calling) turn this is the FIRST
-    ///     request's latency, since that is when the caller first saw output.
-    /// </summary>
+    /// <summary>Wall-clock milliseconds from turn start to the first emitted chunk, measured client-side.</summary>
+    /// <remarks>
+    ///     It therefore includes network, adapter and deserialization overhead on top of the server's own
+    ///     <see cref="PromptMs" />, which is deliberate: it is what a caller actually waits. On a multi-segment
+    ///     (tool-calling) turn this is the FIRST request's latency, since that is when the caller first saw output.
+    /// </remarks>
     public double? TimeToFirstTokenMs { get; init; }
 
     /// <summary>Prompt tokens evaluated, summed across every provider request the turn made.</summary>
@@ -38,10 +36,12 @@ public sealed class InvocationThroughput
     public double? GenerationMs { get; init; }
 
     /// <summary>
-    ///     Prompt tokens served from the prompt cache rather than evaluated, summed across every request. Non-zero means
-    ///     <see cref="PromptMs" /> is not a cold-prefill measurement — on a tool-calling turn the later requests re-send
-    ///     the whole conversation, and the runtime serves the shared prefix from cache.
+    ///     Prompt tokens served from the prompt cache rather than evaluated, summed across every request.
     /// </summary>
+    /// <remarks>
+    ///     Non-zero means <see cref="PromptMs" /> is not a cold-prefill measurement — on a tool-calling turn the later
+    ///     requests re-send the whole conversation, and the runtime serves the shared prefix from cache.
+    /// </remarks>
     public int? CachedPromptTokens { get; init; }
 
     /// <summary>

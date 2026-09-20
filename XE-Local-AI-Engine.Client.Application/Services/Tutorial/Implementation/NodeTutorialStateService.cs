@@ -60,9 +60,8 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
                 return false;
             }
 
-            // Authentication can load the user into this request's scoped DbContext before it reaches this lock.
-            // Refresh that tracked entity so every serialized write merges against the latest tutorial JSON and
-            // concurrency stamp rather than the snapshot captured while parallel requests were authorizing.
+            // Authentication can load the user into this request's scoped DbContext before it reaches this lock. Refresh that tracked entity so every serialized
+            // write merges against the latest tutorial JSON and concurrency stamp rather than the snapshot captured while parallel requests were authorizing.
             await _dbContext.Entry(user).ReloadAsync(cancellationToken);
 
             var trimmedKey = key.Trim();

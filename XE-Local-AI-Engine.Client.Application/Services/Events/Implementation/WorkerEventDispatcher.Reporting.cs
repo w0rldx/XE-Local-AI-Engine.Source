@@ -45,9 +45,8 @@ public sealed partial class WorkerEventDispatcher
         UpdateInvocation(invocationId,
             state =>
             {
-                // Stamped on a REAL transition only: the browser renders elapsed cold-load time from this value, so a
-                // re-report of the same phase must not restart its clock. The injected clock matches
-                // UpdateInvocation's own LastUpdatedAt stamp in this partial class.
+                // Stamped on a REAL transition only: the browser renders elapsed cold-load time from this value, so a re-report of the same
+                // phase must not restart its clock. The injected clock matches UpdateInvocation's own LastUpdatedAt stamp.
                 if (state.RuntimePhase != phase)
                 {
                     state.RuntimePhaseChangedAtUtc = _timeProvider.GetUtcNow();
@@ -105,9 +104,8 @@ public sealed partial class WorkerEventDispatcher
             state =>
             {
                 state.ModelReadinessMs = modelReadinessMs;
-                // The TURN's summed usage, kept apart from the state's InputTokens/OutputTokens/... which
-                // ReportInvocationCompletedAsync fills with the LAST round's counts. Both are persisted, to different
-                // rows: cost onto the envelope, occupancy onto the message.
+                // The TURN's summed usage, kept apart from the state's InputTokens/OutputTokens/... which ReportInvocationCompletedAsync fills
+                // with the LAST round's counts. Both are persisted, to different rows: cost onto the envelope, occupancy onto the message.
                 state.TurnInputTokens = usage?.InputTokens;
                 state.TurnOutputTokens = usage?.OutputTokens;
                 state.TurnTotalTokens = usage?.TotalTokens;
@@ -229,10 +227,8 @@ public sealed partial class WorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(payload);
 
-        // Fold the runner's session-scope answer onto the pending-approval slot the preceding
-        // ReportApprovalRequestedAsync recorded. It cannot ride that call: ApprovalRequestPayload is the platform-hub
-        // contract and carries no such field. Without this the reconnect replay had nothing to send and the browser
-        // fell back to the tool catalog — the exact fallback that offered a session scope for the skill tools.
+        // Fold the runner's session-scope answer onto the pending-approval slot ReportApprovalRequestedAsync recorded; it cannot ride that
+        // call, because ApprovalRequestPayload is the platform-hub contract. Without it the replay falls back to the tool catalog.
         if (payload.SessionScopeEligible is { } sessionScopeEligible)
         {
             UpdateInvocation(payload.InvocationId,
@@ -259,9 +255,8 @@ public sealed partial class WorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(payload);
 
-        // Record on the invocation state FIRST, then fan out. The state write is what a reconnecting browser is
-        // replayed from, so doing it first means a client that attaches in the gap still sees the pending question
-        // rather than missing both the live event and the snapshot.
+        // Record on the invocation state FIRST, then fan out: the state write is what a reconnecting browser is replayed from, so a client
+        // that attaches in the gap still sees the pending question rather than missing both the live event and the snapshot.
         UpdateInvocation(payload.InvocationId,
             state =>
             {

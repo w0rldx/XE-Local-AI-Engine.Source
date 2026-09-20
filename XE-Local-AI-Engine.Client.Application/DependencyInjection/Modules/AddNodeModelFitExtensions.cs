@@ -22,31 +22,30 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 internal static class AddNodeModelFitExtensions
 {
+    /// <summary>
+    ///     Registers the model-fit stack: its stores, the inference optimizer, the curated model catalog, the GGUF
+    ///     download coordinators, the hardware profiler and the runtime device audit.
+    /// </summary>
+    /// <remarks>
+    ///     No approved-image registry store is registered: the approved-image concept is gone, and its table and entity
+    ///     stay in place unread, since no destructive migration removes them.
+    /// </remarks>
     public static IHostApplicationBuilder AddNodeModelFit(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Model-fit persistence stores. Snapshots carry sanitized-by-default summaries; the encrypted raw output, stderr
-        // and diagnostics are exposed only on the explicit operator-diagnostics read. Recommendation and benchmark rows
-        // are normalized snapshot projections. Scoped to match the scoped, DbContext-backed stores.
-        // The approved-image registry store is no longer registered — the approved-image concept (its query-
-        // service read + the list endpoint) was removed. The orphaned table/entity is left in place (no
-        // destructive migration); nothing writes or reads it.
+        // Model-fit persistence stores, Scoped to match the DbContext-backed stores: snapshot summaries are sanitized by default, the
+        // encrypted raw output, stderr and diagnostics needing the operator-diagnostics read, and recommendation and benchmark rows are projections.
         builder.Services.AddScoped<IModelFitSnapshotStore, ModelFitSnapshotStore>();
         builder.Services.AddScoped<IModelFitRecommendationStore, ModelFitRecommendationStore>();
         builder.Services.AddScoped<IModelFitBenchmarkStore, ModelFitBenchmarkStore>();
-        // Inference-profile persistence: one live llama-server launch config per (machine_key, model, role, backend) plus
-        // its freeze/stale status transitions. Plaintext structural rows (no encryption interceptor). Scoped to match the
-        // scoped, DbContext-backed stores.
+        // Inference-profile persistence: one live llama-server launch config per (machine_key, model, role, backend) plus its
+        // freeze/stale status transitions. Plaintext structural rows, no encryption interceptor. Scoped like the DbContext-backed stores.
         builder.Services.AddScoped<IInferenceProfileStore, InferenceProfileStore>();
 
-        // Inference Optimizer orchestrator: explore → benchmark → freeze over the supervisor's exclusive
-        // profiling entry point. The machine-readable fit-output parser and the OpenAI chat-client factory are public seams over the
-        // provider-internal parser/adapter so this layer stays Application → Providers. The metadata reader exposes the
-        // GGUF MoE/param/quant/context inputs over the internal header reader (AddHuggingFaceGgufStore registered it in
-        // AddNodeModelRuntime). The harness is stateless → singleton; the orchestrator composes the Scoped profile +
-        // model-fit snapshot/benchmark stores → Scoped.
+        // Inference Optimizer orchestrator: explore → benchmark → freeze over the supervisor's exclusive profiling entry point. The
+        // fit-output parser, chat-client factory and GGUF metadata reader are public seams over provider internals, keeping this layer Application → Providers.
         builder.Services.AddGgufMetadataReader();
         builder.Services.AddSingleton<IFittedArgsParser, FittedArgsParser>();
         builder.Services.AddSingleton<IInferenceChatClientFactory, OpenAiInferenceChatClientFactory>();
@@ -60,10 +59,8 @@ internal static class AddNodeModelFitExtensions
         // The request validator allowlists the recommend intent params (use-case + limit bounds). Stateless → singleton.
         builder.Services.AddSingleton<ModelFitRequestValidator>();
 
-        // Curated model catalog: bundled JSON + optional operator-configured remote refresh.
-        // The options section binds ModelCatalog:RefreshUrl/RefreshTtl/FetchTimeout (empty RefreshUrl = bundled-only,
-        // never a network call). The named HttpClient is resolved via IHttpClientFactory, never injected as a bare
-        // HttpClient — this keeps every FastEndpoints ctor (instantiated at startup) test-factory-safe by construction.
+        // Curated model catalog: bundled JSON plus an optional operator-configured remote refresh, bound from ModelCatalog:RefreshUrl,
+        // RefreshTtl and FetchTimeout (an empty RefreshUrl is bundled-only, never a network call). A named client, so startup-built endpoint ctors stay test-safe.
         builder.Services.Configure<ModelCatalogOptions>(configuration.GetSection(ModelCatalogOptions.SectionName));
         // The catalog document is a few KB; cap the response buffer well above that (5 MB) so a misconfigured or
         // compromised RefreshUrl can never make the node buffer an unbounded response body in memory.
@@ -79,41 +76,27 @@ internal static class AddNodeModelFitExtensions
         // The memory-fit estimator is a pure, stateless function over GGUF header metadata + the hardware
         // profile → singleton. Consumed by the advisor to score each candidate GGUF file's fit.
         builder.Services.AddSingleton<MemoryFitEstimator>();
-        // The GGUF variant recommender annotates a repo's selectable files (quality tier + hardware fit verdict + a single
-        // recommended pick) for the download picker's inspect endpoint. Stateless over the singleton GPU-variant selector
-        // and free-VRAM probe → singleton. Read-time only; never persists.
+        // The GGUF variant recommender annotates a repo's selectable files (quality tier, hardware fit verdict, one recommended pick)
+        // for the download picker's inspect endpoint. Singleton: stateless over the GPU-variant selector and free-VRAM probe, and never persists.
         builder.Services.AddSingleton<IGgufVariantRecommender, GgufVariantRecommender>();
-        // Model-fit refresh service = the local model advisor: the single non-bypass path that profiles hardware,
-        // discovers candidate GGUF files (the Hugging Face GGUF store), estimates memory fit, ranks the survivors and
-        // replaces the cached recommendation snapshot. Invoked only by the scheduler's ModelRecommendationCheckHandler.
-        // Scoped because it composes the Scoped DbContext-backed snapshot/recommendation stores (the hardware-profiler
-        // and GGUF-store seams it depends on are singletons).
+        // The local model advisor: the single non-bypass path that profiles hardware, discovers candidate GGUF files, estimates memory
+        // fit, ranks survivors and replaces the cached snapshot. Only ModelRecommendationCheckHandler invokes it. Scoped, over the scoped stores.
         builder.Services.AddScoped<IModelFitRefreshService, ModelFitRefreshService>();
-        // The operator-driven GGUF download coordinator owns a per-model cancellation registry so a download
-        // started by one HTTP request can be cancelled by a separate request, and tracks the latest sanitized progress.
-        // Singleton because the download runs detached after the request scope that started it has returned (it composes
-        // the singleton Hugging Face GGUF store IGgufModelStore). The advisor management endpoints (download/cancel)
-        // consume it.
+        // The operator-driven GGUF download coordinator owns a per-model cancellation registry, so a download started by one HTTP
+        // request is cancellable by another, and tracks sanitized progress. Singleton: the download runs detached after its request scope returns.
         builder.Services.AddSingleton<IGgufAcquisitionOperationRegistry, GgufAcquisitionOperationRegistry>();
         builder.Services.AddSingleton<IGgufDownloadCoordinator, GgufDownloadCoordinator>();
         builder.Services.AddSingleton<IGgufImportTransactionCoordinator, GgufImportTransactionCoordinator>();
-        // No-op download event publisher default — the coordinator (singleton) resolves a publisher even in
-        // Application-only / test hosts that wire no SignalR hub. The Client host supersedes this with a hub-backed
-        // publisher so download status changes push live to operator clients (replacing the per-second downloads poll).
+        // No-op download event publisher default, so the singleton coordinator resolves a publisher in Application-only and test hosts
+        // that wire no hub. The Client host supersedes it with a hub-backed publisher pushing download status changes live.
         builder.Services.AddSingleton<IGgufDownloadEventPublisher, NullGgufDownloadEventPublisher>();
-        // Model-fit local-API services. The query service is a pure cache reader over the persistence stores (sanitized
-        // snapshot summary + normalized recommendation rows) and takes NO dependency on the runner or refresh service, so
-        // a read can never start an advisor run. The refresh trigger is a template-guarded facade over
-        // the scheduler trigger service: it fires only an existing model-recommendation-check definition and never runs
-        // the advisor itself. Both are Scoped because they compose the Scoped, DbContext-backed stores / scheduler service.
+        // Model-fit local-API services. The query service is a pure cache reader over the stores, with NO dependency on the runner or
+        // refresh service, so a read never starts an advisor run; the refresh trigger only fires an existing definition. Both Scoped.
         builder.Services.AddScoped<IModelFitQueryService, ModelFitQueryService>();
         builder.Services.AddScoped<IModelFitRefreshTrigger, ModelFitRefreshTrigger>();
 
-        // The provider-neutral hardware profiler reports RAM, VRAM, GPU vendor, CPU, and free disk across platforms.
-        // Singleton — the profile is cached in memory and re-probed only on forceRefresh:true.
-        // The free-disk figure is reported for the models volume, resolved here from the node data dir (the same root the
-        // INodeDataDirectory abstraction resolves: the per-user data dir in desktop mode, ContentRootPath otherwise — the
-        // profiler is registered with a plain string at config time, so it reads the NodeData:Directory key directly).
+        // The provider-neutral hardware profiler reports RAM, VRAM, GPU vendor, CPU and free disk across platforms. Singleton: the
+        // profile is cached and re-probed only on forceRefresh. Free disk is the models volume, from the same root INodeDataDirectory resolves.
         var dataDirectoryRoot = configuration[NodeDataDirectory.ConfigurationKey];
         builder.Services.AddHardwareProfiler(string.IsNullOrWhiteSpace(dataDirectoryRoot)
             ? builder.Environment.ContentRootPath
@@ -127,19 +110,13 @@ internal static class AddNodeModelFitExtensions
         // application meter). A plain registration wins over the null default the HF store module registers.
         builder.Services.AddSingleton<IHfDownloadMetrics, NodeMetricsHfDownloadMetrics>();
 
-        // Report-only llama-server spawn/readiness/placement observations. Registered before the provider module; its
-        // TryAdd null default therefore leaves this shared NodeMetrics bridge in place. The concrete type is registered
-        // too, and the interface forwards to it, because the same instance also holds the last-successful-load VRAM
-        // record the dev-workflow cost collector reads — two registrations of the class would be two caches, one of
-        // them never written.
+        // Report-only llama-server spawn/readiness/placement observations, registered BEFORE the provider module so its TryAdd null
+        // default leaves this NodeMetrics bridge in place. Concrete plus forwarding interface: one instance also holds the VRAM record the cost collector reads.
         builder.Services.AddSingleton<NodeMetricsLlamaServerLoadTelemetry>();
         builder.Services.AddSingleton<ILlamaServerLoadTelemetry>(services => services.GetRequiredService<NodeMetricsLlamaServerLoadTelemetry>());
 
-        // Runtime device audit: composes the hardware profiler + the GPU-variant selector + the device-inventory
-        // probe to detect a silent CPU fallback (a GPU box whose selected runtime runs on the CPU), and exposes the
-        // audited EFFECTIVE hardware profile the advisor + capacity gate size against. Singleton — it memoizes the
-        // binary-derived audit and depends only on singletons (the profiler, selector, and device probe). The
-        // device-inventory probe (ILlamaDeviceInventoryProbe) is registered by the llama-server provider stack.
+        // Runtime device audit: composes the hardware profiler, the GPU-variant selector and ILlamaDeviceInventoryProbe (from the
+        // llama-server provider) to catch a silent CPU fallback and expose the EFFECTIVE profile the advisor and capacity gate size against.
         builder.Services.AddSingleton<IRuntimeDeviceAudit, RuntimeDeviceAuditService>();
 
         return builder;

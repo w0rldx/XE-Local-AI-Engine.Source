@@ -4,14 +4,15 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Application-layer orchestration over <see cref="IMcpServerStore" />: validates the supplied fields, delegates
-///     persistence, and re-publishes the live MCP tool snapshot via <see cref="IMcpServerConnectionManager.RefreshAsync" />
-///     after any change that can alter the enabled set. The store owns id/version/timestamp stamping and the
-///     connection-affecting version-bump rule; this service never re-implements them. Validation rejects an empty Name,
-///     missing transport-specific fields (Stdio requires a Command, Http requires a loopback Url), a non-loopback HTTP
-///     URL, and a duplicate Name (the unique index is the backstop). Registration always persists disabled; enabling is
-///     the dedicated <see cref="SetEnabledAsync" /> action.
+///     Application-layer orchestration over <see cref="IMcpServerStore" />: it validates the supplied fields,
+///     delegates persistence and republishes the live MCP tool snapshot after any change to the enabled set.
 /// </summary>
+/// <remarks>
+///     The store owns id/version/timestamp stamping and the connection-affecting version-bump rule. Validation rejects
+///     an empty Name, missing transport-specific fields (Stdio requires a Command, Http a loopback Url), a non-loopback
+///     HTTP URL and a duplicate Name, with the unique index as the backstop. A registration always persists disabled:
+///     enabling is the dedicated <see cref="SetEnabledAsync" /> action.
+/// </remarks>
 public interface IMcpServerService
 {
     /// <summary>Validates and persists a new registration (always disabled), returning the stored record.</summary>

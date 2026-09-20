@@ -181,10 +181,12 @@ public sealed class McpAgentDeleteResponse
 }
 
 /// <summary>
-///     One development-workflow run as an observing agent sees it: lifecycle metadata and node tallies, and nothing
-///     else. The pinned graph, artifact bytes, work-session transcripts and every host path stay on the REST surface a
-///     browser operator uses — an MCP client is being told how a run is going, not handed its contents.
+///     One development-workflow run as an observing agent sees it: lifecycle metadata and node tallies, nothing else.
 /// </summary>
+/// <remarks>
+///     The pinned graph, artifact bytes, work-session transcripts and every host path stay on the REST surface a
+///     browser operator uses: an MCP client is told how a run is going, not handed its contents.
+/// </remarks>
 public record McpWorkflowRunSummary(
     string RunId,
     string WorkItemId,
@@ -227,10 +229,13 @@ public sealed class McpWorkflowNodeRunSummary
 }
 
 /// <summary>
-///     A single run's observation: the list row's own fields, why it ended if it has, and its node rows — FLAT, so a
-///     caller reads <c>run.status</c> rather than <c>run.run.status</c>. It extends the summary rather than embedding
-///     one, which is what keeps the field set a caller sees here identical to the one the listing returns.
+///     A single run's observation: the list row's own fields, why it ended if it has, and its node rows, FLAT, so a
+///     caller reads <c>run.status</c> rather than <c>run.run.status</c>.
 /// </summary>
+/// <remarks>
+///     It extends the summary rather than embedding one, which keeps the field set a caller sees here identical to the
+///     one the listing returns.
+/// </remarks>
 public sealed record McpWorkflowRunDetail(
     string RunId,
     string WorkItemId,

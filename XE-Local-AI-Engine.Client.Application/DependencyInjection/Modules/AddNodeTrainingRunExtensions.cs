@@ -31,9 +31,8 @@ internal static class AddNodeTrainingRunExtensions
         builder.Services.AddSingleton<TrainingRunQueueSignal>();
         builder.Services.AddSingleton<ITrainingRunQueueSignal>(provider => provider.GetRequiredService<TrainingRunQueueSignal>());
 
-        // Singletons: the registry outlives the executor's scope (cancel arrives on a request scope), and the
-        // workspace is a pure path/crypto helper with no per-request state. The registry is TryAdd because the dataset
-        // module registers the same one for dataset-generation cancels.
+        // Singletons: the registry outlives the executor's scope (a cancel arrives on a request scope) and the workspace is a pure
+        // path/crypto helper with no per-request state. TryAdd on the registry, because the dataset module registers the same one.
         builder.Services.TryAddSingleton<TrainingRunCancellationRegistry>();
         builder.Services.AddSingleton<TrainingRunWorkspace>();
 

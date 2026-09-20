@@ -6,36 +6,18 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using XE_Local_AI_Engine.Client.Persistence;
 
-/// <summary>
-///     Readiness probe for the node-local SQLite database. Persistence is essential: a node that cannot open, read,
-///     write, or that is missing its schema cannot serve chat, agents, or scheduling, so readiness must flip in any of
-///     those cases. The probe reuses the app's own <see cref="NodeChatDbContext" /> (resolved per health-check scope) so
-///     the connection string and encryption posture are identical to production access — it never opens a raw connection
-///     with its own key plumbing. Within a single bounded window it exercises three capabilities without persistent
-///     domain mutation:
-///     <list type="number">
-///         <item><description>read: <c>SELECT 1</c> proves the file is open and readable;</description></item>
-///         <item>
-///             <description>
-///                 schema: a sentinel core table is present in <c>sqlite_master</c> (guards a replaced or
-///                 schema-incompatible database that opens but lacks the node schema);
-///             </description>
-///         </item>
-///         <item>
-///             <description>
-///                 write: inside a <c>BEGIN IMMEDIATE</c> transaction, a scratch-table DDL forces an actual write to the
-///                 main database (which fails on a read-only or otherwise unwritable file), then rolls back — so the
-///                 write path is proven with zero net mutation.
-///             </description>
-///         </item>
-///     </list>
-///     Failure reasons are distinguished in the description and the <c>reason</c> data entry.
-/// </summary>
+/// <summary>Readiness probe for the node-local SQLite database.</summary>
+/// <remarks>
+///     A node that cannot open, read or write its database, or that is missing its schema, cannot serve chat, agents or scheduling, so readiness must
+///     flip in any of those cases. <see cref="NodeChatDbContext" /> is reused, resolved per health-check scope, so the connection string and encryption
+///     posture are identical to production access — the probe never opens a raw connection with its own key plumbing. Failure reasons are distinguished
+///     in the description and the <c>reason</c> data entry. What the three probe steps are and why each is needed:
+///     docs/wiki/08-data-and-persistence.md ("Readiness: what the SQLite probe proves").
+/// </remarks>
 public sealed class NodeSqliteHealthCheck : IHealthCheck
 {
-    // A representative core table: present whenever the node schema exists (created by migrations in production and by
-    // EnsureCreated in tests), absent on a blank or replaced database. Its presence is a cheap schema-equivalence
-    // sentinel; a wholesale schema diff is intentionally not performed.
+    // A representative core table: present whenever the node schema exists (created by migrations in production and by EnsureCreated in tests), absent
+    // on a blank or replaced database. Its presence is a cheap schema-equivalence sentinel; a wholesale schema diff is intentionally not performed.
     private const string SchemaSentinelTable = "conversations";
 
     // A readiness probe must be fast: a hung or contended database should surface as unhealthy quickly rather than
@@ -63,10 +45,8 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
             await _dbContext.Database.OpenConnectionAsync(probeToken);
             var connection = (SqliteConnection)_dbContext.Database.GetDbConnection();
 
-            // The write probe's transaction must be rolled back on EVERY exit — the DDL failing, the 2s probe timeout,
-            // or the caller cancelling — because Microsoft.Data.Sqlite pools native handles: "closing" the connection
-            // returns a handle SQLite still considers mid-transaction to the pool, and the next consumer to draw it
-            // fails with "cannot start a transaction within a transaction". The finally below owns that.
+            // The write probe's transaction must be rolled back on EVERY exit (DDL failure, the 2s probe timeout, caller cancellation), because
+            // Microsoft.Data.Sqlite pools handles: "closing" returns one SQLite still thinks is mid-transaction, and the next consumer fails to begin one.
             var transactionOpen = false;
             try
             {
@@ -94,10 +74,8 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                     }
                 }
 
-                // 3. Writable — BEGIN IMMEDIATE alone only takes an advisory reserved lock and does not touch the file, so
-                // it succeeds even on a read-only database. A DDL write inside the transaction forces an actual page write
-                // to the main database (which fails with "attempt to write a readonly database" when the file is not
-                // writable); the rollback undoes the scratch table, so there is zero net mutation on a writable database.
+                // 3. Writable — BEGIN IMMEDIATE alone takes only an advisory reserved lock and never touches the file, so it succeeds even on a read-only database.
+                // A DDL write inside the transaction forces a real page write, failing with "attempt to write a readonly database"; the rollback leaves zero net mutation.
                 try
                 {
                     await using (var beginCommand = connection.CreateCommand())
@@ -120,11 +98,8 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                 }
                 catch (Exception writeException) when (writeException is not OperationCanceledException)
                 {
-                    // The transaction BEGIN opened is rolled back by the finally below. The raw provider message is NOT
-                    // interpolated into the description: /health/ready is anonymous and, on a non-loopback/proxied
-                    // deployment, would otherwise leak internal error text (including filesystem paths) to remote
-                    // callers. The structured "unwritable" reason and the exception (for server-side health logging)
-                    // are preserved.
+                    // The transaction BEGIN opened is rolled back by the finally below, and the raw provider message is NOT interpolated into the description:
+                    // /health/ready is anonymous, so on a proxied deployment it would leak internal error text (filesystem paths included) to remote callers.
                     return Unhealthy(stopwatch, reason: "unwritable",
                         "Node SQLite database is not writable.", writeException);
                 }

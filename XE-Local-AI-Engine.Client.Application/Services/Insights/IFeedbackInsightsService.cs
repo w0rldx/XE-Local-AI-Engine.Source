@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Insights;
 
 /// <summary>
-///     Application-layer read model over the per-agent feedback aggregate. Shapes the raw store counts
-///     into operator-facing analytics: derived totals/down-rate, the "never act on n=1" threshold flag, and
-///     privacy-capped/truncated comment exemplars. Pure analytics — no generation, no playbook writes.
+///     Application-layer read model over the per-agent feedback aggregate. Shapes the raw store counts into operator-facing analytics:
+///     derived totals/down-rate, the "never act on n=1" threshold flag, and privacy-capped/truncated comment exemplars.
 /// </summary>
+/// <remarks>
+///     Pure analytics — no generation, no playbook writes.
+/// </remarks>
 public interface IFeedbackInsightsService
 {
     /// <summary>

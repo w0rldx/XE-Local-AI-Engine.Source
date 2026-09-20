@@ -63,10 +63,8 @@ internal sealed class McpServerService : IMcpServerService
 
         await EnsureNameAvailableAsync(input.Name, id, cancellationToken);
 
-        // A PUT edit never flips the enabled state — that is the dedicated SetEnabledAsync action — so carry the current
-        // enabled flag through to the store regardless of what the request body claims. Environment values the caller
-        // sent back masked are restored from the stored record: the API never returns a value, so a form that
-        // round-trips what it was shown must not overwrite a secret with the placeholder it was shown instead.
+        // A PUT edit never flips the enabled state, which is SetEnabledAsync's job, so the stored flag carries through whatever the body
+        // claims. Masked environment values are restored from the record, so a form round-tripping what it was shown cannot erase a secret.
         var edit = input with
         {
             Environment = RestoreMaskedEnvironment(input.Environment, existing.Environment),
@@ -184,9 +182,8 @@ internal sealed class McpServerService : IMcpServerService
 
         if (input.TrustTier == McpTrustTier.BuiltInTrusted)
         {
-            // BuiltInTrusted names a transport the ENGINE owns. Nothing registered through this surface is one, and
-            // accepting the value here would let an operator (or anything holding a session) label a third-party
-            // executable as engine-owned. Refused rather than silently downgraded, so the attempt is visible.
+            // BuiltInTrusted names a transport the ENGINE owns, and nothing registered through this surface is one: accepting it would
+            // let anything holding a session label a third-party executable engine-owned. Refused, not downgraded, so the attempt shows.
             throw new McpServerValidationException("Trust tier 'BuiltInTrusted' is reserved for engine-owned MCP transports and cannot be assigned to a registration.");
         }
 
@@ -211,10 +208,12 @@ internal sealed class McpServerService : IMcpServerService
 
     /// <summary>
     ///     Replaces every environment value the caller sent as <see cref="McpEnvironmentMask.Value" /> with the value
-    ///     already stored under that key. A key that carries the mask and has no stored value keeps the mask verbatim —
-    ///     it is a new key whose value the caller genuinely typed, and inventing an empty string for it would be a
-    ///     guess.
+    ///     already stored under that key.
     /// </summary>
+    /// <remarks>
+    ///     A key that carries the mask with no stored value keeps the mask verbatim: it is a new key whose value the
+    ///     caller genuinely typed, and inventing an empty string for it would be a guess.
+    /// </remarks>
     private static IReadOnlyDictionary<string, string> RestoreMaskedEnvironment(IReadOnlyDictionary<string, string> incoming,
         IReadOnlyDictionary<string, string> stored)
     {
@@ -231,11 +230,13 @@ internal sealed class McpServerService : IMcpServerService
     }
 
     /// <summary>
-    ///     The tier answers "where does this server's PROCESS run", so it is inert for HTTP — this node launches
-    ///     nothing for an HTTP registration, it opens a loopback socket to a server that is already running. An HTTP
-    ///     row is therefore stored at the column default rather than at whatever the request carried, so a persisted
-    ///     <see cref="McpTrustTier.PrivilegedHost" /> can never be read as a host grant somebody actually made.
+    ///     The tier answers "where does this server's PROCESS run", so it is inert for HTTP: this node launches
+    ///     nothing for an HTTP registration, it opens a loopback socket to a server already running.
     /// </summary>
+    /// <remarks>
+    ///     An HTTP row is therefore stored at the column default rather than at whatever the request carried, so a
+    ///     persisted <see cref="McpTrustTier.PrivilegedHost" /> can never read as a host grant somebody actually made.
+    /// </remarks>
     private static McpServerInput NormalizeTrustTier(McpServerInput input)
     {
         return input.TransportKind == McpTransportKind.Http
@@ -259,11 +260,8 @@ internal sealed class McpServerService : IMcpServerService
             throw new McpServerValidationException("Url must be an absolute http or https URL.");
         }
 
-        // The HTTP transport is loopback-only by default (the connection manager re-checks at connect time as defence in
-        // depth). Match the configured allow-list case-insensitively against the URL host so an operator-widened list and
-        // the connect-time check agree. Uri.Host wraps an IPv6 literal in brackets (e.g. "[::1]"), so strip them before
-        // the compare — the allow-list stores the bare address ("::1") — matching the connection manager's factory-side
-        // normalization so both sides accept http://[::1]/.
+        // The HTTP transport is loopback-only by default, the connection manager re-checking at connect time. The allow-list matches the
+        // URL host case-insensitively, brackets stripped from an IPv6 literal as the factory does, so both sides accept the bare address.
         var host = uri.Host.Trim('[', ']');
         var loopbackHosts = _mcpOptions.Value.HttpLoopbackHosts ?? [];
         var hostAllowed = loopbackHosts.Any(allowed => string.Equals(allowed, host, StringComparison.OrdinalIgnoreCase));
@@ -275,9 +273,8 @@ internal sealed class McpServerService : IMcpServerService
 
     private async Task EnsureNameAvailableAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
     {
-        // Pre-check against the current registrations so the common case returns a friendly validation error; the unique
-        // index is the backstop for a concurrent race (caught as a UniqueViolation by the callers). Name uniqueness is
-        // case-insensitive because the qualified tool-name slug derives from it and collisions must be impossible.
+        // Pre-check against the current registrations so the common case returns a friendly validation error, the unique index being the
+        // backstop for a race. Name uniqueness is case-insensitive, because the qualified tool-name slug derives from it.
         var existing = await _store.ListAsync(cancellationToken);
         var clash = existing.Any(record => record.Id != excludeId
                                            && string.Equals(record.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -299,11 +296,8 @@ internal sealed class McpServerService : IMcpServerService
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or ObjectDisposedException)
         {
-            // A refresh failure must not fail the persisted CRUD mutation: the row is already committed, the startup
-            // connector and the next mutation both re-reconcile, and the connection manager isolates per-server failures
-            // internally. Log and continue so the caller still sees its successful create/update/delete. The filter
-            // mirrors McpServerStartupConnector (plus ObjectDisposedException, since the manager holds long-lived
-            // clients) so a genuinely unexpected fault still surfaces rather than being silently swallowed.
+            // A refresh failure must not fail the persisted CRUD mutation: the row is committed, and the startup connector and the next
+            // mutation both re-reconcile. The filter mirrors McpServerStartupConnector, so a genuinely unexpected fault still surfaces.
             _logger.LogWarning(exception, "MCP connection refresh after a registration change failed; the change is persisted and will reconcile on the next refresh.");
         }
     }

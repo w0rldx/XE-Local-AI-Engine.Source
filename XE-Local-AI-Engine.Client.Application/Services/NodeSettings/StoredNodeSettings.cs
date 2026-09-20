@@ -5,14 +5,14 @@ using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
-/// <summary>
-///     The persisted, user-editable subset of node runtime settings. Every field beyond the original
-///     <see cref="MaxMessageRequestTimeoutSeconds" /> / <see cref="DefaultModelName" /> pair is nullable so an older
-///     <c>node-settings.json</c> written before a field existed deserializes to <see langword="null" /> and is then
-///     backfilled from the appsettings seed by <c>INodeRuntimeSettings</c> (precedence stored &gt; seed &gt; default).
-///     <c>NodeSettingsStore.Normalize</c> clamps/validates each field; an out-of-range stored value falls back to
-///     <see langword="null" /> (re-seeded) rather than throwing.
-/// </summary>
+/// <summary>The persisted, user-editable subset of node runtime settings.</summary>
+/// <remarks>
+///     Every field beyond the original <see cref="MaxMessageRequestTimeoutSeconds" /> /
+///     <see cref="DefaultModelName" /> pair is nullable, so a <c>node-settings.json</c> written before a field existed
+///     deserializes to <see langword="null" /> and is then backfilled from the appsettings seed by
+///     <c>INodeRuntimeSettings</c> (precedence stored &gt; seed &gt; default). <c>NodeSettingsStore.Normalize</c>
+///     clamps/validates each field; an out-of-range stored value falls back to <see langword="null" /> (re-seeded).
+/// </remarks>
 public sealed partial record StoredNodeSettings
 {
     public const int DefaultMaxMessageRequestTimeoutSeconds = 600;
@@ -70,12 +70,17 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxMaxResponseSizeMb = 100;
 
-    // ALIASED, never re-literalled. This is the value the UI shows as "Recommended", and it used to be an independent
-    // string literal that had to be bumped in lock-step with LlamaCppReleasePins.PinnedTag by hand — which is exactly
-    // how it went 509 builds stale while the engine's own pin had moved. The layering
-    // permits the reference: the frozen direction forbids a PROVIDER depending on Client/Application, not the reverse,
-    // and this assembly already references Providers.LlamaServer (see the Options using above). Const-to-const, so it
-    // still inlines as a compile-time constant and stays usable in attributes and switch patterns.
+    /// <summary>
+    ///     The llama.cpp release tag the UI shows as "Recommended", ALIASED to
+    ///     <see cref="LlamaCppReleasePins.PinnedTag" /> and never re-literalled.
+    /// </summary>
+    /// <remarks>
+    ///     As an independent string literal it had to be bumped in lock-step by hand, and went 509 builds stale while
+    ///     the engine's own pin had moved. The layering permits the reference: the frozen direction forbids a PROVIDER
+    ///     depending on Client/Application, not the reverse, and this assembly already references
+    ///     <c>Providers.LlamaServer</c>. Const-to-const, so it still inlines as a compile-time constant and stays
+    ///     usable in attributes and switch patterns.
+    /// </remarks>
     public const string DefaultRecommendedLlamaCppTag = LlamaCppReleasePins.PinnedTag;
 
     public const int DefaultOrchestrationIdleTimeoutSeconds = 120;
@@ -102,11 +107,11 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxMaxPendingToolCallAgeMinutes = 60;
 
-    /// <summary>
-    ///     Default grace, in seconds, before a run whose last client disconnected is cancelled. Generous on purpose:
-    ///     the clock starts when the STREAM tears down, so it must comfortably exceed the client's automatic-reconnect
-    ///     window — a resource-only argument would suggest 30–60 s.
-    /// </summary>
+    /// <summary>Default grace, in seconds, before a run whose last client disconnected is cancelled.</summary>
+    /// <remarks>
+    ///     Generous on purpose: the clock starts when the STREAM tears down, so it must comfortably exceed the
+    ///     client's automatic-reconnect window — a resource-only argument would suggest 30–60 s.
+    /// </remarks>
     public const int DefaultDetachedGraceSeconds = 300;
 
     /// <summary><c>0</c> disables the disconnect grace entirely: a detached run is bounded only by the whole-invocation watchdog.</summary>
@@ -128,10 +133,14 @@ public sealed partial record StoredNodeSettings
     public const string DefaultSpeculativeMode = SpeculativeDecodingSettings.DisabledMode;
 
     /// <summary>
-    ///     Default KV-cache type for GPU chat spawns. Mirrors <c>LlamaServerLaunchPolicyOptions.KvCacheType</c>'s own
-    ///     default, so an unset setting seeds an options object equal to the provider default and the launch argv,
-    ///     launch identity and inference-profile fingerprint are all byte-identical to a node that never had this knob.
+    ///     Default KV-cache type for GPU chat spawns; mirrors <c>LlamaServerLaunchPolicyOptions.KvCacheType</c>'s own
+    ///     default.
     /// </summary>
+    /// <remarks>
+    ///     An unset setting therefore seeds an options object equal to the provider default, so the launch argv, the
+    ///     launch identity and the inference-profile fingerprint are all byte-identical to a node that never had this
+    ///     knob.
+    /// </remarks>
     public const string DefaultKvCacheType = LlamaServerKvCacheTypes.Q8_0;
 
     /// <summary>Default draft tokens per step (<c>--spec-draft-n-max</c>); mirrors <c>LlamaServerSupervisorOptions.SpeculativeDraftMaxTokens</c>.</summary>
@@ -152,12 +161,12 @@ public sealed partial record StoredNodeSettings
     /// <summary>Node-level master flag for the client voice (TTS) feature. Default (absent) is off.</summary>
     public const bool DefaultVoiceFeatureEnabled = false;
 
-    /// <summary>
-    ///     Node kill-switch for the user-defined custom tools feature. Default (absent) is OFF: custom tools execute host
-    ///     processes / outbound fetches, so the whole feature is opt-in at the node level (the per-agent allow-list and the
-    ///     forced per-call approval remain the second and third gates). When off, no custom tool is OFFERED to any model and
-    ///     <c>ICustomToolCatalog.TryResolveManyAsync</c> refuses to resolve one.
-    /// </summary>
+    /// <summary>Node kill-switch for the user-defined custom tools feature; default (absent) is OFF.</summary>
+    /// <remarks>
+    ///     Custom tools execute host processes / outbound fetches, so the whole feature is opt-in at the node level
+    ///     (the per-agent allow-list and the forced per-call approval remain the second and third gates). When off, no
+    ///     custom tool is OFFERED to any model and <c>ICustomToolCatalog.TryResolveManyAsync</c> refuses to resolve one.
+    /// </remarks>
     public const bool DefaultCustomToolsEnabled = false;
 
     /// <summary>
@@ -245,12 +254,14 @@ public sealed partial record StoredNodeSettings
     }
 
     /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="mode" /> is an EXTERNAL-DRAFT speculative mode — one that
-    ///     runs a second GGUF and so REQUIRES a draft model. <c>draft-mtp</c> drafts from heads inside the main model and
-    ///     is false here despite the name prefix. Delegates to
-    ///     <see cref="SpeculativeDecodingSettings.ModeRequiresDraftModel" /> so the boundary validator + save-endpoint
-    ///     cross-field guard share one authority for the classification.
+    ///     Returns <see langword="true" /> when <paramref name="mode" /> is an EXTERNAL-DRAFT speculative mode — one
+    ///     that runs a second GGUF and so REQUIRES a draft model.
     /// </summary>
+    /// <remarks>
+    ///     <c>draft-mtp</c> drafts from heads inside the main model and is false here despite the name prefix.
+    ///     Delegates to <see cref="SpeculativeDecodingSettings.ModeRequiresDraftModel" /> so the boundary validator and
+    ///     the save-endpoint cross-field guard share one authority for the classification.
+    /// </remarks>
     public static bool SpeculativeModeRequiresDraftModel(string? mode)
     {
         return SpeculativeDecodingSettings.ModeRequiresDraftModel(mode);
@@ -278,13 +289,16 @@ public sealed partial record StoredNodeSettings
     }
 
     /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="profile" /> is one of the four PERSISTABLE external-access
-    ///     literals: <see cref="ExternalAccessProfileRecommended" />, <see cref="ExternalAccessProfileOffline" />,
-    ///     <see cref="ExternalAccessProfileCustom" />, <see cref="ExternalAccessProfilePending" />. This is what may be
-    ///     STORED, so <c>NodeSettingsStore.Normalize</c> uses it. The comparison is ordinal (a constant string pattern), so
-    ///     <c>"Offline"</c> is rejected rather than silently accepted. <see langword="null" /> is a state (undecided), not a
-    ///     literal, and is <see langword="false" /> here.
+    ///     Returns <see langword="true" /> when <paramref name="profile" /> is one of the four PERSISTABLE
+    ///     external-access literals: <see cref="ExternalAccessProfileRecommended" />,
+    ///     <see cref="ExternalAccessProfileOffline" />, <see cref="ExternalAccessProfileCustom" />,
+    ///     <see cref="ExternalAccessProfilePending" />.
     /// </summary>
+    /// <remarks>
+    ///     This is what may be STORED, so <c>NodeSettingsStore.Normalize</c> uses it. The comparison is ordinal (a
+    ///     constant string pattern), so <c>"Offline"</c> is rejected rather than silently accepted.
+    ///     <see langword="null" /> is a state (undecided), not a literal, and is <see langword="false" /> here.
+    /// </remarks>
     public static bool IsValidExternalAccessProfile(string? profile)
     {
         return profile is ExternalAccessProfileRecommended
@@ -306,11 +320,14 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>
     ///     Returns <see langword="true" /> when <paramref name="mode" /> is one of the two navigation modes,
-    ///     <see cref="UiModeSimple" /> or <see cref="UiModeAdvanced" />. The comparison is ordinal (a constant string
-    ///     pattern), so <c>"Simple"</c> is rejected rather than silently accepted. <see langword="null" /> is a state
-    ///     (not answered yet), not a literal, and is <see langword="false" /> here. Unlike the external-access profile
-    ///     there is no engine-written third literal: the client may send either value it may store.
+    ///     <see cref="UiModeSimple" /> or <see cref="UiModeAdvanced" />.
     /// </summary>
+    /// <remarks>
+    ///     The comparison is ordinal (a constant string pattern), so <c>"Simple"</c> is rejected rather than silently
+    ///     accepted. <see langword="null" /> is a state (not answered yet), not a literal, and is
+    ///     <see langword="false" /> here. Unlike the external-access profile there is no engine-written third literal:
+    ///     the client may send either value it may store.
+    /// </remarks>
     public static bool IsValidUiMode(string? mode)
     {
         return mode is UiModeSimple or UiModeAdvanced;
@@ -406,11 +423,13 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>
     ///     KV-cache element type for GPU chat spawns (<c>-ctk</c>/<c>-ctv</c>): <c>f16</c> | <c>q8_0</c> | <c>q4_0</c>.
-    ///     Seed: <c>q8_0</c>. <c>f16</c> emits no KV or flash-attention flags at all. Unknown falls back to
-    ///     <see langword="null" /> (re-seeded to the default). Applies on the next node restart, and CHANGING IT
-    ///     invalidates every frozen inference profile on this node — the selected type is part of the launch-policy
-    ///     fingerprint, so each model re-explores under the new type before it can replay again.
+    ///     Seed: <c>q8_0</c>; <c>f16</c> emits no KV or flash-attention flags at all.
     /// </summary>
+    /// <remarks>
+    ///     Unknown falls back to <see langword="null" /> (re-seeded to the default). Applies on the next node restart,
+    ///     and CHANGING IT invalidates every frozen inference profile on this node — the selected type is part of the
+    ///     launch-policy fingerprint, so each model re-explores under the new type before it can replay again.
+    /// </remarks>
     public string? KvCacheType { get; init; }
 
     /// <summary>
@@ -427,19 +446,24 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>
     ///     Installed cross-encoder reranker model NAME for the knowledge-base search rerank stage
-    ///     (<c>KnowledgeBaseOptions.RerankerModelName</c>). <see langword="null" />/blank (default) leaves reranking OFF;
-    ///     a value enables it, resolved server-side to a rerank-role llama-server on the search path. Applies on the next
-    ///     node restart (seeded into the knowledge-base options at host build).
+    ///     (<c>KnowledgeBaseOptions.RerankerModelName</c>).
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" />/blank (default) leaves reranking OFF; a value enables it, resolved server-side to a
+    ///     rerank-role llama-server on the search path. Applies on the next node restart (seeded into the
+    ///     knowledge-base options at host build).
+    /// </remarks>
     public string? RerankerModelName { get; init; }
 
     /// <summary>
     ///     Installed node-local chat model the reasoning-effort dispatcher moves a FAST <c>auto</c> turn onto.
+    /// </summary>
+    /// <remarks>
     ///     <see langword="null" />/blank (default) leaves the swap OFF — an <c>auto</c> turn then keeps its model and
     ///     only lowers the effort. It is validated at save to be an installed llama.cpp model (never a cloud id, an
     ///     external id, or an Ollama name) and to leave a second loaded-process slot, and re-validated per turn.
     ///     NOT restart-gated: it is read per send, so a save applies to the next turn.
-    /// </summary>
+    /// </remarks>
     public string? AutoEffortFastModelName { get; init; }
 
     /// <summary>
@@ -463,47 +487,43 @@ public sealed partial record StoredNodeSettings
     public bool? ToolRelevanceEnabled { get; init; }
 
     /// <summary>
-    ///     Which external-access preset was last applied. A RECORD of the choice, never the authority: every gate reads the
-    ///     three booleans below, and this member is read for exactly one purpose — telling a decided node from an undecided
-    ///     one. The state machine in full:
-    ///     <list type="bullet">
-    ///         <item><see langword="null" /> — nobody has decided AND no administrator exists (a fresh boot), or an upgraded node not yet backfilled. The only backfillable state.</item>
-    ///         <item><see cref="ExternalAccessProfilePending" /> — an administrator exists and the choice has not been made.</item>
-    ///         <item><see cref="ExternalAccessProfileRecommended" /> / <see cref="ExternalAccessProfileOffline" /> — a preset is in force.</item>
-    ///         <item><see cref="ExternalAccessProfileCustom" /> — the switches no longer match either preset.</item>
-    ///     </list>
-    ///     <see langword="null" /> and <see cref="ExternalAccessProfilePending" /> are both UNDECIDED to the gated services;
-    ///     only <see langword="null" /> is backfillable.
+    ///     Which external-access preset was last applied: a RECORD of the choice, never the authority.
     /// </summary>
+    /// <remarks>
+    ///     Every gate reads the three booleans below; this member is read for exactly one purpose — telling a decided node from an undecided one.
+    ///     <see langword="null" /> means nobody has decided AND no administrator exists (a fresh boot), or an upgraded node not yet backfilled.
+    ///     <see cref="ExternalAccessProfilePending" /> means an administrator exists and the choice has not been made, recommended/offline that a
+    ///     preset is in force, and custom that the switches no longer match either preset. Both <see langword="null" /> and pending are UNDECIDED
+    ///     to the gated services; only <see langword="null" /> is backfillable.
+    /// </remarks>
     public string? ExternalAccessProfile { get; init; }
 
     /// <summary>
     ///     Which navigation mode the operator chose: <see cref="UiModeSimple" /> or <see cref="UiModeAdvanced" />.
-    ///     <see langword="null" /> means the question has not been answered, which is what the SPA's first-run step
-    ///     keys on; <c>UiModeBackfillService</c> stamps <see cref="UiModeAdvanced" /> at boot on a node that finished
-    ///     onboarding before this setting existed, so an upgraded node is never asked.
-    ///     <para>
-    ///         PRESENTATION ONLY, and never a security boundary: it decides which navigation entries are rendered and
-    ///         nothing else. Every route stays reachable by URL, no server gate reads it, and the compile-time
-    ///         capability flags still decide what exists at all.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> means the question has not been answered, which is what the SPA's first-run step keys on;
+    ///     <c>UiModeBackfillService</c> stamps <see cref="UiModeAdvanced" /> at boot on a node that finished onboarding before
+    ///     this setting existed, so an upgraded node is never asked. PRESENTATION ONLY, and never a security boundary: it
+    ///     decides which navigation entries are rendered and nothing else. Every route stays reachable by URL, no server gate
+    ///     reads it, and the compile-time capability flags still decide what exists at all.
+    /// </remarks>
     public string? UiMode { get; init; }
 
-    /// <summary>
-    ///     Whether the node checks for application updates on its own. <see langword="null" /> (absent) reads as
-    ///     <see cref="DefaultAutoCheckApplicationUpdates" /> (on), so an upgraded node keeps today's behaviour. A bool needs
-    ///     no clamping, so <c>NodeSettingsStore.Normalize</c> passes it through untouched. The manual check and apply flow
-    ///     never consult it.
-    /// </summary>
+    /// <summary>Whether the node checks for application updates on its own.</summary>
+    /// <remarks>
+    ///     <see langword="null" /> (absent) reads as <see cref="DefaultAutoCheckApplicationUpdates" /> (on), so an
+    ///     upgraded node keeps today's behaviour. A bool needs no clamping, so <c>NodeSettingsStore.Normalize</c>
+    ///     passes it through untouched. The manual check and apply flow never consult it.
+    /// </remarks>
     public bool? AutoCheckApplicationUpdates { get; init; }
 
-    /// <summary>
-    ///     Whether the node checks for llama.cpp / runtime updates on its own. <see langword="null" /> (absent) reads as
-    ///     <see cref="DefaultAutoCheckRuntimeUpdates" /> (on). A bool needs no clamping, so
-    ///     <c>NodeSettingsStore.Normalize</c> passes it through untouched. The manual runtime-status refresh and the runtime
-    ///     install never consult it.
-    /// </summary>
+    /// <summary>Whether the node checks for llama.cpp / runtime updates on its own.</summary>
+    /// <remarks>
+    ///     <see langword="null" /> (absent) reads as <see cref="DefaultAutoCheckRuntimeUpdates" /> (on). A bool needs
+    ///     no clamping, so <c>NodeSettingsStore.Normalize</c> passes it through untouched. The manual runtime-status
+    ///     refresh and the runtime install never consult it.
+    /// </remarks>
     public bool? AutoCheckRuntimeUpdates { get; init; }
 
     /// <summary>
@@ -521,31 +541,36 @@ public sealed partial record StoredNodeSettings
     public string? DefaultVoiceProfile { get; init; }
 
     /// <summary>
-    ///     Node-default tool-approval policy. <see langword="null" /> (absent, the default) means no node-level
-    ///     tightening — the resolver keeps each tool's own catalog approval flag, byte-identical to the pre-feature path.
-    ///     A value can only ADD an approval requirement (tighten-only, composed on top of the catalog default); it can
-    ///     never waive one. Applies on the next node restart (read once at composition).
+    ///     Node-default tool-approval policy; <see langword="null" /> (absent, the default) means no node-level
+    ///     tightening.
     /// </summary>
+    /// <remarks>
+    ///     Absent, the resolver keeps each tool's own catalog approval flag, byte-identical to the pre-feature path. A
+    ///     value can only ADD an approval requirement (tighten-only, composed on top of the catalog default); it can
+    ///     never waive one. Applies on the next node restart (read once at composition).
+    /// </remarks>
     public NodeToolApprovalPolicySettings? ToolApprovalPolicy { get; init; }
 
     /// <summary>
-    ///     Operator override of usage cost rates. <see langword="null" /> (absent, the default) means no
-    ///     override — the usage-summary cost estimate uses the built-in default rate table, and any model with neither an
-    ///     override nor a default is unpriced (zero). A value supplies per-model-name USD rates that win over the defaults;
-    ///     local runtimes stay free regardless. Negative / non-finite entries are dropped by
-    ///     <c>NodeSettingsStore.Normalize</c> on read. Applies on the next usage-summary read (the cost resolver reads
-    ///     current node settings; no restart needed).
+    ///     Operator override of usage cost rates; <see langword="null" /> (absent, the default) means no override.
     /// </summary>
+    /// <remarks>
+    ///     Without an override the usage-summary cost estimate uses the built-in default rate table, and any model with
+    ///     neither an override nor a default is unpriced (zero). A value supplies per-model-name USD rates that win over
+    ///     the defaults; local runtimes stay free regardless. Negative / non-finite entries are dropped by
+    ///     <c>NodeSettingsStore.Normalize</c> on read. Applies on the next usage-summary read (the cost resolver reads
+    ///     current node settings, so no restart is needed).
+    /// </remarks>
     public NodeUsageRateSettings? UsageRates { get; init; }
 
     /// <summary>
-    ///     The operator's explicit whisper model choice. <see langword="null" /> (the default) means "use the hardware
+    ///     The operator's explicit whisper model choice; <see langword="null" /> (the default) means "use the hardware
     ///     recommendation", which is why an absent value is not a missing one.
-    ///     <para>
-    ///         LOCAL-ONLY: deliberately absent from the node-settings wire DTO, so a save that maps a request onto a
-    ///         fresh record must carry it over from the stored one or it is erased.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     LOCAL-ONLY: deliberately absent from the node-settings wire DTO, so a save that maps a request onto a fresh
+    ///     record must carry it over from the stored one or it is erased.
+    /// </remarks>
     public string? TranscriptionSelectedModelId { get; init; }
 
     /// <summary>
@@ -559,23 +584,23 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>
     ///     Which container runtime application containers use: <c>auto</c> (the default) or <c>docker</c>.
-    ///     <see langword="null" /> (absent) reads as <see cref="DefaultContainerRuntimeSelection" />, so a partial save
-    ///     that omits the field preserves what is stored. Unknown falls back to <see langword="null" /> in
-    ///     <c>NodeSettingsStore.Normalize</c>.
-    ///     <para>
-    ///         Stored as a string rather than as the engine's enum for the reason <c>SpeculativeMode</c> and
-    ///         <c>KvCacheType</c> are: this file is serialized with web defaults and no enum converter, so an enum
-    ///         would persist as <c>0</c>/<c>1</c> in a file an operator hand-edits and would change meaning silently if
-    ///         a value were ever inserted.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> (absent) reads as <see cref="DefaultContainerRuntimeSelection" />, so a partial save that omits the field
+    ///     preserves what is stored; unknown falls back to <see langword="null" /> in <c>NodeSettingsStore.Normalize</c>. Stored as a string
+    ///     rather than as the engine's enum for the reason <c>SpeculativeMode</c> and <c>KvCacheType</c> are: this file is serialized with web
+    ///     defaults and no enum converter, so an enum would persist as <c>0</c>/<c>1</c> in a file an operator hand-edits and would change
+    ///     meaning silently if a value were ever inserted.
+    /// </remarks>
     public string? ContainerRuntimeSelection { get; init; }
 
     /// <summary>
-    ///     Stable, LOCAL-ONLY machine identifier used to key inference profiles to the box they were tuned on. Generated
-    ///     once (<see cref="System.Guid.NewGuid" />, <c>"N"</c> format) by <c>IMachineKeyProvider</c> on first use and
-    ///     persisted here; <see langword="null" /> until then (it is generated, not seeded — there is no appsettings
-    ///     default). NEVER emitted in telemetry, aggregates, or logs.
+    ///     Stable, LOCAL-ONLY machine identifier used to key inference profiles to the box they were tuned on.
     /// </summary>
+    /// <remarks>
+    ///     Generated once (<see cref="System.Guid.NewGuid" />, <c>"N"</c> format) by <c>IMachineKeyProvider</c> on first
+    ///     use and persisted here; <see langword="null" /> until then (it is generated, not seeded — there is no
+    ///     appsettings default). NEVER emitted in telemetry, aggregates, or logs.
+    /// </remarks>
     public string? MachineKey { get; init; }
 }

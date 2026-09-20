@@ -62,9 +62,8 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        // Revalidate immediately before SQLite opens the destination. This closes ordinary same-user replacement races
-        // between directory preparation and export; a fully race-free guarantee would require handle-relative creation,
-        // which Microsoft.Data.Sqlite's VACUUM INTO surface does not expose.
+        // Revalidate immediately before SQLite opens the destination. This closes ordinary same-user replacement races between directory preparation and
+        // export; a fully race-free guarantee would require handle-relative creation, which Microsoft.Data.Sqlite's VACUUM INTO surface does not expose.
         RejectReparsePoint(new DirectoryInfo(exportDirectory));
         RejectExistingDestination(destinationPath);
         await VacuumIntoAsync(dbContext, destinationPath, cancellationToken);

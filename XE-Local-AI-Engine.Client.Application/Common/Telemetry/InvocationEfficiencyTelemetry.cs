@@ -4,10 +4,12 @@ using System.Diagnostics;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 
 /// <summary>
-///     Emits one terminal, content-free efficiency record for an admitted production invocation. Metrics carry only
-///     bounded dimensions; the trace and debug record carry correlation plus numeric aggregates, never prompt/model/tool
-///     content. This is intentionally transient observability rather than a second persistence ledger.
+///     Emits one terminal, content-free efficiency record for an admitted production invocation. Metrics carry only bounded dimensions; the
+///     trace and debug record carry correlation plus numeric aggregates, never prompt/model/tool content.
 /// </summary>
+/// <remarks>
+///     This is intentionally transient observability rather than a second persistence ledger.
+/// </remarks>
 internal static class InvocationEfficiencyTelemetry
 {
     internal static void Record(InvocationEfficiencyRecord record, Activity? activity, ILogger logger)

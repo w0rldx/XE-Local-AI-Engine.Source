@@ -20,43 +20,58 @@ public static class SchedulerJobKeys
     public const string Group = "scheduled-jobs";
 
     /// <summary>
-    ///     Per-fire trigger <c>JobDataMap</c> key stamped by every manual <c>TriggerNowAsync</c> fire (and by nothing
-    ///     else), so the dispatcher can record the run as <c>Manual</c> rather than <c>Schedule</c>. A recurring cron
-    ///     fire never carries it. It is NOT a parameter override — the dispatcher's whitelist never sees it.
+    ///     Per-fire trigger <c>JobDataMap</c> key stamped by every manual <c>TriggerNowAsync</c> fire, and by nothing
+    ///     else, so the dispatcher records the run as <c>Manual</c> rather than <c>Schedule</c>.
     /// </summary>
+    /// <remarks>
+    ///     A recurring cron fire never carries it, and it is NOT a parameter override: the dispatcher's whitelist never
+    ///     sees it.
+    /// </remarks>
     public const string ManualFireKey = "manualFire";
 
     /// <summary>
     ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a use-case override for a model-fit recommendation
-    ///     refresh. A manual <c>TriggerNowAsync</c> fire may stamp this onto the trigger's data map so the run produces the
-    ///     selected use-case instead of the definition's baked one. The recurring (cron) fire never sets it, so a scheduled
-    ///     run is unchanged. The dispatcher merges ONLY this whitelisted key over the stored parameters — no other key from
-    ///     the per-fire map can override a stored parameter.
+    ///     refresh.
     /// </summary>
+    /// <remarks>
+    ///     A manual <c>TriggerNowAsync</c> fire may stamp it so the run produces the selected use-case instead of the
+    ///     definition's baked one; the recurring cron fire never sets it, leaving a scheduled run unchanged. The
+    ///     dispatcher merges ONLY whitelisted keys over the stored parameters — no other key from the per-fire map can
+    ///     override a stored parameter.
+    /// </remarks>
     public const string ModelFitUseCaseOverrideKey = "modelFitUseCaseOverride";
 
     /// <summary>
-    ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a recommendation breadth (<c>--limit</c>) override for
-    ///     a model-fit recommendation refresh. Like <see cref="ModelFitUseCaseOverrideKey" /> it is set only on a manual
-    ///     <c>TriggerNowAsync</c> fire (never on the recurring cron fire) and the dispatcher merges ONLY this whitelisted
-    ///     key over the stored parameters — written back as a JSON number so the handler's numeric <c>limit</c> parse is
-    ///     unchanged. The value is validated to the supported <c>1..50</c> range before it is stamped.
+    ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a recommendation breadth (<c>--limit</c>) override
+    ///     for a model-fit recommendation refresh.
     /// </summary>
+    /// <remarks>
+    ///     Like <see cref="ModelFitUseCaseOverrideKey" /> it is set only on a manual <c>TriggerNowAsync</c> fire, never
+    ///     on the recurring cron fire, and the dispatcher merges ONLY this whitelisted key over the stored parameters.
+    ///     It is written back as a JSON number, so the handler's numeric <c>limit</c> parse is unchanged, and the value
+    ///     is validated to the supported <c>1..50</c> range before it is stamped.
+    /// </remarks>
     public const string ModelFitLimitOverrideKey = "modelFitLimitOverride";
 
     /// <summary>
-    ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a quant override (e.g. <c>Q5_K_M</c>) for a model-fit
-    ///     recommendation refresh. Like the other model-fit override keys it is set only on a manual <c>TriggerNowAsync</c>
-    ///     fire (never on the recurring cron fire) and the dispatcher merges ONLY this whitelisted key over the stored
-    ///     parameters — replacing the default <c>Q4_K_M</c> the advisor would otherwise estimate against.
+    ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a quant override (e.g. <c>Q5_K_M</c>) for a
+    ///     model-fit recommendation refresh.
     /// </summary>
+    /// <remarks>
+    ///     Like the other model-fit override keys it is set only on a manual <c>TriggerNowAsync</c> fire, never on the
+    ///     recurring cron fire, and the dispatcher merges ONLY this whitelisted key over the stored parameters,
+    ///     replacing the default <c>Q4_K_M</c> the advisor would otherwise estimate against.
+    /// </remarks>
     public const string ModelFitQuantOverrideKey = "modelFitQuantOverride";
 
     /// <summary>
-    ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a context-window target the advisor's KV-cache fit is
-    ///     sized against. Like the other model-fit override keys it is set only on a manual <c>TriggerNowAsync</c> fire
-    ///     (never on the recurring cron fire), validated to ≥256 before it is stamped, and written back as a JSON number so
-    ///     the handler's numeric <c>ctxTarget</c> parse is unchanged.
+    ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a context-window target the advisor's KV-cache fit
+    ///     is sized against.
     /// </summary>
+    /// <remarks>
+    ///     Like the other model-fit override keys it is set only on a manual <c>TriggerNowAsync</c> fire, never on the
+    ///     recurring cron fire. It is validated to ≥256 before it is stamped and written back as a JSON number, so the
+    ///     handler's numeric <c>ctxTarget</c> parse is unchanged.
+    /// </remarks>
     public const string ModelFitCtxTargetOverrideKey = "modelFitCtxTargetOverride";
 }

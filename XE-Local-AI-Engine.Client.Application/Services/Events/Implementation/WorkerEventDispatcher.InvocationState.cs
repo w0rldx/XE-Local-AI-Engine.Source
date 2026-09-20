@@ -14,10 +14,8 @@ public sealed partial class WorkerEventDispatcher
         {
             InvocationId = runtimePackage.InvocationId,
             ConversationId = runtimePackage.ConversationId,
-            // Capture the W3C trace id of the ambient (request/hub) activity so the invocation monitor can surface a
-            // copyable correlation id. The pre-spawn spans start as children of this same activity, so they
-            // share this trace id — the monitor row therefore links straight to the run's exported trace. A default
-            // (all-zero) id is treated as absent.
+            // Capture the W3C trace id of the ambient (request/hub) activity so the monitor can surface a copyable correlation id. The
+            // pre-spawn spans are children of that activity and share the id, so the row links straight to the run's exported trace; a default (all-zero) id is absent.
             TraceId = Activity.Current is { } activity && activity.TraceId != default ? activity.TraceId.ToString() : null,
             Status = InvocationStatus.Assigned,
             StartedAt = _timeProvider.GetUtcNow(),
@@ -70,9 +68,8 @@ public sealed partial class WorkerEventDispatcher
         {
             if (CurrentInvocation?.InvocationId != invocationId)
             {
-                // The current slot was replaced (or cleared) before this update arrived. A dropped terminal here
-                // would silently leave the message non-terminal; we apply the update against the matching id only,
-                // so probe the dropped status outside the lock to surface terminal drops for diagnosis.
+                // The current slot was replaced (or cleared) before this update arrived. An update applies against the matching id only, and a
+                // dropped terminal would silently leave the message non-terminal — so probe the dropped status here to surface it.
                 var dropped = update(new InvocationState
                 {
                     InvocationId = invocationId,
@@ -104,10 +101,8 @@ public sealed partial class WorkerEventDispatcher
 
     private void PublishStateChanged(InvocationState state)
     {
-        // Every caller already hands us a fresh Clone of the live invocation (never the mutable CurrentInvocation),
-        // and nothing downstream mutates the snapshot — the history buffer only stores it and the event consumers only
-        // read it. So the recorder and the event share this one immutable snapshot instead of cloning a second time
-        // (which also re-copied PendingToolCalls) on every streamed chunk.
+        // Every caller hands in a fresh Clone of the live invocation (never the mutable CurrentInvocation) and nothing downstream mutates the
+        // snapshot, so the recorder and the event share this one immutable snapshot rather than cloning again per streamed chunk.
         _invocationHistory.Record(state);
         Volatile.Read(ref InvocationStateChanged)?.Invoke(this, new InvocationStateChangedEventArgs(state));
     }

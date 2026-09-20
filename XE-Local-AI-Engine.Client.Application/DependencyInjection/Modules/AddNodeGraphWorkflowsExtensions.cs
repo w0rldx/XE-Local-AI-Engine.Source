@@ -10,17 +10,13 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 internal static class AddNodeGraphWorkflowsExtensions
 {
     /// <summary>
-    ///     Registers the graph-workflow configuration.
-    ///     <para>
-    ///         As with development workflows, <c>Enabled=false</c> does <em>not</em> skip registration: a disabled node
-    ///         has to answer legibly rather than 500 out of an empty container. The switch is enforced by the
-    ///         request-path gate in <c>Program</c> and, later, by the runtime this module grows.
-    ///     </para>
-    ///     <para>
-    ///         The store, the definition service and the dispatcher are registered here as the slice adds them; the
-    ///         options binding is what every one of them resolves.
-    ///     </para>
+    ///     Registers the graph-workflow configuration, store, definition service and dispatcher.
     /// </summary>
+    /// <remarks>
+    ///     As with development workflows, <c>Enabled=false</c> does <em>not</em> skip registration: a disabled node has
+    ///     to answer legibly rather than 500 out of an empty container, so the switch is enforced by the request-path
+    ///     gate in <c>Program</c> and by the runtime. The options binding is what every registration here resolves.
+    /// </remarks>
     public static IHostApplicationBuilder AddNodeGraphWorkflows(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -35,9 +31,8 @@ internal static class AddNodeGraphWorkflowsExtensions
         // can express. Failing them at startup beats meeting them once per node run.
         builder.Services.AddSingleton<IValidateOptions<GraphWorkflowOptions>, GraphWorkflowOptionsValidator>();
 
-        // Scoped, like every store that reaches the DbContext. The store is resolved through the publishing decorator,
-        // so no caller can commit a run change without announcing it; registering the concrete type separately is what
-        // lets the decorator take it as its inner store.
+        // Scoped, like every store that reaches the DbContext, and resolved through the publishing decorator so no caller can commit
+        // a run change without announcing it; the concrete type is registered separately only so the decorator can take it as inner.
         builder.Services.AddScoped<GraphWorkflowStore>();
         builder.Services.AddScoped<IGraphWorkflowStore>(services => new PublishingGraphWorkflowStore(services.GetRequiredService<GraphWorkflowStore>(),
             services.GetRequiredService<IGraphWorkflowEventPublisher>(),
@@ -73,9 +68,8 @@ internal static class AddNodeGraphWorkflowsExtensions
         // admitting node runs a restart has not judged yet.
         builder.Services.AddHostedService<GraphWorkflowStartupReconciler>();
 
-        // One instance under three service types: the loop, the signal every command path calls after its commit, and
-        // the hosted service that starts the two pumps. Its own DisposeAsync is idempotent, because the container
-        // tracks each factory registration's result for disposal separately.
+        // One instance under three service types: the loop, the signal every command path calls after its commit, and the hosted
+        // service that starts the two pumps. Its DisposeAsync is idempotent, as the container tracks each factory result separately.
         builder.Services.AddSingleton<GraphWorkflowDispatcher>();
         builder.Services.AddSingleton<IGraphWorkflowDispatcherSignal>(services => services.GetRequiredService<GraphWorkflowDispatcher>());
         builder.Services.AddSingleton<IHostedService>(services => services.GetRequiredService<GraphWorkflowDispatcher>());

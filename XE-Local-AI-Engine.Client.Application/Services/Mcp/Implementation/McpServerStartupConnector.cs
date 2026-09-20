@@ -2,10 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 /// <summary>
 ///     Connects the enabled MCP servers once at startup by calling
-///     <see cref="IMcpServerConnectionManager.RefreshAsync" /> off the hot path. A connect failure at startup is logged
-///     and swallowed — it is never fatal, since a single bad server is already isolated by the manager. The manager owns
-///     client disposal, so <see cref="StopAsync" /> is a no-op.
+///     <see cref="IMcpServerConnectionManager.RefreshAsync" /> off the hot path.
 /// </summary>
+/// <remarks>
+///     A connect failure at startup is logged and swallowed, never fatal, since the manager already isolates a single
+///     bad server. The manager owns client disposal, so <see cref="StopAsync" /> is a no-op.
+/// </remarks>
 internal sealed class McpServerStartupConnector : IHostedService
 {
     private readonly IMcpServerConnectionManager _connectionManager;

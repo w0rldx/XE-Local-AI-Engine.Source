@@ -5,11 +5,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     Scheduler-specific retention sweeper. Deletes <c>scheduled_job_runs</c> rows (and their cascaded events) older
-///     than <see cref="SchedulerOptions.HistoryRetentionDays" />, on a <see cref="SchedulerOptions.RetentionSweepIntervalMinutes" />
-///     cadence. Kept separate from the chat <c>RetentionSweeperService</c> so scheduler history can evolve its own
-///     retention policy. Run rows stamp <c>CreatedAtUtc</c> in unix-milliseconds, so the cutoff is computed in ms.
+///     Scheduler-specific retention sweeper: deletes <c>scheduled_job_runs</c> rows, and their cascaded events, older
+///     than <see cref="SchedulerOptions.HistoryRetentionDays" />.
 /// </summary>
+/// <remarks>
+///     It sweeps on the <see cref="SchedulerOptions.RetentionSweepIntervalMinutes" /> cadence and is kept separate from
+///     the chat <c>RetentionSweeperService</c>, so scheduler history can evolve its own retention policy. Run rows
+///     stamp <c>CreatedAtUtc</c> in unix-milliseconds, so the cutoff is computed in ms.
+/// </remarks>
 public sealed class SchedulerHistoryRetentionService : BackgroundService
 {
     private readonly ILogger<SchedulerHistoryRetentionService> _logger;

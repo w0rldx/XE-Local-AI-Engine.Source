@@ -4,10 +4,13 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Owns the per-model extra <c>llama-server</c> launch-argument override behind the LocalModels Operator
-///     endpoints: read it, store it, clear it. The HTTP edge keeps the decoding, validation and reserved-flag
-///     rejection it already owns; this type is the only path from those endpoints to the persisted override.
+///     Owns the per-model extra <c>llama-server</c> launch-argument override behind the LocalModels Operator endpoints: read it, store it,
+///     clear it.
 /// </summary>
+/// <remarks>
+///     The HTTP edge keeps the decoding, validation and reserved-flag rejection it already owns; this type is the only path from those
+///     endpoints to the persisted override.
+/// </remarks>
 public sealed class ModelLaunchArgumentsService
 {
     private readonly IModelLaunchArgumentsStore _store;

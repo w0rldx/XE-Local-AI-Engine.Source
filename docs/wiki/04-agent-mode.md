@@ -474,6 +474,21 @@ re-stage shares the run-level single-flight guard with `run_in_agent_home`. It i
 when Agent Mode is disabled or the conversation has no extracted files. The chat-side wiring — and the
 contrasting plain-chat path that *inlines* extracted text instead of staging — is in [Chat](05-chat.md).
 
+#### Resolving a selected folder by id or alias
+
+`SelectedFolderResolver.ResolveAsync` accepts either form the node hands out: the opaque GUID, or the human-facing
+**alias** that Node Settings displays and that `run_in_agent_home`'s schema advertises. The GUID is tried first,
+because an alias of GUID shape is registrable — `NormalizeAlias` leaves lowercase hex and hyphens untouched and
+`AliasShapeRegex` accepts the result — so an opaque id must never be shadowed by an alias that merely looks like one.
+Falling through to the alias lookup only when the id lookup misses is what keeps such an alias reachable rather than
+permanently masked.
+
+The alias is matched **exactly, never normalized**. Stored aliases are already canonical, because registration
+normalizes before persisting, so an exact match on a canonical input finds precisely what exists; refusing to normalize
+here keeps this seam from quietly resolving `My Scratch` to `my-scratch` for a caller that passes unvalidated text.
+Both lookups go through the same store, which returns `null` for a revoked folder, so alias resolution reaches exactly
+the records the GUID path reaches and no others.
+
 ### 2.3 Capacity gate & sub-agent spawn
 
 `SubAgentSpawnService.SpawnAsync` (`Services/Capacity/SubAgentSpawnService.cs`) implements the

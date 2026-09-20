@@ -40,28 +40,27 @@ public sealed class ScheduledJobExecutionContext
     public required ScheduledRunTrigger TriggeredBy { get; init; }
 
     /// <summary>
-    ///     Optional progress-reporting callback. Handlers may invoke this to emit intermediate progress events
-    ///     that are recorded in <c>scheduled_job_run_events</c>.
-    ///     <para>
-    ///         <b>Progress callback wiring point</b> — this property defaults to a no-op until run-history recording
-    ///         injects a real implementation via the dispatcher before passing the
-    ///         context to the handler. Handlers should null-check before calling; a <see langword="null" /> value
-    ///         means progress events are silently dropped (acceptable for Summary-level templates).
-    ///     </para>
+    ///     Optional progress-reporting callback handlers may invoke to emit intermediate progress events, recorded in
+    ///     <c>scheduled_job_run_events</c>.
     /// </summary>
+    /// <remarks>
+    ///     This property defaults to a no-op until run-history recording injects a real implementation through the
+    ///     dispatcher, before the context reaches the handler. Handlers null-check before calling: a
+    ///     <see langword="null" /> value means progress events are silently dropped, which is acceptable for
+    ///     Summary-level templates.
+    /// </remarks>
     public Func<string, int?, CancellationToken, Task>? ReportProgressAsync { get; init; }
 
     /// <summary>
-    ///     Optional operator-facing one-line outcome for this fire, written by the handler and persisted verbatim onto
-    ///     the run row's <c>summary</c> by the dispatcher when the handler completes successfully. Left
-    ///     <see langword="null" /> (the default) the dispatcher records its generic "Completed." instead, so a handler
-    ///     that has nothing distinctive to say need not set it.
-    ///     <para>
-    ///         Same content rules as <see cref="ReportProgressAsync" />: the column is plaintext-structural, so this
-    ///         must carry only sanitized facts about the work (counts, ids, operator-supplied names) — never prompt,
-    ///         parameter or model-answer text. Last write wins; a handler that sets it more than once records its final
-    ///         value.
-    ///     </para>
+    ///     Optional operator-facing one-line outcome for this fire, persisted verbatim onto the run row's
+    ///     <c>summary</c> when the handler completes successfully.
     /// </summary>
+    /// <remarks>
+    ///     Left <see langword="null" />, the default, the dispatcher records its generic "Completed." instead, so a
+    ///     handler with nothing distinctive to say need not set it. Same content rules as
+    ///     <see cref="ReportProgressAsync" />: the column is plaintext-structural, so this carries only sanitized facts
+    ///     about the work (counts, ids, operator-supplied names), never prompt, parameter or model-answer text. Last
+    ///     write wins.
+    /// </remarks>
     public string? Summary { get; set; }
 }

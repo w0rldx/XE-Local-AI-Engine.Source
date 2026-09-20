@@ -60,11 +60,12 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         }
     }
 
-    /// <summary>
-    ///     Synchronous twin of <see cref="LoadAsync" /> for the composition/startup path. Uses a synchronous lock + file
-    ///     read so DI factory seeds and singleton constructors never block on async file I/O (which starves the thread
-    ///     pool during host startup). Same tolerant-deserialize + <see cref="Normalize" /> semantics as the async path.
-    /// </summary>
+    /// <summary>Synchronous twin of <see cref="LoadAsync" /> for the composition/startup path.</summary>
+    /// <remarks>
+    ///     Uses a synchronous lock + file read so DI factory seeds and singleton constructors never block on async file
+    ///     I/O (which starves the thread pool during host startup). Same tolerant-deserialize + <see cref="Normalize" />
+    ///     semantics as the async path.
+    /// </remarks>
     public StoredNodeSettings Load(CancellationToken cancellationToken = default)
     {
         _lock.Wait(cancellationToken);
@@ -115,20 +116,22 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     Recovery from an unreadable <c>node-settings.json</c> is an explicit operator action, never an automatic
+    ///     overwrite: this path throws <see cref="NodeSettingsUnreadableException" /> instead. Automatic callers
+    ///     (<c>ExternalProviderStartupReconciler</c> first) already swallow a startup failure.
+    /// </remarks>
     public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(mutate);
 
-        // ONE lock acquisition around load-mutate-save. Load and Save each take the lock on their own, so a caller
-        // composing them holds it for neither of the gaps between — and this file is written whole, so a concurrent
-        // writer's fields are lost in that gap rather than merged.
+        // ONE lock acquisition around load-mutate-save: Load and Save each take the lock on their own, so a caller composing
+        // them holds it for neither gap between — and this file is written whole, so a concurrent writer's fields are lost there, not merged.
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            // STRICT, unlike LoadAsync: a read-modify-write over an unreadable file would mutate a DEFAULT record and
-            // persist it as valid, healing corruption into a settings file that has silently lost every stored value —
-            // the node's external-access posture included. Recovery is an explicit operator action, never an automatic
-            // overwrite. Automatic callers (ExternalProviderStartupReconciler first) already swallow a startup failure.
+            // STRICT, unlike LoadAsync: a read-modify-write over an unreadable file would mutate a DEFAULT record and persist it as valid,
+            // healing corruption into a settings file that has silently lost every stored value — the node's external-access posture included.
             var current = await ReadUnlockedAsync(cancellationToken);
             if (current is null)
             {
@@ -155,13 +158,13 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         return await ReadUnlockedAsync(cancellationToken) ?? new StoredNodeSettings();
     }
 
-    /// <summary>
-    ///     The STRICT read, and the only place that can tell the three cases apart: a missing file is the DEFAULT record
-    ///     (a legacy install that never saved, not an error), a readable file is the normalized record, and a present but
-    ///     unreadable file is <see langword="null" />. Callers must not conflate the last two — the difference between
-    ///     "no value yet" and "I cannot read the value" is what stops the boot backfill deciding an external-access
-    ///     posture on the strength of a corrupt file.
-    /// </summary>
+    /// <summary>The STRICT read, and the only place that can tell the three cases apart.</summary>
+    /// <remarks>
+    ///     A missing file is the DEFAULT record (a legacy install that never saved, not an error), a readable file is
+    ///     the normalized record, and a present but unreadable file is <see langword="null" />. Callers must not
+    ///     conflate the last two — the difference between "no value yet" and "I cannot read the value" is what stops
+    ///     the boot backfill deciding an external-access posture on the strength of a corrupt file.
+    /// </remarks>
     private async Task<StoredNodeSettings?> ReadUnlockedAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_settingsPath))
@@ -189,24 +192,22 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
 
     /// <summary>
     ///     Writes through a temp SIBLING plus an atomic rename, so a crash mid-write never leaves a torn file: the old
-    ///     one survives intact. <see cref="File.Move(string, string, bool)" /> within one directory is a rename — atomic
-    ///     on Linux (<c>rename(2)</c>) and Windows (<c>MoveFileEx</c> / <c>MOVEFILE_REPLACE_EXISTING</c>). Same-directory
-    ///     is load-bearing: a rename across filesystems is a copy, not a replace.
-    ///     <para>
-    ///         The Windows caveat recorded for <c>llama-launch-fallback.json</c> — an atomic replace over a file another
-    ///         holder has open FAILS on Windows, which is why that file's lock sits on a sibling <c>.lock</c> — does not
-    ///         bite here, so do not "fix" this later: every read and write in this class runs under <c>_lock</c>, the
-    ///         write opens with <see cref="FileShare.None" />, and the repo runs one node instance per data directory.
-    ///     </para>
+    ///     one survives intact.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="File.Move(string, string, bool)" /> within one directory is a rename — atomic on Linux (<c>rename(2)</c>) and
+    ///     Windows (<c>MoveFileEx</c> / <c>MOVEFILE_REPLACE_EXISTING</c>); same-directory is load-bearing, a rename across filesystems
+    ///     is a copy, not a replace. The Windows caveat recorded for <c>llama-launch-fallback.json</c> — an atomic replace over a file
+    ///     another holder has open FAILS on Windows, which is why that file's lock sits on a sibling <c>.lock</c> — does not bite here,
+    ///     so do not "fix" it: every read and write here runs under <c>_lock</c>, the write opens <see cref="FileShare.None" />, and one node instance runs per data directory.
+    /// </remarks>
     private async Task SaveUnlockedAsync(StoredNodeSettings normalizedSettings, CancellationToken cancellationToken)
     {
         var tempPath = string.Concat(_settingsPath, ".", Guid.NewGuid().ToString("N"), ".tmp");
         try
         {
-            // Create with 0600 up front on non-Windows so the file is never briefly world-readable between create and
-            // chmod, and so the RENAMED file keeps owner-only permissions. Windows relies on the per-user
-            // data-directory ACL (UnixCreateMode is unsupported there).
+            // Create with 0600 up front on non-Windows so the file is never briefly world-readable between create and chmod, and so the
+            // RENAMED file keeps owner-only permissions. Windows relies on the per-user data-directory ACL (UnixCreateMode is unsupported there).
             await using (var fileStream = CreateOwnerOnly(tempPath))
             {
                 await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken);
@@ -216,9 +217,8 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         }
         catch
         {
-            // A failed serialize or move leaves the previous file untouched; drop the partial temp so no litter builds up.
-            // Best-effort, in its own try: a delete that throws here would REPLACE the original failure with a cleanup
-            // error, hiding why the write failed.
+            // A failed serialize or move leaves the previous file untouched; drop the partial temp so no litter builds up. Best-effort, in its
+            // own try: a delete that throws here would REPLACE the original failure with a cleanup error, hiding why the write failed.
             DeleteIfExists(tempPath);
             throw;
         }
@@ -248,11 +248,13 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     /// <summary>
-    ///     Opens a truncating write stream for <paramref name="path" />. On non-Windows the file is created with
-    ///     owner-only (0600) permissions atomically via <see cref="FileStreamOptions.UnixCreateMode" />, matching the
-    ///     key-file posture. On Windows <see cref="FileStreamOptions.UnixCreateMode" /> is unsupported, so a plain create
-    ///     is used and the per-user data-directory ACL governs access.
+    ///     Opens a truncating write stream for <paramref name="path" />.
     /// </summary>
+    /// <remarks>
+    ///     On non-Windows the file is created with owner-only (0600) permissions atomically via
+    ///     <see cref="FileStreamOptions.UnixCreateMode" />, matching the key-file posture. On Windows that option is
+    ///     unsupported, so a plain create is used and the per-user data-directory ACL governs access.
+    /// </remarks>
     private static FileStream CreateOwnerOnly(string path)
     {
         var options = new FileStreamOptions
@@ -270,12 +272,12 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         return new FileStream(path, options);
     }
 
-    /// <summary>
-    ///     Clamps/validates each stored field independently. An out-of-range timeout resets only that one field to its
-    ///     documented default (no longer discarding every other migrated field). Each newer nullable field falls back to
-    ///     <see langword="null" /> when out-of-range/malformed so the accessor re-seeds it (preserving the
-    ///     stored &gt; seed &gt; default precedence).
-    /// </summary>
+    /// <summary>Clamps/validates each stored field independently.</summary>
+    /// <remarks>
+    ///     An out-of-range timeout resets only that one field to its documented default, never discarding the other
+    ///     migrated fields. Each newer nullable field falls back to <see langword="null" /> when out-of-range or
+    ///     malformed so the accessor re-seeds it, preserving the stored &gt; seed &gt; default precedence.
+    /// </remarks>
     private static StoredNodeSettings Normalize(StoredNodeSettings settings)
     {
         // Clamp the timeout in isolation: one corrupt/out-of-range value in a hand-edited file must not wipe the rest.
@@ -335,13 +337,13 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         };
     }
 
-    /// <summary>
-    ///     The persistence authority for usage-rate hygiene: drop entries with a blank model name or a negative /
-    ///     non-finite rate (via <see cref="ModelRate.HasValidRates" /> — one shared predicate with the boundary validator
-    ///     and the resolver), trim the model-name keys, and de-duplicate them case-insensitively (matching how the resolver
-    ///     and the run-envelope <c>ModelName</c> compare). An empty result collapses to <see langword="null" /> so an
-    ///     all-junk map reads as "no override".
-    /// </summary>
+    /// <summary>The persistence authority for usage-rate hygiene.</summary>
+    /// <remarks>
+    ///     Drops entries with a blank model name or a negative / non-finite rate (via <see cref="ModelRate.HasValidRates" /> — one shared
+    ///     predicate with the boundary validator and the resolver), trims the model-name keys, and de-duplicates them case-insensitively
+    ///     (matching how the resolver and the run-envelope <c>ModelName</c> compare). An empty result collapses to
+    ///     <see langword="null" /> so an all-junk map reads as "no override".
+    /// </remarks>
     private static NodeUsageRateSettings? NormalizeUsageRates(NodeUsageRateSettings? rates)
     {
         if (rates?.Models is not { Count: > 0 } models)
@@ -375,11 +377,13 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     /// <summary>
-    ///     Unlike every other numeric field, a NEGATIVE disconnect grace clamps to <c>0</c> rather than re-seeding:
+    ///     Unlike every other numeric field, a NEGATIVE disconnect grace clamps to <c>0</c> rather than re-seeding.
+    /// </summary>
+    /// <remarks>
     ///     <c>0</c> is a meaningful value here (never cancel), so "the operator asked for no reaping, badly" is a
     ///     clearer reading of a negative than "fall back to 300 s and reap anyway". An absurdly LARGE value still
     ///     re-seeds like the rest.
-    /// </summary>
+    /// </remarks>
     private static int? NormalizeDetachedGraceSeconds(int? value)
     {
         return value switch
@@ -412,14 +416,16 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     /// <summary>
-    ///     Blank or absent is the LEGACY install — nobody ever wrote a profile — so it stays <see langword="null" /> and
-    ///     the boot backfill may stamp it. A non-blank string the engine does not recognise is the opposite case:
-    ///     somebody wrote a profile, just not one this engine knows, so the node is ASKED AGAIN rather than answered for
-    ///     — it loads as <see cref="StoredNodeSettings.ExternalAccessProfilePending" />. The gated services wait on
-    ///     <c>pending</c>, the backfill leaves any non-null profile alone, the three switches beside it are kept exactly
-    ///     as they are, and the SPA shows the profile chooser to the administrator at the next login. The comparison is
-    ///     ordinal, so <c>"Offline"</c> is unrecognised and <c>"  offline  "</c> is not.
+    ///     Blank or absent is the LEGACY install — nobody ever wrote a profile — so it stays <see langword="null" />
+    ///     and the boot backfill may stamp it.
     /// </summary>
+    /// <remarks>
+    ///     A non-blank string the engine does not recognise is the opposite case: somebody wrote a profile, just not one this engine
+    ///     knows, so the node is ASKED AGAIN rather than answered for — it loads as
+    ///     <see cref="StoredNodeSettings.ExternalAccessProfilePending" />. The gated services wait on <c>pending</c>, the backfill leaves
+    ///     any non-null profile alone, the three switches beside it are kept exactly as they are, and the SPA shows the profile chooser
+    ///     to the administrator at the next login. The comparison is ordinal, so <c>"Offline"</c> is unrecognised and <c>"  offline  "</c> is not.
+    /// </remarks>
     private static string? NormalizeExternalAccessProfile(string? value)
     {
         var trimmed = TrimToNull(value);
@@ -433,16 +439,16 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     /// <summary>
-    ///     Unlike the external-access profile, an unrecognised value falls back to <see langword="null" /> rather than to
-    ///     a "ask again" literal: the mode is presentation only, so a junk value costs nothing to answer for — the reader
-    ///     re-seeds <see cref="StoredNodeSettings.DefaultUiMode" /> and the navigation looks exactly as it did before the
-    ///     setting existed. The comparison is ordinal, so <c>"Simple"</c> is unrecognised and <c>"  simple  "</c> is not.
-    ///     <para>
-    ///         The cost of the null fallback is that a hand-edited junk value makes the node look like one that never
-    ///         answered, and the boot backfill may then stamp <c>advanced</c> over it. That is the same value the reader
-    ///         would have used anyway.
-    ///     </para>
+    ///     Unlike the external-access profile, an unrecognised value falls back to <see langword="null" /> rather than
+    ///     to an "ask again" literal.
     /// </summary>
+    /// <remarks>
+    ///     The mode is presentation only, so a junk value costs nothing to answer for — the reader re-seeds
+    ///     <see cref="StoredNodeSettings.DefaultUiMode" /> and the navigation looks exactly as it did before the setting existed. The
+    ///     comparison is ordinal, so <c>"Simple"</c> is unrecognised and <c>"  simple  "</c> is not. The cost of the null fallback is
+    ///     that a hand-edited junk value makes the node look like one that never answered and the boot backfill may then stamp
+    ///     <c>advanced</c> over it — the same value the reader would have used anyway.
+    /// </remarks>
     private static string? NormalizeUiMode(string? value)
     {
         var trimmed = TrimToNull(value);
@@ -457,17 +463,15 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
 
     private static string? NormalizeKvCacheType(string? value)
     {
-        // An unknown type falls back to null so the accessor re-seeds it to the default. This normalizer is the layer
-        // that must never let a bad value through: LlamaServerLaunchPolicyOptions.Validate() rejects one at host build,
-        // i.e. a persisted junk value would take the node down rather than degrade.
+        // An unknown type falls back to null so the accessor re-seeds it to the default. This normalizer is the layer that must never let
+        // a bad value through: LlamaServerLaunchPolicyOptions.Validate rejects one at host build, so persisted junk would take the node down.
         return LlamaServerKvCacheTypes.TryNormalize(value, out var normalized) ? normalized : null;
     }
 
     private static string? NormalizeContainerRuntimeSelection(string? value)
     {
-        // Lower-cased through the one parser rather than trimmed in place, so the persisted spelling is the same
-        // spelling the API carries and the engine parses. An unrecognised value falls back to null so the reader
-        // re-seeds the default: a hand-edited settings file must not be able to leave the runtime layer unresolvable.
+        // Lower-cased through the one parser rather than trimmed in place, so the persisted spelling is the spelling the API carries and the
+        // engine parses. An unrecognised value falls back to null so the reader re-seeds the default: a hand-edited file must not be able to leave the runtime layer unresolvable.
         return ContainerRuntimeSelectionParser.TryParse(value, out var selection)
             ? ContainerRuntimeSelectionParser.Format(selection)
             : null;

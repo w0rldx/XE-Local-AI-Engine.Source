@@ -3,39 +3,32 @@ namespace XE_Local_AI_Engine.Client.Models;
 using System.ComponentModel.DataAnnotations;
 
 /// <summary>
-///     How much of one streaming turn may be buffered or deferred. Bound from the <c>Chat:StreamBudget</c> section.
-///     One record rather than several split by concern: every knob here answers the same question, they are tuned
-///     together, and one section is one thing to find.
-///     <para>
-///         The emit cadence and the persistence cadence are deliberately DECOUPLED. The SSE emit debounce keeps live
-///         frames at ~25/s so the UI stays fluid; the partial-flush knobs let the database write lag far behind that,
-///         because a flush rewrites the whole accumulated message and a fixed 100 ms cadence therefore made per-turn
-///         write volume quadratic in output length. Bounding a flush's delta at a FRACTION of what is already
-///         persisted bounds the rewrite-to-append ratio regardless of message length.
-///     </para>
-///     <para>
-///         The operator-editable disconnect grace (<c>DetachedGraceSeconds</c>) deliberately does NOT live here — it is
-///         surfaced in the node-settings UI, so it is a stored node setting read through <c>INodeRuntimeSettings</c>.
-///         Everything in this record is appsettings-only tuning.
-///     </para>
+///     How much of one streaming turn may be buffered or deferred, bound from the <c>Chat:StreamBudget</c> section.
 /// </summary>
+/// <remarks>
+///     One record rather than several split by concern: every knob answers the same question and they are tuned together. Emit cadence and persistence
+///     cadence are deliberately DECOUPLED. Everything here is appsettings-only tuning — the operator-editable disconnect grace is a stored node setting
+///     (<see cref="XE_Local_AI_Engine.Client.Services.NodeSettings.StoredNodeSettings.DetachedGraceSeconds" />, read through
+///     <c>INodeRuntimeSettings</c>) because it is surfaced in the node-settings UI. Why the two cadences are decoupled:
+///     docs/wiki/05-chat.md ("Delta-only wire delivery and bounded queues").
+/// </remarks>
 public sealed class ChatStreamBudgetOptions
 {
     public const string SectionName = "Chat:StreamBudget";
 
-    /// <summary>
-    ///     Minimum spacing between live <c>assistant-delta</c> frames, which caps them at ~25/s independent of token
-    ///     rate. Coalescing here — at the single producer, before a sequence number is minted — is what lets a
-    ///     coalesced delta consume exactly one sequence, so the client's ordering guard never waits on a hole.
-    /// </summary>
+    /// <summary>Minimum spacing between live <c>assistant-delta</c> frames, which caps them at ~25/s independent of token rate.</summary>
+    /// <remarks>
+    ///     Coalescing here — at the single producer, before a sequence number is minted — is what lets a coalesced delta consume exactly
+    ///     one sequence, so the client's ordering guard never waits on a hole.
+    /// </remarks>
     [Range(0, 1000)]
     public int EmitDebounceMs { get; set; } = 40;
 
-    /// <summary>
-    ///     Maximum events buffered per stream — the live send/regenerate sink and each resume subscriber alike. At the
-    ///     emit cadence above this is ~80 s of consumer lag before the queue overflows; a consumer that far behind
-    ///     should resynchronize rather than replay 80 s of history, which is what the overflow reconcile makes it do.
-    /// </summary>
+    /// <summary>Maximum events buffered per stream — the live send/regenerate sink and each resume subscriber alike.</summary>
+    /// <remarks>
+    ///     At the emit cadence above this is ~80 s of consumer lag before the queue overflows; a consumer that far behind should
+    ///     resynchronize rather than replay 80 s of history, which is what the overflow reconcile makes it do.
+    /// </remarks>
     [Range(1, int.MaxValue)]
     public int QueueCapacity { get; set; } = 2048;
 
@@ -54,11 +47,12 @@ public sealed class ChatStreamBudgetOptions
     public int MaxSubscribersPerInvocation { get; set; } = 4;
 
     /// <summary>
-    ///     Above this much accumulated content + reasoning, a resume emits <c>assistant-reconcile</c> instead of the
-    ///     opening <c>assistant-snapshot</c> and ends the stream — the client refetches the persisted conversation,
-    ///     which holds the same text, for one request. Deliberately not a truncated snapshot: truncating would invent a
-    ///     partial-replacement semantic the protocol does not have.
+    ///     Above this much accumulated content + reasoning, a resume emits <c>assistant-reconcile</c> instead of the opening <c>assistant-snapshot</c>
+    ///     and ends the stream — the client refetches the persisted conversation, which holds the same text, for one request.
     /// </summary>
+    /// <remarks>
+    ///     Deliberately not a truncated snapshot: truncating would invent a partial-replacement semantic the protocol does not have.
+    /// </remarks>
     [Range(1, int.MaxValue)]
     public int MaxReplaySnapshotChars { get; set; } = 1_048_576;
 

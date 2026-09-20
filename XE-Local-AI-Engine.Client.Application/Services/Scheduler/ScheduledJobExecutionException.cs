@@ -1,16 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     Thrown by a <see cref="IScheduledJobHandler" /> to declare an <b>already-operator-safe</b> failure reason that
-///     <see cref="SchedulerDispatchExecutor" /> may surface verbatim on the run row, the SignalR run event, and the UI —
-///     replacing the generic "The scheduled job failed during execution." message for this one path.
-///     <para>
-///         <b>Security contract (enforced by reviewers).</b> Construct ONLY with text already proven operator-safe: no
-///         secrets, no raw utility / process output, no exception or stack text, no raw job parameters. Every other
-///         exception type the dispatcher catches keeps the generic message, so this is the single widening of the
-///         UI-visible error surface. When in doubt, do NOT use this type — let the generic message apply.
-///     </para>
+///     Thrown by a <see cref="IScheduledJobHandler" /> to declare an <b>already-operator-safe</b> failure reason
+///     <see cref="SchedulerDispatchExecutor" /> may surface verbatim on the run row, the run event and the UI.
 /// </summary>
+/// <remarks>
+///     It replaces the generic "The scheduled job failed during execution." message for this one path. <b>Security
+///     contract, enforced by reviewers:</b> construct ONLY with text already proven operator-safe — no secrets, no raw
+///     utility or process output, no exception or stack text, no raw job parameters. Every other exception type the
+///     dispatcher catches keeps the generic message, so this is the single widening of the UI-visible error surface.
+///     When in doubt, do NOT use this type.
+/// </remarks>
 public sealed class ScheduledJobExecutionException : Exception
 {
     public ScheduledJobExecutionException(string message) : base(message)

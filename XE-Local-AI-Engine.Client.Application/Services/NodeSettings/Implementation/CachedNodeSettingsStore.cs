@@ -4,25 +4,13 @@ using Microsoft.Extensions.Caching.Memory;
 
 /// <summary>
 ///     An <see cref="INodeSettingsStore" /> decorator that caches the loaded settings object in
-///     <see cref="IMemoryCache" /> behind a single key. Node settings are read often and depended on widely but change
-///     only via an operator <c>SaveAsync</c>, so a single-entry, no-TTL cache turns the common read into a sub-millisecond
-///     in-memory hit. The inner file store keeps its semaphore + 0600-perms behavior; this decorator only adds caching.
+///     <see cref="IMemoryCache" /> behind a single key.
 /// </summary>
 /// <remarks>
-///     <para>
-///         WHY a write only INVALIDATES and never publishes: this decorator cannot observe the order in which two
-///         concurrent writes reached disk (they serialize inside the inner store, which reports no ordering), so a write
-///         that published its own value could overwrite the cache with a version the next write had already superseded.
-///         With a no-TTL cache, that stale entry is permanent — every reader, the reconciliation pass included, keeps
-///         seeing settings that are no longer on disk. Dropping the entry is order-INSENSITIVE: whichever write clears
-///         it last, the cache ends empty and the next read repopulates it from the canonical store.
-///     </para>
-///     <para>
-///         WHY a LOAD's publication is version-guarded: a load's disk read can straddle a concurrent write, so
-///         publishing its result unconditionally would reintroduce the same permanently-stale entry. Every write bumps
-///         <c>_writeVersion</c> under the gate the load publishes under, so a load that overlapped one declines to
-///         publish and merely costs the next reader a file read.
-///     </para>
+///     A single-entry, no-TTL cache: node settings are read often and change only via an operator <c>SaveAsync</c>, and the inner file store
+///     keeps its semaphore + 0600-perms behaviour. A write only INVALIDATES the entry, never publishes its own value, and a LOAD publishes only
+///     under a <c>_writeVersion</c> guard — both because a value published across a concurrent write would then be permanently stale.
+///     Why each rule is the order-insensitive one: docs/wiki/08-data-and-persistence.md ("Reading: the cache, and the synchronous twins").
 /// </remarks>
 public sealed class CachedNodeSettingsStore : INodeSettingsStore
 {

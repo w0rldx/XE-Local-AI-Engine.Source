@@ -143,6 +143,13 @@ host connecting to a node inside WSL presents peer `127.0.0.1` and Host `127.0.0
 all three checks pass unchanged and no relaxation is needed for that topology. Not re-verified under
 WSL mirrored networking.
 
+#### Tool invocation writes no approval-audit row
+
+`ToolInvocationService` is the one place a workflow node's tool call is admitted or refused, and it deliberately writes
+no `approve` record. [ADR 0006](../adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md)'s strict pre-invocation record exists for
+*adapting* an approval-required function into a non-approval one for an agentic MCP root. This service refuses that
+class twice and adapts nothing, so an `approve` row here would assert a decision nobody made.
+
 ### 3.2 Authentication & authorization
 
 Three authentication schemes are registered. **JWT bearer** is the default and gates everything the
@@ -952,6 +959,22 @@ repository, `XE-Framework` and the synthetic fixture rather than assumed, and ea
 
 The set is code-owned and versioned with `DevelopmentCommandProfileCatalog.CurrentVersion`, so widening or narrowing
 it is a source change plus a version bump, never configuration.
+
+#### The workspace surveys are managed code
+
+`WorkspaceFileScanner` implements `list_files` and `search_text` in managed code rather than shelling out to `find` and
+`grep`, and that decision preserves every security property the shell-out had — strengthening one.
+
+- **Path confinement is unchanged.** It still happens in the caller's own path guard, before anything reaches the
+  scanner.
+- **Symbolic links are never followed and never emitted**, exactly as `find -P … -type f` and `grep -r` behaved, and
+  the scanner additionally refuses a scan root that is itself reached through a link. That refusal is the strengthening.
+- **One suppression predicate, applied twice.** The caller supplies a single `isSuppressed` delegate
+  (`DevelopmentWorkspaceTools.IsSuppressedFromOutput` in production) and the scanner applies it at *both* the prune step
+  and the emit step, so the generator and the filter cannot drift apart.
+- **That predicate must gate reads on `ISensitiveFileExclusionService.IsSecret`**, never on the broader `IsExcluded`
+  copy filter. Conflating them refuses `obj/`, which an agent legitimately reads after a failed build, while protecting
+  nothing — build output is not a credential.
 
 ### Backend selection: a feature declares what it needs, and never names a backend
 

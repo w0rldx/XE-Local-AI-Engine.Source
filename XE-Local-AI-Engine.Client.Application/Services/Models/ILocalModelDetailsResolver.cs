@@ -4,17 +4,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
-/// <summary>
-///     Answers "which provider owns this model, and what does <em>details</em> mean for it" for the model-details
-///     route. The five-way routing — Codex cloud id, external OpenAI-compatible id, Azure Foundry deployment, GGUF
-///     served by llama.cpp, Ollama-served model — is a decision, so it lives here rather than in the endpoint, which
-///     is left to map one <see cref="LocalModelDetailsResolution" /> onto the wire response.
-///     <para>
-///         The branch order is a PRIORITY, not an arbitrary sequence: the cloud/external ids are recognised by shape
-///         before anything probes a local runtime, because probing the Ollama daemon's <c>/api/show</c> for an id it
-///         has never heard of answers 500, and a cloud model simply has no local details to report.
-///     </para>
-/// </summary>
+/// <summary>Answers "which provider owns this model, and what does <em>details</em> mean for it" for the model-details route.</summary>
+/// <remarks>
+///     The five-way routing — Codex cloud id, external OpenAI-compatible id, Azure Foundry deployment, GGUF served by llama.cpp,
+///     Ollama-served model — is a decision, so it lives here rather than in the endpoint, which is left to map one
+///     <see cref="LocalModelDetailsResolution" /> onto the wire response. <para> The branch order is a PRIORITY, not an arbitrary sequence:
+///     the cloud/external ids are recognised by shape before anything probes a local runtime, because probing the Ollama daemon's <c>/api/show</c>
+///     for an id it has never heard of answers 500, and a cloud model simply has no local details to report. </para>
+/// </remarks>
 public interface ILocalModelDetailsResolver
 {
     /// <summary>
@@ -29,10 +26,12 @@ public interface ILocalModelDetailsResolver
 public abstract record LocalModelDetailsResolution
 {
     /// <summary>
-    ///     The model has no local details to report — a Codex cloud id, an Azure Foundry deployment, an external
-    ///     registration that is gone, a GGUF with no installed descriptor, or an unreachable Ollama daemon. Every one
-    ///     of those is a clean 404 rather than a fault.
+    ///     The model has no local details to report — a Codex cloud id, an Azure Foundry deployment, an external registration that is gone,
+    ///     a GGUF with no installed descriptor, or an unreachable Ollama daemon.
     /// </summary>
+    /// <remarks>
+    ///     Every one of those is a clean 404 rather than a fault.
+    /// </remarks>
     public sealed record NoLocalDetails : LocalModelDetailsResolution;
 
     /// <summary>An external OpenAI-compatible registration; the operator's declarations are the only detail source.</summary>

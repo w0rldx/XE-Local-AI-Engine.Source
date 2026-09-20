@@ -13,11 +13,11 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
-/// <summary>
-///     Represents local model catalog service. Each source is read independently and degrades on its own, so a
-///     picker built on a node with no Ollama, no cloud session and an unreadable GGUF registry still answers with
-///     whatever the remaining sources have.
-/// </summary>
+/// <summary>Represents local model catalog service.</summary>
+/// <remarks>
+///     Each source is read independently and degrades on its own, so a picker built on a node with no Ollama, no cloud session and an
+///     unreadable GGUF registry still answers with whatever the remaining sources have.
+/// </remarks>
 public sealed class LocalModelCatalogService : ILocalModelCatalogService
 {
     private static readonly IReadOnlyDictionary<string, ModelClassificationResult> NoClassifications =
@@ -73,9 +73,8 @@ public sealed class LocalModelCatalogService : ILocalModelCatalogService
 
     public async Task<LocalModelCatalog> GetCatalogAsync(CancellationToken cancellationToken = default)
     {
-        // The effective selected model resolves through the accessor (stored DefaultModelName > appsettings
-        // Agent:LocalChat:DefaultModel seed); the configured default stays the appsettings seed so the picker can
-        // still surface "node default" distinctly from the operator's selection.
+        // The effective selected model resolves through the accessor, with the stored DefaultModelName winning over the appsettings
+        // Agent:LocalChat:DefaultModel seed. The configured default stays that seed, so the picker can surface "node default" separately.
         var selectedModelName = await _runtimeSettings.GetDefaultModelNameAsync(cancellationToken);
 
         // Cloud models (Codex + Azure Foundry) and installed GGUFs are served independently of Ollama, so they are
@@ -106,11 +105,11 @@ public sealed class LocalModelCatalogService : ILocalModelCatalogService
         return _modelService.ListRunningModelsAsync(cancellationToken);
     }
 
-    /// <summary>
-    ///     Enumerates the models registered on the operator's external OpenAI-compatible connections. A best-effort
-    ///     read like every other source: an unreadable encrypted store yields no external entries rather than failing
-    ///     the whole catalog, so a corrupt external file can never take the local model picker down with it.
-    /// </summary>
+    /// <summary>Enumerates the models registered on the operator's external OpenAI-compatible connections.</summary>
+    /// <remarks>
+    ///     A best-effort read like every other source: an unreadable encrypted store yields no external entries rather than failing the
+    ///     whole catalog, so a corrupt external file can never take the local model picker down with it.
+    /// </remarks>
     private async Task<IReadOnlyList<ExternalProviderModelRegistration>> ResolveExternalModelsAsync(CancellationToken cancellationToken)
     {
         try
@@ -129,12 +128,14 @@ public sealed class LocalModelCatalogService : ILocalModelCatalogService
     }
 
     /// <summary>
-    ///     Lists the Ollama runtime's models and their effective kinds, or <see langword="null" /> models when that
-    ///     runtime could not be reached. An unreachable endpoint (<see cref="HttpRequestException" />) is expected in
-    ///     desktop mode and logs at Debug so it does not flood the console; any OTHER failure is unexpected and stays
-    ///     at Warning. Classification is lazy and cached by content digest, so a cache hit issues no <c>/api/show</c>
-    ///     call and repeated catalog reads are cheap.
+    ///     Lists the Ollama runtime's models and their effective kinds, or <see langword="null" /> models when that runtime could not be
+    ///     reached.
     /// </summary>
+    /// <remarks>
+    ///     An unreachable endpoint (<see cref="HttpRequestException" />) is expected in desktop mode and logs at Debug so it does not flood
+    ///     the console; any OTHER failure is unexpected and stays at Warning. Classification is lazy and cached by content digest, so a
+    ///     cache hit issues no <c>/api/show</c> call and repeated catalog reads are cheap.
+    /// </remarks>
     private async Task<OllamaModelListing> ResolveOllamaModelsAsync(CancellationToken cancellationToken)
     {
         try
@@ -165,10 +166,12 @@ public sealed class LocalModelCatalogService : ILocalModelCatalogService
     }
 
     /// <summary>
-    ///     Enumerates the installed GGUF models (served by the bundled llama.cpp runtime, independent of Ollama). A
-    ///     best-effort read: any failure (e.g. an unreadable registry) yields an empty list rather than failing the
-    ///     whole catalog, so the Ollama path's availability is unaffected.
+    ///     Enumerates the installed GGUF models, served by the bundled llama.cpp runtime and independent of Ollama.
     /// </summary>
+    /// <remarks>
+    ///     A best-effort read: any failure (e.g. an unreadable registry) yields an empty list rather than failing the
+    ///     whole catalog, so the Ollama path's availability is unaffected.
+    /// </remarks>
     private async Task<IReadOnlyList<LocalModelDescriptor>> ResolveInstalledGgufModelsAsync(CancellationToken cancellationToken)
     {
         try
@@ -187,10 +190,12 @@ public sealed class LocalModelCatalogService : ILocalModelCatalogService
     }
 
     /// <summary>
-    ///     True when a stored Codex session exists whose access token is non-expired (skew-adjusted — the same gate
-    ///     <c>cloud/codex/status</c> uses). A best-effort read: any failure resolving the session offers no Codex
-    ///     models rather than failing the whole catalog.
+    ///     True when a stored Codex session exists whose access token is non-expired (skew-adjusted — the same gate <c>cloud/codex/status</c>
+    ///     uses).
     /// </summary>
+    /// <remarks>
+    ///     A best-effort read: any failure resolving the session offers no Codex models rather than failing the whole catalog.
+    /// </remarks>
     private async Task<bool> HasUsableCodexSessionAsync(CancellationToken cancellationToken)
     {
         try

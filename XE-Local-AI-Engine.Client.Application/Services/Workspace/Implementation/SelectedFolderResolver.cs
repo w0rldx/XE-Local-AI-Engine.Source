@@ -61,28 +61,12 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
     }
 
     /// <remarks>
-    ///     <para>
-    ///         Accepts either form the node hands out: the opaque GUID, or the human-facing <b>alias</b> that Node
-    ///         Settings displays and that <c>run_in_agent_home</c>'s schema advertises. The alias path used to be
-    ///         missing, so a model following the documented alias form was always rejected with "is not a valid
-    ///         identifier" while only the GUID — which no tool result ever shows the model — worked.
-    ///     </para>
-    ///     <para>
-    ///         <b>GUID first, then alias.</b> An alias of GUID shape is registrable (<see cref="NormalizeAlias" />
-    ///         leaves lowercase hex and hyphens untouched and <see cref="AliasShapeRegex" /> accepts the result), so the
-    ///         order matters: an opaque id must never be shadowed by an alias that merely looks like one. Falling
-    ///         through to the alias lookup when the id lookup misses is what keeps such an alias reachable rather than
-    ///         permanently masked.
-    ///     </para>
-    ///     <para>
-    ///         The alias is matched EXACTLY, not normalized. Stored aliases are already canonical (registration
-    ///         normalizes before persisting), so an exact match on a canonical input finds precisely what exists, and
-    ///         refusing to normalize here keeps this seam from quietly resolving <c>My Scratch</c> to <c>my-scratch</c>
-    ///         for a caller that passes unvalidated text. Both lookups go through the same store, which returns
-    ///         <see langword="null" /> for a revoked folder, so every existing guard is unchanged: alias resolution
-    ///         reaches exactly the records the GUID path reaches, and no others.
-    ///     </para>
+    ///     Accepts either form the node hands out: the opaque GUID, or the human-facing <b>alias</b> that Node Settings displays and that
+    ///     <c>run_in_agent_home</c>'s schema advertises — without the alias path only the GUID works, and no tool result ever shows the model one. The
+    ///     GUID is tried FIRST and the alias is then matched EXACTLY, never normalized. Why that order (an alias of GUID shape is registrable), why the
+    ///     exactness, and what a revoked folder does: docs/wiki/04-agent-mode.md ("Resolving a selected folder by id or alias").
     /// </remarks>
+    /// <seealso cref="NormalizeAlias" />
     public async Task<ResolvedSelectedFolder> ResolveAsync(string id, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);

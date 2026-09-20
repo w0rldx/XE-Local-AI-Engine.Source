@@ -11,33 +11,31 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 internal static class AddNodeCapacityExtensions
 {
+    /// <summary>
+    ///     Registers the capacity gate and the sub-agent spawn path the server-side spawn tool runs through.
+    /// </summary>
+    /// <remarks>
+    ///     Lifetimes are load-bearing. <c>IPendingFootprintLedger</c> and <c>ISpawnSerializer</c> are Singletons: they own
+    ///     the process-wide decide-commit gate, the in-flight reservation total and the per-(model,role) serialization map,
+    ///     which must outlive the per-spawn DI scopes. <c>ICapacityService</c> and <c>SubAgentSpawnService</c> are Scoped
+    ///     because each spawn tool body resolves them from a fresh scope, while the spawn handler is a Singleton, since
+    ///     <c>ClientLocalToolRegistry</c> captures its handlers at construction and a Scoped handler would be captive.
+    /// </remarks>
     public static IHostApplicationBuilder AddNodeCapacity(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // The capacity gate for sub-agent spawns. The footprint provider is stateless (it wraps the singleton
-        // MemoryFitEstimator over the GGUF store's own header-facts cache) → Singleton. The pending-footprint ledger
-        // owns the process-wide decide-commit gate and the in-flight reservation total, which MUST survive across the
-        // per-spawn DI scopes the capacity service is resolved in → Singleton. CapacityService itself depends only on
-        // singletons but is Scoped: the server-side spawn tool body resolves it through a fresh DI scope per spawn,
-        // mirroring how the model-routing path consumes the scoped resolver. MemoryFitEstimator is registered by
-        // AddNodeModelFit; this module runs after it.
+        // The capacity gate for sub-agent spawns. The stateless footprint provider wraps MemoryFitEstimator over the GGUF store's
+        // header-facts cache; that estimator is registered by AddNodeModelFit, which runs before this module.
         builder.Services.AddSingleton<IModelFootprintProvider, ModelFootprintProvider>();
         builder.Services.AddSingleton<IProcessContextAllocationResolver, ProcessContextAllocationResolver>();
         builder.Services.AddSingleton<IProcessLaunchAdmissionRegistry, ProcessLaunchAdmissionRegistry>();
         builder.Services.AddSingleton<IPendingFootprintLedger, PendingFootprintLedger>();
         builder.Services.AddScoped<ICapacityService, CapacityService>();
 
-        // Sub-agent spawn. The SpawnOptions bound the per-root fan-out / cloud-spawn caps and the bounded
-        // same-model queue wait. The SpawnQueue owns the process-wide per-(model,role) serialization map → Singleton
-        // (it must be shared across every concurrent spawn). SubAgentSpawnService is Scoped: the spawn tool body
-        // resolves it through a fresh DI scope per call (it depends on the scoped IChatClient pipeline + the scoped
-        // capacity service). The same scoped implementation is exposed through two deliberately separate interfaces:
-        // trusted in-process sub-agent orchestration and stricter unattended inbound MCP execution. The spawn tool
-        // handler is a Singleton IClientLocalToolHandler (ClientLocalToolRegistry captures the handler IEnumerable at
-        // construction, so a scoped handler would be a captive dependency); it resolves the scoped spawn service from
-        // a fresh scope per invocation.
+        // Sub-agent spawn: SpawnOptions bound the per-root fan-out and cloud-spawn caps and the bounded same-model queue wait.
+        // One Scoped implementation serves two deliberately separate interfaces — trusted in-process orchestration, and stricter unattended inbound MCP execution.
         builder.Services.AddOptions<SpawnOptions>()
                .Bind(configuration.GetSection(SpawnOptions.SectionName))
                .ValidateOnStart();

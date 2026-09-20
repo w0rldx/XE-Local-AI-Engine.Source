@@ -8,12 +8,12 @@ namespace XE_Local_AI_Engine.Client.Services.Persistence;
 public interface INodeDbBackupService
 {
     /// <summary>
-    ///     Takes a consistent <c>VACUUM INTO</c> snapshot of the node database when — and only when — there are pending
-    ///     migrations, then prunes older snapshots down to the configured retention count. A no-op when nothing is pending.
-    ///     <para>
-    ///         Availability over the guarantee: any backup failure is logged at Error and swallowed. It must never throw, so a
-    ///         backup hiccup can never block migration or brick startup.
-    ///     </para>
+    ///     Takes a consistent <c>VACUUM INTO</c> snapshot of the node database when — and only when — there are pending migrations, then
+    ///     prunes older snapshots down to the configured retention count. A no-op when nothing is pending.
     /// </summary>
+    /// <remarks>
+    ///     <para> Availability over the guarantee: any backup failure is logged at Error and swallowed. It must never throw, so a backup
+    ///     hiccup can never block migration or brick startup. </para>
+    /// </remarks>
     Task BackupBeforeMigrationAsync(CancellationToken cancellationToken = default);
 }

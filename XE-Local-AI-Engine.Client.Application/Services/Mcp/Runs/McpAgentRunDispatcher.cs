@@ -52,11 +52,8 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         Interlocked.Exchange(ref _stopping, value: 1);
         IReadOnlyList<McpAgentRunCancellationHandle> active;
 
-        // The durable stop-marker work must not be aborted by the host shutdown token: host shutdown first wins the
-        // durable CAS, then signals (see the class summary). _stopping already tells the in-flight worker to leave the
-        // gate without claiming, so waiting with None cannot deadlock and cannot escape as a TaskCanceledException that
-        // would crash host shutdown. The sibling shutdown paths (RunWatchdogAsync, FinalizeClaimDuringShutdownAsync)
-        // already persist with None for the same reason.
+        // The durable stop-marker work must not be aborted by the host shutdown token: shutdown wins the durable CAS first, then
+        // signals, and the stopping flag already frees the in-flight worker, so waiting with None neither deadlocks nor escapes as a throw.
         await _claimGate.WaitAsync(CancellationToken.None);
         try
         {

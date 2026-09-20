@@ -29,20 +29,25 @@ public sealed class NodeSettingsValidationError
 }
 
 /// <summary>
-///     Cross-field save policy for node settings. It runs on the MERGED result (stored settings + the incoming partial
-///     update), which is precisely why the boundary FluentValidation validator cannot express it: the validator only
-///     sees the request, so it cannot tell a partial update that enables a feature while keeping an already-stored
-///     model apart from one that enables it with nothing selected. Some rules also need the EFFECTIVE runtime value
+///     Cross-field save policy for node settings, running on the MERGED result of the stored settings and the incoming
+///     partial update.
+/// </summary>
+/// <remarks>
+///     That is precisely why the boundary FluentValidation validator cannot express it: the validator sees only the
+///     request, so it cannot tell a partial update that enables a feature while keeping an already-stored model from
+///     one that enables it with nothing selected. Some rules also need the EFFECTIVE runtime value
 ///     (stored &gt; appsettings seed &gt; default) for a knob the request omitted, which only
 ///     <see cref="INodeRuntimeSettings" /> can resolve.
-/// </summary>
+/// </remarks>
 public static class NodeSettingsPolicy
 {
     /// <summary>
-    ///     Validates the merged settings. Rules are evaluated in order and evaluation STOPS at the first violation
-    ///     (the caller surfaces one error at a time, and a later rule may read runtime state an earlier violation makes
-    ///     meaningless), so the result holds at most one error.
+    ///     Validates the merged settings, returning at most one error.
     /// </summary>
+    /// <remarks>
+    ///     Rules are evaluated in order and evaluation STOPS at the first violation: the caller surfaces one error at a
+    ///     time, and a later rule may read runtime state an earlier violation has made meaningless.
+    /// </remarks>
     public static async Task<IReadOnlyList<NodeSettingsValidationError>> ValidateMergedAsync(StoredNodeSettings settings,
         INodeRuntimeSettings runtimeSettings,
         CancellationToken cancellationToken = default)
@@ -50,9 +55,8 @@ public static class NodeSettingsPolicy
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(runtimeSettings);
 
-        // A draft-* speculative mode with no draft model must never persist — it would pass every field-level check and
-        // then fail chat-server start on the next spawn. This also covers the partial update that clears the draft
-        // model while leaving a previously-stored draft-* mode in place.
+        // A draft speculative mode with no draft model must never persist: it passes every field-level check and then fails
+        // chat-server start on the next spawn. This also covers an update clearing the draft model under a stored draft mode.
         if (StoredNodeSettings.SpeculativeModeRequiresDraftModel(settings.SpeculativeMode)
             && string.IsNullOrWhiteSpace(settings.SpeculativeDraftModelName))
         {

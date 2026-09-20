@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     Node-local Quartz scheduler options. Bound from the <c>Scheduler</c> configuration section. Controls whether
-///     the scheduler is active, concurrency, history retention, and the Quartz table prefix used when the migration
-///     embeds the raw QRTZ DDL (for the embedded Quartz schema).
+///     Node-local Quartz scheduler options, bound from the <c>Scheduler</c> configuration section.
 /// </summary>
+/// <remarks>
+///     They control whether the scheduler is active, its concurrency, history retention, and the Quartz table prefix
+///     the migration's embedded raw QRTZ DDL uses.
+/// </remarks>
 public sealed class SchedulerOptions
 {
     public const string Section = "Scheduler";

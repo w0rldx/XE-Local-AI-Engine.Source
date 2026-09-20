@@ -64,6 +64,13 @@ An `assistant-delta` carries only `delta` / `reasoningDelta` plus `contentOffset
 
 Live delivery is bounded independently of durable persistence. `ChatStreamEventSink` uses a non-blocking bounded channel with `Chat:StreamBudget.QueueCapacity` (default 2,048 events) and `MaxQueuedChars` (default 1,048,576 characters); producers never wait, so a slow/disconnected browser cannot stall the pump's database terminalization. Overflow emits one `assistant-reconcile` per burst, causing the client to resume from an authoritative snapshot. Resume subscribers are also bounded, limited to four per invocation by default, and snapshots above `MaxReplaySnapshotChars` reconcile through a persisted-conversation refetch instead of sending an oversized replacement. Delta production is coalesced before sequence assignment by `EmitDebounceMs` (40 ms by default), so coalescing cannot create sequence holes.
 
+**The emit cadence and the persistence cadence are deliberately decoupled**, which is why `ChatStreamBudgetOptions` holds both sets of knobs in one
+record. The SSE emit debounce keeps live frames at roughly 25/s so the UI stays fluid, while the partial-flush knobs let the database write lag far
+behind it: a flush rewrites the whole accumulated message, so a fixed 100 ms cadence made per-turn write volume quadratic in output length. Bounding a
+flush's delta at a *fraction* of what is already persisted bounds the rewrite-to-append ratio regardless of message length. Everything in that record is
+appsettings-only tuning; the operator-editable disconnect grace is a stored node setting (`StoredNodeSettings.DetachedGraceSeconds`, read through
+`INodeRuntimeSettings`) because it is surfaced in the node-settings UI.
+
 ## Model resolution (the per-turn `RuntimeChatClient` seam)
 
 `RuntimeChatClient` (`Services/CloudProviders/Implementation/RuntimeChatClient.cs`) is the node's single registered `IChatClient`. It is a thin wrapper that **re-selects cloud-vs-local on every call** (`ResolveActiveClient`): it asks `IActiveCloudChatClientFactory.TryCreateActiveCloudChatClient` and uses the cloud client when a cloud provider is selected and usable, otherwise the lazily-created, reused local client. Consequences a maintainer must respect:

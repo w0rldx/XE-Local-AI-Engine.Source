@@ -27,16 +27,11 @@ internal sealed class CapabilityReporter : ICapabilityReporter
     ///     The effective default chat model, resolved LIVE through <see cref="INodeRuntimeSettings" /> on every preflight.
     /// </summary>
     /// <remarks>
-    ///     This used to be captured in the constructor straight from configuration:
-    ///     <c>configuration.GetValue&lt;string&gt;("Agent:LocalChat:DefaultModel") ?? configuration.GetValue&lt;string&gt;("Ollama:ChatModel")</c>.
-    ///     That broke the precedence contract stated on <see cref="INodeRuntimeSettings" /> itself — "consumers must read
-    ///     migrated values through this surface, never via the appsettings binding of a migrated field, which is the seed
-    ///     only". Because <c>Agent:LocalChat:DefaultModel</c> IS seeded in <c>appsettings.json</c>, the first branch always
-    ///     won and the operator's stored default model was never consulted at all — not merely stale until restart, but
-    ///     ignored permanently. The node then reported its fallback capability against a model the operator had moved away
-    ///     from (and which, on a fresh node, is not installed).
-    ///     <see cref="INodeRuntimeSettings.GetDefaultModelNameAsync" /> applies <c>stored &gt; seed</c> with that same
-    ///     appsettings key as the seed, so this is behaviour-preserving when nothing is stored and correct when something is.
+    ///     Reading <c>Agent:LocalChat:DefaultModel</c> from configuration here instead would break the precedence contract stated on
+    ///     <see cref="INodeRuntimeSettings" /> itself — "consumers must read migrated values through this surface, never via the appsettings binding of a
+    ///     migrated field, which is the seed only" — and because that key IS seeded in <c>appsettings.json</c> the stored default would never be consulted
+    ///     at all, leaving the node reporting its fallback capability against a model the operator had moved away from.
+    ///     <see cref="INodeRuntimeSettings.GetDefaultModelNameAsync" /> applies <c>stored &gt; seed</c> with the same appsettings key as the seed.
     /// </remarks>
     private Task<string> ResolveDefaultModelAsync(CancellationToken cancellationToken) =>
         _runtimeSettings.GetDefaultModelNameAsync(cancellationToken);

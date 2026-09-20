@@ -7,14 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 
 /// <summary>
-///     DI wiring for the sandboxed <c>run_python</c> compute tool. Registered unconditionally: the node kill-switch
-///     (off by default) is enforced in the gateway rather than by skipping registration, so the tool answers a disabled
-///     node with a clear sentence instead of vanishing from the resolution seam and surfacing as an unknown-tool error.
+///     DI wiring for the sandboxed <c>run_python</c> compute tool, registered unconditionally.
 /// </summary>
 /// <remarks>
-///     Depends on the sandbox provider roles registered by <see cref="AddNodeAgentHomeExtensions.AddNodeAgentHome" />
-///     (<c>IAgentSandboxRuntimeProvider</c>, and the AgentHome identity provider the attach key is built from), so it
-///     must run after that module.
+///     The node kill-switch (off by default) is enforced in the gateway rather than by skipping registration, so the
+///     tool answers a disabled node with a clear sentence instead of vanishing from the resolution seam as an
+///     unknown-tool error. It depends on the sandbox provider roles
+///     <see cref="AddNodeAgentHomeExtensions.AddNodeAgentHome" /> registers (<c>IAgentSandboxRuntimeProvider</c> and the
+///     AgentHome identity provider the attach key is built from), so it must run after that module.
 /// </remarks>
 internal static class AddNodeComputeExtensions
 {

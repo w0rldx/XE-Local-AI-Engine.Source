@@ -8,24 +8,16 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 
 /// <summary>
-///     Quartz template handler for the reserved <c>model-recommendation-check</c> template. On each fire
-///     it validates the decrypted parameters, then invokes <see cref="IModelFitRefreshService" /> to run the local model
-///     advisor (box-aware GGUF recommendation) and replace the cached recommendation snapshot.
-///     <para>
-///         <b>Singleton.</b> The registry captures every handler in a <c>FrozenDictionary</c> at construction, so this
-///         handler is effectively a singleton and CANNOT inject scoped services. It injects
-///         <see cref="IServiceScopeFactory" /> and creates a scope per <see cref="ExecuteAsync" />, resolving the scoped
-///         refresh service inside.
-///     </para>
-///     <para>
-///         <b>Owns no scheduler state.</b> It never creates/updates scheduler run rows and never publishes SignalR — the
-///         dispatcher owns those. It forwards <see cref="ScheduledJobExecutionContext.ReportProgressAsync" /> to the
-///         refresh service, lets <see cref="OperationCanceledException" /> propagate (so the dispatcher records a
-///         Cancelled run), and throws a <see cref="ScheduledJobExecutionException" /> carrying the refresh result's
-///         contractually-sanitized <see cref="ModelFitRefreshResult.SanitizedError" /> on a non-success refresh so the
-///         dispatcher records a Failed run with an actionable reason. The refresh service is invoked ONLY here — there is no bypass path.
-///     </para>
+///     Quartz template handler for the reserved <c>model-recommendation-check</c> template: it validates the decrypted
+///     parameters, then has <see cref="IModelFitRefreshService" /> run the local model advisor.
 /// </summary>
+/// <remarks>
+///     The registry captures every handler in a <c>FrozenDictionary</c> at construction, so this handler is a singleton
+///     and CANNOT inject scoped services: it takes <see cref="IServiceScopeFactory" /> and creates a scope per
+///     <see cref="ExecuteAsync" />. It owns no scheduler state — never a run row, never a notification — but forwards
+///     progress, lets <see cref="OperationCanceledException" /> propagate for a Cancelled run, and throws a
+///     <see cref="ScheduledJobExecutionException" /> carrying <see cref="ModelFitRefreshResult.SanitizedError" />.
+/// </remarks>
 public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
 {
     /// <summary>The reserved scheduler template id this handler claims.</summary>
@@ -35,10 +27,13 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
     private const string AdvisorProviderName = "llama.cpp";
 
     /// <summary>
-    ///     JSON-Schema (draft-07) for the decrypted <c>model-recommendation-check</c> parameters. The approved-image and
-    ///     provider-name params are gone (the advisor runs box-aware GGUF recommendation in-process); the optional
-    ///     <c>quantOverride</c> replaces the default <c>Q4_K_M</c> and <c>ctxTarget</c> overrides the fit context window.
+    ///     JSON-Schema (draft-07) for the decrypted <c>model-recommendation-check</c> parameters.
     /// </summary>
+    /// <remarks>
+    ///     The advisor runs box-aware GGUF recommendation in-process, so the schema carries no approved-image or
+    ///     provider name. The optional <c>quantOverride</c> replaces the default <c>Q4_K_M</c>, and <c>ctxTarget</c>
+    ///     overrides the fit context window.
+    /// </remarks>
     private const string ParameterSchemaJson =
         """
         {
@@ -111,9 +106,8 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
 
         if (result.Status != ModelFitRunStatus.Succeeded)
         {
-            // SanitizedError is operator-safe by the IModelFitRefreshService contract (never secrets / raw output), so
-            // it is surfaced via ScheduledJobExecutionException — the dispatcher records a Failed run carrying this exact
-            // reason. Throwing (rather than returning) prevents a spurious success record.
+            // SanitizedError is operator-safe by the IModelFitRefreshService contract, never secrets or raw output, so
+            // ScheduledJobExecutionException may carry it verbatim. Throwing rather than returning prevents a spurious success record.
             _logger.LogWarning("Model recommendation check did not succeed (template {TemplateId}, status {Status}).",
                 TemplateIdValue,
                 result.Status);
@@ -124,10 +118,13 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
 
     /// <summary>
     ///     Parses the decrypted parameter JSON and validates it against the same model-fit request validator the runner
-    ///     uses. The operation must be <see cref="ModelFitOperation.Recommend" /> for this template. Any validation
-    ///     failure throws <see cref="ScheduledJobValidationException" /> so the dispatcher records the failure without
-    ///     invoking the runner. Never echoes raw parameter values.
+    ///     uses.
     /// </summary>
+    /// <remarks>
+    ///     The operation must be <see cref="ModelFitOperation.Recommend" /> for this template. Any validation failure
+    ///     throws <see cref="ScheduledJobValidationException" />, so the dispatcher records the failure without
+    ///     invoking the runner, and no raw parameter value is ever echoed.
+    /// </remarks>
     private ModelFitRefreshRequest ParseAndValidate(string? parametersJson)
     {
         if (string.IsNullOrWhiteSpace(parametersJson))

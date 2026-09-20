@@ -6,8 +6,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
 ///     Registers the external OpenAI-compatible provider's application-layer half: the encrypted connection store, the
-///     registry projected from it, the tri-state trust resolver every policy gate consults, the write path with its
-///     cross-store side effects, and the startup reconciliation pass.
+///     registry, the tri-state trust resolver every policy gate consults, the write path and the startup reconciliation.
 /// </summary>
 /// <remarks>
 ///     <strong>Caller contract:</strong> invoke BEFORE <c>AddNodeModelRuntime</c>. That module registers the external
@@ -27,9 +26,8 @@ internal static class AddNodeExternalProvidersExtensions
         builder.Services.AddSingleton<ExternalProviderStore>();
         builder.Services.AddSingleton<IExternalProviderStore>(static sp => sp.GetRequiredService<ExternalProviderStore>());
 
-        // Singleton, and the SAME instance behind both faces: the read contract the provider consumes and the
-        // cache-control surface the write path drives. Two instances would mean a save invalidating a snapshot that
-        // the chat path never reads from.
+        // Singleton, and the SAME instance behind both faces: the read contract the provider consumes and the cache-control surface
+        // the write path drives. Two instances would mean a save invalidating a snapshot the chat path never reads from.
         builder.Services.AddSingleton<ExternalProviderRegistry>();
         builder.Services.AddSingleton<IExternalProviderRegistry>(static sp => sp.GetRequiredService<ExternalProviderRegistry>());
         builder.Services.AddSingleton<IExternalProviderRegistryCache>(static sp => sp.GetRequiredService<ExternalProviderRegistry>());
@@ -43,11 +41,8 @@ internal static class AddNodeExternalProvidersExtensions
         builder.Services.AddScoped<IExternalProviderReconciler, ExternalProviderReconciler>();
         builder.Services.AddScoped<IExternalProviderAdministrationService, ExternalProviderAdministrationService>();
 
-        // Scoped to match the endpoint that drives it. Holds no state: each probe builds, uses and disposes its own
-        // HttpClient, because the address it is pinned to is per-request and a pooled client would outlive it.
-        // Constructed by an explicit factory rather than by type: its last constructor parameter is the test transport
-        // seam, and leaving that to the container's default-value fallback would make a real registration depend on a
-        // detail that exists for tests.
+        // Scoped to match the endpoint that drives it, and stateless: each probe builds, uses and disposes its own HttpClient, because
+        // the per-request address would outlive a pooled one. Built by an explicit factory so its test-transport parameter is no container default.
         builder.Services.AddScoped<IExternalProviderProbeService>(static sp =>
             new ExternalProviderProbeService(sp.GetRequiredService<IExternalProviderStore>(),
                 sp.GetRequiredService<ILogger<ExternalProviderProbeService>>()));

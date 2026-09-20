@@ -9,33 +9,42 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 
 /// <summary>
-///     Default <see cref="IScheduledJobManagementService" />. Validates the requested schedule, persists the definition
-///     through the scheduled-job stores first, then reconciles the live Quartz job/trigger to match the stored state
-///     (delete-and-recreate is the simplest correct path for an update). All logging is sanitized — definition ids,
-///     template ids, schedule kinds, and enabled state are safe to log; raw parameters and run details are never logged.
+///     Default <see cref="IScheduledJobManagementService" />: it validates the requested schedule, persists the
+///     definition through the scheduled-job stores first, then reconciles the live Quartz job and trigger.
 /// </summary>
+/// <remarks>
+///     Delete-and-recreate is the simplest correct path for an update. All logging is sanitized: definition ids,
+///     template ids, schedule kinds and enabled state are safe to log, raw parameters and run details never are.
+/// </remarks>
 public sealed class ScheduledJobManagementService : IScheduledJobManagementService
 {
     /// <summary>
-    ///     How many whole-turn budgets the derived run-agent ceiling covers. Quartz counts max-runtime from the job's
-    ///     START, but the run's own invocation deadline only starts once it holds the shared invocation slot — and the
-    ///     turn it queues behind may itself run for a full node "Maximum message request timeout". Two budgets cover
-    ///     one preceding full-length turn plus this run's own.
+    ///     How many whole-turn budgets the derived run-agent ceiling covers.
     /// </summary>
+    /// <remarks>
+    ///     Quartz counts max-runtime from the job's START, but the run's own invocation deadline only starts once it
+    ///     holds the shared invocation slot, and the turn it queues behind may itself run for a full node "Maximum
+    ///     message request timeout". Two budgets cover one preceding full-length turn plus this run's own.
+    /// </remarks>
     private const int DerivedMaxRuntimeTurnBudget = 2;
 
     /// <summary>
     ///     Slack added on top of the turn budgets when the run-agent template's ceiling is derived rather than
-    ///     operator-set, covering the pre-run resolve/capacity work outside both deadlines. Five minutes matches
-    ///     <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c>, the coarse slack unit this subsystem already uses.
+    ///     operator-set, covering the pre-run resolve and capacity work outside both deadlines.
     /// </summary>
+    /// <remarks>
+    ///     Five minutes matches <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c>, the coarse slack unit this subsystem
+    ///     already uses.
+    /// </remarks>
     private const int DerivedMaxRuntimeOverheadSeconds = 300;
 
     /// <summary>
-    ///     The max-runtime the run-agent template used to pre-fill into every new schedule's form before the default
-    ///     was removed. A stored value equal to it is indistinguishable from an operator who typed 600, so
-    ///     <see cref="ResolveMaxRuntimeSecondsAsync" /> treats it as unset — see the rationale there.
+    ///     The stored run-agent max-runtime <see cref="ResolveMaxRuntimeSecondsAsync" /> treats as unset.
     /// </summary>
+    /// <remarks>
+    ///     A stored value equal to it is indistinguishable from an operator who typed 600, and no template pre-fills a
+    ///     max-runtime into a new schedule's form, so the resolver derives a ceiling instead — the rationale is there.
+    /// </remarks>
     private const int LegacyRunAgentTemplateDefaultMaxRuntimeSeconds = 600;
     private readonly IScheduledJobDefinitionStore _definitionStore;
     private readonly ISchedulerEventPublisher _eventPublisher;
@@ -157,9 +166,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     {
         if (enabled)
         {
-            // Resolve the template BEFORE the durable flag is flipped. A registered template is required to build the
-            // dispatch job, so a definition referencing an unknown template can never be scheduled — persisting
-            // Enabled=true first would leave a job that reads as enabled but never fires. Unknown id still returns null.
+            // Resolve the template BEFORE the durable flag is flipped: a registered template is required to build the dispatch job,
+            // so a definition on an unknown template can never be scheduled and would otherwise read as enabled while never firing.
             var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
             if (existing is null)
             {
@@ -189,12 +197,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             }
             catch (Exception)
             {
-                // Any scheduling failure (Quartz SchedulerException, a cron/time-zone parse error, cancellation) leaves the
-                // same wrong state, so the compensation is unconditional and runs on CancellationToken.None: an aborted
-                // request must not skip the flip-back and strand the durable flag.
-                // Nothing re-schedules an enabled-but-unscheduled job later: ReconcileDurableJobsAsync only refreshes
-                // JobDetail rows that already exist and never (re)creates a trigger. Flip the durable flag back so the
-                // stored state matches reality and the operator can retry, then surface the original failure.
+                // Any scheduling failure — Quartz, a cron or time-zone parse error, cancellation — leaves the same wrong state, so the
+                // compensation is unconditional, on CancellationToken.None. Nothing re-schedules such a job later, so flip the flag back.
                 _ = await _definitionStore.SetEnabledAsync(id, enabled: false, CancellationToken.None);
                 throw;
             }
@@ -265,14 +269,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             throw new ScheduledJobValidationException("This job is not currently scheduled and cannot be triggered.");
         }
 
-        // Self-heal a persisted JobDetail whose stored class name no longer resolves: re-add the durable detail with
-        // replace=true so its JOB_CLASS_NAME refreshes to the current typeof(...) value. A JobDetail stored before the
-        // dispatch job moved namespaces would otherwise fail TriggerJob with "Could not load type ...". BuildJobDetail
-        // produces an identical detail for an already-current job, so this is a no-op in the common case. AddJob with a
-        // durable detail and no trigger never fires the job — TriggerJob below performs the actual fire.
-        // Best-effort: a transient AddJob failure (e.g. a momentary DB hiccup) must not surface as a raw 500 from the
-        // heal that exists to remove that very symptom. Log and continue to TriggerJob, which then either succeeds or
-        // surfaces the real, actionable error.
+        // Self-heal a persisted JobDetail whose stored class name no longer resolves: re-adding the durable detail with replace=true
+        // refreshes JOB_CLASS_NAME, is a no-op for a current job and never fires it. Best-effort — a transient failure logs and continues.
         try
         {
             await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken), replace: true, cancellationToken);
@@ -284,10 +282,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
                 definition.Id);
         }
 
-        // Per-fire overrides ride the firing trigger's JobDataMap (never the stored definition). The dispatcher decides
-        // which keys may override stored parameters; an empty/absent map fires the stored definition unchanged.
-        // Quartz honors [DisallowConcurrentExecution] on the non-overlapping dispatch job, so an overlapping manual fire
-        // of a prevent-overlap definition is serialized by Quartz rather than rejected here.
+        // Per-fire overrides ride the firing trigger's JobDataMap, never the stored definition, and the dispatcher decides which keys
+        // may override. Quartz honors the non-overlapping dispatch job's attribute, so an overlapping manual fire is serialized there.
         var fireDataMap = new JobDataMap
         {
             // Every fire through here is an operator/agent "Run now", which is the only thing that distinguishes it from
@@ -313,12 +309,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
 
     public async Task<int> ReconcileDurableJobsAsync(CancellationToken cancellationToken = default)
     {
-        // Startup self-heal: every persisted, enabled, non-deleted definition re-adds its Quartz JobDetail with
-        // replace=true so a stale JOB_CLASS_NAME (e.g. written before the dispatch job moved namespaces) refreshes to the
-        // current typeof(...) value. This covers recurring jobs that are never manually triggered. It NEVER changes a
-        // trigger's schedule and NEVER fires a job: AddJob with a durable, trigger-less detail only rewrites the stored
-        // detail, leaving any existing trigger intact. Definitions whose template is no longer registered are skipped
-        // (they cannot be rebuilt) rather than faulting the whole sweep.
+        // Startup self-heal: every persisted, enabled, non-deleted definition re-adds its Quartz JobDetail with replace=true, so a
+        // stale JOB_CLASS_NAME refreshes. It NEVER changes a trigger or fires a job, and skips definitions whose template is gone.
         var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
         var definitions = await _definitionStore.ListAsync(includeDeleted: false, cancellationToken);
 
@@ -561,9 +553,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
 
         if (record.ScheduleKind == ScheduleKind.Manual)
         {
-            // A Manual job is a durable on-demand job with NO trigger — it never auto-fires, only TriggerNowAsync fires
-            // it. AddJob requires the detail to be durable (BuildJobDetail already calls StoreDurably), so it registers
-            // a trigger-less job. Do not build a trigger for Manual.
+            // A Manual job is a durable on-demand job with NO trigger: it never auto-fires, only TriggerNowAsync fires it. AddJob
+            // requires a durable detail, which BuildJobDetail already stores, so it registers a trigger-less job.
             await scheduler.AddJob(jobDetail, replace: true, cancellationToken);
             return;
         }
@@ -592,15 +583,13 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         var builder = JobBuilder.Create(jobType)
                                 .WithIdentity(BuildJobKey(record.Id))
                                 .UsingJobData(SchedulerJobKeys.ScheduledJobIdKey, record.Id.ToString())
-                                // Opt this job into the auto-interrupt monitor (UseJobAutoInterrupt). Stored as the
-                                // string "true" because UseProperties=true persists only strings; the plugin reads it
-                                // via Convert.ToBoolean. Without this key the global DefaultMaxRunTime never applies.
+                                // Opt this job into the auto-interrupt monitor, as the string "true" because the job
+                                // store persists only strings. Without this key the global DefaultMaxRunTime never applies.
                                 .UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyAutoInterruptable, "true")
                                 .StoreDurably();
 
-        // Per-job max-runtime: the operator's explicit value when set, otherwise the template's derived ceiling.
-        // The plugin parses MaxRunTime as a millisecond long from its string form (TryGetLongValueFromString →
-        // TimeSpan.FromMilliseconds); with neither, the global default applies.
+        // Per-job max-runtime: the operator's explicit value when set, otherwise the template's derived ceiling. The plugin parses
+        // MaxRunTime as a millisecond long from its string form, and with neither value the global default applies.
         var maxRuntimeSeconds = await ResolveMaxRuntimeSecondsAsync(record, cancellationToken);
 
         if (maxRuntimeSeconds is > 0)
@@ -613,23 +602,21 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     }
 
     /// <summary>
-    ///     The effective Quartz ceiling for a schedule: the operator's own value when it is set, otherwise the
-    ///     template's derived ceiling. Only the run-agent template derives one — it drives exactly one model
-    ///     invocation, whose own deadline is the node "Maximum message request timeout", so a Quartz interrupt below
-    ///     that setting always pre-empts the run's own ceiling (the operator raises the node timeout and the unattended
-    ///     run still dies at the older, lower bound). Every other template keeps the global
-    ///     <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c> fallback (null here). Re-resolved on every
-    ///     schedule/reconcile, so a raised node setting reaches existing schedules at the next startup reconciliation.
+    ///     The effective Quartz ceiling for a schedule: the operator's own value when set, otherwise the template's
+    ///     derived ceiling.
     /// </summary>
+    /// <remarks>
+    ///     Only the run-agent template derives one, since it drives exactly one model invocation whose own deadline is
+    ///     the node "Maximum message request timeout", so a lower Quartz interrupt would always pre-empt it. Every
+    ///     other template keeps the global <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c> fallback, null here. It is
+    ///     re-resolved on every schedule and reconcile, so a raised node setting reaches existing schedules.
+    /// </remarks>
     private async Task<int?> ResolveMaxRuntimeSecondsAsync(ScheduledJobDefinitionRecord record, CancellationToken cancellationToken)
     {
         var isRunAgent = string.Equals(record.TemplateId, RunSavedAgentHandler.TemplateIdValue, StringComparison.Ordinal);
 
-        // A stored 600 on a run-agent schedule is ambiguous: it is what the removed template default pre-filled into
-        // the form, so it is far more likely to be that stale default than a deliberate ten-minute cap — and honoring
-        // it would leave exactly the schedules this fix exists for still capped below the node timeout. Operator
-        // decision: treat it as unset and derive the ceiling. An operator who really wanted 600 s gets the derived
-        // ceiling instead, which is never lower, so the only cost is a stuck run being collected later.
+        // A stored 600 on a run-agent schedule is ambiguous: it is what the withdrawn template default pre-filled, far likelier stale
+        // than a deliberate cap, so the operator decision is to treat it as unset and derive a ceiling, which is never lower.
         var isLegacyTemplateDefault = isRunAgent && record.MaxRuntimeSeconds == LegacyRunAgentTemplateDefaultMaxRuntimeSeconds;
         if (record.MaxRuntimeSeconds is > 0 && !isLegacyTemplateDefault)
         {

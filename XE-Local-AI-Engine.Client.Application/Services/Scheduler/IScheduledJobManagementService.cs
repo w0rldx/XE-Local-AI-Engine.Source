@@ -4,14 +4,15 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Application-layer orchestration over the scheduled-job stores and the live Quartz scheduler. It validates the
-///     supplied schedule (template exists, schedule-kind supported, cron/interval/one-shot fields well-formed, timezone
-///     resolves, runtime/display-name present, enum values defined), persists the definition via
-///     <see cref="IScheduledJobDefinitionStore" /> <em>first</em>, then reconciles the Quartz job/trigger to match the
-///     stored state. The store owns id/timestamp stamping and the soft-delete/enable lifecycle; this service never
-///     re-implements them. It returns the decrypted scheduled-job records/projections, throws
-///     <see cref="ScheduledJobValidationException" /> on bad input, and returns <c>null</c> for a missing definition/run.
+///     Application-layer orchestration over the scheduled-job stores and the live Quartz scheduler.
 /// </summary>
+/// <remarks>
+///     It validates the supplied schedule (template exists, schedule-kind supported, cron/interval/one-shot fields
+///     well-formed, timezone resolves, runtime and display name present, enum values defined), persists the definition
+///     through <see cref="IScheduledJobDefinitionStore" /> <em>first</em>, then reconciles the Quartz job and trigger
+///     to the stored state. The store owns id/timestamp stamping and the soft-delete and enable lifecycle. Bad input
+///     throws <see cref="ScheduledJobValidationException" />; a missing definition or run returns <c>null</c>.
+/// </remarks>
 public interface IScheduledJobManagementService
 {
     /// <summary>Returns the descriptors of every registered template, in registration order.</summary>
@@ -34,10 +35,12 @@ public interface IScheduledJobManagementService
 
     /// <summary>
     ///     Validates and applies the editable fields of <paramref name="input" /> to the definition with
-    ///     <paramref name="id" />, then rebuilds its Quartz job/trigger from the new definition (enabling state is
-    ///     preserved — toggling it is the dedicated <see cref="SetEnabledAsync" /> action). Returns the updated record, or
-    ///     <c>null</c> when no definition has that id.
+    ///     <paramref name="id" />, then rebuilds its Quartz job and trigger from the new definition.
     /// </summary>
+    /// <remarks>
+    ///     The enabling state is preserved: toggling it is the dedicated <see cref="SetEnabledAsync" /> action. Returns
+    ///     the updated record, or <c>null</c> when no definition has that id.
+    /// </remarks>
     Task<ScheduledJobDefinitionRecord?> UpdateJobAsync(Guid id, ScheduledJobManagementInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -54,27 +57,28 @@ public interface IScheduledJobManagementService
     Task<bool> DeleteJobAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Fires the definition with <paramref name="id" /> immediately via Quartz. Throws
-    ///     <see cref="ScheduledJobValidationException" /> when no definition has that id, when it is disabled/deleted, when
-    ///     its template forbids manual triggering, or when its Quartz job is not currently scheduled.
-    ///     <para>
-    ///         <paramref name="parameterOverrides" /> is an optional set of per-fire values stamped onto the firing
-    ///         trigger's <c>JobDataMap</c>. They never mutate the stored definition; the dispatcher decides which (if any)
-    ///         of them may override a stored parameter — today only the whitelisted model-fit use-case key. A <c>null</c> or
-    ///         empty map fires the definition exactly as its stored parameters describe (the recurring/cron path).
-    ///     </para>
+    ///     Fires the definition with <paramref name="id" /> immediately through Quartz.
     /// </summary>
+    /// <remarks>
+    ///     It throws <see cref="ScheduledJobValidationException" /> when no definition has that id, when it is disabled
+    ///     or deleted, when its template forbids manual triggering, or when its Quartz job is not currently scheduled.
+    ///     <paramref name="parameterOverrides" /> are per-fire values stamped onto the firing trigger's
+    ///     <c>JobDataMap</c>; they never mutate the stored definition, and the dispatcher decides which of them may
+    ///     override a stored parameter. A <c>null</c> or empty map fires the stored parameters exactly.
+    /// </remarks>
     Task TriggerNowAsync(Guid id,
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Re-adds the durable Quartz <c>JobDetail</c> (with <c>replace=true</c>) for every persisted, enabled,
-    ///     non-deleted definition that already has a Quartz job, so a stale persisted <c>JOB_CLASS_NAME</c> — e.g. one
-    ///     written before the dispatch job moved namespaces — heals to the current type. It never changes a trigger's
-    ///     schedule and never fires a job; definitions whose template is no longer registered are skipped. Intended to run
-    ///     once at startup. Returns the number of job details refreshed.
+    ///     Re-adds the durable Quartz <c>JobDetail</c> with <c>replace=true</c> for every persisted, enabled,
+    ///     non-deleted definition that already has a Quartz job, and returns how many were refreshed.
     /// </summary>
+    /// <remarks>
+    ///     A stale persisted <c>JOB_CLASS_NAME</c>, such as one written before the dispatch job moved namespaces, then
+    ///     heals to the current type. It never changes a trigger's schedule and never fires a job, and skips
+    ///     definitions whose template is no longer registered. Intended to run once at startup.
+    /// </remarks>
     Task<int> ReconcileDurableJobsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -91,21 +95,26 @@ public interface IScheduledJobManagementService
     Task<ScheduledJobRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Requests best-effort cancellation of the run with <paramref name="runId" />: records
-    ///     <c>CancellationRequestedAtUtc</c> and interrupts the matching Quartz fire so the handler's
-    ///     <see cref="CancellationToken" /> is signalled. The dispatcher records the terminal <c>Cancelled</c> state once
-    ///     the handler observes the token. Returns the <see cref="RunCancellationOutcome" /> describing whether the run was
-    ///     missing, already terminal, actively interrupted, or marked but not currently running.
+    ///     Requests best-effort cancellation of the run with <paramref name="runId" />: it records
+    ///     <c>CancellationRequestedAtUtc</c> and interrupts the matching Quartz fire.
     /// </summary>
+    /// <remarks>
+    ///     The handler's <see cref="CancellationToken" /> is signalled, and the dispatcher records the terminal
+    ///     <c>Cancelled</c> state once the handler observes it. The returned <see cref="RunCancellationOutcome" /> says
+    ///     whether the run was missing, already terminal, actively interrupted, or marked but not currently running.
+    /// </remarks>
     Task<RunCancellationOutcome> CancelRunAsync(Guid runId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-///     The editable fields of a scheduled job definition supplied on create/update through the management API.
-///     <see cref="Parameters" /> is the plaintext parameter JSON; the store encrypts it at rest. Unlike the persistence
-///     <c>ScheduledJobDefinitionInput</c>, this carries neither <c>Enabled</c> (create persists enabled, update preserves
-///     the current state) nor <c>CreatedBy</c> (the service stamps the creator) — those are not operator-editable.
+///     The editable fields of a scheduled job definition, supplied on create or update through the management API.
 /// </summary>
+/// <remarks>
+///     <see cref="Parameters" /> is the plaintext parameter JSON, which the store encrypts at rest. Unlike the
+///     persistence <c>ScheduledJobDefinitionInput</c>, this carries neither <c>Enabled</c> (create persists enabled,
+///     update preserves the current state) nor <c>CreatedBy</c> (the service stamps the creator), because neither is
+///     operator-editable.
+/// </remarks>
 public sealed class ScheduledJobManagementInput
 {
     public required string TemplateId { get; init; }

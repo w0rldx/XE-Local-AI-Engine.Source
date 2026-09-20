@@ -29,17 +29,22 @@ public enum FailureCategory
     ModelLoadFailed = 9,
 
     /// <summary>
-    ///     A "Local runtime default" send could not resolve an installed GGUF (llama.cpp) chat-capable model — no chat
-    ///     model is installed on the node. Surfaced instead of the generic <see cref="ProviderUnreachable" /> so the
-    ///     frontend can show a clear "pull a GGUF model" call to action rather than reporting an unreachable provider.
+    ///     A "Local runtime default" send could not resolve an installed GGUF (llama.cpp) chat-capable model — no chat model is installed
+    ///     on the node.
     /// </summary>
+    /// <remarks>
+    ///     Surfaced instead of the generic <see cref="ProviderUnreachable" /> so the frontend can show a clear "pull a GGUF model" call to
+    ///     action rather than reporting an unreachable provider.
+    /// </remarks>
     ModelNotInstalled = 10,
 
     /// <summary>
-    ///     The conversation history still exceeded the resolved context budget after the deterministic budgeter's
-    ///     two-pass truncation (oversized tool-result excerpting, then whole-turn dropping). Surfaced BEFORE any
-    ///     provider call — a clean, classified hard-stop instead of silently overrunning the model's launched context
-    ///     window or being rejected deep inside the provider with an opaque error.
+    ///     The conversation history still exceeded the resolved context budget after the deterministic budgeter's two-pass truncation
+    ///     (oversized tool-result excerpting, then whole-turn dropping).
     /// </summary>
+    /// <remarks>
+    ///     Surfaced BEFORE any provider call — a clean, classified hard-stop instead of silently overrunning the model's launched context
+    ///     window or being rejected deep inside the provider with an opaque error.
+    /// </remarks>
     ContextWindowExceeded = 11
 }

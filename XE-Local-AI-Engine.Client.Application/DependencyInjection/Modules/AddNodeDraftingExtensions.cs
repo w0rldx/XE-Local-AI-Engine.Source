@@ -43,9 +43,8 @@ internal static class AddNodeDraftingExtensions
         // Singleton: the draft slot is process-wide, and it reads the two singleton busy signals.
         builder.Services.AddSingleton<DraftAdmissionGate>();
 
-        // Scoped, not singleton: eligibility reads the scoped, DbContext-backed IModelClassificationStore. The Ollama
-        // model service is always registered — the capability gate swaps in a substitute that reports no installed
-        // model, so a llama.cpp-only node makes Ollama models ineligible instead of breaking the drafting surface.
+        // Scoped, not singleton: eligibility reads the scoped, DbContext-backed IModelClassificationStore. The Ollama model service is
+        // always registered — the capability gate substitutes one reporting no installed model, so a llama.cpp-only node just makes them ineligible.
         builder.Services.AddScoped<IConfigDraftService>(serviceProvider => new DefaultConfigDraftService(serviceProvider.GetRequiredService<ILocalModelProviderResolver>(),
             serviceProvider.GetRequiredService<IGgufModelStore>(),
             serviceProvider.GetRequiredService<IModelClassificationStore>(),

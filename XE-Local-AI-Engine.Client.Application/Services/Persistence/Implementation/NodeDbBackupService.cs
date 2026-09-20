@@ -45,9 +45,8 @@ public sealed class NodeDbBackupService : INodeDbBackupService
     /// <inheritdoc />
     public async Task BackupBeforeMigrationAsync(CancellationToken cancellationToken = default)
     {
-        // Availability over the guarantee: a backup is a safety net, never a gate. Every failure below — an
-        // unreachable DB, an unwritable backup dir, a VACUUM error — is logged at Error and swallowed so migration and
-        // startup proceed regardless. Only genuine cancellation is allowed to propagate.
+        // Availability over the guarantee: a backup is a safety net, never a gate. Every failure below — an unreachable DB, an unwritable backup dir, a
+        // VACUUM error — is logged at Error and swallowed so migration and startup proceed regardless. Only genuine cancellation is allowed to propagate.
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
@@ -102,9 +101,8 @@ public sealed class NodeDbBackupService : INodeDbBackupService
 
     private static async Task VacuumIntoAsync(NodeChatDbContext dbContext, string destinationPath, CancellationToken cancellationToken)
     {
-        // VACUUM INTO cannot bind parameters and cannot run inside a transaction, so build the SQL literal ourselves and run
-        // it directly on the connection. The path is derived from INodeDataDirectory + a sanitized timestamp (never user
-        // input); we still escape single quotes so an unusual directory can't break out of the string literal.
+        // VACUUM INTO cannot bind parameters and cannot run inside a transaction, so build the SQL literal ourselves and run it directly on the connection. The path is derived
+        // from INodeDataDirectory + a sanitized timestamp (never user input); we still escape single quotes so an unusual directory can't break out of the string literal.
         var escapedPath = destinationPath.Replace("'", "''", StringComparison.Ordinal);
 
         await dbContext.Database.OpenConnectionAsync(cancellationToken);

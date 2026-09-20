@@ -5,13 +5,14 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Startup background service that re-derives and re-encrypts conversation titles after the
-///     <c>EncryptConversationTitle</c> migration, which NULLs all existing plaintext titles because migrations cannot
-///     access the node encryption key. For each conversation whose title is NULL, this service reads the first
-///     user-role message, derives the title via <see cref="NodeChatTitle.FromUserContent" />, encrypts it with the
-///     node key, and writes it back. Runs once per startup; safe to re-run (conversations without a user message are
-///     left NULL and processed again on the next restart until a message arrives).
+///     Startup background service that re-derives and re-encrypts conversation titles after the <c>EncryptConversationTitle</c> migration,
+///     which NULLs all existing plaintext titles because migrations cannot access the node encryption key.
 /// </summary>
+/// <remarks>
+///     For each conversation whose title is NULL, this service reads the first user-role message, derives the title via
+///     <see cref="NodeChatTitle.FromUserContent" />, encrypts it with the node key, and writes it back. Runs once per startup; safe to
+///     re-run (conversations without a user message are left NULL and processed again on the next restart until a message arrives).
+/// </remarks>
 public sealed class NodeChatTitleEncryptionBackfillService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -32,9 +33,8 @@ public sealed class NodeChatTitleEncryptionBackfillService : BackgroundService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
-            // Find all non-purged conversations with a NULL title. These are rows that existed before the
-            // EncryptConversationTitle migration (which NULLs plaintext titles) or conversations created before
-            // the first user message arrived.
+            // Find all non-purged conversations with a NULL title. These are rows that existed before the EncryptConversationTitle
+            // migration (which NULLs plaintext titles) or conversations created before the first user message arrived.
             var conversationIds = await dbContext.Database
                                                  .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE purged = 0 AND title IS NULL")
                                                  .ToListAsync(stoppingToken);
@@ -52,9 +52,8 @@ public sealed class NodeChatTitleEncryptionBackfillService : BackgroundService
             {
                 stoppingToken.ThrowIfCancellationRequested();
 
-                // Read the first user-role message id + content blob. DecryptMessageContent is read-both, so this
-                // recovers the plaintext whether the row is a legacy plaintext blob or an encrypted envelope
-                // (content AAD = conversationId + messageId + "content").
+                // Read the first user-role message id + content blob. DecryptMessageContent is read-both, so this recovers the plaintext whether the
+                // row is a legacy plaintext blob or an encrypted envelope, whose content AAD is conversationId + messageId + "content".
                 var row = await dbContext.Database
                                          .SqlQueryRaw<MessageIdAndContent>(
                                              "SELECT message_id AS MessageId, content AS Content FROM messages WHERE conversation_id = {0} AND role = 'user' ORDER BY sequence ASC LIMIT 1",

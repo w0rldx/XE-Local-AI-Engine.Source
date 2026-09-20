@@ -5,52 +5,57 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 /// <summary>
 ///     Represents invocation state.
 /// </summary>
+/// <remarks>
+///     Streamed content and reasoning accumulate one chunk at a time on the hot streaming path; each channel is the immutable, append-only
+///     <see cref="StreamingText" />: appending is O(chunk) and a snapshot CLONE copies the reference (O(1)) rather than materializing the
+///     full string. The string is built and cached only when a consumer reads <see cref="StreamedContent" /> or
+///     <see cref="StreamedThinkingContent" /> — the pump's debounced flush, a resume replay, or the terminal flush — so materialization
+///     happens at bounded cadence rather than the per-chunk O(n) ToString, which was O(n^2) over a turn.
+/// </remarks>
 public sealed class InvocationState
 {
-    // Streamed content/reasoning accumulate one chunk at a time on the hot streaming path. Each channel is the immutable,
-    // append-only StreamingText below: appending is O(chunk) and, crucially, a snapshot CLONE copies the reference (O(1))
-    // instead of materializing the full string. The whole string is built (and cached) only when a consumer reads
-    // StreamedContent/StreamedThinkingContent — the pump's debounced flush, a resume replay, or the terminal flush — so
-    // materialization happens at bounded cadence rather than the per-chunk O(n) ToString (O(n^2) over a turn) it replaced.
-
     public Guid InvocationId { get; init; }
 
     public Guid ConversationId { get; init; }
 
     /// <summary>
     ///     The W3C trace id of the ambient activity when the invocation was created, or null when no activity was in
-    ///     scope (legacy/platform paths). Surfaced in the invocation monitor so a failed run's "See local logs" row
-    ///     carries a copyable correlation id into the exported traces. Not a hot-path value — captured once at creation.
-    ///     Like every other field, <see cref="Clone" /> must copy it.
+    ///     scope (legacy/platform paths).
     /// </summary>
+    /// <remarks>
+    ///     Surfaced in the invocation monitor so a failed run's "See local logs" row carries a copyable correlation id
+    ///     into the exported traces. Not a hot-path value — captured once at creation. Like every other field,
+    ///     <see cref="Clone" /> must copy it.
+    /// </remarks>
     public string? TraceId { get; init; }
 
     public InvocationStatus Status { get; set; }
 
     /// <summary>
     ///     The current runtime phase of the turn — preparing the runtime, loading the model (the cold-start window
-    ///     BEFORE the stream-idle watchdog is armed), or generating. Null for turns that never reported a phase
-    ///     (platform/legacy paths). Surfaced so the UI can show "loading model…" rather than an apparent hang while a
-    ///     large local model warms.
+    ///     BEFORE the stream-idle watchdog is armed), or generating.
     /// </summary>
+    /// <remarks>
+    ///     Null for turns that never reported a phase (platform/legacy paths). Surfaced so the UI can show "loading
+    ///     model…" rather than an apparent hang while a large local model warms.
+    /// </remarks>
     public InvocationRuntimePhase? RuntimePhase { get; set; }
 
-    /// <summary>
-    ///     When <see cref="RuntimePhase" /> last CHANGED — not when it was last reported. Stamped server-side by
-    ///     <c>WorkerEventDispatcher.ReportInvocationPhaseAsync</c> on a real transition only, so the browser can render
-    ///     elapsed cold-load time from an authoritative clock that a page reload does not reset. Null for turns that
-    ///     never reported a phase, and for a phase that predates this field. Like every other field,
-    ///     <see cref="Clone" /> must copy it: a member missing from the clone silently travels as null and only shows
-    ///     up live.
-    /// </summary>
+    /// <summary>When <see cref="RuntimePhase" /> last CHANGED — not when it was last reported.</summary>
+    /// <remarks>
+    ///     Stamped server-side by <c>WorkerEventDispatcher.ReportInvocationPhaseAsync</c> on a real transition only, so the browser can render
+    ///     elapsed cold-load time from an authoritative clock that a page reload does not reset. Null for turns that never reported a phase,
+    ///     and for a phase that predates this field. Like every other field, <see cref="Clone" /> must copy it: a member missing from the
+    ///     clone silently travels as null and only shows up live.
+    /// </remarks>
     public DateTimeOffset? RuntimePhaseChangedAtUtc { get; set; }
 
-    /// <summary>
-    ///     The immutable streamed-content accumulator — the single source of truth for the response text. Cloning an
-    ///     <see cref="InvocationState" /> copies THIS reference (O(1)) rather than the materialized
+    /// <summary>The immutable streamed-content accumulator — the single source of truth for the response text.</summary>
+    /// <remarks>
+    ///     Cloning an <see cref="InvocationState" /> copies THIS reference (O(1)) rather than the materialized
     ///     <see cref="StreamedContent" /> string, which is what removes the per-chunk materialization from the hot path.
     ///     <see cref="Clone" /> must copy this member, not <see cref="StreamedContent" />.
-    /// </summary>
+    /// </remarks>
     internal StreamingText ContentAccumulator { get; set; } = StreamingText.Empty;
 
     public string StreamedContent
@@ -99,13 +104,13 @@ public sealed class InvocationState
 
     public string? ModelUsed { get; set; }
 
-    /// <summary>
-    ///     The LAST provider round's prompt tokens, not the turn's sum. A tool-calling turn is several provider requests
-    ///     and each one's prompt is the whole conversation so far, so the final round's count is what the model's
-    ///     context actually HELD when it answered — the occupancy the chat meter derives from the assistant message
-    ///     these tokens are persisted onto. What the turn COST is <see cref="TurnInputTokens" />, which the run-envelope
-    ///     row records instead. Cost sums across rounds; occupancy does not.
-    /// </summary>
+    /// <summary>The LAST provider round's prompt tokens, not the turn's sum.</summary>
+    /// <remarks>
+    ///     A tool-calling turn is several provider requests and each one's prompt is the whole conversation so far, so the final round's count
+    ///     is what the model's context actually HELD when it answered — the occupancy the chat meter derives from the assistant message these
+    ///     tokens are persisted onto. What the turn COST is <see cref="TurnInputTokens" />, which the run-envelope row records instead. Cost
+    ///     sums across rounds; occupancy does not.
+    /// </remarks>
     public int? InputTokens { get; set; }
 
     /// <summary>The LAST provider round's completion tokens; see <see cref="InputTokens" /> for why it is not the sum.</summary>
@@ -119,10 +124,13 @@ public sealed class InvocationState
 
     /// <summary>
     ///     The turn's prompt tokens SUMMED over its provider rounds — what the turn cost, as opposed to the context
-    ///     occupancy in <see cref="InputTokens" />. Reported once per turn by the runner on every terminal path and
-    ///     persisted onto the run-envelope row (never the message row). Null when the provider reported no usage, and on
-    ///     every platform/legacy turn, in which case the envelope falls back to the message's tokens.
+    ///     occupancy in <see cref="InputTokens" />.
     /// </summary>
+    /// <remarks>
+    ///     Reported once per turn by the runner on every terminal path and persisted onto the run-envelope row (never
+    ///     the message row). Null when the provider reported no usage, and on every platform/legacy turn, in which case
+    ///     the envelope falls back to the message's tokens.
+    /// </remarks>
     public int? TurnInputTokens { get; set; }
 
     /// <summary>The turn's completion tokens summed over its provider rounds; null for the same reasons as <see cref="TurnInputTokens" />.</summary>
@@ -136,9 +144,12 @@ public sealed class InvocationState
 
     /// <summary>
     ///     Estimated tool-schema tokens the turn spent across all its provider rounds, read from the provider-call
-    ///     budget just before the terminal report. A count, never a tool name. Null on a turn whose runner never
-    ///     reported one (the platform path, and any stream that ended without a terminal state).
+    ///     budget just before the terminal report.
     /// </summary>
+    /// <remarks>
+    ///     A count, never a tool name. Null on a turn whose runner never reported one (the platform path, and any
+    ///     stream that ended without a terminal state).
+    /// </remarks>
     public long? ToolSchemaTokens { get; set; }
 
     /// <summary>The largest single round's estimated tool-schema token count for the turn; null for the same reasons as <see cref="ToolSchemaTokens" />.</summary>
@@ -146,18 +157,23 @@ public sealed class InvocationState
 
     /// <summary>
     ///     How many of <see cref="GenerationDurationMs" /> the turn spent making a LOCAL runtime ready — launching
-    ///     <c>llama-server</c> and loading the model — rather than generating. The whole-turn clock starts before the
-    ///     warm, so a cold first turn measured 206 s against the same work's 28 s warm; subtracting this leaves the
-    ///     warm-equivalent turn time. Null whenever no local warm happened (Ollama, a remote provider, an already-warm
-    ///     runtime that reported nothing) and on every platform/legacy turn.
+    ///     <c>llama-server</c> and loading the model — rather than generating.
     /// </summary>
+    /// <remarks>
+    ///     The whole-turn clock starts before the warm, so a cold first turn measured 206 s against the same work's 28 s warm; subtracting
+    ///     this leaves the warm-equivalent turn time. Null whenever no local warm happened (Ollama, a remote provider, an already-warm
+    ///     runtime that reported nothing) and on every platform/legacy turn.
+    /// </remarks>
     public long? ModelReadinessMs { get; set; }
 
     /// <summary>
     ///     The tier reasoning effort <c>auto</c> resolved to for this turn, reported by the runner immediately after
-    ///     the dispatch (<c>fast</c>, <c>normal</c> or <c>deep</c>). Null on every turn that authored a concrete
-    ///     effort, so a reader can tell a dispatched turn from an ordinary one. A label, never a signal value.
+    ///     the dispatch (<c>fast</c>, <c>normal</c> or <c>deep</c>).
     /// </summary>
+    /// <remarks>
+    ///     Null on every turn that authored a concrete effort, so a reader can tell a dispatched turn from an ordinary
+    ///     one. A label, never a signal value.
+    /// </remarks>
     public string? DispatchedTier { get; set; }
 
     /// <summary>The effort the turn was AUTHORED with when a dispatch happened (<c>auto</c>); null otherwise.</summary>
@@ -166,39 +182,45 @@ public sealed class InvocationState
     /// <summary>
     ///     Why the model stopped generating, verbatim from <c>ChatFinishReason.Value</c> on the last streamed update
     ///     that carried one (<c>stop</c>, <c>length</c>, <c>tool_calls</c>, <c>content_filter</c>, or a provider's own
-    ///     token). Null when the provider reported none — every non-OpenAI-shaped path, the orchestration path, and any
-    ///     turn that ended before a terminal update arrived. It describes the GENERATION, not the invocation: a turn
-    ///     that hit the token budget is still <see cref="InvocationStatus.Completed" />, and callers that care about a
-    ///     truncated answer must read THIS rather than the status.
+    ///     token).
     /// </summary>
+    /// <remarks>
+    ///     Null when the provider reported none — every non-OpenAI-shaped path, the orchestration path, and any turn that ended before a
+    ///     terminal update arrived. It describes the GENERATION, not the invocation: a turn that hit the token budget is still
+    ///     <see cref="InvocationStatus.Completed" />, and callers that care about a truncated answer must read THIS rather than the status.
+    /// </remarks>
     public string? FinishReason { get; set; }
 
     /// <summary>
     ///     Wall-clock generation duration in milliseconds, measured by the invocation runner across the whole turn
-    ///     (prompt-eval through final token). Null until the invocation completes and for legacy/platform turns that
-    ///     did not report it. Drives the optional tokens-per-second attribution.
+    ///     (prompt-eval through final token).
     /// </summary>
+    /// <remarks>
+    ///     Null until the invocation completes and for legacy/platform turns that did not report it. Drives the
+    ///     optional tokens-per-second attribution.
+    /// </remarks>
     public long? GenerationDurationMs { get; set; }
 
     /// <summary>
     ///     The turn's separated throughput facts — time to first token, and the pp/tg split of tokens and milliseconds.
+    /// </summary>
+    /// <remarks>
     ///     Null for every turn whose provider reported no <c>timings</c> (all cloud providers, the orchestration path,
     ///     and any turn that ended before a terminal update arrived). Never a ranking input: it describes how fast the
     ///     answer arrived, not how good it is.
-    /// </summary>
+    /// </remarks>
     public InvocationThroughput? Throughput { get; set; }
 
     public InvocationApprovalState? PendingApproval { get; set; }
 
-    /// <summary>
-    ///     The <c>ask_user</c> question currently waiting on the operator, or null. Carries the questions themselves (not
-    ///     just a correlation id) so a reconnecting browser can be handed a still-answerable prompt.
-    ///     <para>
-    ///         WARNING: the CLONE produced by <see cref="Clone" /> — not the live mutated state — is what reaches the
-    ///         chat pump and persistence. Any field added here must also be added to <see cref="Clone" /> or it silently
-    ///         travels as null. This class of bug passes unit tests and only shows up live.
-    ///     </para>
-    /// </summary>
+    /// <summary>The <c>ask_user</c> question currently waiting on the operator, or null.</summary>
+    /// <remarks>
+    ///     Carries the questions themselves (not just a correlation id) so a reconnecting browser can be handed a
+    ///     still-answerable prompt. WARNING: the CLONE produced by <see cref="Clone" /> — not the live mutated state —
+    ///     is what reaches the chat pump and persistence. Any field added here must also be added to
+    ///     <see cref="Clone" /> or it silently travels as null. This class of bug passes unit tests and only shows up
+    ///     live.
+    /// </remarks>
     public InvocationUserQuestionState? PendingQuestion { get; set; }
 
     public InvocationApprovalResolutionState? LastApprovalResolution { get; set; }
@@ -207,15 +229,14 @@ public sealed class InvocationState
 
     public InvocationToolCallResultState? LastToolCallResult { get; set; }
 
-    /// <summary>
-    ///     Snapshot-clones this invocation state. The single clone routine both <c>WorkerEventDispatcher</c> and
-    ///     <c>InvocationResumeRegistry</c> call — previously each hand-rolled its own copy of this method, and a field
-    ///     added to one but not the other would silently travel as null on whichever path was missed (see
+    /// <summary>Snapshot-clones this invocation state.</summary>
+    /// <remarks>
+    ///     The single clone routine both <c>WorkerEventDispatcher</c> and <c>InvocationResumeRegistry</c> call: a hand-rolled copy per caller
+    ///     lets a field added to one but not the other silently travel as null on whichever path was missed (see
     ///     <see cref="PendingQuestion" />). <see cref="ContentAccumulator" />, <see cref="ThinkingAccumulator" /> and
-    ///     <see cref="PendingToolCalls" /> are copied by REFERENCE (O(1)): the accumulators are immutable
-    ///     append-only buffers, and every writer replaces <see cref="PendingToolCalls" /> wholesale rather than
-    ///     mutating it in place, so a snapshot never observes a torn read.
-    /// </summary>
+    ///     <see cref="PendingToolCalls" /> are copied by REFERENCE (O(1)): the accumulators are immutable append-only buffers, and every
+    ///     writer replaces <see cref="PendingToolCalls" /> wholesale rather than mutating it in place, so no snapshot sees a torn read.
+    /// </remarks>
     public InvocationState Clone()
     {
         return new InvocationState

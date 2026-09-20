@@ -13,12 +13,12 @@ internal static class AddNodeDevWorkflowsExtensions
 {
     /// <summary>
     ///     Registers the development-workflow persistence substrate and its runtime.
-    ///     <para>
-    ///         As with work sessions, <c>Enabled=false</c> does <em>not</em> skip registration: a disabled node has to
-    ///         answer legibly rather than 500 out of an empty container. The switch is enforced in the runtime — the
-    ///         dispatcher registers either way and simply never starts its loop.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     As with work sessions, <c>Enabled=false</c> does <em>not</em> skip registration: a disabled node has to answer
+    ///     legibly rather than 500 out of an empty container, so the switch is enforced in the runtime — the dispatcher
+    ///     registers either way and simply never starts its loop.
+    /// </remarks>
     public static IHostApplicationBuilder AddNodeDevWorkflows(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -36,9 +36,8 @@ internal static class AddNodeDevWorkflowsExtensions
         // it. Registering the concrete type separately is what lets the decorator take it as its inner store.
         builder.Services.AddScoped<DevWorkflowStore>();
 
-        // Scoped: it reads the work-session and execution-log stores, which are scoped. The decorator below resolves
-        // it from a scope IT opens per collection rather than from the tick's scope, because a collection that
-        // overruns its deadline is abandoned and must not still be reading on the DbContext the settle then writes on.
+        // Scoped: it reads the scoped work-session and execution-log stores. The decorator below resolves it from a scope IT opens
+        // per collection, because a collection that overruns its deadline is abandoned and must not read on the DbContext the settle writes on.
         builder.Services.AddScoped<IDevWorkflowNodeTelemetrySource, DevWorkflowNodeTelemetrySource>();
         builder.Services.AddScoped<IDevWorkflowStore>(services => new PublishingDevWorkflowStore(services.GetRequiredService<DevWorkflowStore>(),
             services.GetRequiredService<IDevWorkflowEventPublisher>(),
@@ -69,9 +68,8 @@ internal static class AddNodeDevWorkflowsExtensions
         builder.Services.AddScoped<DevWorkflowArtifactPromotion>();
         builder.Services.AddScoped<DevWorkflowAgentExecutor>();
 
-        // Scoped like the agent lane and for the same reason, plus one of its own: the Development services it drives
-        // are scoped and are not registered at all when Development Mode is off, so it asks the scope for them and
-        // answers a node run legibly when they are absent.
+        // Scoped like the agent lane, plus a reason of its own: the Development services it drives are scoped and are not registered
+        // at all when Development Mode is off, so it asks the scope for them and answers a node run legibly when they are absent.
         builder.Services.AddScoped<DevWorkflowDevTaskExecutor>();
         builder.Services.AddScoped<IDevWorkflowRunService, DevWorkflowRunService>();
 
@@ -84,16 +82,14 @@ internal static class AddNodeDevWorkflowsExtensions
         // tick and a scope, and a second instance would hand the same slots out twice.
         builder.Services.AddSingleton<DevWorkflowToolExecutor>();
 
-        // Only when Development Mode is on, because that is where the workspace provider, the repository bindings and
-        // the sandbox come from. A tool node on a node with it switched off then finds no commands to run and says so,
-        // which is a configuration answer rather than a container failure deep inside a detached task.
+        // Only when Development Mode is on, because the workspace provider, the repository bindings and the sandbox come from there.
+        // A tool node on a node with it off finds no commands and says so — a configuration answer, not a container failure in a task.
         if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
         {
             builder.Services.AddScoped<IDevWorkflowToolCommands, DevWorkflowToolCommands>();
 
-            // The integration variant of the same lane, registered under the same condition and for a stronger reason:
-            // what it drives IS Dev Mode's apply gate, so with Development Mode off there is nothing for it to call.
-            // The lane then answers such a node run with a configuration reason, as it does a validation node's.
+            // The integration variant of the same lane, under the same condition and for a stronger reason: what it drives IS Dev Mode's
+            // apply gate, so with Development Mode off there is nothing to call and the lane answers with a configuration reason.
             builder.Services.AddScoped<DevWorkflowApplyCommands>();
         }
 

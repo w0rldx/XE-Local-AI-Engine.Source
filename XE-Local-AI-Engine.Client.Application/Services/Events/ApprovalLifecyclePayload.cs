@@ -1,14 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
-/// <summary>
-///     A single tool-approval request surfaced for the in-flight invocation. Mirrors
-///     <see cref="ToolCallLifecyclePayload" />'s shape and fan-out so the local send/regenerate/resume paths cannot
-///     drift. Distinct from <see cref="XE_Local_AI_Engine.Client.Models.ApprovalRequestPayload" /> (the platform-hub /
-///     invocation-monitor contract, which carries only the invocation id, request id, and description): this payload
-///     additionally carries the tool-call <see cref="CallId" /> and <see cref="ToolName" /> so the local chat stream can
-///     correlate the pending approval to the exact tool-call card the model is waiting on. The <see cref="RequestId" />
-///     is the approval request id the browser echoes back to the loopback resolve endpoint to release the run.
-/// </summary>
+/// <summary>A single tool-approval request surfaced for the in-flight invocation.</summary>
+/// <remarks>
+///     Mirrors <see cref="ToolCallLifecyclePayload" />'s shape and fan-out so the local send/regenerate/resume paths cannot drift. Distinct
+///     from <see cref="XE_Local_AI_Engine.Client.Models.ApprovalRequestPayload" /> (the platform-hub / invocation-monitor contract, which
+///     carries only the invocation id, request id and description): this payload additionally carries the tool-call <see cref="CallId" /> and
+///     <see cref="ToolName" />, so the local chat stream can correlate the pending approval to the exact tool-call card the model waits on.
+/// </remarks>
 public sealed record ApprovalLifecyclePayload
 {
     public required Guid InvocationId { get; init; }
@@ -29,14 +27,15 @@ public sealed record ApprovalLifecyclePayload
     public required string Description { get; init; }
 
     /// <summary>
-    ///     Whether the node can actually REMEMBER an "approve for this session" decision for THIS request — the runner's
-    ///     own answer, taken from the same memo-key resolution that would honor the decision, so the card offers the
-    ///     button only where the click means something. Strictly better than the tool-catalog boolean the client falls
-    ///     back to: the catalog answers at tool-identity level and cannot see the per-CALL narrowings (an imported skill,
-    ///     a resource-less <c>read_skill_resource</c>) — nor does it carry the MAF skill tools at all, which is how
-    ///     <c>run_skill_script</c> kept offering a session scope the node never honors.
-    ///     <see langword="null" /> means "not resolved here" (the platform API-tool path, and a reconnect replay
-    ///     rebuilt from <c>InvocationApprovalState</c>), in which case the client keeps its catalog fallback.
+    ///     Whether the node can actually REMEMBER an "approve for this session" decision for THIS request — the
+    ///     runner's own answer, so the card offers the button only where the click means something.
     /// </summary>
+    /// <remarks>
+    ///     Taken from the same memo-key resolution that would honor the decision, and strictly better than the tool-catalog boolean the
+    ///     client falls back to: the catalog answers at tool-identity level and cannot see the per-CALL narrowings (an imported skill, a
+    ///     resource-less <c>read_skill_resource</c>), nor does it carry the MAF skill tools at all — which is how <c>run_skill_script</c>
+    ///     offers a session scope the node never honors. <see langword="null" /> means "not resolved here" (the platform API-tool path, and a
+    ///     reconnect replay rebuilt from <c>InvocationApprovalState</c>), in which case the client keeps its catalog fallback.
+    /// </remarks>
     public bool? SessionScopeEligible { get; init; }
 }

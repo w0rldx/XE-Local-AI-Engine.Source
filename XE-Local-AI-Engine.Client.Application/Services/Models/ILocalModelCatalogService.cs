@@ -43,19 +43,19 @@ public sealed class LocalModelCatalog
     /// </summary>
     public required StoredAzureFoundryConnection? AzureFoundryConnection { get; init; }
 
-    /// <summary>
-    ///     Every model registered on an operator-configured external OpenAI-compatible connection, key-free. Like the
-    ///     Azure deployments these are offered on the strength of the registration alone: reachability is the health
-    ///     surface's job, and a picker that hid a model whenever its endpoint was briefly down would be unusable.
-    /// </summary>
+    /// <summary>Every model registered on an operator-configured external OpenAI-compatible connection, key-free.</summary>
+    /// <remarks>
+    ///     Like the Azure deployments these are offered on the strength of the registration alone: reachability is the health surface's
+    ///     job, and a picker that hid a model whenever its endpoint was briefly down would be unusable.
+    /// </remarks>
     public required IReadOnlyList<ExternalProviderModelRegistration> ExternalModels { get; init; }
 }
 
 /// <summary>
 ///     Aggregates the model picker's five independent sources (Ollama, installed GGUF, Codex, Azure Foundry, external
-///     OpenAI-compatible connections) and owns the per-source degradation policy, so the list endpoint stays a single
-///     call plus a mapping.
+///     OpenAI-compatible connections) and owns the per-source degradation policy.
 /// </summary>
+/// <remarks>The list endpoint therefore stays a single call plus a mapping.</remarks>
 public interface ILocalModelCatalogService
 {
     /// <summary>
@@ -63,10 +63,10 @@ public interface ILocalModelCatalogService
     /// </summary>
     Task<LocalModelCatalog> GetCatalogAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Lists the models the Ollama runtime currently holds in memory. Delegates straight to the runtime service this
-    ///     catalog already depends on, so the loaded-models endpoint reaches it through an Application-owned seam rather
-    ///     than injecting a concrete provider's contract.
-    /// </summary>
+    /// <summary>Lists the models the Ollama runtime currently holds in memory.</summary>
+    /// <remarks>
+    ///     Delegates straight to the runtime service this catalog already depends on, so the loaded-models endpoint reaches it through an
+    ///     Application-owned seam rather than injecting a concrete provider's contract.
+    /// </remarks>
     Task<IReadOnlyList<RunningModelSnapshot>> ListRunningOllamaModelsAsync(CancellationToken cancellationToken = default);
 }

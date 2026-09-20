@@ -29,11 +29,12 @@ public sealed record AllowedToolDto
     public bool RequiresApproval { get; init; }
 
     /// <summary>
-    ///     The tool's risk class for the node-default tool-approval policy. Defaults to
-    ///     <see cref="ToolCategory.Unknown" /> so a tool the offer provider did not categorize is treated as fail-closed
-    ///     (approval-requiring) by the node policy. This travels alongside the offer for policy evaluation; it is NOT part
-    ///     of the runtime-package config hash (the hash keys on <c>Name</c>/<c>Location</c>/schema/<c>RequiresApproval</c>
-    ///     via <c>MixedEnvelopeAllowedToolDto</c>, which is deliberately left unchanged).
+    ///     The tool's risk class for the node-default tool-approval policy. Defaults to <see cref="ToolCategory.Unknown" /> so a tool the
+    ///     offer provider did not categorize is treated as fail-closed (approval-requiring) by the node policy.
     /// </summary>
+    /// <remarks>
+    ///     This travels alongside the offer for policy evaluation; it is NOT part of the runtime-package config hash (the hash keys on <c>Name</c>/<c>Location</c>/schema/<c>RequiresApproval</c>
+    ///     via <c>MixedEnvelopeAllowedToolDto</c>, which is deliberately left unchanged).
+    /// </remarks>
     public ToolCategory Category { get; init; } = ToolCategory.Unknown;
 }

@@ -4,22 +4,15 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>
 ///     One closed vocabulary for "why did an agent execution unit stop", across the three units that answer the
-///     question in three different alphabets: a workflow node run's <c>failure_class</c>, an
-///     <c>agent_execution_logs</c> row's <c>FailureCategory</c>, and a Development attempt's <c>[code]</c>-prefixed
-///     terminal reason. A cost comparison that groups by whichever alphabet a row happened to be written in is not a
-///     comparison, so the grouping token is named once, here.
-///     <para>
-///         **Only the workflow arm is shipped as code.** <see cref="FromDevWorkflowFailureClass" /> has a real caller
-///         (the run composer's node drill-down). The other two vocabularies are not loaded by any composer — one lives
-///         on the execution log, the other on a Development attempt — so they ship as documented SQL <c>CASE</c>
-///         fragments in <c>docs/runbooks/agent-unit-cost-telemetry-runbook.md</c>, which is where a cross-unit rollup
-///         is actually run. Two mappers nothing calls would be two mappers nothing tests.
-///     </para>
-///     <para>
-///         Nothing ROUTES on any of this. It is a reporting grouping, written onto a read model and never onto a row,
-///         so a token added or re-pointed here changes a report and no run.
-///     </para>
+///     question in three different alphabets.
 /// </summary>
+/// <remarks>
+///     A workflow node run's <c>failure_class</c>, an <c>agent_execution_logs</c> row's <c>FailureCategory</c>, and a Development attempt's
+///     <c>[code]</c>-prefixed terminal reason: a cost comparison that groups by whichever alphabet a row happened to be written in is not a
+///     comparison, so the grouping token is named once, here. Only the workflow arm ships as code — the other two vocabularies ship as
+///     documented SQL <c>CASE</c> fragments in <c>docs/runbooks/agent-unit-cost-telemetry-runbook.md</c>, where a cross-unit rollup is run.
+///     Nothing ROUTES on any of this: it is a reporting grouping, written onto a read model and never onto a row.
+/// </remarks>
 public static class AgentUnitFailureClass
 {
     /// <summary>An operator stopped it.</summary>
@@ -64,11 +57,12 @@ public static class AgentUnitFailureClass
     /// <summary>Everything else, including a reason written in no vocabulary at all.</summary>
     public const string Internal = "Internal";
 
-    /// <summary>
-    ///     The shipped arm of the table, as data rather than as a <c>switch</c>: a <c>switch</c> with a discard arm
-    ///     cannot be asked which inputs it actually knows, and "every failure class this runtime can write has a
-    ///     deliberate group" is the property worth a test.
-    /// </summary>
+    /// <summary>The shipped arm of the table, as data rather than as a <c>switch</c>.</summary>
+    /// <remarks>
+    ///     A <c>switch</c> with a discard arm cannot be asked which inputs it actually knows, and "every failure class this runtime can write
+    ///     has a deliberate group" is the property worth a test. This arm ships because <see cref="FromDevWorkflowFailureClass" /> has a real
+    ///     caller (the run composer's node drill-down); two mappers nothing calls would be two mappers nothing tests.
+    /// </remarks>
     internal static readonly IReadOnlyDictionary<string, string> ByDevWorkflowFailureClass = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [DevWorkflowFailureClasses.Cancelled] = Cancelled,

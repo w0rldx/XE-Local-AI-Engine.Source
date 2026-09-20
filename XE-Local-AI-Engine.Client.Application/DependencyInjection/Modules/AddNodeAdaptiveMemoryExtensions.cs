@@ -6,14 +6,23 @@ using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
 internal static class AddNodeAdaptiveMemoryExtensions
 {
+    /// <summary>
+    ///     Registers adaptive-memory extraction: its options, the dedup layers, the extraction service and the
+    ///     background dispatcher and worker that run it off the chat pump.
+    /// </summary>
+    /// <remarks>
+    ///     The send and regenerate seams dispatch once per terminal turn, TRY-enqueuing onto a bounded queue that never
+    ///     blocks the pump and drops the newest job when full. The hosted worker drains that queue under a concurrency
+    ///     gate, runs each job on its own scope and DbContext with the drain-deadline token, so a completed run's memory
+    ///     survives a cancel-after-completion, and awaits in-flight jobs within a bounded window at shutdown.
+    /// </remarks>
     public static IHostApplicationBuilder AddNodeAdaptiveMemory(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Extraction model options. Defaults to the node-local chat model so a configured node extracts by default, and
-        // so run content is never sent to the cloud chat client by fallback. An empty value (no node-local model
-        // configured) disables extraction entirely — the CI-safe gate, mirroring the analysis options + embedding ranker.
+        // Extraction model options default to the node-local chat model, so a configured node extracts by default and run content
+        // never reaches the cloud chat client by fallback; an empty value disables extraction entirely, which is the CI-safe gate.
         builder.Services.AddOptions<MemoryExtractionOptions>()
                .Bind(builder.Configuration.GetSection(MemoryExtractionOptions.Section))
                .PostConfigure(memoryOptions =>
@@ -43,20 +52,14 @@ internal static class AddNodeAdaptiveMemoryExtensions
         // Extraction agent: mines candidate memories from a completed run using a node-local model only. Singleton
         // because it holds no scoped state and receives a fresh per-run chat client (mirrors the analysis agent).
         builder.Services.AddSingleton<IMemoryExtractionAgent, DefaultMemoryExtractionAgent>();
-        // Semantic (embedding-cosine) dedup layer used by the extraction service ON TOP OF its lexical dedup: catches
-        // paraphrases the exact normalized-text key misses, gated on a confident node-local embedding model (lexical-only
-        // fallback otherwise). Singleton — it holds the long-lived RAM-only existing-memory embedding cache (mirrors the
-        // playbook-retrieval ranker). Injected into the scoped extraction service; a singleton is safe there.
+        // Semantic (embedding-cosine) dedup ON TOP OF the extraction service's lexical dedup, catching paraphrases the exact
+        // normalized-text key misses; gated on a confident node-local embedding model. Singleton: it holds the RAM-only embedding cache.
         builder.Services.AddSingleton<IMemorySemanticDeduplicator, MemorySemanticDeduplicator>();
         // Extraction orchestration: gates temp chats, no-ops without a model, dedupes (lexical then semantic), and writes
         // Suggested/Extracted actions for human review. Scoped — it consumes the scoped, DbContext-backed playbook store.
         builder.Services.AddScoped<IMemoryExtractionService, MemoryExtractionService>();
-        // Background dispatcher + worker: the chat send/regenerate seams call Dispatch once per terminal turn, which
-        // TRY-enqueues onto the dispatcher's bounded queue (never blocking the pump; a full queue drops the newest job
-        // with a text-free warning). The hosted worker drains that queue under a SemaphoreSlim concurrency gate, runs
-        // each job on its own scope/DbContext with the drain-deadline token (so a completed run's memory survives a
-        // cancel-after-completion), and awaits in-flight jobs within a bounded window at shutdown. Registered concrete +
-        // interface so the worker and the hook share the one queue instance. Replaces the prior unbounded fire-and-forget.
+        // Background dispatcher + worker, registered concrete AND by interface so the worker and the chat hook share the one queue
+        // instance; see this method's remarks for the enqueue, drain and shutdown contract.
         builder.Services.AddSingleton<MemoryExtractionDispatcher>();
         builder.Services.AddSingleton<IMemoryExtractionDispatcher>(sp => sp.GetRequiredService<MemoryExtractionDispatcher>());
         builder.Services.AddHostedService(sp => new MemoryExtractionWorker(sp.GetRequiredService<IServiceScopeFactory>(),
@@ -64,10 +67,8 @@ internal static class AddNodeAdaptiveMemoryExtensions
             sp.GetRequiredService<IOptions<MemoryExtractionOptions>>(),
             sp.GetRequiredService<ILogger<MemoryExtractionWorker>>()));
 
-        // Execution-log retention policy plus the sweeper that applies it. The agent_execution_logs telemetry table is
-        // append-only, so without a sweep it grows unbounded. The sweeper resolves the execution-log store from a
-        // per-sweep scope, and only this layer may reach a persistence store, so it is registered beside its options
-        // here rather than in the host.
+        // Execution-log retention policy plus its sweeper: agent_execution_logs is append-only and grows unbounded without a sweep.
+        // The sweeper resolves the store from a per-sweep scope and registers here, not in the host, since only this layer may reach one.
         builder.Services.AddOptions<AgentExecutionLogRetentionOptions>()
                .Bind(builder.Configuration.GetSection(AgentExecutionLogRetentionOptions.Section));
         builder.Services.AddHostedService<AgentExecutionLogRetentionService>();

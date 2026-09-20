@@ -59,6 +59,11 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
         return _store.DeleteAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    ///     Two fixed-length SHA-256 digests make the comparison naturally length-invariant, so a truncated candidate is
+    ///     rejected on content rather than on an early length check.
+    /// </remarks>
     public async Task<bool> ValidateAsync(string? presented, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(presented))
@@ -74,11 +79,8 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
             return false;
         }
 
-        // Hash the candidate and compare DIGESTS, never the plaintext — the plaintext is not recoverable here, which is
-        // the whole point of storing a digest. FixedTimeEquals rather than SequenceEqual: a short-circuiting comparison
-        // leaks the length of the matching prefix, which over a loopback socket is a practical byte-at-a-time oracle.
-        // Two fixed-length SHA-256 digests also make the comparison naturally length-invariant, so a truncated
-        // candidate is rejected on content rather than on an early length check.
+        // Hash the candidate and compare DIGESTS, never the plaintext, which is not recoverable here — the point of storing a digest. FixedTimeEquals
+        // rather than SequenceEqual: short-circuiting leaks the matching prefix length, a byte-at-a-time oracle even over a loopback socket.
         var candidate = HashKey(presented);
         var matches = CryptographicOperations.FixedTimeEquals(record.KeyHash.Span, candidate);
 
@@ -93,13 +95,13 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
         return true;
     }
 
-    /// <summary>
-    ///     A single SHA-256 over the key's UTF-8 bytes — deliberately NOT a password KDF. PBKDF2/Argon2/bcrypt exist to
-    ///     make guessing a low-entropy human-chosen password expensive; the input here is 256 bits of CSPRNG output, so
-    ///     there is no guess space to slow down and the only thing a KDF would buy is latency on every authenticated
-    ///     proxy request. Unsalted for the same reason: a salt defeats precomputation across many weak secrets, and this
-    ///     node has exactly one strong one. This is the standard construction for high-entropy API tokens.
-    /// </summary>
+    /// <summary>A single SHA-256 over the key's UTF-8 bytes — deliberately NOT a password KDF.</summary>
+    /// <remarks>
+    ///     PBKDF2/Argon2/bcrypt exist to make guessing a low-entropy human-chosen password expensive; the input here is 256 bits of CSPRNG
+    ///     output, so there is no guess space to slow down and the only thing a KDF would buy is latency on every authenticated proxy
+    ///     request. Unsalted for the same reason: a salt defeats precomputation across many weak secrets, and this node has exactly one
+    ///     strong one. This is the standard construction for high-entropy API tokens.
+    /// </remarks>
     private static byte[] HashKey(string key)
     {
         return SHA256.HashData(Encoding.UTF8.GetBytes(key));

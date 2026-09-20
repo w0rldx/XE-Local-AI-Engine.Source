@@ -69,26 +69,21 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddSingleton<IConversationContextBudgeter, ConversationContextBudgeter>();
         builder.Services.AddSingleton<IToolApprovalAuditRecorder, ToolApprovalAuditRecorder>();
 
-        // The ask_user hand-off: the runner writes the operator's answer here after its out-of-stream round-trip and
-        // AskUserToolHandler pops it when the framework executes the (now approved) call. Both sides must see the SAME
-        // instance, so it is a singleton — and the handler is one too, because ClientLocalToolRegistry captures the
-        // IClientLocalToolHandler enumerable once at construction.
+        // The ask_user hand-off: the runner writes the operator's answer here after its out-of-stream round-trip and AskUserToolHandler
+        // pops it when the approved call executes. Both sides need the SAME instance; the handler is a Singleton for the registry's sake.
         builder.Services.AddSingleton<UserQuestionAnswerStash>();
         builder.Services.AddSingleton<IClientLocalToolHandler, AskUserToolHandler>();
         builder.Services.AddSingleton<IInvocationAttachmentTracker, InvocationAttachmentTracker>();
         builder.Services.AddSingleton<LocalRuntimeWarmer>();
 
-        // Singletons for the same reason the runner is: they own state that outlives the turn that created it — the
-        // session-approval memo spans a conversation, a parked tool call is released by a post that arrives on a
-        // different call stack, and the lifecycle tracker holds the live turn a cancel arriving on another stack must
-        // find. All four share ONE PendingToolCallRegistry instance.
+        // Singletons for the same reason the runner is: they own state outliving the turn that created it — a session-approval memo
+        // spans a conversation, a parked call is released from another call stack, a cancel must find the live turn. ONE registry, shared.
         builder.Services.AddSingleton<PendingToolCallRegistry>();
         builder.Services.AddSingleton<ToolApprovalCoordinator>();
         builder.Services.AddSingleton<ApiToolCallBridge>();
         builder.Services.AddSingleton<InvocationLifecycleTracker>();
-        // SCOPED, and the singleton runner above may not hold it under any wrapper — not even Lazy<T>, which defers
-        // construction but never opens a scope. The runner opens ONE explicit scope per `auto` turn instead (see
-        // InvocationRunner.RunAsync), so a turn with any other effort never resolves this service at all.
+        // SCOPED, and the singleton runner above may not hold it under any wrapper — not even Lazy<T>, which defers construction but
+        // never opens a scope. InvocationRunner.RunAsync opens ONE explicit scope per `auto` turn; other efforts never resolve it.
         builder.Services.AddScoped<IReasoningEffortDispatcher, DefaultReasoningEffortDispatcher>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
         builder.Services.AddHostedService<DetachedInvocationReaper>();

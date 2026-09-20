@@ -80,9 +80,8 @@ internal sealed class LocalModelAdministrationService : ILocalModelAdministratio
         }
         catch (ExternalProviderOperationNotSupportedException exception)
         {
-            // The external provider owns no weights on this node, so it refuses deletion rather than reporting a
-            // success the model table would then render as a completed removal. Translated here, in the layer that
-            // may reference the provider, so the host maps it to a 409 without taking a dependency of its own.
+            // The external provider owns no weights on this node, so it refuses deletion rather than reporting a success the model table
+            // would render as a removal. Translated in this layer, which may reference the provider, so the host maps a 409 without one.
             throw new ModelOperationNotSupportedByProviderException(exception.Message, exception);
         }
 
@@ -109,10 +108,8 @@ internal sealed class LocalModelAdministrationService : ILocalModelAdministratio
 
         var selectedModelName = modelName!.Trim();
 
-        // Read-modify-write under the store's lock. The settings record is whole-file, so a save built from a record
-        // loaded before validation would write back every field a concurrent writer (a machine-key mint, the
-        // external-provider reconciliation pass) changed in that window. The previous name is read inside the mutation
-        // for the same reason: the transition the cache is invalidated for is the one that actually happened on disk.
+        // Read-modify-write under the store's lock: the settings record is whole-file, so a save built from a record loaded before validation
+        // would revert a concurrent writer. The previous name is read inside the mutation so the invalidated transition is the one on disk.
         string? previousModelName = null;
         await _nodeSettingsStore.UpdateAsync(latest =>
         {

@@ -12,11 +12,8 @@ internal static class AddNodeCoderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Read-only coder tools (list_files / read_file / search_text). They share the AgentHome sandbox + identity +
-        // secret-exclusion services (registered by AddNodeAgentHome / AddNodeWorkerInfrastructure) and are gated by the
-        // same AgentHome:Enabled flag — there is no Coder:Enabled. The handlers, reader, and options are
-        // all Singleton: ClientLocalToolRegistry captures the IClientLocalToolHandler IEnumerable at
-        // construction, so a scoped handler would be a captive dependency. WorkspacePathGuard is static (no registration).
+        // Read-only coder tools (list_files / read_file / search_text) share AgentHome's sandbox, identity and secret-exclusion services (AddNodeAgentHome / AddNodeWorkerInfrastructure)
+        // and the AgentHome:Enabled flag — there is no Coder:Enabled. All Singleton: ClientLocalToolRegistry captures its handlers at construction; WorkspacePathGuard is static.
         builder.Services.AddOptions<CoderOptions>()
                .Bind(configuration.GetSection(CoderOptions.SectionName));
 

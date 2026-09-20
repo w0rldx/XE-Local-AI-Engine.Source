@@ -18,20 +18,24 @@ public sealed record ConversationMessageDto
     public required int SortOrder { get; init; }
 
     /// <summary>
-    ///     TRANSIENT image parts for a vision (multimodal) turn — never persisted and never part of the encrypted history
-    ///     hash (that hashes stored entries, not this turn DTO). Null on every text-only turn. Attached only when the
-    ///     effective model is vision-capable; a non-vision model never receives image parts.
+    ///     TRANSIENT image parts for a vision (multimodal) turn — never persisted and never part of the encrypted history hash (that hashes
+    ///     stored entries, not this turn DTO). Null on every text-only turn.
     /// </summary>
+    /// <remarks>
+    ///     Attached only when the effective model is vision-capable; a non-vision model never receives image parts.
+    /// </remarks>
     public IReadOnlyList<ConversationImagePart>? Images { get; init; }
 
     /// <summary>
-    ///     TRANSIENT tool call/result pairs replayed from an assistant turn's persisted parts, so a continued run reads
-    ///     the actions it already performed rather than only the prose describing them. Follows the <see cref="Images" />
-    ///     precedent exactly: attached by the turn assembler, never persisted, never part of the encrypted history hash
-    ///     (whose input is the encrypted entry, which has no field for it), and always null on the inbound API-side
-    ///     package path. Null on every turn that does not opt in — only the integration coordinator does, and only for a
-    ///     caller-managed session.
+    ///     TRANSIENT tool call/result pairs replayed from an assistant turn's persisted parts, so a continued run reads the actions it
+    ///     already performed rather than only the prose describing them.
     /// </summary>
+    /// <remarks>
+    ///     Follows the <see cref="Images" /> precedent exactly: attached by the turn assembler, never persisted, never part of the
+    ///     encrypted history hash (whose input is the encrypted entry, which has no field for it), and always null on the inbound API-side
+    ///     package path. Null on every turn that does not opt in — only the integration coordinator does, and only for a caller-managed
+    ///     session.
+    /// </remarks>
     public IReadOnlyList<ConversationToolExchange>? ToolExchanges { get; init; }
 }
 
@@ -57,12 +61,12 @@ public sealed class ConversationToolExchange
     public required bool IsError { get; init; }
 }
 
-/// <summary>
-///     One image attached to a turn: its IANA media type (e.g. <c>image/png</c>) and raw decoded bytes. Bytes ride as
-///     <see cref="ReadOnlyMemory{T}" /> (the Application-layer convention for binary payloads, e.g.
-///     <c>EncryptedConversationMessageDto</c>, and the exact shape Microsoft.Extensions.AI <c>DataContent</c> consumes);
-///     a <c>byte[]</c> converts implicitly, so callers passing an array are unaffected.
-/// </summary>
+/// <summary>One image attached to a turn: its IANA media type (e.g. <c>image/png</c>) and raw decoded bytes.</summary>
+/// <remarks>
+///     Bytes ride as <see cref="ReadOnlyMemory{T}" /> (the Application-layer convention for binary payloads, e.g. <c>EncryptedConversationMessageDto</c>,
+///     and the exact shape Microsoft.Extensions.AI <c>DataContent</c> consumes); a <c>byte[]</c> converts implicitly, so callers passing an
+///     array are unaffected.
+/// </remarks>
 public sealed class ConversationImagePart
 {
     public required string MediaType { get; init; }

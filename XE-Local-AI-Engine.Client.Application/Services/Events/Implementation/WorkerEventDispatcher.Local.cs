@@ -10,9 +10,8 @@ public sealed partial class WorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(package);
 
-        // Queue the turn behind any in-flight invocation instead of throwing when busy. The slot is held until the
-        // returned lease is disposed (when the run terminates), so concurrent turns stay mutually exclusive.
-        // Cancelling the turn while it is still queued aborts the wait here.
+        // Queue the turn behind any in-flight invocation instead of throwing when busy. The slot is held until the returned lease is disposed
+        // (when the run terminates), so concurrent turns stay mutually exclusive; cancelling while still queued aborts the wait here.
         await _invocationQueue.WaitAsync(cancellationToken);
 
         InvocationState snapshot;

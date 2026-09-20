@@ -1,14 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
-/// <summary>
-///     The live "a tool approval is waiting on the operator" slot on <see cref="InvocationState" />.
-///     <para>
-///         <see cref="CallId" /> and <see cref="ToolName" /> were added for the reconnect replay: a browser that
-///         reloads mid-turn is re-sent the pending approval, and it can only reattach the Approve/Deny controls to the
-///         right tool-call card if it knows which call the approval belongs to. Both are optional so a platform-hub
-///         approval — which carries only an id and a description — still round-trips unchanged.
-///     </para>
-/// </summary>
+/// <summary>The live "a tool approval is waiting on the operator" slot on <see cref="InvocationState" />.</summary>
+/// <remarks>
+///     <see cref="CallId" /> and <see cref="ToolName" /> serve the reconnect replay: a browser that reloads mid-turn is
+///     re-sent the pending approval, and it can only reattach the Approve/Deny controls to the right tool-call card if
+///     it knows which call the approval belongs to. Both are optional so a platform-hub approval — which carries only
+///     an id and a description — still round-trips unchanged.
+/// </remarks>
 public sealed record InvocationApprovalState
 {
     public required string RequestId { get; init; }
@@ -25,9 +23,12 @@ public sealed record InvocationApprovalState
 
     /// <summary>
     ///     Whether the node can REMEMBER an "approve for this session" decision for this exact request, as the runner
-    ///     resolved it. Recorded so a reconnect replay can re-offer — or withhold — the session button on the same
-    ///     terms as the live event. Null when nothing resolved it (a platform-hub approval); the replay treats null as
-    ///     NOT eligible, because offering a durable decision the node will not keep is the failure being fixed.
+    ///     resolved it.
     /// </summary>
+    /// <remarks>
+    ///     Recorded so a reconnect replay can re-offer — or withhold — the session button on the same terms as the live
+    ///     event. Null when nothing resolved it (a platform-hub approval); the replay treats null as NOT eligible,
+    ///     because offering a durable decision the node will not keep is exactly the failure this prevents.
+    /// </remarks>
     public bool? SessionScopeEligible { get; init; }
 }

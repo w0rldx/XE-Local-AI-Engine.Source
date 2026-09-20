@@ -18,12 +18,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     Owns the MCP client connections and keeps the MCP tool registry in sync with the enabled registrations. Each
-///     refresh reconciles live clients against the store's enabled set, discovers tools from newly connected servers,
-///     qualifies + approval-wraps them, and republishes a deterministically ordered immutable snapshot into the
-///     <see cref="IMcpToolRegistry" />. A per-server connect/list timeout plus per-server failure isolation keep a hung
-///     or hostile server from stalling or aborting the refresh.
+///     Owns the MCP client connections and keeps the MCP tool registry in sync with the enabled registrations.
 /// </summary>
+/// <remarks>
+///     Each refresh reconciles live clients against the store's enabled set, discovers tools from newly connected
+///     servers, qualifies and approval-wraps them, then republishes a deterministically ordered immutable snapshot
+///     into the <see cref="IMcpToolRegistry" />. A per-server connect and list timeout plus per-server failure
+///     isolation keep a hung or hostile server from stalling or aborting the refresh.
+/// </remarks>
 internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, IAsyncDisposable
 {
     private readonly IMcpClientFactory _clientFactory;
@@ -35,9 +37,8 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     private readonly SemaphoreSlim _refreshGate = new(initialCount: 1, maxCount: 1);
     private readonly IMcpToolRegistry _registry;
 
-    // The store is DbContext-backed and therefore Scoped, so a singleton manager must resolve it per refresh through a
-    // scope rather than capturing it (a captive dependency would fail ValidateOnBuild and risk concurrent DbContext use).
-    // This mirrors NodeChatPersistenceWriter / AgentHomeService.
+    // The store is DbContext-backed and therefore Scoped, so this singleton manager resolves it per refresh through a scope rather
+    // than capturing it: a captive dependency would fail ValidateOnBuild and risk concurrent DbContext use.
     private readonly IServiceScopeFactory _scopeFactory;
 
     // Guards _connections and _statuses (mutated only under the refresh gate, but GetStatuses reads concurrently).
@@ -116,15 +117,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
         var enabledById = enabled.ToDictionary(static record => record.Id);
 
-        // Assign a stable, unique slug per server (used for the qualified tool name). Slugs are derived from Name; a
-        // collision after normalization is disambiguated with a numeric suffix so two servers never share a namespace.
-        // Computed BEFORE the drop loop so the keep-predicate can detect a slug shift (a colliding server changing an
-        // existing server's disambiguation suffix), which would otherwise leave cached qualified names stale.
+        // Assign a stable, unique slug per server for the qualified tool name, a numeric suffix disambiguating names that normalize
+        // alike. Computed BEFORE the drop loop, so the keep-predicate sees a slug shift that would leave cached qualified names stale.
         var slugsByServer = AssignServerSlugs(enabled);
 
-        // Drop clients that are no longer enabled, whose connection-affecting Version changed, or whose freshly-computed
-        // slug differs from the one their cached tool names were baked with. The diff is computed against a copy of the
-        // keys so we can mutate _connections while iterating.
+        // Drop clients no longer enabled, whose connection-affecting Version changed, or whose freshly computed slug differs from the
+        // one their cached tool names were baked with. The diff runs over a copy of the keys, so _connections can be mutated meanwhile.
         foreach (var id in _connections.Keys.ToList())
         {
             var existing = _connections[id];
@@ -179,10 +177,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     }
 
     /// <summary>
-    ///     Connects one server under a per-server timeout and lists its tools. Returns the connected server (client +
-    ///     discovered, qualified, approval-wrapped tools) on success, or a redacted error on any specific failure — the
-    ///     failure is isolated so it never aborts the refresh or the other servers.
+    ///     Connects one server under a per-server timeout and lists its tools, returning the connected server with its
+    ///     qualified, approval-wrapped tools, or a redacted error.
     /// </summary>
+    /// <remarks>
+    ///     Any specific failure is isolated, so it never aborts the refresh or the other servers.
+    /// </remarks>
     private async Task<ConnectResult> ConnectServerAsync(McpServerRecord record, string slug, CancellationToken cancellationToken)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -199,10 +199,8 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         }
         catch (SandboxCapabilityNotSupportedException ex)
         {
-            // The ONE connection failure that is not redacted. Every other message here can echo a command path or a
-            // URL, so it is clamped to a generic reason; this one is engine-authored, names no host path and no
-            // secret, and is the whole point of the Sandboxed tier failing closed — an operator who is told only "the
-            // connection failed" cannot tell "this node cannot sandbox" from "your server is broken".
+            // The ONE connection failure that is not redacted: every other message here can echo a command path or URL, so it is
+            // clamped, while this one is engine-authored and tells an operator "this node cannot sandbox" from "your server is broken".
             _logger.LogWarning(ex, "MCP server {ServerId} could not be started under its trust tier; it will contribute no tools.", record.Id);
             await DisposePartialClientAsync(client, record.Version, slug);
             return new ConnectResult(Server: null, ex.Message);
@@ -218,12 +216,8 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                                        or InvalidOperationException
                                        or ArgumentException)
         {
-            // A connect/list failure for one server must never abort the refresh or leave the others half-applied.
-            // The catch covers the realistic transport/protocol set: MCP/HTTP/socket/IO errors, a per-server timeout
-            // (TimeoutException), a malformed tool schema (JsonException/NotSupportedException), a TLS/auth failure,
-            // and a malformed transport configuration (ArgumentException/InvalidOperationException). Caller cancellation
-            // (OperationCanceledException without the per-server timeout) is intentionally NOT caught here so it
-            // propagates out of the refresh.
+            // A connect or list failure for one server must never abort the refresh or leave the others half-applied, so the catch
+            // covers the realistic transport, timeout, schema, TLS and configuration set. Caller cancellation is NOT caught: it propagates.
             _logger.LogWarning(ex, "MCP server {ServerId} failed to connect or list tools; it will contribute no tools.", record.Id);
             await DisposePartialClientAsync(client, record.Version, slug);
             return new ConnectResult(Server: null, Redact(ex.Message));
@@ -246,23 +240,15 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     }
 
     /// <summary>
-    ///     Renames each discovered tool to a collision-free qualified name (<c>mcp__{slug}__{tool}</c>), builds its
-    ///     offer descriptor (approval ON by default), bounds its server round-trip with the per-call timeout, bounds its
-    ///     result with the shared tool-result budget, and wraps the executable in an approval gate.
-    /// </summary>
-    /// <summary>
     ///     The risk class every tool from one server is offered under.
-    ///     <para>
-    ///         <see cref="ToolCategory.Network" /> — "reaches an external/out-of-process surface" — is true of every MCP
-    ///         tool and is the whole story for a loopback HTTP server and for a sandboxed stdio server, neither of which
-    ///         this node grants any host reach. A <see cref="McpTrustTier.PrivilegedHost" /> STDIO server is different in
-    ///         kind: this node launches it as an unconfined child of its own user, so its tools can write files and run
-    ///         commands here. That is <see cref="ToolCategory.WriteExecute" />, and saying so is what lets an operator's
-    ///         node policy tighten the class and what makes the badge in the tool catalog and the category on every audit
-    ///         row truthful. Approval itself is unaffected — every MCP tool is already approval-required and already
-    ///         ineligible for a remembered session approval.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <see cref="ToolCategory.Network" />, "reaches an external or out-of-process surface", is true of every MCP
+    ///     tool and the whole story for a loopback HTTP server and a sandboxed stdio server, neither of which this node
+    ///     grants host reach. A <see cref="McpTrustTier.PrivilegedHost" /> STDIO server is different in kind: this node
+    ///     launches it as an unconfined child of its own user, so it is <see cref="ToolCategory.WriteExecute" />, which
+    ///     a node policy can tighten and which keeps the catalog badge and every audit row truthful.
+    /// </remarks>
     private static ToolCategory ResolveToolCategory(McpServerRecord record)
     {
         return record is { TransportKind: McpTransportKind.Stdio, TrustTier: McpTrustTier.PrivilegedHost }
@@ -270,6 +256,15 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             : ToolCategory.Network;
     }
 
+    /// <summary>
+    ///     Renames each discovered tool to a collision-free qualified name (<c>mcp__{slug}__{tool}</c>), builds its
+    ///     offer descriptor with approval on by default, and wraps the executable.
+    /// </summary>
+    /// <remarks>
+    ///     The wrapping bounds the server round-trip with the per-call timeout, the result with the shared tool-result
+    ///     budget, and the executable in an approval gate. Approval itself is unaffected by the risk class: every MCP
+    ///     tool is approval-required and ineligible for a remembered session approval.
+    /// </remarks>
     private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug, ToolCategory category, int maxToolResultCharacters, int maxInvalidToolCalls,
         TimeSpan toolCallTimeout)
     {
@@ -293,16 +288,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 Category = category
             };
 
-            // Bound the actual server round-trip with the per-call timeout INNERMOST — below arg-repair and the
-            // result budget — so only the SDK call is timed; a stall returns a typed tool-failure result and the run
-            // continues (never a retry). Transparent to name/description/schema.
+            // Bound the server round-trip with the per-call timeout INNERMOST, below arg-repair and the result budget, so only the SDK
+            // call is timed: a stall returns a typed tool-failure result and the run continues, never a retry.
             AIFunction timed = new McpToolCallTimeoutAIFunction(named, toolCallTimeout);
 
-            // Coerce + validate the model's arguments against the MCP tool's schema and run the per-request repair loop
-            // before the server ever sees them — same innermost guard the ClientLocal registry applies — so a malformed
-            // call returns actionable guidance instead of a failed round-trip. Unknown-property rejection is OFF for
-            // third-party servers: an under-declared server schema must not bounce a key the tool actually needs
-            // (required/type checks still apply).
+            // Validate the model's arguments against the tool's schema and run the repair loop before the server sees them, the guard
+            // the ClientLocal registry applies. Unknown-property rejection is OFF: an under-declared server schema must not bounce a needed key.
             AIFunction validated = new ToolArgumentRepairAIFunction(timed, maxInvalidToolCalls, rejectUnknownProperties: false);
 
             // Backstop the (verbatim) MCP result with the shared budget UNDER the approval gate, so a server can't
@@ -352,10 +343,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     }
 
     /// <summary>
-    ///     Assigns a unique kebab slug to each server, derived from its Name. The store enforces a unique Name, but two
-    ///     distinct names can normalize to the same slug, so a numeric suffix disambiguates collisions deterministically
-    ///     (servers are processed oldest first, matching the store's ordering).
+    ///     Assigns a unique kebab slug to each server, derived from its Name.
     /// </summary>
+    /// <remarks>
+    ///     The store enforces a unique Name, but two distinct names can normalize to the same slug, so a numeric suffix
+    ///     disambiguates collisions deterministically, servers being processed oldest first as the store orders them.
+    /// </remarks>
     private static Dictionary<Guid, string> AssignServerSlugs(IReadOnlyList<McpServerRecord> servers)
     {
         var slugs = new Dictionary<Guid, string>();
@@ -378,10 +371,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     }
 
     /// <summary>
-    ///     Normalizes a server name to a lowercase kebab slug: ASCII letters/digits pass through lowercased, every other
-    ///     run collapses to a single hyphen, and leading/trailing hyphens are trimmed. An empty result falls back to
-    ///     <c>server</c> so the qualified name is always well-formed.
+    ///     Normalizes a server name to a lowercase kebab slug: ASCII letters and digits pass through lowercased, every
+    ///     other run collapses to a single hyphen, and leading and trailing hyphens are trimmed.
     /// </summary>
+    /// <remarks>
+    ///     An empty result falls back to <c>server</c>, so the qualified name is always well-formed.
+    /// </remarks>
     private static string Slugify(string name)
     {
         var builder = new StringBuilder(name.Length);

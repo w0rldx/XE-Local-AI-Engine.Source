@@ -18,11 +18,13 @@ public interface ISelectedFolderResolver
     Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Resolves a folder's opaque id OR its human-facing alias to its trusted host path for worker-internal use.
-    ///     A GUID is matched first, so an alias that merely looks like one can never shadow a real id. Throws
-    ///     <see cref="SelectedFolderValidationException" /> for a value that is neither a GUID nor a well-formed alias,
-    ///     and <see cref="SelectedFolderNotFoundException" /> (which derives from it, so a caller catching the base
-    ///     type handles both) for a well-formed value that matches no active folder.
+    ///     Resolves a folder's opaque id OR its human-facing alias to its trusted host path for worker-internal use. A GUID is matched
+    ///     first, so an alias that merely looks like one can never shadow a real id.
     /// </summary>
+    /// <remarks>
+    ///     Throws <see cref="SelectedFolderValidationException" /> for a value that is neither a GUID nor a well-formed alias, and
+    ///     <see cref="SelectedFolderNotFoundException" /> (which derives from it, so a caller catching the base type handles both) for a
+    ///     well-formed value that matches no active folder.
+    /// </remarks>
     Task<ResolvedSelectedFolder> ResolveAsync(string id, CancellationToken cancellationToken = default);
 }

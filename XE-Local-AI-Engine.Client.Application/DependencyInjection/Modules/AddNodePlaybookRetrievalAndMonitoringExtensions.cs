@@ -14,12 +14,8 @@ internal static class AddNodePlaybookRetrievalAndMonitoringExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Playbook relevance-retrieval ranker: the resolver/orchestration paths consult it only when an agent's
-        // Enabled set exceeds the retrieval threshold and the send carries a non-blank query; below that the full static
-        // prepend is used (byte-identical). The lexical ranker (deterministic, model-free, stateless) is registered
-        // concretely as the fallback/disabled path; the embedding ranker is the IPlaybookRetrievalRanker — it resolves
-        // the concrete lexical for graceful degradation and ranks via the node-local embedding model only when
-        // EmbeddingModelName is configured. Both are Singletons (the embedding cache is a long-lived RAM-only store).
+        // Playbook relevance retrieval runs only when an agent's Enabled set exceeds the retrieval threshold and the send carries a query.
+        // Below that the byte-identical static prepend is used. The deterministic lexical ranker is the fallback, the embedding one the interface, needing EmbeddingModelName.
         builder.Services.AddSingleton<LexicalPlaybookRetrievalRanker>();
         builder.Services.AddSingleton<IPlaybookRetrievalRanker, EmbeddingPlaybookRetrievalRanker>();
         builder.Services.AddOptions<PlaybookRetrievalOptions>()

@@ -9,11 +9,12 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     Journalled deletion of an installed model: stage the members, remove the registry aliases, remove the provider-map
-///     rows, commit. A failure compensates in reverse, and when that compensation itself fails it is logged and the
-///     ORIGINAL failure is rethrown, so the caller keeps its typed reason and the retained journal drives
-///     <see cref="ReconcileAsync" /> on the next start.
+///     Journalled deletion of an installed model: stage the members, remove the registry aliases, remove the provider-map rows, commit.
 /// </summary>
+/// <remarks>
+///     A failure compensates in reverse, and when that compensation itself fails it is logged and the ORIGINAL failure is rethrown, so the
+///     caller keeps its typed reason and the retained journal drives <see cref="ReconcileAsync" /> on the next start.
+/// </remarks>
 public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinator, ILocalModelDeletionJournalReconciler
 {
     private readonly DeletionJournalStore _journals;
@@ -123,9 +124,8 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
         }
         catch
         {
-            // A failing compensation must never replace the failure that triggered it: the caller needs the original
-            // reason (and the endpoint its 409 mapping), while the rollback failure is what the retained journal and
-            // this log carry for recovery.
+            // A failing compensation must never replace the failure that triggered it: the caller needs the original reason (and the endpoint
+            // its 409 mapping), while the rollback failure is what the retained journal and this log carry for recovery.
             try
             {
                 await RollBackAsync(lease, journal, staged ?? stagePlan, aliasReceipt, mapReceipts, CancellationToken.None);
@@ -186,12 +186,12 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
         }
     }
 
-    /// <summary>
-    ///     Refuses to delete a base model that installed LoRA adapters launch against. An adapter entry carries no
-    ///     weights of its own — it is loaded on top of the base named by its <c>BaseModelName</c> — so removing the base
-    ///     would leave every dependent adapter permanently unlaunchable. Checked under the mutation lease and before
-    ///     anything is staged, so the refusal has nothing to roll back.
-    /// </summary>
+    /// <summary>Refuses to delete a base model that installed LoRA adapters launch against.</summary>
+    /// <remarks>
+    ///     An adapter entry carries no weights of its own — it is loaded on top of the base named by its <c>BaseModelName</c> — so removing
+    ///     the base would leave every dependent adapter permanently unlaunchable. Checked under the mutation lease and before anything is
+    ///     staged, so the refusal has nothing to roll back.
+    /// </remarks>
     private async Task EnsureNoDependentAdaptersAsync(InstalledModelSnapshot snapshot, CancellationToken cancellationToken)
     {
         var removedNames = snapshot.RegistryAliases.Select(static alias => alias.ModelName).ToArray();

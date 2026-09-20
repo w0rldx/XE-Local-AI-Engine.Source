@@ -8,25 +8,21 @@ using XE_Local_AI_Engine.Client.Persistence;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
-///     Startup background service that upgrades legacy plaintext message rows to the encrypted at-rest envelope. Before
-///     content encryption shipped, the raw-ADO persistence path wrote the <c>content</c> and <c>metadata_json</c>
-///     columns as plaintext UTF-8; this service re-writes every such row as an authenticated-encrypted envelope so no
-///     recognizable chat text remains on disk. Encrypted rows are read-both, so a partially-migrated table stays fully
-///     readable throughout.
+///     Startup background service that upgrades legacy plaintext message rows — the <c>content</c> and <c>metadata_json</c> columns a raw-ADO
+///     persistence path wrote as plaintext UTF-8 — to the encrypted at-rest envelope.
 /// </summary>
 /// <remarks>
-///     Work is done in bounded batches, each committed in its own transaction, so an interrupted run leaves earlier
-///     batches durably migrated and the remaining plaintext rows are picked up on the next batch or the next startup.
-///     The candidate query filters on the two-byte envelope header, so a re-run over an already-migrated table selects
+///     No recognizable chat text then remains on disk. Encrypted rows are read-both, so a partially-migrated table stays fully readable throughout. Work is done in bounded batches, each committed in
+///     its own transaction, so an interrupted run leaves earlier batches durably migrated and the remaining plaintext rows are picked up on the next
+///     batch or the next startup. The candidate query filters on the two-byte envelope header, so a re-run over an already-migrated table selects
 ///     nothing (idempotent). Runs once per startup, mirroring <see cref="NodeChatTitleEncryptionBackfillService" />.
 /// </remarks>
 public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
 {
     internal const int DefaultBatchSize = 200;
 
-    // A row still needs migrating when its content OR its (present) metadata blob lacks the 0xFE 0x01 envelope header.
-    // A blob shorter than two bytes (e.g. an empty placeholder) is treated as unencrypted. x'FE01' is the header bytes.
-    // The same WHERE predicate is mirrored in HasCandidatesSql (an EXISTS probe) below — keep the two in sync.
+    // A row still needs migrating when its content OR its (present) metadata blob lacks the 0xFE 0x01 envelope header. A blob shorter than two bytes (e.g. an empty placeholder)
+    // is treated as unencrypted. x'FE01' is the header bytes. The same WHERE predicate is mirrored in HasCandidatesSql (an EXISTS probe) below — keep the two in sync.
     private const string CandidateSelectSql = """
                                               SELECT message_id AS MessageId, conversation_id AS ConversationId, content AS Content, metadata_json AS MetadataJson
                                               FROM messages
@@ -35,11 +31,14 @@ public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
                                               LIMIT {0}
                                               """;
 
-    // Durable node-local state lives in the modeled `chat_maintenance_state` key/value table (entity
-    // ChatMaintenanceState + migration AddChatMaintenanceState), so the "reclamation still owed" fact survives a restart
-    // and is consistent with the data it guards. It is a plain table (not PRAGMA user_version) so VACUUM preserves it
-    // deterministically. Reads/writes stay raw-SQL to match this service's raw-connection style; the table is guaranteed
-    // to exist because chat migrations are applied at startup before any hosted service runs (Program.cs).
+    /// <summary>The <c>chat_maintenance_state</c> key whose presence records that reclamation is still owed.</summary>
+    /// <remarks>
+    ///     Durable node-local state lives in the modeled <c>chat_maintenance_state</c> key/value table (entity <c>ChatMaintenanceState</c> plus
+    ///     migration <c>AddChatMaintenanceState</c>), so the fact survives a restart and stays consistent with the data it guards. It is a plain
+    ///     table, not <c>PRAGMA user_version</c>, so VACUUM preserves it deterministically. Reads and writes stay raw-SQL to match this service's
+    ///     raw-connection style, and the table is guaranteed to exist because chat migrations are applied at startup before any hosted service
+    ///     runs (<c>Program.cs</c>).
+    /// </remarks>
     private const string MaintenanceStateName = "content_encryption_reclaim_pending";
 
     private const string SetMarkerSql = "INSERT INTO chat_maintenance_state (name, value) VALUES ($name, '1') ON CONFLICT(name) DO UPDATE SET value = '1';";
@@ -75,12 +74,15 @@ public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
     }
 
     /// <summary>
-    ///     Runs one startup pass: migrate any legacy plaintext rows, then reclaim the on-disk plaintext residue those
-    ///     rewrites leave behind. Reclamation is guarded by a durable "reclamation pending" marker so a failed or
-    ///     interrupted cleanup is retried on every subsequent startup until it succeeds — not silently abandoned once the
-    ///     rows are encrypted and there are no candidates left to trigger it. Internal so a test can drive one
-    ///     deterministic pass. Never throws: shutdown and unexpected errors are logged and swallowed.
+    ///     Runs one startup pass: migrate any legacy plaintext rows, then reclaim the on-disk plaintext residue those rewrites leave
+    ///     behind.
     /// </summary>
+    /// <remarks>
+    ///     Reclamation is guarded by a durable "reclamation pending" marker so a failed or interrupted cleanup is retried on every
+    ///     subsequent startup until it succeeds — not silently abandoned once the rows are encrypted and there are no candidates left to
+    ///     trigger it. Internal so a test can drive one deterministic pass. Never throws: shutdown and unexpected errors are logged and
+    ///     swallowed.
+    /// </remarks>
     internal async Task RunOnceAsync(CancellationToken cancellationToken)
     {
         try
@@ -88,9 +90,8 @@ public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
             var reclamationPendingFromPreviousRun = await IsReclamationPendingAsync(cancellationToken);
             var hasLegacyCandidates = await HasLegacyCandidatesAsync(cancellationToken);
 
-            // Set the durable marker BEFORE any legacy row is re-encrypted, so a failure or shutdown during the single
-            // reclamation pass below cannot lose the fact that plaintext residue still has to be reclaimed. It is
-            // committed on its own connection, so it is durable independently of (and prior to) the migration commits.
+            // Set the durable marker BEFORE any legacy row is re-encrypted, so a failure or shutdown during the single reclamation pass below cannot lose the fact that
+            // plaintext residue still has to be reclaimed. It is committed on its own connection, so it is durable independently of (and prior to) the migration commits.
             if (hasLegacyCandidates)
             {
                 await SetReclamationPendingAsync(cancellationToken);
@@ -102,9 +103,8 @@ public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
                 _logger.LogInformation("NodeChatContentEncryptionBackfillService: encrypted {Count} legacy plaintext message row(s).", total);
             }
 
-            // Reclaim residue whenever this run migrated rows OR a previous run's reclamation never completed (marker
-            // still set) — an idempotent retry until the checkpoint/VACUUM pass finally succeeds. Clear the marker only
-            // on success; a failure/cancellation leaves it set so the next startup retries.
+            // Reclaim residue whenever this run migrated rows OR a previous run's reclamation never completed (marker still set) — an idempotent retry until
+            // the checkpoint/VACUUM pass finally succeeds. Clear the marker only on success; a failure/cancellation leaves it set so the next startup retries.
             if ((hasLegacyCandidates || reclamationPendingFromPreviousRun)
                 && await CheckpointAndVacuumAsync(cancellationToken))
             {
@@ -144,10 +144,13 @@ public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
     }
 
     /// <summary>
-    ///     Migrates a single batch of legacy plaintext rows inside one transaction. Returns the number of rows migrated;
-    ///     0 means no legacy rows remain. Each row is re-written idempotently via the db context's ensure-encrypted
-    ///     helpers, so a row already carrying the envelope is left byte-identical.
+    ///     Migrates a single batch of legacy plaintext rows inside one transaction. Returns the number of rows migrated; 0 means no legacy
+    ///     rows remain.
     /// </summary>
+    /// <remarks>
+    ///     Each row is re-written idempotently via the db context's ensure-encrypted helpers, so a row already carrying the envelope is
+    ///     left byte-identical.
+    /// </remarks>
     internal async Task<int> MigrateBatchAsync(int batchSize, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -182,14 +185,13 @@ public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
         return rows.Count;
     }
 
-    /// <summary>
-    ///     Reclaims on-disk plaintext residue left behind by the in-place row rewrites: checkpoint-truncate the WAL,
-    ///     VACUUM the database (which cannot run inside a transaction, so it uses the raw connection with no ambient
-    ///     transaction), then checkpoint again so VACUUM's rebuild lands in the main file. Returns <see langword="true" />
-    ///     only when the whole pass succeeded; on any failure or cancellation it logs and returns <see langword="false" />
-    ///     so the caller leaves the durable "reclamation pending" marker set and retries next startup. A failure here
-    ///     must never crash the background service — the rows are already encrypted. Internal so a test can drive it.
-    /// </summary>
+    /// <summary>Reclaims on-disk plaintext residue left behind by the in-place row rewrites.</summary>
+    /// <remarks>
+    ///     Checkpoint-truncate the WAL, VACUUM the database (which cannot run inside a transaction, so it uses the raw connection with no ambient one),
+    ///     then checkpoint again so VACUUM's rebuild lands in the main file. Returns <see langword="true" /> only when the whole pass succeeded; on any
+    ///     failure or cancellation it logs and returns <see langword="false" />, so the caller leaves the durable "reclamation pending" marker set and
+    ///     retries next startup. A failure here must never crash the background service — the rows are already encrypted. Internal so a test can drive it.
+    /// </remarks>
     internal async Task<bool> CheckpointAndVacuumAsync(CancellationToken cancellationToken)
     {
         try
@@ -199,9 +201,8 @@ public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
             var connection = dbContext.Database.GetDbConnection();
             await OpenIfNeededAsync(connection, cancellationToken);
 
-            // A checkpoint that reports busy or leaves frames behind must NOT be treated as success: proceeding to
-            // VACUUM and clearing the marker on an incomplete truncate could leave plaintext-bearing WAL frames on disk
-            // with the marker permanently cleared. Bail out (keep the marker) so the next startup retries.
+            // A checkpoint that reports busy or leaves frames behind must NOT be treated as success: proceeding to VACUUM and clearing the marker on an incomplete
+            // truncate could leave plaintext-bearing WAL frames on disk with the marker permanently cleared. Bail out (keep the marker) so the next startup retries.
             if (!await CheckpointTruncatedFullyAsync(connection, cancellationToken))
             {
                 LogIncompleteCheckpoint("before VACUUM");
@@ -234,12 +235,13 @@ public sealed class NodeChatContentEncryptionBackfillService : BackgroundService
         }
     }
 
-    // Runs PRAGMA wal_checkpoint(TRUNCATE) and inspects its result row (busy, log, checkpointed). The pragma does NOT
-    // reliably throw when it cannot complete: busy != 0 means SQLITE_BUSY (a concurrent reader blocked the truncate) and
-    // log > 0 with checkpointed < log means WAL frames were left behind — both are cleanup failures. The node default is
-    // now WAL (see NodeSqlitePragmas), so this truncate actually reclaims the plaintext-bearing WAL frames; if WAL
-    // could not be enabled and the file is still in a non-WAL journal, the pragma is a no-op returning (0, -1, -1) — also
-    // treated as success.
+    /// <summary>Runs <c>PRAGMA wal_checkpoint(TRUNCATE)</c> and inspects its result row (busy, log, checkpointed).</summary>
+    /// <remarks>
+    ///     The pragma does NOT reliably throw when it cannot complete: a non-zero busy means SQLITE_BUSY (a concurrent reader blocked the
+    ///     truncate), and a positive log with checkpointed below it means WAL frames were left behind — both are cleanup failures. The node
+    ///     default is WAL (see <c>NodeSqlitePragmas</c>), so this truncate actually reclaims the plaintext-bearing WAL frames; when WAL could
+    ///     not be enabled and the file is still in a non-WAL journal the pragma is a no-op returning (0, -1, -1), also treated as success.
+    /// </remarks>
     private static async Task<bool> CheckpointTruncatedFullyAsync(DbConnection connection, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();

@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     Resolves the USD-per-1M-tokens <see cref="ModelRate" /> to price a run-envelope usage bucket, given the bucket's
-///     fine-grained provider and model name. Precedence: local runtimes (llama.cpp / Ollama) are always free
-///     (zero); otherwise an operator override for the model name wins, then a built-in default-table entry, then zero
-///     (unknown / unpriced). Model names are matched case-insensitively to the run-envelope <c>ModelName</c>.
+///     Resolves the USD-per-1M-tokens <see cref="ModelRate" /> that prices a run-envelope usage bucket, from the
+///     bucket's fine-grained provider and model name.
 /// </summary>
+/// <remarks>
+///     Precedence: local runtimes are always free; otherwise an operator override for the model name wins, then a
+///     built-in default-table entry, then zero for an unknown or unpriced model. Model names are matched
+///     case-insensitively against the run-envelope <c>ModelName</c>.
+/// </remarks>
 public interface IUsageRateResolver
 {
     /// <summary>

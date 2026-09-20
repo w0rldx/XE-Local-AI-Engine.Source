@@ -1,13 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
 /// <summary>
-///     The compiled, MAF-agnostic orchestration spec carried on the loopback <see cref="RuntimePackage" /> when a
-///     conversation is bound to a <c>Kind=Orchestrator</c> definition whose effective model is tool-capable (orchestration).
-///     It is OPTIONAL: <c>null</c> on the single-agent loopback path and on the encrypted/server path, where the
-///     config hash stays byte-identical to today. The orchestration resolver produces it from a topology + the
-///     per-participant tool projection (the same projection the single-agent path uses); the invocation factory compiles it 1:1 into the workflow participants, and
-///     <c>RuntimePackageConfigHash</c> folds it deterministically so a topology/participant edit invalidates resume.
+///     The compiled, MAF-agnostic orchestration spec carried on the loopback <see cref="RuntimePackage" /> when a conversation is bound to
+///     a <c>Kind=Orchestrator</c> definition whose effective model is tool-capable (orchestration).
 /// </summary>
+/// <remarks>
+///     It is OPTIONAL: <c>null</c> on the single-agent loopback path and on the encrypted/server path, where the config hash stays
+///     byte-identical to today. The orchestration resolver produces it from a topology + the per-participant tool projection (the same
+///     projection the single-agent path uses); the invocation factory compiles it 1:1 into the workflow participants, and <c>RuntimePackageConfigHash</c>
+///     folds it deterministically so a topology/participant edit invalidates resume.
+/// </remarks>
 public sealed record OrchestrationSpec
 {
     /// <summary>The triage/coordinator participant's stable key (must match a member of <see cref="Participants" />).</summary>
@@ -27,10 +29,12 @@ public sealed record OrchestrationSpec
 }
 
 /// <summary>
-///     One participant of a compiled orchestration. Maps 1:1 onto a workflow agent: its prompt, model, reasoning, and
-///     the per-participant capability-gated, approval-flagged tool projection (the same contract as the single-agent
-///     path). <see cref="Key" /> is the stable correlation id (the participant's agent-definition id as a string).
+///     One participant of a compiled orchestration. Maps 1:1 onto a workflow agent: its prompt, model, reasoning, and the per-participant
+///     capability-gated, approval-flagged tool projection (the same contract as the single-agent path).
 /// </summary>
+/// <remarks>
+///     <see cref="Key" /> is the stable correlation id (the participant's agent-definition id as a string).
+/// </remarks>
 public sealed record OrchestrationSpecParticipant
 {
     public required string Key { get; init; }
@@ -47,21 +51,26 @@ public sealed record OrchestrationSpecParticipant
     public string? ReasoningEffort { get; init; }
 
     /// <summary>
-    ///     Whether this participant's EFFECTIVE model (its pinned profile, else the turn's active model) advertises the
-    ///     thinking capability. Resolved per participant so a participant pinned to a non-thinking model never has a
-    ///     reasoning level sent to the think wire (and vice versa) — it is NOT the turn model's capability copied to all.
-    ///     Not folded into the config hash: it is derived from <see cref="ModelId" />, which already participates.
+    ///     Whether this participant's EFFECTIVE model (its pinned profile, else the turn's active model) advertises the thinking
+    ///     capability.
     /// </summary>
+    /// <remarks>
+    ///     Resolved per participant so a participant pinned to a non-thinking model never has a reasoning level sent to the think wire (and
+    ///     vice versa) — it is NOT the turn model's capability copied to all. Not folded into the config hash: it is derived from
+    ///     <see cref="ModelId" />, which already participates.
+    /// </remarks>
     public bool SupportsThinking { get; init; }
 
     /// <summary>
-    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this participant's EFFECTIVE
-    ///     model (its chat template renders a literal reasoning end marker). Resolved per participant from the same
-    ///     lookup as <see cref="SupportsThinking" />, so a participant pinned to a non-enforcing model does not carry a
-    ///     cap the server ignores. Not folded into the config hash: it is derived from <see cref="ModelId" />, which
-    ///     already participates. Init-only with no initializer like its neighbours — every producer sets it explicitly,
-    ///     and it is read only when <see cref="SupportsThinking" /> is true.
+    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this participant's EFFECTIVE model (its chat
+    ///     template renders a literal reasoning end marker).
     /// </summary>
+    /// <remarks>
+    ///     Resolved per participant from the same lookup as <see cref="SupportsThinking" />, so a participant pinned to a non-enforcing
+    ///     model does not carry a cap the server ignores. Not folded into the config hash: it is derived from <see cref="ModelId" />, which
+    ///     already participates. Init-only with no initializer like its neighbours — every producer sets it explicitly, and it is read only
+    ///     when <see cref="SupportsThinking" /> is true.
+    /// </remarks>
     public bool ReasoningBudgetEnforceable { get; init; }
 
     /// <summary>The participant's projected tool offer (capability-gated ∩ AllowedToolNames, approval-overridden).</summary>

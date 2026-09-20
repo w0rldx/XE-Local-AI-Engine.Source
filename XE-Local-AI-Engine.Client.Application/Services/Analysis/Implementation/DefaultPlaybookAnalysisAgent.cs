@@ -10,12 +10,13 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     Default <see cref="IPlaybookAnalysisAgent" />: runs a <b>node-local</b> model (resolved per-model via
-///     <see cref="ILocalModelProviderResolver" />, never the shared <see cref="IChatClient" /> singleton which can be a
-///     cloud client) and forces a structured JSON response so each proposal carries its cited evidence + confidence.
-///     Feedback comments are read into the model on-node only — they never cross the node boundary.
-///     This type is intentionally not unit-tested against a live model; tests substitute a fake
-///     <see cref="IPlaybookAnalysisAgent" />.
+///     <see cref="ILocalModelProviderResolver" />, never the shared <see cref="IChatClient" /> singleton which can be a cloud client) and
+///     forces a structured JSON response so each proposal carries its cited evidence + confidence.
 /// </summary>
+/// <remarks>
+///     Feedback comments are read into the model on-node only — they never cross the node boundary. This type is intentionally not
+///     unit-tested against a live model; tests substitute a fake <see cref="IPlaybookAnalysisAgent" />.
+/// </remarks>
 internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -40,9 +41,8 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
     {
         ArgumentNullException.ThrowIfNull(aggregate);
 
-        // Route the configured analysis model to the runtime that serves it (persisted map, else the configured
-        // default provider = ollama, so an un-repointed model behaves exactly as before). Node-local only — never the
-        // cloud singleton.
+        // Route the configured analysis model to the runtime that serves it (persisted map, else the configured default provider, ollama, so an
+        // un-repointed model behaves exactly as before). Node-local only — never the cloud singleton.
         var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken);
         var selection = new LocalModelSelection
         {

@@ -3,11 +3,13 @@ namespace XE_Local_AI_Engine.Client.Common.Telemetry;
 using Microsoft.Data.Sqlite;
 
 /// <summary>
-///     Classifies and records node SQLite write-contention failures (SQLITE_BUSY / SQLITE_LOCKED) that outlived the
-///     connection's <c>busy_timeout</c>. Centralized so every observation increments <see cref="NodeMetrics.SqliteBusyTotal" />
-///     with the same bounded dimensions (never any SQL text). Used by the EF command interceptor and the raw chat-write
-///     boundary.
+///     Classifies and records node SQLite write-contention failures (SQLITE_BUSY / SQLITE_LOCKED) that outlived the connection's <c>busy_timeout</c>.
+///     Centralized so every observation increments <see cref="NodeMetrics.SqliteBusyTotal" /> with the same bounded dimensions (never any
+///     SQL text).
 /// </summary>
+/// <remarks>
+///     Used by the EF command interceptor and the raw chat-write boundary.
+/// </remarks>
 public static class NodeSqliteContention
 {
     // Primary result codes: SQLITE_BUSY = 5, SQLITE_LOCKED = 6.

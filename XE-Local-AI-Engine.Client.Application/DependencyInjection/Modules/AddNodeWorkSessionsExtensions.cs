@@ -16,12 +16,12 @@ internal static class AddNodeWorkSessionsExtensions
 {
     /// <summary>
     ///     Registers the work-session persistence substrate.
-    ///     <para>
-    ///         Unlike the Development module, <c>Enabled=false</c> does <em>not</em> skip registration: the REST surface
-    ///         and the hub are mapped unconditionally, so an empty container would answer 500 where a disabled node has
-    ///         to answer legibly. The switch is enforced in the reconciler and, later, in the runtime.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Unlike the Development module, <c>Enabled=false</c> does <em>not</em> skip registration: the REST surface and
+    ///     the hub are mapped unconditionally, so an empty container would answer 500 where a disabled node has to answer
+    ///     legibly. The switch is enforced in the reconciler and in the runtime.
+    /// </remarks>
     public static IHostApplicationBuilder AddNodeWorkSessions(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -40,13 +40,8 @@ internal static class AddNodeWorkSessionsExtensions
         builder.Services.AddSingleton<IWorkSessionArtifactBlobStore, ManagedWorkSessionArtifactBlobStore>();
         builder.Services.AddHostedService<WorkSessionStartupReconciler>();
 
-        // The same instance behind both surfaces: one class decides who may move a session's status, and a second
-        // instance would let the two disagree about what it already did.
-        //
-        // Both roles resolve the CONCRETE registration rather than casting the interface. The cast read equivalently
-        // and was not: replacing IWorkSessionService — with a test double, or one day a decorator — made this second
-        // surface throw an InvalidCastException while the host was still being built, from a registration that had
-        // nothing to do with the replacement.
+        // The same instance behind both surfaces: one class decides who may move a session's status, and a second instance would let
+        // the two disagree. Both roles resolve the CONCRETE registration: casting the interface throws at host build once it is replaced.
         builder.Services.AddScoped<WorkSessionService>();
         builder.Services.AddScoped<IWorkSessionService>(services => services.GetRequiredService<WorkSessionService>());
         builder.Services.AddScoped<IWorkflowOwnedWorkSessionLifecycle>(services => services.GetRequiredService<WorkSessionService>());
@@ -55,9 +50,8 @@ internal static class AddNodeWorkSessionsExtensions
         // Scoped: it reads the conversation through the scoped chat persistence, from the supervisor's per-turn scope.
         builder.Services.AddScoped<ConversationStepContextBound>();
 
-        // Scoped for the same reason: it reads the agent definition through the scoped store. Resolved by the REST
-        // service on create/repoint AND by the supervisor's per-turn scope, so both judge a session's tool gates the
-        // same way.
+        // Scoped for the same reason: it reads the agent definition through the scoped store. Resolved by the REST service on
+        // create/repoint AND by the supervisor's per-turn scope, so both judge a session's tool gates the same way.
         builder.Services.AddScoped<WorkSessionToolGate>();
 
         // Scoped for the same reason, and resolved from the same two places: the development-workflow lane before it

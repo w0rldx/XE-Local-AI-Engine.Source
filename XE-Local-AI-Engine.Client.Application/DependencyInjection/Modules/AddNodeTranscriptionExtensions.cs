@@ -14,10 +14,12 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 
 /// <summary>
 ///     Wires local audio transcription: the whisper.cpp runtime, the weight store, the download coordinator and the
-///     runtime facade the endpoints call. Must run AFTER <c>AddNodeModelRuntime</c>, for the same reason
-///     <c>AddNodeImages</c> does — the weight store reuses the Hugging Face download client that
-///     <c>AddHuggingFaceGgufStore</c> registers.
+///     runtime facade the endpoints call.
 /// </summary>
+/// <remarks>
+///     Must run AFTER <c>AddNodeModelRuntime</c>, for the same reason <c>AddNodeImages</c> does: the weight store
+///     reuses the Hugging Face download client that <c>AddHuggingFaceGgufStore</c> registers.
+/// </remarks>
 internal static class AddNodeTranscriptionExtensions
 {
     public static IHostApplicationBuilder AddNodeTranscription(this IHostApplicationBuilder builder, IConfiguration configuration)
@@ -39,9 +41,8 @@ internal static class AddNodeTranscriptionExtensions
         // makes a failure observable at all.
         builder.Services.AddSingleton<IWhisperModelDownloadCoordinator, WhisperModelDownloadCoordinator>();
 
-        // Seeded BEFORE AddWhisperCppRuntime, so the provider's TryAddSingleton default is a no-op. Both paths come
-        // from the application layer because the provider must not resolve a node data directory itself, and the idle
-        // TTL is an operator setting rather than a provider constant.
+        // Seeded BEFORE AddWhisperCppRuntime, so the provider's TryAddSingleton default is a no-op. Both paths come from the
+        // application layer, because the provider must not resolve a node data directory and the idle TTL is an operator setting.
         builder.Services.AddSingleton(sp =>
         {
             var pathResolver = sp.GetRequiredService<WhisperModelPathResolver>();
@@ -54,9 +55,8 @@ internal static class AddNodeTranscriptionExtensions
         });
         builder.Services.AddWhisperCppRuntime();
 
-        // The six runtime and source-build endpoints' only path to the provider. Singleton, matching all four wrapped
-        // registrations: WhisperCppServiceCollectionExtensions TryAddSingletons IWhisperRuntimeActivityGate,
-        // IWhisperBackendSelector, IWhisperCppSourceBuildPrerequisiteProbe and IWhisperCppSourceBuildService.
+        // The six runtime and source-build endpoints' only path to the provider. Singleton, matching the four it wraps: the activity
+        // gate, backend selector, source-build prerequisite probe and source-build service WhisperCppServiceCollectionExtensions TryAdds.
         builder.Services.AddSingleton<WhisperRuntimeOrchestrationService>();
 
         builder.Services.AddSingleton<ITranscriptionRuntimeService, TranscriptionRuntimeService>();
@@ -73,16 +73,12 @@ internal static class AddNodeTranscriptionExtensions
         // it in the same collection and the later registration wins — the idiom the image and graph publishers use.
         builder.Services.TryAddSingleton<ITranscriptionEventPublisher, NullTranscriptionEventPublisher>();
 
-        // Live sessions. Singleton, and deliberately NOT an IHostedService: the end-to-end test factory removes every
-        // hosted service, so a background-timer design would be dead there. Everything is driven by pushed frames plus
-        // timers created from the injected TimeProvider.
+        // Live sessions. Singleton, and deliberately NOT an IHostedService: the end-to-end test factory removes every hosted service,
+        // so a background-timer design would be dead there. Pushed frames and timers from the injected TimeProvider drive everything.
         builder.Services.AddSingleton<ILiveTranscriptionSessionRegistry, LiveTranscriptionSessionRegistry>();
 
-        // Per-application audio capture. WASAPI process loopback is a Windows mechanism with no Linux or macOS
-        // equivalent — no per-process binding exists in PipeWire or PulseAudio — so elsewhere the NotSupported
-        // source fails closed with a named error rather than opening a live session that silently receives nothing.
-        // The Windows type carries [SupportedOSPlatform("windows")]; this branch is what makes that attribute
-        // honest, and it is why no CA1416 suppression appears anywhere in the feature.
+        // Per-application audio capture: WASAPI process loopback is a Windows mechanism with no PipeWire or PulseAudio equivalent, so
+        // elsewhere the NotSupported source fails closed by name. This branch is what makes [SupportedOSPlatform] honest — never a CA1416 suppression.
         if (OperatingSystem.IsWindows())
         {
             builder.Services.AddSingleton<IProcessAudioCaptureSource, WindowsProcessAudioCaptureSource>();
@@ -96,10 +92,8 @@ internal static class AddNodeTranscriptionExtensions
         // HTTP request must not kill it. On a host without process loopback it simply never starts one.
         builder.Services.AddSingleton<ProcessAudioCaptureCoordinator>();
 
-        // The transcription service. Singleton: the in-flight cancellation registry must outlive the request that
-        // started a transcription, and it composes the singleton whisper runtime; it opens its own scope per store
-        // operation. It takes the registry so cancel and delete route a live session through one termination path;
-        // the registry resolves this service lazily, so the two singletons do not close a constructor cycle.
+        // The transcription service. Singleton: the in-flight cancellation registry outlives the request that started a transcription,
+        // and it opens its own scope per store operation. It takes the registry, which resolves it lazily, so the two close no ctor cycle.
         builder.Services.AddSingleton<ITranscriptionService, TranscriptionService>();
 
         return builder;

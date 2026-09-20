@@ -5,14 +5,14 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
 ///     Checks the one cross-section relation the work-session docs assert: a park must expire before the node expires
-///     the pending tool call it is waiting on, or the park times out against a call the node has already given up on
-///     and the session is checkpointed off a prompt nobody can answer any more.
-///     <para>
-///         Startup-only, and against the CONFIGURED seed. <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c>
-///         lets a stored Node-Settings override lower the tool-call age at runtime, which this check cannot see; such
-///         an override re-opens the gap until the next restart.
-///     </para>
+///     the pending tool call it is waiting on.
 /// </summary>
+/// <remarks>
+///     Otherwise the park times out against a call the node has already given up on, and the session is checkpointed off a prompt nobody can
+///     answer any more. Startup-only, and against the CONFIGURED seed: <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c> lets a
+///     stored Node-Settings override lower the tool-call age at runtime, which this check cannot see, and such an override re-opens the gap
+///     until the next restart.
+/// </remarks>
 public sealed class WorkSessionOptionsValidator : IValidateOptions<WorkSessionOptions>
 {
     private readonly IOptions<WorkerNodeOptions> _workerNode;

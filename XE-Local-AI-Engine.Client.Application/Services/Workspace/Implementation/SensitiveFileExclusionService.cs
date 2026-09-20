@@ -2,24 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
 using System.Collections.Frozen;
 
-/// <summary>
-///     Name-based <see cref="ISensitiveFileExclusionService" />, built from two deliberately separate sets.
-///     <para>
-///         <see cref="SecretNames" /> plus <see cref="SecretFileGlobs" /> answer "is this a CREDENTIAL?" and are what a
-///         read path gates on. <see cref="CopySkipNames" /> answers the different question "is this worth COPYING?" and
-///         names the host <c>.git</c> baseline (a fresh in-sandbox baseline is created after copy) plus generated/heavy
-///         output directories. The copy filter uses the union; nothing else should.
-///     </para>
-///     <para>
-///         Keeping them apart is the point. Folding build output into a read gate refuses
-///         <c>obj/project.assets.json</c> to an agent diagnosing a failed restore — the exact thing the feature exists
-///         to do — while protecting nothing, because generated output is not a credential.
-///     </para>
-///     <para>
-///         The literal sets are frozen once so the common lookup is an allocation-free hash probe; only a name that
-///         misses them is walked against the wildcard rules.
-///     </para>
-/// </summary>
+/// <summary>Name-based <see cref="ISensitiveFileExclusionService" />, built from two deliberately separate sets.</summary>
+/// <remarks>
+///     <see cref="SecretNames" /> plus <see cref="SecretFileGlobs" /> answer "is this a CREDENTIAL?" and are what a read path gates on.
+///     <see cref="CopySkipNames" /> answers the different question "is this worth COPYING?" and names the host <c>.git</c> baseline (a fresh in-sandbox
+///     baseline is created after copy) plus generated and heavy output. The copy filter uses the union; nothing else should. Folding build output into
+///     a read gate refuses <c>obj/project.assets.json</c> to an agent diagnosing a failed restore — the exact thing the feature exists to do — while
+///     protecting nothing. The literal sets are frozen, so a lookup is an allocation-free hash probe and only a miss walks the wildcard rules.
+/// </remarks>
 internal sealed class SensitiveFileExclusionService : ISensitiveFileExclusionService
 {
     // CREDENTIAL-BEARING literal names. This set gates reads, so an addition here denies an agent a file — include a
@@ -33,9 +23,8 @@ internal sealed class SensitiveFileExclusionService : ISensitiveFileExclusionSer
         "cloud-credentials.enc",
         "worker-credentials.enc",
 
-        // This product's own operator secret. node.key is the 32-byte root from which the SQLite column key, the node
-        // JWT signing key and the Data Protection key-ring KEK are all derived, so it decrypts every .enc blob beside
-        // it — it is the single highest-value file the node ever writes.
+        // This product's own operator secret. node.key is the 32-byte root from which the SQLite column key, the node JWT signing key and the Data
+        // Protection key-ring KEK are all derived, so it decrypts every .enc blob beside it — it is the single highest-value file the node ever writes.
         "node.key",
 
         // Credential stores a developer's home directory and repositories routinely carry.
@@ -61,10 +50,8 @@ internal sealed class SensitiveFileExclusionService : ISensitiveFileExclusionSer
         ".idea"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    // The wildcard SECRET rules, written as grep/find-compatible globs. Every entry is either "prefix*" or "*suffix" —
-    // one wildcard, at one end — which is what MatchesGlob below implements. This array is the ONLY definition of the
-    // pattern rules: the flag sets and both predicates read it, so a pattern can no longer be added to one and
-    // forgotten in the other.
+    // The wildcard SECRET rules, written as grep/find-compatible globs. Every entry is either "prefix*" or "*suffix" — one wildcard, at one end — which is what MatchesGlob below
+    // implements. This array is the ONLY definition of the pattern rules: the flag sets and both predicates read it, so a pattern can no longer be added to one and forgotten in the other.
     private static readonly string[] SecretFileGlobs =
     [
         // ".env.local", ".env.production", … (the ".env" base name is already in SecretNames).

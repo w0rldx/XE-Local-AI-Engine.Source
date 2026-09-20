@@ -155,6 +155,30 @@ Maintainer invariants:
 
 6. **An OS-specific NuGet stays on a plain `net10.0` target.** `Client.Application` references the leaf `NAudio.Wasapi` for Windows WASAPI process-loopback capture, **not** the `NAudio` meta-package, whose multi-targeting would force a Windows TFM onto the project. A package that ships a plain `netX.0` asset with an assembly-level `[SupportedOSPlatform]` needs no Windows TFM and no `EnableWindowsTargeting`: the platform is enforced by a type-level `[SupportedOSPlatform]` on the implementation plus an `OperatingSystem.IsWindows()` branch at the DI call site, which is what keeps CA1416 green. A CA1416 suppression is never the answer. See [24-audio-transcription.md](24-audio-transcription.md#windows-per-application-capture).
 
+## Composition root: the `AddNode*` modules
+
+Every per-feature registration lives in an `AddNode*` module extension under
+`XE-Local-AI-Engine.Client.Application/DependencyInjection/Modules`; `AddNodeApplication`
+(`NodeApplicationServiceCollectionExtensions`) is the orchestrator that invokes them, and the host adds only what it
+owns on top.
+
+**The order in that orchestrator is load-bearing, because `IHostedService` instances start in registration order.**
+Where a module's startup reconciler must terminalize its own crash-orphaned rows before another module's dispatcher
+begins adopting them, the only lever is placing the module earlier — the dependency between such modules is often not
+one-way (Development tasks and DevTask node runs read each other's stores), so the order buys start order, nothing else.
+Two further ordering rules hold today:
+
+- `AddNodeExternalProviders` runs **before** `AddNodeModelRuntime`, which registers the external multiplexer provider
+  only when an `IExternalProviderRegistry` is already in the collection. That is a registration-time check: a registry
+  added afterwards ships a node on which no external model can route.
+- The container feature registers as one chain — `AddNodeContainerSandbox` → `AddNodeContainerRuntime` →
+  `AddNodeExternalAppsCatalog` → `AddNodeExternalApps` — because each link takes a singleton the previous one
+  registers (the daemon attestation, then the resolver, then the catalog). None of it is resolved on the startup path.
+
+Modules that reuse a shared client rather than registering their own (the images, transcription and training-runtime
+modules all reuse the Hugging Face download client `AddNodeModelRuntime` registers) are ordered after their provider
+for the same reason.
+
 ## Build & package conventions
 
 Repo-wide MSBuild config lives at the solution root:

@@ -43,19 +43,17 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public event EventHandler<UserQuestionRequestedChangedEventArgs>? UserQuestionRequestedChanged;
 
-    // The live invocation, mutated in place only under _syncRoot. Its StreamedContent/StreamedThinkingContent now
-    // materialize from an immutable append-only accumulator, so an off-lock read is memory-safe (though it may observe a
-    // transient value mid-append) — see IWorkerEventDispatcher.CurrentInvocation. Internal callers already hold _syncRoot
-    // when they touch it; GetCurrentInvocationSnapshot returns a locked clone for anyone who needs a consistent copy.
+    // The live invocation, mutated in place only under _syncRoot; an off-lock read is memory-safe but may observe a transient value mid-append
+    // (see IWorkerEventDispatcher.CurrentInvocation). Internal callers hold _syncRoot; GetCurrentInvocationSnapshot returns a locked clone.
     public InvocationState? CurrentInvocation { get; private set; }
 
-    /// <summary>
-    ///     TEST-ONLY: clears <see cref="CurrentInvocation" /> back to null under the dispatcher's lock.
+    /// <summary>TEST-ONLY: clears <see cref="CurrentInvocation" /> back to null under the dispatcher's lock.</summary>
+    /// <remarks>
     ///     Production never resets the slot (it is only ever assigned), so e2e tests that share a single
-    ///     <see cref="WorkerEventDispatcher" /> via <c>PerTestSession</c> use this to stop a completed
-    ///     chat's invocation from leaking into the Invocations empty-state assertions. Exposed to the e2e
-    ///     test assembly via <c>InternalsVisibleTo</c>; not part of the public contract.
-    /// </summary>
+    ///     <see cref="WorkerEventDispatcher" /> via <c>PerTestSession</c> use this to stop a completed chat's invocation
+    ///     from leaking into the Invocations empty-state assertions. Exposed to the e2e test assembly via
+    ///     <c>InternalsVisibleTo</c>; not part of the public contract.
+    /// </remarks>
     internal void ResetForTests()
     {
         lock (_syncRoot)

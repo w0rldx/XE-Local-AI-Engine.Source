@@ -17,24 +17,26 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     The tool surface this node exposes to EXTERNAL MCP clients (Claude Code, Claude Desktop, an IDE). The point of
-///     the surface is delegation: an outside agent hands a task to a locally-hosted model instead of doing the work
-///     itself, so private or bulky work never leaves the machine.
-///     <para>
-///         Delegate execution remains workspace-read-only by construction. An explicitly minted agentic key may run a
-///         saved agent's complete allowed-tool set under strict audit-before-invocation auto-approval, but it still
-///         receives no browser Operator role or JWT authority.
-///     </para>
+///     The tool surface this node exposes to EXTERNAL MCP clients, for delegation: an outside agent hands a task to a
+///     locally-hosted model instead of doing the work itself, so private or bulky work never leaves the machine.
 /// </summary>
+/// <remarks>
+///     Delegate execution stays workspace-read-only by construction. An explicitly minted agentic key may run a saved
+///     agent's complete allowed-tool set under strict audit-before-invocation auto-approval, but it still receives no
+///     browser Operator role and no JWT authority.
+/// </remarks>
 [McpServerToolType]
 [Authorize(Policy = NodeAuthorizationPolicies.McpServer)]
 public sealed class NodeAgentMcpTools
 {
     /// <summary>
-    ///     Upper bound on the characters returned from a single agent run. Claude Code caps MCP tool output at ~25k
-    ///     tokens by default and warns past ~10k, so an unbounded local-model answer would be truncated by the client
-    ///     with no indication of why. Bounding here means the caller gets a clean, explicit marker instead.
+    ///     Upper bound on the characters returned from a single agent run.
     /// </summary>
+    /// <remarks>
+    ///     An MCP client caps tool output — Claude Code at ~25k tokens by default, warning past ~10k — so an unbounded
+    ///     local-model answer would be truncated by the client with no indication of why. Bounding here gives the
+    ///     caller a clean, explicit marker instead.
+    /// </remarks>
     private const string TruncationMarker = "\n\n[output truncated by the XE Local AI Engine MCP server]";
 
     private const string InvalidRequestCode = "invalid_request";
@@ -293,12 +295,8 @@ public sealed class NodeAgentMcpTools
     [McpServerTool(Name = "run_agent")]
     [Description(
         "Run a task on this node's local model and return the result. Supply either agent (a saved agent's id or name) or model (a local model id) — exactly one. Delegate saved agents and bare models are tool-less; the seeded read-only Coder may use only its three workspace-read tools. Agentic saved-agent runs may use the definition's full allowed-tool set with strict audited auto-approval. Runs are admission-gated: a request that would exceed the node's memory or concurrency limits is declined with a reason rather than queued indefinitely.")]
-    // Parameter order is dictated by C#, not by preference: `progress` and `cancellationToken` are injected by the SDK
-    // and excluded from the generated schema, but they carry no default, so they must precede the optional arguments.
-    // Those defaults are load-bearing — the SDK derives `required` from the ABSENCE of a default, not from nullability,
-    // so a nullable-but-defaultless `string? agent` is advertised as REQUIRED and every call that binds a bare model is
-    // rejected by the binder before the handler runs (measured live: "the arguments dictionary is missing a value for
-    // the required parameter 'agent'"). Do not remove the `= null`s.
+    // Parameter order is dictated by C#: the SDK-injected `progress` and `cancellationToken` carry no default, so they precede the
+    // optional arguments, whose defaults are load-bearing — the SDK derives `required` from the ABSENCE of a default, not from nullability, so a defaultless parameter is advertised REQUIRED.
 #pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<string> RunAgentAsync([Description("The task for the local agent to carry out.")] string task,
         IProgress<ProgressNotificationValue> progress,
@@ -338,18 +336,16 @@ public sealed class NodeAgentMcpTools
             workspaceId = parsedWorkspaceId;
         }
 
-        // A local model can take well over a minute to load and generate. An MCP client aborts a call that produces
-        // neither a response nor a progress notification inside its idle window (five minutes for Claude Code), so an
-        // early progress report is what keeps a legitimate cold-start run alive rather than being killed as hung.
+        // A local model can take well over a minute to load and generate, and an MCP client aborts a call producing neither a response
+        // nor a progress notification inside its idle window, so this early report is what keeps a cold-start run from being killed.
         progress.Report(new ProgressNotificationValue
         {
             Progress = 0f,
             Message = "Admitting the run on the local node…"
         });
 
-        // The fan-out and cloud-spawn caps hang off a per-root-invocation SpawnContext, which a chat turn seeds and an
-        // MCP call has no equivalent of. Seed one synthetic root per call so an MCP-driven run is bounded by exactly
-        // the same caps as an operator-driven one instead of running uncapped.
+        // The fan-out and cloud-spawn caps hang off a per-root-invocation SpawnContext that a chat turn seeds and an MCP call has no
+        // equivalent of, so one synthetic root per call bounds an MCP-driven run by exactly the caps an operator-driven one has.
         using var spawnRoot = SpawnContext.BeginRoot(_spawnOptions.MaxConcurrentSpawns, _spawnOptions.MaxCloudSpawns);
 
         var request = new McpExecutionBindingRequest
@@ -368,9 +364,8 @@ public sealed class NodeAgentMcpTools
             Message = "Running on the local model…"
         });
 
-        // The inbound execution service returns a typed, sanitized outcome for every EXPECTED rejection (over-cap, no
-        // fit, busy, unresolved agent/model), so those reach the caller as an ordinary tool result. Only a genuinely
-        // exceptional fault propagates, and the SDK turns that into a protocol error.
+        // The inbound execution service returns a typed, sanitized outcome for every EXPECTED rejection — over-cap, no fit, busy,
+        // unresolved agent or model — so those reach the caller as an ordinary tool result and only a real fault becomes a protocol error.
         var outcome = await _mcpAgentExecutionService.SpawnForMcpAsync(request,
             task,
             expectedBindingFingerprint: null,

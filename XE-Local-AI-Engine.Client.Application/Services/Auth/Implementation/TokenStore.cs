@@ -6,11 +6,13 @@ using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Reads the DataProtection-encrypted worker credentials an earlier build could leave in the node data
-///     directory. Read-only: the pairing flow that wrote <c>worker-credentials.enc</c> is gone, so the file is
-///     never created, updated or deleted here. The load is best-effort — a missing, unreadable or
-///     wrong-key file is the unpaired case, not an error.
+///     Reads the DataProtection-encrypted worker credentials an earlier build could leave in the node data directory.
 /// </summary>
+/// <remarks>
+///     Read-only: the pairing flow that wrote <c>worker-credentials.enc</c> is gone, so the file is never created,
+///     updated or deleted here. The load is best-effort — a missing, unreadable or wrong-key file is the unpaired
+///     case, not an error.
+/// </remarks>
 public sealed class TokenStore : ITokenStore
 {
     private const string CredentialsFileName = "worker-credentials.enc";

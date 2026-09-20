@@ -22,9 +22,8 @@ internal sealed class CapabilityReportComposer
     private static readonly string[] VisionModelMarkers = ["llava", "bakllava", "vision", "moondream", "minicpm-v"];
     private static readonly string[] BaseCapabilities = ["text"];
 
-    // AgentHome MVP capability strings (capability flag). Advertised only when AgentHome:Enabled=true so a node
-    // never claims sandbox/workspace/patch/memory support it cannot serve. The normalizer trims/dedupes/
-    // sorts these, and the server stores SupportedCapabilities as a free-form JSON list (no schema bump).
+    // AgentHome MVP capability strings (capability flag). Advertised only when AgentHome:Enabled=true so a node never claims sandbox/workspace/patch/memory
+    // support it cannot serve. The normalizer trims/dedupes/ sorts these, and the server stores SupportedCapabilities as a free-form JSON list (no schema bump).
     private static readonly string[] AgentHomeCapabilities =
     [
         "agent-home",
@@ -269,9 +268,8 @@ internal sealed class CapabilityReportComposer
         return null;
     }
 
-    // nvidia-smi is probed at its two absolute install locations (no PATH lookup, S4036): the driver package's
-    // /usr/bin on native Linux, and the WSL GPU passthrough layer's /usr/lib/wsl/lib — WSL has NO /usr/bin copy,
-    // so dropping the second candidate silently kills GPU detection on WSL boxes.
+    // nvidia-smi is probed at its two absolute install locations (no PATH lookup, S4036): the driver package's /usr/bin on native Linux, and the WSL
+    // GPU passthrough layer's /usr/lib/wsl/lib — WSL has NO /usr/bin copy, so dropping the second candidate silently kills GPU detection on WSL boxes.
     private static readonly string[] NvidiaSmiCandidatePaths = ["/usr/bin/nvidia-smi", "/usr/lib/wsl/lib/nvidia-smi"];
 
     private async Task<GpuInfo?> TryDetectGpuInfoAsync(CancellationToken cancellationToken)

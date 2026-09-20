@@ -14,20 +14,14 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// <summary>
 ///     The <see cref="IClientTransport" /> for a <see cref="McpTrustTier.Sandboxed" /> stdio MCP server: it launches
 ///     the server INSIDE the substrate and speaks the MCP protocol over the child's standard streams.
-///     <para>
-///         <b>Why this replaces <c>StdioClientTransport</c> rather than configuring it.</b> That transport owns the
-///         launch — it composes and starts the process itself — so there is no seam at which the engine could put the
-///         sandbox chain underneath it without reimplementing the launch anyway. What the SDK does offer is
-///         <see cref="StreamClientTransport" />, which speaks the same protocol over a pair of streams it did not
-///         create. So the substrate starts the process and this hands the SDK the streams: the protocol stays the
-///         SDK's, and the launch stays the engine's.
-///     </para>
-///     <para>
-///         <b>Fail-closed.</b> A host whose sandbox backend cannot supply the filesystem boundary is refused here,
-///         before a process exists. It does NOT fall back to a host launch — that is exactly the launch this type was
-///         written to stop — and the refusal names the tier so the operator can see which decision to revisit.
-///     </para>
 /// </summary>
+/// <remarks>
+///     It replaces <c>StdioClientTransport</c> rather than configuring it, because that transport owns the launch and
+///     offers no seam to put the sandbox chain under; <see cref="StreamClientTransport" /> speaks the same protocol
+///     over streams it did not create, so the substrate starts the process and the SDK is handed the streams. It is
+///     fail-closed: a host whose sandbox backend cannot supply the filesystem boundary is refused before a process
+///     exists, never falling back to the host launch this type exists to stop, and the refusal names the tier.
+/// </remarks>
 internal sealed class SandboxedMcpStdioTransport : IClientTransport
 {
     /// <summary>
@@ -37,10 +31,13 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     internal const string RuntimeProfile = "mcp-stdio";
 
     /// <summary>
-    ///     The attach-key generation. Bump it to force every MCP jail to be recreated after a change to what this
-    ///     transport puts in one. It is deliberately not AgentHome's manifest version: these jails share nothing with
-    ///     that layout, and borrowing the number would re-key them for an unrelated reason.
+    ///     The attach-key generation: bump it to force every MCP jail to be recreated after a change to what this
+    ///     transport puts in one.
     /// </summary>
+    /// <remarks>
+    ///     It is deliberately not AgentHome's manifest version: these jails share nothing with that layout, and
+    ///     borrowing the number would re-key them for an unrelated reason.
+    /// </remarks>
     private const int SandboxGeneration = 1;
 
     /// <summary>Link hops followed before a path is treated as a cycle. The kernel's own ELOOP limit is 40.</summary>
@@ -99,19 +96,15 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
 
     /// <summary>
     ///     Host roots a read-only bind must never cover, because binding one hands the sandboxed server the operator's
-    ///     credentials — which is the exact abuse case (threat model AB3) the Sandboxed tier exists to close.
-    ///     <para>
-    ///         <b>The rule is EQUALS-or-ANCESTOR, not "is under".</b> A tree is refused when it IS one of these roots or
-    ///         CONTAINS one; a tree that merely sits beneath one is fine. That asymmetry is the whole design: binding
-    ///         the home directory exposes <c>~/.ssh</c>, while binding <c>~/.nvm/versions/node/vX/bin</c> exposes a
-    ///         node install and nothing else — and refusing the second would make every <c>npx</c>- or <c>uvx</c>-based
-    ///         server unusable at the default tier, which is how a security control gets turned off.
-    ///     </para>
-    ///     <para>
-    ///         Code-owned and engine-composed. It is not configuration: a denylist a registration could edit would be
-    ///         no denylist at all.
-    ///     </para>
+    ///     credentials — the abuse case (threat model AB3) the Sandboxed tier exists to close.
     /// </summary>
+    /// <remarks>
+    ///     The rule is EQUALS-or-ANCESTOR, not "is under": a tree is refused when it IS one of these roots or CONTAINS
+    ///     one, while a tree merely beneath one is fine. Binding the home directory exposes <c>~/.ssh</c>, whereas
+    ///     binding <c>~/.nvm/versions/node/vX/bin</c> exposes a node install and nothing else, and refusing that would
+    ///     make every <c>npx</c>- or <c>uvx</c>-based server unusable at the default tier, which is how a security
+    ///     control gets turned off. The list is code-owned: one a registration could edit would be no denylist at all.
+    /// </remarks>
     internal static IReadOnlyList<string> BuildSensitiveHostRoots(string nodeDataRoot, Func<string>? resolveHome = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(nodeDataRoot);
@@ -119,10 +112,8 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         var home = (resolveHome ?? DefaultHome)();
         if (string.IsNullOrWhiteSpace(home))
         {
-            // FAIL CLOSED. Every credential entry on this list is derived from the home directory, so a host that
-            // cannot name one (a service account, HOME unset) would silently get a list with the whole
-            // credential half missing — the denylist would still be there, still be checked, and still let
-            // `WorkingDirectory = /home/someone` through. A tier that cannot enforce its own control refuses.
+            // FAIL CLOSED: every credential entry on this list derives from the home directory, so a host that cannot name one, such
+            // as a service account, would keep a denylist that is checked and still lets the whole credential half through.
             throw new SandboxCapabilityNotSupportedException(
                 "The Sandboxed MCP trust tier cannot determine this account's home directory, so it cannot tell a server's package tree from the operator's credential stores. "
                 + "Run the engine as an account with a home directory (set HOME), or move the server to the Privileged host tier deliberately.");
@@ -130,9 +121,8 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
 
         var roots = new List<string>(16);
 
-        // The home directory itself, and each credential store under it by name — the second half is not redundant:
-        // the equals-or-ancestor rule catches `WorkingDirectory = $HOME` through the first entry, and
-        // `WorkingDirectory = ~/.ssh` only through the second.
+        // The home directory itself, and each credential store under it by name. The second half is not redundant: the
+        // equals-or-ancestor rule catches a working directory of the home itself through the first entry, and one inside .ssh only here.
         AddRoot(roots, home);
         foreach (var relative in SensitiveHomeSubdirectories)
         {
@@ -156,18 +146,16 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     }
 
     /// <summary>
-    ///     The read-only host trees a sandboxed server needs to see: where its executable lives, and the working
-    ///     directory the operator configured (which is where a stdio server's package files — <c>node_modules</c>, a
-    ///     venv, a <c>dist/</c> — actually are).
-    ///     <para>
-    ///         Engine-derived from the registration and nothing else, and filtered twice. A tree under a mount point
-    ///         the isolated chain owns is DROPPED: the chain refuses such a tree (it would be shadowed rather than
-    ///         visible), and everything under <c>/usr</c> is already bound read-only by the chain itself, so dropping
-    ///         it loses nothing. A tree that equals or contains a <see cref="BuildSensitiveHostRoots" /> entry is
-    ///         REFUSED — loudly, naming the path and the tier, because that one is an operator mistake with a real
-    ///         consequence and silently dropping it would produce a server that starts and then cannot find its files.
-    ///     </para>
+    ///     The read-only host trees a sandboxed server needs to see: where its executable lives, and the configured
+    ///     working directory, which is where a stdio server's package files actually are.
     /// </summary>
+    /// <remarks>
+    ///     They are engine-derived from the registration and nothing else, then filtered twice. A tree under a mount
+    ///     point the isolated chain owns is DROPPED, since the chain refuses it as shadowed and everything under
+    ///     <c>/usr</c> is already bound read-only there, so nothing is lost. A tree that equals or contains a
+    ///     <see cref="BuildSensitiveHostRoots" /> entry is REFUSED loudly, naming the path and the tier, because it is
+    ///     an operator mistake whose silent drop would leave a server that starts and cannot find its files.
+    /// </remarks>
     internal static IReadOnlyList<string> ResolveReadOnlyTrees(McpServerRecord record,
         Func<string, string?> resolveExecutablePath,
         IReadOnlyList<string> sensitiveRoots)
@@ -199,10 +187,8 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             throw new InvalidOperationException("A stdio MCP server requires a command.");
         }
 
-        // The boundary is what the Sandboxed tier IS, so it is checked before anything is created and it does not
-        // degrade. The message is engine-authored — it names no host path and no secret — and is surfaced verbatim to
-        // the operator rather than redacted, because "this node cannot sandbox" and "your server is broken" need to be
-        // tellable apart.
+        // The boundary is what the Sandboxed tier IS, so it is checked before anything is created and never degrades. The message is
+        // engine-authored, naming no host path or secret, and reaches the operator verbatim: "cannot sandbox" and "server broken" differ.
         if (!_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))
         {
             throw new SandboxCapabilityNotSupportedException(
@@ -251,9 +237,8 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             return;
         }
 
-        // BEFORE the chain-owned check, deliberately: `/` and `/etc` are denied roots that the chain-owned predicate
-        // would answer for by dropping them silently, and the operator needs the refusal rather than a server that
-        // starts without the tree it asked for.
+        // BEFORE the chain-owned check, deliberately: the root and /etc are denied roots the chain-owned predicate would drop
+        // silently, and the operator needs the refusal rather than a server that starts without the tree it asked for.
         if (sensitiveRoots.FirstOrDefault(root => CoversRoot(canonical, root)) is { } covered)
         {
             throw new SandboxCapabilityNotSupportedException(
@@ -282,19 +267,19 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     }
 
     /// <summary>
-    ///     Normalizes a path and resolves its link chain, so a tree and a denied root are compared as the same
-    ///     directory however each was spelled — a symlink to the home directory, a relative segment, a trailing
-    ///     separator. Both sides go through this; comparing a resolved tree against an unresolved root is how a
-    ///     denylist silently stops matching on a host whose <c>$HOME</c> is itself a link.
+    ///     Normalizes a path and resolves its link chain, so a tree and a denied root compare as the same directory
+    ///     however each was spelled — a symlink to the home directory, a relative segment, a trailing separator.
     /// </summary>
+    /// <remarks>
+    ///     Both sides go through this: comparing a resolved tree against an unresolved root is how a denylist silently
+    ///     stops matching on a host whose <c>$HOME</c> is itself a link.
+    /// </remarks>
     private static string? Canonicalize(string path)
     {
         try
         {
-            // EVERY ancestor, not just the leaf. Path.GetFullPath is lexical and
-            // Directory.ResolveLinkTarget only follows a link that IS the final component, so `link/.ssh/sockets`
-            // came back as the literal path and matched no denied root — while bwrap, which binds by descriptor
-            // against a kernel that resolves the whole chain, would have mounted ~/.ssh/sockets into the jail.
+            // EVERY ancestor, not just the leaf: Path.GetFullPath is lexical and Directory.ResolveLinkTarget follows only a link that
+            // IS the final component, so a path through a linked ancestor matches no denied root while bwrap would still mount it.
             var current = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
             for (var hop = 0; hop < MaxLinkHops; hop++)
             {
@@ -308,9 +293,8 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 current = resolved;
             }
 
-            // A cycle, or a chain deeper than the kernel would follow. Refusing to answer is the fail-closed reading:
-            // the caller treats a null tree as "contributes nothing", and a null ROOT would be a hole — which is why
-            // BuildSensitiveHostRoots keeps the lexical form when this gives up (see AddRoot).
+            // A cycle, or a chain deeper than the kernel would follow. Refusing to answer is the fail-closed reading: a null tree
+            // contributes nothing, while a null ROOT would be a hole, so BuildSensitiveHostRoots keeps the lexical form (see AddRoot).
             return null;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -446,10 +430,13 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     }
 
     /// <summary>
-    ///     Finds the HOST path of a configured command so its directory can be bound read-only. A bare name is looked
-    ///     up on the engine's own <c>PATH</c>; this is used only to choose a mount, never to compose the launch — the
-    ///     child resolves its own executable against the sandbox's <c>PATH</c>.
+    ///     Finds the HOST path of a configured command so its directory can be bound read-only, a bare name being
+    ///     looked up on the engine's own <c>PATH</c>.
     /// </summary>
+    /// <remarks>
+    ///     It chooses a mount and never composes the launch: the child resolves its own executable against the
+    ///     sandbox's <c>PATH</c>.
+    /// </remarks>
     private static string? ResolveExecutablePath(string command)
     {
         if (command.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal)
@@ -477,18 +464,20 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             ExecutionId = RuntimeProfile + "-" + _record.Id.ToString("N"),
             Executable = _record.Command!,
             Arguments = [.. _record.Arguments],
-            // No working directory: the jail IS the working directory. The configured WorkingDirectory is bound
-            // READ-ONLY instead (see ResolveReadOnlyTrees) — a third-party server has no reason to write into the tree
-            // it was installed from, and the jail is the only writable surface the chain provides.
+            // No working directory: the jail IS the working directory, and the configured one is bound READ-ONLY instead (see
+            // ResolveReadOnlyTrees), since a third-party server has no reason to write into the tree it was installed from.
             Environment = _record.Environment.Count == 0 ? null : _record.Environment
         };
     }
 
     /// <summary>
     ///     The live transport handed to <c>McpClient</c>: the SDK's stream transport for the protocol, plus ownership
-    ///     of the sandbox underneath it. <c>McpClient</c> disposes the transport it was given, which is what makes
-    ///     disposing the MCP connection kill the server process and delete its jail with no separate bookkeeping.
+    ///     of the sandbox underneath it.
     /// </summary>
+    /// <remarks>
+    ///     <c>McpClient</c> disposes the transport it was given, which is what makes disposing the MCP connection kill
+    ///     the server process and delete its jail with no separate bookkeeping.
+    /// </remarks>
     private sealed class SandboxedTransport : ITransport
     {
         private readonly SandboxHandle _handle;

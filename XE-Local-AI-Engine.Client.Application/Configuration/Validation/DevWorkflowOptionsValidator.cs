@@ -4,17 +4,14 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
-/// <summary>
-///     Checks the one cross-section relation the workflow runtime depends on: an agent node IS a work session, so a node
-///     with development workflows on and work sessions off would accept a run, dispatch its first agent node, and fail
-///     it with "work sessions are disabled on this node" — once per node-run, at run time, where the operator sees the
-///     symptom and not the switch. Startup is where that belongs.
-///     <para>
-///         Only the enable flags relate across the sections. The budgets inside <see cref="DevWorkflowOptions" /> are
-///         independent of each other — <c>MaxTotalAttempts</c> bounds retries rather than first attempts, so it is
-///         deliberately smaller than <c>MaxNodeRunsPerRun</c> and their data-annotation ranges are the whole check.
-///     </para>
-/// </summary>
+/// <summary>Checks the one cross-section relation the workflow runtime depends on: an agent node IS a work session.</summary>
+/// <remarks>
+///     A node with development workflows on and work sessions off would accept a run, dispatch its first agent node, and fail it with "work
+///     sessions are disabled on this node" — once per node-run, at run time, where the operator sees the symptom and not the switch; startup
+///     is where that belongs. Only the enable flags relate across the sections: the budgets inside <see cref="DevWorkflowOptions" /> are
+///     independent of each other — <c>MaxTotalAttempts</c> bounds retries rather than first attempts, so it is deliberately smaller than
+///     <c>MaxNodeRunsPerRun</c> and their data-annotation ranges are the whole check.
+/// </remarks>
 public sealed class DevWorkflowOptionsValidator : IValidateOptions<DevWorkflowOptions>
 {
     private readonly IOptions<WorkSessionOptions> _workSessions;

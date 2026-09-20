@@ -5,21 +5,17 @@ using System.Collections.Concurrent;
 /// <summary>
 ///     The hand-off between the runner's human round-trip and the <c>ask_user</c> tool body, keyed on the tool call's
 ///     <c>CallId</c>.
-///     <para>
-///         WHY this exists rather than the tool simply awaiting the operator: a tool handler runs inside
-///         <c>FunctionInvokingChatClient</c>, which the stream-idle watchdog wraps — a handler that blocked on a human
-///         would be killed after <c>StreamIdleTimeout</c> (60 s). So <c>ask_user</c> is registered approval-required, the
-///         runner performs the wait OUTSIDE the watched segment, drops the answer here, and approves the call; the
-///         handler then pops the answer and returns immediately. The framework's
-///         <c>FunctionInvokingChatClient.CurrentContext.CallContent.CallId</c> makes the key exact, so no ambient
-///         plumbing or argument-hash matching is needed.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A tool handler runs inside <c>FunctionInvokingChatClient</c>, which the stream-idle watchdog wraps, so a handler that blocked on a human would be
+///     killed after <c>StreamIdleTimeout</c> (60 s). <c>ask_user</c> is therefore registered approval-required: the runner waits OUTSIDE the watched
+///     segment, drops the answer here and approves the call, and the handler pops the answer and returns immediately. The framework's
+///     <c>FunctionInvokingChatClient.CurrentContext.CallContent.CallId</c> makes the key exact, so no ambient plumbing or argument-hash matching is needed.
+/// </remarks>
 public sealed class UserQuestionAnswerStash
 {
-    // An entry is normally popped microseconds later by the tool the runner just approved. It survives only when the
-    // turn dies between the two (cancel, shutdown, provider failure), so a write-time sweep is enough to keep this
-    // bounded — no timer, no background service.
+    // An entry is normally popped microseconds later by the tool the runner just approved. It survives only when the turn dies between the
+    // two (cancel, shutdown, provider failure), so a write-time sweep is enough to keep this bounded — no timer, no background service.
     private static readonly TimeSpan StaleEntryRetention = TimeSpan.FromMinutes(30);
 
     private readonly ConcurrentDictionary<string, StashedAnswer> _answers = new(StringComparer.Ordinal);

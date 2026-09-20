@@ -33,9 +33,8 @@ internal static class AddNodeAuthExtensions
         // catch — the local-model list/details/select endpoints each used to carry their own copy.
         builder.Services.AddSingleton<ICloudModelResolver, CloudModelResolver>();
 
-        // Node settings: the file store stays the canonical inner store (semaphore + 0600 perms); a single-entry
-        // IMemoryCache decorator fronts it as INodeSettingsStore, and INodeRuntimeSettings is the read surface migrated
-        // consumers use (precedence stored > appsettings seed > hardcoded default).
+        // Node settings: NodeSettingsStore is the canonical inner store (semaphore + 0600 perms) and a single-entry IMemoryCache
+        // decorator fronts it as INodeSettingsStore; INodeRuntimeSettings is the read surface, taking stored over seed over default.
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton<NodeSettingsStore>();
         builder.Services.AddSingleton<INodeSettingsStore>(static sp =>
@@ -47,23 +46,19 @@ internal static class AddNodeAuthExtensions
         // browser silent-auth resume), read by AzureFoundryChatClientFactory and written by the sign-in coordinator.
         builder.Services.AddSingleton<IEntraTokenCacheStore, EntraTokenCacheStore>();
 
-        // Keeps the live, already-authenticated device-code credential alive for the process lifetime — the sign-in
-        // coordinator writes it on success, AzureFoundryChatClientFactory reads it on every send, so a chat send
-        // never depends solely on OS-native encrypted persistence (which may be unavailable — e.g. no libsecret on
-        // Linux/WSL, forcing an in-memory fallback).
+        // Keeps the authenticated device-code credential alive for the process lifetime: the sign-in coordinator writes it and
+        // AzureFoundryChatClientFactory reads it per send, so a send never depends on OS-native persistence (no libsecret on WSL).
         builder.Services.AddSingleton<IEntraLiveCredentialCache, EntraLiveCredentialCache>();
 
-        // Encrypted at-rest store for the authorization-code flow's MSAL home-account-id, read by
-        // AzureFoundryChatClientFactory and written by the auth-code sign-in coordinator (parallel to
-        // IEntraTokenCacheStore, which is shaped around Azure.Identity's device-code/browser AuthenticationRecord).
+        // Encrypted at-rest store for the authorization-code flow's MSAL home-account-id, read by AzureFoundryChatClientFactory
+        // and written by the auth-code coordinator; IEntraTokenCacheStore is its Azure.Identity device-code/browser twin.
         builder.Services.AddSingleton<IEntraAuthCodeAccountStore, EntraAuthCodeAccountStore>();
         builder.Services.AddSingleton<IEntraAuthCodeRedeemer, EntraAuthCodeRedeemer>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
         builder.AddCodexOAuthProvider(configuration);
 
-        // Singleton: owns the cross-request pending Entra ID device-code sign-in state the Operator status endpoint
-        // polls, mirroring ICodexLoginCoordinator. The onSignInSucceeded callback invalidates the active-cloud
-        // selection snapshot so a sign-in takes effect on the very next send.
+        // Singleton: owns the cross-request pending Entra ID device-code sign-in state the Operator status endpoint polls,
+        // mirroring ICodexLoginCoordinator; its success callback invalidates the active-cloud snapshot, so the next send uses it.
         builder.Services.AddSingleton<IEntraDeviceCodeSignInCoordinator>(serviceProvider => new EntraDeviceCodeSignInCoordinator(serviceProvider.GetRequiredService<ICloudCredentialStore>(),
             serviceProvider.GetRequiredService<IEntraTokenCacheStore>(),
             serviceProvider.GetRequiredService<IEntraLiveCredentialCache>(),

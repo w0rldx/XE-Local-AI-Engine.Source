@@ -33,13 +33,13 @@ internal sealed class ManagedBlobReadResult
 
 /// <summary>
 ///     The shared body behind the managed blob conventions: AES-GCM under the node key, an AAD binding scope id, blob id
-///     and a per-convention column name, write-verify-then-atomic-rename, and immutability (re-writing identical content
-///     succeeds, different content throws).
-///     <para>
-///         The layout is <c>{root}/{folder}/{leaf}/{scopeId:N}/{blobId:N}.blob</c> — the shape Development Mode's
-///         artifacts already use on disk, kept byte-identical so its existing blobs stay readable.
-///     </para>
+///     and a per-convention column name, write-verify-then-atomic-rename, and immutability.
 /// </summary>
+/// <remarks>
+///     Immutability means re-writing identical content succeeds while different content throws. The layout is
+///     <c>{root}/{folder}/{leaf}/{scopeId:N}/{blobId:N}.blob</c> — the shape Development Mode's artifacts already use on
+///     disk, kept byte-identical so its existing blobs stay readable.
+/// </remarks>
 internal sealed class ManagedEncryptedBlobStore
 {
     private const string SchemaVersion = "v1";
@@ -156,14 +156,15 @@ internal sealed class ManagedEncryptedBlobStore
     }
 
     /// <summary>
-    ///     Best-effort removal of one blob. A blob that cannot be removed stays on disk for good: nothing sweeps it, and
-    ///     nothing can. Every writer of this store commits the blob BEFORE the row that names it
-    ///     (<c>SaveArtifactToolHandler</c> states that order as its guarantee, and <c>DevelopmentEvidenceService.PrepareAsync</c>
-    ///     hands the row back as a command the caller applies later), so a file whose blob id has no row is
-    ///     indistinguishable from one whose row is still in flight — the knowledge-base sweep
-    ///     (<c>KnowledgeBlobOrphanSweeper</c>) is safe only because that store commits the row first. The leak is bounded
-    ///     by the per-convention byte limit; <see cref="DeleteScope" /> is what actually reclaims a deleted owner's bytes.
+    ///     Best-effort removal of one blob. A blob that cannot be removed stays on disk for good: nothing sweeps it, and nothing can.
     /// </summary>
+    /// <remarks>
+    ///     Every writer of this store commits the blob BEFORE the row that names it (<c>SaveArtifactToolHandler</c> states that order as
+    ///     its guarantee, and <c>DevelopmentEvidenceService.PrepareAsync</c> hands the row back as a command the caller applies later), so
+    ///     a file whose blob id has no row is indistinguishable from one whose row is still in flight — the knowledge-base sweep (<c>KnowledgeBlobOrphanSweeper</c>)
+    ///     is safe only because that store commits the row first. The leak is bounded by the per-convention byte limit;
+    ///     <see cref="DeleteScope" /> is what actually reclaims a deleted owner's bytes.
+    /// </remarks>
     public void Delete(Guid scopeId, Guid blobId)
     {
         DeleteIfPresent(BlobPath(scopeId, blobId));
@@ -182,9 +183,8 @@ internal sealed class ManagedEncryptedBlobStore
         }
         catch (IOException)
         {
-            // The rows are already gone; leftover bytes must never turn a successful row delete into a caller-visible
-            // failure. The callers log the scope id so an operator can remove the directory by hand — nothing collects
-            // it automatically.
+            // The rows are already gone; leftover bytes must never turn a successful row delete into a caller-visible failure.
+            // The callers log the scope id so an operator can remove the directory by hand — nothing collects it automatically.
         }
         catch (UnauthorizedAccessException)
         {

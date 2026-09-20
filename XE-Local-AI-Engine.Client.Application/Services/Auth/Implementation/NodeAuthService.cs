@@ -14,13 +14,14 @@ public sealed class NodeAuthService : INodeAuthService
 {
     private static readonly SemaphoreSlim SetupLock = new(initialCount: 1, maxCount: 1);
 
-    /// <summary>
-    ///     How long a refresh token that ROTATION replaced still buys a successor. The SPA keeps its access token in
-    ///     memory only, so every document load refreshes; a reload while a refresh is already in flight, or a second tab,
-    ///     makes two requests present the same cookie, and single-use rotation would answer the loser 401 — which clears
-    ///     the cookie and signs the operator out although nothing was compromised. Not an option: an operator has no
-    ///     reason to tune it, and every second of it is a second a captured cookie stays replayable.
-    /// </summary>
+    /// <summary>How long a refresh token that ROTATION replaced still buys a successor.</summary>
+    /// <remarks>
+    ///     The SPA keeps its access token in memory only, so every document load refreshes; a reload while a refresh is
+    ///     already in flight, or a second tab, makes two requests present the same cookie, and single-use rotation would
+    ///     answer the loser 401 — which clears the cookie and signs the operator out although nothing was compromised.
+    ///     Not an option: an operator has no reason to tune it, and every second of it is a second a captured cookie
+    ///     stays replayable.
+    /// </remarks>
     private static readonly TimeSpan RotationGraceWindow = TimeSpan.FromSeconds(10);
 
     private readonly NodeIdentityDbContext _dbContext;
@@ -62,6 +63,14 @@ public sealed class NodeAuthService : INodeAuthService
         return new NodeAuthStatus { SetupRequired = !hasAdminUser, Authenticated = principal.Identity?.IsAuthenticated == true };
     }
 
+    /// <summary>Creates the single administrator account and stamps the pending external-access profile.</summary>
+    /// <remarks>
+    ///     The settings file cannot join the identity transaction, so one of the two writes has to be the orphanable one. Writing the profile
+    ///     FIRST makes the orphan "profile pending, no administrator", which is inert: setup fails and is retryable, the gated services keep
+    ///     waiting because there is no operator to ask, and the retry lands on the same null guard. Writing after the commit would instead
+    ///     leave "administrator exists, profile null" reachable — the one state the boot backfill decides as "recommended", which would start
+    ///     outbound checks the operator was never asked about.
+    /// </remarks>
     public async Task<NodeSetupResult> SetupAsync(string email, string password, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
@@ -107,14 +116,8 @@ public sealed class NodeAuthService : INodeAuthService
                 return new NodeSetupResult { Succeeded = false, AlreadyInitialized = false, Errors = ToErrorList(roleResult) };
             }
 
-            // Written BEFORE the commit, and only when nothing has been chosen yet. The settings file cannot join the
-            // identity transaction, so one of the two writes has to be the one that can be orphaned. Writing first makes
-            // the orphan "profile pending, no administrator", which is inert: setup fails and is retryable, the gated
-            // services keep waiting because there is no operator to ask, and the retry lands on this same null guard.
-            // Writing after the commit would instead leave "administrator exists, profile null" reachable — the one
-            // state the boot backfill decides as "recommended", which would start outbound checks the operator was
-            // never asked about. The token is SetupAsync's own: a cancellation here throws before the commit, so the
-            // transaction disposes unconfirmed and Identity rolls back.
+            // Written BEFORE the commit and only when nothing has been chosen yet — see this method's remarks for why that order is the safe
+            // one. The token is SetupAsync's own: a cancellation here throws before the commit, so the transaction disposes unconfirmed.
             await _nodeSettingsStore.UpdateAsync(latest => latest.ExternalAccessProfile is null
                     ? latest with
                     {
@@ -149,10 +152,8 @@ public sealed class NodeAuthService : INodeAuthService
         {
             _logger.LogWarning("Node login failed for user {UserId}: {Reason}.", user.Id, GetSignInFailureReason(signInResult));
 
-            // A locked-out login is the ONE failure that is reported distinguishably: an operator who mistyped five
-            // times otherwise reads "incorrect password" while holding the right one, and has no way to learn that
-            // waiting is the fix. This tells a caller that an email exists once five attempts have been spent, which
-            // is accepted on a loopback-only node whose login is additionally capped at 10 requests/minute per IP.
+            // A locked-out login is the ONE failure reported distinguishably: otherwise an operator who mistyped five times reads "incorrect
+            // password" holding the right one. It tells a caller an email exists after five attempts — accepted on a loopback-only node capped at 10 requests/minute per IP.
             return signInResult.IsLockedOut
                 ? FailedTokenResult(await GetLockoutRetryAfterSecondsAsync(user))
                 : FailedTokenResult();
@@ -267,9 +268,8 @@ public sealed class NodeAuthService : INodeAuthService
             };
         }
 
-        // RemovePassword + AddPassword is the no-old-password reset primitive (Identity has no token-less ResetPassword,
-        // and no reset-token provider is registered). Wrap both in a serializable transaction — mirroring SetupAsync — so a
-        // policy-rejected new password rolls back and never leaves the account in the passwordless intermediate state.
+        // RemovePassword + AddPassword is the no-old-password reset primitive (Identity has no token-less ResetPassword, and no reset-token
+        // provider is registered). Both go in a serializable transaction — as in SetupAsync — so a rejected new password never leaves the account passwordless.
         await using var transaction = await _dbContext.Database
                                                       .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
 
@@ -302,13 +302,14 @@ public sealed class NodeAuthService : INodeAuthService
 
     /// <summary>
     ///     Whether the revocation at <paramref name="revokedAtUtc" /> was ROTATION replacing the presented token, rather
-    ///     than logout, a password change or a reset revoking it. Nothing records WHY a token was revoked, so the
-    ///     discriminator is the successor: rotation stamps the revocation and the replacement from one instant (both
-    ///     take the caller's <c>now</c>), so a still-live token created at exactly that instant is rotation's own
-    ///     successor. <see cref="RevokeRefreshTokensAsync" />, <see cref="ChangePasswordAsync" /> and
-    ///     <see cref="ResetAdminPasswordAsync" /> revoke without issuing anything, so they leave no such token and a
-    ///     logged-out cookie can never be resurrected here.
+    ///     than logout, a password change or a reset revoking it.
     /// </summary>
+    /// <remarks>
+    ///     Nothing records WHY a token was revoked, so the discriminator is the successor: rotation stamps the revocation and the replacement
+    ///     from one instant (both take the caller's <c>now</c>), so a still-live token created at exactly that instant is rotation's own
+    ///     successor. <see cref="RevokeRefreshTokensAsync" />, <see cref="ChangePasswordAsync" /> and <see cref="ResetAdminPasswordAsync" />
+    ///     revoke without issuing anything, so they leave no such token and a logged-out cookie can never be resurrected here.
+    /// </remarks>
     private Task<bool> WasReplacedByRotationAsync(string userId, DateTime revokedAtUtc, DateTime now, CancellationToken cancellationToken)
     {
         if (revokedAtUtc > now || now - revokedAtUtc > RotationGraceWindow)
@@ -383,11 +384,14 @@ public sealed class NodeAuthService : INodeAuthService
     }
 
     /// <summary>
-    ///     Whole seconds still left on the user's lockout, floored at one so a caller is never told to retry in zero
-    ///     seconds and saturated at <see cref="int.MaxValue" /> so an operator-set far-future <c>LockoutEnd</c> cannot
-    ///     overflow the int. Saturating rather than capping matters: a shorter number would tell a caller to retry
-    ///     while the account is still locked, which is the confusion the coded 401 exists to remove.
+    ///     Whole seconds still left on the user's lockout, floored at one and saturated at <see cref="int.MaxValue" />.
     /// </summary>
+    /// <remarks>
+    ///     The floor keeps a caller from being told to retry in zero seconds; the saturation keeps an operator-set
+    ///     far-future <c>LockoutEnd</c> from overflowing the int. Saturating rather than capping matters: a shorter
+    ///     number would tell a caller to retry while the account is still locked, which is the confusion the coded 401
+    ///     exists to remove.
+    /// </remarks>
     private async Task<int> GetLockoutRetryAfterSecondsAsync(NodeUser user)
     {
         var lockoutEnd = await _userManager.GetLockoutEndDateAsync(user);

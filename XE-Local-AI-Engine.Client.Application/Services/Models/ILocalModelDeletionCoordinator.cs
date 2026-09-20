@@ -20,11 +20,13 @@ public interface ILocalModelDeletionCoordinator
 }
 
 /// <summary>
-///     Thrown when a base model cannot be deleted because installed LoRA adapters launch against it. An adapter
-///     carries no weights of its own, so removing the base leaves every dependent adapter permanently unlaunchable.
-///     The global <c>ConflictExceptionHandler</c> turns it into a 409 with
-///     <c>conflictType = InstalledModelHasDependentAdapters</c> — endpoints must let it propagate, never catch it.
+///     Thrown when a base model cannot be deleted because installed LoRA adapters launch against it. An adapter carries no weights of its
+///     own, so removing the base leaves every dependent adapter permanently unlaunchable.
 /// </summary>
+/// <remarks>
+///     The global <c>ConflictExceptionHandler</c> turns it into a 409 with <c>conflictType = InstalledModelHasDependentAdapters</c> —
+///     endpoints must let it propagate, never catch it.
+/// </remarks>
 public sealed class InstalledModelDependentAdaptersException : InvalidOperationException
 {
     public InstalledModelDependentAdaptersException() : base("Installed LoRA adapters apply to this model. Remove them before deleting it.")
@@ -45,10 +47,12 @@ public sealed class InstalledModelProviderConflictException : InvalidOperationEx
 }
 
 /// <summary>
-///     Thrown when a concurrent model mutation moved the provider map on past the revision this deletion (or its
-///     compensating rollback) read, so the write would clobber someone else's change. Mapped to a 409 with
-///     <c>conflictType = InstalledModelProviderMapSuperseded</c>; the operation is retryable after a refresh.
+///     Thrown when a concurrent model mutation moved the provider map on past the revision this deletion (or its compensating rollback)
+///     read, so the write would clobber someone else's change.
 /// </summary>
+/// <remarks>
+///     Mapped to a 409 with <c>conflictType = InstalledModelProviderMapSuperseded</c>; the operation is retryable after a refresh.
+/// </remarks>
 public sealed class InstalledModelProviderMapSupersededException : InvalidOperationException
 {
     public InstalledModelProviderMapSupersededException() : base("Another model change completed while this delete was running. Refresh the model list and try again.")
@@ -58,13 +62,13 @@ public sealed class InstalledModelProviderMapSupersededException : InvalidOperat
 
 /// <summary>
 ///     Thrown when the model-management path is asked to perform an operation the model's runtime provider does not
-///     own — today, deleting or pulling a model that lives on an operator-registered external endpoint. Mapped to a 409
-///     with <c>conflictType = ModelOperationNotSupportedByProvider</c>.
+///     own — today, deleting or pulling a model that lives on an operator-registered external endpoint.
 /// </summary>
 /// <remarks>
-///     It exists because the refusal originates in the PROVIDER assembly, which the host may not reference (the layer
-///     tests freeze that graph), and because 500 is the wrong answer for a request that was understood perfectly and
-///     simply names the wrong lifecycle: external models are removed by unregistering them on their connection.
+///     Mapped to a 409 with <c>conflictType</c> of <c>ModelOperationNotSupportedByProvider</c>. It exists because the refusal originates in
+///     the PROVIDER assembly, which the host may not reference (the layer tests freeze that graph), and because 500 is the wrong answer for
+///     a request that was understood perfectly and simply names the wrong lifecycle: external models are removed by unregistering them on
+///     their connection.
 /// </remarks>
 public sealed class ModelOperationNotSupportedByProviderException : InvalidOperationException
 {

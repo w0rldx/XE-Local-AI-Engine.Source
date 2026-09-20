@@ -43,11 +43,8 @@ internal static class AddNodeCoreOptionsExtensions
                .Validate(static options => options.RetainCount >= 1, "NodeDbBackup:RetainCount must be at least one.")
                .ValidateOnStart();
 
-        // The single source of truth for the per-node runtime-state directory. Registered first (foundational): the
-        // settings store, the encrypted credential stores, the cert-pin store, the AgentHome workspace, and the hardware
-        // profiler all root their files at INodeDataDirectory.Root instead of IHostEnvironment.ContentRootPath. In desktop
-        // mode DesktopBootstrap points it at the per-user data dir; everywhere else it falls back to the content root, so
-        // off the desktop flag every consumer reads/writes exactly where it did before.
+        // Registered first: the single source of truth for the per-node runtime-state directory — the settings store, the encrypted credential
+        // and cert-pin stores, the AgentHome workspace and the hardware profiler all root at INodeDataDirectory.Root (DesktopBootstrap's per-user data dir in desktop mode, the content root else).
         builder.Services.AddSingleton<INodeDataDirectory, NodeDataDirectory>();
 
         builder.Services.AddSingleton<IValidateOptions<WorkerNodeOptions>, WorkerNodeOptionsValidator>();

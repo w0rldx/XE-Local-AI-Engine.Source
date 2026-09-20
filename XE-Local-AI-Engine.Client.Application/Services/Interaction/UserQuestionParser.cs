@@ -3,15 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.Interaction;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
-/// <summary>
-///     Parses and validates the arguments of an <c>ask_user</c> tool call into the questions the chat card renders.
-///     <para>
-///         WHY this validation lives here and not only in the tool handler: <c>ask_user</c> is approval-required, so the
-///         runner intercepts the call BEFORE <c>ToolArgumentRepairAIFunction</c> — the wrapper that normally coerces and
-///         repairs model arguments — ever sees it. The runner is therefore the first and only guard between raw model
-///         output and something shown to a human, and it must be able to reject a malformed call without prompting.
-///     </para>
-/// </summary>
+/// <summary>Parses and validates the arguments of an <c>ask_user</c> tool call into the questions the chat card renders.</summary>
+/// <remarks>
+///     <para> WHY this validation lives here and not only in the tool handler: <c>ask_user</c> is approval-required, so the runner
+///     intercepts the call BEFORE <c>ToolArgumentRepairAIFunction</c> — the wrapper that normally coerces and repairs model arguments —
+///     ever sees it. The runner is therefore the first and only guard between raw model output and something shown to a human, and it must
+///     be able to reject a malformed call without prompting. </para>
+/// </remarks>
 internal static class UserQuestionParser
 {
     // Mirrors the bounds declared in AskUserTool.ParameterSchema. Kept small on purpose (the schema is compiled into

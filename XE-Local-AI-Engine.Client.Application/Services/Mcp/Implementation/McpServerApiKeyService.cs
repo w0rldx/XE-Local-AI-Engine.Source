@@ -78,11 +78,8 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
             return null;
         }
 
-        // Hash the candidate and compare DIGESTS, never the plaintext — the plaintext is not recoverable here, which is
-        // the whole point of storing a digest. FixedTimeEquals rather than SequenceEqual: a short-circuiting comparison
-        // leaks the length of the matching prefix, which over a loopback socket is a practical byte-at-a-time oracle.
-        // Two fixed-length SHA-256 digests also make the comparison naturally length-invariant, so a truncated
-        // candidate is rejected on content rather than on an early length check.
+        // Hash the candidate and compare DIGESTS, never the plaintext, which storing a digest makes unrecoverable here. FixedTimeEquals
+        // rather than SequenceEqual: a short-circuiting compare leaks the matching prefix length, a byte-at-a-time oracle over loopback.
         var candidate = HashKey(presented);
         var matches = CryptographicOperations.FixedTimeEquals(record.KeyHash.Span, candidate);
 
@@ -108,12 +105,15 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
     }
 
     /// <summary>
-    ///     A single SHA-256 over the key's UTF-8 bytes — deliberately NOT a password KDF. PBKDF2/Argon2/bcrypt exist to
-    ///     make guessing a low-entropy human-chosen password expensive; the input here is 256 bits of CSPRNG output, so
-    ///     there is no guess space to slow down and the only thing a KDF would buy is latency on every authenticated
-    ///     MCP request. Unsalted for the same reason: a salt defeats precomputation across many weak secrets, and this
-    ///     node has exactly one strong one. This is the standard construction for high-entropy API tokens.
+    ///     A single SHA-256 over the key's UTF-8 bytes, deliberately NOT a password KDF.
     /// </summary>
+    /// <remarks>
+    ///     PBKDF2, Argon2 and bcrypt exist to make guessing a low-entropy human-chosen password expensive; the input
+    ///     here is 256 bits of CSPRNG output, so there is no guess space to slow down and a KDF would buy only latency
+    ///     on every authenticated MCP request. Unsalted for the same reason: a salt defeats precomputation across many
+    ///     weak secrets, and this node has exactly one strong one. It is the standard high-entropy API token
+    ///     construction.
+    /// </remarks>
     private static byte[] HashKey(string key)
     {
         return SHA256.HashData(Encoding.UTF8.GetBytes(key));

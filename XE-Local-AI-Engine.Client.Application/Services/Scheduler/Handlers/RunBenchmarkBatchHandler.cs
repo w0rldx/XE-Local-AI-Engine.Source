@@ -8,33 +8,16 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
-///     Quartz template handler for the <c>run-benchmark-batch</c> template: freezes a whole model × KV-cache matrix
-///     against one benchmark project on a schedule, so an eight-hour overnight matrix is a schedule rather than a
-///     foreground wait. It <b>enqueues and returns</b> — the runs themselves are drained by the existing single-consumer
-///     <c>BenchmarkQueueHostedService</c>, so the job holds neither the scheduler thread nor the GPU for the duration.
-///     <para>
-///         <b>Singleton.</b> The registry captures every handler in a <c>FrozenDictionary</c> at construction, so this
-///         handler is effectively a singleton and CANNOT inject scoped services. It injects
-///         <see cref="IServiceScopeFactory" /> and creates a scope per <see cref="ExecuteAsync" /> (mirrors
-///         <see cref="RunSavedAgentHandler" />).
-///     </para>
-///     <para>
-///         <b>Refuses to pile up.</b> A nightly matrix that fires while the previous night's is still draining would
-///         queue a second matrix behind the first and measure the same project twice. A fire that finds queued or
-///         running WORK of any kind on the project — primary, judge, fidelity or pairwise comparison, all of which
-///         outlive the runs they belong to — is recorded as a SKIPPED fire naming what is still busy — not a failure, because
-///         nothing is wrong: the node is simply still busy. <see cref="SchedulerMisfirePolicy.SkipMissed" /> covers the
-///         other half, a node that was off when the trigger was due.
-///     </para>
-///     <para>
-///         <b>Owns no scheduler state.</b> It records a content-safe summary (project id, cells requested, runs created,
-///         per-cell failure reasons — never a prompt, never a model answer) through
-///         <see cref="ScheduledJobExecutionContext.ReportProgressAsync" /> and on
-///         <see cref="ScheduledJobExecutionContext.Summary" /> (which the dispatcher persists onto the run row), and
-///         throws
-///         <see cref="ScheduledJobExecutionException" /> with an operator-safe reason only when EVERY cell failed.
-///     </para>
+///     Quartz template handler for the <c>run-benchmark-batch</c> template: it freezes a whole model × KV-cache matrix
+///     against one benchmark project on a schedule, enqueueing the runs and returning.
 /// </summary>
+/// <remarks>
+///     The single-consumer <c>BenchmarkQueueHostedService</c> drains them, so the fire holds neither the scheduler
+///     thread nor the GPU. The registry captures handlers in a <c>FrozenDictionary</c>, so this one is a singleton and
+///     takes <see cref="IServiceScopeFactory" />, scoping per <see cref="ExecuteAsync" />. It refuses to pile up: a
+///     fire finding queued or running WORK of any kind on the project — primary, judge, fidelity or pairwise, all of
+///     which outlive their runs — records a SKIPPED fire naming what is busy, never a failure.
+/// </remarks>
 public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
 {
     /// <summary>The reserved scheduler template id this handler claims.</summary>
@@ -50,10 +33,13 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
     private const int MaxRepeatCount = 10;
 
     /// <summary>
-    ///     JSON-Schema (draft-07) for the decrypted <c>run-benchmark-batch</c> parameters: the project to measure and the
-    ///     matrix to freeze against it. Values are validated again in code before use — the descriptor schema is
-    ///     documentation for the management UI, never the enforcement point.
+    ///     JSON-Schema (draft-07) for the decrypted <c>run-benchmark-batch</c> parameters: the project to measure and
+    ///     the matrix to freeze against it.
     /// </summary>
+    /// <remarks>
+    ///     Values are validated again in code before use: the descriptor schema is documentation for the management
+    ///     UI, never the enforcement point.
+    /// </remarks>
     private const string ParameterSchemaJson =
         """
         {
@@ -97,20 +83,16 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         """;
 
     /// <summary>
-    ///     How long a fire may spend freezing EACH cell before it stops and reports what it started. The whole fire's
-    ///     budget is this times the number of cells, so the ceiling grows with the matrix the operator asked for.
-    ///     <para>
-    ///         The interactive batch endpoint spends 45 s on the WHOLE request, because a connection is held open; a
-    ///         Quartz fire holds nothing, and a flat 45 s truncates the overnight matrix this template exists to run —
-    ///         measured live on this node, a cold cell costs ~18 s (the freeze verifies each model's GGUF by digest),
-    ///         so a flat budget enqueued 3 of 4 cells. Per-cell keeps the guard that matters — a pathological host
-    ///         cannot hang the fire indefinitely — while still admitting the matrix.
-    ///     </para>
-    ///     <para>
-    ///         Checked BETWEEN cells, never inside one, so the budget can be overrun by one cell and no cell is ever
-    ///         half-frozen. The scheduler's own max-runtime ceiling remains the outer bound.
-    ///     </para>
+    ///     How long a fire may spend freezing EACH cell before it stops and reports what it started, so the whole
+    ///     fire's ceiling grows with the matrix the operator asked for.
     /// </summary>
+    /// <remarks>
+    ///     The interactive batch endpoint spends 45 s on the WHOLE request, because a connection is held open; a Quartz
+    ///     fire holds nothing, and a flat 45 s truncates the overnight matrix this template exists to run — a cold cell
+    ///     was measured at ~18 s on this node, since the freeze verifies each model's GGUF by digest, so a flat budget
+    ///     enqueued 3 of 4 cells. It is checked BETWEEN cells, never inside one, so one cell may overrun it and none is
+    ///     ever half-frozen; the scheduler's own max-runtime ceiling stays the outer bound.
+    /// </remarks>
     private static readonly TimeSpan PerCellFreezeBudget = TimeSpan.FromSeconds(45);
 
     private static readonly JsonSerializerOptions ParameterSerializerOptions = new()
@@ -172,10 +154,8 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
             throw new ScheduledJobExecutionException("The scheduled benchmark project could not be found. It may have been deleted.");
         }
 
-        // Refuse to pile up (R-7). Reported as a skipped fire, not a failure: the schedule is fine, the node is busy.
-        // Counted over WORK ITEMS of every kind, not over run statuses: judging, fidelity and pairwise work outlives
-        // the run it belongs to, so the previous matrix can hold the single-consumer queue and the GPU for hours while
-        // every one of its runs already reads Succeeded — and the next fire piled a second matrix on top of it.
+        // Refuse to pile up, reported as a skipped fire rather than a failure: the schedule is fine, the node is busy. Counted over
+        // WORK ITEMS of every kind, since judging, fidelity and pairwise work outlives runs that already read Succeeded.
         var active = await store.CountActiveWorkAsync(parameters.ProjectId, cancellationToken);
         var activeCount = active.Values.Sum();
         if (activeCount > 0)
@@ -197,11 +177,13 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
 
     /// <summary>
     ///     Freezes each cell of the matrix in turn against one shared <see cref="BenchmarkFreezeScope" />, so the
-    ///     llama-server capability probe runs once and each distinct model is verified once and then held — the variable
-    ///     a matrix exists to hold still. Every group insert is all-or-nothing, so the version the NEXT cell must present
-    ///     is the running total of runs created so far; re-reading the project between cells would be the same number
-    ///     with a wider race window.
+    ///     llama-server capability probe runs once and each distinct model is verified once and then held.
     /// </summary>
+    /// <remarks>
+    ///     Holding the model still is the point of a matrix. Every group insert is all-or-nothing, so the version the
+    ///     NEXT cell must present is the running total of runs created so far; re-reading the project between cells
+    ///     would give the same number with a wider race window.
+    /// </remarks>
     private async Task EnqueueMatrixAsync(ScheduledJobExecutionContext context,
         IBenchmarkRunFreezeService freezeService,
         RunBenchmarkBatchParameters parameters,
@@ -305,10 +287,13 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         kvCacheType is null ? modelName : $"{modelName} ({kvCacheType})";
 
     /// <summary>
-    ///     Records the fire's content-safe outcome in both places it belongs: the live progress event stream, and
-    ///     <see cref="ScheduledJobExecutionContext.Summary" /> so the run row carries the same sentence rather than a
-    ///     generic "Completed." that reads identically for an enqueued matrix and a busy-skip.
+    ///     Records the fire's content-safe outcome in both places it belongs: the live progress event stream and
+    ///     <see cref="ScheduledJobExecutionContext.Summary" />.
     /// </summary>
+    /// <remarks>
+    ///     The run row then carries the same sentence, rather than a generic "Completed." that reads identically for an
+    ///     enqueued matrix and a busy-skip.
+    /// </remarks>
     private static Task ReportAsync(ScheduledJobExecutionContext context, string summary, CancellationToken cancellationToken)
     {
         context.Summary = summary;
@@ -317,10 +302,13 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
     }
 
     /// <summary>
-    ///     Parses and validates the decrypted parameter JSON and expands it into the ordered cell list. A malformed or
-    ///     out-of-range payload throws <see cref="ScheduledJobValidationException" /> (the dispatcher records the failure
-    ///     without freezing anything). Never echoes raw parameter values beyond the model names the operator typed.
+    ///     Parses and validates the decrypted parameter JSON and expands it into the ordered cell list.
     /// </summary>
+    /// <remarks>
+    ///     A malformed or out-of-range payload throws <see cref="ScheduledJobValidationException" />, so the dispatcher
+    ///     records the failure without freezing anything. No raw parameter value beyond the operator's model names is
+    ///     ever echoed.
+    /// </remarks>
     private static RunBenchmarkBatchParameters ParseAndValidate(string? parametersJson)
     {
         if (string.IsNullOrWhiteSpace(parametersJson))

@@ -6,29 +6,21 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-/// <summary>
-///     The one place a workflow node's tool call is admitted or refused. Every gate runs here — catalog match, risk
-///     class, composed approval, structural approval floor, argument validation, budget — so a caller cannot skip one
-///     by construction, and <see cref="ListInvocableToolsAsync" /> walks the same gates so a picker or a save-time
-///     validator can never disagree with what the runtime will actually run.
-///     <para>
-///         <b>Not cached.</b> The catalog is re-read on every call, opening a scope for the custom-tool store each
-///         time. Deliberate: these are operator-paced calls, and the composed approval read in gate 2 comes live from
-///         node settings — a cache would go stale against a TIGHTENED policy, which is the one direction that matters.
-///     </para>
-///     <para>
-///         <b>No audit row.</b> ADR 0006's strict pre-invocation record exists for adapting an approval-required
-///         function into a non-approval one for an agentic MCP root; this service refuses that class twice and adapts
-///         nothing, so an <c>approve</c> row would assert a decision nobody made.
-///     </para>
-/// </summary>
+/// <summary>The one place a workflow node's tool call is admitted or refused.</summary>
+/// <remarks>
+///     Every gate runs here — catalog match, risk class, composed approval, structural approval floor, argument validation, budget — so a caller
+///     cannot skip one by construction, and <see cref="ListInvocableToolsAsync" /> walks the same gates, so a picker or a save-time validator can
+///     never disagree with what the runtime will actually run. Why the catalog is re-read on every call, and why no approval-audit row is written:
+///     docs/wiki/12-security-and-privacy.md ("Tool invocation writes no approval-audit row").
+/// </remarks>
+/// <seealso cref="IToolInvocationService" />
 internal sealed class ToolInvocationService : IToolInvocationService
 {
-    /// <summary>
-    ///     The catalog <c>Source</c> tag for an in-process built-in, matched ORDINALLY rather than taking the first
-    ///     name match: the catalog appends custom-tool entries after the built-ins, so first-match-wins would resolve a
-    ///     custom tool named <c>read_file</c> to the built-in only by accident of ordering.
-    /// </summary>
+    /// <summary>The catalog <c>Source</c> tag for an in-process built-in, matched ORDINALLY rather than by first name match.</summary>
+    /// <remarks>
+    ///     The catalog appends custom-tool entries after the built-ins, so first-match-wins would resolve a custom tool
+    ///     named <c>read_file</c> to the built-in only by accident of ordering.
+    /// </remarks>
     private const string BuiltinSource = "builtin";
 
     private static readonly JsonSerializerOptions ResultSerializerOptions = JsonSerializerOptions.Web;
@@ -59,6 +51,13 @@ internal sealed class ToolInvocationService : IToolInvocationService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     The deadline is its OWN cancellation source, not a <c>CancelAfter</c> on the linked budget: classifying off the CALLER's token would report a
+    ///     terminal <c>Cancelled</c> for a retryable <c>Timeout</c> whenever that token fired between the budget expiring and the catch reading it. It is
+    ///     armed BEFORE the catalog is read, so a slow read spends the caller's budget rather than leaving the tool a second, full one, and a spent budget
+    ///     cancels synchronously. The arming sits inside the try because <c>CancelAfter</c> refuses a span past <c>int.MaxValue</c> ms and a node may
+    ///     declare one.
+    /// </remarks>
     public async Task<ToolInvocationOutcome> InvokeAsync(string toolName,
         string argumentsJson,
         ToolInvocationContext context,
@@ -72,17 +71,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
             return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.UnknownTool, Result = null, Reason = "The node names no tool." };
         }
 
-        // The deadline is its OWN source rather than a CancelAfter on the linked budget, and the catch below is why:
-        // classifying off the CALLER's token would report a terminal Cancelled for a retryable Timeout whenever that
-        // token happens to fire between the budget expiring and the catch reading it.
-        //
-        // Armed HERE, before the catalog is even read: the caller's budget covers the WHOLE call, so a slow catalog
-        // read spends it like anything else. Armed after the lookup, a node could wait its budget out on the catalog
-        // and then hand the tool a second, full one. A budget already spent is cancelled synchronously, so an expired
-        // deadline never depends on timer resolution.
-        // Only the DECLARATION is out here, where the catch can still read it. The arming is inside the try, because
-        // CancelAfter refuses a span past int.MaxValue milliseconds and a node may declare one: this method's contract
-        // is that a bad call is an OUTCOME, so a budget it cannot arm has to fault like anything else.
+        // Only the DECLARATION is out here, where the catch can still read it; the arming is inside the try. See this method's remarks.
         using var deadline = new CancellationTokenSource();
 
         // Everything from here is inside one try: the contract is that no bad call throws, and a caller's token can
@@ -121,9 +110,8 @@ internal sealed class ToolInvocationService : IToolInvocationService
                 return new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.InvalidArguments, Result = null, Reason = parseError };
             }
 
-            // Step 7. The same validator, schema and strictness the registry's own wrapper applies — run BEFORE the
-            // call so a schema violation is the node's failure rather than a successful node output carrying repair
-            // guidance meant for a model.
+            // Step 7. The same validator, schema and strictness the registry's own wrapper applies — run BEFORE the call so a schema
+            // violation is the node's failure rather than a successful node output carrying repair guidance meant for a model.
             var validation = ToolArgumentValidator.CoerceAndValidate(executable.JsonSchema, arguments!, rejectUnknownProperties: true);
             if (!validation.IsValid)
             {
@@ -146,20 +134,16 @@ internal sealed class ToolInvocationService : IToolInvocationService
         }
         catch (OperationCanceledException)
         {
-            // Step 11a. Whose deadline fired. The budget this service imposed is asked FIRST and by its own source:
-            // a spent budget is a timeout however many other tokens have fired since, and the two answers are not
-            // interchangeable — a timeout is re-attempted and a cancellation is not.
+            // Step 11a. Whose deadline fired. The budget this service imposed is asked FIRST and by its own source: a spent budget is a timeout however
+            // many other tokens have fired since, and the two answers are not interchangeable — a timeout is re-attempted and a cancellation is not.
             return deadline.IsCancellationRequested
                 ? new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.Timeout, Result = null, Reason = $"'{toolName}' exceeded the node's time budget." }
                 : new ToolInvocationOutcome { Kind = ToolInvocationOutcomeKind.Cancelled, Result = null, Reason = $"The invocation of '{toolName}' was cancelled." };
         }
         catch (Exception exception)
         {
-            // Step 11b. The reason names the tool and nothing else: an exception message can carry a path or an
-            // argument value, so it goes to a Debug log an operator surface never renders.
-            // Not every caller is a graph-workflow node: the training dataset generator invokes through this seam
-            // with no run of its own and identifies itself in NodeKey alone. Naming a run of all zeroes there would
-            // read as a real run to anyone filtering the log by one.
+            // Step 11b. The reason names the tool and nothing else: an exception message can carry a path or an argument value, so it goes to a Debug log no operator surface renders.
+            // Not every caller is a graph-workflow node — the dataset generator invokes with no run of its own and identifies itself in NodeKey alone, so a run of all zeroes would read as real.
             if (context.RunId == Guid.Empty)
             {
                 _logger.LogDebug(exception, "Tool {ToolName} threw for {NodeKey}.", toolName, context.NodeKey);
@@ -243,9 +227,8 @@ internal sealed class ToolInvocationService : IToolInvocationService
         return null;
     }
 
-    // From HeadlessToolExecutor.TryParseArguments (minus the element it does not need): the arguments are cloned
-    // property-by-property into an ordinal bag, which is what both the validator and AIFunction read. The parser's own
-    // message is the one deliberate departure — see the catch.
+    // From HeadlessToolExecutor.TryParseArguments (minus the element it does not need): the arguments are cloned property-by-property into an
+    // ordinal bag, which is what both the validator and AIFunction read. The parser's own message is the one deliberate departure — see the catch.
     private static bool TryParseArguments(string argumentsJson, out AIFunctionArguments? arguments, out string error)
     {
         arguments = null;

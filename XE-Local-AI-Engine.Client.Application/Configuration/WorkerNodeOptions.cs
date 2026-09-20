@@ -19,10 +19,13 @@ public sealed class WorkerNodeOptions
     public int CleanupIntervalSeconds { get; set; } = 60;
 
     /// <summary>
-    ///     Seed for the disconnect grace: how long a run whose last client disconnected keeps going before it is
-    ///     cancelled. <c>0</c> disables reaping. Operator-editable, so this is the SEED only — read the effective value
-    ///     through <c>INodeRuntimeSettings.GetDetachedGraceSecondsAsync</c>, never from here.
+    ///     Seed for the disconnect grace: how long a run whose last client disconnected keeps going before it is cancelled. <c>0</c>
+    ///     disables reaping.
     /// </summary>
+    /// <remarks>
+    ///     Operator-editable, so this is the SEED only — read the effective value through <c>INodeRuntimeSettings.GetDetachedGraceSecondsAsync</c>,
+    ///     never from here.
+    /// </remarks>
     [Range(minimum: 0, maximum: 86400)]
     public int DetachedGraceSeconds { get; set; } = 300;
 }

@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     Destructive-boundary preparation invoked before an operator-selected workspace is soft-revoked. Implementations
-///     must acquire the shared workspace-revocation lease and clear any live workspace rooted in the selected folder.
-///     There is deliberately no permissive default: absence or failure of this service makes revocation fail closed.
+///     Destructive-boundary preparation invoked before an operator-selected workspace is soft-revoked. Implementations must acquire the
+///     shared workspace-revocation lease and clear any live workspace rooted in the selected folder.
 /// </summary>
+/// <remarks>
+///     There is deliberately no permissive default: absence or failure of this service makes revocation fail closed.
+/// </remarks>
 public interface IWorkspaceRevocationPreparation
 {
     Task<IWorkspaceRevocationSession> PrepareAsync(ResolvedSelectedFolder folder, CancellationToken cancellationToken = default);

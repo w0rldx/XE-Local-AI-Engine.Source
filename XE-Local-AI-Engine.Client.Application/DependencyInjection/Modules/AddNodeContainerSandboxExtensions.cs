@@ -7,25 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 /// <summary>
 ///     Registers the Development Mode container sandbox: options plus validation, the Docker daemon client factory,
 ///     the daemon-attestation store, and the preflight service the capability endpoint reads.
-///     <para>
-///         A module of its own rather than an addition to <c>AddNodeAgentHome</c>, because provider
-///         selection is per feature: Development Mode gets the container provider while AgentHome and Coder stay on
-///         the process provider. Registering the container pieces alongside AgentHome's would imply a coupling this
-///         design explicitly rejects.
-///     </para>
-///     <para>
-///         Note what is NOT here: no binding of <c>DockerSandboxRuntimeProvider</c> to a role. The two role
-///         interfaces are registered by <c>AddNodeAgentHome</c>, which runs BEFORE this module — safely, because they
-///         are lazy factory delegates. <c>SandboxProviderSelector.ResolveDevelopment</c> reaches the concrete type
-///         registered below only when <c>Development:Sandbox:Provider</c> names it; nothing here can hand it to
-///         AgentHome, which no longer needs a convention to guarantee because the type system does.
-///     </para>
-///     <para>
-///         Also here: the startup container sweep. It is the container-provider counterpart to
-///         <c>SandboxOrphanReaper</c> (registered by <c>AddNodeAgentHome</c>, and process-provider-only), and it lives
-///         with the rest of the container pieces for the same reason they do.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A module of its own rather than part of <c>AddNodeAgentHome</c>: provider selection is per feature, Development
+///     Mode taking the container provider while AgentHome and Coder stay on the process provider. Nothing here binds
+///     <c>DockerSandboxRuntimeProvider</c> to a role — the lazy role factories come from <c>AddNodeAgentHome</c>, which
+///     runs BEFORE this module, and <c>SandboxProviderSelector.ResolveDevelopment</c> reaches it only when named by
+///     <c>Development:Sandbox:Provider</c>. The startup sweep, counterpart to <c>SandboxOrphanReaper</c>, is here too.
+/// </remarks>
 internal static class AddNodeContainerSandboxExtensions
 {
     public static IHostApplicationBuilder AddNodeContainerSandbox(this IHostApplicationBuilder builder, IConfiguration configuration)
@@ -43,16 +32,12 @@ internal static class AddNodeContainerSandboxExtensions
         builder.Services.AddSingleton<IDockerDaemonAttestationStore, DockerDaemonAttestationStore>();
         builder.Services.AddSingleton<IDockerDaemonPreflightService, DockerDaemonPreflightService>();
 
-        // Registered as a concrete type. The role factory in AddNodeAgentHome resolves it from here, which is what
-        // makes it a DI singleton rather than a fresh instance per resolution. It could not be bound to the agent role
-        // even deliberately: it implements IDevelopmentSandboxRuntimeProvider only, so a container requirement
-        // silently acquired by a feature that does not need one is a compile error, not a review catch.
+        // Registered as a concrete type so the role factory in AddNodeAgentHome resolves THIS instance, making it a DI singleton
+        // rather than a fresh one per resolution. It implements IDevelopmentSandboxRuntimeProvider only, so the agent role cannot take it.
         builder.Services.AddSingleton<DockerSandboxRuntimeProvider>();
 
-        // Registered unconditionally, gated at run time. Provider selection is a configuration-bound factory that
-        // nothing here can evaluate — Development:Sandbox:Provider unset means "follow the agent role", which needs
-        // the whole container built — so the sweeper resolves the selector itself and returns without touching the
-        // daemon on a node that did not opt in.
+        // Registered unconditionally and gated at run time: provider selection is a configuration-bound factory nothing here can
+        // evaluate (unset means "follow the agent role"), so the sweeper resolves the selector and never touches the daemon unopted.
         builder.Services.AddHostedService<DockerSandboxOrphanSweeper>();
 
         return builder;

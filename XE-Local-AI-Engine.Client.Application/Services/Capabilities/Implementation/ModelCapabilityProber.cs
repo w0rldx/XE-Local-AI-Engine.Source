@@ -5,11 +5,12 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Probes the node-local model runtime through the provider-neutral <see cref="IModelCapabilityClient" />:
-///     installed-model inventory (short-lived cache), per-model context length (digest-keyed cache), runtime
-///     reachability/version, and the active/running model. Collaborator behind <see cref="CapabilityReporter" />;
-///     owns the probe caches and the configured-model fallback list.
+///     Probes the node-local model runtime through the provider-neutral <see cref="IModelCapabilityClient" />: installed-model inventory
+///     (short-lived cache), per-model context length (digest-keyed cache), runtime reachability/version, and the active/running model.
 /// </summary>
+/// <remarks>
+///     Collaborator behind <see cref="CapabilityReporter" />; owns the probe caches and the configured-model fallback list.
+/// </remarks>
 internal sealed class ModelCapabilityProber
 {
     private const string DiagnosticOllamaUnreachable = "ollama-unreachable";
@@ -99,9 +100,8 @@ internal sealed class ModelCapabilityProber
         }
         catch (HttpRequestException exception)
         {
-            // Debug, not Warning: an unreachable Ollama endpoint is the expected/benign case in desktop mode (no Ollama
-            // daemon). The graceful configured-fallback below keeps the node functional; full stack traces here would
-            // just flood the operator console on every capability report.
+            // Debug, not Warning: an unreachable Ollama endpoint is the expected/benign case in desktop mode (no Ollama daemon). The graceful
+            // configured-fallback below keeps the node functional; full stack traces here would just flood the operator console on every capability report.
             _logger.LogDebug(exception, "Ollama not reachable while querying installed models; reporting {ConfiguredModelCount} configured fallback(s): {ConfiguredModels}.",
                 _configuredModelNames.Count,
                 string.Join(", ", _configuredModelNames));

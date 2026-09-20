@@ -217,6 +217,141 @@ The two VRAM columns are the odd pair here: every other column counts what the a
 
 Two reading traps a query must respect. The columns hold the **last attempt only** — a `Pending` re-attempt clears them, and the failing attempt's ten additive numbers are merged into that reset's `node.retry.scheduled` event detail instead — so a node's true total is `row + retry snapshots`. And a null is "nobody reported it", never zero: a structural node, a row from before the migration, and a collection that could not run all read the same way. The [cost telemetry runbook](../runbooks/agent-unit-cost-telemetry-runbook.md) carries the full recipe, including the reasons every number is a lower bound.
 
+## `node-settings.json`: the save protocol
+
+`node-settings.json` is not in either database, but it is persisted state with the same hazards, and
+`NodeSettingsAdministrationService` is the only writer of record. Two properties of the file shape everything
+below: it is written **whole** (a temp sibling plus an atomic rename in `NodeSettingsStore.SaveUnlockedAsync`),
+and the wire DTO is optional field by optional field, so any save that omits a field must resolve it from what is
+actually stored.
+
+**Validate on a snapshot, project onto the write-time record.** `ValidateAndSaveAsync` takes a projection, not a
+merged record. Validation necessarily runs against a snapshot — the policy checks are async (they resolve models)
+while the store's mutation must stay pure and synchronous under its lock — so the write re-applies the same
+projection to the record the store holds at write time. Saving the validated preview instead wrote that snapshot's
+value back over every field a sibling writer had changed in the window: a tool-capable-model registration, a
+default-model selection.
+
+**Rebasing is refused, not risked.** Rebasing onto a record that moved can compose two individually valid updates
+into an invalid one — a patch that validated "keep model warm on" against a stored warm model, rebased onto a
+sibling write that cleared that model, would persist keep-warm enabled with nothing selected. The mutation
+therefore compares the write-time record with the one that was validated and declines to project on a difference;
+the caller reloads, re-validates and retries up to `MaxSaveAttempts` times, after which the save is REFUSED and the
+caller gets a conflict result. Nothing is ever written that was not validated against the record it landed on. The
+comparison is serialize-and-compare rather than the record's own equality: `StoredNodeSettings` holds an
+`IReadOnlyList<string>` and nested records, whose compiler-generated equality is by REFERENCE, so two loads of the
+same stored allow-list would read as a change and burn every attempt on a difference that does not exist.
+
+**The projection runs several times per save**, so a caller that captures a value out of it gets the LAST
+invocation's value, not an accumulation: each run overwrites the captured local, and the run that produced the
+persisted record is the last one. `ApplyAgenticPatchAsync` relies on exactly that to name the PREVIOUS default
+model for its cache invalidation.
+
+**LOCAL-ONLY members ride along from the stored record**, never from the caller: `MachineKey`,
+`TranscriptionSelectedModelId` and `TranscriptionIdleTimeoutMinutes` are deliberately absent from the wire DTO, so
+a caller that builds a `StoredNodeSettings` out of a request has no value to supply and saving its record verbatim
+would erase them. For `MachineKey` that is silent data loss with a long tail: the next start mints a fresh key and
+every frozen inference profile — keyed by machine key — is orphaned while still reading as frozen. The carry-over
+is applied both in `SaveTrustedMergedAsync` (so the record a call VALIDATES and RETURNS carries the key, including
+on rejection paths that never reach a write) and inside the store mutation, where it is taken from the *latest*
+record because `IMachineKeyProvider` races every settings save on the same node.
+
+**Node-locality of the auto-effort fast model has two enforcement points.** Point 1 is this service, on BOTH save
+paths (the endpoint's merged save and the MCP patch): the runner's dispatcher may move an `auto` turn onto that
+model, and the turn's data was admitted upstream against a node-local one, so a cloud id, an `ext:` id or an Ollama
+name is refused before it can be stored. It fires only on a CHANGE to the value — both paths validate the merged
+result, so re-validating an unchanged stored value would reject every save of every other setting once the
+configured fast model is uninstalled, naming a field the operator never touched. Point 2 is the dispatcher's
+per-turn re-check, which shares the predicate (`NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync`) verbatim,
+so an already-stored value that stops being node-local is refused where it would actually be used. The registry
+membership test is what stops an arbitrary string — a cloud model id included — from passing two resolvers that
+both default the unknown to "node-local llama.cpp".
+
+### Reading: the cache, and the synchronous twins
+
+`CachedNodeSettingsStore` decorates the file store with a single-entry, no-TTL `IMemoryCache` entry, so the common
+read is a sub-millisecond in-memory hit. Two rules keep it coherent, and both exist because a no-TTL cache makes
+any stale entry **permanent** — every reader, the reconciliation pass included, would keep seeing settings that are
+no longer on disk:
+
+- **A write only INVALIDATES; it never publishes its own value.** The decorator cannot observe the order in which
+  two concurrent writes reached disk (they serialize inside the inner store, which reports no ordering), so a write
+  that published its own value could overwrite the cache with a version the next write had already superseded.
+  Dropping the entry is order-INSENSITIVE: whichever write clears it last, the cache ends empty and the next read
+  repopulates it from the canonical store.
+- **A LOAD's publication is version-guarded.** A load's disk read can straddle a concurrent write, so publishing
+  its result unconditionally would reintroduce the same permanently-stale entry. Every write bumps `_writeVersion`
+  under the gate the load publishes under, so a load that overlapped one declines to publish and merely costs the
+  next reader a file read.
+
+`INodeRuntimeSettings` carries a **synchronous twin** of each getter for the composition/startup path (DI factory
+seeds and singleton constructors) and for request-time call sites that are structurally synchronous: they read the
+stored settings synchronously rather than blocking on async file I/O during host startup, which starves the thread
+pool. Prefer the async getters. A sync twin is acceptable at request time ONLY when the call site cannot be made
+async without rippling through an interface — the live example is `LocalToolOfferProvider.IsToolCapable`, whose
+whole offer seam is synchronous by design — and it is safe there because the read resolves through
+`CachedNodeSettingsStore`, where `Load` is an `IMemoryCache.TryGetValue` hit and `SaveAsync` invalidates AND
+re-primes the entry, so the file is touched only on a cold first read. What is NOT acceptable is a sync twin on a
+per-TOKEN path, or capturing the result in a singleton field to avoid the read — the latter is what silently
+required a node restart before an edit took effect.
+
+Each getter resolves `stored value > appsettings seed > hardcoded default`, and `NodeRuntimeSettings` captures the
+seed from the bound options/configuration at construction so first-run behaviour matches plain appsettings. Some
+seeds are read from `IConfiguration` directly rather than through `IOptions<T>`, for two distinct reasons worth
+keeping straight: the orchestration idle-timeout would otherwise be a **DI cycle** (`OrchestrationAgentOptions` is
+itself `Configure`-d from this accessor at the composition root, so the AI.Agent factory, which cannot reference
+`INodeRuntimeSettings`, still gets the stored value), while the Hugging Face and transcription seeds come from
+configuration because their options are registered by modules that **not every host or test context runs**, and
+this accessor is constructed in all of them. For knobs with no config section at all (the llama.cpp supervisor
+cap/TTL) the seed IS the hardcoded default.
+
+### The tool-capable model allow-list is fed, never replaced
+
+`AgentHome:ToolCapableModels` in `node-settings.json` gates tool calling on exact membership
+(`LocalToolOfferProvider.IsToolCapable`). The capability is independently known —  `GgufCapabilityDetector`
+classifies it deterministically from a GGUF's embedded Jinja chat template, and the result is persisted on every
+installed model as `LocalModelDescriptor.IsToolCapable` — so `IToolCapableModelRegistrar` writes detection results
+INTO the allow-list rather than bypassing it. The gate is synchronous and on the per-turn offer path while
+capability resolution is an async store read, and, more importantly, the allow-list is the operator-visible source
+of truth: it is an editable field in Node Settings (`node-settings-tool-capable-models`) and is what the Agents
+page displays. Feeding it keeps one inspectable, auditable list an operator can still curate, instead of a second
+invisible capability path that silently disagrees with the UI. The gate itself is unchanged.
+
+Registration is **additive only**: no path ever removes a name, so a model an operator added by hand — or one
+served by Ollama or a cloud provider, which have no GGUF descriptor at all — keeps its entry. Detection can grant
+capability here, never revoke it. `ToolCapableModelBackfillService` runs the backfill once at startup, off the
+critical path, because feeding capability in only at download time would leave every model already on the node
+silently tool-less. It is best-effort by design: the node must start even when the model registry or the settings
+file cannot be read, so a failure is logged and swallowed, and because the work is additive and idempotent a missed
+run corrects itself on the next start or the next download.
+
+Writes into the list take the same precaution as every other save. `ToolCapableModelRegistrar.AddAsync` does a
+pre-check load and returns early when nothing would change — it runs on every completed download and every startup,
+and `INodeSettingsStore.UpdateAsync` persists even when the mutation returns the record unchanged, so an identical
+list would churn the cache and the file for nothing — but the merge itself is recomputed from the record the store
+holds AT WRITE TIME, since a list built from the stale pre-check snapshot would silently drop every field another
+writer changed in between.
+
+## Readiness: what the SQLite probe proves
+
+`NodeSqliteHealthCheck` backs `/health/ready`. Within one bounded window it exercises three capabilities without any
+persistent domain mutation, and each step exists because the one before it cannot answer for it:
+
+1. **read** — `SELECT 1` proves the file is open and readable.
+2. **schema** — a sentinel core table is present in `sqlite_master`. This guards a replaced or schema-incompatible
+   database that opens and reads perfectly well but carries none of the node's own tables.
+3. **write** — inside a `BEGIN IMMEDIATE` transaction, a scratch-table DDL forces an actual page write to the main
+   database, then rolls back. `BEGIN IMMEDIATE` alone only takes an advisory reserved lock and never touches the file,
+   so it succeeds even on a read-only database; the DDL is what fails with "attempt to write a readonly database" when
+   the file is not writable, and the rollback leaves zero net mutation on one that is.
+
+The write probe's transaction must be rolled back on *every* exit — the DDL failing, the 2 s probe timeout, the caller
+cancelling — because `Microsoft.Data.Sqlite` pools native handles: "closing" the connection returns a handle SQLite
+still considers mid-transaction to the pool, and the next consumer to draw it fails with "cannot start a transaction
+within a transaction". The raw provider message is never interpolated into the health description, because
+`/health/ready` is anonymous and would otherwise leak internal error text, filesystem paths included, to remote callers
+on a proxied deployment; the structured `unwritable` reason and the exception are kept for server-side logging.
+
 ## Related pages
 
 - [Architecture Overview](01-architecture-overview.md)

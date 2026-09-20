@@ -18,10 +18,13 @@ public sealed record MixedEnvelopeAllowedToolDto
     public string? Schema { get; init; }
 
     /// <summary>
-    ///     Execution location of the offered tool. Carried on the wire so a <see cref="ToolLocation.ClientLocal" /> tool
-    ///     routes to its local registry placeholder instead of an API-side bridge. Serialized as the underlying int (no
-    ///     string-enum converter) and covered by the config hash, so it stays byte-identical to the server payload.
+    ///     Execution location of the offered tool. Carried on the wire so a <see cref="ToolLocation.ClientLocal" /> tool routes to its
+    ///     local registry placeholder instead of an API-side bridge.
     /// </summary>
+    /// <remarks>
+    ///     Serialized as the underlying int (no string-enum converter) and covered by the config hash, so it stays byte-identical to the
+    ///     server payload.
+    /// </remarks>
     [JsonPropertyOrder(4)]
     public ToolLocation Location { get; init; }
 

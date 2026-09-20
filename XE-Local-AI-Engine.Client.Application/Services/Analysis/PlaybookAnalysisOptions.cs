@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Analysis;
 
-/// <summary>
-///     Options for the analysis staging analysis agent. <see cref="ModelName" /> names the node-local model used to read
-///     feedback (defaulted in composition to the node's configured chat model, so analysis never silently picks a
-///     cloud model); <see cref="MaxProposals" /> caps how many actions a single run may propose.
-/// </summary>
+/// <summary>Options for the analysis staging analysis agent.</summary>
+/// <remarks>
+///     <see cref="ModelName" /> names the node-local model used to read feedback (defaulted in composition to the node's configured chat
+///     model, so analysis never silently picks a cloud model); <see cref="MaxProposals" /> caps how many actions a single run may propose.
+/// </remarks>
 public sealed class PlaybookAnalysisOptions
 {
     public const string Section = "PlaybookAnalysis";

@@ -17,11 +17,14 @@ public interface INodeAuthService
     Task<NodePasswordChangeResult> ChangePasswordAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Resets the single administrator account's password WITHOUT requiring the current one, then revokes every active
-    ///     refresh token and clears any lockout. This is the "forgot password" recovery path: it is exposed only to the
-    ///     local, operator-run CLI (see <c>--reset-admin-password</c> in Program.cs), never over the loopback HTTP surface,
-    ///     because the trust boundary is the machine itself. Fails when no administrator account exists yet.
+    ///     Resets the single administrator account's password WITHOUT requiring the current one, then revokes every
+    ///     active refresh token and clears any lockout.
     /// </summary>
+    /// <remarks>
+    ///     This is the "forgot password" recovery path: it is exposed only to the local, operator-run CLI (see
+    ///     <c>--reset-admin-password</c> in Program.cs), never over the loopback HTTP surface, because the trust
+    ///     boundary is the machine itself. Fails when no administrator account exists yet.
+    /// </remarks>
     Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, CancellationToken cancellationToken);
 }
 
@@ -32,12 +35,12 @@ public sealed class NodeAuthStatus
     public required bool Authenticated { get; init; }
 }
 
-/// <summary>
-///     A token-issuing outcome. <see cref="LockedOutRetryAfterSeconds" /> is set only on a login that Identity
-///     refused because the account is locked out, and carries the whole seconds still left on that lockout (at least
-///     one). Every other failure leaves it <c>null</c>, so the transport cannot accidentally tell a wrong password
-///     apart from a locked account.
-/// </summary>
+/// <summary>A token-issuing outcome.</summary>
+/// <remarks>
+///     <see cref="LockedOutRetryAfterSeconds" /> is set only on a login that Identity refused because the account is
+///     locked out, and carries the whole seconds still left on that lockout (at least one). Every other failure leaves
+///     it <c>null</c>, so the transport cannot accidentally tell a wrong password apart from a locked account.
+/// </remarks>
 public sealed class NodeAuthTokenResult
 {
     public required bool Succeeded { get; init; }

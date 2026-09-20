@@ -16,14 +16,23 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 
 internal static class AddNodeAgentHomeExtensions
 {
+    /// <summary>
+    ///     Registers the AgentHome gateway and its tools, plus the sandbox provider roles node agent work executes under.
+    /// </summary>
+    /// <remarks>
+    ///     Sandbox providers register as themselves; the agent and Development ROLES are lazy factories over them. Two
+    ///     roles naming one provider therefore share ONE singleton: a second <c>ProcessSandboxRuntimeProvider</c> takes a
+    ///     second jail root, and <c>CoderWorkspaceReader.ConnectAsync</c>, which attaches to the live sandbox by key, would
+    ///     find no workspace. No bare <c>ISandboxRuntimeProvider</c> is registered, so every consumer names a role; the
+    ///     lazy factories also let <c>DockerSandboxRuntimeProvider</c> arrive later from <c>AddNodeContainerSandbox</c>.
+    /// </remarks>
     public static IHostApplicationBuilder AddNodeAgentHome(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // ClientLocal run_in_agent_home tool. The handler flag-gates and validates requests before delegating through
-        // the AgentHome gateway to the manifest initializer, sandbox provider, and selected-folder resolver. The tool
-        // stays off the distributed wire until AgentHome is enabled.
+        // ClientLocal run_in_agent_home tool: the handler flag-gates and validates requests before delegating through the
+        // AgentHome gateway to the manifest initializer, sandbox provider and selected-folder resolver, and stays off the wire until AgentHome is enabled.
         builder.Services.AddSingleton<IAgentHomeIdentityProvider, AgentHomeIdentityProvider>();
         builder.Services.AddSingleton<IAgentHomeExecutionLeaseManager, AgentHomeExecutionLeaseManager>();
         builder.Services.AddSingleton<IAgentHomeWorkspaceIsolation, AgentHomeWorkspaceIsolation>();
@@ -32,14 +41,11 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddSingleton<IAgentHomeWorkspaceService, AgentHomeWorkspaceService>();
         // Patch export service: post-run diff of the workspace-copy baseline with changes.patch, changed-files.json, and budget guard.
         builder.Services.AddSingleton<IAgentHomePatchService, AgentHomePatchService>();
-        // Memory-proposal export service: schema validation and secret scan for agent-written JSONL proposals. It is
-        // registered but NOT yet consumed: `propose_memory` was removed from the tool schema because the node
-        // collected proposals and discarded them, and persisting one into the adaptive-memory Suggested pipeline is
-        // the slice that will take this dependency back up. Its own tests keep it honest in the meantime.
+        // Memory-proposal export service: schema validation and secret scan for agent-written JSONL proposals. Registered but
+        // NOT consumed — `propose_memory` stays out of the tool schema until a proposal lands in the adaptive-memory Suggested pipeline.
         builder.Services.AddSingleton<IAgentHomeMemoryProposalService, AgentHomeMemoryProposalService>();
-        // Goal executor: the bounded inner agent loop that turns the model's `goal` into real workspace work. It takes
-        // the shared IChatClient, so it is registered here rather than folded into AgentHomeService, which has no
-        // model dependency of its own.
+        // Goal executor: the bounded inner agent loop that turns the model's `goal` into real workspace work. It takes the
+        // shared IChatClient, so it stays out of AgentHomeService, which has no model dependency of its own.
         builder.Services.AddSingleton<IAgentHomeGoalExecutor, AgentHomeGoalExecutor>();
         // Run-scoped JSONL logger. The AgentHome gateway constructs one per run; the logger owns redacted event output.
         builder.Services.AddTransient<IAgentHomeRunLogger, AgentHomeRunLogger>();
@@ -51,36 +57,26 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddSingleton<IConversationSandboxStager>(static sp => (AgentHomeService)sp.GetRequiredService<IAgentHomeService>());
         builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
-        // Sandbox provider selection. The provider is configuration-bound and resolved once; known providers are the
-        // deterministic fake and the jailed process provider. There is no execution-capable code default — an unset
-        // provider resolves to fake in non-Production, while SandboxOptionsValidator fails startup in Production (a
-        // stripped config must never silently grant the command-executing provider).
+        // Sandbox provider selection, configuration-bound and resolved once: the deterministic fake or the jailed process provider.
+        // No execution-capable default — unset is fake off Production; in Production SandboxOptionsValidator fails startup, so a stripped config never grants execution.
         builder.Services.AddOptions<SandboxOptions>()
                .Bind(configuration.GetSection(SandboxOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<SandboxOptions>, SandboxOptionsValidator>();
-        // Development Mode's own provider selection. Bound HERE rather than in AddNodeDevelopment because that
-        // module returns early when Development Mode is disabled, while the selector registered below must be able to
-        // read this option unconditionally. Unset means "whatever the agent role resolved", so binding it changes
-        // nothing on a node that does not set it.
+        // Development Mode's own provider selection, bound HERE and not in AddNodeDevelopment: that module returns early when
+        // Development Mode is off, while the selector below reads this option unconditionally. Unset means "whatever the agent role resolved".
         builder.Services.AddOptions<DevelopmentSandboxOptions>()
                .Bind(configuration.GetSection(DevelopmentSandboxOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<DevelopmentSandboxOptions>, DevelopmentSandboxOptionsValidator>();
-        // Local-container provider options (the copy-in and jail-growth byte budgets ProcessSandboxRuntimeProvider
-        // enforces). Bound and validated unconditionally; the fail-closed validator matters only when the
-        // local-container provider is selected.
+        // Local-container provider options — the copy-in and jail-growth byte budgets ProcessSandboxRuntimeProvider enforces.
+        // Bound and validated unconditionally; the fail-closed validator only bites when the local-container provider is selected.
         builder.Services.AddOptions<LocalContainerOptions>()
                .Bind(configuration.GetSection(LocalContainerOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<LocalContainerOptions>, LocalContainerOptionsValidator>();
-        // Sandbox containment. The probe measures ONCE per host which mechanisms a sandboxed child can really be
-        // launched under (systemd user scope for CPU/memory/PID ceilings, empty network namespace for egress denial,
-        // and a bubblewrap mount namespace for the opt-in filesystem boundary), and is a singleton precisely so that
-        // measurement is shared: the provider's advertised Capabilities and the launch path both read it, which is
-        // what makes "advertise only what is enforced" mechanical rather than a convention someone has to remember.
-        // The filesystem probe is the expensive one — it runs the whole production chain once — which is a second
-        // reason the result must not be re-measured per resolution.
+        // The containment probe measures ONCE per host which mechanisms a sandboxed child launches under: systemd user scope
+        // (CPU/memory/PID), empty netns (egress), costly bubblewrap mounts (filesystem). Singleton: launcher and advertised Capabilities share it.
         builder.Services.AddSingleton<ISandboxContainmentProbe, HostSandboxContainmentProbe>();
         builder.Services.AddSingleton<ISandboxLauncher, SandboxLauncher>();
         builder.Services.AddSingleton<ISandboxMarkerStore, FileSandboxMarkerStore>();
@@ -95,14 +91,8 @@ internal static class AddNodeAgentHomeExtensions
             builder.Services.AddSingleton<ISandboxProcessGroupKiller, NoOpSandboxProcessGroupKiller>();
         }
 
-        // The concrete providers are registered as themselves, and the two ROLES are factories over them. Two things
-        // follow, both deliberate. (1) When the agent and Development roles name the same provider they get the SAME
-        // SINGLETON: ProcessSandboxRuntimeProvider allocates its jail root once per instance, and CoderWorkspaceReader
-        // reaches AgentHome's live sandbox by attach key through ConnectAsync — a second instance would answer "no
-        // workspace available" to every coder tool. (2) There is no ISandboxRuntimeProvider registration at all, so a
-        // new consumer must state which role it wants rather than silently inheriting whichever provider won.
-        // DockerSandboxRuntimeProvider is registered in AddNodeContainerSandbox, which runs after this module; the
-        // roles are lazy factory delegates, so that ordering is fine.
+        // The concrete providers register as themselves and the two ROLES are lazy factories over them; see this method's
+        // remarks for why one provider named by both roles must stay a single instance.
         builder.Services.AddSingleton<FakeSandboxRuntimeProvider>();
         builder.Services.AddSingleton<ProcessSandboxRuntimeProvider>();
         builder.Services.AddSingleton(SandboxProviderSelector.ResolveAgent);

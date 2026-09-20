@@ -3,13 +3,15 @@ namespace XE_Local_AI_Engine.Client.Models;
 using System.Globalization;
 
 /// <summary>
-///     Shared parse/validation for the RNG seed fields carried on the wire as strings (chat
-///     <see cref="SamplingOptions.Seed" /> and the image job request/response seed). A seed is an unconstrained public
-///     64-bit value, so serializing it as a JSON number loses precision above <c>2^53</c>: a large seed the backend
-///     accepts is silently rounded on the wire and then rejected by the client's safe-integer validator (Blocker 3). The
-///     string form survives the wire exactly; this helper is the single place that recovers the <see cref="long" /> and
-///     rejects a malformed value with one consistent message.
+///     Shared parse/validation for the RNG seed fields carried on the wire as strings (chat <see cref="SamplingOptions.Seed" /> and the
+///     image job request/response seed).
 /// </summary>
+/// <remarks>
+///     A seed is an unconstrained public 64-bit value, so serializing it as a JSON number loses precision above <c>2^53</c>: a large seed
+///     the backend accepts is silently rounded on the wire and then rejected by the client's safe-integer validator (Blocker 3). The string
+///     form survives the wire exactly; this helper is the single place that recovers the <see cref="long" /> and rejects a malformed value
+///     with one consistent message.
+/// </remarks>
 public static class SeedValue
 {
     /// <summary>The operator-safe rejection message for a seed string that is not a base-10 64-bit integer.</summary>

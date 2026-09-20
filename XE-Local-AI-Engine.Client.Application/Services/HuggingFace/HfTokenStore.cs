@@ -7,12 +7,14 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     Encrypted-at-rest store for the optional Hugging Face access token (third instance of the
-///     <c>CloudCredentialStore</c> / <c>TokenStore</c> <see cref="IDataProtector" /> pattern). The token is protected
-///     with the <c>WorkerNode.HfTokenStore.v1</c> protector and written to <c>hf-token.enc</c> under the node data dir.
-///     It is exposed only via <see cref="GetTokenAsync" /> to the download client and is never logged, never placed in
-///     exceptions, and never indexed.
+///     Encrypted-at-rest store for the optional Hugging Face access token (third instance of the <c>CloudCredentialStore</c> / <c>TokenStore</c>
+///     <see cref="IDataProtector" /> pattern).
 /// </summary>
+/// <remarks>
+///     The token is protected with the <c>WorkerNode.HfTokenStore.v1</c> protector and written to <c>hf-token.enc</c> under the node data
+///     dir. It is exposed only via <see cref="GetTokenAsync" /> to the download client and is never logged, never placed in exceptions, and
+///     never indexed.
+/// </remarks>
 public sealed class HfTokenStore : IHfTokenStore, IDisposable
 {
     private const string TokenFileName = "hf-token.enc";
