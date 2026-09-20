@@ -8,18 +8,16 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     FastEndpoints handler that begins the one-click download of the recommended cross-encoder reranker
-///     (<see cref="RecommendedRerankerModel" />) so an operator can turn on KB reranking without hunting for a repo/quant
-///     (POST). Thin transport over the SAME machinery an operator HF download uses: it delegates to the
-///     <see cref="IGgufDownloadCoordinator" /> (progress/cancel then stream over the GGUF download hub), and the model
-///     name it registers under carries the <c>reranker</c> fragment so it classifies as a reranker and stays out of the
-///     chat picker. Body-less (<c>EndpointWithoutRequest</c>) — no JSON body is expected.
+///     Begins the one-click download of the recommended cross-encoder reranker
+///     (<see cref="RecommendedRerankerModel" />), so an operator can turn on KB reranking without hunting for a repo
+///     and quant. Body-less, so no JSON body is expected.
 /// </summary>
 /// <remarks>
-///     Idempotent-safe: if the recommended reranker is already installed it is a friendly no-op (no download started,
-///     <see cref="DownloadRecommendedRerankerResponse.AlreadyInstalled" /> is <c>true</c>); if a download for the same
-///     model is already running the coordinator rejoins it (<see cref="DownloadRecommendedRerankerResponse.AlreadyInFlight" />
-///     is <c>true</c>) rather than starting a second. No path/token is accepted or returned.
+///     Thin transport over the SAME machinery an operator HF download uses: it delegates to
+///     <see cref="IGgufDownloadCoordinator" />, so progress and cancel stream over the GGUF download hub, and the
+///     model name it registers under carries the <c>reranker</c> fragment, so it classifies as a reranker and stays
+///     out of the chat picker. Idempotent-safe, with the three outcomes described on
+///     <see cref="DownloadRecommendedRerankerResponse" />. No path or token is accepted or returned.
 /// </remarks>
 public sealed class DownloadRecommendedRerankerEndpoint : EndpointWithoutRequest<DownloadRecommendedRerankerResponse>
 {

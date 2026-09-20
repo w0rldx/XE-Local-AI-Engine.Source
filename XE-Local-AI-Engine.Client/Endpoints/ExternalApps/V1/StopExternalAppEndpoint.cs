@@ -8,13 +8,11 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 
 /// <summary>
 ///     Stops the instance's containers in reverse dependency order, keeping them and the network.
-///     <para>
-///         202 with the ADMITTED row — the snapshot as the synchronous admission left it, taken before the operation
-///         runner starts, which is why the status set carries the transient values. The endpoint never awaits the
-///         container work and never polls, and the request's own token covers the admission only, so a client that
-///         disconnects cancels nothing. Follow the rest on the hub.
-///     </para>
 /// </summary>
+/// <remarks>
+///     202 with the ADMITTED row, then the hub — see docs/wiki/09-api-and-hubs.md ("Design notes on the newer
+///     endpoint families").
+/// </remarks>
 public sealed class StopExternalAppEndpoint : Endpoint<ExternalAppInstanceCommandRequest, ExternalAppInstanceSummaryView>
 {
     private readonly IExternalAppService _apps;

@@ -43,10 +43,12 @@ internal static class ExternalProviderEndpointDtoMapper
     }
 
     /// <summary>
-    ///     Maps the save DTO onto the store's request. The API key is passed through UNTOUCHED, including its absence:
-    ///     the store's own merge is what distinguishes "keep the stored key" from "clear it", and normalizing a blank
-    ///     to an empty string here would collapse that distinction before it ever reached the merge.
+    ///     Maps the save DTO onto the store's request, passing the API key through UNTOUCHED, its absence included.
     /// </summary>
+    /// <remarks>
+    ///     The store's own merge is what distinguishes "keep the stored key" from "clear it", and normalizing a blank
+    ///     to an empty string here would collapse that distinction before it ever reached the merge.
+    /// </remarks>
     public static ExternalProviderConnectionSaveRequest ToSaveRequest(this SaveExternalProviderConnectionRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);

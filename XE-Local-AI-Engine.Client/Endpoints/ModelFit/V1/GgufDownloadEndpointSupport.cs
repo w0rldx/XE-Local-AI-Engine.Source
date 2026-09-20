@@ -4,12 +4,15 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     Shared HTTP mapping for the synchronous failures <see cref="Services.ModelFit.IGgufDownloadCoordinator.StartAsync" />
-///     can surface, so every endpoint that starts a GGUF download answers with the same status codes instead of a 500.
+///     Shared HTTP mapping for the synchronous failures
+///     <see cref="Services.ModelFit.IGgufDownloadCoordinator.StartAsync" /> can surface, so every endpoint that starts
+///     a GGUF download answers with the same status codes instead of a 500.
+/// </summary>
+/// <remarks>
 ///     Mirrors <see cref="GgufImportEndpointSupport" /> for the import pipeline. Only the sanitized exception surfaces
 ///     reach here (<see cref="GgufAcquisitionConflictException" /> and <see cref="HuggingFaceDownloadException" />);
 ///     anything else is left to the global handler as a 500.
-/// </summary>
+/// </remarks>
 internal static class GgufDownloadEndpointSupport
 {
     /// <summary>True when <paramref name="exception" /> has a mapped status code — use as the <c>when</c> filter.</summary>

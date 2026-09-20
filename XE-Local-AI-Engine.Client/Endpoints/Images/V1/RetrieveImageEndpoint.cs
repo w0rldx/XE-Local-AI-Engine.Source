@@ -13,11 +13,13 @@ public sealed class RetrieveImageRequest
 }
 
 /// <summary>
-///     FastEndpoints handler that streams a generated image's decrypted bytes (GET images/{imageId}). The blob store
-///     decrypts on read; 404 when the image id is unknown or its blob is missing. The response is served inline with the
-///     stored MIME type (image/png) and marked no-store — the plaintext image only ever exists in transit. No prompt,
-///     path, or filename is surfaced. Operator-gated.
+///     Streams a generated image's decrypted bytes. Operator-gated.
 /// </summary>
+/// <remarks>
+///     The blob store decrypts on read; 404 when the image id is unknown or its blob is missing. The response is
+///     served inline with the stored MIME type (image/png) and marked no-store, so the plaintext image only ever
+///     exists in transit. No prompt, path or filename is surfaced.
+/// </remarks>
 public sealed class RetrieveImageEndpoint : Endpoint<RetrieveImageRequest>
 {
     private readonly IGeneratedImageStore _imageStore;

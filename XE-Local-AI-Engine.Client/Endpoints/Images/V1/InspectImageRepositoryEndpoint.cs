@@ -7,13 +7,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     FastEndpoints handler for per-repo image weight-file inspection (GET images/models/inspect). Thin transport over
-///     <see cref="IImageModelDiscovery.InspectRepoAsync" />: returns the repo's selectable <c>.gguf</c>/<c>.safetensors</c>
-///     files with size and a suggested part role, so the picker can pre-fill a whole file-set instead of asking the
-///     operator to type file names. Sanitized rows only — no token, no internal URL, no path. A discovery/network
-///     failure surfaces a 200 OK with an empty file list (never a 500), mirroring
-///     <c>InspectGgufRepositoryEndpoint</c>.
+///     Per-repo image weight-file inspection: the repo's selectable <c>.gguf</c>/<c>.safetensors</c> files with size
+///     and a suggested part role, so the picker can pre-fill a whole file-set instead of asking for file names.
 /// </summary>
+/// <remarks>
+///     Thin transport over <see cref="IImageModelDiscovery.InspectRepoAsync" />, returning sanitized rows only — no
+///     token, no internal URL, no path. A discovery or network failure surfaces a 200 OK with an empty file list,
+///     never a 500, mirroring <c>InspectGgufRepositoryEndpoint</c>.
+/// </remarks>
 public sealed class InspectImageRepositoryEndpoint : Endpoint<InspectImageRepositoryRequest, InspectImageRepositoryResponse>
 {
     private readonly IImageModelDiscovery _discovery;

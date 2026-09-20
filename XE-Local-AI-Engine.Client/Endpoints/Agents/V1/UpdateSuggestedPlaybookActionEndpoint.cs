@@ -7,11 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     analysis staging: edits a pending Suggested/Analysis action before review. The action stays Suggested/Analysis and
-///     keeps its evidence + confidence; only the operator-editable fields change. 404 when the action is missing,
-///     belongs to another agent, or is not a pending suggestion. Operator-gated. A separate route from the manual
-///     PUT so analysis provenance is never rewritten to Manual.
+///     Analysis staging: edits a pending Suggested/Analysis action before review — it stays Suggested/Analysis and
+///     keeps its evidence + confidence, and only the operator-editable fields change.
 /// </summary>
+/// <remarks>
+///     A separate route from the manual PUT so analysis provenance is never rewritten to Manual. Operator-gated; 404
+///     when the action is missing, belongs to another agent, or is not a pending suggestion.
+/// </remarks>
 public sealed class UpdateSuggestedPlaybookActionEndpoint : Endpoint<UpdateSuggestedPlaybookActionRequest, PlaybookActionResponse>
 {
     private readonly IPlaybookActionService _playbookActionService;

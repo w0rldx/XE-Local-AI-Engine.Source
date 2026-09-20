@@ -9,12 +9,12 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 /// <summary>
 ///     One execution's persisted timeline, read from the events table and never from the in-memory ring: the ring is
 ///     evictable and empty after a restart, and an operator opening a run from last week must still see what happened.
-///     <para>
-///         Operator-gated and deliberately not key-scoped, like the other admin execution routes. Its response items
-///         are the SAME record the external recovery route returns, so the timeline an operator reads and the rows an
-///         integrator polls cannot drift apart.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Operator-gated and deliberately not key-scoped, like the other admin execution routes. Its response items are
+///     the SAME record the external recovery route returns, so the timeline an operator reads and the rows an
+///     integrator polls cannot drift apart.
+/// </remarks>
 public sealed class GetIntegrationExecutionEventsEndpoint : Endpoint<ListIntegrationExecutionEventsRequest, ListIntegrationExecutionEventsResponse>
 {
     private readonly IntegrationExecutionQueryService _executions;

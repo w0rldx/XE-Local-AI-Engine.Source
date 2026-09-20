@@ -5,10 +5,13 @@ using FluentValidation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Bounds on a new session. The source kind is the load-bearing rule: the service throws an
-///     <see cref="ArgumentException" /> for an unknown one, and an unhandled exception is a 500 — so an unknown kind
-///     has to be refused here, with the same parse the service performs, or the two would disagree.
+///     Bounds on a new session.
 /// </summary>
+/// <remarks>
+///     The source kind is the load-bearing rule: the service throws an <see cref="ArgumentException" /> for an unknown
+///     one and an unhandled exception is a 500, so an unknown kind has to be refused here, with the same parse the
+///     service performs, or the two would disagree.
+/// </remarks>
 public sealed class CreateTranscriptionSessionRequestValidator : Validator<CreateTranscriptionSessionRequest>
 {
     /// <summary>The two language modes; anything else is a client that has drifted from the contract.</summary>
@@ -16,10 +19,8 @@ public sealed class CreateTranscriptionSessionRequestValidator : Validator<Creat
 
     public CreateTranscriptionSessionRequestValidator()
     {
-        // Matched against the NAMES. Enum.TryParse also parses the underlying numbers, so "99" would pass both this
-        // rule and the service's, and be stored as an ordinal no member has — surfacing on the wire as "99" for a
-        // client that has no case for it. Same rule as DevWorkflowTokenRules.IsNamed, kept local so two endpoint
-        // feature folders do not reach into each other.
+        // Matched against the NAMES: Enum.TryParse also parses the underlying numbers, so "99" would pass both this rule and the service's and be stored as an ordinal no
+        // member has, surfacing on the wire for a client that has no case for it. Same rule as DevWorkflowTokenRules.IsNamed, kept local so two feature folders stay apart.
         RuleFor(static request => request.SourceKind)
             .Must(static sourceKind => string.IsNullOrWhiteSpace(sourceKind)
                                        || Enum.GetNames<TranscriptionSourceKind>().Contains(sourceKind.Trim(), StringComparer.OrdinalIgnoreCase))
@@ -29,16 +30,8 @@ public sealed class CreateTranscriptionSessionRequestValidator : Validator<Creat
             .Must(static mode => LanguageModes.Contains(mode, StringComparer.OrdinalIgnoreCase))
             .WithMessage("The language mode must be 'auto' or 'override'.");
 
-        // An override with nothing to override by is silently degraded to auto downstream. Refusing it here is what
-        // stops an operator who asked for German getting an auto-detected transcript and no sign anything was dropped.
-        //
-        // Declared on the REQUEST, not on the property, and that is the whole point. FastEndpoints' validation schema
-        // processor lifts a property rule into the OpenAPI schema, and it did so for both forms of a conditional one:
-        // the block `When(pred, () => RuleFor(x => x.LanguageOverride).NotEmpty().Length(2, 8))` published the member
-        // as `required`, and switching to the chained `.When(...)` dropped that but still published `minLength: 2`.
-        // Either way the generated client refused every `languageMode: "auto"` create request before it left the
-        // browser — a break no backend test could see, because the server was answering correctly throughout. An
-        // object-level rule has no property to attach to, so nothing about it can reach the schema.
+        // An override with nothing to override by is silently degraded to auto downstream, so refusing it here is what stops an operator who asked for German getting an
+        // auto-detected transcript with no sign anything was dropped. Declared on the REQUEST, never the property — docs/wiki/09-api-and-hubs.md ("Conventions") says why.
         RuleFor(static request => request)
             .Must(static request => !IsOverride(request.LanguageMode) || request.LanguageOverride?.Trim().Length is >= 2 and <= 8)
             .WithMessage("Name the language to force as a 2-8 character code.");

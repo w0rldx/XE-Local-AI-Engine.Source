@@ -90,9 +90,8 @@ public sealed class ResolveUserQuestionRequestValidator : Validator<ResolveUserQ
                 answer.RuleFor(static a => a.Question)
                       .NotEmpty();
 
-                // An answer must actually answer: either at least one selected option or free text from the "Other"
-                // row. Neither would park the turn on an empty result the model cannot branch on, so reject it here
-                // rather than feeding a content-free answer into the run.
+                // An answer must actually answer: at least one selected option, or free text from the "Other" row. Neither would park the turn on an empty result the
+                // model cannot branch on, so reject it here rather than feeding a content-free answer into the run.
                 answer.RuleFor(static a => a)
                       .Must(static a => a.Selected?.Any(static selected => !string.IsNullOrWhiteSpace(selected)) == true
                                         || !string.IsNullOrWhiteSpace(a.Other))

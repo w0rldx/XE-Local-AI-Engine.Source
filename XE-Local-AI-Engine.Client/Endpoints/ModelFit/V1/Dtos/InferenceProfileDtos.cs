@@ -3,11 +3,10 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using System.ComponentModel.DataAnnotations;
 
 /// <summary>
-///     A node-local inference profile projected for transport (shared by the list, explore, freeze and invalidate
-///     responses). It carries only the launch-arg facts and lifecycle metadata; the local-only machine key is
-///     deliberately OMITTED — it must never leave the box. <see cref="Role" /> is the lowercase wire role
-///     (<c>chat|embedding|reranker</c>) and <see cref="Status" /> is the lifecycle name (<c>Explored|Frozen|Stale</c>).
+///     A node-local inference profile projected for transport — shared by the list, explore, freeze and invalidate
+///     responses — carrying only the launch-arg facts and lifecycle metadata.
 /// </summary>
+/// <remarks>The local-only machine key is deliberately OMITTED: it must never leave the box.</remarks>
 public sealed class InferenceProfileViewDto
 {
     public required Guid Id { get; init; }
@@ -73,19 +72,20 @@ public sealed class ListInferenceProfilesResponse
 }
 
 /// <summary>
-///     Body for <c>POST model-fit/profiles/explore</c>. Explores a node-local GGUF model to draft its launch args.
-///     <see cref="ModelName" /> must be non-blank and resolve to a local GGUF (a cloud or missing model is rejected with a
-///     400). <see cref="Role" /> is <c>chat|embedding|reranker</c> (case-insensitive; defaults to <c>chat</c> when
-///     omitted); an unknown role is rejected with a 400.
+///     Body for <c>POST model-fit/profiles/explore</c>, which explores a node-local GGUF model to draft its launch args.
 /// </summary>
+/// <remarks>
+///     <see cref="ModelName" /> must be non-blank and resolve to a local GGUF; a cloud or missing model, and an unknown
+///     <see cref="Role" /> (matched case-insensitively), are each rejected with a 400.
+/// </remarks>
 public sealed class ExploreInferenceProfileRequest
 {
-    /// <summary>
-    ///     Lowest accepted <see cref="ContextTokens" /> — the launch policy's smallest chat tier. A shape bound: the
-    ///     resolver itself has no minimum beyond its 256-token alignment unit. Lives on the DTO so the documented range,
-    ///     the <c>Range</c> annotation that publishes it in the OpenAPI schema, and the value
+    /// <summary>Lowest accepted <see cref="ContextTokens" /> — the launch policy's smallest chat tier.</summary>
+    /// <remarks>
+    ///     A shape bound: the resolver itself has no minimum beyond its 256-token alignment unit. It lives on the DTO so
+    ///     the documented range, the <c>Range</c> annotation that publishes it in the OpenAPI schema and the value
     ///     <c>ExploreInferenceProfileEndpoint</c> enforces cannot drift apart.
-    /// </summary>
+    /// </remarks>
     internal const int MinExploreContextTokens = 2048;
 
     /// <summary>
@@ -100,35 +100,18 @@ public sealed class ExploreInferenceProfileRequest
     public string? Role { get; init; }
 
     /// <summary>
-    ///     Optional operator benchmark knob: pins this explore spawn's context window (<c>-c</c>) for this call only.
-    ///     Omit it for the allocation resolver's hardware-tier choice, which is what every explore did before this
-    ///     field existed. Nothing about the value is persisted — it reaches one spawn and is never written to node
-    ///     settings or the launch policy.
-    ///     <para>
-    ///         Accepted range is <see cref="MinExploreContextTokens" />–<see cref="MaxExploreContextTokens" />
-    ///         (2048–1048576), enforced by <c>ExploreInferenceProfileEndpoint</c> from these same consts. The floor is
-    ///         the launch policy's LOWEST chat tier rather than a resolver-enforced minimum (the resolver's own floor is
-    ///         the 256-token alignment unit); the ceiling is a shape bound only. The model's train ceiling caps the
-    ///         value SILENTLY, so a request above it succeeds with a smaller window: read <c>ctxSize</c> on the
-    ///         returned profile for what was actually used.
-    ///     </para>
-    ///     <para>
-    ///         An override the box cannot fit FAILS the explore rather than being reduced: it routes the allocation
-    ///         down the deterministic-override branch, and <c>ProcessContextAllocationResolver.TryDownTierForAdmission</c>
-    ///         down-tiers hardware-tier allocations only. So the value is honoured verbatim or the spawn is rejected;
-    ///         an unoverridden explore, by contrast, steps down a tier instead of failing.
-    ///     </para>
-    ///     <para>
-    ///         GPU-only. A non-null value on a CPU-variant node is rejected with a 400, because
-    ///         <c>llama-fit-params</c> does not run on the CPU backend and the window could not be recorded in the
-    ///         profile. The provider-side fallback resolver
-    ///         (<c>DefaultProcessContextAllocationResolver</c>) ignores this field entirely; a host running that
-    ///         resolver exposes no explore endpoint.
-    ///     </para>
+    ///     Optional operator benchmark knob pinning this explore spawn's context window (<c>-c</c>) for this call only;
+    ///     omit it for the allocation resolver's hardware-tier choice.
     /// </summary>
-    // The annotation is documentation only: it publishes minimum/maximum into the OpenAPI schema and the generated
-    // client's Zod validators. FastEndpoints does not run DataAnnotations, so the endpoint's inline check stays the
-    // enforcing path — a hand-rolled request that skips the generated client still gets a 400.
+    /// <remarks>
+    ///     Nothing is persisted: the value reaches one spawn, never node settings or the launch policy.
+    ///     <c>ExploreInferenceProfileEndpoint</c> enforces the accepted range; the model's train ceiling then caps it SILENTLY, so read <c>ctxSize</c> on the
+    ///     returned profile for the window used. GPU-only: a non-null value on a CPU-variant node answers 400, and the fallback
+    ///     <c>DefaultProcessContextAllocationResolver</c> ignores it, so a host on that resolver exposes no explore endpoint. See
+    ///     docs/wiki/07-model-fit.md ("Inference Optimizer (operator surface)"), the <b>Explore</b> bullet.
+    /// </remarks>
+    // Documentation only: it publishes minimum/maximum into the OpenAPI schema and the generated client's Zod
+    // validators. FastEndpoints does not run DataAnnotations, so the endpoint's inline check is the enforcing path.
     [Range(MinExploreContextTokens, MaxExploreContextTokens)]
     public int? ContextTokens { get; init; }
 }
@@ -150,11 +133,13 @@ public sealed class BenchmarkInferenceProfileRequest
 }
 
 /// <summary>
-///     Body for <c>POST model-fit/profiles/freeze</c>. Freezes the Explored profile identified by <see cref="ProfileId" />
-///     — gated on its most recent successful benchmark (a freeze without a justifying benchmark is rejected with a 400).
-///     The id is carried in the body (never a route param) so the POST always has a body. An empty id is rejected with a
-///     400.
+///     Body for <c>POST model-fit/profiles/freeze</c>, which freezes the Explored profile identified by
+///     <see cref="ProfileId" />, gated on its most recent successful benchmark.
 /// </summary>
+/// <remarks>
+///     A freeze without a justifying benchmark, and an empty id, are each rejected with a 400. The id is carried in the
+///     body (never a route param) so the POST always has a body.
+/// </remarks>
 public sealed class FreezeInferenceProfileRequest
 {
     public required Guid ProfileId { get; init; }
@@ -172,9 +157,12 @@ public sealed class InvalidateInferenceProfileRequest
 
 /// <summary>
 ///     Response carrying a single inference profile view — the result of <c>POST model-fit/profiles/explore</c>,
-///     <c>.../freeze</c> and <c>.../invalidate</c>. A domain rejection (cloud/missing model, freeze-gate failure) is
-///     surfaced as a 400 with an error body rather than this success shape.
+///     <c>.../freeze</c> and <c>.../invalidate</c>.
 /// </summary>
+/// <remarks>
+///     A domain rejection (cloud/missing model, freeze-gate failure) is surfaced as a 400 with an error body rather
+///     than this success shape.
+/// </remarks>
 public sealed class InferenceProfileActionResponse
 {
     public required InferenceProfileViewDto Profile { get; init; }
@@ -272,10 +260,13 @@ public sealed class InferenceBenchmarkMetricsDto
 }
 
 /// <summary>
-///     Response for <c>POST model-fit/profiles/benchmark</c>: the measured metrics plus the snapshot they were persisted
-///     under, plus the (un-frozen) profile view. A failed benchmark harness leaves the snapshot Failed and is surfaced as
-///     a 400 with an error body rather than this success shape.
+///     Response for <c>POST model-fit/profiles/benchmark</c>: the measured metrics, the snapshot they were persisted
+///     under, and the (un-frozen) profile view.
 /// </summary>
+/// <remarks>
+///     A failed benchmark harness leaves the snapshot Failed and is surfaced as a 400 with an error body rather than
+///     this success shape.
+/// </remarks>
 public sealed class BenchmarkInferenceProfileResponse
 {
     /// <summary>The id of the persisted benchmark snapshot; null when no snapshot was created.</summary>

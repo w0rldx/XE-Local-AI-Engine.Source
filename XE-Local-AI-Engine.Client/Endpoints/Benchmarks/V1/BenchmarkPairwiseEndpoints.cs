@@ -8,10 +8,12 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
-///     The verdict matrix behind a project's pairwise scores, together with the fit those verdicts produced. One
-///     route, deliberately: splitting them would let a client render a strength beside a verdict set that did not
-///     produce it, and nothing on the wire would say so.
+///     The verdict matrix behind a project's pairwise scores, together with the fit those verdicts produced.
 /// </summary>
+/// <remarks>
+///     One route, deliberately: splitting them would let a client render a strength beside a verdict set that did not
+///     produce it, and nothing on the wire would say so.
+/// </remarks>
 public sealed class ListBenchmarkComparisonsEndpoint : Endpoint<ListBenchmarkComparisonsRequest, ListBenchmarkComparisonsResponse>
 {
     private static readonly JsonSerializerOptions ScoreOptions = new(JsonSerializerDefaults.Web);

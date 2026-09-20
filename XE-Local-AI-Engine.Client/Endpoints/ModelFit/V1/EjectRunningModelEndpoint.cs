@@ -9,16 +9,16 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     FastEndpoints handler to eject a running llama-server process (POST model-fit/running/eject). Thin transport over
-///     <see cref="LlamaCppRuntimeOrchestrationService.EjectAsync" />: by default the eject is GRACEFUL — it marks the process
-///     evicting (no new inference), waits a bounded window for any in-flight turn to drain, then tears the process down
-///     and releases its port. A process with no in-flight work is torn down immediately. When in-flight work does not
-///     drain within the window and <c>force</c> was not set, the process is <strong>left running</strong> and the
-///     response <see cref="EjectRunningModelResponse.Outcome" /> reports <c>timed_out_still_busy</c> rather than killing
-///     the running turn silently; setting <c>force</c> tears it down anyway and marks the interrupted run
-///     operator-ejected. Eject is idempotent (a not-running process reports <c>not_running</c>). Role is
-///     <c>chat|embedding</c> (defaulting to chat); an unknown role is rejected with a 400.
+///     FastEndpoints handler to eject a running llama-server process (POST model-fit/running/eject): thin transport
+///     over <see cref="LlamaCppRuntimeOrchestrationService.EjectAsync" />.
 /// </summary>
+/// <remarks>
+///     A graceful eject marks the process evicting (no new inference), waits a bounded window for any in-flight turn to
+///     drain, then tears the process down and releases its port; one with no in-flight work goes immediately. Work that
+///     does not drain leaves the process <strong>left running</strong> under <c>timed_out_still_busy</c> rather than
+///     killing the turn silently, unless <c>force</c> is set, which tears it down anyway and marks the interrupted run
+///     operator-ejected. Role vocabulary, idempotence and the 400: <see cref="EjectRunningModelRequest" />.
+/// </remarks>
 public sealed class EjectRunningModelEndpoint : Endpoint<EjectRunningModelRequest, EjectRunningModelResponse>
 {
     private readonly LlamaCppRuntimeOrchestrationService _runtime;

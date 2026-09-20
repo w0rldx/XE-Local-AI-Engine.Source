@@ -33,25 +33,33 @@ public sealed class CreateAgentDefinitionRequest
     public bool DefaultTemporaryChat { get; init; }
 
     /// <summary>
-    ///     Whether this agent mines its completed runs into new candidate memories (adaptive memory). Defaults to
-    ///     <c>true</c>; set <c>false</c> for a retrieval-only agent that uses existing memory but learns nothing new.
-    ///     Additive and non-config-affecting — like <see cref="PlaybookEnabled" />, it never enters the runtime config hash.
+    ///     Whether this agent mines its completed runs into new candidate memories (adaptive memory); defaults to
+    ///     <c>true</c>. Set <c>false</c> for a retrieval-only agent that uses existing memory but learns nothing new.
     /// </summary>
+    /// <remarks>
+    ///     Additive and non-config-affecting — like <see cref="PlaybookEnabled" />, it never enters the runtime config
+    ///     hash.
+    /// </remarks>
     public bool MemoryExtractionEnabled { get; init; } = true;
 
     /// <summary>
     ///     Opts this definition OUT of the versioned base instruction scaffold normally prepended ahead of
-    ///     <see cref="Instructions" /> when composing the resolved prompt. Defaults to <c>false</c> (scaffold ON).
+    ///     <see cref="Instructions" /> when composing the resolved prompt; defaults to <c>false</c> (scaffold ON).
+    /// </summary>
+    /// <remarks>
     ///     Additive; changing it is NOT config-affecting for this definition's own version — the resulting prompt
     ///     change already drives the runtime config hash directly.
-    /// </summary>
+    /// </remarks>
     public bool DisableBaseScaffold { get; init; }
 
     /// <summary>
     ///     Whether this agent opts out of the node's send-time tool-relevance filter, so every offered tool is shown to
-    ///     the model on every round. Additive; NOT config-affecting — the filter narrows only the array handed to the
-    ///     provider, never the offer or the resolved prompt, so toggling it leaves the runtime config hash unmoved.
+    ///     the model on every round.
     /// </summary>
+    /// <remarks>
+    ///     Additive; NOT config-affecting — the filter narrows only the array handed to the provider, never the offer
+    ///     or the resolved prompt, so toggling it leaves the runtime config hash unmoved.
+    /// </remarks>
     public bool DisableToolRelevanceFilter { get; init; }
 
     /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
@@ -93,35 +101,45 @@ public sealed class UpdateAgentDefinitionRequest
     public bool DefaultTemporaryChat { get; init; }
 
     /// <summary>
-    ///     Whether this agent mines its completed runs into new candidate memories (adaptive memory). Defaults to
-    ///     <c>true</c>; set <c>false</c> for a retrieval-only agent that uses existing memory but learns nothing new.
-    ///     Additive and non-config-affecting — like <see cref="PlaybookEnabled" />, it never enters the runtime config hash.
+    ///     Whether this agent mines its completed runs into new candidate memories (adaptive memory); defaults to
+    ///     <c>true</c>. Set <c>false</c> for a retrieval-only agent that uses existing memory but learns nothing new.
     /// </summary>
+    /// <remarks>
+    ///     Additive and non-config-affecting — like <see cref="PlaybookEnabled" />, it never enters the runtime config
+    ///     hash.
+    /// </remarks>
     public bool MemoryExtractionEnabled { get; init; } = true;
 
     /// <summary>
     ///     Opts this definition OUT of the versioned base instruction scaffold normally prepended ahead of
-    ///     <see cref="Instructions" /> when composing the resolved prompt. Defaults to <c>false</c> (scaffold ON).
+    ///     <see cref="Instructions" /> when composing the resolved prompt; defaults to <c>false</c> (scaffold ON).
+    /// </summary>
+    /// <remarks>
     ///     Additive; changing it is NOT config-affecting for this definition's own version — the resulting prompt
     ///     change already drives the runtime config hash directly.
-    /// </summary>
+    /// </remarks>
     public bool DisableBaseScaffold { get; init; }
 
     /// <summary>
     ///     Whether this agent opts out of the node's send-time tool-relevance filter, so every offered tool is shown to
-    ///     the model on every round. Additive; NOT config-affecting — the filter narrows only the array handed to the
-    ///     provider, never the offer or the resolved prompt, so toggling it leaves the runtime config hash unmoved.
+    ///     the model on every round.
     /// </summary>
+    /// <remarks>
+    ///     Additive; NOT config-affecting — the filter narrows only the array handed to the provider, never the offer
+    ///     or the resolved prompt, so toggling it leaves the runtime config hash unmoved.
+    /// </remarks>
     public bool DisableToolRelevanceFilter { get; init; }
 
     /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
     public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
 
     /// <summary>
-    ///     The draft response's provenance block, echoed back unchanged. Optional, and <b>set-if-present</b>: omitting
-    ///     it leaves any stored provenance alone rather than clearing it, so an ordinary edit cannot erase the record of
-    ///     how the definition was originally drafted.
+    ///     The draft response's provenance block, echoed back unchanged. Optional, and <b>set-if-present</b>.
     /// </summary>
+    /// <remarks>
+    ///     Omitting it leaves any stored provenance alone rather than clearing it, so an ordinary edit cannot erase the
+    ///     record of how the definition was originally drafted.
+    /// </remarks>
     public GenerationMetadata? GenerationMetadata { get; init; }
 }
 
@@ -184,12 +202,12 @@ public sealed class AgentDefinitionResponse
 
     public required long UpdatedAtUtc { get; init; }
 
-    /// <summary>
-    ///     AI-drafting provenance when this definition came from a draft, otherwise null. Agents share one response
-    ///     type between the single-item and list surfaces, so this is populated by the single-item reads (get, create,
-    ///     update) and left null by <see cref="ListAgentDefinitionsResponse" /> — the list would otherwise carry a
-    ///     rationale and brief per row for no reader.
-    /// </summary>
+    /// <summary>AI-drafting provenance when this definition came from a draft, otherwise null.</summary>
+    /// <remarks>
+    ///     Agents share one response type between the single-item and list surfaces, so this is populated by the
+    ///     single-item reads (get, create, update) and left null by <see cref="ListAgentDefinitionsResponse" /> — the
+    ///     list would otherwise carry a rationale and brief per row for no reader.
+    /// </remarks>
     public GenerationMetadataResponse? GenerationMetadata { get; init; }
 }
 

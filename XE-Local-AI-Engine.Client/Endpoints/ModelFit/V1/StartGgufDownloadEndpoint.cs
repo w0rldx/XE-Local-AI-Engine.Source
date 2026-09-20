@@ -7,11 +7,14 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     FastEndpoints handler to begin a GGUF file download (POST model-fit/download). Thin transport over the
-///     <see cref="IGgufDownloadCoordinator" /> (which delegates to the staged Hugging Face acquisition transaction): it starts a
-///     background, cancellable download keyed by the canonical model name and returns immediately with that identity. The
-///     download runs detached; progress/cancel are tracked by the coordinator. No path/token is accepted or returned.
+///     FastEndpoints handler to begin a GGUF file download (POST model-fit/download), a thin transport over
+///     <see cref="IGgufDownloadCoordinator" />, which delegates to the staged Hugging Face acquisition transaction.
 /// </summary>
+/// <remarks>
+///     It starts a background, cancellable download keyed by the canonical model name and returns immediately with that
+///     identity; the download runs detached, and the coordinator tracks progress and cancellation. No path or token is
+///     accepted or returned.
+/// </remarks>
 public sealed class StartGgufDownloadEndpoint : Endpoint<StartGgufDownloadRequest, StartGgufDownloadResponse>
 {
     private readonly IGgufDownloadCoordinator _downloadCoordinator;

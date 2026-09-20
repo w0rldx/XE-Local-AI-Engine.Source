@@ -11,16 +11,14 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 /// <summary>
 ///     Composes the two read shapes that need more than one row: a run with its pinned graph and every node summary,
 ///     and one node run's drill-down.
-///     <para>
-///         Run detail is THE repaint fetch, so it is written to a fixed query budget rather than a per-node one: the
-///         run and its node runs, the definition names, the agent definitions, and the artifact rows. A per-node query
-///         here would be an N+1 on the one request a live view repeats.
-///     </para>
-///     <para>
-///         Built by DI and reached only from the endpoints in this folder, so it lives under the same fence they do: it
-///         composes <c>Client.Application</c> services and takes no store of its own.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Run detail is THE repaint fetch, so it runs a fixed query budget rather than a per-node one, which would be an
+///     N+1 on the one request a live view repeats. Built by DI and reached only from the endpoints in this folder, so
+///     it lives under the same fence they do: it composes <c>Client.Application</c> services and takes no store of its
+///     own. Every derived field is explained in docs/wiki/09-api-and-hubs.md
+///     ("Design notes on the newer endpoint families").
+/// </remarks>
 public sealed class DevWorkflowRunComposer
 {
     private readonly IAgentDefinitionService _agents;
@@ -65,19 +63,14 @@ public sealed class DevWorkflowRunComposer
                              .Select(static node => node.NodeKey)
                              .ToHashSet(StringComparer.Ordinal);
 
-        // How many CHILDREN the decomposition produced, counted over the run's WHOLE node-run list, once: a client
-        // counting the rows it drew is wrong by construction for a fan-out wider than its page. Distinct INDEXES, not
-        // rows — a template subtree of more than one node clones every one of them per child, so counting rows would
-        // read a two-child fan-out of a two-node template as "1 of 4" against a MaterializationIndex that only ever
-        // counts children.
+        // How many CHILDREN the decomposition produced, over the run's WHOLE node-run list and over distinct INDEXES rather than rows: a client counting the rows it drew is
+        // wrong for a fan-out wider than its page, and a multi-node template subtree clones every node per child, so rows read a two-child fan-out of a two-node template as "1 of 4".
         var materializationCounts = detail.NodeRuns.Where(static nodeRun => nodeRun.MaterializedFromNodeRunId is not null)
                                           .GroupBy(static nodeRun => nodeRun.MaterializedFromNodeRunId!.Value)
                                           .ToDictionary(static group => group.Key,
                                               static group => group.Select(static nodeRun => nodeRun.MaterializationIndex).Distinct().Count());
-        // The state machine's own verdict on every skipped row, resolved ONCE for the run: a skip a person chose is
-        // waived and a join carries on past it, one that cascaded off something dead is not. A client cannot tell them
-        // apart — the ancestor that decides it need not be among the join's own dependencies — so the answer ships on
-        // the row rather than being re-derived in the browser.
+        // The state machine's own verdict on every skipped row, resolved ONCE for the run: a skip a person chose is waived and a join carries on past it, one that cascaded
+        // off something dead is not. A client cannot tell them apart — the deciding ancestor need not be among the join's dependencies — so the answer ships on the row.
         var waivedSkips = DevWorkflowGraphContract.WaivedSkipNodeKeys(run.GraphJson, byKey);
 
         // The cap each node's DEFINITION declared, resolved once for the run off the same pinned graph everything else
@@ -269,36 +262,25 @@ public sealed class DevWorkflowRunComposer
 
     /// <summary>
     ///     How many attempts an operator has bought this node run: the distance the row's own <c>MaxAttempts</c> has
-    ///     travelled from the cap its definition declared, which each Retry raises by one IN PLACE. The widening is
-    ///     therefore its own record, and the client subtracts this to recover the declared cap.
-    ///     <para>
-    ///         Read off the row rather than counted from <c>Retry</c> decision rows, because a decision row exists
-    ///         whether or not it was ever applied and whether or not widening existed when it was written. Counting
-    ///         them reported a widening in two cases that never had one: the settle window between recording a Retry
-    ///         and the dispatcher spending it, which a PAUSED run holds open indefinitely; and every node run
-    ///         persisted BEFORE this shipped, whose Retry rows moved no cap at all — both rendered a cap one below
-    ///         the definition's.
-    ///     </para>
-    ///     <para>
-    ///         A MATERIALIZED clone is looked up by its own key and needs no template hop: the materializer DEEP-CLONES
-    ///         the template node into the graph's node array, rewriting only <c>nodeKey</c> and <c>retryTarget</c>, and
-    ///         the expansion is written back to <c>run.GraphJson</c> under a bumped revision. So the pinned graph a run
-    ///         detail reads declares every clone key, carrying the template's own <c>maxAttempts</c>.
-    ///     </para>
-    ///     <para>
-    ///         Floored at zero, and zero for a node key the pinned graph does not declare — an unroutable graph, which
-    ///         <see cref="DevWorkflowGraphContract.DeclaredMaxAttempts" /> answers empty for. Nothing to compare
-    ///         against is not evidence of a widening.
-    ///     </para>
+    ///     travelled from the cap its definition declared, which each Retry raises by one IN PLACE.
     /// </summary>
+    /// <remarks>
+    ///     Read off the row, never counted from <c>Retry</c> decision rows, which exist whether or not they were ever
+    ///     applied. Floored at zero, and zero for a node key the pinned graph does not declare — an unroutable graph,
+    ///     which <see cref="DevWorkflowGraphContract.DeclaredMaxAttempts" /> answers empty for: nothing to compare
+    ///     against is not evidence of a widening. Why the row and not the decisions, and why a materialized clone needs
+    ///     no template hop: docs/wiki/09-api-and-hubs.md ("Design notes on the newer endpoint families").
+    /// </remarks>
     private static int OperatorRetries(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlyDictionary<string, int> declaredCaps) =>
         declaredCaps.TryGetValue(nodeRun.NodeKey, out var declared) ? Math.Max(0, nodeRun.MaxAttempts - declared) : 0;
 
     /// <summary>
     ///     The waived verdict as the wire carries it: only a <c>Skipped</c> row has one, and a run whose pinned graph
-    ///     could not be parsed has none at all — both read as <c>null</c>, which the client renders as a skip it makes
-    ///     no claim about rather than as a dead one.
+    ///     could not be parsed has none at all.
     /// </summary>
+    /// <remarks>
+    ///     Both read as <c>null</c>, which the client renders as a skip it makes no claim about rather than a dead one.
+    /// </remarks>
     private static bool? SkipWaived(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlySet<string>? waivedSkips) =>
         waivedSkips is null || nodeRun.Status != DevWorkflowNodeRunStatus.Skipped ? null : waivedSkips.Contains(nodeRun.NodeKey);
 
@@ -333,9 +315,12 @@ public sealed class DevWorkflowRunComposer
 
     /// <summary>
     ///     The stored route on the wire, parsed by the runtime's own reader — the one that owns the document — and only
-    ///     re-shaped here. An unreadable column costs this node its route rather than costing the drill-down a 500,
-    ///     exactly as an unreadable policy resolution does.
+    ///     re-shaped here.
     /// </summary>
+    /// <remarks>
+    ///     An unreadable column costs this node its route rather than costing the drill-down a 500, exactly as an
+    ///     unreadable policy resolution does.
+    /// </remarks>
     private static DevWorkflowNodeRouteResponse? Route(string? routeJson) =>
         DevWorkflowNodeRunDocuments.TryParseRoute(routeJson) is { } route
             ? new DevWorkflowNodeRouteResponse { Satisfied = route.Satisfied, Dead = route.Dead, Waived = route.Waived, GateAnswer = route.GateAnswer, Truncated = route.Truncated }
@@ -343,16 +328,15 @@ public sealed class DevWorkflowRunComposer
 
     /// <summary>
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the
-    ///     client: re-deriving join semantics in the browser would duplicate the dispatcher's own evaluation and drift
-    ///     from it. Only <c>Pending</c> carries it — <c>Blocked</c> means a human is the dependency.
-    ///     <para>
-    ///         A source that has SETTLED is never waited on, whichever way it settled — which is the same answer the
-    ///         dispatcher's edge rule gives for a branch whose condition did not fire, and is why an <c>Any</c> join
-    ///         needs no case of its own here: it too waits exactly while an inbound edge is undecided. The one edge that
-    ///         needs saying out loud is a materialization TEMPLATE's: it never gets a row, so it can never settle, and
-    ///         naming it would show every decomposing run as stuck on the one node nothing ever runs.
-    ///     </para>
+    ///     client, which would duplicate the dispatcher's own join evaluation and drift from it.
     /// </summary>
+    /// <remarks>
+    ///     Only <c>Pending</c> carries it — <c>Blocked</c> means a human is the dependency. A source that has SETTLED is
+    ///     never waited on, whichever way it settled, which is why an <c>Any</c> join needs no case of its own. A
+    ///     materialization TEMPLATE never gets a row, so it can never settle, and naming it would show every
+    ///     decomposing run as stuck on the one node nothing ever runs. Fuller account:
+    ///     docs/wiki/09-api-and-hubs.md ("Design notes on the newer endpoint families").
+    /// </remarks>
     private static IReadOnlyList<string>? WaitingOnNodeKeys(DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowGraph graph,
         IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey,
@@ -388,25 +372,15 @@ public sealed class DevWorkflowRunComposer
 
     /// <summary>
     ///     The model this node run's session actually runs on: the node's own <c>modelProfile</c> when it authored one,
-    ///     because that is the pin the work session is created and resumed with, and the bound agent's otherwise. Null
-    ///     when neither pins anything — the session then takes the node's default chat model, which is a live setting
-    ///     this pane has no business naming as if the run had chosen it.
-    ///     <para>
-    ///         The authored pin counts only on an AGENT node run, which is the one lane that dispatches on it. A Tool or
-    ///         DevTask node carrying the field runs on neither — Dev Mode's coder resolves its own — so naming it there
-    ///         would be the same false label this method was cut back to stop giving.
-    ///     </para>
-    ///     <para>
-    ///         Only the PINNED half is stable: the node comes from the run's own graph snapshot, so an edit to the
-    ///         definition cannot change it. The fallback is the agent definition as it stands NOW, so a node that
-    ///         pinned nothing re-labels when its agent is repointed — which is the same live read every other agent
-    ///         field on this response makes.
-    ///     </para>
-    ///     <para>
-    ///         Trimmed, because the parser trims before it pins: labelling <c>" qwen "</c> for a session dispatched on
-    ///         <c>"qwen"</c> would make the pane disagree with the run over whitespace.
-    ///     </para>
+    ///     and the bound agent's otherwise.
     /// </summary>
+    /// <remarks>
+    ///     Null when neither pins anything, since the session then takes the node's default chat model — a live setting
+    ///     this pane has no business naming as if the run had chosen it. The authored pin counts only on an AGENT node
+    ///     run, the one lane that dispatches on it, and the value is trimmed because the parser trims before it pins.
+    ///     Which half is stable and which re-reads live: docs/wiki/09-api-and-hubs.md
+    ///     ("Design notes on the newer endpoint families").
+    /// </remarks>
     private static string? ModelLabel(DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowGraphNode? node,
         IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById) =>
@@ -436,12 +410,14 @@ public sealed class DevWorkflowRunComposer
     }
 
     /// <summary>
-    ///     Which node runs consumed an artifact that has since been superseded. Staleness IS written today, by the two
-    ///     callers that supersede an artifact — an agent-node promotion and a Tool node's report, both through
-    ///     <c>MarkDependentsStaleAsync</c> — so this answers a real question rather than a reserved one. It is still
-    ///     "none" for most runs, and costs one artifact read to say so: the per-node read only happens once a stale row
-    ///     actually exists.
+    ///     Which node runs consumed an artifact that has since been superseded.
     /// </summary>
+    /// <remarks>
+    ///     Staleness is written by the two callers that supersede an artifact — an agent-node promotion and a Tool
+    ///     node's report, both through <c>MarkDependentsStaleAsync</c> — so this answers a real question rather than a
+    ///     reserved one. It is still "none" for most runs and costs one artifact read to say so: the per-node read only
+    ///     happens once a stale row actually exists.
+    /// </remarks>
     private async Task<IReadOnlySet<Guid>> ResolveStaleInputsAsync(Guid runId,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         CancellationToken cancellationToken)
@@ -469,17 +445,15 @@ public sealed class DevWorkflowRunComposer
     }
 
     /// <summary>
-    ///     Which rule text applied, read from the record written at materialization — never re-resolved. Re-resolving
-    ///     would answer "what would apply now", a different and misleading question in an audit view.
-    ///     <para>
-    ///         The CURRENT hash of each named rule set rides alongside it, so a reader can tell an unchanged document
-    ///         from one edited since the node ran, and both from one deleted — which reads as a null current hash.
-    ///     </para>
-    ///     <para>
-    ///         Parsed through the runtime's own tolerant reader: an unreadable column is a hand-edited row, and it must
-    ///         cost this node its rule-set list rather than costing the whole drill-down a 500.
-    ///     </para>
+    ///     Which rule text applied, read from the record written at materialization — never re-resolved, which would
+    ///     answer "what would apply now", a different and misleading question in an audit view.
     /// </summary>
+    /// <remarks>
+    ///     The CURRENT hash of each named rule set rides alongside it, so a reader can tell an unchanged document from
+    ///     one edited since the node ran, and both from one deleted — which reads as a null current hash. Parsed
+    ///     through the runtime's own tolerant reader: an unreadable column is a hand-edited row, and it must cost this
+    ///     node its rule-set list rather than costing the whole drill-down a 500.
+    /// </remarks>
     private static IReadOnlyList<DevWorkflowAppliedRuleSetResponse> AppliedRuleSets(string? policyResolutionJson, IReadOnlyList<DevWorkflowRuleSetSummary> current) =>
     [
         .. DevWorkflowRulePolicyResolver.Read(policyResolutionJson)

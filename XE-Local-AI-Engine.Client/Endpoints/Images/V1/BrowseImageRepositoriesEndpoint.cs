@@ -7,12 +7,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     FastEndpoints handler for image-model repo discovery (GET images/models/browse). Thin transport over
-///     <see cref="IImageModelDiscovery.SearchAsync" />: a free-text query + breadth + sort maps to candidate
-///     text-to-image repos. Returns sanitized summaries only — no token, no internal URL. A discovery/network failure
-///     surfaces a 200 OK with an empty list (never a 500) so the browse panel degrades gracefully, following the
-///     precedent set by the GGUF browse/inspect endpoints.
+///     Image-model repo discovery: thin transport over <see cref="IImageModelDiscovery.SearchAsync" />, mapping a
+///     free-text query, breadth and sort to candidate text-to-image repos.
 /// </summary>
+/// <remarks>
+///     Returns sanitized summaries only — no token, no internal URL. A discovery or network failure surfaces a 200 OK
+///     with an empty list, never a 500, so the browse panel degrades gracefully, as the GGUF browse/inspect endpoints
+///     do.
+/// </remarks>
 public sealed class BrowseImageRepositoriesEndpoint : Endpoint<BrowseImageRepositoriesRequest, BrowseImageRepositoriesResponse>
 {
     /// <summary>The maximum repos a single browse may return (bounds the discovery search breadth).</summary>
@@ -65,9 +67,8 @@ public sealed class BrowseImageRepositoriesEndpoint : Endpoint<BrowseImageReposi
         }
         catch (Exception exception) when (exception is HttpRequestException or HuggingFaceDownloadException or TimeoutException or InvalidOperationException or OperationCanceledException)
         {
-            // A discovery/network failure must not 500 the browse panel — surface an empty list (no raw reason). The
-            // OperationCanceledException arm (after the ct-cancellation rethrow above) covers an HttpClient request
-            // TIMEOUT (TaskCanceledException, not caller cancellation), which would otherwise escape and 500.
+            // A discovery or network failure must not 500 the browse panel — surface an empty list, with no raw reason. The OperationCanceledException arm (after the
+            // ct-cancellation rethrow above) covers an HttpClient request TIMEOUT, a TaskCanceledException rather than caller cancellation, which would otherwise 500.
             _logger.LogWarning(exception, "Image model repo discovery failed for a browse request.");
             await Send.OkAsync(new BrowseImageRepositoriesResponse
                 {

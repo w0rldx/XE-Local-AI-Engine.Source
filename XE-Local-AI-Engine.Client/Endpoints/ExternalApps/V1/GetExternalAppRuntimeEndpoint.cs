@@ -7,10 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Containers;
 
 /// <summary>
-///     The resolved container runtime for the Runtime panel. A pure read: it never pins a daemon and never reconciles,
-///     which is why <c>foreignInstallContainers</c> is 0 here — the count is the reconciler's observation, and
-///     reporting a cached one as a fresh one would tell the operator a foreign container is there when it is not.
+///     The resolved container runtime for the Runtime panel: a pure read that never pins a daemon and never
+///     reconciles.
 /// </summary>
+/// <remarks>
+///     Which is why <c>foreignInstallContainers</c> is 0 here — the count is the reconciler's observation, and
+///     reporting a cached one as a fresh one would tell the operator a foreign container is there when it is not.
+/// </remarks>
 public sealed class GetExternalAppRuntimeEndpoint : EndpointWithoutRequest<ExternalAppRuntimeResponse>
 {
     private readonly IContainerRuntimeResolver _resolver;

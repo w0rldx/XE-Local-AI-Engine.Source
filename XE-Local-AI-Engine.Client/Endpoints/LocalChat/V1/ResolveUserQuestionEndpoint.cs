@@ -7,12 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
 ///     Loopback responder for a pending <c>ask_user</c> question — the question analogue of
-///     <see cref="ResolveToolApprovalEndpoint" />. The parked turn is waiting on the operator, and in desktop/local mode
-///     there is no worker hub to carry the answers, so the browser posts them here; the handler feeds them into
-///     <see cref="IWorkerEventDispatcher.DispatchUserQuestionAnsweredAsync" />, which releases the waiting run. Keyed
-///     only by the question request id (the runner's opaque per-question key), so it works with no platform connection
-///     and needs no conversation context.
+///     <see cref="ResolveToolApprovalEndpoint" />.
 /// </summary>
+/// <remarks>
+///     The parked turn is waiting on the operator, and desktop/local mode has no worker hub to carry the answers, so
+///     the browser posts them here; the handler feeds them into
+///     <see cref="IWorkerEventDispatcher.DispatchUserQuestionAnsweredAsync" />, which releases the waiting run. Keyed
+///     only by the question request id, the runner's opaque per-question key, so it needs no conversation context.
+/// </remarks>
 public sealed class ResolveUserQuestionEndpoint : Endpoint<ResolveUserQuestionRequest, ResolveUserQuestionResponse>
 {
     private readonly IWorkerEventDispatcher _eventDispatcher;

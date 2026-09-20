@@ -51,11 +51,13 @@ internal static class McpServerApiKeyMapper
     }
 
     /// <summary>
-    ///     Builds the absolute MCP endpoint URL from the LIVE request rather than from configuration. The node binds an
-    ///     OS-assigned loopback port in desktop mode, so the port is not knowable ahead of time and any configured value
-    ///     would go stale on the next launch; the request the operator's own browser just made carries the authoritative
-    ///     scheme, host and port.
+    ///     Builds the absolute MCP endpoint URL from the LIVE request rather than from configuration.
     /// </summary>
+    /// <remarks>
+    ///     The node binds an OS-assigned loopback port in desktop mode, so the port is not knowable ahead of time and
+    ///     any configured value would go stale on the next launch; the request the operator's own browser just made
+    ///     carries the authoritative scheme, host and port.
+    /// </remarks>
     private static string BuildEndpointUrl(HttpContext httpContext)
     {
         var request = httpContext.Request;

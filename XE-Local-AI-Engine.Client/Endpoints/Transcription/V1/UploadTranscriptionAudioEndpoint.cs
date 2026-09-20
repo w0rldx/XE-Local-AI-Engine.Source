@@ -14,20 +14,11 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 ///     Streams one audio file into the session and transcribes it, returning the finished session.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>This endpoint must never bind an <see cref="IFormFile" />.</b> ASP.NET Core buffers a bound form file:
-///         anything past the 64 KB memory threshold spills to a framework-owned temp file under
-///         <c>ASPNETCORE_TEMP</c> before the handler runs — before the container sniff, before the engine-owned slot
-///         exists, and outside the directory the temp-file tests inspect. Almost every real audio file is larger than
-///         64 KB, so copying the buffered upload path would put a second plaintext copy of the operator's audio on
-///         disk, owned by nobody, on every upload. Auto-binding is therefore disabled and the section is read
-///         straight from the multipart stream.
-///     </para>
-///     <para>
-///         <b>One <c>await using</c> spans the copy and the transcription.</b> An overrun, a client disconnect, an
-///         <see cref="IOException" /> mid-copy, a cancellation, a failed transcode and a clean success all leave
-///         through the same slot disposal, which is the only thing that deletes the audio.
-///     </para>
+///     <b>This endpoint must never bind an <see cref="IFormFile" />.</b> ASP.NET Core buffers a bound form file past 64 KB to a framework-owned temp file under
+///     <c>ASPNETCORE_TEMP</c>, before the handler runs and outside the directory the temp-file tests inspect — a second plaintext copy of the operator's audio on almost
+///     every upload. Auto-binding is disabled and the section read straight from the multipart stream. <b>One <c>await using</c> spans the copy and the transcription</b>,
+///     so an overrun, a disconnect, an <see cref="IOException" />, a cancellation, a failed transcode and a clean success all leave through the same slot disposal, the
+///     only thing that deletes the audio.
 /// </remarks>
 public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscriptionAudioRequest, TranscriptionSessionDetailResponse>
 {
@@ -62,10 +53,8 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        // Checked BEFORE a byte of the body is read. Without it an upload to a session that does not exist is only
-        // refused after the whole file has been streamed to disk — the client waits out a pointless transfer, and the
-        // node writes and deletes a file it was never going to use. The outcome mapping below keeps the same answer
-        // for the race where the session disappears between this read and the transcription.
+        // Checked BEFORE a byte of the body is read: otherwise an upload to a session that does not exist is refused only after the whole file has streamed to disk, and the
+        // node writes and deletes a file it was never going to use. The outcome mapping below keeps the same answer for the race where the session disappears after this read.
         if (await _sessions.GetSessionAsync(req.SessionId, ct) is null)
         {
             await Send.NotFoundAsync(ct);
@@ -84,9 +73,8 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
             }
             catch (Exception exception) when (IsMalformedBody(exception))
             {
-                // A body that is not a well-formed multipart document is a client error, not a server fault. The
-                // degenerate case is a form carrying no parts at all, which the reader reports as a truncated stream —
-                // without this arm the caller gets a 500 for having sent nothing.
+                // A body that is not a well-formed multipart document is a client error, not a server fault. The degenerate case is a form carrying no parts at all, which
+                // the reader reports as a truncated stream — without this arm the caller gets a 500 for having sent nothing.
                 section = null;
             }
 
@@ -146,10 +134,8 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
         }
         catch (Exception exception) when (IsMalformedBody(exception))
         {
-            // A body truncated INSIDE the file section throws here rather than at the section read above, and a client
-            // that hung up mid-upload is still a client error. The slot's disposal is unaffected: it is the enclosing
-            // await using, so the partial audio goes either way. A write failure on the engine's own temp file lands in
-            // this arm too, which is the accepted cost of not answering 500 for a truncated upload.
+            // A body truncated INSIDE the file section throws here rather than at the section read above, and a client that hung up mid-upload is still a client error. The
+            // slot's disposal is unaffected (the enclosing await using), so the partial audio goes either way; a write failure on the engine's own temp file lands here too.
             AddError("The uploaded file could not be read.");
             await Send.ErrorsAsync(cancellation: ct);
             return;
@@ -168,10 +154,8 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
             return;
         }
 
-        // Succeeded, Cancelled and RuntimeFailed are all FINISHED requests whose verdict lives on the session row —
-        // Completed, Cancelled or Failed with a sanitized reason. Answering 200 with that row is what lets one client
-        // render every ending the same way, instead of translating a status code back into a session state. The
-        // fallback pair carries the one refusal that writes nothing to the row ("already-transcribing").
+        // Succeeded, Cancelled and RuntimeFailed are all FINISHED requests whose verdict lives on the session row (Completed, Cancelled or Failed with a sanitized reason), so
+        // answering 200 with that row lets one client render every ending alike. The fallback pair carries the one refusal that writes nothing to the row, already-transcribing.
         var session = result.Session ?? await _sessions.GetSessionAsync(req.SessionId, ct);
         if (session is null)
         {

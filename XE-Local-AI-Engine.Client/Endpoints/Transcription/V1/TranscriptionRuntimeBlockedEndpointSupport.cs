@@ -4,10 +4,13 @@ using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
-///     Builds the 409 body every blocked transcription-runtime mutation returns. A deliberate typed DTO rather than
-///     the shared problem-details envelope, because the SPA branches on the reason code and renders the activity
-///     snapshot; keeping it here means the endpoints that produce it cannot drift apart and the busy reason exists once.
+///     Builds the 409 body every blocked transcription-runtime mutation returns.
 /// </summary>
+/// <remarks>
+///     A deliberate typed DTO rather than the shared problem-details envelope, because the SPA branches on the reason
+///     code and renders the activity snapshot. Keeping it here means the endpoints that produce it cannot drift apart,
+///     and the busy reason exists once.
+/// </remarks>
 internal static class TranscriptionRuntimeBlockedEndpointSupport
 {
     /// <summary>The reason code the SPA matches to show "wait for the running work" rather than an error.</summary>

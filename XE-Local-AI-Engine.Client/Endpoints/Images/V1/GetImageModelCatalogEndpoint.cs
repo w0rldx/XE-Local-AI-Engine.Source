@@ -9,12 +9,13 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     FastEndpoints handler for the curated image-model catalog (GET images/models/catalog). Joins three things the UI
-///     would otherwise have to correlate itself: the bundled catalog entries, which of them are already installed, and
-///     how each one's weights compare to this box's measured memory budget. Every entry carries its whole file-set in
-///     the exact shape <c>POST images/models/downloads</c> accepts, so installing is one click and no typing.
-///     Operator-gated; no path or token is surfaced.
+///     The curated image-model catalog. Operator-gated; no path or token is surfaced.
 /// </summary>
+/// <remarks>
+///     Joins three things the UI would otherwise correlate itself: the bundled catalog entries, which of them are
+///     already installed, and how each one's weights compare to this box's measured memory budget. Every entry carries
+///     its whole file-set in the exact shape <c>POST images/models/downloads</c> accepts, so installing is one click.
+/// </remarks>
 public sealed class GetImageModelCatalogEndpoint : EndpointWithoutRequest<GetImageModelCatalogResponse>
 {
     private readonly IImageModelCatalog _catalog;

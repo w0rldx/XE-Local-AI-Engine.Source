@@ -7,11 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Inference;
 
 /// <summary>
-///     FastEndpoints handler that lists every persisted node-local inference profile (GET model-fit/profiles). Thin
-///     transport over <see cref="IInferenceProfileService.ListProfilesAsync" />: each row is projected to a sanitized DTO
-///     that surfaces the launch-arg facts plus the lifecycle status name (<c>Explored|Frozen|Stale</c>) and NEVER the
-///     local-only machine key (the view already omits it).
+///     FastEndpoints handler listing every persisted node-local inference profile (GET model-fit/profiles), a thin
+///     transport over <see cref="IInferenceProfileService.ListProfilesAsync" />.
 /// </summary>
+/// <remarks>
+///     Each row is projected to a sanitized DTO carrying the launch-arg facts plus the lifecycle status name
+///     (<c>Explored|Frozen|Stale</c>) and NEVER the local-only machine key, which the view already omits.
+/// </remarks>
 public sealed class ListInferenceProfilesEndpoint : EndpointWithoutRequest<ListInferenceProfilesResponse>
 {
     private readonly IInferenceProfileService _inferenceProfileService;

@@ -51,10 +51,13 @@ public sealed class ListScheduledJobsRequest
 }
 
 /// <summary>
-///     Body for <c>POST scheduler/jobs</c>. Carries all editable definition fields; <see cref="Parameters" /> is passed
-///     as a plaintext JSON string and stored encrypted at rest by the node encryption interceptors. The <c>Enabled</c>
-///     field is omitted — create always persists enabled; toggling is the dedicated enable/disable actions.
+///     Body for <c>POST scheduler/jobs</c>, carrying all editable definition fields.
 /// </summary>
+/// <remarks>
+///     <see cref="Parameters" /> is passed as a plaintext JSON string and stored encrypted at rest by the node
+///     encryption interceptors. The <c>Enabled</c> field is omitted: create always persists enabled, and toggling is
+///     the dedicated enable and disable actions.
+/// </remarks>
 public sealed class CreateScheduledJobRequest
 {
     public required string TemplateId { get; init; }
@@ -145,10 +148,13 @@ public sealed class ScheduledJobActionRequest
 }
 
 /// <summary>
-///     Wire projection of a <c>ScheduledJobDefinitionRecord</c>. Raw <c>parameter_json</c> is intentionally omitted;
-///     <see cref="HasParameters" /> signals whether parameters are configured without exposing the plaintext value.
-///     Enums serialize as their string names via the globally registered <c>JsonStringEnumConverter</c>.
+///     Wire projection of a <c>ScheduledJobDefinitionRecord</c>.
 /// </summary>
+/// <remarks>
+///     Raw <c>parameter_json</c> is intentionally omitted; <see cref="HasParameters" /> signals whether parameters are
+///     configured without exposing the plaintext value. Enums serialize as their string names via the globally
+///     registered <c>JsonStringEnumConverter</c>.
+/// </remarks>
 public sealed class ScheduledJobResponse
 {
     public required Guid Id { get; init; }
@@ -227,11 +233,13 @@ public sealed class ScheduledJobRunRouteRequest
 }
 
 /// <summary>
-///     Wire projection of a <c>ScheduledJobRunRecord</c>. Raw <c>details_json</c> and <c>error_details</c> are
-///     intentionally omitted; <see cref="ErrorMessage" /> (human-readable summary) and <see cref="Summary" /> are
-///     safe to surface. Enums serialize as their string names via the globally registered
-///     <c>JsonStringEnumConverter</c>.
+///     Wire projection of a <c>ScheduledJobRunRecord</c>.
 /// </summary>
+/// <remarks>
+///     Raw <c>details_json</c> and <c>error_details</c> are intentionally omitted; <see cref="ErrorMessage" />, a
+///     human-readable summary, and <see cref="Summary" /> are safe to surface. Enums serialize as their string names
+///     via the globally registered <c>JsonStringEnumConverter</c>.
+/// </remarks>
 public sealed class ScheduledJobRunResponse
 {
     public required Guid Id { get; init; }
@@ -269,11 +277,14 @@ public sealed class ListScheduledJobRunsResponse
 }
 
 /// <summary>
-///     Response for <c>POST scheduler/runs/{runId}/cancel</c>. Cancellation is best-effort, so <see cref="Outcome" />
-///     reports whether the run was actively interrupted, marked but not currently running, or already terminal (the
-///     not-found case is a 404 with no body). <see cref="CancellationRequestedAtUtc" /> is the unix-ms instant the
-///     request was recorded, or <c>null</c> when nothing was stamped.
+///     Response for <c>POST scheduler/runs/{runId}/cancel</c>.
 /// </summary>
+/// <remarks>
+///     Cancellation is best-effort, so <see cref="Outcome" /> reports whether the run was actively interrupted, marked
+///     but not currently running, or already terminal; the not-found case is a 404 with no body.
+///     <see cref="CancellationRequestedAtUtc" /> is the unix-ms instant the request was recorded, or <c>null</c> when
+///     nothing was stamped.
+/// </remarks>
 public sealed class ScheduledJobRunCancelResponse
 {
     /// <summary>String name of the <c>RunCancellationOutcome</c> (e.g. <c>Requested</c>, <c>RequestedButNotRunning</c>, <c>AlreadyTerminal</c>).</summary>

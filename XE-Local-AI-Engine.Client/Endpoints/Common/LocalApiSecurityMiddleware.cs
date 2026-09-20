@@ -4,19 +4,15 @@ using System.Net;
 
 /// <summary>
 ///     Guards the loopback-only <c>/api/local/v1</c> surface: a request is served only when its transport peer is a
-///     loopback address AND its Host/Origin resolve to a loopback name on the bound port. This backstops the anonymous
-///     first-run setup endpoint against a routable caller with a forged Host/Origin.
-///     <para>
-///         The peer check reads <see cref="Microsoft.AspNetCore.Http.ConnectionInfo.RemoteIpAddress" />, which is the
-///         address of the socket peer — the machine that opened the TCP connection to Kestrel. A reverse proxy running
-///         on the SAME host would therefore appear as a loopback peer and defeat this check, since every forwarded
-///         request would arrive from 127.0.0.1. That is by design and acceptable because a proxied / headless deployment
-///         is UNSUPPORTED: the app binds loopback-only (<c>LoopbackBindGuard</c> shuts the process down on a routable
-///         bind), and no forwarded-headers middleware is registered, so <c>X-Forwarded-For</c> is never honoured and the
-///         socket peer is always the real client on every supported (same-machine, single-user) launch. Deployments that
-///         put this surface behind a proxy or expose it beyond the local machine are out of scope for this guard.
-///     </para>
+///     loopback address AND its Host/Origin resolve to a loopback name on the bound port.
 /// </summary>
+/// <remarks>
+///     This backstops the anonymous first-run setup endpoint against a routable caller with a forged Host/Origin. The
+///     peer check reads <see cref="Microsoft.AspNetCore.Http.ConnectionInfo.RemoteIpAddress" />, the socket peer, so a
+///     reverse proxy on the SAME host defeats it; that is acceptable because a proxied or headless deployment is
+///     UNSUPPORTED. See docs/wiki/09-api-and-hubs.md ("Security middleware &amp; auth ordering") for why the socket
+///     peer is always the real client on every supported launch.
+/// </remarks>
 public sealed class LocalApiSecurityMiddleware
 {
     private static readonly HashSet<string> AllowedHosts = new(StringComparer.OrdinalIgnoreCase)
@@ -51,10 +47,8 @@ public sealed class LocalApiSecurityMiddleware
 
     private static bool IsLoopbackPeer(IPAddress? remoteIpAddress)
     {
-        // The local API is a loopback-only surface: a routable peer must never reach it even with a forged Host/Origin,
-        // so the transport-level peer address is the authoritative gate. A null RemoteIpAddress means the request never
-        // traversed the network stack — the in-memory TestServer transport and in-process health probes present no peer
-        // address — so it is treated as trusted (loopback-equivalent). Only a concrete non-loopback address is rejected.
+        // The transport peer is the authoritative gate: a routable peer must never reach this loopback-only surface even with a forged Host/Origin.
+        // A null address means the request never traversed the network stack (in-memory TestServer transport, in-process health probes), so it counts as loopback.
         return remoteIpAddress is null || IPAddress.IsLoopback(remoteIpAddress);
     }
 

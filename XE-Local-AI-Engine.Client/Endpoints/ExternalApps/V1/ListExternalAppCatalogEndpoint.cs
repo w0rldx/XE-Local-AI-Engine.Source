@@ -7,11 +7,11 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
-/// <summary>
-///     The catalog cards, each already carrying whether this node has the application installed. The join is performed
-///     here rather than left to the SPA because it is the second round-trip the card exists to avoid; the base64
-///     <c>files[]</c> asset bodies never cross the wire.
-/// </summary>
+/// <summary>The catalog cards, each already carrying whether this node has the application installed.</summary>
+/// <remarks>
+///     The join is performed here rather than left to the SPA because it is the second round-trip the card exists to
+///     avoid; the base64 <c>files[]</c> asset bodies never cross the wire.
+/// </remarks>
 public sealed class ListExternalAppCatalogEndpoint : EndpointWithoutRequest<ExternalAppCatalogResponse>
 {
     private readonly IExternalAppService _apps;

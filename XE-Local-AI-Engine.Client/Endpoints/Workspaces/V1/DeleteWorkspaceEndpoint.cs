@@ -28,10 +28,8 @@ public sealed class DeleteWorkspaceEndpoint : Endpoint<DeleteWorkspaceRequest>
 
     public override async Task HandleAsync(DeleteWorkspaceRequest req, CancellationToken ct)
     {
-        // No catch: the selected-folder family (unknown id -> 404, rejection -> 400) is answered by the global
-        // SelectedFolderExceptionHandler, which is where that mapping is stated once. A busy revocation lease throws
-        // WorkspaceRevocationBusyException, which the global ConflictExceptionHandler answers with the shared 409
-        // ConflictProblemDetails (conflictType = WorkspaceRevocationBusy) — never hand-built here.
+        // No catch: the selected-folder family (unknown id to 404, rejection to 400) is answered by the global SelectedFolderExceptionHandler, where that mapping is stated
+        // once. A busy revocation lease throws WorkspaceRevocationBusyException, which the global ConflictExceptionHandler answers with the shared 409 ConflictProblemDetails.
         await _revocationService.RevokeAsync(req.WorkspaceId, ct);
         await Send.NoContentAsync(ct);
     }

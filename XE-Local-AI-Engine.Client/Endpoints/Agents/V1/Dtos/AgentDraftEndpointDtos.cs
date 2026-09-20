@@ -4,11 +4,13 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 
 /// <summary>
-///     Request for <c>POST agents/draft</c>. In <see cref="DraftMode.Create" /> only <see cref="ModelName" /> and
-///     <see cref="Brief" /> are read; in <see cref="DraftMode.Improve" /> the three <c>Existing*</c> fields carry the
-///     content being revised (<see cref="ExistingContent" /> is the agent's instructions). Every field is capped at the
-///     endpoint before the drafting service takes the single draft slot.
+///     Request for <c>POST agents/draft</c>: <see cref="DraftMode.Create" /> reads only <see cref="ModelName" /> and
+///     <see cref="Brief" />, while <see cref="DraftMode.Improve" /> also reads the three <c>Existing*</c> fields.
 /// </summary>
+/// <remarks>
+///     The <c>Existing*</c> fields carry the content being revised, <see cref="ExistingContent" /> being the agent's
+///     instructions. Every field is capped at the endpoint before the drafting service takes the single draft slot.
+/// </remarks>
 public sealed class DraftAgentDefinitionRequest
 {
     public DraftMode Mode { get; init; }
@@ -30,10 +32,12 @@ public sealed class DraftAgentDefinitionRequest
 }
 
 /// <summary>
-///     A drafted agent definition. Nothing here is persisted: the fields populate the operator's form, and
-///     <see cref="GenerationMetadata" /> is echoed back unchanged on the create/update request that eventually saves it
-///     (see that type for why the provenance is informational rather than an attestation).
+///     A drafted agent definition; nothing here is persisted — the fields populate the operator's form.
 /// </summary>
+/// <remarks>
+///     <see cref="GenerationMetadata" /> is echoed back unchanged on the create/update request that eventually saves
+///     it; see that type for why the provenance is informational rather than an attestation.
+/// </remarks>
 public sealed class AgentDraftResponse
 {
     public required string Name { get; init; }

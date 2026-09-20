@@ -1,13 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
-/// <summary>
-///     Turns one training comparison into a benchmark project with its paired base/tuned runs.
-///     <para>
-///         The id is route-bound and everything else comes from the body, so <c>ComparisonId</c> cannot be
-///         <c>required</c> — the body is deserialized before the route value is applied and the generated client sends
-///         only the body members (same rule as <c>DeleteComparisonRequest</c>).
-///     </para>
-/// </summary>
+/// <summary>Turns one training comparison into a benchmark project with its paired base/tuned runs.</summary>
+/// <remarks>
+///     The id is route-bound and everything else comes from the body, so <c>ComparisonId</c> cannot be
+///     <c>required</c> — the body is deserialized before the route value is applied and the generated client sends
+///     only the body members (same rule as <c>DeleteComparisonRequest</c>).
+/// </remarks>
 public sealed class CreateBenchmarkFromComparisonRequest
 {
     public Guid ComparisonId { get; init; }

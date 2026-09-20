@@ -133,11 +133,11 @@ public sealed class UpdateBenchmarkProjectEndpoint : Endpoint<UpdateBenchmarkPro
     }
 }
 
-/// <summary>
-///     Deletes a project with its runs and all their evidence. Answers 409 <c>ActiveRun</c>, having deleted nothing,
-///     while any of the project's runs is still queued, generating, judging or being compared — a finished run goes,
-///     a live one blocks the whole call.
-/// </summary>
+/// <summary>Deletes a project with its runs and all their evidence.</summary>
+/// <remarks>
+///     Answers 409 <c>ActiveRun</c>, having deleted nothing, while any of the project's runs is still queued,
+///     generating, judging or being compared — a finished run goes, a live one blocks the whole call.
+/// </remarks>
 public sealed class DeleteBenchmarkProjectEndpoint : Endpoint<DeleteBenchmarkProjectRequest>
 {
     private readonly BenchmarkRecordService _records;
@@ -163,11 +163,11 @@ public sealed class DeleteBenchmarkProjectEndpoint : Endpoint<DeleteBenchmarkPro
     }
 }
 
-/// <summary>
-///     Changes the judge on a project that may already be frozen. The judge is the one frozen-project knob an operator
-///     can still turn, and turning it re-scores every run — so it is its own resource with its own confirmation, never
-///     a field that rides along on the project PUT.
-/// </summary>
+/// <summary>Changes the judge on a project that may already be frozen.</summary>
+/// <remarks>
+///     The judge is the one frozen-project knob an operator can still turn, and turning it re-scores every run — so it
+///     is its own resource with its own confirmation, never a field that rides along on the project PUT.
+/// </remarks>
 public sealed class UpdateBenchmarkJudgePolicyEndpoint : Endpoint<UpdateBenchmarkJudgePolicyRequest, BenchmarkJudgeChangeResponse>
 {
     private readonly IBenchmarkProjectService _projects;
@@ -284,9 +284,8 @@ internal static class BenchmarkProjectDetailProjection
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(project);
 
-        // A plain LIST, never get-or-create: materializing item 0 for a project created before task items existed is a
-        // write, and exactly one endpoint may perform it — the items GET. Every other project read stays a read, so a
-        // page refresh cannot race two item-0 rows into existence.
+        // A plain LIST, never get-or-create: materializing item 0 for a project that has none is a write, and exactly one endpoint may perform it — the items GET.
+        // Every other project read stays a read, so a page refresh cannot race two item-0 rows into existence.
         return project.ToDetail(runCount,
             await BenchmarkJudgePolicyProjection.ReadAsync(records, project.Id, ct),
             await records.ListTaskItemsAsync(project.Id, ct));

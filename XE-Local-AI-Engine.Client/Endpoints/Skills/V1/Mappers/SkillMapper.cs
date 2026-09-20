@@ -87,10 +87,12 @@ internal static class SkillMapper
     }
 
     /// <summary>
-    ///     Projects the dry-run report onto the wire. Resource <em>content</em> is dropped here: the preview shows the
-    ///     operator which bundled files a skill carries, and shipping every payload would put megabytes of third-party
-    ///     text in a report that exists to be read.
+    ///     Projects the dry-run report onto the wire.
     /// </summary>
+    /// <remarks>
+    ///     Resource <em>content</em> is dropped here: the preview shows the operator which bundled files a skill
+    ///     carries, and shipping every payload would put megabytes of third-party text in a report meant to be read.
+    /// </remarks>
     public static SkillImportPreviewResponse ToResponse(this SkillImportPreview preview)
     {
         ArgumentNullException.ThrowIfNull(preview);
@@ -177,12 +179,8 @@ internal static class SkillMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Origin/SourceUri/ImportedAtUtc are deliberately absent on an ORDINARY edit: the store treats provenance as
-        // promote-only and leaves absent values alone, so an operator edit can never launder an imported skill into a
-        // local one. When Generated is set they are passed explicitly, which is the same promote-only mechanism used in
-        // the tightening direction: model-revised content lands Imported+disabled from ANY prior state (a Local, enabled
-        // skill included), overriding whatever Enabled the client sent, because an AI improve is exactly the case where
-        // the operator has not reviewed the new body yet.
+        // Origin/SourceUri/ImportedAtUtc are deliberately absent on an ORDINARY edit: the store treats provenance as promote-only and leaves absent values alone, so an edit
+        // cannot launder an imported skill into a local one. Generated passes them explicitly, tightening: content lands Imported and disabled from ANY prior state, overriding Enabled.
         return new AgentSkillInput
         {
             Name = request.Name ?? string.Empty,

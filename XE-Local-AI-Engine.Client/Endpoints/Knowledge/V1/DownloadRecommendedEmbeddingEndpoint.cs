@@ -8,29 +8,15 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     FastEndpoints handler that begins the one-click download of the recommended embedding model
-///     (<see cref="RecommendedEmbeddingModel" />) so a fresh node can index knowledge-base documents at all (POST).
-///     Deliberately the exact mirror of <see cref="DownloadRecommendedRerankerEndpoint" />, down to the response shape:
-///     thin transport over the SAME machinery an operator HF download uses, delegating to the
-///     <see cref="IGgufDownloadCoordinator" /> so progress/cancel stream over the GGUF download hub. Body-less
-///     (<c>EndpointWithoutRequest</c>) — no JSON body is expected.
+///     Begins the one-click download of the recommended embedding model (<see cref="RecommendedEmbeddingModel" />), so
+///     a fresh node can index knowledge-base documents at all. Body-less, so no JSON body is expected.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Why this is not merely a convenience.</b> The reranker is optional — without it, search silently degrades
-///         to fusion order. The embedder is load-bearing: with no embedding model installed, ingestion of every document
-///         fails outright and the knowledge base is inert. Before this endpoint existed, the only route out was to know
-///         to go to Models → Browse Hugging Face and pick a suitable embedding GGUF by hand, which the failure message
-///         did not say.
-///     </para>
-///     <para>
-///         The already-installed check is broader than the reranker's on purpose. The reranker asks only "is THE
-///         recommended repo present", because selecting a reranker is an explicit operator act. Here the question that
-///         actually matters is "can this node embed at all", and <c>EmbeddingModelResolver</c> will happily resolve ANY
-///         installed embedding-named model — so if the operator already has, say, an <c>mxbai-embed</c> GGUF, offering
-///         to download a second one would be noise. <see cref="DownloadRecommendedEmbeddingResponse.AlreadyInstalled" />
-///         therefore reports the model that would actually be used, which is not necessarily the recommended one.
-///     </para>
+///     The exact mirror of <see cref="DownloadRecommendedRerankerEndpoint" />, delegating to <see cref="IGgufDownloadCoordinator" /> so progress and cancel stream over the
+///     GGUF download hub. Not merely a convenience: the reranker is optional, but with no embedding model installed, ingestion of every document fails outright and the
+///     knowledge base is inert. The already-installed check is broader than the reranker's, because the question is whether this node can embed AT ALL and
+///     <c>EmbeddingModelResolver</c> resolves ANY installed embedding-named model — so
+///     <see cref="DownloadRecommendedEmbeddingResponse.AlreadyInstalled" /> reports the model that would actually be used.
 /// </remarks>
 public sealed class DownloadRecommendedEmbeddingEndpoint : EndpointWithoutRequest<DownloadRecommendedEmbeddingResponse>
 {

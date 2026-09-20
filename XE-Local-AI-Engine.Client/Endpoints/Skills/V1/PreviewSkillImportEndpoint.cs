@@ -34,19 +34,16 @@ public sealed class PreviewSkillImportEndpoint : Endpoint<SkillImportPreviewRequ
         // Declare the multipart body so FastEndpoints documents it in OpenAPI (and the request is not rejected with a
         // 415 for lacking a JSON body). All three sources ride the same form: one content type, one binding path.
         Description(builder => builder.Accepts<SkillImportPreviewRequest>("multipart/form-data"));
-        // Kestrel's default body cap (30 MB) sits BELOW the configured archive cap, so without this the server would
-        // refuse an archive the import pipeline is configured to accept — and refuse it with a bare 413 from the host,
-        // nowhere near a message an operator can act on. The import service still caps the bytes it reads: this
-        // metadata is only honoured where a body-size feature exists.
+        // Kestrel's default body cap (30 MB) sits BELOW the configured archive cap, so without this the server would refuse an archive the import pipeline is configured to
+        // accept, with a bare 413 from the host. The import service still caps the bytes it reads: this metadata is only honoured where a body-size feature exists.
         Options(builder => builder.WithMetadata(new SkillImportRequestSizeLimit(_maxArchiveBytes)));
         Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(SkillImportPreviewRequest req, CancellationToken ct)
     {
-        // Every guard in the pipeline fails closed through SkillImportException, which the global
-        // DomainValidationExceptionHandler answers with the same 400: its message is written to be shown — it names
-        // the rule that was broken and never echoes an entry path, a resource name or any imported text.
+        // Every guard in the pipeline fails closed through SkillImportException, which the global DomainValidationExceptionHandler answers with the same 400: its message is
+        // written to be shown — it names the rule that was broken and never echoes an entry path, a resource name or any imported text.
         var preview = req.Source switch
         {
             SkillImportSourceKind.Upload => await PreviewUploadAsync(req, ct),

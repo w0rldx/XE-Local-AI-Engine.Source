@@ -1,14 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Scheduler.V1;
 
-// These are the transport-layer parallels of the persistence enums in
-// XE_Local_AI_Engine.Client.Persistence.Entities. They exist so the scheduler
-// wire contract is isolated from a persistence-side rename: the DTOs reference
-// THESE types, and SchedulerMapper translates persistence <-> wire.
-//
-// CONTRACT: member names are byte-identical to the persistence enums and the
-// global JsonStringEnumConverter (no naming policy) serializes them by name,
-// so the JSON wire form is unchanged (e.g. "Cron" stays "Cron"). The integer
-// values mirror the persistence ones too, but only the names are on the wire.
+// The transport-layer parallels of the persistence enums in XE_Local_AI_Engine.Client.Persistence.Entities, isolating the scheduler wire contract from a persistence-side
+// rename. CONTRACT: member names are byte-identical and the global JsonStringEnumConverter (no naming policy) serializes them by name, so "Cron" stays "Cron" on the wire.
 
 /// <summary>
 ///     Wire parallel of <c>Persistence.Entities.ScheduleKind</c>. How a scheduled job's trigger fires: a recurring

@@ -5,10 +5,12 @@ using FluentValidation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Boundary validation for the export surface. The request DTOs cannot use <c>required</c> — they mix route and
-///     body binding — so the "you must actually say what to export" rule lives here, where it produces a field
-///     message rather than a serializer error.
+///     Boundary validation for the export surface.
 /// </summary>
+/// <remarks>
+///     The request DTOs cannot use <c>required</c>, because they mix route and body binding, so the "you must actually
+///     say what to export" rule lives here, where it produces a field message rather than a serializer error.
+/// </remarks>
 public sealed class StartTrainingExportRequestValidator : Validator<StartTrainingExportRequest>
 {
     public StartTrainingExportRequestValidator()

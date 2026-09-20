@@ -6,14 +6,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>
-///     Returns the live connection state plus discovered tools for one registered MCP server. The status is derived from
-///     the registration's enabled flag and the connection manager's last refresh: "disabled" when the server is not
-///     enabled (no connection is attempted), "connected" when the last refresh connected it and listed its tools,
-///     "connecting" when the server is enabled but has no recorded failure yet (a refresh has not reached it, or is still
-///     in flight), and "error" only for an actually recorded failure (a status entry exists, the server is not connected,
-///     and a redacted reason was captured). The tools list is the server's discovered set when connected and empty
-///     otherwise.
+///     The live connection state plus discovered tools for one registered MCP server.
 /// </summary>
+/// <remarks>
+///     The status is derived from the registration's enabled flag and the connection manager's last refresh:
+///     "disabled" when the server is not enabled, so no connection is attempted; "connected" when the last refresh
+///     connected it and listed its tools; "connecting" when it is enabled with no recorded failure yet (a refresh has
+///     not reached it, or is still in flight); and "error" only for an actually recorded failure — a status entry
+///     exists, the server is not connected, and a redacted reason was captured.
+/// </remarks>
 public sealed class GetMcpServerToolsEndpoint : Endpoint<GetMcpServerToolsRequest, McpServerToolsResponse>
 {
     private const string StatusConnected = "connected";
@@ -72,11 +73,8 @@ public sealed class GetMcpServerToolsEndpoint : Endpoint<GetMcpServerToolsReques
             return;
         }
 
-        // Enabled but not connected. Only an actually recorded failure (a status entry exists, the server is not
-        // connected, and the connection manager captured a redacted reason) is a hard "error". Otherwise the server is
-        // still "connecting": a refresh has not reached it yet (no status entry — startup refresh in flight) or it was
-        // seen without a recorded error. Distinguishing these keeps a healthy not-yet-connected server from showing as a
-        // failure in the UI.
+        // Enabled but not connected. Only an actually recorded failure — a status entry exists, the server is not connected, and the connection manager captured a redacted
+        // reason — is a hard "error"; otherwise the server is still "connecting", which keeps a healthy not-yet-connected server from showing as a failure in the UI.
         if (status is { LastError: { Length: > 0 } recordedError })
         {
             await Send.OkAsync(new McpServerToolsResponse
@@ -98,9 +96,8 @@ public sealed class GetMcpServerToolsEndpoint : Endpoint<GetMcpServerToolsReques
             ct);
     }
 
-    // The connection manager owns the per-server discovered tools (it lists them on the status). The qualified name
-    // (mcp__{serverSlug}__{tool}) is the authoritative offered/executable name; the React panel may strip the prefix for
-    // display.
+    // The connection manager owns the per-server discovered tools, listing them on the status. The qualified name mcp__{serverSlug}__{tool} is the authoritative offered and
+    // executable name; the React panel may strip the prefix for display.
     private static IReadOnlyList<McpDiscoveredToolResponse> ProjectDiscoveredTools(McpServerConnectionStatus status)
     {
         return

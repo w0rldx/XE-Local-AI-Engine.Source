@@ -9,9 +9,12 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 
 /// <summary>
 ///     FastEndpoints handler for the curated model catalog's provenance (GET model-fit/catalog): which catalog build is
-///     currently in effect (bundled / remote / remote-last-good), its version, and when it was last fetched. Read-only —
-///     never triggers a fetch (see <see cref="RefreshModelCatalogEndpoint" /> for the operator-forced refresh).
+///     in effect (bundled / remote / remote-last-good), its version, and when it was last fetched.
 /// </summary>
+/// <remarks>
+///     Read-only — it never triggers a fetch; see <see cref="RefreshModelCatalogEndpoint" /> for the operator-forced
+///     refresh.
+/// </remarks>
 public sealed class GetModelCatalogInfoEndpoint : EndpointWithoutRequest<ModelCatalogInfoResponse>
 {
     private readonly IModelCatalogProvider _catalogProvider;

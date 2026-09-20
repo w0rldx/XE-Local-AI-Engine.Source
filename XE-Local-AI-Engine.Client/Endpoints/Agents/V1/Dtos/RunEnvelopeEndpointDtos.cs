@@ -59,9 +59,9 @@ public sealed class AgentRunEnvelopeResponse
 
     /// <summary>
     ///     Estimated tool-schema tokens the turn spent, cumulative across its provider rounds; null on a row written
-    ///     before this field existed or by the restart-recovery backfill. A <c>long</c>, unlike the token members above,
-    ///     because its source counter is one.
+    ///     without this field or by the restart-recovery backfill.
     /// </summary>
+    /// <remarks>A <c>long</c>, unlike the token members above, because its source counter is one.</remarks>
     public long? ToolSchemaTokens { get; init; }
 
     /// <summary>The largest single round's estimated tool-schema token count; null for the same reasons.</summary>
@@ -78,10 +78,12 @@ public sealed class AgentRunEnvelopeResponse
 
     /// <summary>
     ///     How much of <see cref="DurationMs" /> the turn spent making a LOCAL runtime ready (inference-server launch
-    ///     and model load) rather than generating, so a cold arm can be compared with a warm one:
-    ///     <c>DurationMs - ModelReadinessMs</c> is the warm-equivalent turn time. Null when no local warm happened
-    ///     (a remote provider, an already-warm runtime) and on a row written before this field existed.
+    ///     and model load) rather than generating, so a cold arm can be compared with a warm one.
     /// </summary>
+    /// <remarks>
+    ///     <c>DurationMs - ModelReadinessMs</c> is the warm-equivalent turn time. Null when no local warm happened (a
+    ///     remote provider, an already-warm runtime) and on a row written without this field.
+    /// </remarks>
     public long? ModelReadinessMs { get; init; }
 
     public int? ContentChunkCount { get; init; }

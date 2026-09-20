@@ -10,9 +10,12 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
 ///     Starts the managed Linux CUDA source build and returns as soon as it is running; progress is polled from the
-///     status route. Every refusal is a 409 carrying a reason code and the activity snapshot, so the operator is told
-///     what to wait for or what to install. Operator-gated.
+///     status route. Operator-gated.
 /// </summary>
+/// <remarks>
+///     Every refusal is a 409 carrying a reason code and the activity snapshot, so the operator is told what to wait
+///     for or what to install.
+/// </remarks>
 public sealed class StartWhisperCppSourceBuildEndpoint : Endpoint<StartWhisperCppSourceBuildRequest, StartWhisperCppSourceBuildResponse>
 {
     private readonly WhisperRuntimeOrchestrationService _whisperRuntime;

@@ -53,10 +53,13 @@ internal static class CloudSettingsEndpointDtoMapper
     }
 
     /// <summary>
-    ///     Maps the request's header rows onto the stored header shape so <see cref="CloudSettingsPolicy" /> (which
-    ///     lives in the service layer and cannot see the request DTO) can validate them. A null name becomes empty —
-    ///     the policy treats it as the blank-name row, exactly as the request shape did.
+    ///     Maps the request's header rows onto the stored header shape so <see cref="CloudSettingsPolicy" />, which
+    ///     lives in the service layer and cannot see the request DTO, can validate them.
     /// </summary>
+    /// <remarks>
+    ///     A null name becomes empty, which the policy treats as the blank-name row, exactly as the request shape
+    ///     does.
+    /// </remarks>
     public static IReadOnlyList<StoredAzureFoundryHeader> ToPolicyHeaders(this IReadOnlyList<SaveAzureFoundryHeaderRequest> headers)
     {
         ArgumentNullException.ThrowIfNull(headers);
@@ -126,11 +129,13 @@ internal static class CloudSettingsEndpointDtoMapper
     }
 
     /// <summary>
-    ///     Whether the request asks for Entra ID + AuthorizationCode exactly as typed, before the secret-driven
-    ///     coercion in <see cref="ParseEntraSignInMethod" /> can rewrite it. Lives here, next to the parsers
-    ///     <see cref="ToStoredConfig" /> uses, so a caller's pre-check reads the request the same way the persisted
-    ///     config will be built rather than re-implementing the parse.
+    ///     Whether the request asks for Entra ID plus AuthorizationCode exactly as typed, before the secret-driven
+    ///     coercion in <see cref="ParseEntraSignInMethod" /> can rewrite it.
     /// </summary>
+    /// <remarks>
+    ///     Lives next to the parsers <see cref="ToStoredConfig" /> uses, so a caller's pre-check reads the request the
+    ///     same way the persisted config will be built rather than re-implementing the parse.
+    /// </remarks>
     internal static bool RequestsAuthorizationCode(SaveCloudSettingsRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -157,10 +162,8 @@ internal static class CloudSettingsEndpointDtoMapper
             : AzureFoundryApiSurface.AzureDeployments;
     }
 
-    // A configured client secret selects app-only client-credentials by default (frozen build contract: secret
-    // present -> ClientSecret), carved out for AuthorizationCode — the one sign-in method that
-    // legitimately wants both a secret (to authenticate code redemption) and a delegated scope. Any other requested
-    // value with a secret present still coerces to ClientSecret, regardless of what the UI last had selected.
+    // A configured client secret selects app-only client-credentials by default (frozen build contract: secret present means ClientSecret), carved out for AuthorizationCode,
+    // the one method that legitimately wants both a secret (to authenticate code redemption) and a delegated scope. Any other value with a secret still coerces to ClientSecret.
     private static EntraSignInMethod ParseEntraSignInMethod(string? signInMethod, bool hasSecret)
     {
         var parsedOk = TryParseSignInMethod(signInMethod, out var parsed);

@@ -8,11 +8,14 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     Lists the models the local runtime currently holds in memory (RAM/VRAM). On provider-unreachable, returns an
-///     OK-empty/unavailable response (never a 500) so the loaded-models page can poll and degrade gracefully — mirroring
-///     <see cref="ListLocalModelsEndpoint" />. The response also reports whether the Ollama runtime is configured at all
-///     (<see cref="RunningLocalModelsResponse.OllamaConfigured" />) so the client stops polling when it is switched off.
+///     Lists the models the local runtime currently holds in memory (RAM/VRAM).
 /// </summary>
+/// <remarks>
+///     On provider-unreachable it returns an OK-empty/unavailable response, never a 500, so the loaded-models page can
+///     poll and degrade gracefully — mirroring <see cref="ListLocalModelsEndpoint" />. The response also reports
+///     whether the Ollama runtime is configured at all
+///     (<see cref="RunningLocalModelsResponse.OllamaConfigured" />), so the client stops polling when it is off.
+/// </remarks>
 public sealed class GetRunningLocalModelsEndpoint : EndpointWithoutRequest<RunningLocalModelsResponse>
 {
     private readonly ILocalModelCatalogService _catalogService;
@@ -55,9 +58,8 @@ public sealed class GetRunningLocalModelsEndpoint : EndpointWithoutRequest<Runni
         }
         catch (Exception exception)
         {
-            // An unreachable Ollama endpoint (HttpRequestException) is expected in desktop mode and this endpoint is
-            // polled by the loaded-models page — log it at Debug so it doesn't flood the console. Any OTHER failure is
-            // unexpected and stays at Warning. Mirrors ListLocalModelsEndpoint.
+            // An unreachable Ollama endpoint (HttpRequestException) is expected in desktop mode and this endpoint is polled by the loaded-models page — log it at Debug so it
+            // does not flood the console. Any OTHER failure is unexpected and stays at Warning. Mirrors ListLocalModelsEndpoint.
             if (exception is HttpRequestException)
             {
                 _logger.LogDebug(exception, "Ollama not reachable while loading the running model list; returning unavailable.");

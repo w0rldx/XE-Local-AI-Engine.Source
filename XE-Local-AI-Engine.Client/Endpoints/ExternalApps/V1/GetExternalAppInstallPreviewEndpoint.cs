@@ -7,11 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 
 /// <summary>
-///     Everything the install dialog needs BEFORE it asks for anything: the manifest fingerprint the install must echo
-///     back, the declared and effective permissions, EVERY declared variable, the resource verdict, the missing
-///     capabilities and whether the install can proceed at all. The service evaluates gpu, <c>requires</c>, resources
-///     and the runtime — the SPA never re-derives the verdict from the parts.
+///     Everything the install dialog needs first: the fingerprint the install must echo back, the declared and
+///     effective permissions, EVERY declared variable, the resource verdict, the missing capabilities and the
+///     can-install verdict.
 /// </summary>
+/// <remarks>
+///     The service evaluates gpu, <c>requires</c>, resources and the runtime — the SPA never re-derives the verdict
+///     from the parts.
+/// </remarks>
 public sealed class GetExternalAppInstallPreviewEndpoint : Endpoint<ExternalAppApplicationRequest, ExternalAppInstallPreview>
 {
     private readonly IExternalAppService _apps;

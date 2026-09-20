@@ -34,12 +34,8 @@ public sealed class CreateTrainingRunEndpoint : Endpoint<CreateTrainingRunReques
 
     public override async Task HandleAsync(CreateTrainingRunRequest req, CancellationToken ct)
     {
-        // TrainingRunRejectedException reaches the global DomainValidationExceptionHandler as the same 400: its
-        // rejections are operator-facing by construction — an unconfirmed license, a checkpoint that does not fit,
-        // or a dataset that is not ready. The store's own refusals inside the create transaction are a different
-        // family: VersionConflict — the stale confirmation dialog ExpectedDatasetVersion exists to catch —
-        // DatasetNotReady and BaseArtifactNotReady leave through TrainingExceptionHandler as a 409
-        // TrainingErrorResponse, which is why this route declares both statuses.
+        // TrainingRunRejectedException reaches the global DomainValidationExceptionHandler as a 400, its rejections being operator-facing by construction. The store's own
+        // refusals are a different family: VersionConflict (ExpectedDatasetVersion catches it), DatasetNotReady and BaseArtifactNotReady leave via TrainingExceptionHandler as a 409.
         var run = await _runs.CreateAsync(new CreateTrainingRunCommand
         {
             DatasetId = req.DatasetId,

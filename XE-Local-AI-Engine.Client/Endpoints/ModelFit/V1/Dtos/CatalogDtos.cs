@@ -1,11 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
 /// <summary>
-///     Provenance of the curated model catalog currently in effect (<c>GET model-fit/catalog</c> /
-///     <c>POST model-fit/catalog/refresh</c>). The catalog CONTENT rides the existing recommendations response
-///     (each row's <c>section</c>/<c>tier</c> fields) — this DTO is metadata only: which catalog build is active and
-///     where it came from.
+///     Provenance metadata for the curated model catalog in effect (<c>GET model-fit/catalog</c>,
+///     <c>POST model-fit/catalog/refresh</c>): which catalog build is active and where it came from.
 /// </summary>
+/// <remarks>
+///     The catalog CONTENT rides the recommendations response instead, in each row's <c>section</c>/<c>tier</c> fields.
+/// </remarks>
 public sealed class ModelCatalogInfoResponse
 {
     public required string CatalogVersion { get; init; }
@@ -23,13 +24,12 @@ public sealed class ModelCatalogInfoResponse
 
     public required int ModelCount { get; init; }
 
-    /// <summary>
-    ///     Whether a remote refresh source is configured at all (<c>ModelCatalog:RefreshUrl</c>). When <c>false</c>, the
-    ///     catalog is bundled-only and <c>POST model-fit/catalog/refresh</c> is a guaranteed no-op — it still returns 200
-    ///     with the snapshot in effect, because there is no error to report, but nothing was or could be fetched.
-    ///     The UI must not present that outcome as a successful refresh: no appsettings file ships a
-    ///     <c>ModelCatalog</c> section, so on a stock node this is <c>false</c> and "Refresh catalog" previously showed a
-    ///     green success toast for an action that could never do anything.
-    /// </summary>
+    /// <summary>Whether a remote refresh source is configured at all (<c>ModelCatalog:RefreshUrl</c>).</summary>
+    /// <remarks>
+    ///     <c>false</c> means bundled-only: <c>POST model-fit/catalog/refresh</c> is a guaranteed no-op that still
+    ///     answers 200 with the snapshot in effect (no error to report, nothing fetched), so the UI must not present
+    ///     that outcome as a successful refresh. No shipped appsettings file has a <c>ModelCatalog</c> section, so a
+    ///     stock node reads <c>false</c>.
+    /// </remarks>
     public required bool RefreshSourceConfigured { get; init; }
 }

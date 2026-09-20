@@ -8,17 +8,15 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 
 /// <summary>
 ///     FastEndpoints handler that explores a node-local GGUF model to draft its launch args (POST
-///     model-fit/profiles/explore). Validates the model name (non-blank) and role
-///     (<c>chat|embedding|reranker</c>) and the optional <c>contextTokens</c> override (a shape bound of 2048–1048576,
-///     read from <see cref="ExploreInferenceProfileRequest.MinExploreContextTokens" /> and
-///     <see cref="ExploreInferenceProfileRequest.MaxExploreContextTokens" />; the model's train ceiling is the
-///     resolver's job) before calling the service's explore overload. A domain
-///     rejection — a cloud or missing model, or any
-///     sanitized failure reason the service returns — is surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>,
-///     not an exception. A SKIPPED result (the model was serving inference, so nothing ran and nothing was evicted) is
-///     also a 400 today, carrying its own retry-when-idle wording rather than the generic failure text. On success it
-///     returns the drafted/updated profile view (machine key omitted).
+///     model-fit/profiles/explore), returning the drafted/updated profile view with the machine key omitted.
 /// </summary>
+/// <remarks>
+///     It validates the model name (non-blank), the role (<c>chat|embedding|reranker</c>) and the optional
+///     <c>contextTokens</c> override against the <c>Min</c>/<c>MaxExploreContextTokens</c> shape bound of 2048–1048576
+///     on <see cref="ExploreInferenceProfileRequest" /> — the model's train ceiling is the resolver's job — before
+///     calling the service's explore overload. A domain rejection (a cloud or missing model, any sanitized failure
+///     reason) and a SKIPPED result, which carries its own retry-when-idle wording, are 400s, never exceptions.
+/// </remarks>
 public sealed class ExploreInferenceProfileEndpoint : Endpoint<ExploreInferenceProfileRequest, InferenceProfileActionResponse>
 {
     // The bounds live on the request DTO, next to the XML doc that publishes them, so the documented range and the

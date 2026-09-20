@@ -6,12 +6,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
 /// <summary>
-///     Maps between the golden-conversation transport DTOs and the Application/Persistence types. This is the sole point
-///     in the Client project that references the golden record/source member names, so it is the only file that needs
-///     adjustment if those names change. Keeping the Persistence/Persistence.Entities dependency here (rather than in the
-///     DTO file) stops the ORM layer from leaking across the transport boundary while preserving the wire shape: the
-///     <see cref="GoldenConversationResponse.Source" /> discriminator is already projected to a plain lowercase string.
+///     Maps between the golden-conversation transport DTOs and the Application/Persistence types — the sole point in
+///     the Client project that references the golden record/source member names.
 /// </summary>
+/// <remarks>
+///     Keeping the Persistence/Persistence.Entities dependency here rather than in the DTO file stops the ORM layer
+///     from leaking across the transport boundary while preserving the wire shape: the
+///     <see cref="GoldenConversationResponse.Source" /> discriminator is already projected to a plain lowercase string.
+/// </remarks>
 internal static class GoldenConversationMapper
 {
     // Web defaults so the persisted/serialized golden JSON is camelCase, matching the runner's parsing + the client (CA1869).

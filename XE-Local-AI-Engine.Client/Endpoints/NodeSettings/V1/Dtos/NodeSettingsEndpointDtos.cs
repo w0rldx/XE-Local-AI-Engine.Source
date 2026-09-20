@@ -3,11 +3,14 @@ namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     Response for <c>GET api/local/v1/node-settings</c>. Surfaces the effective stored values for every user-editable
-///     node setting plus the per-field bounds the React form renders ranges from. Fields are grouped: the original chat
-///     timeout, then the "general" migrated knobs (always shown), then the developer-only advanced knobs (the React lane
-///     gates their visibility; the backend always returns them).
+///     Response for <c>GET api/local/v1/node-settings</c>: the effective stored value of every user-editable node
+///     setting, plus the per-field bounds the React form renders ranges from.
 /// </summary>
+/// <remarks>
+///     Fields are grouped: the original chat timeout, then the "general" migrated knobs (always shown), then the
+///     developer-only advanced knobs. The React lane gates the advanced knobs' visibility; the backend always returns
+///     them.
+/// </remarks>
 public sealed record NodeSettingsResponse
 {
     public int MaxMessageRequestTimeoutSeconds { get; init; }
@@ -22,42 +25,48 @@ public sealed record NodeSettingsResponse
 
     /// <summary>
     ///     Node kill-switch for the user-defined custom tools feature. <see langword="null" /> reads as off (default).
-    ///     DANGER: enabling this allows agents to run user-defined tools that execute host commands, launch programs, and
-    ///     make network requests. Off by default; each call still requires operator approval per the per-agent allow-list
-    ///     and the forced per-call approval gate.
     /// </summary>
+    /// <remarks>
+    ///     DANGER: enabling this allows agents to run user-defined tools that execute host commands, launch programs
+    ///     and make network requests. Each call still requires operator approval, per the per-agent allow-list and the
+    ///     forced per-call approval gate.
+    /// </remarks>
     public bool? CustomToolsEnabled { get; init; }
 
     /// <summary>
-    ///     Node switch for the per-turn tool-relevance offer. <see langword="null" /> reads as off (default). When on,
-    ///     an agent carrying many tools is offered a relevance-ranked subset per turn and recovers the rest through
-    ///     <c>list_tools</c>; a per-agent opt-out still wins. A context budget, never an authorisation boundary.
+    ///     Node switch for the per-turn tool-relevance offer. <see langword="null" /> reads as off (default).
     /// </summary>
+    /// <remarks>
+    ///     When on, an agent carrying many tools is offered a relevance-ranked subset per turn and recovers the rest
+    ///     through <c>list_tools</c>; a per-agent opt-out still wins. A context budget, never an authorisation
+    ///     boundary.
+    /// </remarks>
     public bool? ToolRelevanceEnabled { get; init; }
 
     /// <summary>
-    ///     Which external-access preset was last applied: <c>recommended</c>, <c>offline</c>, <c>custom</c> (the switches
-    ///     no longer match a preset), <c>pending</c> (an administrator exists and nobody has chosen yet), or
-    ///     <see langword="null" /> (undecided, with no administrator). A RECORD of the choice, never the authority — the
-    ///     three switches below are what every gate reads. <c>custom</c> and <c>pending</c> are engine-written: the server
-    ///     is their only writer.
-    ///     <para>
-    ///         Honesty rule both surfaces must render: Offline disables exactly the three checks named below and NOTHING
-    ///         else. It does not block the connection to the C0re platform, MCP servers the operator has configured, or
-    ///         model-catalog lookups. Copy that implies a network kill switch is a privacy misrepresentation.
-    ///     </para>
+    ///     Which external-access preset was last applied: <c>recommended</c>, <c>offline</c>, <c>custom</c> (the
+    ///     switches no longer match a preset), <c>pending</c> (an administrator exists and nobody has chosen yet), or
+    ///     <see langword="null" /> (undecided, with no administrator).
     /// </summary>
+    /// <remarks>
+    ///     A RECORD of the choice, never the authority — the three switches below are what every gate reads — and
+    ///     <c>custom</c> and <c>pending</c> are engine-written, the server being their only writer. Honesty rule both
+    ///     surfaces must render: Offline disables exactly the three checks named below and NOTHING else. It does not
+    ///     block the connection to the C0re platform, MCP servers the operator has configured, or model-catalog
+    ///     lookups. Copy that implies a network kill switch is a privacy misrepresentation.
+    /// </remarks>
     public string? ExternalAccessProfile { get; init; }
 
     /// <summary>
     ///     Which navigation mode this node shows: <c>simple</c> (the everyday surfaces only) or <c>advanced</c>
-    ///     (everything this build offers). <see langword="null" /> means the first-run question has not been answered
-    ///     yet — the SPA's onboarding step keys on exactly that, and reads null as <c>advanced</c> everywhere else.
-    ///     <para>
-    ///         Presentation only. It hides navigation entries and nothing more: every route stays reachable by URL, no
-    ///         server-side gate consults it, and the build's capability flags still decide what exists.
-    ///     </para>
+    ///     (everything this build offers).
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> means the first-run question has not been answered yet — the SPA's onboarding step
+    ///     keys on exactly that, and reads null as <c>advanced</c> everywhere else. Presentation only: it hides
+    ///     navigation entries and nothing more, every route stays reachable by URL, no server-side gate consults it,
+    ///     and the build's capability flags still decide what exists.
+    /// </remarks>
     public string? UiMode { get; init; }
 
     /// <summary>
@@ -68,10 +77,12 @@ public sealed record NodeSettingsResponse
     public bool? AutoCheckApplicationUpdates { get; init; }
 
     /// <summary>
-    ///     Whether the node checks for llama.cpp / runtime updates on its own. <see langword="null" /> reads as on. The
-    ///     manual runtime-status refresh and the runtime install are unaffected. The check runs once per process, so
-    ///     turning it back on takes effect at the next node start.
+    ///     Whether the node checks for llama.cpp / runtime updates on its own. <see langword="null" /> reads as on.
     /// </summary>
+    /// <remarks>
+    ///     The manual runtime-status refresh and the runtime install are unaffected. The check runs once per process,
+    ///     so turning it back on takes effect at the next node start.
+    /// </remarks>
     public bool? AutoCheckRuntimeUpdates { get; init; }
 
     /// <summary>
@@ -130,10 +141,13 @@ public sealed record NodeSettingsResponse
 
     /// <summary>
     ///     Which container runtime External Apps resolves against: <c>auto</c> picks the one this node can reach,
-    ///     <c>docker</c> pins it. A STRING, not an enum, so a JSON number is rejected by type before any validator runs
-    ///     and the generated client models it as a plain string. The resolver never switches provider on its own, so
-    ///     this is the only node-wide choice; an instance may still carry its own override.
+    ///     <c>docker</c> pins it.
     /// </summary>
+    /// <remarks>
+    ///     A STRING, not an enum, so a JSON number is rejected by type before any validator runs and the generated
+    ///     client models it as a plain string. The resolver never switches provider on its own, so this is the only
+    ///     node-wide choice; an instance may still carry its own override.
+    /// </remarks>
     public string ContainerRuntimeSelection { get; init; } = StoredNodeSettings.DefaultContainerRuntimeSelection;
 
     public string? SpeculativeDraftModelName { get; init; }
@@ -198,19 +212,24 @@ public sealed record NodeSettingsResponse
     public string? DefaultVoiceProfile { get; init; }
 
     /// <summary>
-    ///     Operator override of usage cost rates, keyed by model NAME → its USD-per-1M input/output rate. Flattened from
-    ///     the stored <see cref="NodeUsageRateSettings" />. <see langword="null" /> means no override (the usage-summary
-    ///     cost estimate falls back to the built-in default rate table). Local runtimes are always free regardless.
+    ///     Operator override of usage cost rates, keyed by model NAME to its USD-per-1M input/output rate, flattened
+    ///     from the stored <see cref="NodeUsageRateSettings" />.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> means no override, so the usage-summary cost estimate falls back to the built-in
+    ///     default rate table. Local runtimes are always free regardless.
+    /// </remarks>
     public IReadOnlyDictionary<string, ModelRate>? UsageRates { get; init; }
 }
 
 /// <summary>
-///     Body for <c>PUT api/local/v1/node-settings</c>. EVERY field is OPTIONAL — including the chat timeout: a
-///     <see langword="null" /> request field keeps the current stored value (the mapper merges into the loaded
-///     <see cref="StoredNodeSettings" />). Provided values are validated at the boundary by
-///     <see cref="NodeSettingsEndpointValidators" /> (ranges, URL format, tag format, array element constraints).
+///     Body for <c>PUT api/local/v1/node-settings</c>. EVERY field is OPTIONAL, including the chat timeout.
 /// </summary>
+/// <remarks>
+///     A <see langword="null" /> request field keeps the current stored value — the mapper merges into the loaded
+///     <see cref="StoredNodeSettings" />. Provided values are validated at the boundary by
+///     <see cref="NodeSettingsEndpointValidators" /> (ranges, URL format, tag format, array element constraints).
+/// </remarks>
 public sealed record SaveNodeSettingsRequest
 {
     public int? MaxMessageRequestTimeoutSeconds { get; init; }
@@ -220,11 +239,14 @@ public sealed record SaveNodeSettingsRequest
     public bool? EnableTools { get; init; }
 
     /// <summary>
-    ///     Node kill-switch for the user-defined custom tools feature. <see langword="null" /> keeps the current stored
-    ///     value. DANGER: enabling this allows agents to run user-defined tools that execute host commands, launch
-    ///     programs, and make network requests. Off by default; each call still requires operator approval per the
-    ///     per-agent allow-list and the forced per-call approval gate.
+    ///     Node kill-switch for the user-defined custom tools feature. <see langword="null" /> keeps the current
+    ///     stored value.
     /// </summary>
+    /// <remarks>
+    ///     DANGER: enabling this allows agents to run user-defined tools that execute host commands, launch programs
+    ///     and make network requests. Off by default; each call still requires operator approval, per the per-agent
+    ///     allow-list and the forced per-call approval gate.
+    /// </remarks>
     public bool? CustomToolsEnabled { get; init; }
 
     /// <summary>
@@ -234,32 +256,43 @@ public sealed record SaveNodeSettingsRequest
     public bool? ToolRelevanceEnabled { get; init; }
 
     /// <summary>
-    ///     Apply an external-access preset: <c>recommended</c> or <c>offline</c> ONLY. The server writes that preset's
-    ///     three switches and ignores any switch sent alongside it. <c>custom</c> and <c>pending</c> are engine-written
-    ///     states and are REJECTED as input — a client never computes either. <see langword="null" /> keeps the current
-    ///     stored value, unless one of the three switches below is supplied, which stamps <c>custom</c>.
+    ///     Apply an external-access preset: <c>recommended</c> or <c>offline</c> ONLY.
     /// </summary>
+    /// <remarks>
+    ///     The server writes that preset's three switches and ignores any switch sent alongside it. <c>custom</c> and
+    ///     <c>pending</c> are engine-written states and are REJECTED as input — a client never computes either.
+    ///     <see langword="null" /> keeps the current stored value, unless one of the three switches below is supplied,
+    ///     which stamps <c>custom</c>.
+    /// </remarks>
     public string? ExternalAccessProfile { get; init; }
 
     /// <summary>
     ///     Set the navigation mode: <c>simple</c> or <c>advanced</c> ONLY; anything else is rejected with a 400.
-    ///     <see langword="null" /> keeps the current stored value. It composes with no other field, so it can be sent on
-    ///     its own — which is how both the first-run step and the Node Settings toggle save it.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> keeps the current stored value. It composes with no other field, so it can be sent
+    ///     on its own — which is how both the first-run step and the Node Settings toggle save it.
+    /// </remarks>
     public string? UiMode { get; init; }
 
     /// <summary>
-    ///     Whether the node checks for application updates on its own. <see langword="null" /> keeps the current stored
-    ///     value; supplying it (without a preset) stamps the profile <c>custom</c>. The manual check and apply flow are
-    ///     unaffected, and the automatic check runs once per process, so turning it back on applies at the next start.
+    ///     Whether the node checks for application updates on its own.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> keeps the current stored value; supplying it (without a preset) stamps the profile
+    ///     <c>custom</c>. The manual check and apply flow are unaffected, and the automatic check runs once per
+    ///     process, so turning it back on applies at the next start.
+    /// </remarks>
     public bool? AutoCheckApplicationUpdates { get; init; }
 
     /// <summary>
-    ///     Whether the node checks for llama.cpp / runtime updates on its own. <see langword="null" /> keeps the current
-    ///     stored value; supplying it (without a preset) stamps the profile <c>custom</c>. The manual runtime-status
-    ///     refresh and the runtime install are unaffected, and the automatic check runs once per process.
+    ///     Whether the node checks for llama.cpp / runtime updates on its own.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> keeps the current stored value; supplying it (without a preset) stamps the profile
+    ///     <c>custom</c>. The manual runtime-status refresh and the runtime install are unaffected, and the automatic
+    ///     check runs once per process.
+    /// </remarks>
     public bool? AutoCheckRuntimeUpdates { get; init; }
 
     /// <summary>
@@ -301,9 +334,11 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>
     ///     Which container runtime External Apps resolves against: <c>auto</c> or <c>docker</c>, case-insensitive.
+    /// </summary>
+    /// <remarks>
     ///     <see langword="null" /> keeps the current stored value, like every other member of this partial update. A
     ///     STRING, not an enum: a JSON number cannot bind to it, so an undefined selection can never be persisted.
-    /// </summary>
+    /// </remarks>
     public string? ContainerRuntimeSelection { get; init; }
 
     public string? SpeculativeDraftModelName { get; init; }
@@ -339,10 +374,13 @@ public sealed record SaveNodeSettingsRequest
     public string? DefaultVoiceProfile { get; init; }
 
     /// <summary>
-    ///     Operator override of usage cost rates, keyed by model NAME → its USD-per-1M input/output rate. <see langword="null" />
-    ///     keeps the currently stored override; a supplied map REPLACES it (an empty map clears the override — the store's
-    ///     <c>Normalize</c> collapses it to null). Negative / non-finite rates are rejected at the boundary with a 400.
+    ///     Operator override of usage cost rates, keyed by model NAME to its USD-per-1M input/output rate.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> keeps the currently stored override; a supplied map REPLACES it, and an empty map
+    ///     clears it because the store's <c>Normalize</c> collapses it to null. Negative or non-finite rates are
+    ///     rejected at the boundary with a 400.
+    /// </remarks>
     public IReadOnlyDictionary<string, ModelRate>? UsageRates { get; init; }
 }
 

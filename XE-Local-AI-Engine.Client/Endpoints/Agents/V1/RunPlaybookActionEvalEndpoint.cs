@@ -8,11 +8,13 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 
 /// <summary>
 ///     Runs golden-conversation evaluation over one agent's golden set for a pending Suggested/Analysis action and
-///     persists the resulting <c>EvalResult</c> on the action (the promote route reads it back). Returns the updated
-///     action (now carrying <c>evalResult</c>); 404 when the action is missing, belongs to another agent, or is not a
-///     pending suggestion. The route carries the ids so the request is body-less (Configure overrides Accepts so the
-///     missing Content-Type is not answered with 415). Operator-gated.
+///     persists the resulting <c>EvalResult</c> on the action, which the promote route reads back. Operator-gated.
 /// </summary>
+/// <remarks>
+///     Returns the updated action, now carrying <c>evalResult</c>; 404 when the action is missing, belongs to another
+///     agent, or is not a pending suggestion. The route carries the ids so the request is body-less, and
+///     <c>Configure</c> overrides Accepts so the missing Content-Type is not answered with 415.
+/// </remarks>
 public sealed class RunPlaybookActionEvalEndpoint : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
 {
     private readonly IPlaybookEvalService _playbookEvalService;
@@ -27,10 +29,8 @@ public sealed class RunPlaybookActionEvalEndpoint : Endpoint<SuggestedPlaybookAc
     {
         Post(LocalApiRoutes.Agents.PlaybookActionEval);
         Policies(NodeAuthorizationPolicies.Operator);
-        // Route-only POST: the agent and action ids come from the route, so a well-behaved client sends no body — and
-        // therefore no Content-Type. The default POST "Accepts" metadata only allows application/json, which
-        // FastEndpoints answers with 415 when the header is absent. Overriding Accepts to accept any content-type lets a
-        // body-less request through (the ids still bind from the route).
+        // Route-only POST: no body means no Content-Type, and the default POST "Accepts" metadata (application/json
+        // only) would answer 415. Accepting any content-type lets the request through; the ids still bind from the route.
         Description(x => x.Accepts<SuggestedPlaybookActionRouteRequest>());
     }
 
@@ -38,9 +38,8 @@ public sealed class RunPlaybookActionEvalEndpoint : Endpoint<SuggestedPlaybookAc
     {
         var outcome = await _playbookEvalService.RunEvalAsync(req.AgentDefinitionId, req.ActionId, ct);
 
-        // The service enforced ownership, persisted EvalResult, and returned the updated record on the outcome — map it
-        // directly. A missing record (ActionFound == false, or the ownership-guarded record returned null) is a 404; no
-        // second, unscoped re-fetch.
+        // The service enforced ownership, persisted EvalResult and returned the updated record on the outcome — map it directly. A missing record (no ActionFound,
+        // or the ownership-guarded record returned null) is a 404; no second, unscoped re-fetch.
         if (!outcome.ActionFound || outcome.Action is null)
         {
             await Send.NotFoundAsync(ct);

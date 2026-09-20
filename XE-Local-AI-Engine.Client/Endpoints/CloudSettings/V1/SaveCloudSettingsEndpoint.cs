@@ -24,9 +24,8 @@ public sealed class SaveCloudSettingsEndpoint : Endpoint<SaveCloudSettingsReques
 
     public override async Task HandleAsync(SaveCloudSettingsRequest req, CancellationToken ct)
     {
-        // Load prior state so a secret header re-sent with a blank value keeps its stored value. The mapper
-        // stays pure — the merge is the only impure step and it runs here. Loaded before validation so the validator can
-        // tell a fresh/renamed blank secret header (rejected, 400) apart from one that resolves via the stored merge.
+        // Load prior state so a secret header re-sent with a blank value keeps its stored value. The mapper stays pure — the merge is the only impure step and it runs here —
+        // and the load happens before validation so the validator can tell a fresh or renamed blank secret header (rejected, 400) from one that resolves via the stored merge.
         var existing = await _cloudCredentialStore.LoadConfigAsync(ct);
         var existingHeaders = existing?.AzureFoundry?.Headers ?? [];
 
@@ -49,11 +48,8 @@ public sealed class SaveCloudSettingsEndpoint : Endpoint<SaveCloudSettingsReques
         var mergedHeaders = CloudSettingsHeaderMerge.Merge(existingHeaders, req.Headers);
         var mergedEntraClientSecret = CloudSettingsEntraSecretMerge.Merge(existing?.AzureFoundry, req.EntraClientSecret);
 
-        // AuthorizationCode redeems the code with the client secret (confidential client), so it requires one —
-        // typed on this request or previously stored. Checked here, after the merge resolves whether a secret is
-        // actually available, so a fresh/renamed secret-less AuthorizationCode connection gets a clean 400 instead
-        // of letting CloudCredentialStore.ValidateConfig throw on save (500) — mirrors the secret-header pattern in
-        // CloudSettingsPolicy.ValidateHeadersAndSuffixes.
+        // AuthorizationCode redeems the code with the client secret (confidential client), so it requires one, typed on this request or previously stored. Checked after the
+        // merge resolves whether a secret is available, so a secret-less connection gets a clean 400 instead of letting CloudCredentialStore.ValidateConfig throw a 500 on save.
         if (CloudSettingsEndpointDtoMapper.RequestsAuthorizationCode(req) && string.IsNullOrWhiteSpace(mergedEntraClientSecret))
         {
             AddError("EntraSignInMethod is 'AuthorizationCode', which requires a client secret (typed on this request or previously stored).");

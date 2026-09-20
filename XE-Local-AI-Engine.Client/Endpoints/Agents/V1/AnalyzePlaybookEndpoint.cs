@@ -7,10 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Analysis;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     analysis staging: runs the analysis agent over one agent's feedback aggregate and persists the resulting Suggested
-///     actions for review. Returns the created suggestions (an empty list when the feedback is below threshold or no
-///     proposal survived validation/dedup); 404 when the agent does not exist. Operator-gated.
+///     Analysis staging: runs the analysis agent over one agent's feedback aggregate and persists the resulting
+///     Suggested actions for review. Operator-gated.
 /// </summary>
+/// <remarks>
+///     Returns the created suggestions — an empty list when the feedback is below threshold or no proposal survived
+///     validation/dedup — and 404 when the agent does not exist.
+/// </remarks>
 public sealed class AnalyzePlaybookEndpoint : Endpoint<AnalyzePlaybookRequest, ListPlaybookActionsResponse>
 {
     private readonly IPlaybookAnalysisService _analysisService;
@@ -25,10 +28,8 @@ public sealed class AnalyzePlaybookEndpoint : Endpoint<AnalyzePlaybookRequest, L
     {
         Post(LocalApiRoutes.Agents.PlaybookAnalyze);
         Policies(NodeAuthorizationPolicies.Operator);
-        // Route-only POST: the agent id comes from the route, so a well-behaved client sends no body — and therefore no
-        // Content-Type. The default POST "Accepts" metadata only allows application/json, which FastEndpoints answers
-        // with 415 when the header is absent. Overriding Accepts to accept any content-type lets a body-less request
-        // through (the agentDefinitionId still binds from the route).
+        // Route-only POST: no body means no Content-Type, and the default POST "Accepts" metadata (application/json
+        // only) would answer 415. Accepting any content-type lets the request through; agentDefinitionId still binds from the route.
         Description(x => x.Accepts<AnalyzePlaybookRequest>());
     }
 

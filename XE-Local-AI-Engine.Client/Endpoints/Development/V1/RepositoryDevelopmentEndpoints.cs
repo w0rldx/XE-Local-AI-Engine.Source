@@ -123,10 +123,8 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint : Endpoint<ReconnectD
             var project = await _service.ReconnectRepositoryAsync(req.ProjectId, req.SelectedFolderId, req.ExpectedVersion, ct);
             await Send.OkAsync(project.ToResponse(), ct);
         }
-        // Reconnect is the one Development endpoint whose request BOTH carries a folder to validate and acts on the
-        // project's persisted binding, so it is the only one that has to split the workspace-security family by type:
-        // the persisted binding blocking the reconnect is a 409, while the folder the caller just picked being
-        // unusable (not a Git root, read-only, network path) is the same 400 it is on register/create.
+        // Reconnect is the one Development endpoint whose request BOTH carries a folder to validate and acts on the project's persisted binding, so it alone splits
+        // the workspace-security family by type: a persisted binding blocking it is a 409, an unusable picked folder (not a Git root, read-only, network path) a 400.
         catch (DevelopmentRepositoryStateConflictException exception)
         {
             AddError(exception.Message);

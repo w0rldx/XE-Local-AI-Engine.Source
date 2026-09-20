@@ -27,11 +27,13 @@ internal static class BenchmarkExportCsv
         + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey,"
         + "taskItemId,taskItemIndex,cellKey,taskInputHash,taskItemSetHash,cellQuality";
 
-    /// <param name="expectedKldBaseLogitsDigest">
-    ///     The digest the project's CURRENT settings recompute. A run whose stored digest differs exports
+    /// <summary>Renders the export rows, applying the same KLD comparability gate as the live read.</summary>
+    /// <remarks>
+    ///     A run whose stored digest differs from <paramref name="expectedKldBaseLogitsDigest" /> exports
     ///     <c>kldState=stale</c> with its KLD cells EMPTY — the same withholding the API does, because a number a
     ///     reader can still see is a number they will still compare.
-    /// </param>
+    /// </remarks>
+    /// <param name="expectedKldBaseLogitsDigest">The digest the project's CURRENT settings recompute.</param>
     public static string Render(IReadOnlyList<BenchmarkRunRecord> runs,
         string? expectedKldBaseLogitsDigest = null,
         BenchmarkPairwiseFitRecord? pairwiseFit = null)
@@ -47,11 +49,11 @@ internal static class BenchmarkExportCsv
         return builder.ToString();
     }
 
-    /// <summary>
-    ///     A value whose first character makes a spreadsheet read the cell as a formula. Several columns here are
-    ///     operator-supplied (a model name, an HF repo id) or provider-verbatim (<c>stopReason</c>), so a row can carry
-    ///     <c>=HYPERLINK(...)</c> into a workbook that evaluates it.
-    /// </summary>
+    /// <summary>A value whose first character makes a spreadsheet read the cell as a formula.</summary>
+    /// <remarks>
+    ///     Several columns here are operator-supplied (a model name, an HF repo id) or provider-verbatim
+    ///     (<c>stopReason</c>), so a row can carry <c>=HYPERLINK(...)</c> into a workbook that evaluates it.
+    /// </remarks>
     private static readonly SearchValues<char> FormulaLeadCharacters = SearchValues.Create("=+-@\t\r");
 
     /// <summary>
@@ -234,11 +236,12 @@ internal static class BenchmarkExportCsv
     private static string Rate(double? value) =>
         value?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty;
 
-    /// <summary>
-    ///     Six decimals, for the fidelity numbers. <see cref="Rate" />'s three are right for a token rate and wrong
-    ///     here: the measured Q4_K_M/UD-Q3_K_XL perplexity gap is 6.7977 vs 6.9497 with standard errors around 0.074,
-    ///     so rounding at three decimals throws away the digits that decide whether two quants separate at all.
-    /// </summary>
+    /// <summary>Six decimals, for the fidelity numbers.</summary>
+    /// <remarks>
+    ///     <see cref="Rate" />'s three are right for a token rate and wrong here: the measured Q4_K_M/UD-Q3_K_XL
+    ///     perplexity gap is 6.7977 vs 6.9497 with standard errors around 0.074, so rounding at three decimals throws
+    ///     away the digits that decide whether two quants separate at all.
+    /// </remarks>
     private static string Precise(double? value) =>
         value?.ToString("0.######", CultureInfo.InvariantCulture) ?? string.Empty;
 

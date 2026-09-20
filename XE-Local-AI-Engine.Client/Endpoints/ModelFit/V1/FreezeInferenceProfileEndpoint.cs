@@ -7,13 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Inference;
 
 /// <summary>
-///     FastEndpoints handler that freezes an Explored inference profile (POST model-fit/profiles/freeze). The target
-///     profile id is carried in the body (never a route param), so the POST always has a body. An empty id is rejected
-///     with a 400. Calls <see cref="IInferenceProfileService.FreezeAsync" />, which is gated on a most-recent successful
-///     benchmark — a freeze without a justifying benchmark (or any store-gate rejection) returns a failed result that is
-///     surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>, not an exception. On success it returns the frozen
-///     profile view.
+///     FastEndpoints handler that freezes an Explored inference profile (POST model-fit/profiles/freeze) through
+///     <see cref="IInferenceProfileService.FreezeAsync" />, returning the frozen profile view.
 /// </summary>
+/// <remarks>
+///     The profile id rides the body, never a route param, so the POST always has a body. An empty id, a freeze the
+///     gate finds no most-recent successful benchmark for, and any other store-gate rejection are 400s via
+///     <c>AddError</c> + <c>Send.ErrorsAsync</c>, not exceptions.
+/// </remarks>
 public sealed class FreezeInferenceProfileEndpoint : Endpoint<FreezeInferenceProfileRequest, InferenceProfileActionResponse>
 {
     private readonly IInferenceProfileService _inferenceProfileService;

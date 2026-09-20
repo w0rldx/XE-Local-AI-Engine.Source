@@ -75,9 +75,12 @@ public sealed class CompareBenchmarkCellsRequest
 
 /// <summary>
 ///     The paired difference between two cells over the items they BOTH answered rankably, with a 95 % percentile
-///     bootstrap interval. Present only when at least three items are shared — an absent entry for a requested pair
-///     means "too few shared items", and is never a delta of zero.
+///     bootstrap interval.
 /// </summary>
+/// <remarks>
+///     Present only when at least three items are shared — an absent entry for a requested pair means "too few shared
+///     items", and is never a delta of zero.
+/// </remarks>
 public sealed class BenchmarkPairedDeltaResponse
 {
     public required string ACellKey { get; init; }

@@ -16,12 +16,15 @@ public sealed class ExternalAppRuntimeResponse
     public required string Status { get; init; }
 
     /// <summary>
-    ///     Read straight off <c>ContainerRuntimeResolution.Available</c> — the daemon answered THIS probe. The mapper
-    ///     projects the member and never re-derives it from <see cref="Status" />, so <c>PermissionDenied</c>,
-    ///     <c>ApiVersionTooOld</c> and <c>DaemonIdentityChanged</c> arrive <c>available: true, ready: false</c>: reachable
-    ///     but unusable, which is a different sentence for the operator than "no daemon". It is the single member the SPA
-    ///     renders "Runtime unavailable" from, and it is why a missing daemon rewrites no instance row.
+    ///     Read straight off <c>ContainerRuntimeResolution.Available</c> — the daemon answered THIS probe.
     /// </summary>
+    /// <remarks>
+    ///     The mapper projects the member and never re-derives it from <see cref="Status" />, so
+    ///     <c>PermissionDenied</c>, <c>ApiVersionTooOld</c> and <c>DaemonIdentityChanged</c> arrive
+    ///     <c>available: true, ready: false</c>: reachable but unusable, which is a different sentence for the
+    ///     operator than "no daemon". It is the single member the SPA renders "Runtime unavailable" from, and it is
+    ///     why a missing daemon rewrites no instance row.
+    /// </remarks>
     public required bool Available { get; init; }
 
     public required bool Ready { get; init; }
@@ -42,18 +45,22 @@ public sealed class ExternalAppRuntimeResponse
 
     /// <summary>
     ///     Owner-labelled containers whose install id belongs to another node data directory. Surfaced, never removed:
-    ///     removal stays a manual operator act. It is 0 on an install preview, where nothing reconciles — the count is the
-    ///     reconciler's observation, not a standing fact.
+    ///     removal stays a manual operator act.
     /// </summary>
+    /// <remarks>
+    ///     It is 0 on an install preview, where nothing reconciles — the count is the reconciler's observation, not a
+    ///     standing fact.
+    /// </remarks>
     public required int ForeignInstallContainers { get; init; }
 }
 
-/// <summary>
-///     One daemon, observed or pinned. <see cref="DaemonId" /> and <see cref="ServerVersion" /> are NULLABLE
-///     because a probe that failed reports neither, and an empty-string identity would read as a daemon that answered.
-///     The pinned view is built from the attestation's two members alone, so its <see cref="ServerVersion" /> is
-///     null by construction — the pin records who was approved, not what version answered.
-/// </summary>
+/// <summary>One daemon, observed or pinned.</summary>
+/// <remarks>
+///     <see cref="DaemonId" /> and <see cref="ServerVersion" /> are NULLABLE because a probe that failed reports
+///     neither, and an empty-string identity would read as a daemon that answered. The pinned view is built from the
+///     attestation's two members alone, so its <see cref="ServerVersion" /> is null by construction — the pin records
+///     who was approved, not what version answered.
+/// </remarks>
 public sealed class ExternalAppDaemonView
 {
     public required string? DaemonId { get; init; }
@@ -114,11 +121,11 @@ public sealed class ExternalAppCatalogResponse
     /// <summary>This document is the shipped seed, not a fetched one.</summary>
     public required bool FromBundledSeed { get; init; }
 
-    /// <summary>
-    ///     Set on the POST when THIS refresh failed and the last-good document was returned;
+    /// <summary>Set on the POST when THIS refresh failed and the last-good document was returned.</summary>
+    /// <remarks>
     ///     <see cref="LastRefreshFailure" /> is set when the MOST RECENT refresh failed, read off the snapshot. Two
-    ///     members because "your click just failed" and "the cache is stale" are different sentences.
-    /// </summary>
+    ///     members, because "your click just failed" and "the cache is stale" are different sentences.
+    /// </remarks>
     public required string? RefreshFailureMessage { get; init; }
 
     public required string? LastRefreshFailure { get; init; }
@@ -157,10 +164,13 @@ public sealed class ExternalAppSummaryView
 }
 
 /// <summary>
-///     The full manifest MINUS every <c>files[]</c> entry: those are base64 asset bodies the engine materialises, never
-///     UI data. There is no user or uid member at either level — containers run as the image's default user, and the
-///     boundary is the container's dropped capabilities, seccomp and loopback-only network.
+///     The full manifest MINUS every <c>files[]</c> entry: those are base64 asset bodies the engine materialises,
+///     never UI data.
 /// </summary>
+/// <remarks>
+///     There is no user or uid member at either level — containers run as the image's default user, and the boundary
+///     is the container's dropped capabilities, seccomp and loopback-only network.
+/// </remarks>
 public sealed class ExternalAppManifestView
 {
     public required string Id { get; init; }
@@ -270,20 +280,17 @@ public sealed class ExternalAppResourcesView
 }
 
 /// <summary>
-///     The permissions an installed instance ACTUALLY holds, computed by <c>ExternalAppEffectivePermissions.From</c> and
-///     carried on BOTH previews, so the panel renders a widening rather than the operator diffing two manifests by eye.
-///     <see cref="Services" /> is the per-service breakdown the server actually diffs, projected as a MAP keyed by
-///     service name so the panel can name the service that gained a capability: aggregates alone hide a redistribution,
-///     because moving a capability from service A to service B changes nothing at the union.
-///     <para>
-///         The four application-level aggregates — <see cref="Capabilities" />,
-///         <see cref="WritableRootFilesystem" />, <see cref="PublishedPorts" /> and
-///         <see cref="ExtraHosts" /> — complete the eight names of the widening vocabulary
-///         (<c>ExternalAppEffectivePermissions.Vocabulary</c>), so the panel renders all eight from the wire instead
-///         of deriving four of them client-side and disagreeing with the server about what an application may do.
-///         They are DISPLAY ONLY: the verdict stays <c>addedPermissions</c>, which is the server's per-service diff.
-///     </para>
+///     The permissions an installed instance ACTUALLY holds, computed by
+///     <c>ExternalAppEffectivePermissions.From</c> and carried on BOTH previews, so the panel renders a widening
+///     rather than the operator diffing two manifests by eye.
 /// </summary>
+/// <remarks>
+///     <see cref="Services" /> is the per-service breakdown the server actually diffs, projected as a MAP keyed by service name so the panel can name the service that
+///     gained a capability: aggregates alone hide a redistribution, since moving a capability from service A to B changes nothing at the union. The four
+///     application-level aggregates (<see cref="Capabilities" />, <see cref="WritableRootFilesystem" />, <see cref="PublishedPorts" />, <see cref="ExtraHosts" />)
+///     complete the eight names of the widening vocabulary (<c>ExternalAppEffectivePermissions.Vocabulary</c>), so the panel renders all eight from the wire rather
+///     than deriving four client-side. They are DISPLAY ONLY: the verdict stays <c>addedPermissions</c>, the server's per-service diff.
+/// </remarks>
 public sealed class ExternalAppEffectivePermissionsView
 {
     public required bool Internet { get; init; }
@@ -361,23 +368,27 @@ public sealed class ExternalAppInstallPreview
 
     public required int ManifestVersion { get; init; }
 
-    /// <summary>
-    ///     SHA-256 of the canonical manifest JSON as served. Acceptance is bound to this fingerprint, not to the version
-    ///     number: a catalog that republishes v3 with a wider <c>capAdd</c> produces a different sha, and the install 409s
-    ///     <c>ExternalAppManifestChanged</c> instead of installing something the operator never read.
-    /// </summary>
+    /// <summary>SHA-256 of the canonical manifest JSON as served.</summary>
+    /// <remarks>
+    ///     Acceptance is bound to this fingerprint, not to the version number: a catalog that republishes v3 with a
+    ///     wider <c>capAdd</c> produces a different sha, and the install 409s <c>ExternalAppManifestChanged</c>
+    ///     instead of installing something the operator never read.
+    /// </remarks>
     public required string ManifestSha256 { get; init; }
 
     public required bool CanInstall { get; init; }
 
     /// <summary>
-    ///     Why <see cref="CanInstall" /> is false, as the <c>ExternalAppBlockedReason</c> name: <c>GpuNotSupported</c>
-    ///     | <c>RuntimeIncompatible</c> | <c>RuntimeUnavailable</c> | <c>InsufficientMemory</c> | <c>InsufficientDisk</c> |
-    ///     <c>AlreadyInstalled</c> | <c>CatalogMissing</c> | <c>BridgeUnavailable</c>. Null when the install can proceed.
-    ///     The install path cannot produce <c>CatalogMissing</c> and the update path cannot produce
+    ///     Why <see cref="CanInstall" /> is false, as the <c>ExternalAppBlockedReason</c> name; null when the install
+    ///     can proceed.
+    /// </summary>
+    /// <remarks>
+    ///     <c>GpuNotSupported</c> | <c>RuntimeIncompatible</c> | <c>RuntimeUnavailable</c> | <c>InsufficientMemory</c>
+    ///     | <c>InsufficientDisk</c> | <c>AlreadyInstalled</c> | <c>CatalogMissing</c> | <c>BridgeUnavailable</c>. The
+    ///     install path cannot produce <c>CatalogMissing</c> and the update path cannot produce
     ///     <c>AlreadyInstalled</c>, but one closed vocabulary means the SPA ships eight labels once instead of two
     ///     overlapping sets.
-    /// </summary>
+    /// </remarks>
     public required string? BlockedReason { get; init; }
 
     public required Guid? ExistingInstanceId { get; init; }
@@ -399,11 +410,12 @@ public sealed class ExternalAppInstallPreview
     public required ExternalAppResourceCheckView ResourceCheck { get; init; }
 }
 
-/// <summary>
-///     Body of <c>GET …/instances/{instanceId}/update-preview</c>. <see cref="Variables" /> is every variable the
-///     TARGET manifest declares; a variable that was <c>secret</c> in the installed snapshot and is plain in the target
-///     arrives UNSET, because the stored value is discarded on update and never returned in plaintext.
-/// </summary>
+/// <summary>Body of <c>GET …/instances/{instanceId}/update-preview</c>.</summary>
+/// <remarks>
+///     <see cref="Variables" /> is every variable the TARGET manifest declares; a variable that was <c>secret</c> in
+///     the installed snapshot and is plain in the target arrives UNSET, because the stored value is discarded on
+///     update and never returned in plaintext.
+/// </remarks>
 public sealed class ExternalAppUpdatePreview
 {
     public required string ApplicationId { get; init; }
@@ -479,11 +491,14 @@ public sealed class ExternalAppInstanceView
     public required string RuntimeProvider { get; init; }
 
     /// <summary>
-    ///     The INSTALLED snapshot, sanitised — <c>files[]</c> stripped, every <c>secret</c> variable's default nulled. The
-    ///     detail page and the Settings tab read this and never the catalog: an instance installed at v2 must render what
-    ///     it is running, not what the catalog now offers, and a <c>catalogMissing</c> instance must still render at all.
-    ///     <c>testedVersion</c> reaches the client as <c>manifest.testedVersion</c>; there is no duplicate top-level member.
+    ///     The INSTALLED snapshot, sanitised — <c>files[]</c> stripped, every <c>secret</c> variable's default nulled.
     /// </summary>
+    /// <remarks>
+    ///     The detail page and the Settings tab read this and never the catalog: an instance installed at v2 must
+    ///     render what it is running, not what the catalog now offers, and a <c>catalogMissing</c> instance must still
+    ///     render at all. <c>testedVersion</c> reaches the client as <c>manifest.testedVersion</c>; there is no
+    ///     duplicate top-level member.
+    /// </remarks>
     public required ExternalAppManifestView Manifest { get; init; }
 
     public required IReadOnlyList<ExternalAppPublishedPortView> PublishedPorts { get; init; }
@@ -521,11 +536,13 @@ public sealed class ExternalAppInstanceView
 
 /// <summary>
 ///     The admitted row as a lifecycle command left it — the snapshot taken before the operation runner starts, which
-///     is why <see cref="Status" /> carries <c>Starting</c>, <c>Stopping</c>, <c>Updating</c> and
-///     <c>Resetting</c>. It is deliberately NOT the full <see cref="ExternalAppInstanceView" />: admission returns a
-///     summary, and re-reading the instance to fill a manifest into a 202 body would return a row a concurrent
-///     operation may already have moved.
+///     is why <see cref="Status" /> carries <c>Starting</c>, <c>Stopping</c>, <c>Updating</c> and <c>Resetting</c>.
 /// </summary>
+/// <remarks>
+///     It is deliberately NOT the full <see cref="ExternalAppInstanceView" />: admission returns a summary, and
+///     re-reading the instance to fill a manifest into a 202 body would return a row a concurrent operation may
+///     already have moved.
+/// </remarks>
 public sealed class ExternalAppInstanceSummaryView
 {
     public required Guid Id { get; init; }
@@ -570,20 +587,24 @@ public sealed class ExternalAppPublishedPortView
     public required string? OpenPath { get; init; }
 
     /// <summary>
-    ///     Composed here rather than in the SPA — the loopback host and the manifest's open path are both server facts —
-    ///     and emitted ONLY for the port whose open path is non-null. At most one such port exists per application, so a
-    ///     non-null url identifies the Open target unambiguously and the SPA selects on it rather than on "the first
-    ///     published port".
+    ///     Composed here rather than in the SPA — the loopback host and the manifest's open path are both server facts
+    ///     — and emitted ONLY for the port whose open path is non-null.
     /// </summary>
+    /// <remarks>
+    ///     At most one such port exists per application, so a non-null url identifies the Open target unambiguously
+    ///     and the SPA selects on it rather than on "the first published port".
+    /// </remarks>
     public required string? Url { get; init; }
 }
 
 /// <summary>
 ///     FULL instance views, not summaries: a card shows the Open target and the runtime provider, and the store reads
 ///     every row whole regardless, so a summary here would only force one GET per card before the page could render.
+/// </summary>
+/// <remarks>
 ///     The lifecycle 202s still answer <see cref="ExternalAppInstanceSummaryView" /> — an admitted row is a snapshot,
 ///     and re-reading it to fill in a manifest would return a row a concurrent operation may already have moved.
-/// </summary>
+/// </remarks>
 public sealed class ListExternalAppInstancesResponse
 {
     public required IReadOnlyList<ExternalAppInstanceView> Items { get; init; }
@@ -595,12 +616,12 @@ public sealed record InstallExternalAppRequest
 
     public string? DisplayName { get; init; }
 
-    /// <summary>
-    ///     The manifest the operator was shown, echoed from the install preview. Both members are required and both are
-    ///     checked at admission; either one mismatching the manifest the catalog now serves is a 409
-    ///     <c>ExternalAppManifestChanged</c>, and the SPA re-fetches the preview and re-shows step 1. The version alone
-    ///     is not enough: a republished v3 keeps its number.
-    /// </summary>
+    /// <summary>The manifest the operator was shown, echoed from the install preview.</summary>
+    /// <remarks>
+    ///     Both members are required and both are checked at admission; either one mismatching the manifest the
+    ///     catalog now serves is a 409 <c>ExternalAppManifestChanged</c>, and the SPA re-fetches the preview and
+    ///     re-shows step 1. The version alone is not enough: a republished v3 keeps its number.
+    /// </remarks>
     public required int ManifestVersion { get; init; }
 
     /// <summary>The fingerprint of the manifest the operator was shown.</summary>
@@ -613,12 +634,15 @@ public sealed record InstallExternalAppRequest
 }
 
 /// <summary>
-///     Body of <c>POST …/update</c>. The fingerprint is echoed from the update preview and binds the acceptance to what
-///     was read. <see cref="AcceptPermissions" /> acknowledges a WIDENING; the SERVER owns the diff, so it is a boolean
-///     and never a list the client could get wrong. <see cref="Variables" /> is the target manifest's full declared set,
-///     exactly as install sends it — the target may declare variables the installed snapshot never had, and one of them
-///     may be required.
+///     Body of <c>POST …/update</c>; the fingerprint is echoed from the update preview and binds the acceptance to
+///     what was read.
 /// </summary>
+/// <remarks>
+///     <see cref="AcceptPermissions" /> acknowledges a WIDENING; the SERVER owns the diff, so it is a boolean and
+///     never a list the client could get wrong. <see cref="Variables" /> is the target manifest's full declared set,
+///     exactly as install sends it — the target may declare variables the installed snapshot never had, and one of
+///     them may be required.
+/// </remarks>
 public sealed record UpdateExternalAppRequest
 {
     public Guid InstanceId { get; init; }
@@ -662,20 +686,25 @@ public sealed record ExternalAppInstanceRequest
 
 /// <summary>
 ///     The four POST lifecycle verbs — start, stop, restart and reset — which send <c>expectedVersion</c> in the body.
-///     UNINSTALL has its own <see cref="UninstallExternalAppRequest" />, because its version rides in the query and the
-///     shape has to reach the generated client. A stale value is a 409 <c>ExternalAppVersionConflict</c>, echoed from
-///     the instance's <c>version</c>. There are no idempotency keys in V1, so this is the whole mechanism.
 /// </summary>
+/// <remarks>
+///     UNINSTALL has its own <see cref="UninstallExternalAppRequest" />, because its version rides in the query and
+///     the shape has to reach the generated client. A stale value is a 409 <c>ExternalAppVersionConflict</c>, echoed
+///     from the instance's <c>version</c>. There are no idempotency keys in V1, so this is the whole mechanism.
+/// </remarks>
 public sealed record ExternalAppInstanceCommandRequest
 {
     public Guid InstanceId { get; init; }
 
     /// <summary>
-    ///     <c>long?</c>, not <c>required long</c>. A required value type does not establish PRESENCE: an omitted member
-    ///     binds to the default, so a command with no version would act at version 0 — a client that forgot the guard
-    ///     would be treated as one that supplied it. Nullable plus a <c>NotNull</c> rule makes omission a 400
-    ///     distinguishable from an explicit <c>0</c>. Endpoints read the value AFTER validation.
+    ///     <c>long?</c>, not <c>required long</c>, so an omission is a 400 distinguishable from an explicit <c>0</c>.
     /// </summary>
+    /// <remarks>
+    ///     A required value type does not establish PRESENCE: an omitted member binds to the default, so a command
+    ///     with no version would act at version 0 — a client that forgot the guard would be treated as one that
+    ///     supplied it. Nullable plus a <c>NotNull</c> rule is what makes the difference. Endpoints read the value
+    ///     AFTER validation.
+    /// </remarks>
     public long? ExpectedVersion { get; init; }
 }
 
@@ -713,12 +742,15 @@ public sealed record ExternalAppInstanceEventFeedRequest
 }
 
 /// <summary>
-///     <see cref="Items" /> is ASCENDING by sequence — oldest first, which is both the store's natural order and
-///     what the History tab wants: it loads from 0 in pages of 200 and renders newest at the bottom, and "Load more"
-///     advances <c>afterSequence</c> to the LAST returned sequence. There is no descending mode and no <c>before</c>
-///     bound: one direction means the hub replay and the paged feed can share one store member without a reversal step
-///     that could disagree.
+///     <see cref="Items" /> is ASCENDING by sequence — oldest first, which is both the store's natural order and what
+///     the History tab wants.
 /// </summary>
+/// <remarks>
+///     The tab loads from 0 in pages of 200 and renders newest at the bottom, and "Load more" advances
+///     <c>afterSequence</c> to the LAST returned sequence. There is no descending mode and no <c>before</c> bound: one
+///     direction means the hub replay and the paged feed can share one store member without a reversal step that
+///     could disagree.
+/// </remarks>
 public sealed class ListExternalAppInstanceEventsResponse
 {
     public required IReadOnlyList<ExternalAppInstanceEventView> Items { get; init; }

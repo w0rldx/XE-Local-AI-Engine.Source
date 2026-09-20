@@ -20,11 +20,14 @@ public sealed class ListGoldenConversationsRequest
 }
 
 /// <summary>
-///     Create request for a golden conversation case. The owning agent id travels in the route; the body
-///     carries the operator-authored fields. The endpoint serializes <see cref="InputTurns" />/<see cref="Assertion" />
-///     to camelCase JSON strings before persisting (the runner parses the same shape). At least one of
-///     <see cref="Assertion" />/<see cref="Rubric" /> must be present (enforced by the service).
+///     Create request for a golden conversation case: the owning agent id travels in the route, the body carries the
+///     operator-authored fields.
 /// </summary>
+/// <remarks>
+///     The endpoint serializes <see cref="InputTurns" />/<see cref="Assertion" /> to camelCase JSON strings before
+///     persisting (the runner parses the same shape). At least one of <see cref="Assertion" />/<see cref="Rubric" />
+///     must be present, enforced by the service.
+/// </remarks>
 public sealed class CreateGoldenConversationRequest
 {
     public Guid AgentDefinitionId { get; init; }
@@ -68,12 +71,12 @@ public sealed class ApproveGoldenConversationRequest
     public Guid GoldenConversationId { get; init; }
 }
 
-/// <summary>
-///     Wire projection of a stored golden conversation case. <see cref="InputTurns" /> and
-///     <see cref="Assertion" /> are deserialized from the persisted JSON strings into the typed DTOs at the boundary so
-///     the client never parses raw JSON. The free-text source is encrypted at rest; this projection is the decrypted,
-///     typed view.
-/// </summary>
+/// <summary>Wire projection of a stored golden conversation case.</summary>
+/// <remarks>
+///     <see cref="InputTurns" /> and <see cref="Assertion" /> are deserialized from the persisted JSON strings into
+///     the typed DTOs at the boundary, so the client never parses raw JSON. The free-text source is encrypted at rest;
+///     this projection is the decrypted, typed view.
+/// </remarks>
 public sealed class GoldenConversationResponse
 {
     public required Guid Id { get; init; }
@@ -114,10 +117,13 @@ public sealed class ListGoldenConversationsResponse
 }
 
 /// <summary>
-///     Per-run counts for a golden harvest: thumbs-up sources scanned and how the candidates split across created /
-///     already-harvested (duplicate) / skipped. Counts only — the harvested turn/answer text never crosses the wire here
-///     (it rides the encrypted golden columns surfaced by the golden list).
+///     Per-run counts for a golden harvest: thumbs-up sources scanned, and how the candidates split across created /
+///     already-harvested (duplicate) / skipped.
 /// </summary>
+/// <remarks>
+///     Counts only — the harvested turn/answer text never crosses the wire here; it rides the encrypted golden columns
+///     surfaced by the golden list.
+/// </remarks>
 public sealed class GoldenHarvestResponse
 {
     public required int ThumbsUpScanned { get; init; }

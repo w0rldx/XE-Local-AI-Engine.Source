@@ -19,13 +19,13 @@ public class BenchmarkFidelityResponse
     /// <summary>
     ///     <c>none</c> when this run has no KL-divergence measurement, <c>ok</c> when its numbers are comparable
     ///     against the project's current settings, and <c>kld-stale</c> when they are not.
-    ///     <para>
-    ///         When it is <c>kld-stale</c>, the three KLD fields below are NULL and the client renders a badge. They
-    ///         are withheld rather than sent for the client to grey out, because a number a reader can still see is a
-    ///         number they will still compare — and a figure measured over a different corpus, chunk count or base
-    ///         model means something different from the one beside it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     When it is <c>kld-stale</c>, the three KLD fields below are NULL and the client renders a badge. They are
+    ///     withheld rather than sent for the client to grey out, because a number a reader can still see is a number
+    ///     they will still compare — and a figure measured over a different corpus, chunk count or base model means
+    ///     something different from the one beside it.
+    /// </remarks>
     public required string KldState { get; init; }
 
     public double? KldMean { get; init; }

@@ -8,10 +8,12 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
 ///     One run with every node run's summary AND the graph the run pinned at start — what the run view draws, without
-///     having to read the definition and hope it has not been edited since. Deliberately WITHOUT the node-run
-///     documents: they are the largest thing a run stores, and a graph of two hundred nodes would carry all of them on
-///     a page that renders none.
+///     having to read the definition and hope it has not been edited since.
 /// </summary>
+/// <remarks>
+///     Deliberately WITHOUT the node-run documents: they are the largest thing a run stores, and a graph of two
+///     hundred nodes would carry all of them on a page that renders none.
+/// </remarks>
 public sealed class GetGraphWorkflowRunEndpoint : Endpoint<GraphWorkflowRunRequest, GraphWorkflowRunResponse>
 {
     private readonly IGraphWorkflowRunService _runs;

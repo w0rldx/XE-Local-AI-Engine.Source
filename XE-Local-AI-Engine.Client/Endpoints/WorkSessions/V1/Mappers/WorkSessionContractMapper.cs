@@ -85,10 +85,13 @@ internal static class WorkSessionContractMapper
         new() { Items = [.. value.Select(ToResponse)], LastSequence = HighestSequence(value.Select(static item => item.Sequence)), HasMore = value.Count >= requestedLimit };
 
     /// <summary>
-    ///     The page's HIGHEST sequence, not its last row's. The feeds are ordered by creation step so a re-stamped task
-    ///     keeps its place in the plan, which means the newest sequence can sit anywhere in the page; paging from the
-    ///     last row would replay every row after it, forever.
+    ///     The page's HIGHEST sequence, not its last row's.
     /// </summary>
+    /// <remarks>
+    ///     The feeds are ordered by creation step so a re-stamped task keeps its place in the plan, which means the
+    ///     newest sequence can sit anywhere in the page; paging from the last row would replay every row after it,
+    ///     forever.
+    /// </remarks>
     private static long HighestSequence(IEnumerable<long> sequences)
     {
         var highest = 0L;

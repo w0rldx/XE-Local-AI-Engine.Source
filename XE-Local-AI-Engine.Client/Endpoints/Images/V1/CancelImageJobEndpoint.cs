@@ -6,10 +6,12 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
 /// <summary>
-///     FastEndpoints handler that requests cancellation of an image job (POST images/jobs/{jobId}/cancel). The coordinator
-///     picks clean-cancel (queued) vs kill+restart (generating) internally; a queued/generating job returns 204, an
-///     unknown or already-terminal job returns 404. Operator-gated.
+///     Requests cancellation of an image job. Operator-gated.
 /// </summary>
+/// <remarks>
+///     The coordinator picks clean-cancel (queued) against kill-and-restart (generating) internally; a queued or
+///     generating job returns 204, an unknown or already-terminal job 404.
+/// </remarks>
 public sealed class CancelImageJobEndpoint : Endpoint<ImageJobRouteRequest>
 {
     private readonly IImageJobCoordinator _coordinator;

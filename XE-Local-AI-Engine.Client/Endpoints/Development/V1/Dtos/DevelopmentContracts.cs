@@ -81,11 +81,11 @@ public sealed class DevelopmentTemplateRequest
     public Guid TemplateId { get; init; }
 }
 
-/// <summary>
-///     Creates a new repository from a template and registers it. The engine clones the template, drops its
-///     <c>.git</c>, re-initializes, and makes one initial commit — so the result is a standalone repository with no
-///     remote and none of the template's history.
-/// </summary>
+/// <summary>Creates a new repository from a template and registers it.</summary>
+/// <remarks>
+///     The engine clones the template, drops its <c>.git</c>, re-initializes and makes one initial commit, so the
+///     result is a standalone repository with no remote and none of the template's history.
+/// </remarks>
 public sealed class CreateDevelopmentRepositoryFromTemplateRequest
 {
     public Guid TemplateId { get; init; }
@@ -113,21 +113,14 @@ public sealed class ReconnectDevelopmentRepositoryRequest
 /// <summary>
 ///     Whether Development Mode is available, which sandbox provider it executes on, and — only when that provider is
 ///     the container one — whether the container runtime is usable.
-///     <para>
-///         Three axes rather than one boolean, deliberately. <see cref="Enabled" /> is this node's own configuration
-///         switch; <see cref="SandboxProvider" /> is the provider that per-feature selection actually resolved; and
-///         <see cref="ContainerRuntime" /> is the preflight of the machine's container runtime, which ADR 0004 makes a
-///         hard requirement for Development Mode execution <em>on that provider</em>. Collapsing them would tell an
-///         operator only that Development Mode is unavailable, which is the least useful true statement available: the
-///         whole value of the preflight is naming which axis is the problem and what to do about it.
-///     </para>
-///     <para>
-///         <see cref="ContainerRuntime" /> is null when <see cref="SandboxProvider" /> is not the container provider,
-///         and that null is the honest answer rather than a missing value: a node running Development Mode on the
-///         supervised process sandbox has no container dependency to report, and reporting an unreachable daemon
-///         anyway would present a false blocker on a feature that works.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Three axes rather than one boolean, deliberately: <see cref="Enabled" /> is this node's configuration switch, <see cref="SandboxProvider" /> the provider
+///     per-feature selection resolved, and <see cref="ContainerRuntime" /> the preflight ADR 0004 makes a hard requirement for execution <em>on that provider</em>.
+///     Collapsing them would say only that Development Mode is unavailable — the least useful true statement — when the whole value of the preflight is naming
+///     which axis is the problem. <see cref="ContainerRuntime" /> is null off the container provider, and that null is honest: such a node has no container
+///     dependency, and reporting an unreachable daemon would be a false blocker on a feature that works.
+/// </remarks>
 public sealed class DevelopmentCapabilityResponse
 {
     /// <summary>This node's Development Mode configuration switch.</summary>
@@ -146,33 +139,26 @@ public sealed class DevelopmentCapabilityResponse
     public required IReadOnlyList<SandboxIsolationSummaryResponse> Isolation { get; init; }
 }
 
-/// <summary>
-///     What one sandbox ROLE is actually isolated by on this host, as the operator sees it.
-///     <para>
-///         Reported per role rather than once for the node because provider selection is per feature: AgentHome,
-///         Development Mode and work sessions each resolve their own provider, and on a mixed node they do not share a
-///         posture. Reporting a single number would have to pick one of them and be wrong about the others.
-///     </para>
-///     <para>
-///         Every boolean here is the SERVED posture: the role's own ADR 0007 declaration in <c>SandboxWorkloads</c>
-///         intersected with the provider's advertised <c>SandboxProviderCapabilities</c> — the same flags the
-///         fail-closed launch policy gates on. Both halves are load-bearing. Reading the capabilities alone claimed a
-///         filesystem boundary for Development Mode, whose declaration asks for none and which runs the host toolchain
-///         with the worktree mounted; reading the declaration alone would claim a boundary on a host that cannot serve
-///         one. <c>DevelopmentContractMapper.ToIsolationSummary</c> owns the rule. Nothing here describes a hardware or
-///         VM boundary: no provider in this tree can prove one, so <see cref="Level" /> deliberately has no term for
-///         it.
-///     </para>
-/// </summary>
+/// <summary>What one sandbox ROLE is actually isolated by on this host, as the operator sees it.</summary>
+/// <remarks>
+///     Per role, not per node: provider selection is per feature, so a mixed node has no single posture. Every boolean is the SERVED posture — the role's own ADR 0007
+///     declaration in <c>SandboxWorkloads</c> INTERSECTED with the provider's advertised <c>SandboxProviderCapabilities</c>, never a capability read-out; both halves
+///     are load-bearing, and <c>DevelopmentContractMapper.ToIsolationSummary</c> owns the rule. Nothing here describes a hardware or VM boundary, so
+///     <see cref="Level" /> deliberately has no term for it. See docs/wiki/12-security-and-privacy.md ("Backend selection: a feature declares what it needs, and never
+///     names a backend").
+/// </remarks>
 public sealed record SandboxIsolationSummaryResponse
 {
     /// <summary>
-    ///     The sandbox role: <c>agent-home</c>, <c>run_python</c>, <c>mcp-stdio</c>, <c>development</c>, or
-    ///     <c>work-session</c>. <c>run_python</c> and <c>mcp-stdio</c> resolve the same provider instance as
-    ///     <c>agent-home</c> and are still reported separately, because they are the roles that declare a filesystem
-    ///     boundary and their served posture therefore differs on the same backend. <c>mcp-stdio</c> covers a
-    ///     <c>Sandboxed</c> stdio MCP server only; a <c>PrivilegedHost</c> one declares no requirements and has no row.
+    ///     The sandbox role: <c>agent-home</c>, <c>run_python</c>, <c>mcp-stdio</c>, <c>development</c> or
+    ///     <c>work-session</c>.
     /// </summary>
+    /// <remarks>
+    ///     <c>run_python</c> and <c>mcp-stdio</c> resolve the same provider instance as <c>agent-home</c> and are
+    ///     still reported separately, because they are the roles that declare a filesystem boundary and their served
+    ///     posture therefore differs on the same backend. <c>mcp-stdio</c> covers a <c>Sandboxed</c> stdio MCP server
+    ///     only; a <c>PrivilegedHost</c> one declares no requirements and has no row.
+    /// </remarks>
     public required string Role { get; init; }
 
     /// <summary>The provider resolved for that role (<c>fake</c>, <c>process</c>, or <c>docker</c>).</summary>
@@ -185,10 +171,13 @@ public sealed record SandboxIsolationSummaryResponse
     public required string Level { get; init; }
 
     /// <summary>
-    ///     Whether THIS role's commands run with the host filesystem absent from their mount namespace — the role asks for
-    ///     the boundary and the provider serves it. A provider that could serve one to a role that never asks reports
-    ///     <see langword="false" /> here, with the reason saying so.
+    ///     Whether THIS role's commands run with the host filesystem absent from their mount namespace — the role asks
+    ///     for the boundary and the provider serves it.
     /// </summary>
+    /// <remarks>
+    ///     A provider that could serve one to a role that never asks reports <see langword="false" /> here, with the
+    ///     reason saying so.
+    /// </remarks>
     public required bool FilesystemIsolation { get; init; }
 
     /// <summary>
@@ -199,51 +188,54 @@ public sealed record SandboxIsolationSummaryResponse
 
     /// <summary>
     ///     Whether denial is a PRECONDITION for this role on this node rather than a best-effort tightening — the
-    ///     difference between "required" and "where available" in the panel, and it is the operator's whole action on the
-    ///     <c>RequireEgressDenial</c> switches. True when the role's own declaration will not accept egress
-    ///     (<c>run_python</c>), or when the node set the switch for the role's section
-    ///     (<c>AgentHome:Sandbox:RequireEgressDenial</c>, <c>Development:Sandbox:RequireEgressDenial</c>). Required AND
-    ///     <see cref="NetworkIsolation" /> false is the one combination that means the role will REFUSE TO START here:
-    ///     the create site fails closed rather than serving the host's network.
+    ///     difference between "required" and "where available" in the panel.
     /// </summary>
+    /// <remarks>
+    ///     The operator's whole action on the <c>RequireEgressDenial</c> switches. True when the role's own declaration will not accept egress
+    ///     (<c>run_python</c>), or when the node set the switch for the role's section (<c>AgentHome:Sandbox:RequireEgressDenial</c>,
+    ///     <c>Development:Sandbox:RequireEgressDenial</c>). Required AND <see cref="NetworkIsolation" /> false is the one combination that means the role will
+    ///     REFUSE TO START here: the create site fails closed rather than serving the host's network.
+    /// </remarks>
     public required bool NetworkIsolationRequired { get; init; }
 
     /// <summary>
-    ///     Whether memory / PID / CPU ceilings are actually imposed on THIS role — the host can impose them and the role
-    ///     asks for them. <c>SandboxCreateRequest.ResourceLimits</c> is a preference a backend may drop, and a role that
-    ///     passes none gets none however capable the host is, so the capability alone was never the served answer.
+    ///     Whether memory / PID / CPU ceilings are actually imposed on THIS role — the host can impose them and the
+    ///     role asks for them.
     /// </summary>
+    /// <remarks>
+    ///     <c>SandboxCreateRequest.ResourceLimits</c> is a preference a backend may drop, and a role that passes none
+    ///     gets none however capable the host is, so the capability alone is never the served answer.
+    /// </remarks>
     public required bool ResourceLimits { get; init; }
 
     /// <summary>Whether the provider can mount a tree read-only.</summary>
     public required bool ReadOnlyMounts { get; init; }
 
-    /// <summary>
-    ///     Why this role has no filesystem boundary, or null when it has one. Two different sentences, and telling them
-    ///     apart is the operator's whole action: the role does not REQUEST one (nothing to fix — it declares an isolation
-    ///     floor of <c>None</c>), or it requests one and the host cannot serve it (the measured probe reason — install the
-    ///     missing mechanism, or leave the tool off). Null is never "we do not know": a role without the boundary always
-    ///     carries a reason.
-    /// </summary>
+    /// <summary>Why this role has no filesystem boundary, or null when it has one.</summary>
+    /// <remarks>
+    ///     Two different sentences, and telling them apart is the operator's whole action: the role does not REQUEST
+    ///     one (nothing to fix — it declares an isolation floor of <c>None</c>), or it requests one and the host
+    ///     cannot serve it (the measured probe reason — install the missing mechanism, or leave the tool off). Null is
+    ///     never "we do not know": a role without the boundary always carries a reason.
+    /// </remarks>
     public required string? FilesystemIsolationUnavailableReason { get; init; }
 
-    /// <summary>
-    ///     Why this role has no CPU / memory / process-count ceiling, or null when it has one. The same two sentences as
-    ///     the filesystem reason, and the same operator action behind them: the role does not REQUEST ceilings (whether it
-    ///     should is an operator decision, not a bug), or it requests them and the host cannot impose them.
-    /// </summary>
+    /// <summary>Why this role has no CPU / memory / process-count ceiling, or null when it has one.</summary>
+    /// <remarks>
+    ///     The same two sentences as the filesystem reason, and the same operator action behind them: the role does
+    ///     not REQUEST ceilings (whether it should is an operator decision, not a bug), or it requests them and the
+    ///     host cannot impose them.
+    /// </remarks>
     public required string? ResourceLimitsUnavailableReason { get; init; }
 }
 
-/// <summary>
-///     The container-runtime preflight, as the operator sees it.
-///     <para>
-///         Per ADR 0004 there is no unisolated fallback: a node without a working container runtime does not get a
-///         degraded Development Mode. <see cref="Message" /> is therefore the entire user experience of that failure
-///         and always names both the cause and the action; <see cref="Status" /> is the machine-readable code the UI
-///         branches on so the prose is never parsed.
-///     </para>
-/// </summary>
+/// <summary>The container-runtime preflight, as the operator sees it.</summary>
+/// <remarks>
+///     Per ADR 0004 there is no unisolated fallback: a node without a working container runtime does not get a
+///     degraded Development Mode. <see cref="Message" /> is therefore the entire user experience of that failure and
+///     always names both the cause and the action; <see cref="Status" /> is the machine-readable code the UI branches
+///     on so the prose is never parsed.
+/// </remarks>
 public sealed class DevelopmentContainerRuntimeResponse
 {
     /// <summary>Whether a Development Mode container could be created right now.</summary>
@@ -271,11 +263,12 @@ public sealed class DevelopmentContainerRuntimeResponse
     public required DevelopmentContainerDaemonResponse? PinnedDaemon { get; init; }
 }
 
-/// <summary>
-///     One daemon, identified. The installation id is what an operator compares when asked to approve a change, so it
-///     crosses the boundary even though it is opaque — without it the confirmation prompt would be asking someone to
-///     approve "a different daemon" with nothing to distinguish it by.
-/// </summary>
+/// <summary>One daemon, identified.</summary>
+/// <remarks>
+///     The installation id is what an operator compares when asked to approve a change, so it crosses the boundary
+///     even though it is opaque — without it the confirmation prompt would be asking someone to approve "a different
+///     daemon" with nothing to distinguish it by.
+/// </remarks>
 public sealed class DevelopmentContainerDaemonResponse
 {
     /// <summary>The daemon's own installation id.</summary>
@@ -291,15 +284,13 @@ public sealed class DevelopmentContainerDaemonResponse
     public required DateTimeOffset? ConfirmedAtUtc { get; init; }
 }
 
-/// <summary>
-///     Approve the container runtime currently reachable after re-confirming its identity.
-///     <para>
-///         <see cref="DaemonId" /> is required and is the daemon the operator was <em>shown</em>. The confirmation is
-///         refused if that is not the daemon reachable when the request arrives — otherwise an approval issued against
-///         one runtime could land on whichever runtime answered next, and the control would be approving something
-///         nobody looked at.
-///     </para>
-/// </summary>
+/// <summary>Approve the container runtime currently reachable after re-confirming its identity.</summary>
+/// <remarks>
+///     <see cref="DaemonId" /> is required and is the daemon the operator was <em>shown</em>. The confirmation is
+///     refused if that is not the daemon reachable when the request arrives — otherwise an approval issued against one
+///     runtime could land on whichever runtime answered next, and the control would be approving something nobody
+///     looked at.
+/// </remarks>
 public sealed class ConfirmDevelopmentContainerRuntimeRequest
 {
     public string DaemonId { get; init; } = string.Empty;

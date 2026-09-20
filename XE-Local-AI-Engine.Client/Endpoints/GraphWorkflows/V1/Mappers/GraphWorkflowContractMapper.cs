@@ -6,44 +6,41 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
-///     Projects the store's snapshots onto the wire contracts. Entities never reach an endpoint: their text columns are
-///     encrypted at rest, so a mapper reading one would hand the operator ciphertext.
-///     <para>
-///         The graph crosses in BOTH directions here, and deliberately as a deserialize-and-reserialize of the same
-///         field list rather than a projection: what survives a round trip is exactly the members these wire types
-///         enumerate, and a member the stored document carries that they do not is DROPPED on the way back out. That
-///         is safe only because every member the runtime reads is enumerated — a document written to a schema version
-///         this node does not speak is refused by the parser rather than quietly trimmed here. Per-kind node settings
-///         and an edge condition's value ride as raw <see cref="JsonElement" />, which is what keeps a boolean a
-///         boolean — stringified, it would compare against a real boolean as a type mismatch, the evaluator fails
-///         closed, and the edge would silently never fire.
-///     </para>
+///     Projects the store's snapshots onto the wire contracts. Entities never reach an endpoint: their text columns
+///     are encrypted at rest, so a mapper reading one would hand the operator ciphertext.
 /// </summary>
+/// <remarks>
+///     The graph crosses in BOTH directions, deliberately as a deserialize-and-reserialize of the same field list
+///     rather than a projection, so a stored member these wire types do not enumerate is DROPPED on the way out. That
+///     is safe only because every member the runtime reads IS enumerated, and a document written to a schema version
+///     this node does not speak is refused by the parser rather than trimmed here. Per-kind node settings and an edge
+///     condition's value ride as raw <see cref="JsonElement" />: stringified, a boolean would type-mismatch a real one.
+/// </remarks>
 internal static class GraphWorkflowContractMapper
 {
     /// <summary>
-    ///     The stored document's own shape: camelCase, nulls omitted, so a round trip through here still parses. An
-    ///     edge condition's <c>value</c> is the one member this must NOT drop when it is null: it carries its own
+    ///     The stored document's own shape: camelCase, nulls omitted, so a round trip through here still parses.
+    /// </summary>
+    /// <remarks>
+    ///     An edge condition's <c>value</c> is the one member this must NOT drop when it is null: it carries its own
     ///     ignore condition, and an absent value is a <see cref="JsonValueKind.Undefined" /> element rather than a
     ///     null, so an explicit <c>null</c> survives both directions while an absent one stays absent.
-    /// </summary>
+    /// </remarks>
     private static readonly JsonSerializerOptions GraphOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
     /// <summary>
-    ///     The stored graph document as the wire shape. Only two things are normalized: an absent
-    ///     <c>schemaVersion</c> reads as 1, and an absent node or edge list reads as empty rather than null. Everything
-    ///     else — labels, positions, per-kind config, condition values — is handed over exactly as it was stored.
-    ///     <para>
-    ///         Unreadable text THROWS, unlike <see cref="ToDocument" />, and the difference is what each blob is: a
-    ///         node-run document is written by the runtime and a broken one is worth reading a page about, while a
-    ///         graph was parsed before it was ever stored. There is no supported route to a corrupt one, so a 500 with
-    ///         a log is the honest answer — an empty canvas drawn beside a real <c>nodeCount</c> would report the
-    ///         corruption as a graph nobody drew.
-    ///     </para>
+    ///     The stored graph document as the wire shape, normalizing only two things: an absent <c>schemaVersion</c>
+    ///     reads as 1, and an absent node or edge list reads as empty rather than null.
     /// </summary>
+    /// <remarks>
+    ///     Everything else — labels, positions, per-kind config, condition values — is handed over exactly as stored.
+    ///     Unreadable text THROWS, unlike <see cref="ToDocument" />, because a graph was parsed before it was ever
+    ///     stored: there is no supported route to a corrupt one, so a 500 with a log is the honest answer, where an
+    ///     empty canvas drawn beside a real <c>nodeCount</c> would report the corruption as a graph nobody drew.
+    /// </remarks>
     public static GraphWorkflowGraph ToWireGraph(string graphJson)
     {
         var graph = JsonSerializer.Deserialize<GraphWorkflowGraph>(graphJson, GraphOptions) ?? GraphWorkflowGraph.Empty;
@@ -56,15 +53,15 @@ internal static class GraphWorkflowContractMapper
     }
 
     /// <summary>
-    ///     The wire graph as the document that gets stored. An ABSENT schema version is written as 1 — the version an
-    ///     editor that never sends the member is drawing — and a PRESENT integer travels verbatim, 0 and 2 included,
-    ///     so the parser answers it with the version refusal instead of this mapper quietly making it supported.
-    ///     <para>
-    ///         An explicit JSON <c>null</c> and an absent member BOTH mean 1, deliberately: null is the JSON spelling
-    ///         of "I am not saying", not of a version, and there is no unsupported document it could smuggle past the
-    ///         parser — every version this node refuses is an integer, and every present integer passes through.
-    ///     </para>
+    ///     The wire graph as the document that gets stored.
     /// </summary>
+    /// <remarks>
+    ///     An ABSENT schema version is written as 1 — the version an editor that never sends the member is drawing —
+    ///     and a PRESENT integer travels verbatim, 0 and 2 included, so the parser answers it with the version refusal
+    ///     instead of this mapper quietly making it supported. An explicit JSON <c>null</c> and an absent member BOTH
+    ///     mean 1, deliberately: null is the JSON spelling of "I am not saying", not of a version, and it smuggles
+    ///     nothing past the parser, since every version this node refuses is an integer.
+    /// </remarks>
     public static string ToGraphJson(GraphWorkflowGraph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
@@ -195,12 +192,12 @@ internal static class GraphWorkflowContractMapper
 
     /// <summary>
     ///     A stored document as raw JSON on the wire, or null when there is none.
-    ///     <para>
-    ///         Unreadable text answers null rather than throwing. These blobs are written by the runtime, so a document
-    ///         that will not parse is a bug somewhere upstream — and answering 500 to a node-run read would take the one
-    ///         page an operator would diagnose it from away with it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Unreadable text answers null rather than throwing. These blobs are written by the runtime, so a document
+    ///     that will not parse is a bug somewhere upstream — and answering 500 to a node-run read would take away the
+    ///     one page an operator would diagnose it from.
+    /// </remarks>
     private static JsonElement? ToDocument(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))

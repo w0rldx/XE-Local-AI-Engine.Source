@@ -5,11 +5,11 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
-/// <summary>
-///     Deletes a golden conversation case (ownership-guarded — the service only deletes a case owned by the agent named
-///     on the route, so one agent's route cannot touch another agent's case). 204 on delete; 404 when the
-///     case is missing or belongs to another agent. Operator-gated.
-/// </summary>
+/// <summary>Deletes a golden conversation case; 204 on delete. Operator-gated.</summary>
+/// <remarks>
+///     Ownership-guarded: the service only deletes a case owned by the agent named on the route, so one agent's route
+///     cannot touch another agent's case. 404 when the case is missing or belongs to another agent.
+/// </remarks>
 public sealed class DeleteGoldenConversationEndpoint : Endpoint<DeleteGoldenConversationRequest>
 {
     private readonly IGoldenConversationService _goldenConversationService;

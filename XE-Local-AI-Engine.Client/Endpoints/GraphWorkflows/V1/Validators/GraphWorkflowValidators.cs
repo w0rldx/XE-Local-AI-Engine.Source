@@ -5,12 +5,14 @@ using FluentValidation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Shape validation only: lengths, required members and non-empty ids. Whether a graph is ROUTABLE — its kinds, its
-///     join policies, its condition operators, its reachability — is the runtime's parser's answer, not a second
-///     opinion here. It is the same parser run start uses, and a copy of its rules in a validator would be a copy that
-///     drifts; worse, a token refused here would answer with one unkeyed sentence where the parser answers with every
-///     failure keyed to the node or edge that carries it, which is what the editor draws on.
+///     Shape validation only: lengths, required members and non-empty ids.
 /// </summary>
+/// <remarks>
+///     Whether a graph is ROUTABLE — its kinds, join policies, condition operators, reachability — is the runtime's
+///     parser's answer, not a second opinion here. It is the same parser run start uses, and a copy of its rules in a
+///     validator would be a copy that drifts; worse, a token refused here would answer with one unkeyed sentence where
+///     the parser answers with every failure keyed to the node or edge that carries it, which the editor draws on.
+/// </remarks>
 public sealed class CreateGraphWorkflowDefinitionRequestValidator : Validator<CreateGraphWorkflowDefinitionRequest>
 {
     public CreateGraphWorkflowDefinitionRequestValidator()
@@ -39,12 +41,8 @@ public sealed class UpdateGraphWorkflowDefinitionRequestValidator : Validator<Up
         // in between, which is the one thing optimistic concurrency exists to refuse.
         RuleFor(static request => request.Version).GreaterThan(0).WithMessage("A definition update must carry the version it was edited from.");
 
-        // Omitted means unchanged, so only a PRESENT value is bounded. Blank-but-present is a caller mistake, not a
-        // request to clear a name the definition cannot do without.
-        // Chained `.When(...)`, never the block `When(pred, () => ...)` form: only the chained one sets the
-        // per-component condition FastEndpoints' schema processor reads, and with the block form it saw an
-        // unconditional NotEmpty and emitted this OPTIONAL member as required on the wire. The rules are unchanged —
-        // a condition at the end of a chain covers every validator before it (ApplyConditionTo.AllValidators default).
+        // Omitted means unchanged, so only a PRESENT value is bounded: blank-but-present is a caller mistake, not a request to clear a name the definition cannot do without.
+        // Chained `.When(...)`, never the block form, or this OPTIONAL member ships as required — docs/wiki/09-api-and-hubs.md ("Conventions").
         RuleFor(static request => request.Name)
             .NotEmpty()
             .WithMessage("A graph workflow definition needs a name.")
@@ -129,11 +127,14 @@ public sealed class GraphWorkflowRunEventFeedRequestValidator : Validator<GraphW
 }
 
 /// <summary>
-///     Shape validation only. Whether THIS pause can take the named answer — whether it is still waiting, whether its
-///     graph offers that decision, whether its comment is required — is the runtime's answer, and a conflict rather
-///     than a bad request. What is refused here is a token that is not a member name at all, so the handler can
-///     <c>Enum.Parse</c> rather than throw its way to a 500.
+///     Shape validation only.
 /// </summary>
+/// <remarks>
+///     Whether THIS pause can take the named answer — whether it is still waiting, whether its graph offers that
+///     decision, whether its comment is required — is the runtime's answer, and a conflict rather than a bad request.
+///     What is refused here is a token that is not a member name at all, so the handler can <c>Enum.Parse</c> rather
+///     than throw its way to a 500.
+/// </remarks>
 public sealed class DecideGraphWorkflowNodeRunRequestValidator : Validator<DecideGraphWorkflowNodeRunRequest>
 {
     private static readonly string[] DecisionNames = Enum.GetNames<GraphWorkflowDecisionKind>();

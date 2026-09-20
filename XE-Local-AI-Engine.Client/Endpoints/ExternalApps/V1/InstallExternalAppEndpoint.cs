@@ -6,18 +6,13 @@ using XE_Local_AI_Engine.Client.Endpoints.ExternalApps.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 
-/// <summary>
-///     Installs one application. 202 with the ADMITTED row: admission is synchronous — validate, gate, create the row,
-///     append the event — and the pull, the create and the start run on the operation runner afterwards, so the awaited
-///     task completes in milliseconds even when the image pull behind it runs for minutes. The endpoint never awaits
-///     completion, and the request's own token covers the admission only, so a disconnecting browser cannot abort an
-///     install halfway.
-///     <para>
-///         The body echoes the <c>manifestVersion</c> AND the <c>manifestSha256</c> the preview returned. A mismatch is
-///         a 409 <c>ExternalAppManifestChanged</c>: a catalog that republishes v3 with a wider capability set keeps its
-///         version number, so the fingerprint is what binds the acceptance to what was read.
-///     </para>
-/// </summary>
+/// <summary>Installs one application, answering 202 with the ADMITTED row.</summary>
+/// <remarks>
+///     The body echoes the <c>manifestVersion</c> AND the <c>manifestSha256</c> the preview returned. A mismatch is a
+///     409 <c>ExternalAppManifestChanged</c>: a catalog that republishes v3 with a wider capability set keeps its
+///     version number, so the fingerprint is what binds the acceptance to what was read. Admission, the operation
+///     runner and the hub: docs/wiki/09-api-and-hubs.md ("Design notes on the newer endpoint families").
+/// </remarks>
 public sealed class InstallExternalAppEndpoint : Endpoint<InstallExternalAppRequest, ExternalAppInstanceSummaryView>
 {
     private readonly IExternalAppService _apps;

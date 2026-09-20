@@ -7,13 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 
 /// <summary>
-///     Mints a credential and returns the plaintext ONCE. Every later read returns prefix, label and timestamps only —
-///     the node stores a digest, so a key not captured here is unrecoverable and the operator must generate another.
-///     <para>
-///         Supplying <c>PrincipalId</c> ROTATES a credential for an existing integrator: the new key inherits the
-///         sessions and in-flight executions the old one owned.
-///     </para>
+///     Mints a credential and returns the plaintext ONCE.
 /// </summary>
+/// <remarks>
+///     Every later read returns prefix, label and timestamps only — the node stores a digest, so a key not captured
+///     here is unrecoverable and the operator must generate another. Supplying <c>PrincipalId</c> ROTATES a credential
+///     for an existing integrator: the new key inherits the sessions and in-flight executions the old one owned.
+/// </remarks>
 public sealed class GenerateIntegrationApiKeyEndpoint : Endpoint<GenerateIntegrationApiKeyRequest, GenerateIntegrationApiKeyResponse>
 {
     private readonly IIntegrationApiKeyService _apiKeyService;

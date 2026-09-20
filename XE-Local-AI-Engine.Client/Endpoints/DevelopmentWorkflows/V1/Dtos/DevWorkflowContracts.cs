@@ -67,10 +67,13 @@ public sealed class UpdateDevWorkflowDefinitionRequest
 
     /// <summary>
     ///     <c>required</c> is what puts <c>version</c> in the schema's <c>required</c> array, and it is the only thing
-    ///     that does: the validator's <c>GreaterThan(0)</c> is the one rule shape FastEndpoints' schema processor does
-    ///     not read requiredness from, so a caller generated against the old spec could omit the member and get a 400
-    ///     from a contract that never said the field was mandatory.
+    ///     that does.
     /// </summary>
+    /// <remarks>
+    ///     The validator's <c>GreaterThan(0)</c> is the one rule shape FastEndpoints' schema processor does not read
+    ///     requiredness from, so without <c>required</c> a generated caller could omit the member and get a 400 from a
+    ///     contract that never said the field was mandatory.
+    /// </remarks>
     public required int Version { get; init; }
 
     public string? Name { get; init; }
@@ -210,10 +213,8 @@ public sealed class DevWorkflowArtifactRequest
     public Guid ArtifactId { get; init; }
 }
 
-// The wire graph. A field-for-field mirror of the stored graph document rather than a projection of it, so the mapper
-// is a deserialize and nothing else — and so a definition read back, edited and saved keeps every field it arrived
-// with. There is no edge table anywhere: this shape is composed from the encrypted graph blob on the definition row or
-// the run row, which is the single source of routing truth.
+// The wire graph: a field-for-field mirror of the stored graph document rather than a projection, so the mapper is a deserialize and nothing else, and a definition read
+// back, edited and saved keeps every field it arrived with. There is no edge table — the shape is composed from the encrypted graph blob, the single source of routing truth.
 
 public sealed record DevWorkflowGraph(
     int SchemaVersion,
@@ -221,8 +222,8 @@ public sealed record DevWorkflowGraph(
     IReadOnlyList<DevWorkflowGraphEdge> Edges,
     /// <summary>
     ///     The template's own waiver of the rule that a node writing outside its sandbox is reached through a human
-    ///     gate. Absent means <c>false</c>: the rule is new, so nothing already stored can be relying on the waiver, and
-    ///     a definition written before this field keeps every byte it had.
+    ///     gate. Absent means <c>false</c> — nothing stored can rely on the waiver — so a definition written without
+    ///     the field keeps every byte it had.
     /// </summary>
     bool? AllowUngatedWrites = null)
 {
@@ -230,12 +231,14 @@ public sealed record DevWorkflowGraph(
 }
 
 /// <summary>
-///     <c>ToolMode</c> is what a Tool node does with the repository it names — <c>Validate</c> or <c>Apply</c> — and it
-///     rides the wire because a definition that loses it loses its apply node: copying the seeded template through this
-///     contract silently produced an ordinary validation node where "apply the approved patches" had been. Absent means
-///     <c>Validate</c>, exactly as the runtime's parser reads it, so a definition written before this field keeps every
-///     byte it had.
+///     <c>ToolMode</c> is what a Tool node does with the repository it names — <c>Validate</c> or <c>Apply</c>.
 /// </summary>
+/// <remarks>
+///     It rides the wire because a definition that loses it loses its apply node: copying the seeded template through
+///     a contract without it turns an "apply the approved patches" node into an ordinary validation one. Absent means
+///     <c>Validate</c>, exactly as the runtime's parser reads it, so a definition written WITHOUT this field keeps
+///     every byte it had.
+/// </remarks>
 public sealed record DevWorkflowGraphNode(
     string NodeKey,
     string NodeType,
@@ -256,14 +259,14 @@ public sealed record DevWorkflowGraphNode(
     string? ToolMode,
     /// <summary>
     ///     How many times this node's fix loop may re-run before the run stops and asks a human. Only meaningful beside
-    ///     a <c>RetryTarget</c>, and refused without one. Absent means no per-loop cap at all — the run-wide attempt
-    ///     budget is what bounds it then, exactly as it does today.
+    ///     a <c>RetryTarget</c>, and refused without one. Absent means NO per-loop cap: the run-wide attempt budget is
+    ///     what bounds it then.
     /// </summary>
     int? MaxLoopIterations,
     /// <summary>
-    ///     Whether this node belongs to a materialization template subtree — a clone-in-waiting the run gives no node
-    ///     run to. DERIVED on the way out from the runtime's own parser, never authored and never stored: the save path
-    ///     nulls it, so a graph that round-trips through a definition PUT keeps exactly the bytes it arrived with.
+    ///     Whether this node belongs to a materialization template subtree — a clone-in-waiting with no node run.
+    ///     DERIVED from the parser on the way out, never authored or stored, so a graph round-tripping a PUT keeps the
+    ///     bytes it arrived with.
     /// </summary>
     bool? IsTemplate = null);
 
@@ -273,14 +276,14 @@ public sealed record DevWorkflowMaterialization(string TemplateNodeKey, string A
 public sealed record DevWorkflowGraphEdge(string From, string To, DevWorkflowEdgeCondition? Condition);
 
 /// <summary>
-///     <see cref="Value" /> is a JSON scalar — string, number, boolean or null — and not a string member. A boolean
-///     that round-trips as <c>"true"</c> would compare against a real boolean as a type mismatch, and the evaluator
-///     fails closed, so the edge would silently never fire.
-///     <para>
-///         Nullable so that the two operators which take no value (<c>exists</c>, <c>notExists</c>) round-trip as the
-///         absent member they are stored as, rather than as an unwritable undefined element.
-///     </para>
+///     <see cref="Value" /> is a JSON scalar — string, number, boolean or null — and not a string member.
 /// </summary>
+/// <remarks>
+///     A boolean that round-trips as <c>"true"</c> would compare against a real boolean as a type mismatch, and the
+///     evaluator fails closed, so the edge would silently never fire. Nullable so that the two operators which take no
+///     value (<c>exists</c>, <c>notExists</c>) round-trip as the absent member they are stored as, rather than as an
+///     unwritable undefined element.
+/// </remarks>
 public sealed record DevWorkflowEdgeCondition(string Path, string Op, JsonElement? Value);
 
 // Responses. Enums cross the wire as their NAMES and are typed string here; the client re-narrows them.
@@ -434,21 +437,27 @@ public sealed class DevWorkflowRunResponse
 public sealed class DevWorkflowNodeRouteResponse
 {
     /// <summary>
-    ///     The out-edges whose condition fired. This means "the edge was satisfied", NEVER "the successor ran": admission
-    ///     is a question about a target's INBOUND edges, so an <c>All</c> join can still skip on a dead sibling edge and an
-    ///     <c>Any</c> join can admit on one. For a human gate, the node's own output document is authoritative.
+    ///     The out-edges whose condition fired. This means "the edge was satisfied", NEVER "the successor ran".
     /// </summary>
+    /// <remarks>
+    ///     Admission is a question about a target's INBOUND edges, so an <c>All</c> join can still skip on a dead
+    ///     sibling edge and an <c>Any</c> join can admit on one. For a human gate, the node's own output document is
+    ///     authoritative.
+    /// </remarks>
     public required IReadOnlyList<string> Satisfied { get; init; }
 
     /// <summary>The out-edges whose condition did not fire.</summary>
     public required IReadOnlyList<string> Dead { get; init; }
 
     /// <summary>
-    ///     The out-edges of a node run whose SKIP the state machine waived — an operator's own skip rather than one that
-    ///     cascaded off something dead. Its own bucket because neither of the others is true of it: a waived edge does not
-    ///     admit an <c>Any</c> successor the way a satisfied one does, and it does not kill an <c>All</c> one the way a
-    ///     dead one does. Empty on a row written before this bucket existed, which is also what it means.
+    ///     The out-edges of a node run whose SKIP the state machine waived — an operator's own skip rather than one
+    ///     that cascaded off something dead.
     /// </summary>
+    /// <remarks>
+    ///     Its own bucket because neither of the others is true of it: a waived edge does not admit an <c>Any</c>
+    ///     successor the way a satisfied one does, and it does not kill an <c>All</c> one the way a dead one does.
+    ///     Empty on a row written WITHOUT this bucket, which is also what empty means.
+    /// </remarks>
     public required IReadOnlyList<string> Waived { get; init; }
 
     /// <summary>The decision a human gate settled on; null on every other node type.</summary>
@@ -688,15 +697,15 @@ public sealed class DevWorkflowNodeRunDetailResponse
 }
 
 /// <summary>
-///     Which rule text actually applied, by content hash. Names the document without copying its body, so the audit
+///     Which rule text actually applied, by content hash: it names the document without copying its body, so the audit
 ///     stays truthful — and verifiable — after the rule set is edited or deleted.
-///     <para>
-///         <see cref="ContentSha256" /> is what the node run RECORDED and never changes.
-///         <see cref="CurrentContentSha256" /> is what the rule set holds now, or null when it has since been deleted —
-///         so a reader can say "edited since this ran" or "deleted" instead of having to assume the document still says
-///         what it said. Comparing the two is the whole reason the hash is recorded.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="ContentSha256" /> is what the node run RECORDED and never changes.
+///     <see cref="CurrentContentSha256" /> is what the rule set holds now, or null when it has since been deleted — so
+///     a reader can say "edited since this ran" or "deleted" instead of having to assume the document still says what
+///     it said. Comparing the two is the whole reason the hash is recorded.
+/// </remarks>
 public sealed class DevWorkflowAppliedRuleSetResponse
 {
     public required Guid Id { get; init; }
@@ -709,15 +718,14 @@ public sealed class DevWorkflowAppliedRuleSetResponse
 }
 
 /// <summary>
-///     Where a rule set applies. An EMPTY axis means "matches everything"; a populated one is an exact,
-///     case-insensitive membership test — no globbing, no precedence, no expression language. Everything applicable is
-///     injected.
-///     <para>
-///         Two axes, not four. <c>languages</c> and <c>taskTypes</c> were dropped before they shipped because nothing
-///         produces either value: under "every populated axis must match" they could only ever apply to nothing, while
-///         looking on the wire as though they worked.
-///     </para>
+///     Where a rule set applies: an EMPTY axis means "matches everything", a populated one is an exact,
+///     case-insensitive membership test — no globbing, no precedence, no expression language.
 /// </summary>
+/// <remarks>
+///     Everything applicable is injected. Two axes, not four: <c>languages</c> and <c>taskTypes</c> are absent because
+///     nothing produces either value, so under "every populated axis must match" they could only ever apply to
+///     nothing, while looking on the wire as though they worked.
+/// </remarks>
 public sealed record DevWorkflowRuleScope(IReadOnlyList<Guid> ProjectIds, IReadOnlyList<string> NodeTypes);
 
 public sealed class DevWorkflowRuleSetResponse
@@ -917,11 +925,13 @@ public sealed class ListDevWorkflowArtifactsResponse
 }
 
 /// <summary>
-///     Whether this node serves development workflows at all. The one response every node answers, switch on or off:
-///     the rest of the family is 404ed by request-path middleware when <c>DevWorkflows:Enabled</c> is false, and a
+///     Whether this node serves development workflows at all — the one response every node answers, switch on or off.
+/// </summary>
+/// <remarks>
+///     The rest of the family is 404ed by request-path middleware when <c>DevWorkflows:Enabled</c> is false, and a
 ///     bodyless 404 is indistinguishable from a broken route, so without this the SPA can only say "could not load".
 ///     Deliberately one field — Development's richer capability payload reports a sandbox this family does not have.
-/// </summary>
+/// </remarks>
 public sealed class DevWorkflowCapabilityResponse
 {
     public required bool Enabled { get; init; }

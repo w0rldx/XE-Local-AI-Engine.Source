@@ -16,14 +16,14 @@ public sealed record LocalModelProxyApiKeyResponse
 }
 
 /// <summary>
-///     Whether a credential exists, plus the connection details an operator needs to configure an external tool. Returned
-///     by the GET when no key has been generated, so the UI can render the "generate one" state without a 404 round trip.
-///     <para>
-///         There is deliberately no key field on this type. The plaintext appears only on
-///         <see cref="GeneratedLocalModelProxyApiKeyResponse" />, so "the GET cannot leak the key" is enforced by the
-///         shape of the contract rather than by a reviewer noticing a comment.
-///     </para>
+///     Whether a credential exists, plus the connection details an operator needs to configure an external tool.
 /// </summary>
+/// <remarks>
+///     Returned by the GET even when no key has been generated, so the UI can render the "generate one" state without
+///     a 404 round trip. There is deliberately no key field on this type: the plaintext appears only on
+///     <see cref="GeneratedLocalModelProxyApiKeyResponse" />, so "the GET cannot leak the key" is enforced by the
+///     shape of the contract rather than by a reviewer noticing a comment.
+/// </remarks>
 public sealed record LocalModelProxyApiKeyStatusResponse
 {
     public required bool Configured { get; init; }
@@ -35,10 +35,13 @@ public sealed record LocalModelProxyApiKeyStatusResponse
 }
 
 /// <summary>
-///     The response to minting a key: the status shape plus the ONE-TIME plaintext <see cref="Key" />. The node keeps
-///     only a SHA-256 digest, so this response body is the only place the key will ever exist. An operator who does not
-///     copy it now cannot recover it — the only remedy is to generate another and reconfigure every client.
+///     The response to minting a key: the status shape plus the ONE-TIME plaintext <see cref="Key" />.
 /// </summary>
+/// <remarks>
+///     The node keeps only a SHA-256 digest, so this response body is the only place the key will ever exist. An
+///     operator who does not copy it now cannot recover it: the only remedy is to generate another and reconfigure
+///     every client.
+/// </remarks>
 public sealed record GeneratedLocalModelProxyApiKeyResponse
 {
     public required bool Configured { get; init; }

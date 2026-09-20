@@ -39,9 +39,12 @@ public sealed class BenchmarkRubricCriterionDto
 
     /// <summary>
     ///     How the criterion is decided: <c>llm</c> (the default an omitted value takes), <c>exact</c>, <c>regex</c>,
-    ///     <c>jsonSchema</c>, <c>mathAnswer</c>, <c>constraint</c> or <c>pythonTests</c>. Optional on the way in so a caller written
-    ///     before verifiable criteria existed keeps working unchanged; always present on the way out.
+    ///     <c>jsonSchema</c>, <c>mathAnswer</c>, <c>constraint</c> or <c>pythonTests</c>.
     /// </summary>
+    /// <remarks>
+    ///     Optional on the way in, so a caller that names no kind keeps working unchanged; always present on the way
+    ///     out.
+    /// </remarks>
     public string? Kind { get; init; }
 
     /// <summary>The kind's configuration as JSON, or null for <c>llm</c>. Validated when the judge policy is saved.</summary>
@@ -75,11 +78,12 @@ public sealed class BenchmarkJudgePolicyResponse
     /// <summary>The judge prompt version this revision was stored under.</summary>
     public int? PromptVersion { get; init; }
 
-    /// <summary>
-    ///     True when <see cref="PromptVersion" /> is not the one this build judges under. The revision still READS —
-    ///     the project opens, the export works, existing scores stay ranked — but no NEW judging will run against it
-    ///     until the operator re-saves the judge, which mints a revision under the current version and re-judges.
-    /// </summary>
+    /// <summary>True when <see cref="PromptVersion" /> is not the one this build judges under.</summary>
+    /// <remarks>
+    ///     The revision still READS — the project opens, the export works, existing scores stay ranked — but no NEW
+    ///     judging will run against it until the operator re-saves the judge, which mints a revision under the current
+    ///     version and re-judges.
+    /// </remarks>
     public bool PromptVersionOutdated { get; init; }
 }
 

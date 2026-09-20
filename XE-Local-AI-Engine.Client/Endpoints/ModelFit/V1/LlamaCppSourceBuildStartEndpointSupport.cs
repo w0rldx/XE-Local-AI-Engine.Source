@@ -3,10 +3,13 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Shared mapping of a <see cref="LlamaCppSourceBuildStartOutcome" /> to the stable machine reason code + user-safe
-///     message the source-build start endpoint returns as a 409. The build-kind noun is a parameter so the wording stays
-///     byte-for-byte what it was, and a second start surface could reuse it without duplicating the outcome switch.
+///     Shared mapping of a <see cref="LlamaCppSourceBuildStartOutcome" /> to the stable machine reason code and
+///     user-safe message the source-build start endpoint returns as a 409.
 /// </summary>
+/// <remarks>
+///     The build-kind noun is a parameter, so each surface keeps its exact wording and a second start surface can reuse
+///     the mapping without duplicating the outcome switch.
+/// </remarks>
 internal static class LlamaCppSourceBuildStartEndpointSupport
 {
     /// <summary>Build-kind label used by the generic source-build start endpoint ("A source build...", "...the source runtime").</summary>

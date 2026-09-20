@@ -71,12 +71,11 @@ public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest,
     ///     Refuses an <c>ext:</c> id that no configured connection actually serves.
     /// </summary>
     /// <remarks>
-    ///     A well-formed id whose registration is gone passes the name validator — the grammar is all that check knows —
-    ///     and storing it would make it the node default, from which every chat turn would fail to route with no
-    ///     explanation of why. The reconciliation pass clears such a default when it finds one at startup; this stops
-    ///     one being written in the first place. Only external ids are checked here: an unknown id under any OTHER
-    ///     provider is a legitimate selection (a model still downloading, an Ollama tag pulled later), and this endpoint
-    ///     has never claimed to verify installation.
+    ///     A well-formed id whose registration is gone passes the name validator — the grammar is all that check knows
+    ///     — and storing it would make it the node default, from which every chat turn would fail to route with no
+    ///     explanation. The reconciliation pass clears such a default at startup; this stops one being written at all.
+    ///     Only external ids are checked here: an unknown id under any OTHER provider is a legitimate selection (a
+    ///     model still downloading, an Ollama tag pulled later), and this endpoint does not verify installation.
     /// </remarks>
     private async Task<bool> ValidateExternalRegistrationAsync(string? modelName, CancellationToken ct)
     {

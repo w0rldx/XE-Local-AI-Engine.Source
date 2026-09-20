@@ -22,10 +22,13 @@ public sealed class CreateSkillRequest
     public IReadOnlyDictionary<string, string>? Metadata { get; init; }
 
     /// <summary>
-    ///     Set by the client when this content came from an applied AI draft. It forces the Imported posture server-side
-    ///     — <c>Origin=Imported</c>, <c>Enabled=false</c>, <c>SourceUri="generated"</c> — so model-written instructions
-    ///     land in the same fenced, review-first bucket as any other third-party skill.
+    ///     Set by the client when this content came from an applied AI draft.
     /// </summary>
+    /// <remarks>
+    ///     It forces the Imported posture server-side — <c>Origin=Imported</c>, <c>Enabled=false</c>,
+    ///     <c>SourceUri="generated"</c> — so model-written instructions land in the same fenced, review-first bucket
+    ///     as any other third-party skill.
+    /// </remarks>
     public bool Generated { get; init; }
 
     /// <summary>The draft response's provenance block, echoed back unchanged. Optional; informational (see the type).</summary>
@@ -35,18 +38,13 @@ public sealed class CreateSkillRequest
 /// <summary>
 ///     Update request for a skill. The id travels in the route; the body carries the new field values plus the
 ///     library-wide Enabled toggle.
-///     <para>
-///         The frontmatter fields are on this request because the store writes the frontmatter column from the input
-///         unconditionally: an update that did not carry them back would silently erase an imported skill's
-///         <c>license</c> / <c>allowed-tools</c> / <c>metadata</c> the first time an operator saved an unrelated edit.
-///         This is a full replacement, as PUT implies — an omitted field clears the stored value.
-///     </para>
-///     <para>
-///         <b>Two documented exceptions to that full-replacement rule</b>, both mirroring the store's promote-only
-///         provenance: an omitted <see cref="GenerationMetadata" /> preserves the stored provenance rather than
-///         clearing it, and <see cref="Generated" /> can only tighten posture, never loosen it.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The frontmatter fields are on this request because the store writes the frontmatter column from the input unconditionally: an update that did not carry them back
+///     would silently erase an imported skill's <c>license</c> / <c>allowed-tools</c> / <c>metadata</c> on the first unrelated edit. This is a full replacement, as PUT
+///     implies, with <b>two exceptions</b> mirroring the store's promote-only provenance: an omitted <see cref="GenerationMetadata" /> preserves the stored provenance, and
+///     <see cref="Generated" /> can only tighten posture, never loosen it.
+/// </remarks>
 public sealed class UpdateSkillRequest
 {
     public Guid SkillId { get; init; }
@@ -68,19 +66,24 @@ public sealed class UpdateSkillRequest
     public IReadOnlyDictionary<string, string>? Metadata { get; init; }
 
     /// <summary>
-    ///     Set by the client when the submitted content came from an applied AI draft — including an AI <em>improve</em>
-    ///     of an existing skill. It forces the Imported posture server-side (<c>Origin=Imported</c>,
-    ///     <c>Enabled=false</c>, <c>SourceUri="generated"</c>) from ANY prior state, overriding
-    ///     <see cref="Enabled" />: model-revised content is no more trusted than model-written content, so an improve
-    ///     cannot be used to launder instructions into an already-enabled local skill.
+    ///     Set by the client when the submitted content came from an applied AI draft, an AI <em>improve</em> of an
+    ///     existing skill included.
     /// </summary>
+    /// <remarks>
+    ///     It forces the Imported posture server-side (<c>Origin=Imported</c>, <c>Enabled=false</c>,
+    ///     <c>SourceUri="generated"</c>) from ANY prior state, overriding <see cref="Enabled" />: model-revised
+    ///     content is no more trusted than model-written content, so an improve cannot launder instructions into an
+    ///     already-enabled local skill.
+    /// </remarks>
     public bool Generated { get; init; }
 
     /// <summary>
-    ///     The draft response's provenance block, echoed back unchanged. Optional, and <b>set-if-present</b>: omitting
-    ///     it leaves any stored provenance alone rather than clearing it, so an ordinary edit cannot erase the record of
-    ///     how the skill was originally drafted.
+    ///     The draft response's provenance block, echoed back unchanged. Optional, and <b>set-if-present</b>.
     /// </summary>
+    /// <remarks>
+    ///     Omitting it leaves any stored provenance alone rather than clearing it, so an ordinary edit cannot erase
+    ///     the record of how the skill was originally drafted.
+    /// </remarks>
     public GenerationMetadata? GenerationMetadata { get; init; }
 }
 
@@ -96,15 +99,15 @@ public sealed class DeleteSkillRequest
 
 /// <summary>
 ///     Full wire projection of a stored skill, including the decrypted markdown <see cref="Body" />. Returned by the
-///     create/get/update endpoints; the list endpoint omits the body for payload economy.
-///     <para>
-///         The optional frontmatter fields (<see cref="License" />, <see cref="Compatibility" />,
-///         <see cref="AllowedTools" />, <see cref="Metadata" />) are the spec's own keys, carried verbatim.
-///         <see cref="Origin" />, <see cref="SourceUri" /> and <see cref="ImportedAtUtc" /> are the provenance the
-///         "Imported" badge renders — third-party content is fenced at runtime and denied session-scoped approval, so
-///         an operator has to be able to see which rows those are.
-///     </para>
+///     create, get and update endpoints; the list endpoint omits the body for payload economy.
 /// </summary>
+/// <remarks>
+///     The optional frontmatter fields (<see cref="License" />, <see cref="Compatibility" />,
+///     <see cref="AllowedTools" />, <see cref="Metadata" />) are the spec's own keys, carried verbatim.
+///     <see cref="Origin" />, <see cref="SourceUri" /> and <see cref="ImportedAtUtc" /> are the provenance the
+///     "Imported" badge renders: third-party content is fenced at runtime and denied session-scoped approval, so an
+///     operator has to be able to see which rows those are.
+/// </remarks>
 public sealed class SkillResponse
 {
     public required Guid Id { get; init; }
@@ -150,15 +153,14 @@ public sealed class SkillResponse
 }
 
 /// <summary>
-///     List projection of a stored skill. Deliberately omits <see cref="SkillResponse.Body" /> — bodies can be large
-///     and are fetched per-id when the editor opens. The model never sees this DTO; it carries only the metadata the
-///     library list needs.
-///     <para>
-///         It also omits <see cref="SkillResponse.ResourceCount" />: the list query does not load resources (decrypting
-///         every bundled file of every skill to render a list would be pure waste), so any count here would be a
-///         constant zero dressed up as data. The per-skill GET carries the real number.
-///     </para>
+///     List projection of a stored skill, carrying only the metadata the library list needs; the model never sees it.
 /// </summary>
+/// <remarks>
+///     Deliberately omits <see cref="SkillResponse.Body" />, since bodies can be large and are fetched per-id when the
+///     editor opens, and <see cref="SkillResponse.ResourceCount" />, since the list query does not load resources —
+///     decrypting every bundled file of every skill to render a list would be pure waste — so any count here would be
+///     a constant zero dressed up as data. The per-skill GET carries the real number.
+/// </remarks>
 public sealed class SkillSummaryResponse
 {
     public required Guid Id { get; init; }

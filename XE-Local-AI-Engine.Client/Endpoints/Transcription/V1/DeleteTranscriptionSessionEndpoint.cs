@@ -7,9 +7,11 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>
 ///     Cancels any transcription still running for the session, then deletes the session and its transcript; 404 when
-///     the id is unknown. There is no audio to delete — the uploaded bytes were removed when the upload that produced
-///     the transcript ended. Operator-gated.
+///     the id is unknown. Operator-gated.
 /// </summary>
+/// <remarks>
+///     There is no audio to delete: the uploaded bytes are removed when the upload that produced the transcript ends.
+/// </remarks>
 public sealed class DeleteTranscriptionSessionEndpoint : Endpoint<TranscriptionSessionRouteRequest>
 {
     private readonly ITranscriptionService _sessions;

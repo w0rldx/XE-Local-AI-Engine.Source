@@ -22,18 +22,10 @@ public sealed class ListBenchmarkRunsRequest
 }
 
 /// <remarks>
-///     <para>
-///         With <see cref="RepeatCount" /> above 1, or with <see cref="Warmup" />, the node freezes ONCE and enqueues
-///         several runs against that one snapshot, sharing a <c>repeatGroupId</c> and numbered by <c>repeatIndex</c>
-///         (0 = the warm-up when one was asked for, then 1..N). They are enqueued back-to-back in FIFO order.
-///     </para>
-///     <para>
-///         Each run still spawns its own exclusive <c>llama-server</c> — that is the unchanged design of the benchmark
-///         queue, not an oversight — so repeats measure cold-launch-to-cold-launch jitter INCLUDING model load, which
-///         is what an operator on this node actually experiences. And because the frozen sampling is deterministic
-///         (temperature 0, fixed seed), identical launches produce the identical answer: what repeats quantify is
-///         throughput jitter, not answer variance.
-///     </para>
+///     With <see cref="RepeatCount" /> above 1, or with <see cref="Warmup" />, the node freezes ONCE and enqueues several runs against that one snapshot, sharing a
+///     <c>repeatGroupId</c> and numbered by <c>repeatIndex</c> (0 = the warm-up when one was asked for, then 1..N), back-to-back in FIFO order. Each still spawns its
+///     own exclusive <c>llama-server</c>, by design, so repeats measure cold-launch-to-cold-launch jitter INCLUDING model load. See docs/wiki/20-benchmarks.md
+///     ("Repeat modes and stop reasons").
 /// </remarks>
 public sealed class StartBenchmarkRunRequest
 {
@@ -50,11 +42,12 @@ public sealed class StartBenchmarkRunRequest
     /// <summary>Enqueue one extra run first, flagged as a warm-up: never ranked, never in a group's statistics.</summary>
     public bool Warmup { get; init; }
 
-    /// <summary>
-    ///     What the repeats measure. <c>Throughput</c> (the default) freezes temperature 0 and one seed, so every
-    ///     repeat answers identically and only the machine varies. <c>AnswerVariance</c> advances the seed per repeat
-    ///     at <see cref="AnswerVarianceTemperature" />, so the spread of answers is the measurement.
-    /// </summary>
+    /// <summary>What the repeats measure.</summary>
+    /// <remarks>
+    ///     <c>Throughput</c> (the default) freezes temperature 0 and one seed, so every repeat answers identically and
+    ///     only the machine varies. <c>AnswerVariance</c> advances the seed per repeat at
+    ///     <see cref="AnswerVarianceTemperature" />, so the spread of answers is the measurement.
+    /// </remarks>
     public BenchmarkRepeatMode RepeatMode { get; init; }
 
     /// <summary>The temperature an <c>AnswerVariance</c> group samples at; omitted takes 0.7. Range above 0 to 2.</summary>
@@ -70,11 +63,11 @@ public sealed class StartBenchmarkRunBatchItem
     public string? KvCacheType { get; init; }
 }
 
-/// <summary>
-///     Enqueues a whole model × KV-type matrix in one call. Deliberately NOT all-or-nothing: one ineligible model in a
-///     ten-cell matrix must not cost the operator the other nine. Each cell goes through the same freeze path as the
-///     single-run endpoint and reports its own outcome.
-/// </summary>
+/// <summary>Enqueues a whole model × KV-type matrix in one call.</summary>
+/// <remarks>
+///     Deliberately NOT all-or-nothing: one ineligible model in a ten-cell matrix must not cost the operator the other
+///     nine. Each cell goes through the same freeze path as the single-run endpoint and reports its own outcome.
+/// </remarks>
 public sealed class StartBenchmarkRunBatchRequest
 {
     public Guid ProjectId { get; init; }
@@ -206,14 +199,12 @@ public class BenchmarkRunSummaryResponse
     /// <summary><c>user</c>, <c>judge</c>, or <c>none</c>.</summary>
     public required string QualityScoreSource { get; init; }
 
-    /// <summary>
-    ///     Dense rank within the project, descending. Null when the run is not in the ranked cohort.
-    ///     <para>
-    ///         It is the rank of this run's cell, not of the run alone: what ranks is one model, one KV type and one
-    ///         repeat of the whole task-item suite. On a single-item project a cell is one run and this is the same
-    ///         number it was before task suites.
-    ///     </para>
-    /// </summary>
+    /// <summary>Dense rank within the project, descending. Null when the run is not in the ranked cohort.</summary>
+    /// <remarks>
+    ///     It is the rank of this run's cell, not of the run alone: what ranks is one model, one KV type and one
+    ///     repeat of the whole task-item suite. On a single-item project a cell is one run, so it equals a per-run
+    ///     rank.
+    /// </remarks>
     public int? Rank { get; init; }
 
     /// <summary>
@@ -222,23 +213,14 @@ public class BenchmarkRunSummaryResponse
     /// </summary>
     public int? CellQuality { get; init; }
 
-    /// <summary>
-    ///     Why this run is not in the project's ranked cohort, or null when it is ranked. One of <c>no-score</c>,
-    ///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
-    ///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>,
-    ///     <c>verifier-unavailable</c>, <c>override-unmatched</c>, <c>truncated</c>, <c>incomplete</c>,
-    ///     <c>warmup</c>, <c>item-revised</c>, <c>item-set-revised</c>, or <c>item-incomplete</c>.
-    ///     <para>
-    ///         <c>verifier-unavailable</c> and <c>override-unmatched</c> mean judging was refused: either a
-    ///         deterministic verifier could not run on this node, or the task item names a rubric criterion that no
-    ///         longer exists. Neither yields a score against a substitute criterion.
-    ///     </para>
-    ///     <para>
-    ///         The last three are suite-level: this run's item changed, the project item set changed, or the cell is
-    ///         missing a scorable item. Operator scores cannot rescue the first two because the question or suite has
-    ///         moved since the run was frozen.
-    ///     </para>
-    /// </summary>
+    /// <summary>Why this run is not in the project's ranked cohort, or null when it is ranked.</summary>
+    /// <remarks>
+    ///     One of <c>no-score</c>, <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>,
+    ///     <c>policy-outdated</c>, <c>generation-stale</c>, <c>execution-key-mismatch</c>,
+    ///     <c>execution-identity-incomplete</c>, <c>verifier-unavailable</c>, <c>override-unmatched</c>,
+    ///     <c>truncated</c>, <c>incomplete</c>, <c>warmup</c>, <c>item-revised</c>, <c>item-set-revised</c> or
+    ///     <c>item-incomplete</c>. Meanings and precedence: docs/wiki/20-benchmarks.md ("Exclusion precedence").
+    /// </remarks>
     public string? RankExclusionReason { get; init; }
 
     /// <summary>The leaf task item this run answered, or null on a run frozen before task suites existed.</summary>
@@ -258,21 +240,24 @@ public class BenchmarkRunSummaryResponse
 
     /// <summary>
     ///     Why the primary generation stopped, verbatim from the provider (<c>stop</c>, <c>length</c>,
-    ///     <c>tool_calls</c>, <c>content_filter</c>), or null when none was reported. <c>length</c> means the answer
-    ///     was cut off by the token budget — the run still succeeded, but it does not rank.
-    ///     <para>
-    ///         <c>incomplete</c> is the one value the node derives rather than reads: the turn finished cleanly and
-    ///         produced no answer at all — it ended on an unanswered tool call, or emitted only reasoning. It succeeds
-    ///         and does not rank, exactly like <c>length</c>, and carries the <c>incomplete</c> rank-exclusion reason.
-    ///     </para>
+    ///     <c>tool_calls</c>, <c>content_filter</c>), or null when none was reported.
     /// </summary>
+    /// <remarks>
+    ///     <c>length</c> means the answer was cut off by the token budget — the run still succeeded, but it does not
+    ///     rank. <c>incomplete</c> is the one value the node derives rather than reads: the turn finished cleanly and
+    ///     produced no answer at all, ending on an unanswered tool call or emitting only reasoning. It succeeds and
+    ///     does not rank, exactly like <c>length</c>, and carries the <c>incomplete</c> rank-exclusion reason.
+    /// </remarks>
     public string? PrimaryStopReason { get; init; }
 
     /// <summary>
-    ///     The BASE model this run is a build of — the Hugging Face repo id (lowercased) or the imported name, with the
-    ///     quant tag stripped. Every quant of one model shares it, so a group is one model and its rows are its quants.
-    ///     Use <see cref="ModelContentFingerprint" /> when you mean the exact build instead.
+    ///     The BASE model this run is a build of — the Hugging Face repo id (lowercased) or the imported name, with
+    ///     the quant tag stripped.
     /// </summary>
+    /// <remarks>
+    ///     Every quant of one model shares it, so a group is one model and its rows are its quants. Use
+    ///     <see cref="ModelContentFingerprint" /> when you mean the exact build instead.
+    /// </remarks>
     public required string ModelGroupKey { get; init; }
 
     /// <summary>
@@ -304,18 +289,20 @@ public class BenchmarkRunSummaryResponse
     public int? TotalTokens { get; init; }
 
     /// <summary>
-    ///     Decode throughput (tg) in tokens per second — derived from <see cref="GenerationTokens" /> and the runtime's
-    ///     own decode duration whenever it reported them, so this is generation speed, not the blended
-    ///     prompt-plus-generation figure it used to be. Falls back to <c>totalTokens / durationMs</c> for a runtime that
-    ///     reports no per-request timings. Equal to <see cref="GenerationTokensPerSecond" /> when the split exists.
+    ///     Decode throughput (tg) in tokens per second, derived from <see cref="GenerationTokens" /> and the runtime's
+    ///     own decode duration whenever it reported them — generation speed, not a blended prompt-plus-generation one.
     /// </summary>
+    /// <remarks>
+    ///     Falls back to <c>totalTokens / durationMs</c> for a runtime that reports no per-request timings. Equal to
+    ///     <see cref="GenerationTokensPerSecond" /> when the split exists.
+    /// </remarks>
     public double? TokensPerSecond { get; init; }
 
     /// <summary>
     ///     Time to first token in milliseconds, measured client-side from turn start — so it includes network and
-    ///     adapter overhead on top of the runtime's own prefill time, which is what a caller actually waits. Null for a
-    ///     runtime that reported nothing and for runs frozen before the column existed.
+    ///     adapter overhead on top of the runtime's own prefill time, which is what a caller actually waits.
     /// </summary>
+    /// <remarks>Null for a runtime that reported nothing, and for runs frozen without the column.</remarks>
     public double? TtftMs { get; init; }
 
     /// <summary>Prompt tokens the runtime evaluated, cached ones included. Null when it reported none.</summary>
@@ -331,10 +318,13 @@ public class BenchmarkRunSummaryResponse
     public double? GenerationTokensPerSecond { get; init; }
 
     /// <summary>
-    ///     Prompt tokens served from the prompt cache rather than evaluated, across ALL of the turn's requests. Above
-    ///     zero means the pp figures describe a partially cached prefill, not a cold one — expected on a tool-calling
-    ///     turn, where every round re-sends the conversation and the runtime serves the shared prefix from cache.
+    ///     Prompt tokens served from the prompt cache rather than evaluated, across ALL of the turn's requests.
     /// </summary>
+    /// <remarks>
+    ///     Above zero means the pp figures describe a partially cached prefill, not a cold one — expected on a
+    ///     tool-calling turn, where every round re-sends the conversation and the runtime serves the shared prefix
+    ///     from cache.
+    /// </remarks>
     public int? CachedPromptTokens { get; init; }
 
     /// <summary>
@@ -361,10 +351,13 @@ public class BenchmarkRunSummaryResponse
     public string? PrimaryIntendedExecutableSha256 { get; set; }
 
     /// <summary>
-    ///     <c>true</c> when this run's intended identity was frozen under a launch-identity scheme this build no longer
-    ///     computes, so the two identities are NOT comparable and a difference between them is not drift. Computed by
-    ///     the server; the client never learns the scheme number. <c>null</c> when the run recorded no intent.
+    ///     <c>true</c> when this run's intended identity was frozen under a launch-identity scheme this build no
+    ///     longer computes, so the two identities are NOT comparable and a difference between them is not drift.
     /// </summary>
+    /// <remarks>
+    ///     Computed by the server; the client never learns the scheme number. <c>null</c> when the run recorded no
+    ///     intent.
+    /// </remarks>
     public bool? PrimaryLaunchIdentitySchemeOutdated { get; set; }
 
     /// <summary>What the launch itself recorded. All null until the spawn reached readiness.</summary>
@@ -388,10 +381,12 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
 
     /// <summary>
     ///     False when a budget WAS pinned and the frozen model cannot honour it — it does not reason, or its chat
-    ///     template renders no reasoning end marker, so llama-server would accept the cap and ignore it. The node
-    ///     therefore does not send one, and this is the only place that says so. Null when no budget was pinned, and
-    ///     on runs frozen before the field existed.
+    ///     template renders no reasoning end marker, so llama-server would accept the cap and ignore it.
     /// </summary>
+    /// <remarks>
+    ///     The node therefore does not send one, and this is the only place that says so. Null when no budget was
+    ///     pinned, and on runs frozen without the field.
+    /// </remarks>
     public bool? ReasoningBudgetApplicable { get; init; }
 
     /// <summary>The rubric verdict of the current attempt (<c>BenchmarkJudgeResultV2</c>), or null.</summary>

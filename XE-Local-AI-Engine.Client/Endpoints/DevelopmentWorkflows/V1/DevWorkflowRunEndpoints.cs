@@ -38,11 +38,11 @@ public sealed class ListDevWorkflowRunsEndpoint : Endpoint<ListDevWorkflowRunsRe
 /// <summary>
 ///     Starts a run of one definition for one work item. 202, not 200: the endpoint commits a durable intent and the
 ///     dispatcher advances it out of band, so the body legitimately reads <c>Pending</c>.
-///     <para>
-///         The two refusals both come from the runtime, which holds the pinned graph: a graph with repo-bound nodes on
-///         a work item that names no project is a 400, and a work item that already has a live run is a 409.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The two refusals both come from the runtime, which holds the pinned graph: a graph with repo-bound nodes on a
+///     work item that names no project is a 400, and a work item that already has a live run is a 409.
+/// </remarks>
 public sealed class StartDevWorkflowRunEndpoint : Endpoint<StartDevWorkflowRunRequest, DevWorkflowRunResponse>
 {
     private readonly DevWorkflowRunComposer _composer;
@@ -205,10 +205,12 @@ public sealed class CancelDevWorkflowRunEndpoint : Endpoint<DevWorkflowRunAction
 }
 
 /// <summary>
-///     The run's event log, paged from an exclusive watermark. The one feed that grows without bound, so the one that
-///     pages; its sequences are strictly increasing but NOT contiguous, because the run's counter is shared with node
-///     runs and artifacts.
+///     The run's event log, paged from an exclusive watermark — the one feed that grows without bound.
 /// </summary>
+/// <remarks>
+///     Its sequences are strictly increasing but NOT contiguous, because the run's counter is shared with node runs
+///     and artifacts.
+/// </remarks>
 public sealed class ListDevWorkflowRunEventsEndpoint : Endpoint<DevWorkflowRunEventFeedRequest, ListDevWorkflowRunEventsResponse>
 {
     private readonly DevWorkflowRunQueryService _runQueries;

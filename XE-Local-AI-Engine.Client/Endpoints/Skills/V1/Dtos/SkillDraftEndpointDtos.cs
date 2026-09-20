@@ -30,10 +30,13 @@ public sealed class DraftSkillRequest
 }
 
 /// <summary>
-///     A drafted skill. Nothing here is persisted. Saving this content through the create/update routes with
-///     <c>generated: true</c> lands it in the Imported posture (disabled, fenced) regardless of what the client asks
-///     for; <see cref="GenerationMetadata" /> is echoed back unchanged on that save.
+///     A drafted skill. Nothing here is persisted.
 /// </summary>
+/// <remarks>
+///     Saving this content through the create or update routes with <c>generated: true</c> lands it in the Imported
+///     posture — disabled and fenced — regardless of what the client asks for; <see cref="GenerationMetadata" /> is
+///     echoed back unchanged on that save.
+/// </remarks>
 public sealed class SkillDraftResponse
 {
     public required string Name { get; init; }

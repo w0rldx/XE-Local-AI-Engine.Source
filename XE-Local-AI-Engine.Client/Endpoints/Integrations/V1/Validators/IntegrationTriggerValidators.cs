@@ -5,10 +5,12 @@ using FluentValidation;
 using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1.Mappers;
 
 /// <summary>
-///     Shape validation only: the name pattern, lengths, enum membership and the input-kind array. The two checks that
-///     need a database — the target agent exists, and it is a single agent rather than an orchestrator — belong to
-///     <c>IIntegrationTriggerService</c>, because a probe does not belong in a validator.
+///     Shape validation only: the name pattern, lengths, enum membership and the input-kind array.
 /// </summary>
+/// <remarks>
+///     The two checks that need a database — the target agent exists, and it is a single agent rather than an
+///     orchestrator — belong to <c>IIntegrationTriggerService</c>, because a probe does not belong in a validator.
+/// </remarks>
 public static class IntegrationTriggerValidationRules
 {
     /// <summary>The external name pattern, restated from the entity's own contract.</summary>
@@ -134,9 +136,8 @@ public sealed class ListIntegrationExecutionsRequestValidator : Validator<ListIn
                     .IsInEnum()
                     .WithMessage("Filter on a known execution status.");
 
-                // A set can hold each status at most once, so a repeat is a malformed query rather than a wider
-                // filter, and saying so beats silently deduplicating it. Distinctness also bounds the length: a
-                // duplicate-free list of enum members can never be longer than the enum.
+                // A set can hold each status at most once, so a repeat is a malformed query rather than a wider filter, and saying so beats silently deduplicating it.
+                // Distinctness also bounds the length: a duplicate-free list of enum members can never be longer than the enum.
                 RuleFor(static request => request.Status)
                     .Must(static statuses => statuses!.Distinct().Count() == statuses!.Count)
                     .WithMessage("Name each execution status at most once.");

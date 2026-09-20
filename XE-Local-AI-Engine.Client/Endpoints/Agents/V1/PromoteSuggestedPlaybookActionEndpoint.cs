@@ -7,11 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Analysis, eval, and monitoring workflows: promotes a pending Suggested/Analysis action to Enabled (human approval — staging ≠ active),
-///     gated by the golden-conversation eval result and the enabled-action cap. 404 when the action is missing, belongs to another
-///     agent, or is not a pending suggestion; 409 when the eval has not passed (required / regressed / stale) or the
-///     agent is already at the enabled-action cap (CapReached). Operator-gated.
+///     Analysis, eval and monitoring workflows: promotes a pending Suggested/Analysis action to Enabled (human
+///     approval — staging ≠ active), gated by the golden-conversation eval result and the enabled-action cap.
 /// </summary>
+/// <remarks>
+///     Operator-gated. 404 when the action is missing, belongs to another agent, or is not a pending suggestion; 409
+///     when the eval has not passed (required / regressed / stale) or the agent is already at the enabled-action cap
+///     (CapReached).
+/// </remarks>
 public sealed class PromoteSuggestedPlaybookActionEndpoint : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
 {
     private readonly IPlaybookActionService _playbookActionService;
@@ -26,10 +29,8 @@ public sealed class PromoteSuggestedPlaybookActionEndpoint : Endpoint<SuggestedP
     {
         Post(LocalApiRoutes.Agents.PlaybookActionPromote);
         Policies(NodeAuthorizationPolicies.Operator);
-        // Route-only POST: the agent and action ids come from the route, so a well-behaved client sends no body — and
-        // therefore no Content-Type. The default POST "Accepts" metadata only allows application/json, which
-        // FastEndpoints answers with 415 when the header is absent. Overriding Accepts to accept any content-type lets a
-        // body-less request through (the ids still bind from the route).
+        // Route-only POST: no body means no Content-Type, and the default POST "Accepts" metadata (application/json
+        // only) would answer 415. Accepting any content-type lets the request through; the ids still bind from the route.
         Description(x => x.Accepts<SuggestedPlaybookActionRouteRequest>());
     }
 
@@ -46,16 +47,14 @@ public sealed class PromoteSuggestedPlaybookActionEndpoint : Endpoint<SuggestedP
                 await Send.NotFoundAsync(ct);
                 return;
             case PlaybookPromotionStatus.CapReached:
-                // relevance retrieval and cohort monitoring hard cap: the agent is already at MaxEnabledActions. Surface a typed 409 with the
-                // PascalCase status name (the established wire format every other branch uses) so the panel's parser
-                // recognizes it and can explain the block and prompt an archive/disable.
+                // Relevance-retrieval and cohort-monitoring hard cap: the agent is already at MaxEnabledActions. Surface a typed 409 with the PascalCase status
+                // name (the established wire format every other branch uses) so the panel's parser recognizes it, explains the block and prompts an archive/disable.
                 var capConflict = new PlaybookPromotionConflictResponse { Status = result.Status.ToString(), Reason = ReasonFor(result.Status) };
                 await Send.ResultAsync(Results.Conflict(capConflict));
                 return;
             default:
-                // EvalRequired / EvalRegressed / EvalStale (and a Promoted with no record) → evaluation blocked the
-                // promotion. Surface a typed 409 so the panel can explain why Approve is unavailable (same Conflict-body
-                // convention as the chat/auth endpoints).
+                // EvalRequired / EvalRegressed / EvalStale (and a Promoted with no record) → evaluation blocked the promotion. Surface a typed 409 so the panel
+                // can explain why Approve is unavailable (same Conflict-body convention as the chat/auth endpoints).
                 var conflict = new PlaybookPromotionConflictResponse { Status = result.Status.ToString(), Reason = ReasonFor(result.Status) };
                 await Send.ResultAsync(Results.Conflict(conflict));
                 return;

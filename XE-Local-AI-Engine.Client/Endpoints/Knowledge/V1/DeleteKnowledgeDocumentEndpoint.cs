@@ -6,11 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     FastEndpoints handler for deleting one knowledge-base document (DELETE by id). Delegates to the purge service,
-///     which issues the explicit ordered raw-SQL deletes (vectors → chunks → sections → document row) in one transaction
-///     — the schema cascade cannot be relied upon because foreign-key enforcement is off on the runtime connection — and
-///     then removes the on-disk encrypted bytes. Returns 404 when the id is unknown, otherwise 204.
+///     Deletes one knowledge-base document: 404 when the id is unknown, otherwise 204.
 /// </summary>
+/// <remarks>
+///     Delegates to the purge service, which issues the explicit ordered raw-SQL deletes (vectors, chunks, sections,
+///     document row) in one transaction — the schema cascade cannot be relied upon, because foreign-key enforcement is
+///     off on the runtime connection — and then removes the on-disk encrypted bytes.
+/// </remarks>
 public sealed class DeleteKnowledgeDocumentEndpoint : Endpoint<KnowledgeDocumentRouteRequest>
 {
     private readonly IKnowledgeDocumentPurgeService _purgeService;

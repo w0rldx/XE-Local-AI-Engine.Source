@@ -34,14 +34,15 @@ public sealed class PlaybookActionMonitorItemResponse
 }
 
 /// <summary>
-///     The relevance-retrieval thresholds surfaced alongside the monitor view, plus the active ranker. The panel uses
-///     these to render the "injection is relevance-gated — top-{topK} of N actions, ranked by …" banner.
-///     <see cref="Ranker" /> is the literal lowercase
-///     string "embedding" or "lexical" (matching the React Zod enum); <see cref="EmbeddingModel" /> carries the
-///     configured node-local embedding model when the embedding ranker is active and is omitted (via
-///     <see cref="JsonIgnoreCondition.WhenWritingNull" />) when lexical, so the React Zod optional matches. All fields
-///     serialize camelCase.
+///     The relevance-retrieval thresholds surfaced alongside the monitor view, plus the active ranker, which the panel
+///     renders as the "injection is relevance-gated — top-{topK} of N actions, ranked by …" banner.
 /// </summary>
+/// <remarks>
+///     <see cref="Ranker" /> is the literal lowercase string "embedding" or "lexical", matching the React Zod enum.
+///     <see cref="EmbeddingModel" /> carries the configured node-local embedding model when the embedding ranker is
+///     active and is omitted (via <see cref="JsonIgnoreCondition.WhenWritingNull" />) when lexical, so the React Zod
+///     optional matches. All fields serialize camelCase.
+/// </remarks>
 public sealed class PlaybookRetrievalResponse
 {
     public required int Threshold { get; init; }

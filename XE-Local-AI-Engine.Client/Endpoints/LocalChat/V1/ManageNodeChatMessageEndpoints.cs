@@ -7,10 +7,12 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Branch endpoint: POST clones the conversation up to the target message into a new Origin=Local
-///     conversation. Guarded — branching FROM a remote mirror is rejected with 409 (the source is read-only;
-///     the branch would carry remote content the node can no longer re-drive).
+///     Branch endpoint: POST clones the conversation up to the target message into a new local-origin conversation.
 /// </summary>
+/// <remarks>
+///     Guarded — branching FROM a remote mirror is rejected with 409: the source is read-only, and the branch would
+///     carry remote content the node can no longer re-drive.
+/// </remarks>
 public sealed class BranchNodeChatConversationEndpoint : Endpoint<BranchNodeChatConversationRequest, NodeChatBranchConversationResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence;
@@ -44,9 +46,8 @@ public sealed class BranchNodeChatConversationEndpoint : Endpoint<BranchNodeChat
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct);
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        // A selected-revision entry that fails integrity validation (not a conversation member / wrong group) throws
-        // NodeChatInvalidBranchSelectionException, which the global DomainValidationExceptionHandler answers with a
-        // 400 — fail closed rather than branching a path the caller did not actually specify.
+        // A selected-revision entry that fails integrity validation (not a conversation member, or the wrong group) throws NodeChatInvalidBranchSelectionException, which
+        // the global DomainValidationExceptionHandler answers with a 400: fail closed rather than branching a path the caller did not actually specify.
         var branched = await _chatPersistence.BranchConversationAsync(new NodeChatBranchConversationRequest { ConversationId = req.ConversationId, MessageId = req.MessageId, CreatedAtUtc = createdAtUtc, SelectedRevisions = req.SelectedRevisions },
             ct);
 
@@ -207,10 +208,12 @@ public sealed class SetNodeChatMessageFeedbackEndpoint : Endpoint<SetNodeChatMes
 
 /// <summary>
 ///     Selected path (conversation tree): PUT upserts the conversation's selected-path map
-///     {variantGroupId-&gt;selectedMessageId} WITHOUT sending a message, so navigating &lt; N/N &gt; variants survives a
-///     reload. An empty/absent map clears the stored selection. Guarded — persisting a selection on a
-///     remote-mirror (Origin=Remote) conversation is rejected with 409, consistent with the view-only posture.
+///     {variantGroupId-&gt;selectedMessageId} WITHOUT sending a message, so variant navigation survives a reload.
 /// </summary>
+/// <remarks>
+///     An empty or absent map clears the stored selection. Guarded — persisting a selection on a remote-mirror
+///     conversation is rejected with 409, consistent with the view-only posture.
+/// </remarks>
 public sealed class SetNodeChatSelectedPathEndpoint : Endpoint<SetNodeChatSelectedPathRequest, NodeChatSelectedPathResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence;

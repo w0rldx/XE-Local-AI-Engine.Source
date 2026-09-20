@@ -8,13 +8,15 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
-///     FastEndpoints handler for the node hardware profile (GET model-fit/hardware-profile). Returns the sanitized
-///     RAM/VRAM/GPU-vendor/CPU/free-disk aggregates the advisor sizes its memory-fit budget against — the PHYSICAL
-///     facts — PLUS the runtime device audit: whether the selected inference runtime actually uses the
-///     advertised GPU or has silently fallen back to the CPU (inferenceBackend, cpuFallback, reason, remediation).
-///     Carries NO machine identifier (hostname/serial) — aggregates only. A <c>?refresh=true</c> query bypasses the
-///     in-memory caches and re-probes.
+///     FastEndpoints handler for the node hardware profile (GET model-fit/hardware-profile): the sanitized
+///     RAM/VRAM/GPU-vendor/CPU/free-disk aggregates the advisor sizes its memory-fit budget against.
 /// </summary>
+/// <remarks>
+///     Those are the PHYSICAL facts; the response also carries the runtime device audit — whether the selected
+///     inference runtime actually uses the advertised GPU or has silently fallen back to the CPU (inferenceBackend,
+///     cpuFallback, reason, remediation). It carries NO machine identifier (hostname/serial), aggregates only, and a
+///     <c>?refresh=true</c> query bypasses the in-memory caches and re-probes.
+/// </remarks>
 public sealed class GetHardwareProfileEndpoint : Endpoint<GetHardwareProfileRequest, HardwareProfileResponse>
 {
     private readonly IHardwareProfiler _hardwareProfiler;

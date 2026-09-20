@@ -16,11 +16,13 @@ public enum SkillImportSourceKind
 }
 
 /// <summary>
-///     Phase 1 request. The body is <c>multipart/form-data</c> for all three sources, not just the upload: one content
-///     type means one binding path and one code path, and the two text sources cost a form field each.
-///     <see cref="Source" /> names which payload is authoritative, so an upload that also carries pasted text can never
-///     be resolved ambiguously.
+///     Phase 1 request.
 /// </summary>
+/// <remarks>
+///     The body is <c>multipart/form-data</c> for all three sources, not just the upload: one content type means one
+///     binding path and one code path, and the two text sources cost a form field each. <see cref="Source" /> names
+///     which payload is authoritative, so an upload that also carries pasted text is never resolved ambiguously.
+/// </remarks>
 public sealed class SkillImportPreviewRequest
 {
     public SkillImportSourceKind Source { get; init; }
@@ -39,10 +41,12 @@ public sealed class SkillImportPreviewRequest
 }
 
 /// <summary>
-///     The dry-run report the operator approves. Nothing was written to produce it. <see cref="Token" /> is the
-///     short-lived, single-use handle to the materialised payload behind this report — phase 2 persists that payload
-///     verbatim rather than re-parsing the upload or re-fetching the repository.
+///     The dry-run report the operator approves. Nothing was written to produce it.
 /// </summary>
+/// <remarks>
+///     <see cref="Token" /> is the short-lived, single-use handle to the materialised payload behind this report:
+///     phase 2 persists that payload verbatim rather than re-parsing the upload or re-fetching the repository.
+/// </remarks>
 public sealed class SkillImportPreviewResponse
 {
     public required Guid Token { get; init; }
@@ -57,10 +61,13 @@ public sealed class SkillImportPreviewResponse
 }
 
 /// <summary>
-///     One discovered skill, exactly as it would be written. The <see cref="Body" /> is carried because reviewing the
-///     real instructions is the whole point of a preview; resource <em>contents</em> are not — the operator reviews
-///     what bundled files exist, and a skill may carry dozens of them.
+///     One discovered skill, exactly as it would be written.
 /// </summary>
+/// <remarks>
+///     The <see cref="Body" /> is carried because reviewing the real instructions is the whole point of a preview;
+///     resource <em>contents</em> are not — the operator reviews what bundled files exist, and a skill may carry
+///     dozens of them.
+/// </remarks>
 public sealed class SkillImportCandidateResponse
 {
     public required string Name { get; init; }

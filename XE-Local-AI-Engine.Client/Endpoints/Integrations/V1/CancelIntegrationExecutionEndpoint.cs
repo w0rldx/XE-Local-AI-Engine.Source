@@ -7,13 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
 /// <summary>
-///     Requests cancellation of an execution from the admin surface. The SAME primitive the external route calls, so
-///     the durable stop marker, the terminal transaction and the in-process signal cannot drift between the two.
-///     <para>
-///         Unlike the external route this one is operator-scoped and does NOT go through the key-scoped access helper:
-///         an operator cancelling from the admin UI must be able to reach every row, whichever integrator owns it.
-///     </para>
+///     Requests cancellation of an execution from the admin surface, through the SAME primitive the external route
+///     calls, so the durable stop marker, the terminal transaction and the in-process signal cannot drift.
 /// </summary>
+/// <remarks>
+///     Unlike the external route this one is operator-scoped and does NOT go through the key-scoped access helper: an
+///     operator cancelling from the admin UI must be able to reach every row, whichever integrator owns it.
+/// </remarks>
 public sealed class CancelIntegrationExecutionEndpoint : EndpointWithoutRequest
 {
     private readonly IntegrationExecutionQueryService _executions;
@@ -28,12 +28,8 @@ public sealed class CancelIntegrationExecutionEndpoint : EndpointWithoutRequest
     {
         Post(LocalApiRoutes.Integrations.ExecutionCancel);
         Policies(NodeAuthorizationPolicies.Operator);
-        // The three codes HandleAsync actually answers. Without this the generated client declares the framework's
-        // default 204 alone — a contract lie that hides the 409 a caller has to branch on and promises a code this
-        // endpoint never sends. The 409 is declared as FastEndpoints' OWN problem shape because that is what
-        // AddError + Send.ErrorsAsync writes (see ProblemDetailsProducesExtensions); the 202 and 404 carry no body.
-        // ClearDefaultProduces takes the ONE code to drop: the bare overload clears everything, which silently takes
-        // the 401 and 403 the auth policy contributes with it.
+        // The three codes HandleAsync actually answers: without this the generated client declares the framework's default 204 alone, hiding the 409 a caller must branch on.
+        // The 409 is FastEndpoints' OWN problem shape (see ProblemDetailsProducesExtensions); ClearDefaultProduces takes the ONE code to drop, since the bare overload clears the 401 and 403 too.
         Description(builder => builder.ClearDefaultProduces(StatusCodes.Status204NoContent)
                                       .Produces(StatusCodes.Status202Accepted)
                                       .Produces(StatusCodes.Status404NotFound)

@@ -5,10 +5,12 @@ using FluentValidation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Shape validation only: lengths, enum parsing, non-empty ids and query ranges. Whether a graph is ROUTABLE is
-///     the runtime's parser's answer, not a second opinion here — it is the same parser run start uses, and a copy of
-///     its rules in a validator would be a copy that drifts.
+///     Shape validation only: lengths, enum parsing, non-empty ids and query ranges.
 /// </summary>
+/// <remarks>
+///     Whether a graph is ROUTABLE is the runtime's parser's answer, not a second opinion here — it is the same parser
+///     run start uses, and a copy of its rules in a validator would be a copy that drifts.
+/// </remarks>
 public sealed class CreateDevWorkflowWorkItemRequestValidator : Validator<CreateDevWorkflowWorkItemRequest>
 {
     public CreateDevWorkflowWorkItemRequestValidator()
@@ -33,12 +35,8 @@ public sealed class UpdateDevWorkflowWorkItemRequestValidator : Validator<Update
     {
         RuleFor(static request => request.WorkItemId).NotEmpty();
 
-        // Omitted means unchanged, so only a PRESENT value is bounded. Blank-but-present is a caller mistake, not a
-        // request to clear a title the work item cannot do without.
-        // Chained `.When(...)`, never the block `When(pred, () => ...)` form: only the chained one sets the
-        // per-component condition FastEndpoints' schema processor reads, and with the block form it saw an
-        // unconditional NotEmpty and emitted this OPTIONAL member as required on the wire. The rules are unchanged —
-        // a condition at the end of a chain covers every validator before it (ApplyConditionTo.AllValidators default).
+        // Omitted means unchanged, so only a PRESENT value is bounded: blank-but-present is a caller mistake, not a request to clear a title the work item cannot do without.
+        // Chained `.When(...)`, never the block form, or this OPTIONAL member ships as required — docs/wiki/09-api-and-hubs.md ("Conventions").
         RuleFor(static request => request.Title)
             .NotEmpty()
             .WithMessage("A work item needs a title.")
@@ -88,10 +86,8 @@ public sealed class UpdateDevWorkflowDefinitionRequestValidator : Validator<Upda
         // in between, which is the one thing optimistic concurrency exists to refuse.
         RuleFor(static request => request.Version).GreaterThan(0).WithMessage("A definition update must carry the version it was edited from.");
 
-        // Chained `.When(...)`, never the block `When(pred, () => ...)` form: only the chained one sets the
-        // per-component condition FastEndpoints' schema processor reads, and with the block form it saw an
-        // unconditional NotEmpty and emitted this OPTIONAL member as required on the wire. The rules are unchanged —
-        // a condition at the end of a chain covers every validator before it (ApplyConditionTo.AllValidators default).
+        // Chained `.When(...)`, never the block form: only the chained one sets the per-component condition FastEndpoints' schema processor reads, and with the block form
+        // this OPTIONAL member ships as required on the wire. See docs/wiki/09-api-and-hubs.md ("Conventions").
         RuleFor(static request => request.Name)
             .NotEmpty()
             .WithMessage("A workflow definition needs a name.")
@@ -124,15 +120,13 @@ public sealed class CreateDevWorkflowRuleSetRequestValidator : Validator<CreateD
         RuleFor(static request => request.Scope).Must(HasOnlyKnownNodeTypes).WithMessage(UnknownNodeTypeMessage);
     }
 
-    /// <summary>
-    ///     The node-type axis is a CLOSED token set. A token nothing parses could only ever match nothing, silently —
-    ///     the same trap that got <c>languages</c> and <c>taskTypes</c> dropped — so it is refused at the door.
-    /// </summary>
-    /// <summary>
-    ///     Matched against the NAMES, not through <c>Enum.TryParse</c>: that also accepts the underlying numbers, so
-    ///     "3" and "-1" would be stored verbatim and then never match anything at resolution time — precisely the
-    ///     silent-no-op trap this check exists to close.
-    /// </summary>
+    /// <summary>The node-type axis is a CLOSED token set, refused at the door.</summary>
+    /// <remarks>
+    ///     A token nothing parses could only ever match nothing, silently — the same trap that got <c>languages</c> and
+    ///     <c>taskTypes</c> dropped. Matched against the NAMES, not through <c>Enum.TryParse</c>: that also accepts the
+    ///     underlying numbers, so "3" and "-1" would be stored verbatim and then never match anything at resolution
+    ///     time.
+    /// </remarks>
     internal static bool HasOnlyKnownNodeTypes(DevWorkflowRuleScope? scope) =>
         scope?.NodeTypes is not { } nodeTypes || nodeTypes.All(DevWorkflowTokenRules.IsNamed<DevWorkflowNodeType>);
 
@@ -256,11 +250,13 @@ public sealed class DevWorkflowDecisionRequestValidator : Validator<DevWorkflowD
 }
 
 /// <summary>
-///     The one spelling of "is this a member of that enum". Matched against the NAMES, never through
-///     <c>Enum.TryParse</c>: that also accepts the underlying numbers, so <c>"3"</c> and <c>"-1"</c> would pass the
-///     door and then be read by the endpoint behind it as a member nobody named — a filter that matches nothing, or,
-///     on the decision axis, an intervention the operator never asked for.
+///     The one spelling of "is this a member of that enum".
 /// </summary>
+/// <remarks>
+///     Matched against the NAMES, never through <c>Enum.TryParse</c>: that also accepts the underlying numbers, so
+///     <c>"3"</c> and <c>"-1"</c> would pass the door and then be read by the endpoint behind it as a member nobody
+///     named — a filter that matches nothing, or, on the decision axis, an intervention the operator never asked for.
+/// </remarks>
 internal static class DevWorkflowTokenRules
 {
     public static bool IsNamed<TEnum>(string? raw)
@@ -287,12 +283,13 @@ internal static class DevWorkflowRequestLimits
 
     public const int MaxRuleSetDescriptionLength = 1024;
 
-    /// <summary>
-    ///     A rule set body, bounded by what an objective can actually carry. Deliberately well under
-    ///     <c>DevWorkflowAgentExecutor.MaxObjectiveCharacters</c> (7000), because a body accepted here that the
-    ///     objective then has to cut is policy the operator believed was in force and the agent never fully read. A
-    ///     document longer than this wants splitting into scoped rule sets, which is the whole point of the scope.
-    /// </summary>
+    /// <summary>A rule set body, bounded by what an objective can actually carry.</summary>
+    /// <remarks>
+    ///     Deliberately well under <c>DevWorkflowAgentExecutor.MaxObjectiveCharacters</c> (7000), because a body
+    ///     accepted here that the objective then has to cut is policy the operator believed was in force and the agent
+    ///     never fully read. A document longer than this wants splitting into scoped rule sets, which is the whole
+    ///     point of the scope.
+    /// </remarks>
     public const int MaxRuleSetBodyLength = 4096;
 
     public const int MaxRunPageSize = 200;

@@ -31,11 +31,12 @@ public sealed class BenchmarkExportProjectResponse
     public required BenchmarkJudgePolicyResponse Judge { get; init; }
 }
 
-/// <summary>
-///     The spread of one measured quantity across a repeat group. Population standard deviation, not sample: the runs
-///     ARE the population — this is every measurement that was taken, not a draw from a larger set — and the sample
-///     form would report a spread for a group of one it cannot know.
-/// </summary>
+/// <summary>The spread of one measured quantity across a repeat group.</summary>
+/// <remarks>
+///     Population standard deviation, not sample: the runs ARE the population — this is every measurement that was
+///     taken, not a draw from a larger set — and the sample form would report a spread for a group of one it cannot
+///     know.
+/// </remarks>
 public sealed class BenchmarkExportSampleStatisticsResponse
 {
     public int SampleCount { get; init; }
@@ -78,15 +79,13 @@ public sealed class BenchmarkExportRepeatGroupResponse
 }
 
 /// <summary>
-///     One row shaped like a <c>llama-bench -o json</c> record, for the fields this node has an equivalent of. It is a
-///     TRANSLATION, not a claim of comparability: llama-bench times a fixed synthetic prompt inside one process, while
-///     these numbers come from a real agent turn against a freshly launched server, so the two are the same units and
-///     not the same experiment. Fields llama-bench carries and this node does not observe are omitted rather than
-///     invented.
+///     One row shaped like a <c>llama-bench -o json</c> record, for the fields this node has an equivalent of.
 /// </summary>
 /// <remarks>
-///     Two rows per group, mirroring llama-bench's own shape: a prompt-processing row (<c>nGen</c> 0) and a
-///     token-generation row (<c>nPrompt</c> 0).
+///     A TRANSLATION, not a claim of comparability: llama-bench times a fixed synthetic prompt inside one process, while these numbers come from a real agent turn
+///     against a freshly launched server, so the two are the same units and not the same experiment. Fields llama-bench carries and this node does not observe are
+///     omitted rather than invented. Two rows per group, mirroring llama-bench's own shape: a prompt-processing row (<c>nGen</c> 0) and a token-generation row
+///     (<c>nPrompt</c> 0).
 /// </remarks>
 public sealed class BenchmarkExportLlamaBenchRowResponse
 {
@@ -149,11 +148,12 @@ public sealed class BenchmarkExportResponse
     public int ScorableItemCount { get; init; }
 }
 
-/// <summary>
-///     The published fit a pairwise project's scores were read out of. Exported as ONE object rather than smeared over
-///     the runs, because that is what it is: a fit is a single immutable row whose identity (<see cref="FitKey" />)
-///     covers the whole comparison set. Per-run strengths stay on the run rows, where every other score already is.
-/// </summary>
+/// <summary>The published fit a pairwise project's scores were read out of.</summary>
+/// <remarks>
+///     Exported as ONE object rather than smeared over the runs, because that is what it is: a fit is a single
+///     immutable row whose identity (<see cref="FitKey" />) covers the whole comparison set. Per-run strengths stay on
+///     the run rows, where every other score already is.
+/// </remarks>
 public sealed class BenchmarkExportPairwiseFitResponse
 {
     public Guid Id { get; init; }

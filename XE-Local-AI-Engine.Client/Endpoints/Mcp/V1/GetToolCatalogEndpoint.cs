@@ -7,12 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Exposes the node's full dynamic tool catalog — built-in tools plus every enabled MCP tool — as the single source
-///     the React tool pickers (chat tools overview + the agent-definition tool selector) consume, replacing the former
-///     static front-end constant. Each entry carries its source ("builtin" or "mcp:{serverSlug}") so the UI can
-///     group/badge tools by their originating server. Model-capability gating is intentionally not applied here: this is
-///     the catalog of everything that exists on the node (the offer provider applies gating per active model elsewhere).
+///     The node's full dynamic tool catalog — built-in tools plus every enabled MCP tool — as the single source the
+///     React tool pickers consume: the chat tools overview and the agent-definition tool selector.
 /// </summary>
+/// <remarks>
+///     Each entry carries its source ("builtin" or "mcp:{serverSlug}"), so the UI can group and badge tools by their
+///     originating server. Model-capability gating is intentionally NOT applied here: this is the catalog of
+///     everything that exists on the node, and the offer provider applies gating per active model elsewhere.
+/// </remarks>
 public sealed class GetToolCatalogEndpoint : EndpointWithoutRequest<ToolCatalogResponse>
 {
     private readonly ToolCatalogService _toolCatalog;

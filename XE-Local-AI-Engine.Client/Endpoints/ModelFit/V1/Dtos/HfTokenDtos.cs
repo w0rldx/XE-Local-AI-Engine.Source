@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
 /// <summary>
-///     Body for <c>POST model-fit/hf-token</c>. When <see cref="Token" /> is non-empty the token is stored encrypted at
-///     rest; when it is null/empty the stored token is cleared (returns to anonymous access). The token is a secret: it is
-///     NEVER returned by any endpoint, NEVER logged, and NEVER echoed in a response.
+///     Body for <c>POST model-fit/hf-token</c>: a non-empty <see cref="Token" /> is stored encrypted at rest, a
+///     null/empty one clears the stored token and returns to anonymous access.
 /// </summary>
+/// <remarks>The token is a secret: it is NEVER returned by any endpoint, NEVER logged, and NEVER echoed in a response.</remarks>
 public sealed class SetHfTokenRequest
 {
     /// <summary>The Hugging Face access token to store; null/empty clears the stored token.</summary>

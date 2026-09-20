@@ -68,9 +68,8 @@ public sealed class SaveCloudSettingsRequestValidator : Validator<SaveCloudSetti
 
     private static bool IsApiKeyMode(string? authMode)
     {
-        // Treat anything that does not parse to ManagedIdentity or EntraId (including an unparseable value) as
-        // ApiKey so the key requirement is enforced; the AuthMode rule above surfaces a separate error for an
-        // unparseable value.
+        // Treat anything that does not parse to ManagedIdentity or EntraId, an unparseable value included, as ApiKey so the key requirement is enforced; the AuthMode rule
+        // above surfaces a separate error for an unparseable value.
         return !(Enum.TryParse<AzureFoundryAuthMode>(authMode?.Trim(), ignoreCase: true, out var parsed)
                  && parsed is AzureFoundryAuthMode.ManagedIdentity or AzureFoundryAuthMode.EntraId);
     }

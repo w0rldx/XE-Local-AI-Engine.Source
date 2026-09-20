@@ -6,11 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
 /// <summary>
-///     FastEndpoints handler listing every tracked image-model download (GET images/models/downloads) — in flight and
-///     recently finished. This is how a failed weight download becomes visible: the operator UI polls it while a
-///     download is pending and surfaces the <c>Failed</c> phase with its sanitized reason instead of waiting forever for
-///     a model that will never appear. Mirrors <c>GET model-fit/gguf/downloads</c>. No path, URL, or token is returned.
+///     Every tracked image-model download, in flight and recently finished.
 /// </summary>
+/// <remarks>
+///     This is how a failed weight download becomes visible: the operator UI polls it while a download is pending and
+///     surfaces the <c>Failed</c> phase with its sanitized reason, instead of waiting forever for a model that will
+///     never appear. Mirrors <c>GET model-fit/gguf/downloads</c>. No path, URL or token is returned.
+/// </remarks>
 public sealed class ListImageModelDownloadsEndpoint : EndpointWithoutRequest<ListImageModelDownloadsResponse>
 {
     private readonly IImageModelDownloadCoordinator _downloadCoordinator;

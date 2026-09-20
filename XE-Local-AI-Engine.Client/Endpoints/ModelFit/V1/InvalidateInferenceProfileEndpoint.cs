@@ -8,12 +8,13 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 
 /// <summary>
 ///     FastEndpoints handler that manually invalidates an inference profile, demoting it to Stale (POST
-///     model-fit/profiles/invalidate). The target profile id is carried in the body (never a route param), so the POST
-///     always has a body. An empty id is rejected with a 400. Calls
-///     <see cref="IInferenceProfileService.InvalidateAsync" />; a store-gate rejection (e.g. an unknown profile) returns a
-///     failed result that is surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>, not an exception. On success
-///     it returns the demoted profile view.
+///     model-fit/profiles/invalidate) through <see cref="IInferenceProfileService.InvalidateAsync" />.
 /// </summary>
+/// <remarks>
+///     The profile id rides the body, never a route param, so the POST always has a body. An empty id and a store-gate
+///     rejection (an unknown profile, say) are 400s via <c>AddError</c> + <c>Send.ErrorsAsync</c>, not exceptions;
+///     success returns the demoted profile view.
+/// </remarks>
 public sealed class InvalidateInferenceProfileEndpoint : Endpoint<InvalidateInferenceProfileRequest, InferenceProfileActionResponse>
 {
     private readonly IInferenceProfileService _inferenceProfileService;

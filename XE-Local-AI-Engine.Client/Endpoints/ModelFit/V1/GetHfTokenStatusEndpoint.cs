@@ -6,13 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     FastEndpoints handler reporting whether a Hugging Face access token is configured (GET model-fit/hf-token). Thin
-///     transport over the Hugging Face token store (<see cref="IHfTokenStore.HasTokenAsync" />).
-///     <para>
-///         <b>Secret hygiene:</b> this endpoint returns ONLY a boolean presence flag — it NEVER returns or logs
-///         the token value. The token never leaves the encrypted store.
-///     </para>
+///     FastEndpoints handler reporting whether a Hugging Face access token is configured (GET model-fit/hf-token), a
+///     thin transport over the token store (<see cref="IHfTokenStore.HasTokenAsync" />).
 /// </summary>
+/// <remarks>
+///     <b>Secret hygiene:</b> it returns ONLY a boolean presence flag — it NEVER returns or logs the token value, which
+///     never leaves the encrypted store.
+/// </remarks>
 public sealed class GetHfTokenStatusEndpoint : EndpointWithoutRequest<HfTokenStatusResponse>
 {
     private readonly IHfTokenStore _tokenStore;

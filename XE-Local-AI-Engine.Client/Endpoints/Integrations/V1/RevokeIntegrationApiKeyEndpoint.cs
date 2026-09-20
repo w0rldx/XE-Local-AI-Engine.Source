@@ -6,10 +6,12 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 
 /// <summary>
-///     Revokes a credential. A SOFT revoke — the row is stamped, never deleted — because execution rows and the
-///     content-free audit rows reference the credential's prefix, and deleting it would orphan that history and let the
-///     same display prefix be minted again.
+///     Revokes a credential: a SOFT revoke, so the row is stamped, never deleted.
 /// </summary>
+/// <remarks>
+///     Execution rows and the content-free audit rows reference the credential's prefix, so deleting it would orphan
+///     that history and let the same display prefix be minted again.
+/// </remarks>
 public sealed class RevokeIntegrationApiKeyEndpoint : EndpointWithoutRequest
 {
     private readonly IIntegrationApiKeyService _apiKeyService;

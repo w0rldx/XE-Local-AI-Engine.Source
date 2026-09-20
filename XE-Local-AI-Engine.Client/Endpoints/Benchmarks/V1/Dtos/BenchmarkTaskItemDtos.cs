@@ -2,20 +2,21 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using System.Text.Json;
 
-/// <summary>
-///     One task item as an operator writes it. The index, the revision and the input hash are absent on purpose: the
-///     server owns them, because a client that could name them could present an answer to an old question as an
-///     answer to the current one.
-/// </summary>
+/// <summary>One task item as an operator writes it.</summary>
+/// <remarks>
+///     The index, the revision and the input hash are absent on purpose: the server owns them, because a client that
+///     could name them could present an answer to an old question as an answer to the current one.
+/// </remarks>
 public class BenchmarkTaskItemMutationRequest
 {
     public string Prompt { get; init; } = string.Empty;
 
-    /// <summary>
-    ///     Omitted means <c>prompt</c>. <c>niah</c> writes a long-context probe, which expands into its
-    ///     <c>niahCase</c> children here and now, so each case is an ordinary item with its own id. A <c>niahCase</c>
-    ///     is refused: a case is written by the generator that owns it, never by hand.
-    /// </summary>
+    /// <summary>Omitted means <c>prompt</c>.</summary>
+    /// <remarks>
+    ///     <c>niah</c> writes a long-context probe, which expands into its <c>niahCase</c> children here and now, so
+    ///     each case is an ordinary item with its own id. A <c>niahCase</c> is refused: a case is written by the
+    ///     generator that owns it, never by hand.
+    /// </remarks>
     public string? Kind { get; init; }
 
     /// <summary>Overrides the judge policy's reference answer for this item only.</summary>
@@ -24,12 +25,12 @@ public class BenchmarkTaskItemMutationRequest
     /// <summary>Per-criterion overrides of the judge policy's verifier config, keyed by criterion id.</summary>
     public JsonElement? VerifierConfig { get; init; }
 
-    /// <summary>
-    ///     Generator parameters; null for a plain prompt, required for a <c>niah</c> probe:
+    /// <summary>Generator parameters; null for a plain prompt, required for a <c>niah</c> probe.</summary>
+    /// <remarks>
     ///     <c>{contextTokens[], needleDepthPercent[], needleTemplate?, questionTemplate?, criterionId?, seed?,
     ///     countsTowardScore?}</c>. One case is generated per (length x depth) pair, and a length past the project's
     ///     context window is refused with both numbers named.
-    /// </summary>
+    /// </remarks>
     public JsonElement? GeneratorConfig { get; init; }
 
     /// <summary>Whether this item enters the project's ranked mean, or is reported on its own axis.</summary>
@@ -71,8 +72,8 @@ public sealed class ReorderBenchmarkTaskItemsRequest
 }
 
 /// <param name="InputHash">
-///     What this item asks, as a value. Every run of it is stamped with a copy at freeze, and a run whose stamp no
-///     longer matches answered a question that no longer exists.
+///     What this item asks, as a value. Every run is stamped with a copy at freeze, and a run whose stamp no longer
+///     matches answered a question that no longer exists.
 /// </param>
 public sealed class BenchmarkTaskItemResponse
 {

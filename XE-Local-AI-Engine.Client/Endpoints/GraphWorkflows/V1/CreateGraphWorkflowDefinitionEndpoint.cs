@@ -9,13 +9,13 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
 ///     Creates a definition, refusing a graph the dispatcher could not route.
-///     <para>
-///         Validated by the RUNTIME's own parser rather than by a validator of this endpoint's own: it is the same
-///         parser run start uses, so a graph accepted here is one that will start, and a rule added there cannot be
-///         forgotten here. Its refusal carries EVERY failure, each keyed to the node or edge it belongs to, so the
-///         exception is replayed here rather than in the global single-message handler that could only report one.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Validated by the RUNTIME's own parser rather than by a validator of this endpoint's own: it is the same parser
+///     run start uses, so a graph accepted here is one that will start, and a rule added there cannot be forgotten
+///     here. Its refusal carries EVERY failure, each keyed to the node or edge it belongs to, so the exception is
+///     replayed here rather than in the global single-message handler, which could only report one.
+/// </remarks>
 public sealed class CreateGraphWorkflowDefinitionEndpoint : Endpoint<CreateGraphWorkflowDefinitionRequest, GraphWorkflowDefinitionResponse>
 {
     private readonly IGraphWorkflowDefinitionService _definitions;

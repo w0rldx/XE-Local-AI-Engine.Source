@@ -6,10 +6,12 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     FastEndpoints handler for listing every knowledge-base document (GET). Returns management summaries — including the
-///     decrypted display name (owner-only, over this authenticated surface), pipeline status, chunk count, embedding
-///     model, and a computed stale-model flag — but never chunk content.
+///     Lists every knowledge-base document as a management summary.
 /// </summary>
+/// <remarks>
+///     Each summary carries the decrypted display name (owner-only, over this authenticated surface), pipeline status,
+///     chunk count, embedding model and a computed stale-model flag — but never chunk content.
+/// </remarks>
 public sealed class ListKnowledgeDocumentsEndpoint : Endpoint<ListKnowledgeDocumentsRequest, ListKnowledgeDocumentsResponse>
 {
     private readonly IKnowledgeDocumentCatalogService _catalogService;

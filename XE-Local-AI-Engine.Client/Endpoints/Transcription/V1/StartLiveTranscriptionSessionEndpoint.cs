@@ -10,16 +10,11 @@ using XE_Local_AI_Engine.Client.Services.Transcription;
 ///     registered, so the hub will accept audio for it. Operator-gated.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The client awaits this before it forwards a single frame — without it the hub refuses every push, since a
-///         session with no lanes has nowhere to put audio. It is idempotent: a retry, a double-click or a reconnect
-///         that re-issues the start answers 200 with the same state rather than registering a second set of lanes.
-///     </para>
-///     <para>
-///         404 for an unknown session, 409 for one that already finished (with the terminal status in the body, so
-///         the client can say which), and 400 for a session whose source kind has no live capture path — a file
-///         session, where retrying could never work.
-///     </para>
+///     The client awaits this before it forwards a single frame — without it the hub refuses every push, since a
+///     session with no lanes has nowhere to put audio. Idempotent: a retry, a double-click or a reconnect that
+///     re-issues the start answers 200 with the same state rather than registering a second set of lanes. 404 for an
+///     unknown session, 409 for one that already finished (with the terminal status in the body, so the client can say
+///     which), and 400 for a source kind with no live capture path — a file session, where retrying can never work.
 /// </remarks>
 public sealed class StartLiveTranscriptionSessionEndpoint : Endpoint<TranscriptionSessionRouteRequest, StartLiveTranscriptionSessionResponse>
 {

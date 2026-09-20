@@ -138,10 +138,12 @@ public sealed class ArchiveNodeChatConversationEndpoint : Endpoint<ArchiveNodeCh
 }
 
 /// <summary>
-///     Sets the per-conversation temporary-chat (<c>memory_excluded</c>) override (adaptive memory). Stays on the chat
-///     auth path (Operator policy, same as the other conversation mutations) — NOT the agent-management surface — and
-///     honors the read-only mutation guard like rename/pin/archive.
+///     Sets the per-conversation temporary-chat (<c>memory_excluded</c>) override (adaptive memory).
 /// </summary>
+/// <remarks>
+///     Stays on the chat auth path — the Operator policy the other conversation mutations carry, NOT the
+///     agent-management surface — and honors the read-only mutation guard like rename, pin and archive.
+/// </remarks>
 public sealed class SetNodeChatConversationMemoryExcludedEndpoint : Endpoint<SetNodeChatConversationMemoryExcludedRequest, NodeChatConversationResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence;

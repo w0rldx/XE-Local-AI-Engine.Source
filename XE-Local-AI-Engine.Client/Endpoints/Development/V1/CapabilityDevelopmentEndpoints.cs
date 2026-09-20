@@ -11,27 +11,19 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
-// Constructor injection here is only safe because the IDevelopmentEndpoint marker keeps these endpoints out of
-// FastEndpoints discovery when Development:Enabled is false (see the EndpointDiscoveryOptions.Filter in
-// ConfigureServices): FastEndpoints activates every discovered endpoint once at startup, while AddNodeDevelopment
-// registers their services only when the feature is on. GetDevelopmentCapabilityEndpoint must stay reachable with the
-// feature off and therefore must NOT carry the marker — its dependencies are all registered unconditionally.
+// Constructor injection is safe only because the IDevelopmentEndpoint marker keeps these endpoints out of FastEndpoints discovery (EndpointDiscoveryOptions.Filter) when Development:Enabled is false:
+// discovery activates every endpoint at startup, AddNodeDevelopment only when the feature is on. GetDevelopmentCapabilityEndpoint must stay reachable with it off, so it carries no marker.
 
 /// <summary>
 ///     Reports Development Mode's availability, and the state of the runtime it will actually execute on.
-///     <para>
-///         The container-runtime block is reported only when the resolved
-///         <see cref="IDevelopmentSandboxRuntimeProvider" /> really is the container provider. Reporting it
-///         unconditionally — which this endpoint did before per-feature selection — told operators
-///         that a node without a Docker daemon could not run Development Mode, while Development Mode was in fact
-///         running perfectly well on the supervised process sandbox. An over-reported dependency is not a harmless
-///         extra field: it is a false blocker on a working feature.
-///     </para>
-///     <para>
-///         The one endpoint in this file without the <c>IDevelopmentEndpoint</c> marker: it stays registered with
-///         Development Mode switched off, which is exactly when an operator needs to be told the feature is off.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The container-runtime block is reported ONLY when the resolved <see cref="IDevelopmentSandboxRuntimeProvider" />
+///     really is the container provider: reporting it unconditionally tells an operator that a node without a Docker
+///     daemon cannot run Development Mode while it runs perfectly well on the supervised process sandbox, and an
+///     over-reported dependency is a false blocker on a working feature. The one endpoint in this file without the
+///     <c>IDevelopmentEndpoint</c> marker, so it stays registered with Development Mode switched off.
+/// </remarks>
 public sealed class GetDevelopmentCapabilityEndpoint : EndpointWithoutRequest<DevelopmentCapabilityResponse>
 {
     private readonly IOptions<DevelopmentOptions> _options;
@@ -93,18 +85,16 @@ public sealed class GetDevelopmentCapabilityEndpoint : EndpointWithoutRequest<De
         await Send.OkAsync(new DevelopmentCapabilityResponse { Enabled = enabled, SandboxProvider = providerName, ContainerRuntime = preflight.ToResponse(), Isolation = isolation }, ct);
     }
 
-    // Reaches no daemon: the role providers are DI singletons resolved by the selector, and the container preflight
-    // above is the one call that talks to anything (it keeps its own cached attestation). The containment measurement
-    // is a process-lifetime cache behind a Lazy, so whichever caller touches it first pays for it once and every
-    // capability GET after that is free. This endpoint can be that first caller on a node where nothing has read a
-    // provider's Capabilities yet; the probe is bounded and best-effort by contract, so the cost is one bounded
-    // measurement, never a failure.
+    // Reaches no daemon: the role providers are DI singletons and the container preflight above is the one call that talks to anything (it caches its attestation).
+    // The containment measurement is a process-lifetime Lazy, so the first caller pays once; the probe is bounded and best-effort by contract, never a failure.
     /// <summary>
-    ///     The one fact about the <c>mcp-stdio</c> row that is not a property of the sandbox mechanism: the tier's
-    ///     sensitive-host-root denylist is derived from the account's home directory, so a host that cannot name one
-    ///     refuses every Sandboxed connection. The mapper reports what the backend serves and knows nothing about
-    ///     that, so it is stated here rather than threaded through a projection it does not belong to.
+    ///     The one fact about the <c>mcp-stdio</c> row that is not a property of the sandbox mechanism.
     /// </summary>
+    /// <remarks>
+    ///     The tier's sensitive-host-root denylist is derived from the account's home directory, so a host that cannot
+    ///     name one refuses every Sandboxed connection. The mapper reports what the backend serves and knows nothing
+    ///     about that, so it is stated here rather than threaded through a projection it does not belong to.
+    /// </remarks>
     private static SandboxIsolationSummaryResponse WithHomeDirectoryCaveat(SandboxIsolationSummaryResponse summary)
     {
         if (!string.IsNullOrWhiteSpace(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)))
@@ -132,40 +122,26 @@ public sealed class GetDevelopmentCapabilityEndpoint : EndpointWithoutRequest<De
         return
         [
             DevelopmentContractMapper.ToIsolationSummary("agent-home", SandboxWorkloads.AgentHome, _agentSandboxRuntimeProvider, containment, agentRequiresDenial),
-            // run_python shares AgentHome's provider instance ON PURPOSE (ComputeToolGateway injects
-            // IAgentSandboxRuntimeProvider), and is still a row of its own: it is the ONE workload in this engine that
-            // declares SandboxIsolationMode.Filesystem, so on a host with a working bubblewrap chain its posture is
-            // materially stronger than AgentHome's on the very same backend. Folding the two together would report the
-            // stronger role's boundary for the weaker one or the weaker one's for the stronger. Reported whether or not
-            // Compute:Enabled is set: this table answers "what would this role be served here", which is exactly the
-            // question an operator asks before turning the tool on.
+            // run_python shares AgentHome's provider instance (ComputeToolGateway injects IAgentSandboxRuntimeProvider) and is still its own row: the ONE workload declaring
+            // SandboxIsolationMode.Filesystem, so folding them reports one role's boundary for the other. Reported whether or not Compute:Enabled is set: it answers what a role WOULD get here.
             DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, _agentSandboxRuntimeProvider, containment, agentRequiresDenial),
-            // A Sandboxed stdio MCP server. Also served by the agent-role provider instance, and also a row of its own
-            // for run_python's reason: it declares SandboxIsolationMode.Filesystem, so its served posture differs from
-            // AgentHome's on the very same backend. It is the row that answers the question an operator has BEFORE
-            // registering a server — on a host that cannot isolate, this row says so, and every Sandboxed registration
-            // will refuse to connect rather than launching on the host. A PrivilegedHost server has no row here
-            // because it declares nothing: it is not a substrate consumer, it is an explicit per-server host grant.
+            // A Sandboxed stdio MCP server: served by the agent-role provider instance, its own row for run_python's reason, and the row an operator reads BEFORE registering a server — on a host that
+            // cannot isolate, every Sandboxed registration refuses to connect. A PrivilegedHost server has no row: it declares nothing, an explicit per-server host grant.
             WithHomeDirectoryCaveat(DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment, agentRequiresDenial)),
-            // Either Development declaration is correct here: DevelopmentModeImageToolchain is
-            // DevelopmentModeHostToolchain `with` a different workload name and toolchain source, and this projection
-            // reads neither — it reads the isolation floor, which is None on both. Passing the host-toolchain constant
-            // avoids re-deriving SandboxProviderSelector.ResolveDevelopment's node predicate for an answer that cannot
-            // differ; the resolved PROVIDER, which does differ, is already reported from the instance itself.
+            // Either Development declaration works: DevelopmentModeImageToolchain is DevelopmentModeHostToolchain `with` a different name and toolchain source, and this projection reads only the
+            // isolation floor, None on both. The host-toolchain constant avoids re-deriving SandboxProviderSelector.ResolveDevelopment's predicate; the resolved PROVIDER comes from the instance.
             DevelopmentContractMapper.ToIsolationSummary("development", SandboxWorkloads.DevelopmentModeHostToolchain, _sandboxRuntimeProvider, containment, developmentRequiresDenial),
             DevelopmentContractMapper.ToIsolationSummary("work-session", SandboxWorkloads.WorkSession, _workSessionSandboxRuntimeProvider, containment, agentRequiresDenial)
         ];
     }
 }
 
-/// <summary>
-///     Records the operator's explicit approval of the container runtime currently reachable.
-///     <para>
-///         Its own endpoint rather than a flag on the capability GET, because pinning a daemon is a decision and a GET
-///         must not make decisions: a page refresh, a prefetch or a health check would otherwise silently approve
-///         whatever daemon happened to be answering.
-///     </para>
-/// </summary>
+/// <summary>Records the operator's explicit approval of the container runtime currently reachable.</summary>
+/// <remarks>
+///     Its own endpoint rather than a flag on the capability GET, because pinning a daemon is a decision and a GET
+///     must not make decisions: a page refresh, a prefetch or a health check would otherwise silently approve
+///     whatever daemon happened to be answering.
+/// </remarks>
 public sealed class ConfirmDevelopmentContainerRuntimeEndpoint : Endpoint<ConfirmDevelopmentContainerRuntimeRequest, DevelopmentContainerRuntimeResponse>, IDevelopmentEndpoint
 {
     private readonly IDockerDaemonPreflightService _dockerDaemonPreflight;

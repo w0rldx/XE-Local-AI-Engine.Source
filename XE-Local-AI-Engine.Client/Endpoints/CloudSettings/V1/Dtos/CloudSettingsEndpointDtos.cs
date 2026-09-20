@@ -129,11 +129,13 @@ public sealed record SaveCloudSettingsRequest
     public string? EntraClientId { get; init; }
 
     /// <summary>
-    ///     Write-only Entra ID client secret. A blank value on an existing EntraId connection keeps the previously
-    ///     stored secret through the endpoint's custom-header-style secret merge; a blank value with no stored secret
-    ///     selects interactive user sign-in instead of app-only
-    ///     client-credentials.
+    ///     Write-only Entra ID client secret.
     /// </summary>
+    /// <remarks>
+    ///     A blank value on an existing EntraId connection keeps the previously stored secret through the endpoint's
+    ///     custom-header-style secret merge; a blank value with no stored secret selects interactive user sign-in
+    ///     instead of app-only client-credentials.
+    /// </remarks>
     public string? EntraClientSecret { get; init; }
 
     /// <summary>Required only when <see cref="AuthMode" /> is <c>EntraId</c>; ignored otherwise.</summary>

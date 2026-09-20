@@ -61,12 +61,8 @@ public sealed class ImportKnowledgeRepositoryEndpoint : Endpoint<ImportKnowledge
                 },
                 ct);
         }
-        // Only the rejections the CALLER can act on are echoed as 400. A bare InvalidOperationException used to be in
-        // this set, which quietly turned every environment failure inside the importer — an unreadable Git index, a
-        // file that could not be opened, a file that changed under the reader — into a client error carrying an I/O
-        // message. Those now travel as KnowledgeRepositoryReadException and fall through to the global 500 handler.
-        // KnowledgeRepositoryImportRejectedException has moved to the global DomainValidationExceptionHandler; the two
-        // left are a framework type and a type whose status differs by endpoint, so neither can be centralized.
+        // Only the rejections the CALLER can act on are echoed as 400; a bare InvalidOperationException must stay OUT, or an environment failure inside the importer (an
+        // unreadable Git index, an unopenable file) becomes a client error: those are KnowledgeRepositoryReadException (global 500) and KnowledgeRepositoryImportRejectedException (global 400).
         catch (Exception exception) when (exception is ArgumentException or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);

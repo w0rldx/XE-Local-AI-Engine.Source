@@ -29,10 +29,13 @@ public sealed class UpdateGraphWorkflowDefinitionRequest
 
     /// <summary>
     ///     <c>required</c> is what puts <c>version</c> in the schema's <c>required</c> array, and it is the only thing
-    ///     that does: the validator's <c>GreaterThan(0)</c> is the one rule shape FastEndpoints' schema processor does
-    ///     not read requiredness from, so a caller generated against the old spec could omit the member and get a 400
-    ///     from a contract that never said the field was mandatory.
+    ///     that does.
     /// </summary>
+    /// <remarks>
+    ///     The validator's <c>GreaterThan(0)</c> is the one rule shape FastEndpoints' schema processor does not read
+    ///     requiredness from, so without <c>required</c> a generated caller could omit the member and get a 400 from a
+    ///     contract that never said the field was mandatory.
+    /// </remarks>
     public required int Version { get; init; }
 
     public string? Name { get; init; }
@@ -53,22 +56,15 @@ public sealed class ValidateGraphWorkflowDefinitionRequest
     public GraphWorkflowGraph Graph { get; init; } = GraphWorkflowGraph.Empty;
 }
 
-// The wire graph. A field-for-field mirror of the stored graph document rather than a projection of it, so the mapper
-// is a deserialize and nothing else — and so a definition read back, edited and saved keeps every field it arrived
-// with. There is no node or edge table anywhere: this shape is composed from the encrypted graph blob on the
-// definition row, which is the single source of routing truth.
+// The wire graph: a field-for-field mirror of the stored graph document rather than a projection, so the mapper is a deserialize and nothing else, and a definition read
+// back, edited and saved keeps every field it arrived with. There is no node or edge table — the shape is composed from the encrypted graph blob on the definition row.
 
 /// <remarks>
-///     <see cref="SchemaVersion" /> is NULLABLE, and that is the whole point of it: as a plain <c>int</c> an absent
-///     member and an explicit <c>0</c> both arrive as 0, the mapper cannot tell "the author omitted it" from "the
-///     author wrote a version this node does not speak", and normalizing both to 1 would smuggle an unsupported
-///     document past the parser's version refusal. Absent means 1; anything present travels verbatim and is answered
-///     by the parser.
-///     <para>
-///         An explicit JSON <c>null</c> reads the same as an absent member — both mean 1. Null is the JSON spelling of
-///         "I am not saying" rather than a version, and it smuggles nothing past the parser: every version this node
-///         refuses is an integer, and every present integer passes through to be answered there.
-///     </para>
+///     <see cref="SchemaVersion" /> is NULLABLE, and that is the whole point: as a plain <c>int</c> an absent member
+///     and an explicit <c>0</c> both arrive as 0, so the mapper could not tell "the author omitted it" from "the author
+///     wrote a version this node does not speak", and normalizing both to 1 would smuggle an unsupported document past
+///     the parser's version refusal. Absent means 1, and so does an explicit JSON <c>null</c> — the JSON spelling of
+///     "I am not saying" rather than a version. Anything present travels verbatim and is answered by the parser.
 /// </remarks>
 public sealed record GraphWorkflowGraph(int? SchemaVersion, IReadOnlyList<GraphWorkflowGraphNode> Nodes, IReadOnlyList<GraphWorkflowGraphEdge> Edges)
 {
@@ -76,16 +72,15 @@ public sealed record GraphWorkflowGraph(int? SchemaVersion, IReadOnlyList<GraphW
 }
 
 /// <summary>
-///     One authored node. <see cref="Config" /> is the per-kind settings block carried as RAW JSON: each kind reads a
-///     different set of members, and a typed union of the eight would land in the generated client as an unusable
-///     discriminated schema while buying nothing — the runtime's parser is what refuses a member on the wrong kind,
-///     and it reads the stored document rather than this projection.
-///     <para>
-///         <see cref="Label" /> is nullable and is NOT filled in on the way out: a node that named none is labelled by
-///         its key, exactly as the parser reads it, and writing the key back into the document would change the bytes
-///         a round trip stores.
-///     </para>
+///     One authored node.
 /// </summary>
+/// <remarks>
+///     <see cref="Config" /> is the per-kind settings block carried as RAW JSON: each kind reads a different set of
+///     members, and a typed union of the eight would land in the generated client as an unusable discriminated schema
+///     while buying nothing — the runtime's parser refuses a member on the wrong kind, and it reads the stored
+///     document rather than this projection. <see cref="Label" /> is nullable and is NOT filled in on the way out: a
+///     node that named none is labelled by its key, and writing the key back would change the round-tripped bytes.
+/// </remarks>
 public sealed record GraphWorkflowGraphNode(
     string Key,
     string Kind,
@@ -106,23 +101,17 @@ public sealed record GraphWorkflowNodePosition(double X, double Y);
 public sealed record GraphWorkflowGraphEdge(string Key, string From, string To, string? Label, string? SourceHandle, GraphWorkflowEdgeCondition? Condition);
 
 /// <summary>
-///     <see cref="Value" /> is a JSON scalar — string, number, boolean or null — and not a string member. A boolean
-///     that round-trips as <c>"true"</c> would compare against a real boolean as a type mismatch, the evaluator fails
-///     closed, and the edge would silently never fire.
-///     <para>
-///         <see cref="Path" /> is optional: a conditional edge leaving a <c>Condition</c> node inherits that node's
-///         <c>config.path</c>.
-///     </para>
-///     <para>
-///         <see cref="Value" /> is a NON-nullable <see cref="JsonElement" /> whose <see cref="JsonValueKind.Undefined" />
-///         means "no such member", which is the only shape that keeps the two absences apart. As a
-///         <c>JsonElement?</c> it could not: a JSON <c>null</c> and a missing member both land as <c>null</c>, the
-///         written document drops the member either way, and <c>{"op":"eq","value":null}</c> — a comparison the
-///         evaluator answers — comes back out as the one thing the parser refuses, a value-taking operator with no
-///         value. Undefined is what the ignore condition below skips on the way out, so the two operators that take no
-///         value (<c>Exists</c>, <c>NotExists</c>) still round-trip as the absent member they are stored as.
-///     </para>
+///     <see cref="Value" /> is a JSON scalar — string, number, boolean or null — and not a string member, and
+///     <see cref="Path" /> is optional, a conditional edge leaving a <c>Condition</c> node inheriting that node's
+///     <c>config.path</c>.
 /// </summary>
+/// <remarks>
+///     A boolean round-tripped as <c>"true"</c> would type-mismatch a real boolean, the evaluator fails closed, and
+///     the edge would silently never fire. <see cref="Value" /> is a NON-nullable <see cref="JsonElement" /> whose
+///     <see cref="JsonValueKind.Undefined" /> means "no such member", the only shape keeping the two absences apart:
+///     as a <c>JsonElement?</c>, a JSON <c>null</c> and a missing member both land as <c>null</c>, and
+///     <c>{"op":"eq","value":null}</c> would come back out as the value-taking operator with no value that the parser refuses. Undefined is what the ignore condition skips.
+/// </remarks>
 public sealed record GraphWorkflowEdgeCondition(
     string? Path,
     string Op,
@@ -191,13 +180,13 @@ public sealed class GraphWorkflowValidationErrorResponse
 /// <summary>
 ///     A validation report, which is why it answers 200 for anything well-formed: zero errors and five are the same
 ///     shape, and neither is a failure of the request that asked.
-///     <para>
-///         <see cref="Warnings" /> are the same <c>(key, message)</c> shape and are NOT errors: <see cref="Valid" />
-///         stays <c>errors.length === 0</c>, a definition carrying only warnings saves and starts, and a client that
-///         ignores the member behaves exactly as it did before. One type for both rather than a severity member,
-///         so nothing that refuses on <see cref="Errors" /> has to remember to filter first.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="Warnings" /> are the same <c>(key, message)</c> shape and are NOT errors: <see cref="Valid" /> stays
+///     <c>errors.length === 0</c>, a definition carrying only warnings saves and starts, and a client that ignores the
+///     member is unaffected. One type for both rather than a severity member, so nothing that refuses on
+///     <see cref="Errors" /> has to remember to filter first.
+/// </remarks>
 public sealed class ValidateGraphWorkflowDefinitionResponse
 {
     public required bool Valid { get; init; }
@@ -262,11 +251,11 @@ public sealed class GraphWorkflowNodeRunRequest
 /// <summary>
 ///     One answer to one pause. <see cref="OperationId" /> is the caller-minted idempotency key: the same one always
 ///     answers with the decision it already recorded, and a different one on an answered pause is a second human act.
-///     <para>
-///         <see cref="Payload" /> rides as raw JSON because it is the operator's document rather than a shape this
-///         runtime declares; it must be a JSON object, and it is bounded well under the node output envelope.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="Payload" /> rides as raw JSON because it is the operator's document rather than a shape this runtime
+///     declares; it must be a JSON object, and it is bounded well under the node output envelope.
+/// </remarks>
 public sealed class DecideGraphWorkflowNodeRunRequest
 {
     public Guid RunId { get; init; }
@@ -361,15 +350,14 @@ public sealed class GraphWorkflowNodeRunSummaryResponse
 /// <summary>
 ///     One run in full. <see cref="Output" /> is the result the succeeded <c>End</c> node resolved, written once at
 ///     terminalization and null until then.
-///     <para>
-///         <see cref="Graph" /> is the run's OWN graph — the copy pinned when it started, not the definition's current
-///         one — in the same shape <see cref="GraphWorkflowDefinitionResponse.Graph" /> carries, so a client parses
-///         both with one piece of code. It is here rather than on the run SUMMARY because a list must not carry one
-///         graph per row: a definition may hold up to a mebibyte of them. Without it a run view drawing the definition
-///         it names renders the wrong graph for every run started before an edit — which is the whole reason the run
-///         pins a copy at all.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="Graph" /> is the run's OWN graph — the copy pinned when it started, not the definition's current one
+///     — in the same shape <see cref="GraphWorkflowDefinitionResponse.Graph" /> carries, so a client parses both with
+///     one piece of code. It is here rather than on the run SUMMARY because a list must not carry one graph per row: a
+///     definition may hold up to a mebibyte of them. Without it a run view drawing the definition it names would
+///     render the wrong graph for every run started before an edit, which is why a run pins a copy at all.
+/// </remarks>
 public sealed class GraphWorkflowRunResponse
 {
     public required GraphWorkflowRunSummaryResponse Run { get; init; }
@@ -439,10 +427,13 @@ public sealed class ListGraphWorkflowRunsResponse
 }
 
 /// <summary>
-///     What a decision answers with: the decision that now stands, and the CURRENT statuses of the run and of the pause
-///     it answered. Current rather than predicted — what follows a decision is the dispatcher's work on its own clock,
-///     so a run that legitimately still reads <c>WaitingForApproval</c> is reported as it is.
+///     What a decision answers with: the decision that now stands, and the CURRENT statuses of the run and of the
+///     pause it answered.
 /// </summary>
+/// <remarks>
+///     Current rather than predicted — what follows a decision is the dispatcher's work on its own clock, so a run
+///     that legitimately still reads <c>WaitingForApproval</c> is reported as it is.
+/// </remarks>
 public sealed class GraphWorkflowDecisionResultResponse
 {
     public required string Decision { get; init; }

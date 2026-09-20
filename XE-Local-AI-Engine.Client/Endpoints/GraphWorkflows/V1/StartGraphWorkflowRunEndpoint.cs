@@ -10,12 +10,12 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 /// <summary>
 ///     Starts a run of one definition. 202, not 200: the endpoint commits a durable intent and the dispatcher advances
 ///     it out of band, so the run legitimately reads <c>Pending</c> the moment this answers.
-///     <para>
-///         The caller's <c>requestId</c> is the idempotency key. The same one always answers with the same
-///         <c>runId</c> — no second run, no conflict — which is what lets a scheduler or an integration retry a start
-///         it never saw the answer to.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The caller's <c>requestId</c> is the idempotency key. The same one always answers with the same <c>runId</c> —
+///     no second run, no conflict — which is what lets a scheduler or an integration retry a start it never saw the
+///     answer to.
+/// </remarks>
 public sealed class StartGraphWorkflowRunEndpoint : Endpoint<StartGraphWorkflowRunRequest, StartGraphWorkflowRunResponse>
 {
     private readonly IGraphWorkflowRunService _runs;

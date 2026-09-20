@@ -12,11 +12,13 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Extension methods that translate the application-layer model-fit / advisor records into sanitized endpoint DTOs.
-///     This is the sole point in the Client project that references those record member names. Every projection is
-///     sanitized: the recommendation view never carries raw output / stderr / diagnostics; the hardware profile carries
-///     no machine identifiers; running/version projections carry no internal paths.
+///     Extension methods translating the application-layer model-fit / advisor records into sanitized endpoint DTOs —
+///     the sole point in the Client project that references those record member names.
 /// </summary>
+/// <remarks>
+///     Every projection is sanitized: the recommendation view never carries raw output / stderr / diagnostics, the
+///     hardware profile carries no machine identifiers, and running/version projections carry no internal paths.
+/// </remarks>
 internal static class ModelFitMapper
 {
     public static GetLatestRecommendationsResponse ToResponse(this ModelFitLatestRecommendationsView view)
@@ -66,13 +68,11 @@ internal static class ModelFitMapper
             IsInstalled = record.IsInstalled,
             PullModelName = record.PullModelName,
             ReleaseDate = ExtractReleaseDate(record.DiagnosticsJson),
-            // Soft publisher-trust signal extracted from the persisted diagnostics blob. The advisor emits
-            // is_trusted_publisher per model; when the blob predates that emit we derive it from the model name so
-            // pre-existing snapshots still flag trust until the next refresh.
+            // Soft publisher-trust signal from the persisted diagnostics blob: the advisor emits is_trusted_publisher per model, and a blob without that key falls
+            // back to a model-name derivation, so snapshots written before it still flag trust until the next refresh.
             IsTrustedPublisher = ExtractIsTrustedPublisher(record.DiagnosticsJson, record.ModelName),
-            // Catalog-lane fields (curated catalog, explore section, MoE expert offload), extracted from the same
-            // diagnostics blob. A pre-existing snapshot row (predating the catalog lane) has none of these keys and
-            // defaults to the "explore" section.
+            // Catalog-lane fields (curated catalog, explore section, MoE expert offload) from the same diagnostics blob. A snapshot row written before the catalog
+            // lane has none of these keys and defaults to the "explore" section.
             Section = ExtractString(record.DiagnosticsJson, "section") ?? "explore",
             Tier = ExtractString(record.DiagnosticsJson, "tier"),
             CatalogId = ExtractString(record.DiagnosticsJson, "catalog_id"),
@@ -114,11 +114,12 @@ internal static class ModelFitMapper
         };
     }
 
-    /// <summary>
-    ///     Projects the PHYSICAL hardware profile plus the runtime device audit into the wire DTO. The profile
-    ///     fields carry what hardware exists (a GPU may be physically present); the audit fields carry runtime truth —
-    ///     whether the selected inference runtime actually uses it or has silently fallen back to the CPU.
-    /// </summary>
+    /// <summary>Projects the PHYSICAL hardware profile plus the runtime device audit into the wire DTO.</summary>
+    /// <remarks>
+    ///     The profile fields carry what hardware exists (a GPU may be physically present); the audit fields carry
+    ///     runtime truth — whether the selected inference runtime actually uses it or has silently fallen back to the
+    ///     CPU.
+    /// </remarks>
     public static HardwareProfileResponse ToResponse(this HardwareProfile profile, RuntimeDeviceAuditState audit)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -178,9 +179,8 @@ internal static class ModelFitMapper
         return new InspectGgufRepositoryResponse
         {
             RepoId = detail.RepoId,
-            // Base quants first (smallest-first so the picker leads with the lightest), then the speculative-decoding
-            // drafters. A drafter is a fraction of the real weights' size, so a pure size sort put all of them at the
-            // TOP of the ladder — the defect where the first three rows of gemma-4-12b were 0.4-0.8 GB drafters.
+            // Base quants first, smallest-first so the picker leads with the lightest, then the speculative-decoding drafters. A drafter is a fraction of the real
+            // weights' size, so a pure size sort would put every drafter at the TOP of the ladder instead of the lightest real quant.
             Files =
             [
                 .. detail.Files
@@ -400,11 +400,12 @@ internal static class ModelFitMapper
         };
     }
 
-    /// <summary>
-    ///     Projects the registry's current acquisition snapshot to its wire DTO. This is a field-for-field copy rather
-    ///     than a projection: the hydrate response and the hub push must stay the same shape so the client reconciles both
-    ///     through one <c>Sequence</c> comparison. The payload is already sanitized by the registry.
-    /// </summary>
+    /// <summary>Projects the registry's current acquisition snapshot to its wire DTO.</summary>
+    /// <remarks>
+    ///     A field-for-field copy rather than a projection: the hydrate response and the hub push must stay the same
+    ///     shape so the client reconciles both through one <c>Sequence</c> comparison. The payload is already sanitized
+    ///     by the registry.
+    /// </remarks>
     public static RuntimeAcquisitionStatusResponse ToResponse(this LlamaCppRuntimeAcquisitionStatus statusEvent)
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
@@ -560,10 +561,13 @@ internal static class ModelFitMapper
     }
 
     /// <summary>
-    ///     Pulls ONLY the <c>release_date</c> string out of the persisted diagnostics blob (the rest stays server-side, so
-    ///     the row projection remains sanitized). Tolerant: a null/blank/malformed blob, a non-object root, or a missing /
-    ///     non-string <c>release_date</c> all yield <c>null</c>.
+    ///     Pulls ONLY the <c>release_date</c> string out of the persisted diagnostics blob, so the rest stays
+    ///     server-side and the row projection remains sanitized.
     /// </summary>
+    /// <remarks>
+    ///     Tolerant: a null/blank/malformed blob, a non-object root, or a missing / non-string <c>release_date</c> all
+    ///     yield <c>null</c>.
+    /// </remarks>
     private static string? ExtractReleaseDate(string? diagnosticsJson)
     {
         if (string.IsNullOrWhiteSpace(diagnosticsJson))
@@ -586,12 +590,12 @@ internal static class ModelFitMapper
         }
     }
 
-    /// <summary>
-    ///     Pulls the <c>is_trusted_publisher</c> boolean out of the persisted diagnostics blob. When the blob carries an
-    ///     explicit <c>true</c>/<c>false</c> that value wins. When the property is ABSENT (a row persisted before the
-    ///     advisor emitted the signal) or the blob is null/malformed, the trust is derived from the model name so
+    /// <summary>Pulls the <c>is_trusted_publisher</c> boolean out of the persisted diagnostics blob.</summary>
+    /// <remarks>
+    ///     An explicit <c>true</c>/<c>false</c> in the blob wins. When the property is ABSENT (a row persisted before
+    ///     the advisor emitted the signal) or the blob is null/malformed, the trust is derived from the model name, so
     ///     pre-existing snapshots are not all silently flagged untrusted until the next refresh regenerates the blob.
-    /// </summary>
+    /// </remarks>
     private static bool ExtractIsTrustedPublisher(string? diagnosticsJson, string modelName)
     {
         if (!string.IsNullOrWhiteSpace(diagnosticsJson))
@@ -638,11 +642,12 @@ internal static class ModelFitMapper
         }
     }
 
-    /// <summary>
-    ///     The one parse behind every value extractor below: a null, whitespace or malformed blob, a non-object root and
-    ///     a missing property all read as null, and <paramref name="read" /> decides what a present property of the wrong
-    ///     shape does. It runs inside the <c>using</c> because a <see cref="JsonElement" /> does not outlive its document.
-    /// </summary>
+    /// <summary>The one parse behind every value extractor below.</summary>
+    /// <remarks>
+    ///     A null, whitespace or malformed blob, a non-object root and a missing property all read as null, and
+    ///     <paramref name="read" /> decides what a present property of the wrong shape does. It runs inside the
+    ///     <c>using</c> because a <see cref="JsonElement" /> does not outlive its document.
+    /// </remarks>
     private static T? ExtractValue<T>(string? diagnosticsJson, string propertyName, Func<JsonElement, T?> read)
         where T : struct
     {

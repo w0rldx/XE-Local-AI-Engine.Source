@@ -6,10 +6,12 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 
 /// <summary>
-///     Drafts a skill from an operator description using a node-local model. Writes nothing: the response populates the
-///     operator's form and the existing <c>skills</c> create/update routes remain the only path to the database, where
-///     the drafted content lands in the Imported posture.
+///     Drafts a skill from an operator description using a node-local model.
 /// </summary>
+/// <remarks>
+///     Writes nothing: the response populates the operator's form, and the existing <c>skills</c> create and update
+///     routes remain the only path to the database, where the drafted content lands in the Imported posture.
+/// </remarks>
 public sealed class DraftSkillEndpoint : Endpoint<DraftSkillRequest, SkillDraftResponse>
 {
     private const int MaxExistingDescriptionLength = 1024;

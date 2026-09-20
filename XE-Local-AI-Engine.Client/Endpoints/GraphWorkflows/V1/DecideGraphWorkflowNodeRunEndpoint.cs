@@ -9,10 +9,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
-///     Answers one pause. Thin transport and nothing else: the endpoint holds no idempotency logic of its own — the
-///     operation id goes to the runtime, which answers a replayed decision with the recorded one rather than deciding
-///     twice, and refuses a DIFFERENT id on an answered pause with the decision that stands on the body.
+///     Answers one pause. Thin transport and nothing else.
 /// </summary>
+/// <remarks>
+///     The endpoint holds no idempotency logic of its own: the operation id goes to the runtime, which answers a
+///     replayed decision with the recorded one rather than deciding twice, and refuses a DIFFERENT id on an answered
+///     pause with the decision that stands on the body.
+/// </remarks>
 public sealed class DecideGraphWorkflowNodeRunEndpoint : Endpoint<DecideGraphWorkflowNodeRunRequest, GraphWorkflowDecisionResultResponse>
 {
     private readonly IGraphWorkflowRunService _runs;

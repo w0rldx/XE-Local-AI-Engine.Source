@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
 /// <summary>
-///     Query-string request for <c>GET model-fit/recommendations/latest</c>. <see cref="UseCase" /> is optional and is
-///     the only cache-lookup key — the approved-image and provider-name params are gone (the advisor is the single
-///     box-aware recommendation backend). It carries no raw image reference or command.
+///     Query-string request for <c>GET model-fit/recommendations/latest</c>: the optional <see cref="UseCase" /> is the
+///     only cache-lookup key, and no raw image reference or command is accepted.
 /// </summary>
+/// <remarks>
+///     There is no approved-image or provider-name param: the advisor is the single box-aware recommendation backend.
+/// </remarks>
 public sealed class GetLatestRecommendationsRequest
 {
     /// <summary>Optional use-case filter for the cached recommendation key (null matches the use-case-less snapshot).</summary>
@@ -53,10 +55,10 @@ public sealed class ModelFitRecommendationResponse
     public bool IsTrustedPublisher { get; init; }
 
     /// <summary>
-    ///     Which recommendation section this row belongs to: <c>recommended</c> / <c>canRun</c> (the curated catalog
-    ///     lane, primary) or <c>explore</c> (the live Hugging Face discovery lane, secondary).
-    ///     A pre-existing snapshot row predating the catalog lane defaults to <c>explore</c>.
+    ///     Which recommendation section this row belongs to: <c>recommended</c>/<c>canRun</c> (the curated catalog lane,
+    ///     primary) or <c>explore</c> (the live Hugging Face discovery lane, secondary).
     /// </summary>
+    /// <remarks>A snapshot row predating the catalog lane reads <c>explore</c>.</remarks>
     public required string Section { get; init; }
 
     /// <summary>The catalog entry's editorial tier (<c>S</c>/<c>A</c>/<c>B</c>), or <c>null</c> for an <c>explore</c> row.</summary>
@@ -85,12 +87,15 @@ public sealed class ModelFitRecommendationResponse
     public double? CpuGb { get; init; }
 
     /// <summary>
-    ///     ADVISORY-ONLY quantized-KV-cache estimate for a catalog-lane row: the KV quant label the advisory was computed
-    ///     at (currently always <c>Q8_0</c>), or <c>null</c> when no advisory exists (explore row, incomplete GGUF
-    ///     metadata, or a snapshot predating the advisory). The row's fit/ranking/required-memory fields are ALWAYS the
-    ///     fp16-KV estimate — the default chat launch uses an fp16 KV cache, so this never claims the model fits; it only
-    ///     hints at the headroom a quantized KV cache could unlock on a flash-attention-capable runtime.
+    ///     ADVISORY-ONLY quantized-KV-cache estimate for a catalog-lane row: the KV quant label the advisory was
+    ///     computed at (currently always <c>Q8_0</c>).
     /// </summary>
+    /// <remarks>
+    ///     <c>null</c> when no advisory exists (explore row, incomplete GGUF metadata, or a snapshot predating the
+    ///     advisory). The row's fit/ranking/required-memory fields are ALWAYS the fp16-KV estimate, because the default
+    ///     chat launch uses an fp16 KV cache: this never claims the model fits, it only hints at the headroom a
+    ///     quantized KV cache could unlock on a flash-attention-capable runtime.
+    /// </remarks>
     public string? KvQuant { get; init; }
 
     /// <summary>Estimated total footprint (GB) with the quantized KV cache; <c>null</c> when <see cref="KvQuant" /> is null.</summary>
@@ -108,9 +113,12 @@ public sealed class ModelFitRecommendationResponse
     /// <summary>
     ///     KV-cache bytes for one token of context at the snapshot's context target, computed at
     ///     <see cref="KvBytesPerTokenQuant" /> — the chat launch's own element size, NOT the fp16 estimate the row's
-    ///     required-memory figures use. <c>null</c> when the GGUF header cannot size the KV term or the row predates
-    ///     this field. Always render it together with the quant: unlabelled, it is ambiguous by a factor of two.
+    ///     required-memory figures use.
     /// </summary>
+    /// <remarks>
+    ///     <c>null</c> when the GGUF header cannot size the KV term or the row predates this field. Always render it
+    ///     together with the quant: unlabelled, it is ambiguous by a factor of two.
+    /// </remarks>
     public long? KvBytesPerToken { get; init; }
 
     /// <summary>The KV element size <see cref="KvBytesPerToken" /> was computed at (currently always <c>Q8_0</c>); <c>null</c> when that is null.</summary>
@@ -124,13 +132,15 @@ public sealed class ModelFitRecommendationResponse
 }
 
 /// <summary>
-///     Response for <c>GET model-fit/recommendations/latest</c>. The response is ALWAYS 200 with an explicit
-///     <see cref="HasCache" /> flag rather than a 404, so the UI can distinguish "no recommendation has ever been cached"
-///     (an empty/diagnostics state) from a transport error. When <see cref="HasCache" /> is <c>false</c> every snapshot
-///     field is <c>null</c> and <see cref="Recommendations" /> is empty. The payload exposes only the sanitized snapshot
-///     summary plus the normalized rows — never any raw output, stderr or diagnostics, and no approved-image/provider
-///     coupling.
+///     Response for <c>GET model-fit/recommendations/latest</c>: the sanitized snapshot summary plus the normalized
+///     rows — never any raw output, stderr or diagnostics, and no approved-image/provider coupling.
 /// </summary>
+/// <remarks>
+///     The response is ALWAYS 200 with an explicit <see cref="HasCache" /> flag rather than a 404, so the UI can
+///     distinguish "no recommendation has ever been cached" (an empty/diagnostics state) from a transport error. When
+///     <see cref="HasCache" /> is <c>false</c> every snapshot field is <c>null</c> and <see cref="Recommendations" />
+///     is empty.
+/// </remarks>
 public sealed class GetLatestRecommendationsResponse
 {
     /// <summary>True when a cached recommendation snapshot exists for the key; false on a cache-miss (the empty state).</summary>
@@ -150,17 +160,16 @@ public sealed class GetLatestRecommendationsResponse
 }
 
 /// <summary>
-///     Body for <c>POST model-fit/recommendations/refresh</c>. Carries the id of an existing scheduled job to fire —
-///     never an image reference, command line or template id (the approved-image + provider-name params are gone). The
-///     service self-guards that the job is a <c>model-recommendation-check</c> job, so this endpoint can never fire an
-///     arbitrary scheduled job.
-///     <para>
-///         <see cref="UseCase" />, <see cref="Limit" />, <see cref="QuantOverride" /> and <see cref="CtxTarget" /> are
-///         OPTIONAL per-run overrides so the manual refresh runs the currently-selected use-case / breadth / quant /
-///         context instead of the definition's baked ones. Each is validated before anything fires (rejected with a 400);
-///         a <c>null</c>/empty value fires the definition's stored value unchanged. No free text reaches the run.
-///     </para>
+///     Body for <c>POST model-fit/recommendations/refresh</c>: the id of an existing scheduled job to fire, never an
+///     image reference, command line or template id.
 /// </summary>
+/// <remarks>
+///     The service self-guards that the job is a <c>model-recommendation-check</c> job, so this endpoint can never fire
+///     an arbitrary scheduled job, and no free text reaches the run. <see cref="UseCase" />, <see cref="Limit" />,
+///     <see cref="QuantOverride" /> and <see cref="CtxTarget" /> are OPTIONAL per-run overrides so a manual refresh runs
+///     the currently-selected use-case/breadth/quant/context instead of the definition's baked ones; each is validated
+///     before anything fires (rejected with a 400), and a null/empty one fires the stored value unchanged.
+/// </remarks>
 public sealed class RefreshRecommendationsRequest
 {
     public Guid ScheduledJobId { get; init; }
@@ -179,20 +188,26 @@ public sealed class RefreshRecommendationsRequest
 }
 
 /// <summary>
-///     Accepted response for <c>POST model-fit/recommendations/refresh</c>. The refresh is created asynchronously by the
-///     scheduler (the run id is owned by the scheduler dispatcher, so it is NOT fabricated here); the response only
-///     echoes the scheduled job id that was triggered.
+///     Accepted response for <c>POST model-fit/recommendations/refresh</c>, echoing only the scheduled job id that was
+///     triggered.
 /// </summary>
+/// <remarks>
+///     The refresh is created asynchronously by the scheduler, whose dispatcher owns the run id — it is NOT fabricated
+///     here.
+/// </remarks>
 public sealed class RefreshRecommendationsResponse
 {
     public required Guid ScheduledJobId { get; init; }
 }
 
 /// <summary>
-///     Sanitized projection of the node hardware profile (<c>GET model-fit/hardware-profile</c>). Carries only the
-///     inference-relevant aggregates — RAM/VRAM/GPU vendor/CPU/free-disk — and never any machine identifier (hostname,
-///     serial). The GPU vendor is a lowercase string (<c>nvidia|amd|intel|none|unknown</c>).
+///     Sanitized projection of the node hardware profile (<c>GET model-fit/hardware-profile</c>): the
+///     inference-relevant aggregates only — RAM/VRAM/GPU vendor/CPU/free-disk.
 /// </summary>
+/// <remarks>
+///     It never carries a machine identifier (hostname, serial). The GPU vendor is a lowercase string
+///     (<c>nvidia|amd|intel|none|unknown</c>).
+/// </remarks>
 public sealed class HardwareProfileResponse
 {
     public required long TotalRamBytes { get; init; }
@@ -215,9 +230,8 @@ public sealed class HardwareProfileResponse
 
     public required long FreeDiskBytes { get; init; }
 
-    // Runtime device audit: whether the SELECTED inference runtime actually uses the advertised GPU or has
-    // silently fallen back to the CPU. The fields above are physical facts (what hardware exists); these are runtime
-    // truth (what inference will use). Non-required so a projection without an audit keeps the CPU-safe defaults.
+    // Runtime device audit: whether the SELECTED runtime uses the advertised GPU or has silently fallen back to the CPU.
+    // The fields above are physical facts; these are runtime truth. Non-required, so no audit keeps the CPU-safe defaults.
 
     /// <summary>The backend inference actually uses: <c>cuda|vulkan|cpu|unknown</c>.</summary>
     public string InferenceBackend { get; init; } = "unknown";
@@ -240,9 +254,8 @@ public sealed class HardwareProfileResponse
     /// </summary>
     public string? BackendUndeterminedReason { get; init; }
 
-    // Measured GPU layer placement from the most recent observed model load. Distinct from the CPU-fallback fields: a
-    // partial offload means the GPU IS in use, just not for every layer. Null until a model has been loaded and
-    // observed. The model name is carried so the figures are never attributed to the wrong model.
+    // Measured GPU layer placement from the most recent observed model load, null until one is observed; unlike the
+    // CPU-fallback fields, a partial offload means the GPU IS in use. The model name keeps the figures attributable.
 
     /// <summary>Layers the runtime actually placed on the GPU for <see cref="GpuOffloadModelName" />, or null.</summary>
     public int? GpuOffloadedLayers { get; init; }

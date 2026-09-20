@@ -6,11 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     Extension methods that translate between the image endpoint DTOs and the coordinator / registry types. This is the
-///     sole point in the Client project that references those member names — only this file needs adjustment if they
-///     change. Enum values are surfaced as their string names so the wire contract is decoupled from the internal enum
-///     types (a persistence/abstractions rename never silently changes the JSON form).
+///     Extension methods that translate between the image endpoint DTOs and the coordinator and registry types.
 /// </summary>
+/// <remarks>
+///     The sole point in the Client project that references those member names, so only this file needs adjustment
+///     when they change. Enum values are surfaced as their string names, decoupling the wire contract from the
+///     internal enum types: a persistence or abstractions rename never silently changes the JSON form.
+/// </remarks>
 internal static class ImageMapper
 {
     public static CreateImageJobInput ToInput(this CreateImageJobRequest request)

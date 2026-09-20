@@ -7,10 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>
-///     Opens a transcription session in the <c>Created</c> state and returns it. The audio arrives afterwards, through
-///     <see cref="UploadTranscriptionAudioEndpoint" /> — so the title is decided here, which is why the file flow sends
-///     the chosen file's name on this call. A blank model id resolves to the node's effective model. Operator-gated.
+///     Opens a transcription session in the <c>Created</c> state and returns it. Operator-gated.
 /// </summary>
+/// <remarks>
+///     The audio arrives afterwards, through <see cref="UploadTranscriptionAudioEndpoint" />, so the title is decided
+///     here — which is why the file flow sends the chosen file's name on this call. A blank model id resolves to the
+///     node's effective model.
+/// </remarks>
 public sealed class CreateTranscriptionSessionEndpoint : Endpoint<CreateTranscriptionSessionRequest, TranscriptionSessionDetailResponse>
 {
     private readonly ITranscriptionService _sessions;

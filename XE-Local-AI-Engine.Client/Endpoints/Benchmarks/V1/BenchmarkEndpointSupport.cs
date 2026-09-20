@@ -4,11 +4,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
-///     Central benchmark exception → HTTP mapper. The global handler and the batch endpoint route handled exceptions
-///     through this type so the status code, machine-readable <c>code</c>, and operator-safe message stay in one place.
-///     Bodies are RFC 7807 <c>application/problem+json</c>: the message is the ProblemDetails
-///     <c>detail</c> and the <see cref="BenchmarkErrorCode" /> name is carried in the <c>code</c> extension member.
+///     Central benchmark exception → HTTP mapper: the global handler and the batch endpoint route handled exceptions
+///     through this type, so the status code, <c>code</c> and operator-safe message stay in one place.
 /// </summary>
+/// <remarks>
+///     Bodies are RFC 7807 <c>application/problem+json</c>: the message is the ProblemDetails <c>detail</c> and the
+///     <see cref="BenchmarkErrorCode" /> name is carried in the <c>code</c> extension member.
+/// </remarks>
 internal static class BenchmarkEndpointSupport
 {
     public static bool IsHandled(Exception exception) =>
@@ -16,10 +18,12 @@ internal static class BenchmarkEndpointSupport
             or BenchmarkUnsupportedKvCacheTypeException or BenchmarkJudgePolicyChangedException;
 
     /// <summary>
-    ///     The run's current judge verdict, decrypted, or null when it has no attempt or no stored result. EVERY
-    ///     endpoint that returns the run detail shape reads it here: a mutation response that skipped it would render
-    ///     as "not judged" for a run whose GET shows a full verdict.
+    ///     The run's current judge verdict, decrypted, or null when it has no attempt or no stored result.
     /// </summary>
+    /// <remarks>
+    ///     EVERY endpoint that returns the run detail shape reads it here: a mutation response that skipped it would
+    ///     render as "not judged" for a run whose GET shows a full verdict.
+    /// </remarks>
     public static async Task<BenchmarkJudgeResultV2?> ReadVerdictAsync(BenchmarkRecordService records, BenchmarkRunRecord run, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(records);
@@ -35,9 +39,13 @@ internal static class BenchmarkEndpointSupport
 
     /// <summary>
     ///     The base-logit digest a project's CURRENT settings recompute, or null when it does not measure KL
-    ///     divergence. Every endpoint that serves a run's fidelity block passes it: a stored KLD figure is displayed
-    ///     only while the two match, and the whole cache key — not the base model's fingerprint — is the gate.
+    ///     divergence.
     /// </summary>
+    /// <remarks>
+    ///     Every endpoint that serves a run's fidelity block passes it: a stored KLD figure is displayed only while
+    ///     the two match, and the whole cache key — not the base model's fingerprint — is the gate. See
+    ///     docs/wiki/20-benchmarks.md ("The comparability gate is the whole cache key").
+    /// </remarks>
     public static string? ExpectedKldDigest(BenchmarkProjectRecord? project) =>
         BenchmarkFidelityDisplayFacts.FromProject(project).ExpectedKldDigest;
 
@@ -47,11 +55,12 @@ internal static class BenchmarkEndpointSupport
         return Problem(statusCode, code, message);
     }
 
-    /// <summary>
-    ///     The same mapping <see cref="Error" /> applies, as data rather than as a response — the batch endpoint reports
-    ///     a refused matrix cell inside a 200 body, and reading the code off a built <see cref="IResult" /> is not a
-    ///     thing you can do. One switch, so a per-item rejection and a single-run failure can never disagree.
-    /// </summary>
+    /// <summary>The same mapping <see cref="Error" /> applies, as data rather than as a response.</summary>
+    /// <remarks>
+    ///     The batch endpoint reports a refused matrix cell inside a 200 body, and reading the code off a built
+    ///     <see cref="IResult" /> is not a thing you can do. One switch, so a per-item rejection and a single-run
+    ///     failure can never disagree.
+    /// </remarks>
     public static (int StatusCode, BenchmarkErrorCode Code, string Message) Classify(Exception exception) =>
         exception switch
         {

@@ -313,10 +313,12 @@ public sealed class ListWorkSessionEventsResponse
 }
 
 /// <summary>
-///     Whether this node serves work sessions at all. The one response every node answers, switch on or off: the rest
-///     of the family is 404ed by request-path middleware when <c>WorkSessions:Enabled</c> is false, and a bodyless 404
-///     is indistinguishable from a broken route, so without this the SPA can only say "could not load".
+///     Whether this node serves work sessions at all — the one response every node answers, switch on or off.
 /// </summary>
+/// <remarks>
+///     The rest of the family is 404ed by request-path middleware when <c>WorkSessions:Enabled</c> is false, and a
+///     bodyless 404 is indistinguishable from a broken route, so without this the SPA can only say "could not load".
+/// </remarks>
 public sealed class WorkSessionCapabilityResponse
 {
     public required bool Enabled { get; init; }

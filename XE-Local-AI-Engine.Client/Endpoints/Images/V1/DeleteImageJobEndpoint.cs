@@ -6,11 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
 /// <summary>
-///     FastEndpoints handler that deletes one image job with its generated image(s) — rows and encrypted blobs
-///     (DELETE images/jobs/{jobId}). 204 when it is gone, 404 for an unknown job, and 409 while the job is still
-///     queued or generating: the node refuses an active job rather than cancelling it on the operator's behalf, the
-///     same posture the benchmark project delete takes. Operator-gated.
+///     Deletes one image job with its generated images — rows and encrypted blobs. Operator-gated.
 /// </summary>
+/// <remarks>
+///     204 when it is gone, 404 for an unknown job, and 409 while the job is still queued or generating: the node
+///     refuses an active job rather than cancelling it on the operator's behalf, the same posture the benchmark
+///     project delete takes.
+/// </remarks>
 public sealed class DeleteImageJobEndpoint : Endpoint<ImageJobRouteRequest>
 {
     private readonly IImageJobCoordinator _coordinator;

@@ -1,13 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
 /// <summary>
-///     Response for <c>POST model-fit/llamacpp/version</c> (ensure-binary) and <c>POST model-fit/llamacpp/update</c>.
-///     Surfaces the resolved, hash-verified llama.cpp prebuilt binary: its release tag (<see cref="Version" />), the
-///     acceleration <see cref="Variant" /> (<c>cpu|cuda|vulkan</c>), whether it is the recommended pinned fallback, and
-///     the recommended pinned tag. There is no source-build / arbitrary pin capability — the manager only resolves/ensures
-///     the pinned-or-selected prebuilt asset. (The read-only GET on this route was removed: it could trigger a
-///     multi-hundred-MB download on a fresh node; the runtime-status GET surfaces the installed tag+variant instead.)
+///     Response for <c>POST model-fit/llamacpp/version</c> (ensure-binary) and <c>POST model-fit/llamacpp/update</c>:
+///     the resolved, hash-verified llama.cpp prebuilt binary.
 /// </summary>
+/// <remarks>
+///     There is no source-build or arbitrary-pin capability — the manager only resolves/ensures the pinned-or-selected
+///     prebuilt asset. The route carries no GET, because a read that ensures the binary can trigger a multi-hundred-MB
+///     download on a fresh node; the runtime-status GET surfaces the installed tag+variant instead.
+/// </remarks>
 public sealed class LlamaCppVersionResponse
 {
     /// <summary>The resolved binary's llama.cpp release tag (e.g. <c>b9692</c>).</summary>
@@ -24,11 +25,13 @@ public sealed class LlamaCppVersionResponse
 }
 
 /// <summary>
-///     Body for <c>POST model-fit/llamacpp/version</c>. Ensures the prebuilt binary for the requested acceleration
-///     <see cref="Variant" /> (<c>cpu|cuda|vulkan</c>, case-insensitive) is present and hash-verified, downloading it if
-///     missing. There is no arbitrary version/tag input — the release tag is pinned in code. An unknown variant
-///     is rejected with a 400.
+///     Body for <c>POST model-fit/llamacpp/version</c>: ensures the prebuilt binary for the requested acceleration
+///     <see cref="Variant" /> (<c>cpu|cuda|vulkan</c>, case-insensitive) is present and hash-verified.
 /// </summary>
+/// <remarks>
+///     A missing binary is downloaded. There is no arbitrary version/tag input — the release tag is pinned in code —
+///     and an unknown variant is rejected with a 400.
+/// </remarks>
 public sealed class EnsureLlamaCppBinaryRequest
 {
     /// <summary>Acceleration variant to ensure — <c>cpu|cuda|vulkan</c>.</summary>
@@ -36,10 +39,12 @@ public sealed class EnsureLlamaCppBinaryRequest
 }
 
 /// <summary>
-///     The installed llama.cpp runtime descriptor inside <see cref="LlamaCppRuntimeStatusResponse" />. Present only when
-///     an <c>installed-runtime.json</c> record exists (a runtime was installed via the dynamic updater). Null on a fresh
-///     node whose binary came from the pinned floor and was never recorded by an explicit install.
+///     The installed llama.cpp runtime descriptor inside <see cref="LlamaCppRuntimeStatusResponse" />, present only when
+///     an <c>installed-runtime.json</c> record exists (a runtime installed via the dynamic updater).
 /// </summary>
+/// <remarks>
+///     Null on a fresh node whose binary came from the pinned floor and was never recorded by an explicit install.
+/// </remarks>
 public sealed class LlamaCppInstalledRuntimeResponse
 {
     /// <summary>The installed release tag (e.g. <c>b9692</c>).</summary>
@@ -68,11 +73,13 @@ public sealed class LlamaCppInstalledRuntimeResponse
 }
 
 /// <summary>
-///     Query-string request for <c>GET model-fit/llamacpp/runtime</c>. <see cref="Refresh" /> (default false) forces a
-///     fresh catalog tag-resolution (recommended + upstream-latest) — subject to the endpoint's 60s rate-limit guard.
-///     Declaring it here lands the param in the OpenAPI contract so the generated client can send it (it was previously
-///     read ad-hoc and absent from the schema). This still resolves tags only — never an asset — so it never downloads.
+///     Query-string request for <c>GET model-fit/llamacpp/runtime</c>: <see cref="Refresh" /> (default false) forces a
+///     fresh catalog tag-resolution (recommended + upstream-latest), subject to the endpoint's 60s rate-limit guard.
 /// </summary>
+/// <remarks>
+///     Declaring the param here lands it in the OpenAPI contract so the generated client can send it. It resolves tags
+///     only — never an asset — so it never downloads.
+/// </remarks>
 public sealed class GetLlamaCppRuntimeRequest
 {
     /// <summary>When true, re-checks the live release catalog (rate-limited to once per 60s); null/false serves the cached snapshot.</summary>
@@ -80,13 +87,14 @@ public sealed class GetLlamaCppRuntimeRequest
 }
 
 /// <summary>
-///     Response for <c>GET model-fit/llamacpp/runtime</c>. Read-only: it surfaces the installed runtime (when recorded),
-///     the recommended tag, the optional upstream-latest tag (resolved server-side; the client only displays it in
-///     developer mode), whether a newer recommended runtime is available, whether the live catalog was offline at the
-///     time of the snapshot, and how many llama.cpp model processes are currently running (the pre-update safety gate
-///     reads this — a non-zero count means the runtime must not be replaced until the operator ejects them). It NEVER
-///     triggers a binary download.
+///     Read-only response for <c>GET model-fit/llamacpp/runtime</c>: the installed runtime when recorded, the
+///     recommended and upstream-latest tags, the update/offline flags, and the running llama.cpp process count.
 /// </summary>
+/// <remarks>
+///     It NEVER triggers a binary download. The upstream-latest tag is resolved server-side and the client displays it
+///     in developer mode only; the process count is what the pre-update safety gate reads — a non-zero count means the
+///     runtime must not be replaced until the operator ejects them.
+/// </remarks>
 public sealed class LlamaCppRuntimeStatusResponse
 {
     /// <summary>The installed runtime descriptor, or null when no explicit install has been recorded.</summary>
@@ -105,10 +113,12 @@ public sealed class LlamaCppRuntimeStatusResponse
     public required bool IsOffline { get; init; }
 
     /// <summary>
-    ///     The number of running <c>llama-server</c> processes (chat + embedding) reported by the supervisor. Counts
-    ///     llama.cpp binaries only — Ollama is an opt-in external provider and is never counted. A non-zero value gates
-    ///     the runtime update (the binary must not be replaced while a process holds it).
+    ///     The number of running <c>llama-server</c> processes (chat + embedding) reported by the supervisor.
     /// </summary>
+    /// <remarks>
+    ///     It counts llama.cpp binaries only — Ollama is an opt-in external provider and is never counted. A non-zero
+    ///     value gates the runtime update: the binary must not be replaced while a process holds it.
+    /// </remarks>
     public required int RunningProcessCount { get; init; }
 
     /// <summary>
@@ -126,18 +136,23 @@ public sealed class LlamaCppRuntimeStatusResponse
 
     /// <summary>
     ///     When the release catalog was last consulted, as unix milliseconds; <c>null</c> when NO check has ever run.
+    /// </summary>
+    /// <remarks>
     ///     That distinction is the point: with the automatic runtime-update check turned off by the node's
     ///     external-access settings, an empty snapshot would otherwise be indistinguishable from a check that found
     ///     nothing, and read as a permanent "up to date". A manual refresh populates it.
-    /// </summary>
+    /// </remarks>
     public long? CheckedAtUtc { get; init; }
 }
 
 /// <summary>
-///     Body for <c>POST model-fit/llamacpp/update</c>. Installs a chosen llama.cpp release <see cref="Tag" /> (validated
-///     against <c>^b\d+$</c>; a malformed tag is rejected with a 400). <see cref="Variant" /> optionally overrides the
-///     auto-selected acceleration variant (<c>cpu|cuda|vulkan</c>); when null the host variant is selected automatically.
+///     Body for <c>POST model-fit/llamacpp/update</c>, which installs the chosen llama.cpp release <see cref="Tag" />.
 /// </summary>
+/// <remarks>
+///     The tag is validated against <c>^b\d+$</c>; a malformed one is rejected with a 400. <see cref="Variant" />
+///     optionally overrides the auto-selected acceleration variant (<c>cpu|cuda|vulkan</c>); when null the host variant
+///     is selected automatically.
+/// </remarks>
 public sealed class UpdateLlamaCppRuntimeRequest
 {
     /// <summary>The release tag to install (e.g. <c>b9700</c>); must match <c>^b\d+$</c>.</summary>
@@ -148,11 +163,14 @@ public sealed class UpdateLlamaCppRuntimeRequest
 }
 
 /// <summary>
-///     409 Conflict body returned by <c>POST model-fit/llamacpp/update</c> when one or more <c>llama-server</c> processes
-///     are still running. Replacing the runtime binary while a process holds it is unsafe, so the operator must eject all
-///     running models first (the update is never auto-evicted). <see cref="RunningProcessCount" /> lets the UI explain how
-///     many remain. The message is sanitized (no internal path/URL).
+///     409 Conflict body returned by <c>POST model-fit/llamacpp/update</c> when one or more <c>llama-server</c>
+///     processes are still running.
 /// </summary>
+/// <remarks>
+///     Replacing the runtime binary while a process holds it is unsafe, so the operator must eject all running models
+///     first — the update never auto-evicts. <see cref="RunningProcessCount" /> lets the UI explain how many remain,
+///     and the message is sanitized (no internal path/URL).
+/// </remarks>
 public sealed class LlamaCppUpdateBlockedResponse
 {
     /// <summary>The number of running llama.cpp processes that must be ejected before the runtime can be updated.</summary>
@@ -164,18 +182,21 @@ public sealed class LlamaCppUpdateBlockedResponse
 
 /// <summary>
 ///     Response for <c>GET model-fit/llamacpp/acquisition</c>: the current first-run llama.cpp runtime acquisition
-///     snapshot. Its fields mirror the <c>RuntimeAcquisitionStatusHubEvent</c> push payload 1:1 <b>on purpose</b> — the
-///     client hydrates from this endpoint on mount and is then pushed the same shape over the acquisition hub, so both
-///     paths reconcile through one type and one <see cref="Sequence" /> comparison.
+///     snapshot.
 /// </summary>
+/// <remarks>
+///     Its fields mirror the <c>RuntimeAcquisitionStatusHubEvent</c> push payload 1:1 <b>on purpose</b> — the client
+///     hydrates from this endpoint on mount and is then pushed the same shape over the acquisition hub, so both paths
+///     reconcile through one type and one <see cref="Sequence" /> comparison.
+/// </remarks>
 public sealed class RuntimeAcquisitionStatusResponse
 {
-    /// <summary>
-    ///     Monotonic counter stamped on every status write, never reset within a process lifetime. Hydrate and push travel
-    ///     different paths and race in BOTH directions, so the client drops any update whose sequence is not greater than
-    ///     the one it already holds — otherwise a late-arriving hydrate would overwrite a terminal push and strand the
-    ///     banner on a phase that already finished. Timestamps are not sufficient for this.
-    /// </summary>
+    /// <summary>Monotonic counter stamped on every status write, never reset within a process lifetime.</summary>
+    /// <remarks>
+    ///     Hydrate and push travel different paths and race in BOTH directions, so the client drops any update whose
+    ///     sequence is not greater than the one it already holds; otherwise a late-arriving hydrate would overwrite a
+    ///     terminal push and strand the banner on a phase that already finished. Timestamps are not sufficient.
+    /// </remarks>
     public required long Sequence { get; init; }
 
     /// <summary>

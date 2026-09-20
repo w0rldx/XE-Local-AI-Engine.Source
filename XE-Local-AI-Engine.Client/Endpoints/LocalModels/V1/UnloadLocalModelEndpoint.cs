@@ -7,13 +7,15 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
 /// <summary>
-///     Gracefully evicts a model from the local runtimes' memory, wherever it is resident. The two-runtime fan-out —
-///     every llama-server role, then the gated Ollama eviction — belongs to <see cref="IModelUnloadCoordinator" />;
-///     this endpoint binds, delegates and maps. Idempotent: unloading a model that is not loaded still reports success.
-///     <c>Unloaded</c> is false only when a llama-server process was still busy when the bounded drain window elapsed
-///     and was therefore left running. The model name is carried in the route, so the client sends no body at all — see
-///     <see cref="Configure" /> for the Accepts override that keeps a body-less POST out of 415.
+///     Gracefully evicts a model from the local runtimes' memory, wherever it is resident.
 /// </summary>
+/// <remarks>
+///     The two-runtime fan-out — every llama-server role, then the gated Ollama eviction — belongs to
+///     <see cref="IModelUnloadCoordinator" />; this endpoint binds, delegates and maps. Idempotent: unloading a model
+///     that is not loaded still reports success. <c>Unloaded</c> is false only when a llama-server process was still
+///     busy when the bounded drain window elapsed and was therefore left running. The model name is carried in the
+///     route, so the client sends no body at all — see <see cref="Configure" /> for the Accepts override.
+/// </remarks>
 public sealed class UnloadLocalModelEndpoint : Endpoint<UnloadLocalModelRequest, UnloadLocalModelResponse>
 {
     private readonly ModelNameValidator _modelNameValidator;
@@ -33,10 +35,8 @@ public sealed class UnloadLocalModelEndpoint : Endpoint<UnloadLocalModelRequest,
     {
         Post(LocalApiRoutes.LocalModels.Unload);
         Policies(NodeAuthorizationPolicies.Operator);
-        // Route-only POST: the model name binds from the route, so a well-behaved client sends no body — and therefore
-        // no Content-Type. The default POST "Accepts" metadata only allows application/json, which FastEndpoints answers
-        // with 415 when the header is absent. Overriding Accepts lets the body-less eject request through. (Sending a
-        // dummy "{}" instead is NOT an option: the generated client's requestValidator types this body as `never`.)
+        // Route-only POST: the model name binds from the route, so a well-behaved client sends no body and no Content-Type, which the default POST "Accepts" metadata answers
+        // with 415. Overriding Accepts lets it through. Sending a dummy body instead is NOT an option: the generated client's requestValidator types this body as `never`.
         Description(x => x.Accepts<UnloadLocalModelRequest>());
     }
 

@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 
 /// <summary>
-///     One tool a Tool node may run. <see cref="ParameterSchema" /> is the RAW JSON-schema text rather than a typed
-///     shape: every tool declares a different object, and the editor parses this string to draw the argument form —
-///     the same way <c>AllowedToolDto.ParameterSchema</c> carries it on the agent surface.
+///     One tool a Tool node may run.
 /// </summary>
+/// <remarks>
+///     <see cref="ParameterSchema" /> is the RAW JSON-schema text rather than a typed shape: every tool declares a
+///     different object, and the editor parses this string to draw the argument form — the same way
+///     <c>AllowedToolDto.ParameterSchema</c> carries it on the agent surface.
+/// </remarks>
 public sealed class GraphWorkflowToolResponse
 {
     public required string Name { get; init; }

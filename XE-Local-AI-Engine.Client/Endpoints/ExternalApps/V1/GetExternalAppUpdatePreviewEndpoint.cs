@@ -7,20 +7,17 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 
 /// <summary>
-///     What the Update dialog needs before it asks for anything: the target manifest version and its fingerprint,
-///     every target variable with the current values masked, the permissions this update ADDS, the resource verdict,
-///     and whether the update can proceed at all.
-///     <para>
-///         An application that has LEFT the catalog is a 200 carrying a blocked preview — <c>canUpdate: false</c>,
-///         <c>blockedReason: "CatalogMissing"</c>, no added permissions — and not a 409, because the dialog must be
-///         able to say WHY there is nothing to update. <c>POST …/update</c> in that same state answers 404: the
-///         preview explains, the command refuses.
-///     </para>
-///     <para>
-///         It takes no <c>expectedVersion</c>. It changes nothing, and the version it would guard is the one the
-///         operator is about to read.
-///     </para>
+///     What the Update dialog needs first: the target manifest version and its fingerprint, every target variable
+///     with the current values masked, the permissions this update ADDS, the resource verdict and the can-update
+///     verdict.
 /// </summary>
+/// <remarks>
+///     An application that has LEFT the catalog is a 200 carrying a blocked preview (<c>canUpdate: false</c>,
+///     <c>blockedReason: "CatalogMissing"</c>, no added permissions) and not a 409, because the dialog must be able to
+///     say WHY there is nothing to update; <c>POST …/update</c> in that same state answers 404 — the preview explains,
+///     the command refuses. It takes no <c>expectedVersion</c>: it changes nothing, and the version it would guard is
+///     the one the operator is about to read.
+/// </remarks>
 public sealed class GetExternalAppUpdatePreviewEndpoint : Endpoint<ExternalAppInstanceRequest, ExternalAppUpdatePreview>
 {
     private readonly IExternalAppService _apps;

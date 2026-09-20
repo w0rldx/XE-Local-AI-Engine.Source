@@ -10,19 +10,13 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 /// <summary>
 ///     Re-probes the runtime and, when the body names the daemon that is answering RIGHT NOW, approves the identity
 ///     change and re-runs the startup reconciler.
-///     <para>
-///         <c>acknowledgeDaemonId</c> is never a blind approval. The endpoint re-probes first and compares the id
-///         against the observed one, answering 400 on a mismatch, so a client echoing the last id it rendered cannot
-///         approve whatever daemon is answering now — the hole a bare boolean leaves open. Omitting it re-probes and
-///         confirms nothing.
-///     </para>
-///     <para>
-///         A POST rather than a GET for the same reason: a refresh, a prefetch or a health check must not be able to
-///         pin a daemon. After a preflight that comes back ready it reconciles, making "approve the daemon and recover
-///         the rows still transient after boot" one operator action rather than a restart; the reconciler skips any
-///         instance with an operation in flight, so a refresh during an install cannot disturb it.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <c>acknowledgeDaemonId</c> is never a blind approval: the endpoint re-probes first and compares the id against
+///     the observed one, answering 400 on a mismatch — the hole a bare boolean leaves open. Omitting it re-probes and
+///     confirms nothing. A POST rather than a GET for the same reason, and the reconcile it runs afterwards:
+///     docs/wiki/09-api-and-hubs.md ("Design notes on the newer endpoint families").
+/// </remarks>
 public sealed class RefreshExternalAppRuntimeEndpoint : Endpoint<RefreshExternalAppRuntimeRequest, ExternalAppRuntimeResponse>
 {
     private readonly IExternalAppStartupReconciler _reconciler;

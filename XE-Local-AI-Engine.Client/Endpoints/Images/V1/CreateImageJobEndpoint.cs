@@ -8,11 +8,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
 /// <summary>
-///     FastEndpoints handler that enqueues a text-to-image job (POST images/jobs). Thin transport over the
-///     <see cref="IImageJobCoordinator" />: it validates the prompt/model, hands a provider-neutral input to the
-///     coordinator (which persists the job Queued with the prompt encrypted at rest and runs generation detached), then
-///     returns the freshly-created Queued view. Operator-gated.
+///     Enqueues a text-to-image job, returning the freshly created Queued view. Operator-gated.
 /// </summary>
+/// <remarks>
+///     Thin transport over <see cref="IImageJobCoordinator" />: it validates the prompt and model and hands a
+///     provider-neutral input to the coordinator, which persists the job Queued with the prompt encrypted at rest and
+///     runs generation detached.
+/// </remarks>
 public sealed class CreateImageJobEndpoint : Endpoint<CreateImageJobRequest, ImageJobResponse>
 {
     private readonly IImageJobCoordinator _coordinator;

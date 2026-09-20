@@ -131,9 +131,8 @@ public sealed class UpdateDevWorkflowWorkItemEndpoint : Endpoint<UpdateDevWorkfl
         Patch(LocalApiRoutes.DevelopmentWorkflows.WorkItemById);
         Policies(NodeAuthorizationPolicies.Operator);
 
-        // No 409 declared: this PATCH writes against the Any version sentinel, so it has no version race to lose —
-        // the only other writer to a work item is the runtime writing its STATUS, which this never touches. Declaring
-        // one would put a response in the generated client that the endpoint cannot send.
+        // No 409 declared: this PATCH writes against the Any version sentinel, so it has no version race to lose — the only other writer to a work item is the runtime
+        // writing its STATUS, which this never touches. Declaring one would put a response in the generated client that the endpoint cannot send.
         Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound));
     }
 
@@ -141,9 +140,8 @@ public sealed class UpdateDevWorkflowWorkItemEndpoint : Endpoint<UpdateDevWorkfl
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        // An omitted member is forwarded as null, which the store reads as "leave it alone" — a PATCH that only
-        // renames must not blank the request it never mentioned. There is no expected version: the only other writer
-        // to a work item is the runtime writing its STATUS, which this cannot collide with.
+        // An omitted member is forwarded as null, which the store reads as "leave it alone" — a PATCH that only renames must not blank the request it never mentioned.
+        // There is no expected version: the only other writer to a work item is the runtime writing its STATUS, which this cannot collide with.
         var updated = await _authoring.UpdateWorkItemAsync(new UpdateDevWorkflowWorkItemCommand { WorkItemId = req.WorkItemId, ExpectedVersion = DevWorkflowVersions.Any, Title = req.Title, Request = req.Request }, ct);
         var runs = await _runQueries.ListRunSummariesAsync(req.WorkItemId, cancellationToken: ct);
         await Send.OkAsync(updated.ToResponse(runs), ct);
@@ -151,10 +149,12 @@ public sealed class UpdateDevWorkflowWorkItemEndpoint : Endpoint<UpdateDevWorkfl
 }
 
 /// <summary>
-///     Removes a work item and everything under it. Delegated to the runtime rather than written here, because the
-///     rows are the smaller half: the work sessions the agent node runs own and the artifact bytes on disk go with
-///     them, and neither is something the store can reach.
+///     Removes a work item and everything under it.
 /// </summary>
+/// <remarks>
+///     Delegated to the runtime rather than written here, because the rows are the smaller half: the work sessions the
+///     agent node runs own and the artifact bytes on disk go with them, and neither is something the store can reach.
+/// </remarks>
 public sealed class DeleteDevWorkflowWorkItemEndpoint : Endpoint<DevWorkflowWorkItemRequest>
 {
     private readonly IDevWorkflowRunService _runs;

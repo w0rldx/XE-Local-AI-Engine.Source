@@ -6,15 +6,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     FastEndpoints handler to set or clear the Hugging Face access token (POST model-fit/hf-token). Thin transport over
-///     the Hugging Face token store (<see cref="IHfTokenStore" />): a non-empty token is stored encrypted at rest; a
-///     null/empty token clears the stored token (anonymous access).
-///     <para>
-///         <b>Secret hygiene:</b> the token is NEVER returned by this endpoint, NEVER logged, and NEVER echoed
-///         in the response. The response reports ONLY whether a token is now configured — the value itself never leaves the
-///         store.
-///     </para>
+///     FastEndpoints handler to set or clear the Hugging Face access token (POST model-fit/hf-token), a thin transport
+///     over the token store (<see cref="IHfTokenStore" />).
 /// </summary>
+/// <remarks>
+///     A non-empty token is stored encrypted at rest; a null/empty one clears it (anonymous access).
+///     <b>Secret hygiene:</b> the token is NEVER returned by this endpoint, NEVER logged and NEVER echoed in the
+///     response, which reports ONLY whether a token is now configured — the value itself never leaves the store.
+/// </remarks>
 public sealed class SetHfTokenEndpoint : Endpoint<SetHfTokenRequest, HfTokenStatusResponse>
 {
     private readonly IHfTokenStore _tokenStore;

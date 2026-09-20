@@ -7,14 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Proxy;
 
 /// <summary>
-///     Mints a new inbound model-proxy credential, REPLACING any existing one. This is both "generate" and "rotate":
-///     there is one key, so a regenerate immediately invalidates the previous value and every tool configured with it.
-///     Generating a key is also how an operator turns the proxy ON — a node with no key authenticates nobody.
-///     <para>
-///         This response is the ONLY place the plaintext key ever appears — the node persists only its SHA-256 digest.
-///         A caller that discards this body cannot get the key back from any other endpoint.
-///     </para>
+///     Mints a new inbound model-proxy credential, REPLACING any existing one.
 /// </summary>
+/// <remarks>
+///     Both "generate" and "rotate": there is one key, so a regenerate immediately invalidates the previous value and
+///     every tool configured with it. Generating a key is also how an operator turns the proxy ON — a node with no key
+///     authenticates nobody. This response is the ONLY place the plaintext key ever appears, the node persisting only
+///     its SHA-256 digest, so a caller that discards this body cannot get the key back anywhere else.
+/// </remarks>
 public sealed class GenerateLocalModelProxyApiKeyEndpoint : EndpointWithoutRequest<GeneratedLocalModelProxyApiKeyResponse>
 {
     private readonly ILocalModelProxyApiKeyService _apiKeyService;

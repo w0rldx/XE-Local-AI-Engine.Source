@@ -9,14 +9,14 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 /// <summary>
 ///     Removes the containers, the network, the rows AND the instance's data directory — all of it an explicit
 ///     operator act, which is why it is a DELETE rather than a lifecycle verb.
-///     <para>
-///         <c>expectedVersion</c> rides in the QUERY here, not a body: a DELETE with a body is awkward on every layer
-///         that touches it, and intermediaries may drop it. It is bound through <c>[QueryParam]</c> on
-///         <see cref="UninstallExternalAppRequest.ExpectedVersion" /> so the OpenAPI document declares a query
-///         parameter instead of a request body the generated client would fill and this endpoint would never read.
-///         The member is validated for PRESENCE, so a delete with no query is a 400 rather than a delete at version 0.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <c>expectedVersion</c> rides in the QUERY here, not a body, bound through <c>[QueryParam]</c> on
+///     <see cref="UninstallExternalAppRequest.ExpectedVersion" /> so the OpenAPI document declares a query parameter
+///     instead of a request body the generated client would fill and this endpoint would never read. The member is
+///     validated for PRESENCE, so a delete with no query is a 400 rather than a delete at version 0. Why the query:
+///     docs/wiki/09-api-and-hubs.md ("Design notes on the newer endpoint families").
+/// </remarks>
 public sealed class UninstallExternalAppEndpoint : Endpoint<UninstallExternalAppRequest, ExternalAppInstanceSummaryView>
 {
     private readonly IExternalAppService _apps;

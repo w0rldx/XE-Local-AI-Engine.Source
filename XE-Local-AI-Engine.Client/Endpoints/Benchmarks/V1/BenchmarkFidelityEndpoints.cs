@@ -63,12 +63,12 @@ public sealed class GetBenchmarkKldDiskEstimateEndpoint : Endpoint<GetKldDiskEst
 /// <summary>
 ///     Changes a project's quant-fidelity settings. Unlike every other project write this one is allowed on a FROZEN
 ///     project: the settings decide what gets measured next, not what the existing runs were measured against.
-///     <para>
-///         A base-model or chunk-count change mints a new expected comparability digest, so figures measured under the
-///         old one start reading as <c>kld-stale</c>. Nothing is deleted and no attempt is rewritten — the stale
-///         reading IS the honest answer, and the operator re-measures the runs they care about.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A base-model or chunk-count change mints a new expected comparability digest, so figures measured under the old
+///     one start reading as <c>kld-stale</c>. Nothing is deleted and no attempt is rewritten — the stale reading IS
+///     the honest answer, and the operator re-measures the runs they care about.
+/// </remarks>
 public sealed class UpdateBenchmarkProjectFidelityEndpoint : Endpoint<UpdateBenchmarkProjectFidelityRequest, BenchmarkProjectFidelityChangeResponse>
 {
     private readonly IBenchmarkProjectService _projects;

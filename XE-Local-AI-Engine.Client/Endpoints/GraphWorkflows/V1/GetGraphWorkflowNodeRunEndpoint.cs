@@ -8,9 +8,12 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
 ///     One node run in full, input and output documents included — the node drawer's read, and the one place a
-///     document is decrypted. Keyed by node key rather than by row id: there is exactly one node run per
-///     <c>(run, node key)</c>, so the key a reader already has off the canvas is its identity.
+///     document is decrypted.
 /// </summary>
+/// <remarks>
+///     Keyed by node key rather than by row id: there is exactly one node run per <c>(run, node key)</c>, so the key a
+///     reader already has off the canvas is its identity.
+/// </remarks>
 public sealed class GetGraphWorkflowNodeRunEndpoint : Endpoint<GraphWorkflowNodeRunRequest, GraphWorkflowNodeRunResponse>
 {
     private readonly IGraphWorkflowRunService _runs;

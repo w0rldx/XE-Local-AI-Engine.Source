@@ -5,10 +5,13 @@ using FluentValidation;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 
 /// <summary>
-///     Shape validation for <see cref="CreateEvaluationRequest" />: a run id must be present and the target must name a
-///     side of the comparison. Whether the run, model or artifact actually exists is the evaluation service's call —
-///     that needs a database, and a probe does not belong in a validator.
+///     Shape validation for <see cref="CreateEvaluationRequest" />: a run id must be present and the target must name
+///     a side of the comparison.
 /// </summary>
+/// <remarks>
+///     Whether the run, model or artifact actually exists is the evaluation service's call: that needs a database, and
+///     a probe does not belong in a validator.
+/// </remarks>
 public sealed class CreateEvaluationRequestValidator : Validator<CreateEvaluationRequest>
 {
     public CreateEvaluationRequestValidator()

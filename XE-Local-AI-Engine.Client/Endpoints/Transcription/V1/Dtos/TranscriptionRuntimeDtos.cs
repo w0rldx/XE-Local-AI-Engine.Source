@@ -157,17 +157,23 @@ public sealed class TranscriptionRuntimeStatusResponse
     public required int IdleTimeoutMinutes { get; init; }
 
     /// <summary>
-    ///     Whether the pinned voice-activity-detection weights are installed. The daemon always launches with
-    ///     voice-activity detection on, so a node reporting <see langword="false" /> here cannot start the runtime at
-    ///     all — which is the one thing a "failed to start" message on its own would not tell the operator.
+    ///     Whether the pinned voice-activity-detection weights are installed.
     /// </summary>
+    /// <remarks>
+    ///     The daemon always launches with voice-activity detection on, so a node reporting <see langword="false" />
+    ///     here cannot start the runtime at all — the one thing a "failed to start" message would not tell the
+    ///     operator.
+    /// </remarks>
     public required bool VadInstalled { get; init; }
 
     /// <summary>
-    ///     Whether this node can capture the audio of a single application. Windows only, and only at or above the
-    ///     build Microsoft documents for process loopback. The SPA hides the per-application source entirely when it
-    ///     is <see langword="false" /> rather than offering an option that cannot work.
+    ///     Whether this node can capture the audio of a single application: Windows only, and only at or above the
+    ///     build Microsoft documents for process loopback.
     /// </summary>
+    /// <remarks>
+    ///     The SPA hides the per-application source entirely when it is <see langword="false" />, rather than offering
+    ///     an option that cannot work.
+    /// </remarks>
     public required bool ProcessCaptureSupported { get; init; }
 
     public WhisperInstalledRuntimeResponse? ManagedRuntime { get; init; }

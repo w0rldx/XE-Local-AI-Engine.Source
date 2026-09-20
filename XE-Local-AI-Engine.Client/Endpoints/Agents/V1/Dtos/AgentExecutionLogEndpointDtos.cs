@@ -17,10 +17,12 @@ public sealed class ListAgentExecutionLogsRequest
 }
 
 /// <summary>
-///     Wire projection of an execution-log row. Metadata ONLY — there is no message content to redact.
+///     Wire projection of an execution-log row — metadata ONLY, so there is no message content to redact.
+/// </summary>
+/// <remarks>
 ///     <see cref="ErrorClass" /> is an exception type name only (never the exception message or any transcript text);
 ///     the store contract guarantees this and the endpoint never widens it.
-/// </summary>
+/// </remarks>
 public sealed class AgentExecutionLogResponse
 {
     public required Guid Id { get; init; }

@@ -9,12 +9,12 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
 ///     Judges a graph without saving it, so the editor asks the RUNTIME's own parser whether a graph would route and
-///     draws the answer a run would get rather than a second implementation of the same rules. Persists nothing.
-///     <para>
-///         Answers 200 for any well-formed body: a validation report is not a request failure, and the client needs
-///         the same shape whether there are zero errors or five.
-///     </para>
+///     draws the answer a run would get rather than a second implementation of the same rules.
 /// </summary>
+/// <remarks>
+///     Persists nothing, and answers 200 for any well-formed body: a validation report is not a request failure, and
+///     the client needs the same shape whether there are zero errors or five.
+/// </remarks>
 public sealed class ValidateGraphWorkflowDefinitionEndpoint : Endpoint<ValidateGraphWorkflowDefinitionRequest, ValidateGraphWorkflowDefinitionResponse>
 {
     private readonly IGraphWorkflowDefinitionService _definitions;

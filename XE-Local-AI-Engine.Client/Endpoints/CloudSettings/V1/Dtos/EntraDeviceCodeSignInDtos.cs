@@ -18,10 +18,12 @@ public sealed record EntraDeviceCodeSignInResponse
 }
 
 /// <summary>
-///     Response to <c>GET cloud-settings/entra/device-code/status</c>: the current Entra ID device-code sign-in
-///     state. Carries no token material — only lifecycle state and, while pending, the same non-secret user code /
-///     verification URL returned by the start endpoint.
+///     Response to <c>GET cloud-settings/entra/device-code/status</c>: the current Entra ID device-code sign-in state.
 /// </summary>
+/// <remarks>
+///     Carries no token material — only lifecycle state and, while pending, the same non-secret user code and
+///     verification URL the start endpoint returned.
+/// </remarks>
 public sealed record EntraDeviceCodeSignInStatusResponse
 {
     /// <summary>The sign-in lifecycle state, as the <c>EntraDeviceCodeSignInState</c> enum name.</summary>

@@ -27,11 +27,13 @@ public sealed class CreateMcpServerRequest
     public string? Url { get; init; }
 
     /// <summary>
-    ///     How much of this node the server is trusted with; see <c>docs/security/mcp-trust-tiers.md</c>. Defaults to
-    ///     <see cref="McpTrustTier.Sandboxed" />, which is what an omitted value must mean. <c>BuiltInTrusted</c> is
-    ///     rejected — it names an engine-owned transport, not a registration. Ignored for an HTTP registration, which
-    ///     launches no process.
+    ///     How much of this node the server is trusted with; see <c>docs/security/mcp-trust-tiers.md</c>.
     /// </summary>
+    /// <remarks>
+    ///     Defaults to <see cref="McpTrustTier.Sandboxed" />, which is what an omitted value must mean.
+    ///     <c>BuiltInTrusted</c> is rejected: it names an engine-owned transport, not a registration. Ignored for an
+    ///     HTTP registration, which launches no process.
+    /// </remarks>
     public McpTrustTier TrustTier { get; init; } = McpTrustTier.Sandboxed;
 }
 
@@ -57,11 +59,13 @@ public sealed class UpdateMcpServerRequest
     public string? Url { get; init; }
 
     /// <summary>
-    ///     How much of this node the server is trusted with; see <c>docs/security/mcp-trust-tiers.md</c>. Defaults to
-    ///     <see cref="McpTrustTier.Sandboxed" />, which is what an omitted value must mean. <c>BuiltInTrusted</c> is
-    ///     rejected — it names an engine-owned transport, not a registration. Ignored for an HTTP registration, which
-    ///     launches no process.
+    ///     How much of this node the server is trusted with; see <c>docs/security/mcp-trust-tiers.md</c>.
     /// </summary>
+    /// <remarks>
+    ///     Defaults to <see cref="McpTrustTier.Sandboxed" />, which is what an omitted value must mean.
+    ///     <c>BuiltInTrusted</c> is rejected: it names an engine-owned transport, not a registration. Ignored for an
+    ///     HTTP registration, which launches no process.
+    /// </remarks>
     public McpTrustTier TrustTier { get; init; } = McpTrustTier.Sandboxed;
 }
 
@@ -89,15 +93,15 @@ public sealed class SetMcpServerEnabledRequest
 }
 
 /// <summary>
-///     Wire projection of a stored MCP server registration. <see cref="TransportKind" /> and <see cref="TrustTier" />
-///     serialize as their string names ("Stdio"/"Http", "Sandboxed"/"PrivilegedHost"/"BuiltInTrusted") via the
-///     globally registered <c>JsonStringEnumConverter</c>; the remaining fields serialize camelCase.
-///     <para>
-///         Description and arguments are returned decrypted — they are operator-authored text the settings form has to
-///         round-trip. <see cref="Env" /> is NOT: it is returned masked, because an environment map is where a stdio
-///         server's API keys live and there is no editing reason to read one back.
-///     </para>
+///     Wire projection of a stored MCP server registration.
 /// </summary>
+/// <remarks>
+///     <see cref="TransportKind" /> and <see cref="TrustTier" /> serialize as their string names ("Stdio"/"Http",
+///     "Sandboxed"/"PrivilegedHost"/"BuiltInTrusted") via the globally registered <c>JsonStringEnumConverter</c>; the
+///     remaining fields serialize camelCase. Description and arguments are returned decrypted, being operator-authored
+///     text the settings form has to round-trip. <see cref="Env" /> is NOT: it is returned masked, because an
+///     environment map is where a stdio server's API keys live and there is no editing reason to read one back.
+/// </remarks>
 public sealed class McpServerResponse
 {
     /// <summary>
@@ -122,9 +126,12 @@ public sealed class McpServerResponse
 
     /// <summary>
     ///     The configured environment variable NAMES, each carrying <see cref="MaskedEnvironmentValue" /> in place of
-    ///     its value. A stdio server's environment is where its API keys live; it is encrypted at rest and never
-    ///     travels back out of the node. Sending a masked value back on an update keeps the stored one.
+    ///     its value.
     /// </summary>
+    /// <remarks>
+    ///     A stdio server's environment is where its API keys live; it is encrypted at rest and never travels back out
+    ///     of the node. Sending a masked value back on an update keeps the stored one.
+    /// </remarks>
     public required IReadOnlyDictionary<string, string> Env { get; init; }
 
     public string? Url { get; init; }
@@ -147,11 +154,13 @@ public sealed class ListMcpServersResponse
 }
 
 /// <summary>
-///     Live connection state plus discovered tools for one MCP server. <see cref="Status" /> is "connected" (the server
-///     is connected and its tools were listed), "disabled" (the server is not enabled, so it is not connected), or
-///     "error" (the last connect/list attempt failed; <see cref="Error" /> carries a short redacted reason). The tools
-///     list is the discovered set when connected and empty otherwise.
+///     Live connection state plus discovered tools for one MCP server.
 /// </summary>
+/// <remarks>
+///     <see cref="Status" /> is "connected" (connected and its tools listed), "disabled" (not enabled, so not
+///     connected), or "error" (the last connect or list attempt failed, with <see cref="Error" /> carrying a short
+///     redacted reason). The tools list is the discovered set when connected and empty otherwise.
+/// </remarks>
 public sealed class McpServerToolsResponse
 {
     public required string Status { get; init; }
@@ -171,10 +180,13 @@ public sealed class McpDiscoveredToolResponse
 }
 
 /// <summary>
-///     The node's full dynamic tool catalog: built-in tools plus every enabled MCP tool. <see cref="ToolCatalogEntryResponse.Source" />
-///     is "builtin" for in-process tools and "mcp:{serverSlug}" for a tool discovered from a registered MCP server, so the
-///     UI can group/badge tools by their originating server. This is the single source the React tool pickers consume.
+///     The node's full dynamic tool catalog: built-in tools plus every enabled MCP tool, and the single source the
+///     React tool pickers consume.
 /// </summary>
+/// <remarks>
+///     <see cref="ToolCatalogEntryResponse.Source" /> is "builtin" for an in-process tool and "mcp:{serverSlug}" for
+///     one discovered from a registered MCP server, so the UI can group and badge tools by originating server.
+/// </remarks>
 public sealed class ToolCatalogResponse
 {
     public required IReadOnlyList<ToolCatalogEntryResponse> Tools { get; init; }
@@ -191,37 +203,46 @@ public sealed class ToolCatalogEntryResponse
     public required string Source { get; init; }
 
     /// <summary>
-    ///     The tool's risk class as the <c>ToolCategory</c> name ("ReadLocal" / "WriteExecute" /
-    ///     "Orchestration" / "Network" / "Unknown"). Serialized as a string (matching the <see cref="Source" /> idiom) so
-    ///     the UI can label the tool's class; an unrecognized value degrades to fail-closed on the client.
+    ///     The tool's risk class as the <c>ToolCategory</c> name ("ReadLocal" / "WriteExecute" / "Orchestration" /
+    ///     "Network" / "Unknown").
     /// </summary>
+    /// <remarks>
+    ///     Serialized as a string, matching the <see cref="Source" /> idiom, so the UI can label the tool's class; an
+    ///     unrecognized value degrades to fail-closed on the client.
+    /// </remarks>
     public required string Category { get; init; }
 
     /// <summary>
     ///     Whether the tool requires an approval round-trip under the CURRENT node-default approval policy, computed
-    ///     through the same <c>IToolApprovalPolicy</c> the runtime enforcement uses (node-default, agent-independent — a
-    ///     bound agent may tighten further via its own per-tool overrides). It is the floor an operator sees for the tool.
+    ///     through the same <c>IToolApprovalPolicy</c> the runtime enforcement uses.
     /// </summary>
+    /// <remarks>
+    ///     Node-default and agent-independent: a bound agent may tighten it further through its own per-tool
+    ///     overrides, so this is the floor an operator sees for the tool.
+    /// </remarks>
     public required bool EffectiveRequiresApproval { get; init; }
 
     /// <summary>
-    ///     Whether an "approve for this session" decision on this tool can actually be REMEMBERED by the node, computed
-    ///     through the same <c>SessionApprovalEligibility</c> predicate the invocation runner's memo uses. The chat
-    ///     approval card hides the session button when this is <see langword="false" />, so it never promises a durable
-    ///     decision the node will quietly downgrade to a one-shot approval. It is an upper bound, not a guarantee: the
-    ///     runner applies further per-CALL narrowings the catalog cannot see (an imported skill, a skill the package does
-    ///     not carry, a resource-read that names no resource) which only ever remove eligibility.
+    ///     Whether an "approve for this session" decision on this tool can actually be REMEMBERED by the node,
+    ///     computed through the same <c>SessionApprovalEligibility</c> predicate the invocation runner's memo uses.
     /// </summary>
+    /// <remarks>
+    ///     The chat approval card hides the session button when this is <see langword="false" />, so it never promises
+    ///     a durable decision the node will quietly downgrade to a one-shot approval. An upper bound, not a guarantee:
+    ///     the runner applies further per-CALL narrowings the catalog cannot see (an imported skill, a skill the
+    ///     package does not carry, a resource-read that names no resource), which only ever remove eligibility.
+    /// </remarks>
     public required bool SessionScopeEligible { get; init; }
 
     /// <summary>
     ///     What reaching this tool does to a run that has NO operator behind it — a scheduled run, an integration
-    ///     trigger run, any invocation whose package is unattended. One of the
-    ///     <see cref="ToolUnattendedBehaviourValues" />, and NOT derivable from
-    ///     <see cref="EffectiveRequiresApproval" />: <c>ask_user</c> is approval-gated too (that is how the call is
-    ///     routed to the human round-trip) but an unattended run continues past it, so a warning driven off the
-    ///     approval flag alone names a tool that would not actually fail the run.
+    ///     trigger run, any invocation whose package is unattended. One of <see cref="ToolUnattendedBehaviourValues" />.
     /// </summary>
+    /// <remarks>
+    ///     NOT derivable from <see cref="EffectiveRequiresApproval" />: <c>ask_user</c> is approval-gated too, which is
+    ///     how the call is routed to the human round-trip, but an unattended run continues past it — so a warning
+    ///     driven off the approval flag alone names a tool that would not actually fail the run.
+    /// </remarks>
     public required string UnattendedBehaviour { get; init; }
 }
 
@@ -241,10 +262,13 @@ public static class ToolUnattendedBehaviourValues
     public const string Fails = "fails";
 
     /// <summary>
-    ///     The run CONTINUES without an answer. <c>ToolApprovalCoordinator.RequestUserAnswerAsync</c> skips the park for
-    ///     an unattended package and stashes the same "not answered" result the wait would have reached, so the model
-    ///     gets a branchable result instead of a dead turn. Only <c>ask_user</c> behaves this way.
+    ///     The run CONTINUES without an answer. Only <c>ask_user</c> behaves this way.
     /// </summary>
+    /// <remarks>
+    ///     <c>ToolApprovalCoordinator.RequestUserAnswerAsync</c> skips the park for an unattended package and stashes
+    ///     the same "not answered" result the wait would have reached, so the model gets a branchable result instead
+    ///     of a dead turn.
+    /// </remarks>
     public const string ContinuesUnanswered = "continuesUnanswered";
 
     /// <summary>The tool needs no human at all, so an unattended run executes it exactly as an interactive one does.</summary>

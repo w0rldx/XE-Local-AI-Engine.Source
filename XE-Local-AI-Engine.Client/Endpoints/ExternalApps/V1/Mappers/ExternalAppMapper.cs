@@ -7,11 +7,13 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
 /// <summary>
-///     Projects the External Apps service results onto the endpoint DTOs. It PROJECTS and nothing else: the service
-///     deserializes the stored manifest, computes update availability, the effective permissions and the blocked
-///     reason, and masks the secret variables. A mapper that parsed JSON or re-derived a verdict would be a service in
-///     disguise, and the one it disagreed with would be the one the operator accepted.
+///     Projects the External Apps service results onto the endpoint DTOs — it PROJECTS and nothing else.
 /// </summary>
+/// <remarks>
+///     The service deserializes the stored manifest, computes update availability, the effective permissions and the
+///     blocked reason, and masks the secret variables. A mapper that parsed JSON or re-derived a verdict would be a
+///     service in disguise, and the one it disagreed with would be the one the operator accepted.
+/// </remarks>
 internal static class ExternalAppMapper
 {
     /// <summary>The variable type whose value never leaves the node and whose declared default is never a wire value.</summary>
@@ -19,15 +21,14 @@ internal static class ExternalAppMapper
 
     private const string LoopbackHost = "http://127.0.0.1:";
 
-    /// <summary>
+    /// <summary>Projects one container-runtime resolution onto the Runtime panel's response.</summary>
+    /// <remarks>
     ///     <paramref name="foreignInstallContainers" /> is the reconciler's observation and is 0 wherever nothing
     ///     reconciled — an install preview, for instance. <c>Available</c> is copied off the resolution rather than
     ///     re-derived from the status, so "the daemon answered but we cannot use it" keeps its own sentence.
-    ///     <para>
-    ///         <c>ObservedDaemon</c> is NULL when the probe reached no daemon, rather than a view whose every member is
-    ///         null: the DTO declares it nullable, and an object present with a null id reads as a daemon that answered.
-    ///     </para>
-    /// </summary>
+    ///     <c>ObservedDaemon</c> is NULL when the probe reached no daemon, rather than a view whose every member is
+    ///     null: the DTO declares it nullable, and an object present with a null id reads as a daemon that answered.
+    /// </remarks>
     public static ExternalAppRuntimeResponse ToRuntimeResponse(ContainerRuntimeResolution resolution, int foreignInstallContainers)
     {
         ArgumentNullException.ThrowIfNull(resolution);
@@ -120,9 +121,12 @@ internal static class ExternalAppMapper
 
     /// <summary>
     ///     The manifest as the wire carries it: every <c>files[]</c> asset body dropped, and every <c>secret</c>
-    ///     variable's declared default nulled. Both are removals, so a member added to the catalog contract cannot
-    ///     leak through this by default — it has to be mapped in.
+    ///     variable's declared default nulled.
     /// </summary>
+    /// <remarks>
+    ///     Both are removals, so a member added to the catalog contract cannot leak through this by default — it has
+    ///     to be mapped in.
+    /// </remarks>
     public static ExternalAppManifestView ToManifestView(ApplicationManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(manifest);
@@ -214,9 +218,12 @@ internal static class ExternalAppMapper
 
     /// <summary>
     ///     The update disclosure — a member-for-member projection, so a rename on the service side is a compile error
-    ///     here rather than a silently null wire field. A catalog-missing preview needs no branch: the service already
-    ///     filled <c>CanUpdate: false</c> and the reason.
+    ///     here rather than a silently null wire field.
     /// </summary>
+    /// <remarks>
+    ///     A catalog-missing preview needs no branch: the service already filled <c>CanUpdate: false</c> and the
+    ///     reason.
+    /// </remarks>
     public static ExternalAppUpdatePreview ToUpdatePreview(UpdatePreview preview)
     {
         ArgumentNullException.ThrowIfNull(preview);
@@ -309,13 +316,13 @@ internal static class ExternalAppMapper
     /// <summary>
     ///     Projects the per-service grant map whole, and the four application-level aggregates the widening vocabulary
     ///     names, so the panel reads all eight names off the wire rather than deriving half of them.
-    ///     <para>
-    ///         The aggregates are DISPLAY ONLY and change no verdict: the diff the server refuses an update with stays
-    ///         per service (a capability moved from one service to another is a widening the union cannot see). They
-    ///         are ordinal-sorted because a map's enumeration order is not a contract and a card must not reshuffle
-    ///         between two reads of the same manifest.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The aggregates are DISPLAY ONLY and change no verdict: the diff the server refuses an update with stays per
+    ///     service (a capability moved from one service to another is a widening the union cannot see). They are
+    ///     ordinal-sorted because a map's enumeration order is not a contract and a card must not reshuffle between
+    ///     two reads of the same manifest.
+    /// </remarks>
     public static ExternalAppEffectivePermissionsView ToEffectivePermissionsView(ExternalAppEffectivePermissions permissions)
     {
         ArgumentNullException.ThrowIfNull(permissions);
@@ -430,10 +437,13 @@ internal static class ExternalAppMapper
     }
 
     /// <summary>
-    ///     The observed host bindings, each carrying the manifest's open path for its container port. The url is
-    ///     composed only where that path is non-null, so the single Open target is identified by a non-null url rather
-    ///     than by "the first published port", which would land the Open button on the wrong application's service.
+    ///     The observed host bindings, each carrying the manifest's open path for its container port.
     /// </summary>
+    /// <remarks>
+    ///     The url is composed only where that path is non-null, so the single Open target is identified by a non-null
+    ///     url rather than by "the first published port", which would land the Open button on the wrong application's
+    ///     service.
+    /// </remarks>
     private static IReadOnlyList<ExternalAppPublishedPortView> ToPublishedPortViews(ApplicationManifest manifest,
         IReadOnlyList<ExternalAppPublishedPort> publishedPorts)
     {
@@ -468,9 +478,12 @@ internal static class ExternalAppMapper
 
     /// <summary>
     ///     The catalog's <c>generatedAtUtc</c> is authored as an ISO-8601 string; the wire carries unix milliseconds
-    ///     like every other time member. An unparseable value reads as 0 rather than failing the whole catalog read:
-    ///     the document already passed validation, and a timestamp is not worth a 500.
+    ///     like every other time member.
     /// </summary>
+    /// <remarks>
+    ///     An unparseable value reads as 0 rather than failing the whole catalog read: the document already passed
+    ///     validation, and a timestamp is not worth a 500.
+    /// </remarks>
     private static long ToUnixMilliseconds(string generatedAtUtc)
     {
         return DateTimeOffset.TryParse(generatedAtUtc,

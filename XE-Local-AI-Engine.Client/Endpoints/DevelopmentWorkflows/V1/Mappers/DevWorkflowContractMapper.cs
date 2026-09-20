@@ -6,14 +6,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>
-///     Projects the store's snapshots onto the wire contracts. Entities never reach an endpoint: their text columns
-///     are encrypted at rest, so a mapper reading one would hand the operator ciphertext.
-///     <para>
-///         The graph crosses in BOTH directions here, and deliberately as a deserialize-and-reserialize of the same
-///         field list rather than a projection: a definition read back, edited and saved has to keep every field it
-///         arrived with, and a run's pinned graph has to render exactly what the dispatcher routes on.
-///     </para>
+///     Projects the store's snapshots onto the wire contracts.
 /// </summary>
+/// <remarks>
+///     Entities never reach an endpoint: their text columns are encrypted at rest, so a mapper reading one would hand
+///     the operator ciphertext. The graph crosses in BOTH directions here, and deliberately as a
+///     deserialize-and-reserialize of the same field list rather than a projection: a definition read back, edited and
+///     saved has to keep every field it arrived with, and a run's pinned graph has to render exactly what the
+///     dispatcher routes on.
+/// </remarks>
 internal static class DevWorkflowContractMapper
 {
     /// <summary>
@@ -25,18 +26,18 @@ internal static class DevWorkflowContractMapper
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    /// <summary>
-    ///     The stored graph document as the wire shape. Defaults are filled in the same way the runtime's parser fills
-    ///     them, so the rendered graph says what the dispatcher will actually do: an unnamed node is labelled by its
-    ///     key, and an absent edge list is no edges rather than null.
-    /// </summary>
+    /// <summary>The stored graph document as the wire shape.</summary>
+    /// <remarks>
+    ///     Defaults are filled in the same way the runtime's parser fills them, so the rendered graph says what the
+    ///     dispatcher will actually do: an unnamed node is labelled by its key, and an absent edge list is no edges
+    ///     rather than null.
+    /// </remarks>
     public static DevWorkflowGraph ToWireGraph(string graphJson)
     {
         var graph = JsonSerializer.Deserialize<DevWorkflowGraph>(graphJson, GraphOptions) ?? DevWorkflowGraph.Empty;
 
-        // Asked of the runtime's parser, not walked again here: a second implementation of "which nodes are template
-        // clones-in-waiting" is the one thing this class exists to prevent, and the parser answers empty for a graph it
-        // cannot route rather than throwing on the read path.
+        // Asked of the runtime's parser, not walked again here: a second implementation of "which nodes are template clones-in-waiting" is the one thing this class exists to
+        // prevent, and the parser answers empty for a graph it cannot route rather than throwing on the read path.
         var templates = DevWorkflowGraphContract.TemplateNodeKeys(graphJson);
         return graph with
         {
@@ -53,13 +54,13 @@ internal static class DevWorkflowContractMapper
         };
     }
 
-    /// <summary>
-    ///     The wire graph as the document that gets stored. Two fields are touched on the way in: <c>toolMode</c> is
-    ///     written in the parser's own spelling, so a definition saved as <c>"apply"</c> stores <c>"Apply"</c> and every
-    ///     reader of the blob — including a future one that does not parse case-insensitively — sees one form; and
-    ///     <c>isTemplate</c> is dropped, because it is DERIVED on the way out and a stored copy of it would be a second
-    ///     answer able to disagree with the parser's.
-    /// </summary>
+    /// <summary>The wire graph as the document that gets stored.</summary>
+    /// <remarks>
+    ///     Two fields are touched on the way in: <c>toolMode</c> is written in the parser's own spelling, so a
+    ///     definition saved as <c>"apply"</c> stores <c>"Apply"</c> and every reader of the blob — including one that
+    ///     does not parse case-insensitively — sees one form; and <c>isTemplate</c> is dropped, because it is DERIVED
+    ///     on the way out and a stored copy would be a second answer able to disagree with the parser's.
+    /// </remarks>
     public static string ToGraphJson(DevWorkflowGraph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
@@ -182,10 +183,13 @@ internal static class DevWorkflowContractMapper
 
     /// <summary>
     ///     The stored scope as the wire shape, read through the runtime's own parser so the page renders exactly the
-    ///     axes the resolver matches on. A column nothing can parse renders as empty axes rather than failing the read:
-    ///     the resolver already treats that row as applying to NOTHING, and a management page that cannot load it is a
-    ///     page nobody can use to fix it.
+    ///     axes the resolver matches on.
     /// </summary>
+    /// <remarks>
+    ///     A column nothing can parse renders as empty axes rather than failing the read: the resolver already treats
+    ///     that row as applying to NOTHING, and a management page that cannot load it is a page nobody can use to fix
+    ///     it.
+    /// </remarks>
     private static DevWorkflowRuleScope ToScope(string scopeJson) =>
         DevWorkflowRulePolicyResolver.ReadScope(scopeJson) is { } scope ? new DevWorkflowRuleScope(scope.ProjectIds, scope.NodeTypes) : new DevWorkflowRuleScope([], []);
 

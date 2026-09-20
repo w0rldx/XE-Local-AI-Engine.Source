@@ -3,10 +3,13 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Transcription.V1;
 using System.ComponentModel.DataAnnotations;
 
 /// <summary>
-///     A transcription session without its transcript — what the session list renders. Timestamps are unix-ms and
-///     <see cref="Status" /> / <see cref="SourceKind" /> are the enum names. No audio path is ever surfaced: the
-///     uploaded bytes live only for the length of one transcription and are deleted with the upload slot.
+///     A transcription session without its transcript — what the session list renders.
 /// </summary>
+/// <remarks>
+///     Timestamps are unix-ms and <see cref="Status" /> / <see cref="SourceKind" /> are the enum names. No audio path
+///     is ever surfaced: the uploaded bytes live only for the length of one transcription and are deleted with the
+///     upload slot.
+/// </remarks>
 public sealed class TranscriptionSessionSummaryResponse
 {
     public required Guid Id { get; init; }
@@ -166,17 +169,15 @@ public sealed class UploadTranscriptionAudioRequest
     public Guid SessionId { get; init; }
 
     /// <summary>
-    ///     OpenAPI metadata ONLY. Form auto-binding is disabled on this endpoint so the audio never reaches a
-    ///     framework-owned temp file, which means this property is always null at runtime and must never be read.
-    ///     The bytes are streamed from <c>FormFileSectionsAsync()</c> straight into the engine-owned upload slot.
-    ///     <para>
-    ///         Declared non-nullable and <see cref="RequiredAttribute" /> because the endpoint refuses a request
-    ///         carrying no file with a 400: a schema that permits an absent or null file describes an endpoint that
-    ///         does not exist, and the generated client types the body off that schema. The <c>null!</c> is the price
-    ///         of saying so without re-enabling the binding that would buffer the audio — nothing ever assigns or
-    ///         reads this member.
-    ///     </para>
+    ///     OpenAPI metadata ONLY: this property is always null at runtime and must never be read.
     /// </summary>
+    /// <remarks>
+    ///     Form auto-binding is disabled on this endpoint so the audio never reaches a framework-owned temp file; the
+    ///     bytes stream from <c>FormFileSectionsAsync()</c> straight into the engine-owned upload slot. It is declared
+    ///     non-nullable and <see cref="RequiredAttribute" /> because the endpoint refuses a request carrying no file
+    ///     with a 400, and a schema permitting an absent file would describe an endpoint that does not exist. The
+    ///     <c>null!</c> is the price of saying so without re-enabling the binding that would buffer the audio.
+    /// </remarks>
     [Required]
     public IFormFile File { get; init; } = null!;
 }

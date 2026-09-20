@@ -11,16 +11,11 @@ using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 ///     SignalR: the browser picks the process and the node does the rest. Operator-gated.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The call order is create session, subscribe on the hub, <c>POST …/live/start</c>, then this. This
-///         endpoint verifies the third step happened by asking the registry, because starting a recorder for a
-///         session with no lanes would capture audio with nowhere to put it.
-///     </para>
-///     <para>
-///         400 when the host cannot capture process audio at all, because retrying can never work. 409 when the
-///         session is not live or already has a capture, because the caller can fix either and try again. Both
-///         carry a reason code rather than prose, in the same shape the runtime routes use.
-///     </para>
+///     The call order is create session, subscribe on the hub, <c>POST …/live/start</c>, then this; the endpoint
+///     verifies the third step by asking the registry, because starting a recorder for a session with no lanes would
+///     capture audio with nowhere to put it. 400 when the host cannot capture process audio at all, since retrying can
+///     never work; 409 when the session is not live or already has a capture, since the caller can fix either. Both
+///     carry a reason code rather than prose, in the same shape the runtime routes use.
 /// </remarks>
 public sealed class StartProcessCaptureEndpoint : Endpoint<StartProcessCaptureRequest, ProcessCaptureStatusResponse>
 {

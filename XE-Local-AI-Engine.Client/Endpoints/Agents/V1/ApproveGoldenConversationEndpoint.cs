@@ -7,12 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
 /// <summary>
-///     Promotes a staged harvested golden candidate into the active set (flips it to
-///     <c>Enabled == true</c>). Ownership-guarded — the service only enables a harvested, currently-disabled case owned by
-///     the agent named on the route, so one agent's route cannot touch another agent's case. 200 with the updated case;
-///     404 when the case is missing, already enabled, manual, or belongs to another agent. A route-only POST (the client
-///     posts <c>{}</c>). Operator-gated.
+///     Promotes a staged harvested golden candidate into the active set (flips it to <c>Enabled == true</c>). A
+///     route-only POST, so the client posts <c>{}</c>. Operator-gated.
 /// </summary>
+/// <remarks>
+///     Ownership-guarded: the service only enables a harvested, currently-disabled case owned by the agent named on
+///     the route, so one agent's route cannot touch another agent's case. 200 with the updated case; 404 when the case
+///     is missing, already enabled, manual, or belongs to another agent.
+/// </remarks>
 public sealed class ApproveGoldenConversationEndpoint : Endpoint<ApproveGoldenConversationRequest, GoldenConversationResponse>
 {
     private readonly IGoldenConversationService _goldenConversationService;

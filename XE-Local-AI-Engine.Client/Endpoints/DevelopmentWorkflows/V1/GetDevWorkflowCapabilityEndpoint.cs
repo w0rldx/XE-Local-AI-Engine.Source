@@ -8,17 +8,14 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>
 ///     Reports whether development workflows are switched on for this node.
-///     <para>
-///         The one route in the family carved out of the disabled-node 404 sweep in <c>Program</c>, exactly as
-///         <c>development/capability</c> is: every other path under <c>development-workflows/</c> answers a bodyless
-///         404 with the feature off, which a client cannot tell from a broken route. This endpoint is what lets the
-///         SPA say "switched off on this node" rather than "could not load the work items".
-///     </para>
-///     <para>
-///         Constructor injection is safe with the feature off because <see cref="DevWorkflowOptions" /> is bound
-///         unconditionally — unlike Development Mode, this family is never dropped from endpoint discovery.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The one route in the family carved out of the disabled-node 404 sweep in <c>Program</c>, exactly as
+///     <c>development/capability</c> is: every other path under <c>development-workflows/</c> answers a bodyless 404
+///     with the feature off, which a client cannot tell from a broken route, so this is what lets the SPA say
+///     "switched off on this node" rather than "could not load the work items". Constructor injection is safe off:
+///     <see cref="DevWorkflowOptions" /> binds unconditionally and this family is never dropped from discovery.
+/// </remarks>
 public sealed class GetDevWorkflowCapabilityEndpoint : EndpointWithoutRequest<DevWorkflowCapabilityResponse>
 {
     private readonly IOptions<DevWorkflowOptions> _options;

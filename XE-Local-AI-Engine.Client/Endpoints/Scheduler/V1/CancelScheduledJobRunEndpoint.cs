@@ -6,11 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     FastEndpoints handler for requesting cancellation of a running job run
-///     (POST scheduler/runs/{runId}/cancel). Cancellation is best-effort: 404 when the run is missing, 409 when it has
-///     already reached a terminal state, and 202 Accepted (with the outcome) when the request was recorded — whether or
-///     not Quartz had an active fire to interrupt. Operator-gated.
+///     Requests cancellation of a running job run. Operator-gated.
 /// </summary>
+/// <remarks>
+///     Cancellation is best-effort: 404 when the run is missing, 409 when it has already reached a terminal state, and
+///     202 Accepted with the outcome when the request was recorded — whether or not Quartz had an active fire to
+///     interrupt.
+/// </remarks>
 public sealed class CancelScheduledJobRunEndpoint : Endpoint<ScheduledJobRunRouteRequest, ScheduledJobRunCancelResponse>
 {
     private readonly IScheduledJobManagementService _scheduledJobManagementService;

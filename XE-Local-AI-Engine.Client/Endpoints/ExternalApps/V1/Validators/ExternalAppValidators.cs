@@ -4,17 +4,13 @@ using System.Text.RegularExpressions;
 using FastEndpoints;
 using FluentValidation;
 
-/// <summary>
-///     Shape validation only: patterns, lengths, ranges and presence. Anything needing the catalog or the stored
-///     instance — whether a variable is declared, whether the fingerprint still matches, whether the transition is
-///     legal — belongs to the service, because a probe does not belong in a validator.
-///     <para>
-///         NO VALUE EVER REACHES A MESSAGE. The variables map carries an application's admin password and its API
-///         keys, and a 400 body is logged, so every rule in this file names the KEY and never the value, and
-///         <c>{PropertyValue}</c> is banned here. FluentValidation's default length message does not echo a value, but
-///         one casually written message or a <c>ForEach</c> over the dictionary would.
-///     </para>
-/// </summary>
+/// <summary>Shape validation only: patterns, lengths, ranges and presence.</summary>
+/// <remarks>
+///     Anything needing the catalog or the stored instance — whether a variable is declared, whether the fingerprint still matches, whether the transition is legal —
+///     belongs to the service, because a probe does not belong in a validator. NO VALUE EVER REACHES A MESSAGE: the variables map carries an application's admin
+///     password and its API keys and a 400 body is logged, so every rule here names the KEY and never the value, and <c>{PropertyValue}</c> is banned. One casually
+///     written message, or a <c>ForEach</c> over the dictionary, would break that where FluentValidation's default length message does not.
+/// </remarks>
 public static partial class ExternalAppValidationRules
 {
     /// <summary>The catalog's application id grammar, restated from the manifest contract.</summary>
@@ -29,10 +25,13 @@ public static partial class ExternalAppValidationRules
     public const string VariableKeyPattern = "^[A-Za-z_][A-Za-z0-9_]{0,63}$";
 
     /// <summary>
-    ///     The bound <see cref="VariableKeyPattern" /> already carries (1 + 63). It is restated as a number because the
-    ///     400 message ECHOES the submitted key, and a caller that posts a ten-kilobyte key must not get ten kilobytes
-    ///     of it back in a body that is logged. Every message naming a key truncates to this length.
+    ///     Maximum submitted variable-key length; the bound <see cref="VariableKeyPattern" /> already carries (1 + 63).
     /// </summary>
+    /// <remarks>
+    ///     It is restated as a number because the 400 message ECHOES the submitted key, and a caller that posts a
+    ///     ten-kilobyte key must not get ten kilobytes of it back in a body that is logged. Every message naming a key
+    ///     truncates to this length.
+    /// </remarks>
     public const int MaxVariableKeyLength = 64;
 
     /// <summary>Lowercase hex, 64 characters — the shape of a SHA-256. Whether it MATCHES is the service's 409.</summary>
@@ -44,11 +43,12 @@ public static partial class ExternalAppValidationRules
 
     public const int MaxDisplayNameLength = 128;
 
-    /// <summary>
-    ///     Mirrors the default of <c>ExternalAppsOptions.MaxLogTailLines</c>. A SHAPE pre-check only: the node's
-    ///     configured cap is the real bound and <c>IExternalAppService.ReadLogsAsync</c> enforces it, so a node that
-    ///     lowered the option still rejects a tail this rule let through — with the service's own message.
-    /// </summary>
+    /// <summary>Mirrors the default of <c>ExternalAppsOptions.MaxLogTailLines</c>.</summary>
+    /// <remarks>
+    ///     A SHAPE pre-check only: the node's configured cap is the real bound and
+    ///     <c>IExternalAppService.ReadLogsAsync</c> enforces it, so a node that lowered the option still rejects a
+    ///     tail this rule let through — with the service's own message.
+    /// </remarks>
     public const int MaxLogTailLines = 2000;
 
     public const int MaxDaemonIdLength = 128;
@@ -115,11 +115,12 @@ public static partial class ExternalAppValidationRules
                      .OverridePropertyName("manifestSha256");
     }
 
-    /// <summary>
-    ///     <c>NotNull</c> IS the presence check. An omitted <c>?expectedVersion=</c> binds a nullable to null and
-    ///     answers 400, while an explicit <c>0</c> passes and reaches the service — which is the difference between a
-    ///     client that forgot the guard and one that supplied it. A stale value is the service's 409.
-    /// </summary>
+    /// <summary><c>NotNull</c> IS the presence check for <c>expectedVersion</c>.</summary>
+    /// <remarks>
+    ///     An omitted <c>?expectedVersion=</c> binds a nullable to null and answers 400, while an explicit <c>0</c>
+    ///     passes and reaches the service — which is the difference between a client that forgot the guard and one
+    ///     that supplied it. A stale value is the service's 409.
+    /// </remarks>
     internal static void ApplyExpectedVersion<T>(AbstractValidator<T> validator, Func<T, long?> selector)
     {
         ArgumentNullException.ThrowIfNull(validator);

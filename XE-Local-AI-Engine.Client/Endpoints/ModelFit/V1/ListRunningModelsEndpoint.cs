@@ -8,13 +8,15 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
-///     FastEndpoints handler for the running llama-server processes (GET model-fit/running). There is no dedicated
-///     list-running seam — the running models are derived from the llama-server process supervisor's
-///     <see cref="LlamaCppRuntimeOrchestrationService.CheckHealthAsync" /> snapshot (one row per running <c>(model, role)</c>
-///     process). A process-probe or transport failure returns an OK-empty list so the running panel can poll and
-///     degrade; any other exception is a defect and is left to surface as a 500 rather than be disguised as "nothing is
-///     running". Each row's diagnostics are already sanitized (no internal paths/secrets).
+///     FastEndpoints handler for the running llama-server processes (GET model-fit/running), one row per running
+///     <c>(model, role)</c> process with its diagnostics already sanitized (no internal paths/secrets).
 /// </summary>
+/// <remarks>
+///     There is no dedicated list-running seam: the rows are derived from the llama-server process supervisor's
+///     <see cref="LlamaCppRuntimeOrchestrationService.CheckHealthAsync" /> snapshot. A process-probe or transport
+///     failure returns an OK-empty list so the running panel can poll and degrade; any other exception is a defect and
+///     is left to surface as a 500 rather than be disguised as "nothing is running".
+/// </remarks>
 public sealed class ListRunningModelsEndpoint : EndpointWithoutRequest<ListRunningModelsResponse>
 {
     private readonly ILogger<ListRunningModelsEndpoint> _logger;
@@ -51,11 +53,8 @@ public sealed class ListRunningModelsEndpoint : EndpointWithoutRequest<ListRunni
         {
             throw;
         }
-        // Narrowed to what the supervisor snapshot can actually fail with: Process.HasExited (InvalidOperationException,
-        // Win32Exception, NotSupportedException) and the liveness probe's transport (HttpRequestException/TimeoutException
-        // — the shipped probe already swallows both, a substituted one need not). Everything else is a bug in our code
-        // and must surface as a 500 rather than be reported to the running panel as "nothing is running", which is what
-        // the previous catch-all did — and eject/update decisions are made off that answer.
+        // Narrowed to what the supervisor snapshot can fail with: Process.HasExited (InvalidOperationException, Win32Exception, NotSupportedException) and the probe's
+        // transport (HttpRequestException/TimeoutException; a substituted probe may not swallow them). Any other exception must 500: reporting a defect as "nothing is running" misleads eject/update.
         catch (Exception exception) when (exception is InvalidOperationException
                                               or Win32Exception
                                               or NotSupportedException

@@ -106,10 +106,12 @@ public sealed class DeleteExternalProviderConnectionRequest
     public string? ConnectionId { get; init; }
 
     /// <summary>
-    ///     The revision the caller read, or null to delete unconditionally. Bound explicitly from the query string: a
-    ///     DELETE with a request body is a shape not every HTTP stack will send, and without the attribute the
-    ///     generated OpenAPI document declares one.
+    ///     The revision the caller read, or null to delete unconditionally.
     /// </summary>
+    /// <remarks>
+    ///     Bound explicitly from the query string: a DELETE with a request body is a shape not every HTTP stack will
+    ///     send, and without the attribute the generated OpenAPI document declares one.
+    /// </remarks>
     [QueryParam]
     public string? ExpectedRevision { get; init; }
 }

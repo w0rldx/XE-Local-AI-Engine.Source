@@ -30,11 +30,8 @@ internal static class LocalModelsMapper
                           .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
                           .ToArray();
 
-        // Order: local Ollama → local GGUF (llamacpp) → cloud → external. GGUF entries are deduped against the Ollama
-        // names so a name present under both runtimes is listed once (Ollama wins). The picker groups by Provider, so
-        // the families stay visually separated; cloud (Codex) stays last in its catalog (strongest-first) order.
-        // External entries trail everything because they are not one family: the client sections them per connection
-        // and badges each by its DECLARED locality, which no position in this list could express.
+        // Order: local Ollama, local GGUF (llamacpp), cloud, external. GGUF names are deduped against the Ollama ones so a name under both runtimes is listed once (Ollama wins),
+        // and cloud (Codex) keeps its catalog's strongest-first order. External entries trail everything: the client sections them per connection and badges each by its DECLARED locality.
         var localItems = ConcatGgufModels(ollamaItems, ggufModels, selectedModelName);
 
         var items = ConcatRemoteModels(localItems, cloudModels, externalModels);
@@ -52,21 +49,15 @@ internal static class LocalModelsMapper
 
     /// <summary>
     ///     Maps installed GGUF models (served by the bundled llama.cpp runtime) to model-list entries tagged
-    ///     <see cref="LocalModelProviders.LlamaCpp" />. GGUF chat models are classified <see cref="ModelKind.Chat" />
-    ///     WITHOUT an <c>/api/show</c> probe — a downloaded GGUF in the chat picker has a completion head by
-    ///     construction. Reasoning/tool support and the capability tokens are detected offline from the model's GGUF
-    ///     chat template (carried on the descriptor by the store); a model whose template could not be read defaults to
-    ///     the safe no-tools/no-reasoning classification (a non-tool model is never offered tools). Reasoning surfaces as
-    ///     TWO mutually exclusive flags: <see cref="LocalModelResponse.IsReasoningCapable" /> (graded — a
-    ///     <c>think:&lt;level&gt;</c> control exists) and <see cref="LocalModelResponse.IsNativeReasoningCapable" />
-    ///     (the model reasons on a template-baked channel with no graded switch). An embedding-only
-    ///     GGUF is recognized offline from its name (<see cref="ModelKindDetector.IsEmbeddingName" />, matching
-    ///     EMBED/NOMIC-EMBED/BGE-… fragments) and tagged <see cref="ModelKind.Embedding" />; a reranker
-    ///     (cross-encoder) GGUF is recognized from its name (<see cref="ModelKindDetector.IsRerankerName" />, matching
-    ///     RERANK, checked FIRST since a name like <c>bge-reranker-…</c> matches the embedding prefix too) and tagged
-    ///     <see cref="ModelKind.Reranker" />. Both are filtered out by the React <c>kind === "Chat"</c> picker; every
-    ///     other GGUF stays Chat.
+    ///     <see cref="LocalModelProviders.LlamaCpp" />.
     /// </summary>
+    /// <remarks>
+    ///     GGUF chat models are classified <see cref="ModelKind.Chat" /> WITHOUT an <c>/api/show</c> probe: a
+    ///     downloaded GGUF in the chat picker has a completion head by construction. Reasoning, tool support and the
+    ///     capability tokens are detected offline from the descriptor's GGUF chat template; an unreadable template
+    ///     defaults to the safe no-tools/no-reasoning classification. Reasoning surfaces as two mutually exclusive
+    ///     flags: graded <see cref="LocalModelResponse.IsReasoningCapable" />, template-baked <see cref="LocalModelResponse.IsNativeReasoningCapable" />.
+    /// </remarks>
     public static IReadOnlyList<LocalModelResponse> ToLlamaCppModelResponses(IReadOnlyList<LocalModelDescriptor> ggufModels,
         string? selectedModelName)
     {
@@ -76,6 +67,8 @@ internal static class LocalModelsMapper
                .Where(static descriptor => !string.IsNullOrWhiteSpace(descriptor.ModelName))
                .Select(descriptor =>
                {
+                   // Kind from the name alone (a fresh GGUF carries no probe), per ModelKindDetector.EmbeddingNameFragments and its reranker sibling; the picker shows only Chat. The MTP- draft
+                   // quant marker wins, then RERANK before embedding (bge-reranker-… matches both), then a BGE-/BGE: prefix or an EMBED / ALL-MINILM / NOMIC-EMBED / MXBAI-EMBED fragment.
                    var kind = LocalGgufModelKindClassifier.Classify(descriptor.ModelName);
                    return new LocalModelResponse
                    {
@@ -91,9 +84,8 @@ internal static class LocalModelsMapper
                        Capabilities = descriptor.Capabilities,
                        IsReasoningCapable = descriptor.IsReasoningCapable,
                        IsNativeReasoningCapable = descriptor.IsNativeReasoningCapable,
-                       // Detected from the SAME chat template as the reasoning flags: a graded model whose template
-                       // renders no reasoning end marker keeps its effort but loses its token cap, and the node says so
-                       // rather than letting the UI imply a budget that llama.cpp silently ignores.
+                       // Detected from the SAME chat template as the reasoning flags: a graded model whose template renders no reasoning end marker keeps its effort but
+                       // loses its token cap, and the node says so rather than letting the UI imply a budget that llama.cpp silently ignores.
                        ReasoningBudgetEnforceable = descriptor.ReasoningBudgetEnforceable,
                        IsToolCapable = descriptor.IsToolCapable,
                        IsMultimodalCapable = descriptor.IsMultimodalCapable,
@@ -104,13 +96,6 @@ internal static class LocalModelsMapper
                .ToArray();
     }
 
-    /// <summary>
-    ///     Classifies an installed GGUF from its name alone (a fresh GGUF carries no capability probe). A
-    ///     speculative-decoding drafter is checked FIRST: its key carries the exact <c>MTP-</c> quant marker, and left
-    ///     unclassified it would default to Chat and sit in the picker as a 0.4 GB twin of the real model it drafts for.
-    ///     Reranker is then checked before embedding because a reranker name such as <c>bge-reranker-…</c> also matches
-    ///     the embedding prefix, and the reranker classification is the correct one. Any other name defaults to Chat.
-    /// </summary>
     // Appends GGUF entries after the Ollama group, deduping by ModelName (case-insensitive) so a name installed under
     // both runtimes is listed once (the Ollama entry wins). Returns a single ordered array (Ollama first, then GGUF).
     private static LocalModelResponse[] ConcatGgufModels(IReadOnlyList<LocalModelResponse> ollamaItems,
@@ -132,10 +117,8 @@ internal static class LocalModelsMapper
         return ollamaItems.Concat(ggufItems).ToArray();
     }
 
-    // Appends the two non-node-local families after the node-local ones, in the one order both list paths use: cloud
-    // (Codex, Azure) first, then the operator's external connections. One helper rather than two hand-written concat
-    // chains, because the available and unavailable paths disagreeing about this order is exactly the kind of drift
-    // nothing else would catch.
+    // Appends the two non-node-local families after the node-local ones, in the one order both list paths use: cloud (Codex, Azure) first, then the operator's external
+    // connections. One helper rather than two hand-written concat chains, because the available and unavailable paths disagreeing about this order is drift nothing would catch.
     private static LocalModelResponse[] ConcatRemoteModels(IReadOnlyList<LocalModelResponse> localItems,
         IReadOnlyList<LocalModelResponse>? cloudModels,
         IReadOnlyList<LocalModelResponse>? externalModels)
@@ -160,22 +143,11 @@ internal static class LocalModelsMapper
     ///     <c>ext:{connectionId}/{wireId}</c> id.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         Every capability here is DECLARED by the operator, never probed: only <c>POST /v1/chat/completions</c> is
-    ///         universal across OpenAI-compatible servers, and none of them advertises tool, vision or reasoning support
-    ///         in a shape that can be trusted across llama.cpp, vLLM, LM Studio and hosted APIs alike.
-    ///     </para>
-    ///     <para>
-    ///         Reasoning maps onto the GRADED flag and never the native one: native reasoning is a llama.cpp
-    ///         chat-template concept, and the external path's graded control is the typed <c>reasoning_effort</c> body
-    ///         field. <c>ReasoningBudgetEnforceable</c> is vacuously true — the provider emits no budget marker, so
-    ///         there is no cap for the server to silently ignore, and reporting false would make the UI warn about an
-    ///         enforcement gap that does not exist.
-    ///     </para>
-    ///     <para>
-    ///         Size, quantization and modified-at stay null: they describe node-local weights, and the node holds none
-    ///         for these models.
-    ///     </para>
+    ///     Every capability here is DECLARED by the operator, never probed: only <c>POST /v1/chat/completions</c> is
+    ///     universal across OpenAI-compatible servers, and none advertises tool, vision or reasoning support in a shape
+    ///     trustworthy across llama.cpp, vLLM, LM Studio and hosted APIs alike. Reasoning maps onto the GRADED flag and
+    ///     never the native one, a llama.cpp chat-template concept, and <c>ReasoningBudgetEnforceable</c> is vacuously
+    ///     true: no budget marker means no cap to silently ignore. Size, quantization and modified-at stay null.
     /// </remarks>
     public static IReadOnlyList<LocalModelResponse> ToExternalProviderModelResponses(IReadOnlyList<ExternalProviderModelRegistration> registrations,
         string? selectedModelName)
@@ -216,19 +188,21 @@ internal static class LocalModelsMapper
         return locality == ExternalProviderLocality.Local
             ? LocalModelDeclaredLocalities.Local
 
-            // Anything that is not a positive Local declaration is treated as cloud — the fail-closed direction the
-            // trust resolver takes for an unresolvable id, kept identical here so the badge can never say "local"
-            // about something the gates treat as leaving the node.
+            // Anything that is not a positive Local declaration is treated as cloud — the fail-closed direction the trust resolver takes for an unresolvable id, kept identical
+            // here so the badge can never say "local" about something the gates treat as leaving the node.
             : LocalModelDeclaredLocalities.Cloud;
     }
 
     /// <summary>
     ///     Maps the offered Codex cloud models (<see cref="CodexModelCatalog.ModelIds" />) to model-list entries tagged
-    ///     <see cref="LocalModelProviders.CodexOAuth" />. The endpoint passes these only when a Codex session is
-    ///     present. Each entry advertises the Codex provider's declared capability matrix
-    ///     (<see cref="CodexProviderCapabilities.V0" />) rather than an Ollama classification (the local runtime has
-    ///     never seen these ids). Size/quantization fields stay null — they are local-runtime concepts.
+    ///     <see cref="LocalModelProviders.CodexOAuth" />.
     /// </summary>
+    /// <remarks>
+    ///     The endpoint passes these only when a Codex session is present. Each entry advertises the Codex provider's
+    ///     declared capability matrix (<see cref="CodexProviderCapabilities.V0" />) rather than an Ollama
+    ///     classification, because the local runtime has never seen these ids. Size and quantization stay null: they
+    ///     are local-runtime concepts.
+    /// </remarks>
     public static IReadOnlyList<LocalModelResponse> ToCodexCloudModelResponses(string? selectedModelName)
     {
         return CodexModelCatalog.ModelIds
@@ -249,12 +223,15 @@ internal static class LocalModelsMapper
 
     /// <summary>
     ///     Maps a stored Azure Foundry connection's manually-added deployments to model-list entries tagged
-    ///     <see cref="LocalModelProviders.AzureFoundry" />. The endpoint passes these only when an Azure connection is
-    ///     stored. Each entry advertises the Azure provider's declared capability matrix
-    ///     (<see cref="AzureFoundryProviderCapabilities.V0" />) rather than an Ollama classification (the local runtime
-    ///     has never seen these deployment ids). The deployment name is the model id; an optional display label rides
-    ///     along. Size/quantization fields stay null — they are local-runtime concepts.
+    ///     <see cref="LocalModelProviders.AzureFoundry" />.
     /// </summary>
+    /// <remarks>
+    ///     The endpoint passes these only when an Azure connection is stored. Each entry advertises the Azure
+    ///     provider's declared capability matrix (<see cref="AzureFoundryProviderCapabilities.V0" />) rather than an
+    ///     Ollama classification, because the local runtime has never seen these deployment ids. The deployment name is
+    ///     the model id and an optional display label rides along; size and quantization stay null, being
+    ///     local-runtime concepts.
+    /// </remarks>
     public static IReadOnlyList<LocalModelResponse> ToAzureFoundryCloudModelResponses(StoredAzureFoundryConnection connection,
         string? selectedModelName)
     {
@@ -267,9 +244,8 @@ internal static class LocalModelsMapper
                              ModelName = model.DeploymentName,
                              Provider = LocalModelProviders.AzureFoundry,
 
-                             // The operator sets this label in the Azure settings editor, and until now the list DTO had
-                             // nowhere to put it — so it was stored, round-tripped through settings, and then dropped
-                             // before it ever reached the picker.
+                             // The operator sets this label in the Azure settings editor; it is carried here so the picker can render it, rather than being stored,
+                             // round-tripped through settings and then dropped.
                              DisplayLabel = model.DisplayLabel,
                              IsSelected = string.Equals(model.DeploymentName, selectedModelName, StringComparison.OrdinalIgnoreCase),
                              Kind = ModelKind.Chat.ToString(),
@@ -289,19 +265,16 @@ internal static class LocalModelsMapper
         IReadOnlyList<LocalModelDescriptor>? ggufModels = null,
         IReadOnlyList<LocalModelResponse>? externalModels = null)
     {
-        // Ollama is unavailable, but node-local GGUFs (served by llama.cpp) do not depend on it — surface them so a
-        // no-Ollama box can still select and chat over an installed GGUF. A present Codex session likewise offers cloud
-        // models, and an external connection is served by someone else's endpoint entirely. Order mirrors the success
-        // path: GGUF (local) then cloud then external.
+        // Ollama is unavailable, but node-local GGUFs (served by llama.cpp) do not depend on it — surface them so a no-Ollama box can still select and chat over an installed
+        // GGUF. A Codex session likewise offers cloud models, and an external connection is served by someone else's endpoint. Order mirrors the success path: GGUF, cloud, external.
         var ggufItems = ggufModels is { Count: > 0 }
             ? ToLlamaCppModelResponses(ggufModels, selectedModelName)
             : [];
 
         var items = ConcatRemoteModels(ggufItems, cloudModels, externalModels);
 
-        // IsAvailable reflects whether a node-local runtime can serve a chat: true once at least one GGUF is
-        // installed (llama.cpp can serve it), even though Ollama itself is down. Cloud-only (no GGUF) keeps the
-        // local runtime reported unavailable.
+        // IsAvailable reflects whether a node-local runtime can serve a chat: true once at least one GGUF is installed (llama.cpp can serve it), even though Ollama itself is
+        // down. Cloud-only (no GGUF) keeps the local runtime reported unavailable.
         var isAvailable = ggufItems.Count > 0;
 
         return new ListLocalModelsResponse
@@ -310,9 +283,8 @@ internal static class LocalModelsMapper
             SelectedModelName = selectedModelName,
             ConfiguredDefaultModelName = configuredDefaultModelName,
 
-            // The unavailability sentence belongs to an unavailable list only: reporting a local runtime that IS
-            // available alongside "Local model provider is unavailable." is a contradiction any client reading `error`
-            // would render as a false alarm.
+            // The unavailability sentence belongs to an unavailable list only: reporting a local runtime that IS available alongside
+            // "Local model provider is unavailable." is a contradiction any client reading `error` would render as a false alarm.
             Error = isAvailable ? null : error,
             Items = items
         };
@@ -330,9 +302,8 @@ internal static class LocalModelsMapper
                     .Select(static snapshot => (Name: ReadRunningModelName(snapshot), Snapshot: snapshot))
                     .Where(static entry => !string.IsNullOrWhiteSpace(entry.Name))
 
-                    // "Running" means resident in this node's RAM/VRAM. An external model is served by someone else's
-                    // process, so it can never legitimately appear here — and if a runtime ever echoed an ext: id back,
-                    // listing it would invite an eject/unload action against a process this node does not own.
+                    // "Running" means resident in this node's RAM/VRAM, and an external model is served by someone else's process, so it can never legitimately appear here:
+                    // were a runtime to echo an ext: id back, listing it would invite an eject/unload action against a process this node does not own.
                     .Where(static entry => !ExternalModelId.HasExternalScheme(entry.Name))
                     .Select(static entry => new RunningLocalModelResponse
                     {
@@ -421,12 +392,15 @@ internal static class LocalModelsMapper
     }
 
     /// <summary>
-    ///     Maps an installed GGUF descriptor (served by llama.cpp) to the shared model-details response.
-    ///     <see cref="LocalModelDetailsResponse.MaxContextTokens" /> is the descriptor's advertised train ceiling and
-    ///     <paramref name="effectiveContextTokens" /> the RUNNING process's launched context window, when a
-    ///     chat process is warm. <c>Template</c>/<c>System</c>/<c>License</c> are Ollama Modelfile concepts a raw GGUF has
-    ///     no equivalent of, so they stay null. Keeps the response shape aligned with the Ollama branch.
+    ///     Maps an installed GGUF descriptor (served by llama.cpp) to the shared model-details response, keeping its
+    ///     shape aligned with the Ollama branch.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="LocalModelDetailsResponse.MaxContextTokens" /> is the descriptor's advertised train ceiling and
+    ///     <paramref name="effectiveContextTokens" /> the RUNNING process's launched context window, when a chat
+    ///     process is warm. <c>Template</c>/<c>System</c>/<c>License</c> are Ollama Modelfile concepts a raw GGUF has
+    ///     no equivalent of, so they stay null.
+    /// </remarks>
     public static LocalModelDetailsResponse ToDetailsResponse(this LocalModelDescriptor descriptor, string modelName, int? effectiveContextTokens = null)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
@@ -445,13 +419,15 @@ internal static class LocalModelsMapper
     }
 
     /// <summary>
-    ///     Maps an external OpenAI-compatible registration to the shared model-details response. Details for an
-    ///     external model come entirely from the operator's declarations — there is no probe, because only
-    ///     POST /v1/chat/completions is universal across OpenAI-compatible servers and none of them reports a window in
-    ///     a shape that can be trusted across all of them. The declared window is reported as BOTH the advertised
-    ///     ceiling and the effective window: for an endpoint the node does not launch, those are the same number, and
-    ///     the context meter reads the effective one.
+    ///     Maps an external OpenAI-compatible registration to the shared model-details response.
     /// </summary>
+    /// <remarks>
+    ///     Details for an external model come entirely from the operator's declarations — there is no probe, because
+    ///     only POST /v1/chat/completions is universal across OpenAI-compatible servers and none of them reports a
+    ///     window in a shape that can be trusted across all of them. The declared window is reported as BOTH the
+    ///     advertised ceiling and the effective window: for an endpoint the node does not launch those are the same
+    ///     number, and the context meter reads the effective one.
+    /// </remarks>
     public static LocalModelDetailsResponse ToDetailsResponse(this ExternalProviderModelRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
@@ -462,9 +438,8 @@ internal static class LocalModelsMapper
             MaxContextTokens = registration.Model.ContextLength,
             EffectiveContextTokens = registration.Model.ContextLength,
 
-            // The same four connection facts the list entry carries. A details view reached directly — a deep link, a
-            // reload — has no list entry to read them from, and the egress cue must not depend on which route the
-            // client happened to arrive by.
+            // The same four connection facts the list entry carries: a details view reached directly (a deep link, a reload) has no list entry to read them from, and the
+            // egress cue must not depend on which route the client happened to arrive by.
             DisplayLabel = registration.Model.DisplayName,
             ExternalConnectionId = registration.Connection.Id,
             ExternalConnectionName = registration.Connection.DisplayName,

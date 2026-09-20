@@ -7,12 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
 /// <summary>
-///     FastEndpoints handler that begins an image-model file-set download (POST images/models/downloads). It validates
-///     the requested file-set, hands it to <see cref="IImageModelDownloadCoordinator" /> (which owns the detached
-///     transfer plus its status registry), and returns 202 immediately. The download's outcome — including failure — is
-///     observable via <c>GET images/models/downloads</c>; presence of the finished model surfaces via
-///     <c>GET images/models</c>. No path/token is accepted or returned. Operator-gated.
+///     Begins an image-model file-set download, answering 202 immediately. Operator-gated.
 /// </summary>
+/// <remarks>
+///     It validates the requested file-set and hands it to <see cref="IImageModelDownloadCoordinator" />, which owns
+///     the detached transfer and its status registry. The outcome, failure included, is observable through
+///     <c>GET images/models/downloads</c>, and the finished model through <c>GET images/models</c>. No path or token
+///     is accepted or returned.
+/// </remarks>
 public sealed class StartImageModelDownloadEndpoint : Endpoint<StartImageModelDownloadRequest, StartImageModelDownloadResponse>
 {
     private readonly IImageModelDownloadCoordinator _downloadCoordinator;
@@ -51,9 +53,8 @@ public sealed class StartImageModelDownloadEndpoint : Endpoint<StartImageModelDo
             return;
         }
 
-        // The coordinator owns the detached transfer and records its terminal phase, so a failure is reported rather
-        // than logged and forgotten. The request token is deliberately not involved — it is cancelled the instant the
-        // 202 is written, while the download outlives this request.
+        // The coordinator owns the detached transfer and records its terminal phase, so a failure is reported rather than logged and forgotten. The request token is
+        // deliberately not involved: it is cancelled the instant the 202 is written, while the download outlives this request.
         var ticket = _downloadCoordinator.Start(request);
 
         await Send.ResultAsync(Results.Accepted(uri: null, new StartImageModelDownloadResponse

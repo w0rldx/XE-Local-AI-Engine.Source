@@ -7,14 +7,16 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Inference;
 
 /// <summary>
-///     FastEndpoints handler that benchmarks a drafted inference profile (POST model-fit/profiles/benchmark). The target
-///     profile id is carried in the body (never a route param), so the POST always has a body. An empty id is rejected
-///     with a 400. Calls <see cref="IInferenceProfileService.BenchmarkAsync" />; a failed harness leaves the snapshot
-///     Failed and is surfaced as a 400 via <c>AddError</c> + <c>Send.ErrorsAsync</c>, not an exception. A SKIPPED result
-///     (the model was serving inference, so nothing ran and nothing was evicted) is also a 400 today, carrying its own
-///     retry-when-idle wording rather than the generic failure text. On success it
-///     returns the measured metrics + snapshot id + (un-frozen) profile view — never the raw <c>/metrics</c> scrape.
+///     FastEndpoints handler that benchmarks a drafted inference profile (POST model-fit/profiles/benchmark) through
+///     <see cref="IInferenceProfileService.BenchmarkAsync" />.
 /// </summary>
+/// <remarks>
+///     The profile id rides the body, never a route param, so the POST always has a body; an empty id is a 400. A
+///     failed harness leaves the snapshot Failed, and a SKIPPED result (the model was serving inference, so nothing ran
+///     and nothing was evicted) is a 400 too, carrying its own retry-when-idle wording rather than the generic failure
+///     text; both go through <c>AddError</c> + <c>Send.ErrorsAsync</c>, not an exception. Success returns the metrics,
+///     snapshot id and un-frozen profile view — never the raw <c>/metrics</c> scrape.
+/// </remarks>
 public sealed class BenchmarkInferenceProfileEndpoint : Endpoint<BenchmarkInferenceProfileRequest, BenchmarkInferenceProfileResponse>
 {
     private readonly IInferenceProfileService _inferenceProfileService;

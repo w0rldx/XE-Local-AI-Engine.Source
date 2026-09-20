@@ -5,15 +5,15 @@ using Microsoft.AspNetCore.Http.Metadata;
 
 /// <summary>
 ///     The request-body cap for the four routes that carry a document — create, update and validate, which carry a
-///     graph, and start-run, which carries an input. Without one they inherit Kestrel's 30 MB default, and a body that
-///     size is parsed, walked by the runtime's parser and hashed before the node cap ever gets a chance to refuse it.
-///     <para>
-///         Two mechanisms, as elsewhere in this tree: the metadata is what the HOST enforces before the body is read,
-///         and <see cref="IsOversized" /> is the cheap early exit the handler makes for itself. The metadata is
-///         Kestrel-side, so the in-memory test host neither honours nor disproves it; the early exit is the half that
-///         is provable without a real connection.
-///     </para>
+///     graph, and start-run, which carries an input.
 /// </summary>
+/// <remarks>
+///     Without one they inherit Kestrel's 30 MB default, and a body that size is parsed, walked by the runtime's
+///     parser and hashed before the node cap ever gets a chance to refuse it. Two mechanisms, as elsewhere in this
+///     tree: the metadata is what the HOST enforces before the body is read, and <see cref="IsOversized" /> is the
+///     cheap early exit the handler makes for itself. The metadata is Kestrel-side, so the in-memory test host neither
+///     honours nor disproves it; the early exit is provable without a real connection.
+/// </remarks>
 internal sealed class GraphWorkflowRequestSizeLimit : IRequestSizeLimitMetadata
 {
     /// <summary>
@@ -27,23 +27,26 @@ internal sealed class GraphWorkflowRequestSizeLimit : IRequestSizeLimitMetadata
 
     /// <summary>
     ///     What an oversized request is told, written as the <c>detail</c> of the shared
-    ///     <c>RequestBodyTooLargeProblem</c> body — the SAME problem+json shape the host's own refusal writes and the
-    ///     one these routes declare, so the caller parses one shape whichever half refused.
+    ///     <c>RequestBodyTooLargeProblem</c> body.
     /// </summary>
+    /// <remarks>
+    ///     That is the SAME problem+json shape the host's own refusal writes and the one these routes declare, so the
+    ///     caller parses one shape whichever half refused.
+    /// </remarks>
     public static readonly string OversizedDetail =
         string.Create(CultureInfo.InvariantCulture,
             $"The request body is larger than the {MaxBytes / (1024 * 1024)} MB this node accepts for a graph.");
 
     /// <summary>
-    ///     Whether the request DECLARES more body than this node accepts. Content-Length is never the limit — a
-    ///     caller can omit or lie about it — which is what the metadata above is for; this is the layer that answers
-    ///     with a message an operator can read instead of a bare host refusal.
-    ///     <para>
-    ///         An ABSENT Content-Length is therefore NOT a refusal. A chunked body declares no length at all, and
-    ///         reading that null as "over the cap" would answer 413 to every streamed request, about a size nobody
-    ///         ever stated. The streamed case belongs to the metadata above, which counts the bytes as they arrive.
-    ///     </para>
+    ///     Whether the request DECLARES more body than this node accepts.
     /// </summary>
+    /// <remarks>
+    ///     Content-Length is never the limit — a caller can omit or lie about it — which is what the metadata above is
+    ///     for; this is the layer that answers with a message an operator can read instead of a bare host refusal. An
+    ///     ABSENT Content-Length is therefore NOT a refusal: a chunked body declares no length at all, and reading that
+    ///     null as "over the cap" would answer 413 to every streamed request, about a size nobody ever stated. The
+    ///     streamed case belongs to the metadata above, which counts the bytes as they arrive.
+    /// </remarks>
     public static bool IsOversized(HttpRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);

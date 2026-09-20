@@ -7,10 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>
-///     Cancels an in-flight weight download. Idempotent: cancelling one that just finished reports no change rather
-///     than failing, because the operator clicking a stale row is a race, not a mistake. A 1.6 GB pull that could not
-///     be stopped would hold the node's bandwidth and disk until it finished. Operator-gated.
+///     Cancels an in-flight weight download. Operator-gated.
 /// </summary>
+/// <remarks>
+///     Idempotent: cancelling one that just finished reports no change rather than failing, because the operator
+///     clicking a stale row is a race, not a mistake. A 1.6 GB pull that could not be stopped would hold the node's
+///     bandwidth and disk until it finished.
+/// </remarks>
 public sealed class CancelTranscriptionModelDownloadEndpoint : Endpoint<TranscriptionModelDownloadRequest, TranscriptionModelDownloadResponse>
 {
     private readonly IWhisperModelDownloadCoordinator _downloadCoordinator;

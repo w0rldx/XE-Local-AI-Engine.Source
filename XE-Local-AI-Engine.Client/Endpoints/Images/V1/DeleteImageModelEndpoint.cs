@@ -44,9 +44,8 @@ public sealed class DeleteImageModelEndpoint : Endpoint<DeleteImageModelRequest>
             return;
         }
 
-        // A weight file still held by the running sd-server surfaces as ImageModelInUseException, which the global
-        // ConflictExceptionHandler renders as a 409 ProblemDetails — the store keeps the registry entry in that case, so
-        // the model correctly remains listed rather than vanishing while its gigabytes stay on disk.
+        // A weight file still held by the running sd-server surfaces as ImageModelInUseException, which the global ConflictExceptionHandler renders as a 409 ProblemDetails.
+        // The store keeps the registry entry in that case, so the model correctly remains listed rather than vanishing while its gigabytes stay on disk.
         await _modelStore.DeleteModelAsync(req.ModelName.Trim(), ct);
         await Send.NoContentAsync(ct);
     }

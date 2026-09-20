@@ -2,18 +2,18 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
 
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
-// Request DTOs
-//
-// These mirror the established endpoint-DTO style in this project (sealed class + required/init, e.g.
-// SchedulerEndpointDtos / ConversationUploadEndpointDtos) rather than positional records: the multipart upload binding
-// and the route/query binding are proven against this shape, and keeping the whole file consistent avoids mixing styles.
+// Request DTOs. These follow the endpoint-DTO style this project uses elsewhere — sealed class with required/init members, as in SchedulerEndpointDtos and
+// ConversationUploadEndpointDtos — rather than positional records: the multipart upload binding and the route/query binding are proven against this shape.
 
 /// <summary>
-///     Route binding for the multipart knowledge-document upload. The file rides the multipart form; the typed
-///     <see cref="File" /> property exists so FastEndpoints documents a <c>multipart/form-data</c> body in OpenAPI (the
-///     generated hey-api client then serializes the upload as form-data rather than JSON). The handler still reads the
-///     form-file collection directly, so the binding tolerates whichever multipart field name the client chooses.
+///     Route binding for the multipart knowledge-document upload; the file rides the multipart form.
 /// </summary>
+/// <remarks>
+///     The typed <see cref="File" /> property exists so FastEndpoints documents a <c>multipart/form-data</c> body in
+///     OpenAPI, which is what makes the generated hey-api client serialize the upload as form-data rather than JSON.
+///     The handler still reads the form-file collection directly, so the binding tolerates whichever multipart field
+///     name the client chooses.
+/// </remarks>
 public sealed class UploadKnowledgeDocumentRequest
 {
     public IFormFile? File { get; init; }
@@ -81,11 +81,14 @@ public sealed class ImportKnowledgeRepositoryResponse
 }
 
 /// <summary>
-///     Result of a multipart upload. <see cref="Deduplicated" /> is true when an identical file (same content hash)
-///     already existed — in that case <see cref="DocumentId" /> is the pre-existing document's id and no new ingestion
-///     was enqueued. <see cref="Status" /> is the document's current pipeline status. Enums serialize as their string
-///     names via the globally registered converter.
+///     Result of a multipart upload.
 /// </summary>
+/// <remarks>
+///     <see cref="Deduplicated" /> is true when an identical file (same content hash) already existed; in that case
+///     <see cref="DocumentId" /> is the pre-existing document's id and no new ingestion was enqueued.
+///     <see cref="Status" /> is the document's current pipeline status. Enums serialize as their string names via the
+///     globally registered converter.
+/// </remarks>
 public sealed class UploadKnowledgeDocumentResponse
 {
     public required Guid DocumentId { get; init; }
@@ -96,10 +99,13 @@ public sealed class UploadKnowledgeDocumentResponse
 }
 
 /// <summary>
-///     Management summary of one knowledge-base document. <see cref="DisplayName" /> is the decrypted original file name
-///     (owner-only, over this authenticated surface). <see cref="StaleModel" /> is true when the document was embedded
-///     with a model other than the currently configured one, so the UI can offer a reindex.
+///     Management summary of one knowledge-base document.
 /// </summary>
+/// <remarks>
+///     <see cref="DisplayName" /> is the decrypted original file name, owner-only over this authenticated surface.
+///     <see cref="StaleModel" /> is true when the document was embedded with a model other than the currently
+///     configured one, so the UI can offer a reindex.
+/// </remarks>
 public sealed class KnowledgeDocumentResponse
 {
     public required Guid DocumentId { get; init; }
@@ -247,14 +253,15 @@ public sealed class ReindexCorpusResponse
 }
 
 /// <summary>
-///     Result of the one-click recommended-reranker download. Carries the same core identity the GGUF download trigger
-///     returns (<see cref="ModelName" /> + <see cref="AlreadyInFlight" />) plus the recommended descriptor
-///     (<see cref="RepoId" />/<see cref="Quant" />) and an <see cref="AlreadyInstalled" /> flag so the UI can show what is
-///     being fetched and give a friendly no-op when the model is already present. Exactly one of the three states holds:
-///     already installed (no download started), already in flight (rejoined an existing download), or a fresh download
-///     started — the download runs in the background and progress streams over the GGUF download hub, keyed by
-///     <see cref="ModelName" />.
+///     Result of the one-click recommended-reranker download.
 /// </summary>
+/// <remarks>
+///     Carries the same core identity the GGUF download trigger returns (<see cref="ModelName" /> and
+///     <see cref="AlreadyInFlight" />), the recommended descriptor (<see cref="RepoId" />/<see cref="Quant" />) and an
+///     <see cref="AlreadyInstalled" /> flag. Exactly one of three states holds: already installed with no download
+///     started, already in flight having rejoined an existing download, or a fresh download started — which runs in
+///     the background, with progress streaming over the GGUF download hub keyed by <see cref="ModelName" />.
+/// </remarks>
 public sealed class DownloadRecommendedRerankerResponse
 {
     /// <summary>Canonical <c>{repoId}:{quant}</c> model name to track the download by and to select as the reranker.</summary>
@@ -273,12 +280,14 @@ public sealed class DownloadRecommendedRerankerResponse
 }
 
 /// <summary>
-///     Result of the one-click recommended-embedding-model download. Shape-identical to
-///     <see cref="DownloadRecommendedRerankerResponse" /> so the two buttons share one UI idiom, with one semantic
-///     difference worth knowing: <see cref="AlreadyInstalled" /> reports whether the node can embed AT ALL, so
-///     <see cref="ModelName" /> may name a different embedding model the operator already had rather than the
-///     recommended one. <see cref="RepoId" />/<see cref="Quant" /> always describe the recommendation itself.
+///     Result of the one-click recommended-embedding-model download, shape-identical to
+///     <see cref="DownloadRecommendedRerankerResponse" /> so the two buttons share one UI idiom.
 /// </summary>
+/// <remarks>
+///     One semantic difference is worth knowing: <see cref="AlreadyInstalled" /> reports whether the node can embed AT
+///     ALL, so <see cref="ModelName" /> may name a different embedding model the operator already had rather than the
+///     recommended one. <see cref="RepoId" />/<see cref="Quant" /> always describe the recommendation itself.
+/// </remarks>
 public sealed class DownloadRecommendedEmbeddingResponse
 {
     /// <summary>The embedding model that will actually be used — the recommended one, or an already-installed equivalent.</summary>

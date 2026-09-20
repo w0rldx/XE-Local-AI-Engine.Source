@@ -6,11 +6,13 @@ using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Read-only app self-update status (GET app-update/status): the running version, the available version (when newer),
-///     whether an update is available, and whether this build is configured / desktop, plus a sanitized check status. Reads the
-///     shared <see cref="IAppUpdateState" /> snapshot (computed at startup); <c>?refresh=true</c> forces a fresh GitHub
-///     check, subject to a 10-minute rate-limit floor.
+///     Read-only app self-update status: the running version, the available version when newer, whether an update is
+///     available, whether this build is configured and desktop, plus a sanitized check status.
 /// </summary>
+/// <remarks>
+///     Reads the shared <see cref="IAppUpdateState" /> snapshot, computed at startup; <c>?refresh=true</c> forces a
+///     fresh GitHub check, subject to a 10-minute rate-limit floor.
+/// </remarks>
 public sealed class GetAppUpdateStatusEndpoint : Endpoint<GetAppUpdateStatusRequest, AppUpdateStatusResponse>, IDesktopOnlyEndpoint
 {
     // Minimum spacing between anonymous live GitHub refreshes.

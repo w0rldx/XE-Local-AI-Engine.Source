@@ -5,11 +5,14 @@ using FluentValidation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     Boundary validation for <see cref="SaveNodeSettingsRequest" />. Every migrated field is optional; a rule fires only
-///     <c>When</c> the field is supplied (a <see langword="null" /> keeps the current stored value). Range/format
-///     violations are rejected with a 400 and a clear message before anything is persisted; the store's <c>Normalize</c>
-///     remains the second, defense-in-depth clamp.
+///     Boundary validation for <see cref="SaveNodeSettingsRequest" />.
 /// </summary>
+/// <remarks>
+///     Every migrated field is optional, so a rule fires only <c>When</c> the field is supplied (a
+///     <see langword="null" /> keeps the current stored value). Range and format violations are rejected with a 400 and
+///     a clear message before anything is persisted; the store's <c>Normalize</c> remains the second,
+///     defense-in-depth clamp.
+/// </remarks>
 public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSettingsRequest>
 {
     public SaveNodeSettingsRequestValidator()
@@ -77,9 +80,8 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => !string.IsNullOrWhiteSpace(request.KvCacheType))
             .WithMessage("Unknown KV cache type.");
 
-        // The parser IS the allow-list — one producer, so the accepted set cannot drift from the spelling Format
-        // writes — and it is case-insensitive, so a hand-written client's "Docker" is accepted and normalized while
-        // "Podman" answers 400. A blank string is rejected rather than treated as "keep": only an absent member keeps.
+        // The parser IS the allow-list — one producer, so the accepted set cannot drift from the spelling Format writes — and it is case-insensitive, so a hand-written
+        // client's "Docker" is accepted and normalized while "Podman" answers 400. A blank string is rejected rather than treated as "keep": only an absent member keeps.
         RuleFor(static request => request.ContainerRuntimeSelection)
             .Must(StoredNodeSettings.IsValidContainerRuntimeSelection)
             .When(static request => request.ContainerRuntimeSelection is not null)
@@ -93,10 +95,8 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftGpuLayers, StoredNodeSettings.MaxSpeculativeDraftGpuLayers)
             .When(static request => request.SpeculativeDraftGpuLayers is not null);
 
-        // Cross-field: a draft-* mode needs a draft model. This boundary rule fires when the request itself sets a draft-*
-        // SpeculativeMode; it catches the common "pick draft mode, forget the model" case with an immediate 400. It cannot
-        // see the CURRENT stored mode (partial-update merge), so the endpoint additionally re-checks the merged result —
-        // together they guarantee a draft-* mode never persists without a draft model (which would fail chat-server start).
+        // Cross-field: a draft-* mode needs a draft model. This boundary rule fires when the request itself sets a draft-* SpeculativeMode, catching "pick draft mode, forget
+        // the model" with an immediate 400; it cannot see the CURRENT stored mode, so the endpoint re-checks the merged result — together, no draft-* mode persists modelless.
         RuleFor(static request => request.SpeculativeDraftModelName)
             .Must(static name => !string.IsNullOrWhiteSpace(name))
             .When(static request => StoredNodeSettings.SpeculativeModeRequiresDraftModel(request.SpeculativeMode))
@@ -134,9 +134,8 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .InclusiveBetween(StoredNodeSettings.MinDetachedGraceSeconds, StoredNodeSettings.MaxDetachedGraceSeconds)
             .When(static request => request.DetachedGraceSeconds is not null);
 
-        // Every override entry must have a non-blank model name and finite, non-negative rates (HasValidRates is the one
-        // shared predicate with the store's Normalize). Reject junk with an immediate 400; Normalize remains the
-        // defense-in-depth second pass that also drops any entry that slips through.
+        // Every override entry must have a non-blank model name and finite, non-negative rates (HasValidRates is the one shared predicate with the store's Normalize). Junk is
+        // rejected with an immediate 400; Normalize remains the defense-in-depth second pass that also drops any entry slipping through.
         RuleFor(static request => request.UsageRates!)
             .Must(static rates => rates.All(static entry =>
                 !string.IsNullOrWhiteSpace(entry.Key) && entry.Value is not null && entry.Value.HasValidRates))

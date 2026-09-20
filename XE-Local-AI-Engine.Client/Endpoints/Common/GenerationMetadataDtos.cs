@@ -5,14 +5,14 @@ using XE_Local_AI_Engine.Client.Services.Drafting;
 /// <summary>
 ///     AI-drafting provenance as it travels on the wire: the draft endpoints return this block alongside the drafted
 ///     fields, and the client echoes it back <em>opaquely</em> on the create/update request that saves the draft.
-///     <para>
-///         <b>This is informational, not an attestation.</b> Every field here is client-supplied on the save path, and
-///         this is a single-operator local node — so an operator can trivially forge it against themselves. It records
-///         what a draft claimed, and nothing downstream grants trust or capability based on it (locked decision 9: no
-///         signed receipts). The two fields a reader can rely on are the server-stamped <c>acceptedAtUtc</c> and
-///         <c>wasEdited</c> on <see cref="GenerationMetadataResponse" />.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <b>Informational, not an attestation.</b> Every field is client-supplied on the save path on a single-operator
+///     local node, so an operator can trivially forge it against themselves. It records what a draft claimed; nothing
+///     downstream grants trust or capability based on it (locked decision 9: no signed receipts). The two fields a
+///     reader can rely on are the server-stamped <c>acceptedAtUtc</c> and <c>wasEdited</c> on
+///     <see cref="GenerationMetadataResponse" />.
+/// </remarks>
 public sealed class GenerationMetadata
 {
     /// <summary>The node-local model that produced the draft, as the operator selected it.</summary>
@@ -45,9 +45,12 @@ public sealed class GenerationMetadata
 
 /// <summary>
 ///     Stored provenance as the single-item reads return it: everything the client echoed, plus the two fields the
-///     server computes at save time. Carried on the full skill and single-agent projections only — list projections
-///     leave it out/null so the library lists stay lean.
+///     server computes at save time.
 /// </summary>
+/// <remarks>
+///     Carried on the full skill and single-agent projections only — list projections leave it out/null so the library
+///     lists stay lean.
+/// </remarks>
 public sealed class GenerationMetadataResponse
 {
     public string? Model { get; init; }
@@ -77,11 +80,12 @@ public sealed class GenerationMetadataResponse
     public bool WasEdited { get; init; }
 }
 
-/// <summary>
-///     The one place the wire provenance block is bounded, stamped and (de)serialized. Every create/update endpoint
-///     that accepts an echoed <see cref="GenerationMetadata" /> runs <see cref="Validate" /> first — the block is
-///     operator input like any other, so it is capped at the boundary rather than trusted (invariant 7).
-/// </summary>
+/// <summary>The one place the wire provenance block is bounded, stamped and (de)serialized.</summary>
+/// <remarks>
+///     Every create/update endpoint that accepts an echoed <see cref="GenerationMetadata" /> runs
+///     <see cref="Validate" /> first: the block is operator input like any other, so it is capped at the boundary
+///     rather than trusted (invariant 7).
+/// </remarks>
 internal static class GenerationProvenance
 {
     /// <summary>
@@ -95,9 +99,12 @@ internal static class GenerationProvenance
 
     /// <summary>
     ///     Stamps the two server-computed fields onto the echoed block and renders the persisted JSON object for the
-    ///     encrypted <c>GenerationMetadataJson</c> column. Returns <c>null</c> when no block was echoed, which the
-    ///     stores read as "leave the stored provenance alone".
+    ///     encrypted <c>GenerationMetadataJson</c> column.
     /// </summary>
+    /// <returns>
+    ///     The persisted JSON, or <c>null</c> when no block was echoed — which the stores read as "leave the stored
+    ///     provenance alone".
+    /// </returns>
     public static string? ToPersistedJson(GenerationMetadata? metadata,
         string? savedName,
         string? savedDescription,

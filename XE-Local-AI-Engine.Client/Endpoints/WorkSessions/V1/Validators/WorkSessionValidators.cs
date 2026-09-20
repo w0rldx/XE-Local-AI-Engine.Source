@@ -5,15 +5,14 @@ using FluentValidation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Shape validation only: lengths, enum parsing, non-empty ids and query ranges. Whether the agent exists and its
-///     model can call a tool needs a resolved model and stays in the service — a second capability gate here would be a
-///     second thing to keep in step.
-///     <para>
-///         The two length ceilings mirror the service's. They are duplicated deliberately: this layer rejects an
-///         over-long title before a conversation is created for it, and the service still enforces its own for callers
-///         that are not this API.
-///     </para>
+///     Shape validation only: lengths, enum parsing, non-empty ids and query ranges.
 /// </summary>
+/// <remarks>
+///     Whether the agent exists and its model can call a tool needs a resolved model and stays in the service — a
+///     second capability gate here would be a second thing to keep in step. The two length ceilings mirror the
+///     service's, duplicated deliberately: this layer rejects an over-long title before a conversation is created for
+///     it, and the service still enforces its own for callers that are not this API.
+/// </remarks>
 public sealed class CreateWorkSessionRequestValidator : Validator<CreateWorkSessionRequest>
 {
     public CreateWorkSessionRequestValidator()
@@ -47,12 +46,8 @@ public sealed class UpdateWorkSessionRequestValidator : Validator<UpdateWorkSess
     {
         RuleFor(static request => request.SessionId).NotEmpty();
 
-        // Omitted means unchanged, so only a PRESENT value is bounded. Blank-but-present is a caller mistake, not a
-        // request to clear a title the session cannot do without.
-        // Chained `.When(...)`, never the block `When(pred, () => ...)` form: only the chained one sets the
-        // per-component condition FastEndpoints' schema processor reads, and with the block form it saw an
-        // unconditional NotEmpty and emitted this OPTIONAL member as required on the wire. The rules are unchanged —
-        // a condition at the end of a chain covers every validator before it (ApplyConditionTo.AllValidators default).
+        // Omitted means unchanged, so only a PRESENT value is bounded: blank-but-present is a caller mistake, not a request to clear a title the session cannot do without.
+        // Chained `.When(...)`, never the block form, or this OPTIONAL member ships as required — docs/wiki/09-api-and-hubs.md ("Conventions").
         RuleFor(static request => request.Title)
             .NotEmpty()
             .WithMessage("A work session needs a title.")

@@ -38,9 +38,8 @@ internal static class UsageSummaryMapper
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(rateResolver);
 
-        // Fold the buckets once so the caller need not re-sum. Token sums stay long (a wide range can exceed int); the
-        // cost accumulates as a raw (unrounded) double and is rounded ONCE at the end, so the grand total does not
-        // compound per-bucket rounding error.
+        // Fold the buckets once so the caller need not re-sum. Token sums stay long (a wide range can exceed int); the cost accumulates as a raw (unrounded) double
+        // and is rounded ONCE at the end, so the grand total does not compound per-bucket rounding error.
         var runCount = 0;
         var promptTokens = 0L;
         var completionTokens = 0L;
@@ -75,11 +74,8 @@ internal static class UsageSummaryMapper
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(rateResolver);
 
-        // Fold the (model, provider, day) buckets down to one row per provider — summed across days and models. Ordinal
-        // keying keeps the canonical lowercase provider labels distinct without culture surprises; token sums stay long (a
-        // wide range can exceed int). The bucket list is small (bounded by retention horizon x models x providers), so the
-        // in-memory group is cheap. Per-provider cost sums the raw per-bucket costs then rounds once (no compounding).
-        // Ordered biggest-consumer first (total tokens), then provider name for a stable tie order.
+        // Fold the (model, provider, day) buckets to one row per provider, summed across days and models; the list is small (retention horizon x models x providers), so the group is cheap.
+        // Ordinal keying keeps the canonical lowercase provider labels distinct without culture surprises; rows are ordered biggest-consumer first by total tokens, then provider name.
         return records
                .GroupBy(record => record.Provider, StringComparer.Ordinal)
                .Select(group => new AgentUsageProviderTotalsResponse
@@ -99,10 +95,13 @@ internal static class UsageSummaryMapper
     }
 
     /// <summary>
-    ///     Raw (unrounded) USD cost of one bucket: reasoning tokens bill at the OUTPUT rate (they are model output), and
-    ///     rates are per 1M tokens so each term divides by 1,000,000. A free / unpriced (provider, model) resolves to a
-    ///     zero rate → zero cost. Kept unrounded so callers can accumulate and round once.
+    ///     Raw (unrounded) USD cost of one bucket: reasoning tokens bill at the OUTPUT rate (they are model output),
+    ///     and rates are per 1M tokens so each term divides by 1,000,000.
     /// </summary>
+    /// <remarks>
+    ///     A free / unpriced (provider, model) resolves to a zero rate → zero cost. Kept unrounded so callers can
+    ///     accumulate and round once.
+    /// </remarks>
     private static double RawCost(TokenUsageAggregateRecord record, IUsageRateResolver rateResolver)
     {
         var rate = rateResolver.Resolve(record.Provider, record.ModelName);

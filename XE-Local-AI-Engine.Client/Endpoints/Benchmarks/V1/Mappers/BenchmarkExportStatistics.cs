@@ -5,11 +5,11 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 internal static class BenchmarkExportStatistics
 {
-    /// <summary>
-    ///     One entry per repeat group, plus one per ungrouped run. Warm-ups are dropped — absorbing the first-launch
-    ///     cost is their whole job, and averaging them back in would put the cost right back into the numbers the
-    ///     repeats after them exist to isolate.
-    /// </summary>
+    /// <summary>One entry per repeat group, plus one per ungrouped run.</summary>
+    /// <remarks>
+    ///     Warm-ups are dropped — absorbing the first-launch cost is their whole job, and averaging them back in would
+    ///     put the cost right back into the numbers the repeats after them exist to isolate.
+    /// </remarks>
     public static IReadOnlyList<BenchmarkExportRepeatGroupResponse> Groups(IReadOnlyList<BenchmarkRunRecord> runs)
     {
         ArgumentNullException.ThrowIfNull(runs);
@@ -34,11 +34,11 @@ internal static class BenchmarkExportStatistics
                    .ToArray();
     }
 
-    /// <summary>
-    ///     Mean and POPULATION standard deviation. The runs are the population — this is every measurement that was
-    ///     taken, not a draw from a larger set — and the sample form would divide by zero on the single run that is by
-    ///     far the commonest group size.
-    /// </summary>
+    /// <summary>Mean and POPULATION standard deviation.</summary>
+    /// <remarks>
+    ///     The runs are the population — this is every measurement that was taken, not a draw from a larger set — and
+    ///     the sample form would divide by zero on the single run that is by far the commonest group size.
+    /// </remarks>
     public static BenchmarkExportSampleStatisticsResponse Summarize(IEnumerable<double?> values)
     {
         ArgumentNullException.ThrowIfNull(values);
@@ -61,14 +61,14 @@ internal static class BenchmarkExportStatistics
 
     /// <summary>
     ///     Two rows per group in llama-bench's own shape: a prompt-processing row and a token-generation row.
-    ///     <para>
-    ///         The model and runtime facts come from the group's FIRST run. An answer-variance group has one snapshot
-    ///         per repeat rather than one shared snapshot — the seed differs — but every fact read here (model file,
-    ///         its size, the GPU-layer count, the runtime build and the host GPUs) comes from the parts that do not,
-    ///         because the whole group is frozen against one launch. The token COUNTS are group means, not the first
-    ///         run's: those genuinely vary across an answer-variance group.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The model and runtime facts come from the group's FIRST run. An answer-variance group has one snapshot per
+    ///     repeat rather than one shared snapshot — the seed differs — but every fact read here (model file, its size,
+    ///     the GPU-layer count, the runtime build and the host GPUs) comes from the parts that do not, because the
+    ///     whole group is frozen against one launch. The token COUNTS are group means, not the first run's: those
+    ///     genuinely vary across an answer-variance group.
+    /// </remarks>
     public static IReadOnlyList<BenchmarkExportLlamaBenchRowResponse> LlamaBenchRows(IReadOnlyList<BenchmarkExportRepeatGroupResponse> groups,
         IReadOnlyDictionary<Guid, BenchmarkExportRunFacts> facts)
     {

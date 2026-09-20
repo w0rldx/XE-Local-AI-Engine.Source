@@ -6,10 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     FastEndpoints handler for hybrid knowledge-base retrieval (POST). Delegates to the search service, which embeds the
-///     query, runs the lexical FTS and model-scoped semantic arms, fuses them, and hydrates the hits. Titles and sections
-///     derive from non-sensitive heading/storage references, so a result never exposes the encrypted file name.
+///     Hybrid knowledge-base retrieval.
 /// </summary>
+/// <remarks>
+///     Delegates to the search service, which embeds the query, runs the lexical FTS and model-scoped semantic arms,
+///     fuses them and hydrates the hits. Titles and sections derive from non-sensitive heading and storage references,
+///     so a result never exposes the encrypted file name.
+/// </remarks>
 public sealed class SearchKnowledgeEndpoint : Endpoint<SearchKnowledgeRequest, SearchKnowledgeResponse>
 {
     private const int MinLimit = 1;

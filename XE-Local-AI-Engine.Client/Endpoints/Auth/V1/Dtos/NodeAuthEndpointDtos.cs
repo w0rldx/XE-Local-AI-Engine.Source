@@ -37,9 +37,12 @@ public sealed record NodeAccessTokenResponse
 
 /// <summary>
 ///     The <c>401</c> body <c>auth/login</c> answers when ASP.NET Identity has locked the account, paired with a
-///     <c>Retry-After</c> header carrying the same number of seconds. A wrong password before the lockout threshold
-///     still answers a body-less <c>401</c>, so <see cref="Code" /> is the only signal that waiting is the fix.
+///     <c>Retry-After</c> header carrying the same number of seconds.
 /// </summary>
+/// <remarks>
+///     A wrong password before the lockout threshold still answers a body-less <c>401</c>, so <see cref="Code" /> is
+///     the only signal that waiting is the fix.
+/// </remarks>
 public sealed record NodeLoginLockedOutResponse
 {
     /// <summary>The machine-readable discriminator. Always <c>locked-out</c>.</summary>

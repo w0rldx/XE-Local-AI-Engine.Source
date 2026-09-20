@@ -40,11 +40,14 @@ public sealed class AppUpdateStatusResponse
 }
 
 /// <summary>
-///     Response for <c>POST app-update/apply</c>. On success the process relaunches into the new version, so this is
-///     returned only when there was nothing to apply (or before the relaunch takes effect). <see cref="Applying" />
-///     reflects the REAL apply outcome — the service live-re-checks GitHub, so a stale "update available" snapshot that
-///     has since gone away yields <c>false</c> rather than stranding the client waiting for a relaunch.
+///     Response for <c>POST app-update/apply</c>.
 /// </summary>
+/// <remarks>
+///     On success the process relaunches into the new version, so this is returned only when there was nothing to
+///     apply, or before the relaunch takes effect. <see cref="Applying" /> reflects the REAL apply outcome — the
+///     service live-re-checks GitHub — so a stale "update available" snapshot that has since gone away yields
+///     <c>false</c> rather than stranding the client waiting for a relaunch.
+/// </remarks>
 public sealed class ApplyAppUpdateResponse
 {
     /// <summary>True when an update was actually found and apply was initiated (the app will relaunch); false when none was available.</summary>

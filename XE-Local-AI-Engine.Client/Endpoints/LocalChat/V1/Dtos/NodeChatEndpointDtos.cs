@@ -28,15 +28,15 @@ public sealed class ListNodeChatConversationsResponse
     public required IReadOnlyList<NodeChatConversationSummaryResponse> Items { get; init; }
 
     /// <summary>
-    ///     The node's EFFECTIVE <c>Security:MaxMessageSizeKb</c> (an operator can override the 256 KB default), so the
-    ///     composer can warn — and refuse to send — before firing a request the hub is guaranteed to reject. Advisory
-    ///     only: <c>LocalChatHub.EnsureMessageWithinSizeCap</c> remains the sole enforcement point.
-    ///     <para>
-    ///         It rides this response because the conversation list is the chat page's unconditional first GET (no
-    ///         capability gate, no selected conversation required), so the limit is in hand before the composer can
-    ///         accept a keystroke — and it carries the same <c>Operator</c> policy as the hub that enforces it.
-    ///     </para>
+    ///     The node's EFFECTIVE <c>Security:MaxMessageSizeKb</c> — an operator can override the 256 KB default — so
+    ///     the composer can warn, and refuse to send, before firing a request the hub is guaranteed to reject.
     /// </summary>
+    /// <remarks>
+    ///     Advisory only: <c>LocalChatHub.EnsureMessageWithinSizeCap</c> remains the sole enforcement point. It rides
+    ///     this response because the conversation list is the chat page's unconditional first GET — no capability
+    ///     gate, no selected conversation required — so the limit is in hand before the composer can accept a
+    ///     keystroke, and it carries the same <c>Operator</c> policy as the hub that enforces it.
+    /// </remarks>
     public required int MaxMessageSizeKb { get; init; }
 }
 
@@ -93,19 +93,24 @@ public sealed class CompactNodeChatConversationRequest
     public Guid ConversationId { get; init; }
 
     /// <summary>
-    ///     The model the user is chatting with, forwarded so compaction summarizes with the user's own selection when it
-    ///     is an installed local chat model (a cloud/unknown selection falls back to a node-local model). Optional; a
-    ///     body-less request (null) uses the node's local default. Travels in the body; the id travels in the route.
+    ///     The model the user is chatting with, forwarded so compaction summarizes with the user's own selection when
+    ///     it is an installed local chat model.
     /// </summary>
+    /// <remarks>
+    ///     A cloud or unknown selection falls back to a node-local model. Optional: a body-less request (null) uses
+    ///     the node's local default. It travels in the body, while the conversation id travels in the route.
+    /// </remarks>
     public string? Model { get; init; }
 }
 
 /// <summary>
-///     Result of a compaction attempt. <see cref="Outcome" /> is one of the
-///     <c>ConversationCompactionOutcome</c> names ("Compacted", "NothingToCompact", "NoLocalModel",
-///     "SummarizerReturnedNothing", "ConversationNotFound"); the remaining fields are populated only when a synopsis was
-///     produced.
+///     Result of a compaction attempt.
 /// </summary>
+/// <remarks>
+///     <see cref="Outcome" /> is one of the <c>ConversationCompactionOutcome</c> names ("Compacted",
+///     "NothingToCompact", "NoLocalModel", "SummarizerReturnedNothing", "ConversationNotFound"); the remaining fields
+///     are populated only when a synopsis was produced.
+/// </remarks>
 public sealed class CompactNodeChatConversationResponse
 {
     public required string Outcome { get; init; }
@@ -135,10 +140,13 @@ public sealed class CancelNodeChatMessageRequest
 }
 
 /// <summary>
-///     The operator's decision on a pending tool-approval request. <see cref="RequestId" /> is the approval
-///     request id the <c>approval-requested</c> stream event carried (a plain string, not a Guid — the runner mints it
-///     as an opaque key), which the runner uses to release the exact waiting tool call.
+///     The operator's decision on a pending tool-approval request.
 /// </summary>
+/// <remarks>
+///     <see cref="RequestId" /> is the approval request id the <c>approval-requested</c> stream event carried — a
+///     plain string, not a Guid, because the runner mints it as an opaque key — which the runner uses to release the
+///     exact waiting tool call.
+/// </remarks>
 public sealed class ResolveToolApprovalRequest
 {
     public required string RequestId { get; init; }
@@ -146,12 +154,13 @@ public sealed class ResolveToolApprovalRequest
     public required bool Approved { get; init; }
 
     /// <summary>
-    ///     How long an APPROVE lasts. Additive and defaulted: an omitted or null scope is
-    ///     <see cref="ApprovalScope.Once" />, today's behaviour, so existing callers keep working unchanged.
-    ///     <see cref="ApprovalScope.Session" /> is honoured only for the read-only skill tools on a locally authored
-    ///     skill — the runner decides, and silently falls back to <see cref="ApprovalScope.Once" /> for anything else.
-    ///     Ignored entirely on a deny.
+    ///     How long an APPROVE lasts. An omitted or null scope is <see cref="ApprovalScope.Once" />.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="ApprovalScope.Session" /> is honoured only for the read-only skill tools on a locally authored
+    ///     skill: the runner decides, and silently falls back to <see cref="ApprovalScope.Once" /> for anything else.
+    ///     Ignored entirely on a deny.
+    /// </remarks>
     public ApprovalScope? Scope { get; init; }
 }
 
@@ -163,10 +172,13 @@ public sealed class ResolveToolApprovalResponse
 }
 
 /// <summary>
-///     The operator's answers to a pending <c>ask_user</c> question. <see cref="RequestId" /> is the question request id
-///     the <c>question-requested</c> stream event carried (a plain string, not a Guid — the runner mints it as an opaque
-///     key), which the runner uses to release the exact parked tool call. One entry per question in the call.
+///     The operator's answers to a pending <c>ask_user</c> question, one entry per question in the call.
 /// </summary>
+/// <remarks>
+///     <see cref="RequestId" /> is the question request id the <c>question-requested</c> stream event carried — a
+///     plain string, not a Guid, because the runner mints it as an opaque key — which the runner uses to release the
+///     exact parked tool call.
+/// </remarks>
 public sealed class ResolveUserQuestionRequest
 {
     public required string RequestId { get; init; }
@@ -205,11 +217,14 @@ public sealed class BranchNodeChatConversationRequest
     public Guid MessageId { get; init; }
 
     /// <summary>
-    ///     Optional selected-revision map (<c>variantGroupId -&gt; selectedMessageId</c>, mirroring the persisted
-    ///     selected-path shape) sent from the client's active-revision state so the branched thread matches the path
-    ///     the user was viewing rather than always copying the newest revision. Null/empty ⇒ newest-per-group
-    ///     (legacy). Validated server-side; an entry referencing a non-member message rejects the branch (400).
+    ///     Optional selected-revision map (<c>variantGroupId -&gt; selectedMessageId</c>), mirroring the persisted
+    ///     selected-path shape.
     /// </summary>
+    /// <remarks>
+    ///     Sent from the client's active-revision state, so the branched thread matches the path the user was viewing
+    ///     rather than always copying the newest revision. Null or empty means newest-per-group. Validated
+    ///     server-side: an entry referencing a non-member message rejects the branch with a 400.
+    /// </remarks>
     public IReadOnlyDictionary<Guid, Guid>? SelectedRevisions { get; init; }
 }
 
@@ -294,9 +309,12 @@ public sealed class NodeChatConversationResponse
 
     /// <summary>
     ///     Temporary-chat flag (adaptive memory): when true this conversation's completed runs are NOT mined into new
-    ///     memory candidates (write-only suppression — it still reads existing enabled memory). New conversations inherit
-    ///     the bound agent's <c>DefaultTemporaryChat</c>; the operator can override it per-conversation.
+    ///     memory candidates.
     /// </summary>
+    /// <remarks>
+    ///     Write-only suppression — it still reads existing enabled memory. New conversations inherit the bound
+    ///     agent's <c>DefaultTemporaryChat</c>, and the operator can override it per-conversation.
+    /// </remarks>
     public required bool MemoryExcluded { get; init; }
 
     public required IReadOnlyList<NodeChatMessageResponse> Messages { get; init; }
@@ -380,11 +398,14 @@ public sealed class NodeChatMessageResponse
     public long? GenerationDurationMs { get; init; }
 
     /// <summary>
-    ///     Knowledge-base excerpts that grounded this plain-chat assistant turn, surfaced from the
-    ///     metadata blob so the client can render a "Sources" strip. Null/absent for legacy turns, turns that did not use
-    ///     the knowledge base, and user messages. Carries only non-sensitive provenance (document/chunk id, derived
-    ///     title/section, score) — never chunk body text or the encrypted original file name.
+    ///     Knowledge-base excerpts that grounded this plain-chat assistant turn, surfaced from the metadata blob so
+    ///     the client can render a "Sources" strip.
     /// </summary>
+    /// <remarks>
+    ///     Null or absent for a turn that did not use the knowledge base, a turn written without it, and every user
+    ///     message. Carries only non-sensitive provenance — document and chunk id, derived title and section, score —
+    ///     never chunk body text or the encrypted original file name.
+    /// </remarks>
     public IReadOnlyList<NodeChatMessageSource>? Sources { get; init; }
 }
 

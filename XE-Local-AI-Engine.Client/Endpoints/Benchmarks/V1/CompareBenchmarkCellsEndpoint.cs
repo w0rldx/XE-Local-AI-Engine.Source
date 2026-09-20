@@ -8,10 +8,12 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
-///     Two to six cells side by side, with the paired-difference interval between every pair of them. The
-///     difference is a read-time projection over the cell table — nothing here is stored, so it is always computed
-///     from the scores the project holds right now.
+///     Two to six cells side by side, with the paired-difference interval between every pair of them.
 /// </summary>
+/// <remarks>
+///     The difference is a read-time projection over the cell table — nothing here is stored, so it is always
+///     computed from the scores the project holds right now.
+/// </remarks>
 public sealed class CompareBenchmarkCellsEndpoint : Endpoint<CompareBenchmarkCellsRequest, CompareBenchmarkCellsResponse>
 {
     private const int MinimumCells = 2;
@@ -58,12 +60,8 @@ public sealed class CompareBenchmarkCellsEndpoint : Endpoint<CompareBenchmarkCel
 
         var page = await _records.ListCellsAsync(req.ProjectId, ct);
 
-        // Which leaves count toward a quality number. A NIAH case is judged and carries its own score, but that score
-        // is a recall figure on its own axis and never enters the cell mean, so it must not enter a paired delta
-        // either - a delta is the same class of aggregate. The cell table cannot answer this and only the item rows
-        // can, which costs one extra read whose payloads get decrypted to reach one boolean. That is acceptable on a
-        // compare an operator triggers by hand. If it ever stops being acceptable, surface the scorable id set on the
-        // ranking instead of widening this read.
+        // Which leaves count toward a quality number: a NIAH case is judged, but its score is a recall figure on its own axis that never enters the cell mean, so it
+        // must not enter a paired delta either. Only the item rows can answer that, at one extra decrypting read - acceptable by hand; if it stops being, put the scorable id set on the ranking.
         var items = await _records.ListTaskItemsAsync(req.ProjectId, ct);
         var scorable = items.Where(static item => item.IsLeaf && item.CountsTowardScore).Select(static item => item.Id).ToHashSet();
         var byKey = page.Cells.ToDictionary(static cell => cell.CellKey, StringComparer.Ordinal);
@@ -126,13 +124,15 @@ public sealed class CompareBenchmarkCellsEndpoint : Endpoint<CompareBenchmarkCel
     }
 
     /// <summary>
-    ///     The two cells' quality scores for the items they SHARE, aligned and in task-item order. An item is shared
-    ///     only when both sides answered it rankably AND its item counts toward the score: a run the ranking excluded
-    ///     — truncated, item-revised, item-set-revised — carries a null quality and takes its item out of the
-    ///     comparison rather than into it with a guessed number, and a display-only leaf (a NIAH case) is left out for
-    ///     the same reason it is left out of the cell mean. A run naming no item is a pre-suite singleton and can be
-    ///     shared with nothing.
+    ///     The two cells' quality scores for the items they SHARE, aligned and in task-item order.
     /// </summary>
+    /// <remarks>
+    ///     An item is shared only when both sides answered it rankably AND its item counts toward the score: a run the
+    ///     ranking excluded — truncated, item-revised, item-set-revised — carries a null quality and takes its item
+    ///     out of the comparison rather than into it with a guessed number, and a display-only leaf (a NIAH case) is
+    ///     left out for the same reason it is left out of the cell mean. A run naming no item is a pre-suite singleton
+    ///     and can be shared with nothing.
+    /// </remarks>
     private static (int[] A, int[] B) SharedQuality(BenchmarkCellRecord left, BenchmarkCellRecord right, IReadOnlySet<Guid> scorable)
     {
         var rightByItem = Rankable(right, scorable);

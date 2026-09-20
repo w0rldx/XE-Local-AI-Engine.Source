@@ -12,10 +12,12 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 internal static class DevelopmentContractMapper
 {
     /// <summary>
-    ///     Projects the profile as its id, build target and digest rather than the stored blob. The build target is
-    ///     repository-relative by construction, so nothing host-identifying crosses the boundary; the full profile's
-    ///     argument vectors would, and buy the operator nothing.
+    ///     Projects the profile as its id, build target and digest rather than the stored blob.
     /// </summary>
+    /// <remarks>
+    ///     The build target is repository-relative by construction, so nothing host-identifying crosses the boundary;
+    ///     the full profile's argument vectors would, and buy the operator nothing.
+    /// </remarks>
     public static DevelopmentProjectResponse ToResponse(this DevelopmentProjectSnapshot value)
     {
         var profile = DevelopmentProfileSummary.TryFrom(value.CommandProfileJson);
@@ -138,96 +140,20 @@ internal static class DevelopmentContractMapper
         };
 
     /// <summary>
-    ///     Projects one sandbox role's SERVED isolation posture — what the role's own declaration asks for, intersected
-    ///     with what its provider advertises — into the operator-facing summary.
-    ///     <para>
-    ///         THE DERIVATION RULE, in one place. It is an INTERSECTION, not a capability readout, and that is the
-    ///         correction this method exists in its current shape to carry: reading the provider's flags alone reported
-    ///         Development Mode on this Linux box as filesystem-isolated and <c>Isolated</c>, because the process
-    ///         backend advertises a boundary — while <see cref="SandboxWorkloads.DevelopmentModeHostToolchain" />
-    ///         declares <see cref="SandboxIsolationMode.None" /> and the feature runs the host toolchain with the
-    ///         worktree mounted. A capability a role never requests is not a boundary the role is behind.
-    ///     </para>
-    ///     <list type="bullet">
-    ///         <item>
-    ///             <term>Filesystem</term>
-    ///             <description>
-    ///                 the provider advertises
-    ///                 <see cref="SandboxProviderCapabilities.SupportsHostFilesystemBoundary" /> AND the role's
-    ///                 <see cref="SandboxRequirements.IsolationFloor" /> is
-    ///                 <see cref="SandboxIsolationMode.Filesystem" />. The PROPERTY flag, not
-    ///                 <see cref="SandboxProviderCapabilities.SupportsFilesystemIsolation" />: this surface answers
-    ///                 "can a command here see the host filesystem", and a hardened container cannot — read-only
-    ///                 rootfs, engine-generated mounts only, no host namespaces, all read back and fail-closed on
-    ///                 mismatch — while that narrower flag means "serves the bubblewrap chain's own create-request
-    ///                 contract", which the container backend refuses. <c>run_python</c> is the one role in this engine
-    ///                 that declares the floor (<see cref="SandboxWorkloads.RunPython" />), so on a host with a working
-    ///                 chain it is the one role this column says <c>Yes</c> for.
-    ///             </description>
-    ///         </item>
-    ///         <item>
-    ///             <term>Network</term>
-    ///             <description>
-    ///                 the provider advertises <see cref="SandboxProviderCapabilities.SupportsNetworkPolicy" />. Not
-    ///                 intersected with <see cref="SandboxRequirements.NetworkFloor" />, and deliberately: the floor is
-    ///                 the weakest posture a workload will ACCEPT (<c>Unrestricted</c> for AgentHome and Development
-    ///                 Mode, so that a node without the mechanism still runs), while every consumer REQUESTS
-    ///                 <see cref="SandboxNetworkPolicy.None" /> per call exactly where the flag is advertised —
-    ///                 <c>AgentHomeService.ResolveNetworkPolicy</c>,
-    ///                 <c>DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy</c>, and
-    ///                 <c>ComputeToolGateway.BuildCreateRequest</c> unconditionally. So the flag IS the served posture
-    ///                 here, and reading the floor instead would report egress as unrestricted on a node that denies
-    ///                 it. <see cref="SandboxIsolationSummaryResponse.NetworkIsolationRequired" /> carries the OTHER
-    ///                 half — whether denial is a precondition on this node or a best-effort tightening — because
-    ///                 "denied here" and "must be denied here" are the two facts an operator acts on differently, and
-    ///                 one boolean cannot say both.
-    ///             </description>
-    ///         </item>
-    ///         <item>
-    ///             <term>Resource limits</term>
-    ///             <description>
-    ///                 the provider advertises <see cref="SandboxProviderCapabilities.SupportsResourceLimits" /> AND
-    ///                 the role's <see cref="SandboxRequirements.RequestsResourceLimits" /> is set. Intersected, unlike
-    ///                 Network, because ceilings are the opposite kind of axis:
-    ///                 <see cref="SandboxCreateRequest.ResourceLimits" /> is a PREFERENCE a backend may drop, and
-    ///                 <c>SandboxLifecycleRegistry.BuildLaunchPolicy</c> applies a scope ceiling only when the create
-    ///                 request carries one. Every executing role asks today, through the one
-    ///                 <see cref="SandboxResourceCeilings" /> derivation, so on a host with no ceiling mechanism this
-    ///                 column is No for all of them with the measured probe reason — which is a different sentence from
-    ///                 the "not requested by this role" one it used to carry, and a different operator action.
-    ///             </description>
-    ///         </item>
-    ///     </list>
-    ///     <para>
-    ///         <see cref="SandboxIsolationSummaryResponse.Level" /> counts those three SERVED axes, unchanged in rule
-    ///         and changed in inputs: <c>Isolated</c> for three, <c>Confined</c> for one or two, <c>None</c> for zero.
-    ///         There is no fourth term for a hardware or VM boundary because nothing in this tree can prove one.
-    ///     </para>
-    ///     <para>
-    ///         Counting advertised flags rather than trusting a provider's name stays the other half of the point: the
-    ///         process provider advertises a flag only where the containment probe EXERCISED the mechanism, so a
-    ///         Windows host reports <c>None</c> with the measured reason on exactly the same code path that reports a
-    ///         served boundary on Linux.
-    ///     </para>
-    ///     <para>
-    ///         Both reason strings therefore carry two different sentences, and telling them apart is the operator's
-    ///         whole action: NOT REQUESTED by the role (nothing to fix here — the workload declares no boundary and no
-    ///         ceiling; whether it should is an operator decision) versus REQUESTED AND UNAVAILABLE (the measured probe
-    ///         reason — install the missing mechanism, or leave the tool off).
-    ///     </para>
+    ///     Projects one sandbox role's SERVED isolation posture — the role's own declaration INTERSECTED with what its
+    ///     provider advertises, never a capability read-out — into the operator-facing summary.
     /// </summary>
+    /// <remarks>
+    ///     Network is the one axis NOT intersected with the role's <c>NetworkFloor</c>: the floor is the weakest posture a workload will ACCEPT, while every consumer
+    ///     requests <c>SandboxNetworkPolicy.None</c> wherever the flag is advertised (<c>AgentHomeService.ResolveNetworkPolicy</c>,
+    ///     <c>DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy</c>, <c>ComputeToolGateway.BuildCreateRequest</c>), so the flag IS the served posture.
+    ///     <see cref="SandboxIsolationSummaryResponse.Level" /> counts the three served axes — three, one-or-two, zero — with no term for a hardware or VM
+    ///     boundary. Rule, flags and the two reasons: docs/wiki/12-security-and-privacy.md ("Backend selection").
+    /// </remarks>
     /// <param name="role">The wire role name, as the panel keys its rows on.</param>
-    /// <param name="requirements">
-    ///     The role's ADR 0007 declaration from <see cref="SandboxWorkloads" />, which is the source of truth for what
-    ///     the role asks for. Passed in rather than looked up from <paramref name="role" /> so this projection owns no
-    ///     second per-role table that could drift from the constants the selector resolves against.
-    /// </param>
-    /// <param name="provider">The provider actually resolved for that role.</param>
+    /// <param name="requirements">The role's ADR 0007 declaration from <see cref="SandboxWorkloads" />, passed in so this projection owns no second per-role table.</param>
     /// <param name="containment">The host containment measurement, for the probe reason.</param>
-    /// <param name="nodeRequiresEgressDenial">
-    ///     This role's section's <c>RequireEgressDenial</c> switch. Defaulted to <see langword="false" /> — the shipped
-    ///     posture — so a caller that does not set the switch reports exactly what it reported before it existed.
-    /// </param>
+    /// <param name="nodeRequiresEgressDenial">This role's section's <c>RequireEgressDenial</c> switch; defaults to the shipped <see langword="false" />.</param>
     public static SandboxIsolationSummaryResponse ToIsolationSummary(string role,
         SandboxRequirements requirements,
         ISandboxRuntimeProvider provider,
@@ -307,9 +233,8 @@ internal static class DevelopmentContractMapper
         };
     }
 
-    // The containment probe measures the HOST bubblewrap chain, which is the process provider's boundary and nobody
-    // else's. Attributing its reason to another provider would tell an operator that a container role is unisolated
-    // because this host lacks bwrap, which is not why.
+    // The containment probe measures the HOST bubblewrap chain, which is the process provider's boundary and nobody else's. Attributing its reason to another
+    // provider would tell an operator that a container role is unisolated because this host lacks bwrap, which is not why.
     private static string ToFilesystemIsolationUnavailableReason(string providerName, SandboxContainment containment)
     {
         if (string.Equals(providerName, ProcessSandboxRuntimeProvider.Name, StringComparison.Ordinal))

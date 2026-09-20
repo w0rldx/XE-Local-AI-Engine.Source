@@ -7,11 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
-///     FastEndpoints handler to retrieve the tracked status of a single GGUF download by model name
-///     (GET model-fit/gguf/downloads/{modelName}). Returns 404 when the coordinator has no entry for that name —
-///     either it was never started or the process restarted. Thin transport over
-///     <see cref="IGgufDownloadCoordinator.GetStatus" />; no path, URL, or token is returned.
+///     FastEndpoints handler retrieving one tracked GGUF download by model name (GET
+///     model-fit/gguf/downloads/{modelName}), a thin transport over <see cref="IGgufDownloadCoordinator.GetStatus" />.
 /// </summary>
+/// <remarks>
+///     A name the coordinator has no entry for answers 404 — it was never started, or the process restarted. No path,
+///     URL or token is returned.
+/// </remarks>
 public sealed class GetGgufDownloadStatusEndpoint : Endpoint<GetGgufDownloadStatusRequest, GgufDownloadStatusResponse>
 {
     private readonly IGgufDownloadCoordinator _downloadCoordinator;

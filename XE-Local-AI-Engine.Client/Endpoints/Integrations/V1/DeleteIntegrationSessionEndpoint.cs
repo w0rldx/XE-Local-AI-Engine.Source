@@ -8,18 +8,13 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
 /// <summary>
 ///     Deletes a session by purging its owned conversation.
-///     <para>
-///         <b>The purge is the whole delete.</b> The conversation footprint purge takes the session row, its executions
-///         and their events with it, because those rows carry conversation-derived content and that purge is the node's
-///         privacy single source of truth. What survives is the content-free kind-3 audit row per terminalized
-///         execution: its <c>ConversationId</c> is null, so the purge never reaches it.
-///     </para>
-///     <para>
-///         Refuses with 409 while an execution on the session is still <c>Accepted</c>, <c>Queued</c> or
-///         <c>Running</c> — deleting then would purge the conversation out from under a live run about to persist its
-///         answer into it.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <b>The purge is the whole delete.</b> The conversation footprint purge takes the session row, its executions and their events with it, because those rows carry
+///     conversation-derived content and that purge is the node's privacy single source of truth. What survives is the content-free kind-3 audit row per terminalized
+///     execution, whose <c>ConversationId</c> is null. Refuses with 409 while an execution on the session is still <c>Accepted</c>, <c>Queued</c> or <c>Running</c>:
+///     deleting then would purge the conversation out from under a live run about to persist its answer into it.
+/// </remarks>
 public sealed class DeleteIntegrationSessionEndpoint : EndpointWithoutRequest
 {
     private readonly IntegrationSessionService _sessions;

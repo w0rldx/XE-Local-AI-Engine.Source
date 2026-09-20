@@ -6,6 +6,13 @@ using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
+/// <summary>Saves a partial node-settings update, merging it into the record the write lands on.</summary>
+/// <remarks>
+///     Cross-field guards run on the MERGED result in <c>NodeSettingsPolicy</c>, not at the boundary: the validator
+///     sees only the request, never the current stored state, and some rules need the EFFECTIVE runtime value (stored
+///     over appsettings seed over default) for a knob the request omitted. The policy stops at the first violation,
+///     which is the one-error-at-a-time response this endpoint sends.
+/// </remarks>
 public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest, NodeSettingsResponse>
 {
     private readonly INodeSettingsAdministrationService _administrationService;
@@ -20,23 +27,15 @@ public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest,
     {
         Put(LocalApiRoutes.NodeSettings.Settings);
         Policies(NodeAuthorizationPolicies.Operator);
-        // Only the 409 is declared: FastEndpoints already advertises the 200 and, because the host configures
-        // Errors.UseProblemDetails(), a ProblemDetails 400. Declaring those explicitly re-labelled the 400 as the
-        // FastEndpoints ErrorResponse shape, which is not what this endpoint actually sends.
+        // Only the 409 is declared: FastEndpoints already advertises the 200 and, because the host configures Errors.UseProblemDetails, a ProblemDetails 400. Declaring those
+        // explicitly re-labels the 400 as the FastEndpoints ErrorResponse shape, which is not what this endpoint sends.
         Description(builder => builder.Produces<NodeSettingsConflictResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(SaveNodeSettingsRequest req, CancellationToken ct)
     {
-        // The merge, not a merged record, and no load of its own: this request is optional field by optional field, so
-        // every field it omits is resolved from the record the service applies this to — the one the write lands on.
-        // Resolving them from a snapshot loaded here instead wrote that snapshot back over every field a sibling
-        // writer had changed while this save validated.
-        //
-        // Cross-field guards run on the MERGED result in NodeSettingsPolicy — the boundary validator only sees the
-        // request, not the current stored state, and some rules need the EFFECTIVE runtime value (stored > appsettings
-        // seed > default) for a knob the request omitted. The policy stops at the first violation, matching the
-        // one-error-at-a-time response this endpoint has always sent.
+        // Pass the merge, not a merged record, and load nothing here: this request is optional field by optional field, so every field it omits must resolve from the record
+        // the service applies it to — the one the write lands on — or a snapshot loaded here would overwrite every field a sibling writer changed while this save validated.
         var result = await _administrationService.SaveTrustedMergedAsync(current => req.ToStoredSettings(current), ct);
         if (result.Conflicted)
         {

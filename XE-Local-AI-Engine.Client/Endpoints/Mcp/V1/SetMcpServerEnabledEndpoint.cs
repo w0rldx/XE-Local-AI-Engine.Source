@@ -7,10 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>
-///     Enables or disables a registered MCP server. Enabling is a deliberate, separate action from create/update (a
-///     registration is always created disabled), and is the only path that flips the enabled state — the
-///     create/update bodies carry no enabled flag. A successful toggle triggers a connection refresh in the service.
+///     Enables or disables a registered MCP server.
 /// </summary>
+/// <remarks>
+///     Enabling is a deliberate action separate from create and update — a registration is always created disabled —
+///     and this is the only path that flips the enabled state, the create and update bodies carrying no enabled flag.
+///     A successful toggle triggers a connection refresh in the service.
+/// </remarks>
 public sealed class SetMcpServerEnabledEndpoint : Endpoint<SetMcpServerEnabledRequest, McpServerResponse>
 {
     private readonly IMcpServerService _mcpServerService;

@@ -7,10 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
 /// <summary>
-///     POST <c>chat/conversations/{conversationId}/compact</c> — non-destructive compaction. Summarizes the conversation's
-///     older turns with a node-local model into an encrypted synopsis sent in their place on later turns; the original
-///     messages are never deleted. Operator-gated and honors the read-only mutation guard, like rename/pin/archive.
+///     Non-destructive compaction of one conversation. Operator-gated.
 /// </summary>
+/// <remarks>
+///     Summarizes the conversation's older turns with a node-local model into an encrypted synopsis sent in their
+///     place on later turns; the original messages are never deleted. Honors the read-only mutation guard, like
+///     rename, pin and archive.
+/// </remarks>
 public sealed class CompactNodeChatConversationEndpoint : Endpoint<CompactNodeChatConversationRequest, CompactNodeChatConversationResponse>
 {
     private readonly IConversationCompactionService _compactionService;
@@ -30,12 +33,8 @@ public sealed class CompactNodeChatConversationEndpoint : Endpoint<CompactNodeCh
     {
         Post(LocalApiRoutes.LocalChat.CompactConversation);
         Policies(NodeAuthorizationPolicies.Operator);
-        // Route-only POST: the conversation id comes from the route, so the generated client sends no body — and
-        // therefore no Content-Type. The default POST "Accepts" metadata only allows application/json, which
-        // FastEndpoints answers with 415 when the header is absent. Overriding Accepts lets the body-less request
-        // through (the id still binds from the route).
-        // 409 = the read-only (Origin=Remote) rejection written by the global ConflictExceptionHandler
-        // (conflictType = ReadOnlyConversation); the guard exception is never caught here.
+        // Route-only POST: the conversation id comes from the route, so the generated client sends no body and no Content-Type, which the default POST "Accepts" metadata
+        // answers with 415; overriding Accepts lets it through. The 409 is the read-only rejection the global ConflictExceptionHandler writes with conflictType ReadOnlyConversation.
         Description(x => x.Accepts<CompactNodeChatConversationRequest>()
                           .ProducesConflictProblemDetails());
     }

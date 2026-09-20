@@ -34,10 +34,11 @@ internal static class TranscriptionMapper
     ///     Projects one session with its transcript.
     /// </summary>
     /// <param name="view">The decrypted session.</param>
-    /// <param name="fallbackErrorCode">
-    ///     The reason to report when the session row carries none. A refusal the service returns without writing the
-    ///     row — <c>already-transcribing</c> — would otherwise come back as a 200 with a silent, unexplained session.
-    /// </param>
+    /// <param name="fallbackErrorCode">The reason to report when the session row carries none.</param>
+    /// <remarks>
+    ///     Without <paramref name="fallbackErrorCode" />, a refusal the service returns without writing the row —
+    ///     <c>already-transcribing</c> — would come back as a 200 with a silent, unexplained session.
+    /// </remarks>
     /// <param name="fallbackErrorMessage">The display-safe explanation that goes with <paramref name="fallbackErrorCode" />.</param>
     public static TranscriptionSessionDetailResponse ToResponse(this TranscriptionSessionDetailView view,
         string? fallbackErrorCode = null,

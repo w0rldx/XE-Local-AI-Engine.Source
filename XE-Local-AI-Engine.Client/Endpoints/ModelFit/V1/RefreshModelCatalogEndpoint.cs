@@ -8,18 +8,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 
 /// <summary>
-///     FastEndpoints handler for an operator-forced catalog refresh (POST model-fit/catalog/refresh). Bypasses the TTL
-///     and attempts one remote fetch immediately when a refresh URL is configured; a no-op (returns the bundled
-///     snapshot) otherwise. A failed fetch/validation never surfaces as an error here — the provider's fallback chain
-///     (last-good, else bundled) means this endpoint always returns 200 with whatever catalog is now in effect.
+///     FastEndpoints handler for an operator-forced catalog refresh (POST model-fit/catalog/refresh): it bypasses the
+///     TTL and attempts one remote fetch when a refresh URL is configured, and is a no-op otherwise.
 /// </summary>
 /// <remarks>
-///     The 200-always contract is deliberate, but it used to be indistinguishable from success: with no
-///     <c>ModelCatalog:RefreshUrl</c> configured — which is the state of every stock node, since no appsettings file
-///     ships that section — this returned the unchanged bundled snapshot and the UI showed a green "catalog refreshed"
-///     toast for an action that could not possibly have done anything. The response now carries
-///     <see cref="ModelCatalogInfoResponse.RefreshSourceConfigured" /> so the caller can tell "refreshed" from
-///     "there is nothing to refresh from". Same silent-success class as the image-model download.
+///     A failed fetch or validation never surfaces as an error: the provider's fallback chain (last-good, else bundled)
+///     means this always returns 200 with whatever catalog is now in effect. A 200 therefore cannot be read as success
+///     — <see cref="ModelCatalogInfoResponse.RefreshSourceConfigured" /> is what tells "refreshed" from "there is
+///     nothing to refresh from". Same silent-success class as the image-model download.
 /// </remarks>
 public sealed class RefreshModelCatalogEndpoint : EndpointWithoutRequest<ModelCatalogInfoResponse>
 {

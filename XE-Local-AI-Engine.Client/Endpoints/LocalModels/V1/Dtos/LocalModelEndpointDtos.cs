@@ -18,11 +18,13 @@ public static class LocalModelProviders
     public const string AzureFoundry = "AzureFoundry";
 
     /// <summary>
-    ///     A model on an operator-registered external OpenAI-compatible connection. ONE tag for every connection — the
-    ///     provider is a multiplexer and the connection is carried by the id itself — so egress and grouping are read
-    ///     from <see cref="LocalModelResponse.DeclaredLocality" /> and
-    ///     <see cref="LocalModelResponse.ExternalConnectionId" />, never from this tag alone.
+    ///     A model on an operator-registered external OpenAI-compatible connection — ONE tag for every connection,
+    ///     because the provider is a multiplexer and the connection is carried by the id itself.
     /// </summary>
+    /// <remarks>
+    ///     Egress and grouping are therefore read from <see cref="LocalModelResponse.DeclaredLocality" /> and
+    ///     <see cref="LocalModelResponse.ExternalConnectionId" />, never from this tag alone.
+    /// </remarks>
     public const string External = "external";
 }
 
@@ -74,9 +76,12 @@ public sealed class LocalModelResponse
 
     /// <summary>
     ///     The provider this model is served by: <c>"Ollama"</c> for a node-local model (the default), or
-    ///     <c>"CodexOAuth"</c> for a ChatGPT-subscription Codex cloud model. The chat picker groups by this and shows
-    ///     an egress hint for cloud models. Defaults to <c>"Ollama"</c> so existing local entries are unchanged.
+    ///     <c>"CodexOAuth"</c> for a ChatGPT-subscription Codex cloud model.
     /// </summary>
+    /// <remarks>
+    ///     The chat picker groups by this and shows an egress hint for cloud models. Defaults to <c>"Ollama"</c>, so an
+    ///     entry written without the field reads as node-local.
+    /// </remarks>
     public string Provider { get; init; } = LocalModelProviders.Ollama;
 
     /// <summary>
@@ -98,9 +103,12 @@ public sealed class LocalModelResponse
 
     /// <summary>
     ///     The operator-declared trust locality of the serving connection (<see cref="LocalModelDeclaredLocalities" />),
-    ///     or <see langword="null" /> for every non-external entry. This is a DECLARATION, never an inference from the
-    ///     base URL, and it is what decides whether the model is grouped and badged as local or as cloud.
+    ///     or <see langword="null" /> for every non-external entry.
     /// </summary>
+    /// <remarks>
+    ///     This is a DECLARATION, never an inference from the base URL, and it is what decides whether the model is
+    ///     grouped and badged as local or as cloud.
+    /// </remarks>
     public string? DeclaredLocality { get; init; }
 
     public long? SizeBytes { get; init; }
@@ -134,44 +142,48 @@ public sealed class LocalModelResponse
     public required IReadOnlyList<string> Capabilities { get; init; }
 
     /// <summary>
-    ///     True when the model advertises the Ollama <c>thinking</c> capability — i.e. GRADED reasoning, a switchable
-    ///     <c>think:&lt;level&gt;</c> control. The composer uses this to gate the graded reasoning-effort menu so a
-    ///     non-reasoning model is never offered (or sent) the <c>think</c> field.
+    ///     True when the model advertises the Ollama <c>thinking</c> capability — GRADED reasoning, a switchable
+    ///     <c>think:&lt;level&gt;</c> control.
     /// </summary>
+    /// <remarks>
+    ///     The composer uses this to gate the graded reasoning-effort menu, so a non-reasoning model is never offered
+    ///     (or sent) the <c>think</c> field.
+    /// </remarks>
     public required bool IsReasoningCapable { get; init; }
 
     /// <summary>
     ///     True when the model reasons NATIVELY: its chat template bakes reasoning onto its own channel with no graded
-    ///     switch (the OpenAI harmony family, e.g. gpt-oss). Mutually exclusive with <see cref="IsReasoningCapable" />.
-    ///     The composer renders its own badge for this and keeps the BINARY on/none effort vocabulary — a native model
-    ///     must never be routed into the graded path. Defaults to <see langword="false" /> so an older client that omits
-    ///     the field behaves exactly as before.
+    ///     switch (the OpenAI harmony family, e.g. gpt-oss).
     /// </summary>
+    /// <remarks>
+    ///     Mutually exclusive with <see cref="IsReasoningCapable" />. The composer renders its own badge for this and
+    ///     keeps the BINARY on/none effort vocabulary — a native model must never be routed into the graded path.
+    ///     Defaults to <see langword="false" />, which is what a client omitting the field means.
+    /// </remarks>
     public bool IsNativeReasoningCapable { get; init; }
 
     /// <summary>
-    ///     Whether a model that reasons also accepts a GRADED effort level, or only reasons or does not. Distinguishes
-    ///     the two shapes <see cref="IsReasoningCapable" /> alone conflates for an externally served model: an endpoint
-    ///     that honours <c>reasoning_effort</c> gets the graded selector, one that merely reasons gets the binary
-    ///     on/off control — offering levels it ignores is a menu whose entries do nothing.
-    ///     <para>
-    ///         <see langword="null" /> means "not declared", which is every non-external entry: a local model's graded
-    ///         control follows its Ollama <c>thinking</c> capability and a cloud provider's follows its own vocabulary,
-    ///         neither of which this field is allowed to change. Meaningful only together with
-    ///         <see cref="IsReasoningCapable" />.
-    ///     </para>
+    ///     Whether a model that reasons also accepts a GRADED effort level, or only reasons or does not.
     /// </summary>
+    /// <remarks>
+    ///     Distinguishes the two shapes <see cref="IsReasoningCapable" /> alone conflates for an externally served
+    ///     model: an endpoint honouring <c>reasoning_effort</c> gets the graded selector, one that merely reasons gets
+    ///     the binary control, since offering levels it ignores is a menu whose entries do nothing.
+    ///     <see langword="null" /> means "not declared", which is every non-external entry: a local model's graded
+    ///     control follows its Ollama <c>thinking</c> capability and a cloud provider's its own, neither of which this field may change.
+    /// </remarks>
     public bool? IsReasoningEffortCapable { get; init; }
 
     /// <summary>
-    ///     True when llama.cpp can ENFORCE a per-request thinking budget for this model — its chat template renders a
-    ///     literal reasoning end marker (<c>&lt;/think&gt;</c>, gemma-4's <c>&lt;channel|&gt;</c>, …), which is what
-    ///     llama-server turns into the non-empty think-end-tag set its <c>reasoning_budget_tokens</c> gate requires.
-    ///     When <see langword="false" /> alongside <see cref="IsReasoningCapable" />, the graded effort still applies
-    ///     but its token cap does NOT: the server would accept the field and silently ignore it, so the node omits it.
-    ///     Meaningful only together with <see cref="IsReasoningCapable" />; defaults to <see langword="true" /> so an
-    ///     older client that omits the field, and every non-llama.cpp entry, behave exactly as before.
+    ///     True when llama.cpp can ENFORCE a per-request thinking budget for this model.
     /// </summary>
+    /// <remarks>
+    ///     Its chat template renders a literal reasoning end marker (<c>&lt;/think&gt;</c>, gemma-4's
+    ///     <c>&lt;channel|&gt;</c>, …), which is what llama-server turns into the non-empty think-end-tag set its
+    ///     <c>reasoning_budget_tokens</c> gate requires. When <see langword="false" /> alongside
+    ///     <see cref="IsReasoningCapable" />, the graded effort still applies but its token cap does NOT: the server
+    ///     would accept the field and silently ignore it, so the node omits it. Defaults to <see langword="true" />.
+    /// </remarks>
     public bool ReasoningBudgetEnforceable { get; init; } = true;
 
     /// <summary>
@@ -182,10 +194,12 @@ public sealed class LocalModelResponse
 
     /// <summary>
     ///     True when the model can accept image input (vision / multimodal) — its <c>mmproj</c> projector companion is
-    ///     present locally, so llama-server is launched with <c>--mmproj</c>. The composer uses this to gate image
-    ///     attachment so an image is never sent to a text-only model (which llama-server would reject). Defaults to
-    ///     <see langword="false" /> so an older client that omits the field behaves exactly as before.
+    ///     present locally, so llama-server is launched with <c>--mmproj</c>.
     /// </summary>
+    /// <remarks>
+    ///     The composer uses this to gate image attachment, so an image is never sent to a text-only model (which
+    ///     llama-server would reject). Defaults to <see langword="false" />.
+    /// </remarks>
     public bool IsMultimodalCapable { get; init; }
 
     /// <summary>True when an operator override is set, so the effective kind differs from the detected one.</summary>
@@ -259,10 +273,13 @@ public sealed class LocalModelDetailsResponse
 
     /// <summary>
     ///     The effective context window (in tokens) the RUNNING llama.cpp process for this model actually loaded — the
-    ///     launched <c>-c</c> as the server reports it via <c>/props</c>. Null when no chat process is running
-    ///     for the model or the runtime does not expose it. Distinct from <see cref="MaxContextTokens" /> (the model's
-    ///     advertised train ceiling): the chat context-usage meter should size against this real window when present.
+    ///     launched <c>-c</c> as the server reports it via <c>/props</c>.
     /// </summary>
+    /// <remarks>
+    ///     Null when no chat process is running for the model, or the runtime does not expose it. Distinct from
+    ///     <see cref="MaxContextTokens" /> (the model's advertised train ceiling): the chat context-usage meter sizes
+    ///     against this real window when present.
+    /// </remarks>
     public int? EffectiveContextTokens { get; init; }
 
     /// <summary>The operator's friendly label for this model, or null when they gave none. Populated for external models.</summary>
@@ -325,10 +342,13 @@ public sealed class RunningLocalModelsResponse
 
     /// <summary>
     ///     Whether the optional Ollama runtime is configured/enabled on this node (the <c>XE_OLLAMA_RUNTIME_ENABLED</c>
-    ///     gate). When false the client can stop polling this endpoint entirely — no Ollama daemon will ever answer — so
-    ///     it never backs off forever against a runtime that is switched off. Distinct from <see cref="IsAvailable" />,
-    ///     which reflects whether a configured daemon is currently reachable.
+    ///     gate).
     /// </summary>
+    /// <remarks>
+    ///     When false the client can stop polling this endpoint entirely — no Ollama daemon will ever answer — so it
+    ///     never backs off forever against a runtime that is switched off. Distinct from <see cref="IsAvailable" />,
+    ///     which reflects whether a configured daemon is currently reachable.
+    /// </remarks>
     public required bool OllamaConfigured { get; init; }
 
     public string? Error { get; init; }

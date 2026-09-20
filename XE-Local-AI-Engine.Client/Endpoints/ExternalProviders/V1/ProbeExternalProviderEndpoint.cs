@@ -11,17 +11,10 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 ///     model ids for pick-to-add.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The probe runs on the node because the browser cannot reach an arbitrary operator endpoint through CORS,
-///         and because the stored API key exists only here. An inline draft under a stored connection id falls back to
-///         that connection's key, so "Test connection" works on an existing connection without re-typing the secret —
-///         and the key is never returned, only used.
-///     </para>
-///     <para>
-///         A reachable endpoint that serves no model listing is a 200 with <c>reachable: true</c>, an explanatory
-///         <c>error</c> and an empty list, not a failure: only <c>POST /v1/chat/completions</c> is universal across
-///         OpenAI-compatible servers, so refusing such a connection would refuse working ones.
-///     </para>
+///     The probe runs on the node because the browser cannot reach an arbitrary operator endpoint through CORS, and because the stored API key exists only here. An inline
+///     draft under a stored connection id falls back to that connection's key, so "Test connection" works without re-typing the secret, and the key is never returned. A
+///     reachable endpoint that serves no model listing answers 200 with <c>reachable: true</c>, an explanatory <c>error</c> and an empty list: only
+///     <c>POST /v1/chat/completions</c> is universal across OpenAI-compatible servers, so refusing such a connection would refuse working ones.
 /// </remarks>
 public sealed class ProbeExternalProviderEndpoint : Endpoint<ExternalProviderProbeRequest, ExternalProviderProbeResponse>
 {

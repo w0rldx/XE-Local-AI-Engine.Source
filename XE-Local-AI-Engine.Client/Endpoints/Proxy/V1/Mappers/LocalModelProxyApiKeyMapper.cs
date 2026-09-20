@@ -50,12 +50,14 @@ internal static class LocalModelProxyApiKeyMapper
     }
 
     /// <summary>
-    ///     Builds the absolute OpenAI base URL from the LIVE request rather than from configuration. The node binds an
-    ///     OS-assigned loopback port in desktop mode, so the port is not knowable ahead of time and any configured value
-    ///     would go stale on the next launch; the request the operator's own browser just made carries the authoritative
-    ///     scheme, host and port. An external tool sets this as its <c>base_url</c> and the client appends
-    ///     <c>/chat/completions</c> etc.
+    ///     Builds the absolute OpenAI base URL from the LIVE request rather than from configuration.
     /// </summary>
+    /// <remarks>
+    ///     The node binds an OS-assigned loopback port in desktop mode, so the port is not knowable ahead of time and
+    ///     any configured value would go stale on the next launch; the request the operator's own browser just made
+    ///     carries the authoritative scheme, host and port. An external tool sets this as its <c>base_url</c>, and the
+    ///     client appends <c>/chat/completions</c> and the rest.
+    /// </remarks>
     private static string BuildEndpointUrl(HttpContext httpContext)
     {
         var request = httpContext.Request;

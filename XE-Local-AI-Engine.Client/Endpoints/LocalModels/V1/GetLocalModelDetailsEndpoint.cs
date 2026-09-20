@@ -8,11 +8,14 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
 /// <summary>
-///     Reports one model's details. The provider routing behind "which model is this and what are its details" lives in
+///     Reports one model's details.
+/// </summary>
+/// <remarks>
+///     The provider routing behind "which model is this and what are its details" lives in
 ///     <see cref="ILocalModelDetailsResolver" />; this endpoint binds, delegates, and maps the one resolution it gets
 ///     back — a <see cref="LocalModelDetailsResolution.NoLocalDetails" /> is the single 404 for every branch that has
 ///     no local details to report.
-/// </summary>
+/// </remarks>
 public sealed class GetLocalModelDetailsEndpoint : Endpoint<GetLocalModelDetailsRequest, LocalModelDetailsResponse>
 {
     private readonly ILocalModelDetailsResolver _detailsResolver;

@@ -42,23 +42,18 @@ public static class LocalApiRoutes
         public const string MessageFeedback = "chat/conversations/{conversationId}/messages/{messageId}/feedback";
         public const string SelectedPath = "chat/conversations/{conversationId}/selected-path";
 
-        // Per-conversation uploaded-file attachments. Collection route (POST multipart upload, GET list) and the
-        // individual file resource (DELETE). The literal "uploads" segment keeps these distinct from the other
-        // conversation action routes; {fileId} is the server-generated file id (never a client-supplied path).
+        // Per-conversation uploaded-file attachments: the collection (POST multipart upload, GET list) and one file resource (DELETE).
+        // The literal "uploads" segment keeps these off the other conversation action routes; {fileId} is server-generated, never a client-supplied path.
         public const string ConversationUploads = "chat/conversations/{conversationId}/uploads";
         public const string ConversationUploadById = "chat/conversations/{conversationId}/uploads/{fileId}";
         public const string Cancel = "chat/cancel";
 
-        // Loopback tool-approval responder. In desktop/local mode there is no worker hub to resolve an MCP
-        // tool's approval round-trip, so the browser posts the operator's decision here; the handler feeds it into the
-        // in-process invocation runner to release the waiting turn. The literal "approvals/resolve" segments keep it
-        // distinct from the other chat action routes; the body carries the approval request id + decision (no route param).
+        // Loopback tool-approval responder: desktop/local mode has no worker hub for an MCP tool's approval round-trip, so the browser posts the operator's decision
+        // here and the in-process invocation runner releases the waiting turn. Literal segments keep it off the chat action routes; the body carries the request id + decision, no route param.
         public const string ResolveApproval = "chat/approvals/resolve";
 
-        // Loopback ask_user responder, the question analogue of ResolveApproval: the browser posts the operator's
-        // answers here and the handler feeds them into the in-process runner to release the parked turn. The literal
-        // "questions/resolve" segments keep it distinct from the other chat action routes; the body carries the
-        // question request id + the answers (no route param).
+        // Loopback ask_user responder, the question analogue of ResolveApproval: the browser posts the operator's answers here and the in-process runner releases
+        // the parked turn. Literal segments keep it off the chat action routes; the body carries the question request id + the answers, no route param.
         public const string ResolveUserQuestion = "chat/questions/resolve";
     }
 
@@ -71,17 +66,13 @@ public static class LocalApiRoutes
     {
         public const string Settings = "cloud-settings";
 
-        // Entra ID device-code sign-in lifecycle for the stored Azure Foundry connection (interactive user sign-in
-        // with no client secret configured). Kept under the CloudSettings surface rather than CloudCodex since it
-        // authenticates the existing Azure Foundry connection, not a separate cloud provider. Never exposes token
-        // material — start returns only the user code + verification URL; status reports state + those same
-        // non-secret fields.
+        // Entra ID device-code sign-in for the stored Azure Foundry connection (interactive sign-in, no client secret). Under CloudSettings, not CloudCodex, because it authenticates
+        // that connection rather than a separate provider. No token material crosses: start returns only the user code + verification URL, status the state and those same non-secret fields.
         public const string EntraDeviceCodeStart = "cloud-settings/entra/device-code/start";
         public const string EntraDeviceCodeStatus = "cloud-settings/entra/device-code/status";
 
-        // Entra ID authorization-code sign-in lifecycle (confidential client + PKCE, Postman parity): browser
-        // sign-in yields a delegated token while the stored client secret authenticates the code redemption. Start
-        // returns only the authorize URL to open; status reports lifecycle state. Never exposes token material.
+        // Entra ID authorization-code sign-in (confidential client + PKCE, Postman parity): browser sign-in yields a delegated token while the stored client secret
+        // authenticates the code redemption. Start returns only the authorize URL to open, status the lifecycle state. Never exposes token material.
         public const string EntraAuthCodeStart = "cloud-settings/entra/auth-code/start";
         public const string EntraAuthCodeStatus = "cloud-settings/entra/auth-code/status";
     }
@@ -89,8 +80,10 @@ public static class LocalApiRoutes
     /// <summary>
     ///     External OpenAI-compatible provider routes: the operator's named connections (an Unsloth-served
     ///     llama-server, vLLM, LM Studio, a hosted OpenAI-compatible API) and their manually registered models.
-    ///     Every route is Operator-gated; the read path reports only whether an API key is stored, never the key.
     /// </summary>
+    /// <remarks>
+    ///     Every route is Operator-gated; the read path reports only whether an API key is stored, never the key.
+    /// </remarks>
     public static class ExternalProviders
     {
         /// <summary>The whole connection list (GET). Carries the store revision every write compares against.</summary>
@@ -99,10 +92,8 @@ public static class LocalApiRoutes
         /// <summary>One connection resource: GET, PUT (insert-or-replace), DELETE. <c>{connectionId}</c> is the slug.</summary>
         public const string ConnectionById = "external-providers/connections/{connectionId}";
 
-        // Connect-time reachability check against GET {base}/models, run SERVER-side because the browser cannot
-        // reach an arbitrary operator endpoint through CORS. A literal segment beside the collection, so it can never
-        // be parsed as a {connectionId}. POST because the body carries either a stored connection id or an inline
-        // draft (base URL + optional key) that has not been saved yet — a "Test connection" before the first save.
+        // Connect-time reachability check against GET {base}/models, run SERVER-side because the browser cannot reach an arbitrary operator endpoint through CORS. A literal segment beside
+        // the collection, so it never parses as a {connectionId}. POST because the body carries a stored connection id or an unsaved draft (base URL + optional key): a pre-save "Test connection".
         public const string Probe = "external-providers/probe";
     }
 
@@ -230,20 +221,17 @@ public static class LocalApiRoutes
         public const string RunScore = "benchmarks/runs/{runId}/score";
         public const string RunRejudge = "benchmarks/runs/{runId}/rejudge";
 
-        // A project's task items are their own sub-resource, one level down from the project: they are a collection
-        // with its own lifecycle (add, edit, delete, reorder), and each write recomputes the project's item-set hash,
-        // which is not something a field on the project PUT could express.
+        // A project's task items are their own sub-resource, one level down from the project: a collection with its own lifecycle (add, edit, delete, reorder), and each
+        // write recomputes the project's item-set hash, which is not something a field on the project PUT could express.
         public const string ProjectTaskItems = "benchmarks/projects/{projectId}/items";
         public const string ProjectTaskItemById = "benchmarks/projects/{projectId}/items/{itemId}";
 
-        // The measurement CELLS of a project: one model, one KV type, one repeat of the whole item suite. Its own
-        // route rather than a shape on ProjectRuns, because a cell is what ranks and a run list cannot say which
-        // items a cell is MISSING — the absence is the answer.
+        // The measurement CELLS of a project: one model, one KV type, one repeat of the whole item suite. Its own route rather than a shape on ProjectRuns, because a
+        // cell is what ranks and a run list cannot say which items a cell is MISSING — the absence is the answer.
         public const string ProjectCells = "benchmarks/projects/{projectId}/cells";
 
-        // Two to six named cells and the paired difference between each pair of them. Its own route rather than a
-        // flag on ProjectCells: a comparison is over a SELECTION, and the interval is computed from the items that
-        // selection shares -- a number that does not exist until someone says which cells they mean.
+        // Two to six named cells and the paired difference between each pair of them. Its own route rather than a flag on ProjectCells: a comparison is over a SELECTION,
+        // and the interval is computed from the items that selection shares -- a number that does not exist until someone says which cells they mean.
         public const string ProjectCompare = "benchmarks/projects/{projectId}/compare";
 
         // Reordering is its own verb on its own route: it names the whole order at once, which is also what makes it
@@ -255,11 +243,8 @@ public static class LocalApiRoutes
         public const string ProjectJudge = "benchmarks/projects/{projectId}/judge";
         public const string ProjectRejudge = "benchmarks/projects/{projectId}/rejudge";
 
-        // Quant fidelity is a display-only axis measured by its own work kind, so it gets its own sub-resources
-        // rather than flags on the run or project routes.
-        // The one part of a FROZEN project's configuration an operator may still change: it decides what gets
-        // measured next, not what the existing runs were measured against. Its own sub-resource for the same reason
-        // the judge has one — it never rides the project PUT, which the freeze refuses.
+        // Quant fidelity is a display-only axis measured by its own work kind, so it gets its own sub-resources rather than flags on the run or project routes. Like the judge policy it is
+        // a part of a FROZEN project an operator may still change: it sets what gets measured NEXT, not what existing runs were measured against, so it never rides the project PUT the freeze refuses.
         public const string ProjectFidelity = "benchmarks/projects/{projectId}/fidelity";
 
         public const string ProjectKldEstimate = "benchmarks/projects/{projectId}/fidelity/kld-estimate";
@@ -304,21 +289,20 @@ public static class LocalApiRoutes
         public const string ResourceByName = "skills/{skillId}/resources/{resourceName}";
     }
 
-    /// <summary>
-    ///     Node-wide user-defined custom tool library routes. Custom tools are operator-authored HttpFetch/Command tools
-    ///     that agent definitions enable per-agent (off by default) and run under the existing human-in-the-loop
-    ///     approval. Every route is Operator-gated; the read path masks secret header/env values.
-    /// </summary>
+    /// <summary>Node-wide user-defined custom tool library routes.</summary>
+    /// <remarks>
+    ///     Custom tools are operator-authored HttpFetch/Command tools that agent definitions enable per-agent (off by
+    ///     default) and run under the existing human-in-the-loop approval. Every route is Operator-gated; the read path
+    ///     masks secret header/env values.
+    /// </remarks>
     public static class CustomTools
     {
         // Collection (GET list, POST create) and the individual tool resource (GET, PUT, DELETE).
         public const string Definitions = "custom-tools";
         public const string DefinitionById = "custom-tools/{customToolId}";
 
-        // Authoring-time executable validation for the ProgramLaunch selector: POST a candidate absolute path, get
-        // back ok/reason from the same O_NOFOLLOW host-executable guard the executor runs. Desktop-only (a headless
-        // host has no operator picking a local binary); the literal "executable-probe" segment sits under the
-        // collection so it can never be parsed as a {customToolId}. POST carries the path in the body (no 415 trap).
+        // Authoring-time executable validation for the ProgramLaunch selector, desktop-only: a headless host has no operator picking a local binary. The literal segment sits under
+        // the collection, so it never parses as a {customToolId}. POST carries the path in the body (no 415 trap); ok/reason comes from the same O_NOFOLLOW host-executable guard the executor runs.
         public const string ExecutableProbe = "custom-tools/executable-probe";
     }
 
@@ -363,9 +347,8 @@ public static class LocalApiRoutes
         // body-less POST would land on this repo's 415 trap.
         public const string RepositoryProfileDetection = "development/repositories/{selectedFolderId}/profile-detection";
 
-        // Templates are ordinary repositories the operator already has; the registry is list/add/remove, and
-        // materializing one produces a NEW registered repository, which is why the create route sits under
-        // repositories rather than under templates.
+        // Templates are ordinary repositories the operator already has; the registry is list/add/remove, and materializing one produces a NEW registered repository,
+        // which is why the create route sits under repositories rather than under templates.
         public const string Templates = "development/templates";
         public const string TemplateById = "development/templates/{templateId}";
         public const string RepositoriesFromTemplate = "development/repositories/from-template";
@@ -383,13 +366,13 @@ public static class LocalApiRoutes
         public const string Hub = "/api/local/v1/development/hub";
     }
 
-    /// <summary>
-    ///     Local API contract type for model-fit, the box-aware local model advisor. Cache-first: the latest
-    ///     endpoint reads the cached recommendation snapshot and never runs the advisor; the refresh endpoint delegates
-    ///     to the scheduler trigger and never executes the advisor directly. The advisor management routes are thin
-    ///     transport over the llama.cpp binary/supervisor seams and the Hugging Face GGUF discovery/store/token seams.
-    ///     There is no approved-image concept or provider-name param. Benchmark stays gated.
-    /// </summary>
+    /// <summary>Local API contract type for model-fit, the box-aware local model advisor.</summary>
+    /// <remarks>
+    ///     Cache-first: the latest endpoint reads the cached recommendation snapshot and never runs the advisor, and the
+    ///     refresh endpoint delegates to the scheduler trigger rather than executing the advisor directly. The advisor
+    ///     management routes are thin transport over the llama.cpp binary/supervisor seams and the Hugging Face GGUF
+    ///     discovery/store/token seams. There is no approved-image concept or provider-name param, and benchmark stays gated.
+    /// </remarks>
     public static class ModelFit
     {
         // Latest cached recommendation snapshot (query-filtered by useCase). The literal "latest" segment follows
@@ -416,9 +399,8 @@ public static class LocalApiRoutes
         public const string Download = "model-fit/download";
         public const string DownloadCancel = "model-fit/download/cancel";
 
-        // Progress polling for in-flight and recently-finished GGUF downloads (IGgufDownloadCoordinator status registry).
-        // List returns all tracked statuses; the {modelName} variant returns one (404 when unknown). The list endpoint is
-        // the one-shot hydrate on mount; live progress streams over the DownloadHub below (no more per-second poll).
+        // Progress polling for in-flight and recently-finished GGUF downloads (IGgufDownloadCoordinator status registry). List returns all tracked statuses; the {modelName}
+        // variant returns one (404 when unknown). The list endpoint is the one-shot hydrate on mount; live progress streams over the DownloadHub below instead of a poll.
         public const string Downloads = "model-fit/gguf/downloads";
         public const string DownloadStatus = "model-fit/gguf/downloads/{modelName}";
         public const string DownloadOperationStatus = "model-fit/gguf/downloads/operations/{operationId:guid}";
@@ -438,9 +420,8 @@ public static class LocalApiRoutes
         public const string Running = "model-fit/running";
         public const string RunningEject = "model-fit/running/eject";
 
-        // Curated model catalog: read-only metadata (version/source/fetchedAt) and an operator
-        // forced-refresh trigger. The catalog content itself rides the existing recommendations/latest response
-        // (section/tier fields on each row) — these two routes are catalog-provenance only.
+        // Curated model catalog: read-only metadata (version/source/fetchedAt) and an operator forced-refresh trigger. The catalog content itself rides the existing
+        // recommendations/latest response (section/tier fields on each row) — these two routes are catalog-provenance only.
         public const string CatalogInfo = "model-fit/catalog";
         public const string CatalogRefresh = "model-fit/catalog/refresh";
 
@@ -456,12 +437,8 @@ public static class LocalApiRoutes
         // the release catalog). Validates the tag format before resolving the asset + digest and installing.
         public const string LlamaCppUpdate = "model-fit/llamacpp/update";
 
-        // In-app Linux source build of llama.cpp for a chosen backend (no upstream prebuilt CUDA asset exists).
-        // Prerequisites reports the itemized toolchain checklist (any OS; non-Linux → canBuild=false). The build action
-        // is Linux+prereq+disk+eject-first+single-flight gated server-side; status/cancel/remove drive the in-flight
-        // build and the adopted managed runtime. Literal "source-build" segments follow "llamacpp" so none collide with
-        // the version/runtime/update routes above. The hub is a full path (mapped via MapHub, not the FastEndpoints
-        // prefix), mirroring the other local hubs; each push carries the phase + appended log lines.
+        // In-app Linux source build of llama.cpp for a chosen backend, because no upstream prebuilt CUDA asset exists. Admission gating, the prerequisites checklist and the
+        // phase/log payload: docs/wiki/09-api-and-hubs.md ("Design notes on the newer endpoint families"). The literal "source-build" segments follow "llamacpp", and the hub is a full MapHub path.
         public const string SourceBuildPrerequisites = "model-fit/llamacpp/source-build/prerequisites";
         public const string SourceBuild = "model-fit/llamacpp/source-build";
         public const string SourceBuildStatus = "model-fit/llamacpp/source-build/status";
@@ -469,28 +446,20 @@ public static class LocalApiRoutes
         public const string SourceBuildRemove = "model-fit/llamacpp/source-build/remove";
         public const string SourceBuildHub = "/api/local/v1/model-fit/llamacpp/source-build/hub";
 
-        // Read-only first-run runtime-acquisition snapshot (IRuntimeAcquisitionStatusRegistry): the GPU-probe → download →
-        // verify → extract phase, byte progress, and the archive step counter. This is the one-shot hydrate on mount —
-        // acquisition starts within seconds of boot, well before the client has authenticated and opened the hub below, so
-        // without it the banner would never appear for the slow-first-run case it exists to explain. It NEVER triggers an
-        // acquisition (unlike the ensure POST on LlamaCppVersion). The literal "acquisition" segment follows "llamacpp",
-        // so it collides with none of the version/runtime/update/source-build routes above.
+        // Read-only first-run runtime-acquisition snapshot (IRuntimeAcquisitionStatusRegistry) — docs/wiki/09-api-and-hubs.md ("Design notes on the newer endpoint families").
+        // It NEVER triggers an acquisition, unlike the ensure POST on LlamaCppVersion. The literal "acquisition" segment follows "llamacpp", so it collides with none of the routes above.
         public const string LlamaCppAcquisition = "model-fit/llamacpp/acquisition";
 
-        // SignalR push hub for runtime acquisition progress. Full path (mapped via MapHub, not the FastEndpoints prefix),
-        // mirroring the other local hubs. Each push carries the same sanitized payload the hydrate GET serves, stamped
-        // with the monotonic sequence the client reconciles hydrate and push by.
+        // SignalR push hub for runtime acquisition progress: a full path (mapped via MapHub, not the FastEndpoints prefix), mirroring the other local hubs. Each push carries
+        // the same sanitized payload the hydrate GET serves, stamped with the monotonic sequence the client reconciles hydrate and push by.
         public const string LlamaCppAcquisitionHub = "/api/local/v1/model-fit/llamacpp/acquisition/hub";
 
         // HF access-token set/clear (IHfTokenStore). The endpoint NEVER returns the token; GET reports presence
         // only (security gate).
         public const string HfToken = "model-fit/hf-token";
 
-        // Inference Optimizer profile surface (IInferenceProfileService). The collection GET lists every persisted
-        // node-local profile (machine key omitted). The four POST actions each carry their target in the body (never a
-        // route param) so the POST always has a body, sidestepping the FastEndpoints 415-on-bodyless-POST issue. The
-        // literal "explore|benchmark|freeze|invalidate" action segments follow "profiles", so none can be parsed as a
-        // profile id. Benchmark stays the gate for freeze (a profile can only be frozen after a successful benchmark).
+        // Inference Optimizer profile surface (IInferenceProfileService). The four POST actions each carry their target in the body, never a route param, so the POST always has
+        // a body and sidesteps the FastEndpoints 415-on-bodyless-POST issue. See docs/wiki/09-api-and-hubs.md ("Design notes on the newer endpoint families").
         public const string Profiles = "model-fit/profiles";
         public const string ProfilesExplore = "model-fit/profiles/explore";
         public const string ProfilesBenchmark = "model-fit/profiles/benchmark";
@@ -526,9 +495,8 @@ public static class LocalApiRoutes
         // could not be stopped would hold the node's bandwidth and disk until it finished.
         public const string ModelDownloadCancel = "images/models/downloads/cancel";
 
-        // Curated image-model catalog: the one-click install list, annotated with this box's hardware fit and whether
-        // each entry is already installed. The literal "catalog" segment precedes nothing, so it cannot be captured by
-        // ModelByName's {modelName} route (that one is DELETE-only in any case).
+        // Curated image-model catalog: the one-click install list, annotated with this box's hardware fit and whether each entry is already installed. The literal "catalog"
+        // segment precedes nothing, so it cannot be captured by ModelByName's {modelName} route (that one is DELETE-only in any case).
         public const string ModelCatalog = "images/models/catalog";
 
         // Hugging Face image-model repo discovery (IImageModelDiscovery search) and per-repo weight-file inspection —
@@ -559,10 +527,12 @@ public static class LocalApiRoutes
 
     /// <summary>
     ///     Local audio transcription: the whisper.cpp runtime, its managed source build, and the model catalogue.
-    ///     The whole surface is gated on <c>Transcription:Enabled</c> by request-path middleware in <c>Program</c>
-    ///     that answers 404 for anything under <see cref="Root" />; the session routes arrive in a later slice under
-    ///     the same root, so the gate already covers them.
     /// </summary>
+    /// <remarks>
+    ///     The whole surface is gated on <c>Transcription:Enabled</c> by request-path middleware in <c>Program</c> that
+    ///     answers 404 for anything under <see cref="Root" />. The session routes sit under that same root, so the gate
+    ///     covers them too.
+    /// </remarks>
     public static class Transcription
     {
         /// <summary>The prefix the feature gate matches; every route below sits under it.</summary>
@@ -609,9 +579,8 @@ public static class LocalApiRoutes
         /// </summary>
         public const string SessionProcessCapture = "transcription/sessions/{sessionId}/capture/process";
 
-        // SignalR push hub for live transcription sessions. Full path (mapped via MapHub, not the FastEndpoints
-        // prefix), mirroring the other local hubs. It shares the family's first segment, so the feature gate's
-        // 404 covers its negotiate too.
+        // SignalR push hub for live transcription sessions: a full path (mapped via MapHub, not the FastEndpoints prefix), mirroring the other local hubs. It shares the
+        // family's first segment, so the feature gate's 404 covers its negotiate too.
         public const string Hub = "/api/local/v1/transcription/hub";
     }
 
@@ -627,11 +596,13 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local knowledge-base (offline RAG) document management, search, reindex, and hub routes. Every route is
-    ///     Operator-gated; none is <c>IDesktopOnlyEndpoint</c>, so all survive the headless OpenAPI regen. The document
-    ///     collection route carries the multipart upload (POST) and the list (GET); the individual document resource is
-    ///     GET/DELETE with the server-generated <c>{documentId}</c> (never a client-supplied path).
+    ///     Local knowledge-base (offline RAG) document management, search, reindex, and hub routes.
     /// </summary>
+    /// <remarks>
+    ///     Every route is Operator-gated; none is <c>IDesktopOnlyEndpoint</c>, so all survive the headless OpenAPI
+    ///     regen. The document collection route carries the multipart upload (POST) and the list (GET); the individual
+    ///     document resource is GET/DELETE with the server-generated <c>{documentId}</c> (never a client-supplied path).
+    /// </remarks>
     public static class KnowledgeBase
     {
         // Document collection (POST multipart upload, GET list) and the individual document resource (GET detail, DELETE).
@@ -660,9 +631,8 @@ public static class LocalApiRoutes
         // load-bearing rather than optional: with no embedding model installed the knowledge base cannot index anything.
         public const string EmbeddingDownloadRecommended = "knowledge-base/embedding/download-recommended";
 
-        // SignalR push hub for indexing status changes. Full path (mapped via MapHub, not the FastEndpoints prefix),
-        // mirroring the other local hubs. Each push carries the sanitized document id + status; Operator-gated because
-        // subscribers see which documents are being indexed.
+        // SignalR push hub for indexing status changes: a full path (mapped via MapHub, not the FastEndpoints prefix), mirroring the other local hubs. Each push carries the
+        // sanitized document id + status; Operator-gated because subscribers see which documents are being indexed.
         public const string Hub = "/api/local/v1/knowledge-base/hub";
     }
 
@@ -687,10 +657,12 @@ public static class LocalApiRoutes
 
         /// <summary>
         ///     The MCP Streamable HTTP endpoint itself, mapped by <c>MapMcp</c> OUTSIDE FastEndpoints (like the SignalR
-        ///     hubs) but deliberately INSIDE the <c>/api/local/v1</c> prefix so
-        ///     <c>LocalApiSecurityMiddleware</c>'s loopback peer + Host + Origin gate still covers it. Moving it outside
-        ///     the prefix would silently drop that gate and leave the bearer key as the only control.
+        ///     hubs) but deliberately INSIDE the <c>/api/local/v1</c> prefix.
         /// </summary>
+        /// <remarks>
+        ///     <c>LocalApiSecurityMiddleware</c>'s loopback peer + Host + Origin gate therefore still covers it. Moving
+        ///     it outside the prefix would silently drop that gate and leave the bearer key as the only control.
+        /// </remarks>
         public const string ServerEndpoint = "mcp/server";
     }
 
@@ -707,11 +679,14 @@ public static class LocalApiRoutes
         public const string ApiKey = "proxy/key";
 
         /// <summary>
-        ///     The OpenAI-compatible base an external tool configures (its <c>base_url</c>). The <c>v1/*</c> routes below
-        ///     hang off it. Mapped OUTSIDE FastEndpoints (like <c>MapMcp</c>) but INSIDE the <c>/api/local/v1</c> prefix,
-        ///     so <c>LocalApiSecurityMiddleware</c>'s loopback peer + Host + Origin gate still covers them. The full base
-        ///     an operator hands to a client is <c>{scheme}://{host}/api/local/v1/proxy/v1</c>.
+        ///     The OpenAI-compatible base an external tool configures (its <c>base_url</c>); the <c>v1/*</c> routes
+        ///     below hang off it.
         /// </summary>
+        /// <remarks>
+        ///     Mapped OUTSIDE FastEndpoints (like <c>MapMcp</c>) but INSIDE the <c>/api/local/v1</c> prefix, so
+        ///     <c>LocalApiSecurityMiddleware</c>'s loopback peer + Host + Origin gate still covers them. The full base
+        ///     an operator hands to a client is <c>{scheme}://{host}/api/local/v1/proxy/v1</c>.
+        /// </remarks>
         public const string OpenAiBase = "proxy/v1";
 
         /// <summary>OpenAI chat-completions passthrough. Forwarded verbatim to the resolved llama-server child's own <c>/v1/chat/completions</c>.</summary>
@@ -789,9 +764,8 @@ public static class LocalApiRoutes
         /// </summary>
         public const string ComparisonBenchmark = "training/comparisons/{comparisonId}/benchmark";
 
-        // Exports. Starting one and listing what a run produced are run-scoped; every action ON an artifact addresses
-        // it by its own id, because an artifact outlives the export that produced it and is acted on without the run
-        // in hand.
+        // Exports. Starting one and listing what a run produced are run-scoped; every action ON an artifact addresses it by its own id, because an artifact outlives the
+        // export that produced it and is acted on without the run in hand.
         public const string RunExports = "training/runs/{runId}/exports";
         public const string RunArtifacts = "training/runs/{runId}/artifacts";
         public const string ArtifactById = "training/artifacts/{artifactId}";
@@ -806,22 +780,24 @@ public static class LocalApiRoutes
     /// <summary>
     ///     Agent work sessions: the objective-scoped runs an operator starts, their lifecycle verbs, the five
     ///     sequence-filtered feeds the session view pages through, and the live-notification hub.
-    ///     <para>
-    ///         Approvals and <c>ask_user</c> answers deliberately have no route here — a session view embeds the
-    ///         conversation the session owns and resolves both through the existing chat routes, so there is one
-    ///         approval path on the node rather than two that can drift.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Approvals and <c>ask_user</c> answers deliberately have no route here — a session view embeds the
+    ///     conversation the session owns and resolves both through the existing chat routes, so there is one approval
+    ///     path on the node rather than two that can drift.
+    /// </remarks>
     public static class WorkSessions
     {
         public const string Root = "work-sessions";
 
         /// <summary>
-        ///     The one route carved out of the disabled-node 404 sweep, mirroring <see cref="Development.Capability" />:
-        ///     it answers <c>enabled: false</c> so the SPA can say "switched off on this node" instead of rendering the
+        ///     The one route carved out of the disabled-node 404 sweep, mirroring <see cref="Development.Capability" />.
+        /// </summary>
+        /// <remarks>
+        ///     It answers <c>enabled: false</c> so the SPA can say "switched off on this node" instead of rendering the
         ///     bodyless 404 as a load failure. A literal segment outranks <see cref="ById" />'s parameter, so this can
         ///     never be read as a session id.
-        /// </summary>
+        /// </remarks>
         public const string Capability = "work-sessions/capability";
 
         public const string ById = "work-sessions/{sessionId}";
@@ -849,13 +825,13 @@ public static class LocalApiRoutes
 
     /// <summary>
     ///     Development workflows: work items, definitions, runs and their node runs.
-    ///     <para>
-    ///         The whole surface is gated on <c>DevWorkflows:Enabled</c> by request-path middleware in <c>Program</c>
-    ///         that answers 404 for anything under <see cref="Root" />, which is why the prefix is a constant rather
-    ///         than spelled at each route. The literal first segment cannot be captured by any <c>development/…</c>
-    ///         route parameter — the two families diverge at segment one.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The whole surface is gated on <c>DevWorkflows:Enabled</c> by request-path middleware in <c>Program</c> that
+    ///     answers 404 for anything under <see cref="Root" />, which is why the prefix is a constant rather than
+    ///     spelled at each route. The literal first segment cannot be captured by any <c>development/…</c> route
+    ///     parameter — the two families diverge at segment one.
+    /// </remarks>
     public static class DevelopmentWorkflows
     {
         public const string Root = "development-workflows";
@@ -909,10 +885,12 @@ public static class LocalApiRoutes
         public const string RunCancel = "development-workflows/runs/{runId}/cancel";
 
         /// <summary>
-        ///     The append-only event log, paged by an EXCLUSIVE <c>?sinceSeq=</c> lower bound. Sequences are strictly
-        ///     increasing but NOT contiguous — the run's counter is shared with node-runs and artifacts — so a client
-        ///     follows the watermark rather than counting rows.
+        ///     The append-only event log, paged by an EXCLUSIVE <c>?sinceSeq=</c> lower bound.
         /// </summary>
+        /// <remarks>
+        ///     Sequences are strictly increasing but NOT contiguous — the run's counter is shared with node-runs and
+        ///     artifacts — so a client follows the watermark rather than counting rows.
+        /// </remarks>
         public const string RunEvents = "development-workflows/runs/{runId}/events";
 
         /// <summary>The heavier per-node drill-down: session and task ids, artifacts, applied rule sets, decisions.</summary>
@@ -939,13 +917,13 @@ public static class LocalApiRoutes
 
     /// <summary>
     ///     Graph workflows: operator-authored definitions and the runs started from them.
-    ///     <para>
-    ///         The whole surface is gated on <c>GraphWorkflows:Enabled</c> by request-path middleware in <c>Program</c>
-    ///         that answers 404 for anything under <see cref="Root" />, which is why the prefix is a constant rather
-    ///         than spelled at each route. Later slices add the run, event, decision and hub paths under the same root,
-    ///         so the gate already covers them.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The whole surface is gated on <c>GraphWorkflows:Enabled</c> by request-path middleware in <c>Program</c>
+    ///     that answers 404 for anything under <see cref="Root" />, which is why the prefix is a constant rather than
+    ///     spelled at each route. The run, event, decision and hub paths sit under that same root, so the gate covers
+    ///     them too.
+    /// </remarks>
     public static class GraphWorkflows
     {
         public const string Root = "graph-workflows";
@@ -970,10 +948,13 @@ public static class LocalApiRoutes
         public const string Tools = "graph-workflows/tools";
 
         /// <summary>
-        ///     Starts a run of one definition. 202 with the run id: the endpoint commits a durable intent and the
-        ///     dispatcher advances it out of band, so the run legitimately reads <c>Pending</c> when the answer lands.
-        ///     The caller's <c>requestId</c> is the idempotency key — the same one always answers with the same run.
+        ///     Starts a run of one definition, answering 202 with the run id.
         /// </summary>
+        /// <remarks>
+        ///     The endpoint commits a durable intent and the dispatcher advances it out of band, so the run legitimately
+        ///     reads <c>Pending</c> when the answer lands. The caller's <c>requestId</c> is the idempotency key — the
+        ///     same one always answers with the same run.
+        /// </remarks>
         public const string DefinitionRuns = "graph-workflows/definitions/{definitionId}/runs";
 
         /// <summary>The run list, newest first.</summary>
@@ -989,10 +970,13 @@ public static class LocalApiRoutes
         public const string RunNodeByKey = "graph-workflows/runs/{runId}/nodes/{nodeKey}";
 
         /// <summary>
-        ///     Answers the pause at <c>nodeKey</c>. The caller's <c>operationId</c> is the idempotency key — the same
-        ///     one always answers with the decision it already recorded, and a DIFFERENT one on an answered pause is a
-        ///     second human act, refused with the decision that stands on the body.
+        ///     Answers the pause at <c>nodeKey</c>.
         /// </summary>
+        /// <remarks>
+        ///     The caller's <c>operationId</c> is the idempotency key — the same one always answers with the decision
+        ///     it already recorded, and a DIFFERENT one on an answered pause is a second human act, refused with the
+        ///     decision that stands on the body.
+        /// </remarks>
         public const string RunNodeDecide = "graph-workflows/runs/{runId}/nodes/{nodeKey}/decide";
 
         /// <summary>
@@ -1021,9 +1005,12 @@ public static class LocalApiRoutes
     /// <summary>
     ///     Operator-gated management of the external integration surface: the named triggers an integrator invokes, the
     ///     <c>xeint_</c> credentials that authenticate it, the sessions those invocations own, and the executions they
-    ///     produce. Ordinary FastEndpoints routes behind <c>NodeAuthorizationPolicies.Operator</c> — the surface an
-    ///     integrator actually calls is <see cref="IntegrationApi" />, and the two never overlap.
+    ///     produce.
     /// </summary>
+    /// <remarks>
+    ///     Ordinary FastEndpoints routes behind <c>NodeAuthorizationPolicies.Operator</c> — the surface an integrator
+    ///     actually calls is <see cref="IntegrationApi" />, and the two never overlap.
+    /// </remarks>
     public static class Integrations
     {
         public const string Triggers = "integrations/triggers";
@@ -1041,16 +1028,14 @@ public static class LocalApiRoutes
     /// <summary>
     ///     External Apps: the curated catalog, the container runtime this node resolves against, and the installed
     ///     instances an operator installs, configures, starts, updates, resets and uninstalls.
-    ///     <para>
-    ///         The whole surface is gated on <c>ExternalApps:Enabled</c> by request-path middleware in <c>Program</c>
-    ///         that answers 404 for anything under <see cref="Root" /> — the hub path included, because it sits under
-    ///         the same first segment — which is why the prefix is a constant rather than spelled at each route. Every
-    ///         route is <c>NodeAuthorizationPolicies.Operator</c>: installing an application container is an
-    ///         administrative act, and the catalog reveals what this node can run. Every lifecycle route carries
-    ///         <c>expectedVersion</c> except cancel, and install and update carry the manifest fingerprint they were
-    ///         previewed with; both are request members, not route segments.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Gated on <c>ExternalApps:Enabled</c> by request-path middleware in <c>Program</c> that 404s anything under
+    ///     <see cref="Root" />, the hub path included since it shares the first segment — which is why the prefix is a
+    ///     constant rather than spelled at each route. Every route is <c>NodeAuthorizationPolicies.Operator</c>:
+    ///     installing an application container is an administrative act, and the catalog reveals what this node can
+    ///     run. <c>expectedVersion</c> and the manifest fingerprint are request members, never route segments.
+    /// </remarks>
     public static class ExternalApps
     {
         public const string Root = "external-apps";
@@ -1060,9 +1045,12 @@ public static class LocalApiRoutes
 
         /// <summary>
         ///     Re-runs the preflight and, when the body names the daemon currently observed, records the approval and
-        ///     re-runs the startup reconciler. A POST because a refresh, a prefetch or a health check must not be able
-        ///     to approve whatever daemon is answering.
+        ///     re-runs the startup reconciler.
         /// </summary>
+        /// <remarks>
+        ///     A POST because a refresh, a prefetch or a health check must not be able to approve whatever daemon is
+        ///     answering.
+        /// </remarks>
         public const string RuntimeRefresh = "external-apps/runtime/refresh";
 
         /// <summary>
@@ -1088,15 +1076,16 @@ public static class LocalApiRoutes
         public const string InstanceById = "external-apps/instances/{instanceId}";
 
         /// <summary>
-        ///     What the Update dialog needs before it asks for anything: the target manifest version and its sha256,
-        ///     every target variable with the current values masked, the permissions this update ADDS, the resource
-        ///     verdict, and whether the update can proceed at all.
+        ///     What the Update dialog needs before it asks for anything.
         /// </summary>
+        /// <remarks>
+        ///     The target manifest version and its sha256, every target variable with the current values masked, the
+        ///     permissions this update ADDS, the resource verdict, and whether the update can proceed at all.
+        /// </remarks>
         public const string InstanceUpdatePreview = "external-apps/instances/{instanceId}/update-preview";
 
-        // The five lifecycle verbs. Each commits an intent and answers 202 with the ADMITTED snapshot — the row as the
-        // synchronous admission left it, taken before the operation runner starts — which is why the status set
-        // carries Starting, Stopping, Updating and Resetting. All five carry `expectedVersion`.
+        // The five lifecycle verbs. Each commits an intent and answers 202 with the ADMITTED snapshot — the row as the synchronous admission left it, taken before the
+        // operation runner starts — which is why the status set carries Starting, Stopping, Updating and Resetting. All five carry `expectedVersion`.
         public const string InstanceStart = "external-apps/instances/{instanceId}/start";
 
         public const string InstanceStop = "external-apps/instances/{instanceId}/stop";
@@ -1117,10 +1106,12 @@ public static class LocalApiRoutes
         public const string InstanceEvents = "external-apps/instances/{instanceId}/events";
 
         /// <summary>
-        ///     Bounded container logs read from the daemon, nothing persisted: <c>?service=</c> and <c>?tail=</c>, where
-        ///     a tail above 2000 is REJECTED, never clamped — a silently clamped <c>tail=100000</c> reads as a truncated
-        ///     log. The text is raw application output and is NOT masked.
+        ///     Bounded container logs read from the daemon, nothing persisted: <c>?service=</c> and <c>?tail=</c>.
         /// </summary>
+        /// <remarks>
+        ///     A tail above 2000 is REJECTED, never clamped — a silently clamped <c>tail=100000</c> reads as a truncated
+        ///     log. The text is raw application output and is NOT masked.
+        /// </remarks>
         public const string InstanceLogs = "external-apps/instances/{instanceId}/logs";
 
         /// <summary>SignalR notification hub. Full path (mapped via MapHub, not the FastEndpoints prefix).</summary>
@@ -1129,12 +1120,15 @@ public static class LocalApiRoutes
 
     /// <summary>
     ///     The EXTERNAL integration API: what an automation, a sensor or a webhook receiver calls with an
-    ///     <c>xeint_</c> bearer key. Mapped OUTSIDE FastEndpoints (like <c>MapMcp</c> and the model proxy) but
-    ///     deliberately INSIDE the <c>/api/local/v1</c> prefix, so <c>LocalApiSecurityMiddleware</c>'s loopback peer +
-    ///     Host + Origin gate still covers it; moving it outside the prefix would silently drop that layer and leave
-    ///     the bearer key as the only control. Off the OpenAPI document for the same reason the proxy is: the bodies
-    ///     are a caller contract rather than node DTOs.
+    ///     <c>xeint_</c> bearer key.
     /// </summary>
+    /// <remarks>
+    ///     Mapped OUTSIDE FastEndpoints (like <c>MapMcp</c> and the model proxy) but deliberately INSIDE the
+    ///     <c>/api/local/v1</c> prefix, so <c>LocalApiSecurityMiddleware</c>'s loopback peer + Host + Origin gate still
+    ///     covers it; moving it outside the prefix would silently drop that layer and leave the bearer key as the only
+    ///     control. Off the OpenAPI document for the same reason the proxy is: the bodies are a caller contract rather
+    ///     than node DTOs.
+    /// </remarks>
     public static class IntegrationApi
     {
         public const string Invoke = "integration-api/triggers/{triggerName}/invoke";

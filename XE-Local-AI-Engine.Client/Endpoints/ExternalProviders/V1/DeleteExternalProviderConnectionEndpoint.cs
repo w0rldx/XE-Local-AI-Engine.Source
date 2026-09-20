@@ -31,9 +31,8 @@ public sealed class DeleteExternalProviderConnectionEndpoint : Endpoint<DeleteEx
         Description(builder => builder
                                .Produces<ExternalProviderConnectionsResponse>(StatusCodes.Status200OK)
                                .Produces<ExternalProviderConnectionsResponse>(StatusCodes.Status409Conflict)
-                               // Declared because it is reachable: a malformed connection id, and a store this build
-                               // must not write (unreadable, or written by a newer version), both refuse with a 400.
-                               // An undeclared status is one the generated client cannot model.
+                               // Declared because it is reachable: a malformed connection id, and a store this build must not write (unreadable, or written by a newer
+                               // version), both refuse with a 400, and an undeclared status is one the generated client cannot model.
                                .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 

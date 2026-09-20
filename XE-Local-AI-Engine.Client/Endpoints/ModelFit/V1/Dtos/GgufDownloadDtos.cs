@@ -1,9 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
 /// <summary>
-///     Query-string request for <c>GET model-fit/gguf/browse</c>. <see cref="Query" /> is a free-text repo search term
-///     (null returns the trending GGUF repos); <see cref="Limit" /> bounds the result count; <see cref="Sort" /> is one of
-///     <c>trending|downloads|likes|lastModified</c> (defaults to trending). No raw command or image reference is accepted.
+///     Query-string request for <c>GET model-fit/gguf/browse</c>: a free-text repo search (<see cref="Query" /> null
+///     returns the trending GGUF repos) bounded by <see cref="Limit" />. No raw command or image reference is accepted.
 /// </summary>
 public sealed class BrowseGgufRepositoriesRequest
 {
@@ -70,11 +69,13 @@ public sealed class GgufRepositoryFileResponse
     public required bool IsDynamic { get; init; }
 
     /// <summary>
-    ///     Whether this file is a speculative-decoding DRAFT model (an MTP drafter) rather than a base-model quant. Its
-    ///     <see cref="Quant" /> carries the <c>MTP-</c> marker so it can never share a label with the real weights, and
-    ///     the picker lists drafts in their own group (never as a quality-graded quant row). Still downloadable — the
-    ///     node's <c>Draft model (MTP)</c> speculative mode needs one.
+    ///     Whether this file is a speculative-decoding DRAFT model (an MTP drafter) rather than a base-model quant.
     /// </summary>
+    /// <remarks>
+    ///     Its <see cref="Quant" /> carries the <c>MTP-</c> marker so a draft can never share a label with the real
+    ///     weights, and the picker lists drafts in their own group, never as a quality-graded quant row. Drafts stay
+    ///     downloadable: the node's <c>Draft model (MTP)</c> speculative mode needs one.
+    /// </remarks>
     public required bool IsDraft { get; init; }
 
     public required long SizeBytes { get; init; }
@@ -98,9 +99,12 @@ public sealed class GgufRepositoryFileResponse
 
 /// <summary>
 ///     Response envelope for <c>GET model-fit/gguf/inspect</c>: the repo id, its selectable GGUF files, and whether the
-///     repo ships a multimodal projector companion. The projector fields are repo-level, not per file: a repo has at most
-///     one projector for the download to attach (the highest-precision one), whichever quant is chosen.
+///     repo ships a multimodal projector companion.
 /// </summary>
+/// <remarks>
+///     The projector fields are repo-level, not per file: a repo has at most one projector for the download to attach
+///     (the highest-precision one), whichever quant is chosen.
+/// </remarks>
 public sealed class InspectGgufRepositoryResponse
 {
     public required string RepoId { get; init; }
@@ -118,10 +122,10 @@ public sealed class InspectGgufRepositoryResponse
 }
 
 /// <summary>
-///     Body for <c>POST model-fit/download</c>. Selects a GGUF file in a repo to download. <see cref="FileName" /> picks
-///     the exact <c>.gguf</c> when supplied; otherwise <see cref="Quant" /> (defaulting to the store's configured default)
-///     selects the matching quant. <see cref="Revision" /> optionally pins a commit/branch. No path/token is accepted.
+///     Body for <c>POST model-fit/download</c>: <see cref="FileName" /> picks the exact <c>.gguf</c>, otherwise
+///     <see cref="Quant" /> (default: the store's configured quant) selects it. No path or token is accepted.
 /// </summary>
+/// <remarks><see cref="Revision" /> optionally pins a commit or branch.</remarks>
 public sealed class StartGgufDownloadRequest
 {
     public required string RepoId { get; init; }
@@ -133,11 +137,14 @@ public sealed class StartGgufDownloadRequest
     public string? Revision { get; init; }
 
     /// <summary>
-    ///     Whether to also pull the repo's <c>mmproj</c> projector when it ships one. Defaults to <c>true</c> — a body
-    ///     that omits the field installs exactly what it always did. Send <c>false</c> for a weights-only install, which
-    ///     is how a vision-capable repo becomes eligible as a benchmark judge. The choice is part of the installed
-    ///     identity: re-requesting the same repo and quant with the opposite choice while one is installed answers 409.
+    ///     Whether to also pull the repo's <c>mmproj</c> projector when it ships one; defaults to <c>true</c>, so a body
+    ///     that omits the field installs the projector.
     /// </summary>
+    /// <remarks>
+    ///     <c>false</c> gives a weights-only install, which is how a vision-capable repo becomes eligible as a benchmark
+    ///     judge. The choice is part of the installed identity: re-requesting the same repo and quant with the opposite
+    ///     choice while one is installed answers 409.
+    /// </remarks>
     public bool IncludeProjector { get; init; } = true;
 }
 

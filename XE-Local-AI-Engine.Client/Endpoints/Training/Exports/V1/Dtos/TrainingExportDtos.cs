@@ -3,10 +3,12 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Training.Exports.V1;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Route-bound and body-bound fields live in one request object, so none of them can be <c>required</c>: the body
-///     is deserialized before the route value is applied, and a required route property fails that deserialization
-///     with a confusing 400. The validator carries the real requirements instead.
+///     Route-bound and body-bound fields live in one request object, so none of them can be <c>required</c>.
 /// </summary>
+/// <remarks>
+///     The body is deserialized before the route value is applied, and a required route property fails that
+///     deserialization with a confusing 400. The validator carries the real requirements instead.
+/// </remarks>
 public sealed class StartTrainingExportRequest
 {
     public Guid RunId { get; init; }

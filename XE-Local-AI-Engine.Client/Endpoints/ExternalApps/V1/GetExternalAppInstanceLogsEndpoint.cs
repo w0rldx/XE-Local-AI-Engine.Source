@@ -6,11 +6,11 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
-/// <summary>
-///     A bounded tail of one service's container log, read live and never persisted. The text crosses UNMASKED by
-///     design: it is the application's own output, and an application printing its own secrets is something its
-///     operator has to be able to see.
-/// </summary>
+/// <summary>A bounded tail of one service's container log, read live and never persisted.</summary>
+/// <remarks>
+///     The text crosses UNMASKED by design: it is the application's own output, and an application printing its own
+///     secrets is something its operator has to be able to see.
+/// </remarks>
 public sealed class GetExternalAppInstanceLogsEndpoint : Endpoint<ExternalAppInstanceLogsRequest, ExternalAppInstanceLogsResponse>
 {
     private readonly IExternalAppService _apps;
@@ -44,9 +44,11 @@ public sealed class GetExternalAppInstanceLogsEndpoint : Endpoint<ExternalAppIns
 
     /// <summary>
     ///     Which service an omitted <c>?service=</c> read: the first one publishing a port, else the first declared.
+    /// </summary>
+    /// <remarks>
     ///     The snapshot the runtime returns carries no service name, so the response would otherwise echo a null the
     ///     caller cannot page or refresh with. It costs one extra read, and only when the caller named no service.
-    /// </summary>
+    /// </remarks>
     private async Task<string> ResolveDefaultServiceAsync(Guid instanceId, CancellationToken ct)
     {
         var detail = await _apps.GetAsync(instanceId, ct);

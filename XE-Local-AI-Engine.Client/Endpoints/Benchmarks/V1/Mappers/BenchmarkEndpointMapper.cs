@@ -94,8 +94,8 @@ internal static class BenchmarkEndpointMapper
 
     /// <param name="judge">The decrypted current judge policy, or a disabled marker when the project does not judge.</param>
     /// <param name="taskItems">
-    ///     The project's items. Omitted leaves the detail's item list empty rather than guessing: a caller that did
-    ///     not read them must not be able to render "this project asks nothing".
+    ///     The project's items. Omitted leaves the item list empty rather than guessing: a caller that did not read
+    ///     them must not render "this project asks nothing".
     /// </param>
     public static BenchmarkProjectDetailResponse ToDetail(this BenchmarkProjectRecord project,
         int runCount,
@@ -136,8 +136,8 @@ internal static class BenchmarkEndpointMapper
         };
 
     /// <param name="expectedKldBaseLogitsDigest">
-    ///     The digest the project's CURRENT KL-divergence settings recompute, or null when the project does not
-    ///     measure it. A stored KLD figure is served only while the two match; see <see cref="ToFidelity" />.
+    ///     The digest the project's CURRENT KL-divergence settings recompute, or null when it does not measure it; a
+    ///     stored KLD figure is served only while the two match.
     /// </param>
     public static BenchmarkRunSummaryResponse ToSummary(this BenchmarkRunRecord run, string? expectedKldBaseLogitsDigest = null)
     {
@@ -195,11 +195,14 @@ internal static class BenchmarkEndpointMapper
 
     /// <summary>
     ///     Projects a run's fidelity numbers, WITHHOLDING the KL-divergence trio unless the digest they were measured
-    ///     under is the one the project's current settings recompute. The gate is the whole cache key rather than the
-    ///     base model's fingerprint: the corpus, the chunk count and the format version all move without the
-    ///     fingerprint moving, and p99 in particular is strongly chunk-count dependent, so a fingerprint-only check
-    ///     would serve a figure measured over 50 chunks beside one measured over 200 as if they compared.
+    ///     under is the one the project's current settings recompute.
     /// </summary>
+    /// <remarks>
+    ///     The gate is the whole cache key rather than the base model's fingerprint: the corpus, the chunk count and
+    ///     the format version all move without the fingerprint moving, and p99 in particular is strongly chunk-count
+    ///     dependent, so a fingerprint-only check would serve a figure measured over 50 chunks beside one measured
+    ///     over 200 as if they compared.
+    /// </remarks>
     public static BenchmarkFidelityResponse? ToFidelity(this BenchmarkRunRecord run, string? expectedKldBaseLogitsDigest)
     {
         ArgumentNullException.ThrowIfNull(run);
@@ -440,13 +443,13 @@ internal static class BenchmarkEndpointMapper
                 PromptVersionOutdated = policy.PromptVersion != BenchmarkJudgePolicyVersions.PromptVersion
             };
 
-    /// <summary>
-    ///     The two frozen reasoning-budget facts, read straight out of the run's snapshot. Two scalars rather than the
-    ///     snapshot itself: the payload stays unexposed, and this needs no column of its own. A plain parse, NOT the
-    ///     factory's verifying deserialize — this is a display value, and a run whose snapshot no longer validates
-    ///     should still render rather than fail its own detail read. Detail only: the listing projection never loads
-    ///     the snapshot column, so it arrives empty and both facts are null.
-    /// </summary>
+    /// <summary>The two frozen reasoning-budget facts, read straight out of the run's snapshot.</summary>
+    /// <remarks>
+    ///     Two scalars rather than the snapshot itself: the payload stays unexposed, and this needs no column of its
+    ///     own. A plain parse, NOT the factory's verifying deserialize — this is a display value, and a run whose
+    ///     snapshot no longer validates should still render rather than fail its own detail read. Detail only: the
+    ///     listing projection never loads the snapshot column, so it arrives empty and both facts are null.
+    /// </remarks>
     private static (int? Tokens, bool? Applicable) ReadReasoningBudget(ReadOnlyMemory<byte> snapshotJson)
     {
         if (snapshotJson.IsEmpty)

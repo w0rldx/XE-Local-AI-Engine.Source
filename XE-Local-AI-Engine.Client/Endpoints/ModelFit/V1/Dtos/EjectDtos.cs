@@ -20,12 +20,13 @@ public sealed class ListRunningModelsResponse
     public required IReadOnlyList<RunningModelResponse> Items { get; init; }
 }
 
-/// <summary>
-///     Body for <c>POST model-fit/running/eject</c>. Ejects the running <c>(model, role)</c> process. By default the
-///     eject is GRACEFUL: it waits a bounded window for in-flight inference to drain before teardown, and reports back
-///     (via <see cref="EjectRunningModelResponse.Outcome" />) when it could not complete safely rather than killing a
-///     running turn silently. <see cref="Role" /> is <c>chat|embedding</c> (case-insensitive); an unknown role → 400.
-/// </summary>
+/// <summary>Body for <c>POST model-fit/running/eject</c>, which ejects the running <c>(model, role)</c> process.</summary>
+/// <remarks>
+///     The eject is GRACEFUL by default: it waits a bounded window for in-flight inference to drain before teardown and
+///     reports through <see cref="EjectRunningModelResponse.Outcome" /> when it could not complete safely, rather than
+///     killing a running turn silently. <see cref="Role" /> is <c>chat|embedding</c> (case-insensitive); an unknown
+///     role answers 400.
+/// </remarks>
 public sealed class EjectRunningModelRequest
 {
     public required string ModelName { get; init; }
@@ -51,11 +52,11 @@ public sealed class EjectRunningModelResponse
 
     public required string Role { get; init; }
 
-    /// <summary>
-    ///     What the eject actually did: <c>ejected</c> (idle or drained cleanly — no turn interrupted),
-    ///     <c>timed_out_still_busy</c> (in-flight work did not drain and no force was requested — the process was left
-    ///     running), <c>forced</c> (torn down despite in-flight work because <c>force</c> was set), or <c>not_running</c>
-    ///     (nothing was loaded — idempotent no-op).
-    /// </summary>
+    /// <summary>What the eject actually did.</summary>
+    /// <remarks>
+    ///     <c>ejected</c> (idle or drained cleanly — no turn interrupted), <c>timed_out_still_busy</c> (in-flight work
+    ///     did not drain and no force was requested — the process was left running), <c>forced</c> (torn down despite
+    ///     in-flight work because <c>force</c> was set), <c>not_running</c> (nothing was loaded — idempotent no-op).
+    /// </remarks>
     public required string Outcome { get; init; }
 }

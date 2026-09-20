@@ -102,12 +102,12 @@ public sealed class GetDevWorkflowRuleSetEndpoint : Endpoint<DevWorkflowRuleSetR
 
 /// <summary>
 ///     Replaces the whole document, refusing an edit made against a version that has since moved on.
-///     <para>
-///         Editing a rule set while a run is in flight is allowed, and deliberately: each node run recorded the
-///         <c>{id, name, contentSha256}</c> that applied to it, so the audit keeps naming the exact text it was given
-///         and the hash is what says the current document is no longer that text.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Editing a rule set while a run is in flight is allowed, and deliberately: each node run recorded the
+///     <c>{id, name, contentSha256}</c> that applied to it, so the audit keeps naming the exact text it was given and
+///     the hash is what says the current document is no longer that text.
+/// </remarks>
 public sealed class UpdateDevWorkflowRuleSetEndpoint : Endpoint<UpdateDevWorkflowRuleSetRequest, DevWorkflowRuleSetResponse>
 {
     private readonly DevWorkflowAuthoringService _authoring;
@@ -147,10 +147,13 @@ public sealed class UpdateDevWorkflowRuleSetEndpoint : Endpoint<UpdateDevWorkflo
 }
 
 /// <summary>
-///     A HARD delete, unlike a definition's archive, and it does not refuse while a run is in flight. Nothing holds a
-///     foreign key to a rule set, and what a node run needs from one — which document applied, at which text — it
-///     copied onto its own row at materialization. The objective composer skips a document that is gone.
+///     A HARD delete, unlike a definition's archive, and it does not refuse while a run is in flight.
 /// </summary>
+/// <remarks>
+///     Nothing holds a foreign key to a rule set, and what a node run needs from one — which document applied, at
+///     which text — it copied onto its own row at materialization. The objective composer skips a document that is
+///     gone.
+/// </remarks>
 public sealed class DeleteDevWorkflowRuleSetEndpoint : Endpoint<DevWorkflowRuleSetRequest>
 {
     private readonly DevWorkflowAuthoringService _authoring;

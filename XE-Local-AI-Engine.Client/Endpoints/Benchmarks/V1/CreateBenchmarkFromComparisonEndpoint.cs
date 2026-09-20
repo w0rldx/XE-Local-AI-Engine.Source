@@ -6,15 +6,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 
 /// <summary>
-///     Training comparison → benchmark project. The existing deep link
-///     (<c>/benchmarks?baseModelName=…&amp;tunedModelName=…</c>) only SELECTS runs that already exist in a project the
-///     operator already built; this creates the project and starts the paired runs in one action.
-///     <para>
-///         No local catch: every refusal the service raises is a benchmark exception family member and is mapped by the
-///         global <c>BenchmarkExceptionHandler</c>, including the "model is not installed" case the service translates
-///         out of the freeze's bare <see cref="KeyNotFoundException" />.
-///     </para>
+///     Training comparison → benchmark project: creates the project and starts the paired runs in one action.
 /// </summary>
+/// <remarks>
+///     The deep link (<c>/benchmarks?baseModelName=…&amp;tunedModelName=…</c>) only SELECTS runs that already exist in
+///     a project the operator already built. No local catch: every refusal the service raises is a benchmark exception
+///     family member and is mapped by the global <c>BenchmarkExceptionHandler</c>, including the "model is not
+///     installed" case the service translates out of the freeze's bare <see cref="KeyNotFoundException" />.
+/// </remarks>
 public sealed class CreateBenchmarkFromComparisonEndpoint : Endpoint<CreateBenchmarkFromComparisonRequest, CreateBenchmarkFromComparisonResponse>
 {
     private readonly IComparisonBenchmarkHandoffService _handoff;

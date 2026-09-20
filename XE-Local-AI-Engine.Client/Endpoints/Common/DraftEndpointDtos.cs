@@ -26,11 +26,12 @@ public sealed class DraftErrorResponse
     public required string Message { get; init; }
 }
 
-/// <summary>
-///     Shared boundary checks for the two draft endpoints. Every request field is capped here, before the drafting
-///     service acquires the single draft slot, so an oversized or hostile request can never hold it (invariant 7). The
-///     service re-checks an aggregate prompt budget as the belt behind this brace.
-/// </summary>
+/// <summary>Shared boundary checks for the two draft endpoints.</summary>
+/// <remarks>
+///     Every request field is capped here, before the drafting service acquires the single draft slot, so an oversized
+///     or hostile request can never hold it (invariant 7). The service re-checks an aggregate prompt budget as the belt
+///     behind this brace.
+/// </remarks>
 internal static class DraftEndpointSupport
 {
     internal const int MaxBriefLength = 4000;

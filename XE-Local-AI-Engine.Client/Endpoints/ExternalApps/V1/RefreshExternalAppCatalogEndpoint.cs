@@ -7,12 +7,12 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
-/// <summary>
-///     Forces a catalog fetch past the TTL. A failed fetch is a 200 carrying the last-good document and
-///     <c>refreshFailureMessage</c>, not an error status: the catalog the node can still serve is the useful answer,
-///     and "your click just failed" is a different sentence from "the cache is stale", which rides on
-///     <c>lastRefreshFailure</c>.
-/// </summary>
+/// <summary>Forces a catalog fetch past the TTL.</summary>
+/// <remarks>
+///     A failed fetch is a 200 carrying the last-good document and <c>refreshFailureMessage</c>, not an error status:
+///     the catalog the node can still serve is the useful answer, and "your click just failed" is a different sentence
+///     from "the cache is stale", which rides on <c>lastRefreshFailure</c>.
+/// </remarks>
 public sealed class RefreshExternalAppCatalogEndpoint : EndpointWithoutRequest<ExternalAppCatalogResponse>
 {
     private readonly IExternalAppService _apps;

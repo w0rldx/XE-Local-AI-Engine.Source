@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 
 /// <summary>
-///     Wire summary of a single curated starter-pack template. The full <c>Instructions</c> body is intentionally not
-///     projected into the gallery list; <see cref="EstimatedPromptTokens" /> (a chars/4 heuristic) drives the size
-///     warning, <see cref="HasOriginalTools" /> flags upstream tool references (dropped on import), and
-///     <see cref="AlreadyImported" /> lets the gallery disable slugs that already exist.
+///     Wire summary of a single curated starter-pack template; the full <c>Instructions</c> body is intentionally not
+///     projected into the gallery list.
 /// </summary>
+/// <remarks>
+///     <see cref="EstimatedPromptTokens" /> (a chars/4 heuristic) drives the size warning,
+///     <see cref="HasOriginalTools" /> flags upstream tool references (dropped on import), and
+///     <see cref="AlreadyImported" /> lets the gallery disable slugs that already exist.
+/// </remarks>
 public sealed class AgentTemplateSummary
 {
     public required string Slug { get; init; }

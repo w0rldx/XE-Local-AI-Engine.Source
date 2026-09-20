@@ -7,11 +7,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-/// <summary>
-///     A project's task items: the questions it asks. Their own sub-resource rather than fields on the project PUT,
-///     because each write recomputes the project's item-set hash — and a moved set hash resets the rank cohort, which
-///     is not something a field could express.
-/// </summary>
+/// <summary>A project's task items: the questions it asks.</summary>
+/// <remarks>
+///     Their own sub-resource rather than fields on the project PUT, because each write recomputes the project's
+///     item-set hash — and a moved set hash resets the rank cohort, which is not something a field could express.
+/// </remarks>
 public sealed class ListBenchmarkTaskItemsEndpoint : Endpoint<BenchmarkProjectRouteRequest, ListBenchmarkTaskItemsResponse>
 {
     private readonly IBenchmarkTaskItemService _items;
@@ -34,9 +34,8 @@ public sealed class ListBenchmarkTaskItemsEndpoint : Endpoint<BenchmarkProjectRo
 
     public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
     {
-        // Get-or-create, not a plain list: a project created before task items existed has none, and materializing
-        // item 0 needs the node encryption key that a migration does not have. Every project created since gets its
-        // items with itself, so this is a read for all of them.
+        // Get-or-create, not a plain list: a project that predates task items has none, and materializing item 0 needs the node encryption key a migration does not
+        // have. Every project created since gets its items with itself, so this is a read for all of them.
         var taskItems = await _items.GetOrCreateItemsAsync(req.ProjectId, ct);
         var project = await _records.GetProjectAsync(req.ProjectId, ct)
                       ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");

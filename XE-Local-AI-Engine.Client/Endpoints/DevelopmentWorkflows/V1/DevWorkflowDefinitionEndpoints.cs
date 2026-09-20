@@ -37,13 +37,13 @@ public sealed class ListDevWorkflowDefinitionsEndpoint : Endpoint<ListDevWorkflo
 
 /// <summary>
 ///     Creates a definition, refusing a graph the dispatcher could not route.
-///     <para>
-///         Validated by the RUNTIME's parser rather than by a validator of this endpoint's own: it is the same parser
-///         run start uses, so a graph accepted here is one that will start, and a rule added there cannot be forgotten
-///         here. Its refusal is a single message, and the global validation handler shapes it into the same 400 body
-///         every other domain refusal produces.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Validated by the RUNTIME's parser rather than by a validator of this endpoint's own: it is the same parser run
+///     start uses, so a graph accepted here is one that will start, and a rule added there cannot be forgotten here.
+///     Its refusal is a single message, and the global validation handler shapes it into the same 400 body every other
+///     domain refusal produces.
+/// </remarks>
 public sealed class CreateDevWorkflowDefinitionEndpoint : Endpoint<CreateDevWorkflowDefinitionRequest, DevWorkflowDefinitionResponse>
 {
     private readonly DevWorkflowAuthoringService _authoring;
@@ -168,9 +168,9 @@ public sealed class UpdateDevWorkflowDefinitionEndpoint : Endpoint<UpdateDevWork
 
 /// <summary>
 ///     Archives a definition rather than deleting it: every run that pinned it keeps rendering, and a definition
-///     cannot become permanently undeletable because a year-old run still references it. It disappears from the
-///     picker and from the default list.
+///     cannot become permanently undeletable because a year-old run still references it.
 /// </summary>
+/// <remarks>It disappears from the picker and from the default list.</remarks>
 public sealed class ArchiveDevWorkflowDefinitionEndpoint : Endpoint<DevWorkflowDefinitionRequest>
 {
     private readonly DevWorkflowAuthoringService _authoring;

@@ -6,10 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
 ///     The single token-issuing response shared by login and refresh: both mint the same pair, so both must write the
-///     refresh cookie and the access-token body — or neither. A partial result (an access token without its refresh
-///     cookie, or a stale cookie left behind on failure) is an authentication bug, which is why the cookie write and
-///     the 200/401 decision are one operation rather than two steps each caller repeats.
+///     refresh cookie and the access-token body — or neither.
 /// </summary>
+/// <remarks>
+///     A partial result — an access token without its refresh cookie, or a stale cookie left behind on failure — is an
+///     authentication bug, which is why the cookie write and the 200/401 decision are one operation rather than two
+///     steps each caller repeats.
+/// </remarks>
 internal static class NodeAuthEndpointSupport
 {
     public static async Task SendTokenResultAsync<TRequest>(ResponseSender<TRequest, NodeAccessTokenResponse> send,
@@ -23,9 +26,8 @@ internal static class NodeAuthEndpointSupport
         {
             NodeAuthCookie.ClearRefreshToken(send.HttpContext.Response);
 
-            // The one 401 that says WHY. Only login can produce it (a refresh has no account to lock), so the branch is
-            // inert on the refresh path — but the cookie clear and the 401 stay one operation, which is why it lives
-            // here rather than in the login endpoint.
+            // The one 401 that says WHY. Only login can produce it — a refresh has no account to lock — so the branch is inert on the refresh path, but the cookie clear and
+            // the 401 stay one operation, which is why it lives here rather than in the login endpoint.
             if (result.LockedOutRetryAfterSeconds is { } retryAfterSeconds)
             {
                 send.HttpContext.Response.Headers.RetryAfter = retryAfterSeconds.ToString(CultureInfo.InvariantCulture);

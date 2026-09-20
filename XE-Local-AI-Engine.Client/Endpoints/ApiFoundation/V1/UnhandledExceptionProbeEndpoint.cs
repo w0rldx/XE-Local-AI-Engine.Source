@@ -4,9 +4,8 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-// Framework-probe endpoint (mirrors ValidationProblemProbe): deliberately throws an unhandled exception so the
-// DefaultExceptionHandler -> RFC7807 ProblemDetails pipeline can be asserted end-to-end, including the W3C trace id
-// carried in ProblemDetails.traceId. Operator-authorized like the other diagnostics probes.
+// Framework-probe endpoint mirroring ValidationProblemProbe: it deliberately throws an unhandled exception so the DefaultExceptionHandler to RFC7807 ProblemDetails
+// pipeline can be asserted end-to-end, the W3C trace id on ProblemDetails.traceId included. Operator-authorized like the other diagnostics probes.
 public sealed class UnhandledExceptionProbeEndpoint : EndpointWithoutRequest
 {
     public override void Configure()

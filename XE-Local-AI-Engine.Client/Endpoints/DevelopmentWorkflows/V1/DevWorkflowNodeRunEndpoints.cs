@@ -42,10 +42,13 @@ public sealed class GetDevWorkflowNodeRunEndpoint : Endpoint<DevWorkflowNodeRunR
 }
 
 /// <summary>
-///     The run's artifacts, every version of every lineage. The version history IS the knowledge layer, so hiding
-///     superseded rows behind a flag would cost an endpoint to get them back; the client groups by
-///     <c>lineageId</c> and reads <c>isLatest</c>, which is computed here rather than re-derived there.
+///     The run's artifacts, every version of every lineage.
 /// </summary>
+/// <remarks>
+///     The version history IS the knowledge layer, so hiding superseded rows behind a flag would cost an endpoint to
+///     get them back; the client groups by <c>lineageId</c> and reads <c>isLatest</c>, which is computed here rather
+///     than re-derived there.
+/// </remarks>
 public sealed class ListDevWorkflowArtifactsEndpoint : Endpoint<DevWorkflowArtifactFeedRequest, ListDevWorkflowArtifactsResponse>
 {
     private readonly DevWorkflowRunQueryService _runQueries;

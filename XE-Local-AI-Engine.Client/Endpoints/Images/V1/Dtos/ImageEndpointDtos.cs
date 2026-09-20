@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 
 /// <summary>
-///     Body for <c>POST images/jobs</c>. Carries the text-to-image generation parameters; the coordinator persists the
-///     prompt / negative-prompt encrypted at rest and never logs them. Enum-like values are absent — <see cref="Sampler" />
-///     is a free-text method name the runtime validates.
+///     Body for <c>POST images/jobs</c>, carrying the text-to-image generation parameters.
 /// </summary>
+/// <remarks>
+///     The coordinator persists the prompt and negative prompt encrypted at rest and never logs them. Enum-like values
+///     are absent: <see cref="Sampler" /> is a free-text method name the runtime validates.
+/// </remarks>
 public sealed class CreateImageJobRequest
 {
     /// <summary>Registry key of the installed image model to generate with.</summary>
@@ -17,10 +19,13 @@ public sealed class CreateImageJobRequest
     public string? NegativePrompt { get; init; }
 
     /// <summary>
-    ///     Random seed as a string (precision-safe on the wire — a 64-bit seed serialized as a JSON number would round
-    ///     above 2^53). <see langword="null" />/blank requests a runtime-chosen random seed (equivalent to <c>-1</c>);
-    ///     any non-blank value must be a base-10 64-bit integer (validated by <see cref="Models.SeedValue" />).
+    ///     Random seed as a string, precision-safe on the wire: a 64-bit seed serialized as a JSON number would round
+    ///     above 2^53.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> or blank requests a runtime-chosen random seed, equivalent to <c>-1</c>; any
+    ///     non-blank value must be a base-10 64-bit integer, validated by <see cref="Models.SeedValue" />.
+    /// </remarks>
     public string? Seed { get; init; }
 
     public int Width { get; init; } = 512;
@@ -43,11 +48,14 @@ public sealed class ImageJobRouteRequest
 }
 
 /// <summary>
-///     Wire projection of a persisted image job. <see cref="Status" /> is the <c>ImageJobStatus</c> value's string name
-///     (<c>Queued</c>/<c>Generating</c>/<c>Succeeded</c>/<c>Failed</c>/<c>Cancelled</c>). <see cref="Prompt" /> /
-///     <see cref="NegativePrompt" /> are the decrypted plaintext — returned only to the authenticated operator, never
-///     logged. All timestamps are unix-ms. No storage path is ever surfaced.
+///     Wire projection of a persisted image job.
 /// </summary>
+/// <remarks>
+///     <see cref="Status" /> is the <c>ImageJobStatus</c> value's string name
+///     (<c>Queued</c>/<c>Generating</c>/<c>Succeeded</c>/<c>Failed</c>/<c>Cancelled</c>). <see cref="Prompt" /> and
+///     <see cref="NegativePrompt" /> are the decrypted plaintext, returned only to the authenticated operator and
+///     never logged. All timestamps are unix-ms, and no storage path is ever surfaced.
+/// </remarks>
 public sealed class ImageJobResponse
 {
     public required Guid Id { get; init; }
@@ -150,10 +158,12 @@ public sealed class ImageModelResponse
     public required long DownloadedAtUtc { get; init; }
 
     /// <summary>
-    ///     Recommended starting number of sampling steps for this model's family (see <c>ImageFamilyDefaults</c>). The
-    ///     generation form pre-fills from these rather than from one set of SD1.5-era numbers, because the wrong ones do
-    ///     not fail — they silently produce a bad image (FLUX-schnell at 20 steps / CFG 7 instead of 4 / 1.0).
+    ///     Recommended starting number of sampling steps for this model's family (see <c>ImageFamilyDefaults</c>).
     /// </summary>
+    /// <remarks>
+    ///     The generation form pre-fills from these rather than from one set of SD1.5-era numbers, because the wrong
+    ///     ones do not fail — they silently produce a bad image (FLUX-schnell at 20 steps / CFG 7 instead of 4 / 1.0).
+    /// </remarks>
     public required int DefaultSteps { get; init; }
 
     /// <summary>Recommended starting classifier-free-guidance scale for this model's family.</summary>
@@ -171,9 +181,10 @@ public sealed class ListImageModelsResponse
 
 /// <summary>
 ///     One requested weight file inside a model's file-set for <c>POST images/models/downloads</c>: which
-///     <see cref="Role" /> it fills (<c>Diffusion</c>/<c>Vae</c>/<c>ClipL</c>/<c>ClipG</c>/<c>T5</c>) and the repo-relative
-///     file name to download. <see cref="Sha256" /> optionally pins the file when the source exposes a digest.
+///     <see cref="Role" /> it fills (<c>Diffusion</c>/<c>Vae</c>/<c>ClipL</c>/<c>ClipG</c>/<c>T5</c>) and the
+///     repo-relative file name to download.
 /// </summary>
+/// <remarks><see cref="Sha256" /> optionally pins the file when the source exposes a digest.</remarks>
 public sealed class ImageModelPartDownloadRequest
 {
     public required string Role { get; init; }
@@ -184,26 +195,32 @@ public sealed class ImageModelPartDownloadRequest
 
     /// <summary>
     ///     Repository this part is pulled from when it is not the set's <c>RepoId</c>; <c>null</c> uses the set's repo.
-    ///     Needed because a real file-set can span repos — a Qwen-Image install takes its diffusion weights and VAE from
-    ///     one repo and its Qwen2.5-VL text encoder from another.
     /// </summary>
+    /// <remarks>
+    ///     Needed because a real file-set can span repos: a Qwen-Image install takes its diffusion weights and VAE from
+    ///     one repo and its Qwen2.5-VL text encoder from another.
+    /// </remarks>
     public string? RepoId { get; init; }
 
     /// <summary>
-    ///     Known size of this part in bytes when the caller has one, otherwise <c>null</c>. Two behaviours depend on it:
-    ///     the pre-flight free-disk check is a no-op without a size (so a set that does not fit fails part-way through an
-    ///     18 GB transfer instead of before it starts), and the aggregate set percentage is only computed when EVERY
-    ///     part declares a size.
+    ///     Known size of this part in bytes when the caller has one, otherwise <c>null</c>.
     /// </summary>
+    /// <remarks>
+    ///     Two behaviours depend on it: the pre-flight free-disk check is a no-op without a size (so a set that does
+    ///     not fit fails part-way through an 18 GB transfer instead of before it starts), and the aggregate set
+    ///     percentage is only computed when EVERY part declares a size.
+    /// </remarks>
     public long? SizeBytes { get; init; }
 }
 
 /// <summary>
-///     Body for <c>POST images/models/downloads</c>. Ensures a whole image-model file-set is present locally; the
-///     download runs detached (fire-and-forget) and progress surfaces via <c>GET images/models</c> presence. A model is a
-///     <b>set</b> of weight parts — one for SD1.5, several for FLUX/SD3 — so all parts download together. No path/token is
-///     accepted or returned.
+///     Body for <c>POST images/models/downloads</c>: ensures a whole image-model file-set is present locally.
 /// </summary>
+/// <remarks>
+///     The download runs detached and progress surfaces through <c>GET images/models</c> presence. A model is a
+///     <b>set</b> of weight parts — one for SD1.5, several for FLUX/SD3 — so all parts download together. No path or
+///     token is accepted or returned.
+/// </remarks>
 public sealed class StartImageModelDownloadRequest
 {
     /// <summary>Registry key — the canonical model name to register the completed set under.</summary>

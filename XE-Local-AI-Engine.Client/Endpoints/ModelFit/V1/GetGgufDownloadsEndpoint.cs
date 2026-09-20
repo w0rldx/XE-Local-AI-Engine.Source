@@ -6,11 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
-///     FastEndpoints handler to list all tracked GGUF download statuses (GET model-fit/gguf/downloads). Returns the
-///     current snapshot for every entry in the coordinator's status registry — both in-flight and recently-finished
-///     downloads. The FE polls this to rediscover downloads after navigation and to render a progress list.
-///     No path, URL, or token is returned; all fields are sanitized by <see cref="IGgufDownloadCoordinator" />.
+///     FastEndpoints handler listing every tracked GGUF download status (GET model-fit/gguf/downloads): the current
+///     snapshot for each entry in the coordinator's status registry, in-flight and recently-finished alike.
 /// </summary>
+/// <remarks>
+///     The frontend polls this to rediscover downloads after navigation and to render a progress list. No path, URL or
+///     token is returned; all fields are sanitized by <see cref="IGgufDownloadCoordinator" />.
+/// </remarks>
 public sealed class GetGgufDownloadsEndpoint : EndpointWithoutRequest<ListGgufDownloadsResponse>
 {
     private readonly IGgufDownloadCoordinator _downloadCoordinator;

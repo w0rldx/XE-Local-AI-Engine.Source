@@ -9,10 +9,13 @@ using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
-///     Deletes the adopted managed runtime and its record. This is the in-app recovery from a fail-closed tombstone:
-///     without it, a record proven unusable can only be cleared by hand. Refuses with <c>409 runtime-busy</c> while
-///     anything holds the runtime. Operator-gated.
+///     Deletes the adopted managed runtime and its record, refusing with <c>409 runtime-busy</c> while anything holds
+///     the runtime. Operator-gated.
 /// </summary>
+/// <remarks>
+///     This is the in-app recovery from a fail-closed tombstone: without it, a record proven unusable could only be
+///     cleared by hand.
+/// </remarks>
 public sealed class RemoveWhisperCppSourceBuildEndpoint : Endpoint<TranscriptionRuntimeActionRequest, WhisperCppSourceBuildStatusResponse>
 {
     private readonly WhisperRuntimeOrchestrationService _whisperRuntime;
@@ -59,9 +62,8 @@ public sealed class RemoveWhisperCppSourceBuildEndpoint : Endpoint<Transcription
         }
         catch (WhisperRuntimeException exception)
         {
-            // A directory that will not delete is the recovery path failing, and the operator needs the reason in the
-            // same typed envelope Start uses rather than a 500 from the global handler. The message is contractually
-            // sanitized, so it is safe to surface.
+            // A directory that will not delete is the recovery path failing, and the operator needs the reason in the same typed envelope Start uses rather than a 500 from
+            // the global handler. The message is contractually sanitized, so it is safe to surface.
             await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.Blocked("source-build-error",
                           exception.Message,
                           _whisperRuntime.GetActivitySnapshot()));

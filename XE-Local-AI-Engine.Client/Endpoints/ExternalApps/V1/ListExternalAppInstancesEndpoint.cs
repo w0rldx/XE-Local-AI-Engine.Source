@@ -6,11 +6,12 @@ using XE_Local_AI_Engine.Client.Endpoints.ExternalApps.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 
-/// <summary>
-///     Every installed instance in full. The card shows an Open target, a published port and the runtime provider, all
-///     of which live on the detail; the store reads whole rows regardless, so a summary list would buy nothing and
-///     cost the page one GET per card before it could render.
-/// </summary>
+/// <summary>Every installed instance in full.</summary>
+/// <remarks>
+///     The card shows an Open target, a published port and the runtime provider, all of which live on the detail, and
+///     the store reads whole rows regardless — so a summary list would buy nothing and cost the page one GET per card
+///     before it could render.
+/// </remarks>
 public sealed class ListExternalAppInstancesEndpoint : EndpointWithoutRequest<ListExternalAppInstancesResponse>
 {
     private readonly IExternalAppService _apps;

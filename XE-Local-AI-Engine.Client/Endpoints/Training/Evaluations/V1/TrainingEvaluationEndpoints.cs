@@ -32,9 +32,8 @@ public sealed class CreateEvaluationEndpoint : Endpoint<CreateEvaluationRequest,
 
     public override async Task HandleAsync(CreateEvaluationRequest req, CancellationToken ct)
     {
-        // EvaluationRejectedException reaches the global DomainValidationExceptionHandler as the same 400: its
-        // rejections are operator-facing by construction — no installed base model, no completed staged artifact,
-        // or a run that held nothing back.
+        // EvaluationRejectedException reaches the global DomainValidationExceptionHandler as the same 400: its rejections are operator-facing by construction — no installed
+        // base model, no completed staged artifact, or a run that held nothing back.
         var created = await _evaluations.CreateAsync(new CreateEvaluationCommand { TrainingRunId = req.TrainingRunId, Target = req.Target, ModelNameOverride = req.ModelName, ArtifactId = req.ArtifactId }, ct);
         await Send.ResultAsync(TypedResults.Accepted((string?)null, created.ToResponse()));
     }

@@ -7,11 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Read-only, versioned durable run-envelope lifecycle records. Returns a page of metadata-only rows
-///     (terminal status, usage/timing counters, correlation ids, trace id, schema version) newest-first, optionally
-///     scoped to one conversation — there is NO message content in this store, so nothing to redact; <c>FailureCategory</c>
-///     is a category enum name only by the store contract. Operator-gated.
+///     Read-only, versioned durable run-envelope lifecycle records: a page of metadata-only rows (terminal status,
+///     usage/timing counters, correlation ids, trace id, schema version), newest-first. Operator-gated.
 /// </summary>
+/// <remarks>
+///     Optionally scoped to one conversation. There is NO message content in this store, so nothing to redact, and
+///     <c>FailureCategory</c> is a category enum name only by the store contract.
+/// </remarks>
 public sealed class ListRunEnvelopesEndpoint : Endpoint<ListRunEnvelopesRequest, ListRunEnvelopesResponse>
 {
     // Default page size when the caller supplies none; clamped upper bound keeps a diagnostics fetch bounded.

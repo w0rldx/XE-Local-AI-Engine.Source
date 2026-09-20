@@ -8,9 +8,12 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
 ///     Phase 2 of the third-party skill import: persists the skills the operator selected from a preview they
-///     acknowledged. Writes the materialised preview payload verbatim — the source is never re-parsed or re-fetched, so
-///     what lands is what was reviewed even if the repository changed in between.
+///     acknowledged.
 /// </summary>
+/// <remarks>
+///     Writes the materialised preview payload verbatim — the source is never re-parsed or re-fetched, so what lands
+///     is what was reviewed even if the repository changed in between.
+/// </remarks>
 /// <remarks>
 ///     Without <c>acknowledged: true</c> the import service refuses before it even looks the token up, so an
 ///     unacknowledged call cannot consume a preview either. Imported skills land disabled with Imported provenance;

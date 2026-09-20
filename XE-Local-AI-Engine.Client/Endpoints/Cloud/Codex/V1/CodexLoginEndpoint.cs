@@ -6,11 +6,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 /// <summary>
-///     <c>POST cloud/codex/login</c> (Operator): starts the loopback PKCE login and returns the authorize URL so the
-///     UI can render a copyable/clickable link. Best-effort auto-opens the system browser; idempotent in
-///     that a second call supersedes any stale pending login. The token exchange completes in the background — the UI
-///     polls <c>cloud/codex/status</c> for completion. Never returns token material.
+///     Starts the loopback PKCE login and returns the authorize URL, so the UI can render a copyable link.
+///     Operator-gated.
 /// </summary>
+/// <remarks>
+///     Best-effort auto-opens the system browser, and is idempotent in that a second call supersedes any stale
+///     pending login. The token exchange completes in the background; the UI polls <c>cloud/codex/status</c> for
+///     completion. Never returns token material.
+/// </remarks>
 public sealed class CodexLoginEndpoint : EndpointWithoutRequest<CodexLoginResponse>
 {
     private readonly CodexSessionService _session;

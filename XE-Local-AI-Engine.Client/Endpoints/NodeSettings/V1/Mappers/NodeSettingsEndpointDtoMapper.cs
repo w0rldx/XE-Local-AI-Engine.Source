@@ -84,11 +84,13 @@ internal static class NodeSettingsEndpointDtoMapper
     }
 
     /// <summary>
-    ///     Merges the request into the current stored settings: each optional field that is <see langword="null" /> in the
-    ///     request keeps its current stored value (mirrors the original <c>DefaultModelName</c> merge). The store's
-    ///     <c>Normalize</c> then range-clamps every field on save, so the boundary validator + this merge keep behavior
-    ///     additive and backward-compatible.
+    ///     Merges the request into the current stored settings: an optional field that is <see langword="null" /> in
+    ///     the request keeps its current stored value, mirroring the <c>DefaultModelName</c> merge.
     /// </summary>
+    /// <remarks>
+    ///     The store's <c>Normalize</c> then range-clamps every field on save, so the boundary validator and this merge
+    ///     together keep a settings change additive.
+    /// </remarks>
     public static StoredNodeSettings ToStoredSettings(this SaveNodeSettingsRequest request, StoredNodeSettings currentSettings)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -109,9 +111,8 @@ internal static class NodeSettingsEndpointDtoMapper
             CustomToolsEnabled = request.CustomToolsEnabled ?? currentSettings.CustomToolsEnabled,
             ToolRelevanceEnabled = request.ToolRelevanceEnabled ?? currentSettings.ToolRelevanceEnabled,
             ExternalAccessProfile = externalAccessProfile,
-            // Plain null-preserving merge, unlike the external-access block above: the mode couples to no other field,
-            // so it needs no joint resolution. The validator has already proven a supplied value is one of the two
-            // literals; the store's Normalize trims and re-checks it.
+            // Plain null-preserving merge, unlike the external-access block above: the mode couples to no other field, so it needs no joint resolution. The validator has
+            // already proven a supplied value is one of the two literals; the store's Normalize trims and re-checks it.
             UiMode = request.UiMode is null
                 ? currentSettings.UiMode
                 : request.UiMode.Trim(),
@@ -156,9 +157,8 @@ internal static class NodeSettingsEndpointDtoMapper
                 : request.SpeculativeDraftModelName.Trim(),
             SpeculativeDraftMaxTokens = request.SpeculativeDraftMaxTokens ?? currentSettings.SpeculativeDraftMaxTokens,
             SpeculativeDraftGpuLayers = request.SpeculativeDraftGpuLayers ?? currentSettings.SpeculativeDraftGpuLayers,
-            // Optional string, mirroring OllamaEndpoint/DefaultModelName: a null request field keeps the current value; a
-            // supplied value (including an empty string from the "Off" option) is trimmed, and the store's Normalize maps
-            // blank to null (reranking disabled).
+            // Optional string, mirroring OllamaEndpoint/DefaultModelName: a null request field keeps the current value, and a supplied value (including the empty string the
+            // "Off" option sends) is trimmed, with the store's Normalize mapping blank to null — reranking disabled.
             RerankerModelName = request.RerankerModelName is null
                 ? currentSettings.RerankerModelName
                 : request.RerankerModelName.Trim(),
@@ -172,17 +172,15 @@ internal static class NodeSettingsEndpointDtoMapper
             AgentHomeMaxPatchBytes = request.AgentHomeMaxPatchBytes ?? currentSettings.AgentHomeMaxPatchBytes,
             MaxPendingToolCallAgeMinutes = request.MaxPendingToolCallAgeMinutes ?? currentSettings.MaxPendingToolCallAgeMinutes,
             DetachedGraceSeconds = request.DetachedGraceSeconds ?? currentSettings.DetachedGraceSeconds,
-            // The node-default tool-approval policy has no editable field on this request yet (the operator
-            // surface is planned but not yet built); preserve the currently stored value so an unrelated node-settings
-            // save never wipes it.
+            // The node-default tool-approval policy has no editable field on this request, so the currently stored value is preserved: an unrelated node-settings save must
+            // never wipe it.
             ToolApprovalPolicy = currentSettings.ToolApprovalPolicy,
             VoiceFeatureEnabled = request.VoiceFeatureEnabled ?? currentSettings.VoiceFeatureEnabled,
             DefaultVoiceProfile = request.DefaultVoiceProfile is null
                 ? currentSettings.DefaultVoiceProfile
                 : request.DefaultVoiceProfile.Trim(),
-            // Null-preserving: a null request map keeps the currently stored override; a supplied map (wrapped back into
-            // the stored shape) REPLACES it. The store's Normalize then trims keys and drops negative/non-finite entries,
-            // collapsing an empty/all-junk map to null (no override).
+            // Null-preserving: a null request map keeps the currently stored override, and a supplied map (wrapped back into the stored shape) REPLACES it. The store's
+            // Normalize then trims keys and drops negative or non-finite entries, collapsing an empty or all-junk map to null — no override.
             UsageRates = request.UsageRates is null
                 ? currentSettings.UsageRates
                 : new NodeUsageRateSettings
@@ -193,27 +191,16 @@ internal static class NodeSettingsEndpointDtoMapper
     }
 
     /// <summary>
-    ///     The ONE owner of the external-access stamp. The four members are returned together because assigning them
-    ///     independently is exactly the two-owner bug this replaces: the profile is a record of which preset is in force,
-    ///     so it can only be decided alongside the triple it describes.
-    ///     <list type="number">
-    ///         <item>
-    ///             The request carries a PRESET (<c>recommended</c> or <c>offline</c> — the validator has already
-    ///             rejected anything else): write that literal and that preset's triple, ignoring any switch sent in the
-    ///             same request. One bool drives all three, so the two presets cannot drift apart.
-    ///         </item>
-    ///         <item>
-    ///             Otherwise, the request carries at least one switch: write the supplied switches (each falling back to
-    ///             the stored value) and stamp <c>custom</c> UNCONDITIONALLY. No re-derivation — a node at <c>custom</c>
-    ///             with (true, true, false) whose owner flips the third back on stays <c>custom</c>, because the stamp
-    ///             records that the operator edited switches, not that the values happen to match a preset today.
-    ///         </item>
-    ///         <item>
-    ///             Otherwise the save touches no external-access member (every other setting's save): preserve all four,
-    ///             so an unrelated save never disturbs a decided node.
-    ///         </item>
-    ///     </list>
+    ///     The ONE owner of the external-access stamp: the four members are returned together because the profile is a
+    ///     record of which preset is in force, so it can only be decided alongside the triple it describes.
     /// </summary>
+    /// <remarks>
+    ///     A request carrying a PRESET (<c>recommended</c> or <c>offline</c>; the validator rejected anything else)
+    ///     writes that literal and that preset's triple, ignoring any switch sent with it — one bool drives all three,
+    ///     so the presets cannot drift apart. A request carrying at least one switch writes those switches, each
+    ///     falling back to the stored value, and stamps <c>custom</c> UNCONDITIONALLY, never re-derived: the stamp
+    ///     records that the operator edited switches. Any other save preserves all four, disturbing no decided node.
+    /// </remarks>
     private static (string? Profile, bool? ApplicationUpdates, bool? RuntimeUpdates, bool? FirstRunModel) ApplyExternalAccess(SaveNodeSettingsRequest request,
         StoredNodeSettings currentSettings)
     {

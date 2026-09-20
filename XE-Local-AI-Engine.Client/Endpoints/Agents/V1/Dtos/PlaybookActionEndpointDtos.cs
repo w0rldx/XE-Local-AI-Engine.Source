@@ -2,11 +2,11 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 
 using XE_Local_AI_Engine.Client.Persistence;
 
-/// <summary>
-///     List request for one agent's playbook actions. The agent id travels in the route. The optional
-///     <see cref="Scope" /> query filter (<c>?scope=</c>) narrows the result to one adaptive-memory scope; when omitted
-///     the full list is returned (byte-identical to the pre-filter behavior).
-/// </summary>
+/// <summary>List request for one agent's playbook actions; the agent id travels in the route.</summary>
+/// <remarks>
+///     The optional <see cref="Scope" /> query filter (<c>?scope=</c>) narrows the result to one adaptive-memory
+///     scope; when omitted the full list is returned.
+/// </remarks>
 public sealed class ListAgentPlaybookActionsRequest
 {
     public Guid AgentDefinitionId { get; init; }
@@ -103,10 +103,12 @@ public sealed class PlaybookActionResponse
     public double? Confidence { get; init; }
 
     /// <summary>
-    ///     Latest golden-conversation eval outcome (pass/fail + counts + per-case results). Null until an eval has run
-    ///     and after the action is edited (a stale pass is cleared). The promote gate enables the action only when this
-    ///     is present, passed and current.
+    ///     Latest golden-conversation eval outcome (pass/fail + counts + per-case results).
     /// </summary>
+    /// <remarks>
+    ///     Null until an eval has run, and cleared again when the action is edited so a stale pass cannot stand. The
+    ///     promote gate enables the action only when this is present, passed and current.
+    /// </remarks>
     public PlaybookEvalResultResponse? EvalResult { get; init; }
 }
 

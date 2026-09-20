@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 
 /// <summary>
-///     Query for the token-usage summary. The optional half-open range bounds the aggregation on the row's
-///     <c>CreatedAtUtc</c> (unix-ms): <see cref="FromEpochMs" /> is lower-inclusive, <see cref="ToEpochMs" /> is
-///     upper-exclusive; either may be omitted for an open end (subject to the retention horizon). A body-less GET with no
-///     range summarizes every retained run-envelope row. Both bind from the query string.
+///     Query for the token-usage summary: an optional half-open range bounding the aggregation on the row's
+///     <c>CreatedAtUtc</c> (unix-ms). Both fields bind from the query string.
 /// </summary>
+/// <remarks>
+///     <see cref="FromEpochMs" /> is lower-inclusive and <see cref="ToEpochMs" /> upper-exclusive; either may be
+///     omitted for an open end, subject to the retention horizon. A body-less GET with no range summarizes every
+///     retained run-envelope row.
+/// </remarks>
 public sealed class AgentUsageSummaryRequest
 {
     /// <summary>Lower-inclusive bound on <c>CreatedAtUtc</c> (unix-ms). Null leaves the lower end open.</summary>
@@ -49,10 +52,13 @@ public sealed class AgentUsageSummaryBucketResponse
     public required long TotalTokens { get; init; }
 
     /// <summary>
-    ///     Server-computed estimated cost of the bucket in <see cref="Currency" />, rounded to 4 decimals. Priced as
-    ///     <c>inputRate * promptTokens + outputRate * (completionTokens + reasoningTokens)</c> (reasoning bills as output),
-    ///     with rates from the operator override or the built-in default table. Local runtimes and unpriced models are 0.
+    ///     Server-computed estimated cost of the bucket in <see cref="Currency" />, rounded to 4 decimals.
     /// </summary>
+    /// <remarks>
+    ///     Priced as <c>inputRate * promptTokens + outputRate * (completionTokens + reasoningTokens)</c> (reasoning
+    ///     bills as output), with rates from the operator override or the built-in default table. Local runtimes and
+    ///     unpriced models are 0.
+    /// </remarks>
     public required double EstimatedCostUsd { get; init; }
 
     /// <summary>ISO 4217 currency of <see cref="EstimatedCostUsd" />. Always <c>USD</c>.</summary>

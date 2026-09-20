@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
 /// <summary>
-///     Route binding for the multipart upload endpoint. The conversation id travels in the route; the file rides the
-///     multipart form. The typed <see cref="File"/> property exists so FastEndpoints documents a
-///     <c>multipart/form-data</c> request body in OpenAPI (the generated hey-api client then serializes the upload as
-///     form-data rather than JSON). The handler still reads the form file collection directly, so the binding is
-///     tolerant of the multipart field name the client chooses.
+///     Route binding for the multipart upload endpoint: the conversation id travels in the route, the file rides the
+///     multipart form.
 /// </summary>
+/// <remarks>
+///     The typed <see cref="File" /> property exists so FastEndpoints documents a <c>multipart/form-data</c> request
+///     body in OpenAPI, which is what makes the generated hey-api client serialize the upload as form-data rather
+///     than JSON. The handler still reads the form file collection directly, so the binding tolerates whichever
+///     multipart field name the client chooses.
+/// </remarks>
 public sealed class UploadConversationFileRequest
 {
     public Guid ConversationId { get; init; }

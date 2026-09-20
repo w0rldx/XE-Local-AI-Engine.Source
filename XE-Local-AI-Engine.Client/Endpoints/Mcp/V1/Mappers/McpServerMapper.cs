@@ -77,9 +77,8 @@ internal static class McpServerMapper
         };
     }
 
-    // The node's tool-approval policy is reused (not reimplemented) to compute each entry's effective approval, so the
-    // badge an operator sees matches the floor the runtime enforcement applies. The application-layer catalog service is
-    // the door to that policy. Category travels as its enum name.
+    // The node's tool-approval policy is reused rather than reimplemented to compute each entry's effective approval, so the badge an operator sees matches the floor the
+    // runtime enforcement applies; the application-layer catalog service is the door to that policy. Category travels as its enum name.
     public static ToolCatalogEntryResponse ToResponse(this LocalToolCatalogEntry entry, ToolCatalogService toolCatalog)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -87,9 +86,8 @@ internal static class McpServerMapper
 
         var effectiveRequiresApproval = toolCatalog.RequiresApproval(entry);
 
-        // Matched on AskUserTool.ToolName, the same constant ToolApprovalCoordinator.IsUserQuestionRequest matches on,
-        // rather than a second list here that could drift from the branch it describes. The question arm comes FIRST:
-        // ask_user is approval-gated too, and the approval arm would otherwise claim it fails an unattended run.
+        // Matched on AskUserTool.ToolName, the same constant ToolApprovalCoordinator.IsUserQuestionRequest matches on, rather than a second list here that could drift from
+        // the branch it describes. The question arm comes FIRST: ask_user is approval-gated too, and the approval arm would otherwise claim it fails an unattended run.
         var unattendedBehaviour = entry.Name switch
         {
             AskUserTool.ToolName => ToolUnattendedBehaviourValues.ContinuesUnanswered,

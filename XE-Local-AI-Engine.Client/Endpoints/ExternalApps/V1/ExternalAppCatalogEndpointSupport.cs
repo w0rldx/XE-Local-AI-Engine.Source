@@ -8,11 +8,12 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 /// </summary>
 internal static class ExternalAppCatalogEndpointSupport
 {
-    /// <summary>
-    ///     Keys the installed instances by application id. V1 allows one instance per application, so a later row for
-    ///     the same application would be a state the install gate refuses; the first wins rather than throwing, because
-    ///     a catalog read is not the place to discover it.
-    /// </summary>
+    /// <summary>Keys the installed instances by application id.</summary>
+    /// <remarks>
+    ///     V1 allows one instance per application, so a later row for the same application would be a state the
+    ///     install gate refuses; the first wins rather than throwing, because a catalog read is not the place to
+    ///     discover it.
+    /// </remarks>
     public static async Task<IReadOnlyDictionary<string, ExternalAppInstanceSummary>> InstalledByApplicationIdAsync(IExternalAppService apps,
         CancellationToken cancellationToken)
     {

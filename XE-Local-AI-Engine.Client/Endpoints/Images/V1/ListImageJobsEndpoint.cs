@@ -8,10 +8,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
 /// <summary>
-///     The operator's image jobs, paged server-side so the page can reach rows older than the first one. Every row
-///     carries a decrypted prompt, so an unpaged list grew without bound on every page load. Ordered newest-first by
-///     the store and never re-sorted here. Thin transport over the <see cref="IImageJobCoordinator" />. Operator-gated.
+///     The operator's image jobs, paged server-side so the page can reach rows older than the first one.
+///     Operator-gated.
 /// </summary>
+/// <remarks>
+///     Every row carries a decrypted prompt, so an unpaged list would grow without bound on every page load. Ordered
+///     newest-first by the store and never re-sorted here. Thin transport over <see cref="IImageJobCoordinator" />.
+/// </remarks>
 public sealed class ListImageJobsEndpoint : Endpoint<ListImageJobsRequest, ListImageJobsResponse>
 {
     /// <summary>The page size a caller that names none gets.</summary>

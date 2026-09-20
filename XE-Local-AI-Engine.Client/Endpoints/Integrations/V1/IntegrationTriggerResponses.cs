@@ -4,14 +4,15 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 
 /// <summary>
-///     The one mapping from a trigger-write outcome to an HTTP response, shared by the create and the update so the two
-///     cannot drift. The service reports these as return values rather than exceptions — none of them is exceptional —
-///     which is why the endpoint writes the body itself.
-///     <para>
-///         The endpoint passes both itself (for <c>AddError</c>) and its <c>Send</c> sender, which is protected and
-///         therefore not reachable from here — the shape <c>SelectedFolderEndpointSupport</c> established.
-///     </para>
+///     The one mapping from a trigger-write outcome to an HTTP response, shared by the create and the update so the
+///     two cannot drift.
 /// </summary>
+/// <remarks>
+///     The service reports these as return values rather than exceptions — none of them is exceptional — which is why
+///     the endpoint writes the body itself. The endpoint passes both itself (for <c>AddError</c>) and its <c>Send</c>
+///     sender, which is protected and therefore not reachable from here: the shape
+///     <c>SelectedFolderEndpointSupport</c> established.
+/// </remarks>
 internal static class IntegrationTriggerResponses
 {
     public static Task SendFailureAsync<TRequest, TResponse>(IValidationErrors errors,

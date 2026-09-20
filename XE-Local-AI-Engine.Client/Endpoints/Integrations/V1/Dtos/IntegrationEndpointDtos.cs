@@ -4,12 +4,12 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Wire projection of one integration trigger.
-///     <para>
-///         <see cref="AcceptedInputKinds" /> crosses the wire as a <c>string[]</c> of member names
-///         (<c>["text","json"]</c>) rather than the <c>[Flags]</c> enum's integer sum: a bitwise union is not
-///         expressible in an OpenAPI enum, and the summed integer is unreadable in a generated SDK. The array is both.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="AcceptedInputKinds" /> crosses the wire as a <c>string[]</c> of member names
+///     (<c>["text","json"]</c>) rather than the <c>[Flags]</c> enum's integer sum: a bitwise union is not expressible
+///     in an OpenAPI enum, and the summed integer is unreadable in a generated SDK. The array is both.
+/// </remarks>
 public sealed class IntegrationTriggerView
 {
     public required Guid Id { get; init; }
@@ -152,10 +152,12 @@ public sealed class GenerateIntegrationApiKeyResponse
 }
 
 /// <summary>
-///     One execution as the operator list renders it: what happened, to which trigger and session, and when. The
-///     attribution and accounting columns live on <see cref="IntegrationExecutionDetailDto" /> instead, because a list
-///     that carried them would ship a credential prefix into every table row for no rendering.
+///     One execution as the operator list renders it: what happened, to which trigger and session, and when.
 /// </summary>
+/// <remarks>
+///     The attribution and accounting columns live on <see cref="IntegrationExecutionDetailDto" /> instead, because a
+///     list that carried them would ship a credential prefix into every table row for no rendering.
+/// </remarks>
 public sealed class IntegrationExecutionSummaryDto
 {
     public required Guid Id { get; init; }
@@ -225,9 +227,9 @@ public sealed class ListIntegrationExecutionsRequest
 
     /// <summary>
     ///     Repeated to filter on a SET of statuses (<c>?status=Accepted&amp;status=Queued</c>), which is how the
-    ///     operator's Active and History chips are answered server-side by one query. A single value is just a
-    ///     one-element set, and none at all does not constrain.
+    ///     operator's Active and History chips are answered server-side by one query.
     /// </summary>
+    /// <remarks>A single value is just a one-element set, and none at all does not constrain.</remarks>
     public IReadOnlyList<IntegrationExecutionStatus>? Status { get; init; }
 
     public int? Limit { get; init; }
@@ -249,16 +251,15 @@ public sealed class ListIntegrationExecutionsResponse
 }
 
 /// <summary>
-///     One persisted event on an execution's timeline. <b>One record, two routes:</b> the operator's
-///     <c>GET integrations/executions/{id}/events</c> and the external
-///     <c>GET integration-api/executions/{id}/events?sinceSeq=</c> return exactly this shape under two different
-///     policies, so a caller recovering from a 410 and an operator reading the timeline see the same thing.
-///     <para>
-///         It holds the PERSISTED set only — the phase boundaries, the terminal, <c>tool.*</c> and the output events.
-///         Neither assistant type is ever here: per-token deltas are stream-only, and the final text lives on the
-///         owned conversation as an assistant message.
-///     </para>
+///     One persisted event on an execution's timeline.
 /// </summary>
+/// <remarks>
+///     <b>One record, two routes:</b> the operator's <c>GET integrations/executions/{id}/events</c> and the external
+///     <c>GET integration-api/executions/{id}/events?sinceSeq=</c> return exactly this shape under two different
+///     policies, so a caller recovering from a 410 and an operator reading the timeline see the same thing. It holds
+///     the PERSISTED set only — the phase boundaries, the terminal, <c>tool.*</c> and the output events. Neither
+///     assistant type is ever here: per-token deltas are stream-only, and the final text lives on the conversation.
+/// </remarks>
 public sealed class IntegrationExecutionEventDto
 {
     public required Guid ExecutionId { get; init; }
@@ -275,10 +276,13 @@ public sealed class IntegrationExecutionEventDto
 }
 
 /// <summary>
-///     Query for <c>GET integrations/executions/{executionId}/events</c>. Paging is by WATERMARK, not by page number:
-///     pass the last <c>sequence</c> you received back as <see cref="SinceSeq" />. A short page means "caught up"; a
-///     full one means "call again". No offset exists, because holes make one meaningless.
+///     Query for <c>GET integrations/executions/{executionId}/events</c>.
 /// </summary>
+/// <remarks>
+///     Paging is by WATERMARK, not by page number: pass the last <c>sequence</c> you received back as
+///     <see cref="SinceSeq" />. A short page means "caught up", a full one means "call again". No offset exists,
+///     because holes make one meaningless.
+/// </remarks>
 public sealed class ListIntegrationExecutionEventsRequest
 {
     /// <summary>Exclusive, the same meaning <c>Last-Event-ID</c> has on the stream.</summary>
@@ -294,10 +298,13 @@ public sealed class ListIntegrationExecutionEventsResponse
 }
 
 /// <summary>
-///     The one page bound both event routes share. It lives here rather than in either route because the operator's
-///     timeline and the external recovery poll must page identically: a caller that learns the page size from one and
-///     uses it against the other would otherwise silently skip rows.
+///     The one page bound both event routes share.
 /// </summary>
+/// <remarks>
+///     It lives here rather than in either route because the operator's timeline and the external recovery poll must
+///     page identically: a caller that learns the page size from one and uses it against the other would otherwise
+///     silently skip rows.
+/// </remarks>
 public static class IntegrationEventPage
 {
     /// <summary>What a caller that names no limit gets.</summary>
@@ -312,13 +319,13 @@ public static class IntegrationEventPage
 
 /// <summary>
 ///     One caller-managed (or per-invocation) session as the operator surface renders it.
-///     <para>
-///         <see cref="TriggerName" /> rides along because it is the name an integrator addresses; an id alone would
-///         make the row unreadable without a second lookup. <see cref="ExecutionCount" /> and
-///         <see cref="LastActivityUtc" /> are written by the admission transaction and by every persisted event, so
-///         they are the activity indicators a UI renders rather than values it computes.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="TriggerName" /> rides along because it is the name an integrator addresses; an id alone would make
+///     the row unreadable without a second lookup. <see cref="ExecutionCount" /> and <see cref="LastActivityUtc" />
+///     are written by the admission transaction and by every persisted event, so they are activity indicators a UI
+///     renders rather than values it computes.
+/// </remarks>
 public sealed class IntegrationSessionResponse
 {
     public required Guid Id { get; init; }
@@ -362,10 +369,13 @@ public sealed class ListIntegrationSessionsRequest
 }
 
 /// <summary>
-///     Response envelope for <c>GET integrations/sessions</c>, ordered <c>LastActivityUtc</c> then <c>Id</c> DESCENDING
-///     by the store. That order is part of the contract: a client must render it rather than re-sort it, because a page
-///     is a window onto a larger set and a locally sorted page would be labelled "latest" while missing later rows.
+///     Response envelope for <c>GET integrations/sessions</c>, ordered <c>LastActivityUtc</c> then <c>Id</c>
+///     DESCENDING by the store.
 /// </summary>
+/// <remarks>
+///     That order is part of the contract: a client must render it rather than re-sort it, because a page is a window
+///     onto a larger set and a locally sorted page would be labelled "latest" while missing later rows.
+/// </remarks>
 public sealed class ListIntegrationSessionsResponse
 {
     public required IReadOnlyList<IntegrationSessionResponse> Items { get; init; }

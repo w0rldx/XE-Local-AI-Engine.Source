@@ -13,9 +13,11 @@ public class BenchmarkProjectMutationRequest
 
     /// <summary>
     ///     Per-run thinking budget (<c>reasoning_budget_tokens</c>); omitted leaves the reasoning bounded only by the
-    ///     agent's reasoning effort and the window. Must be &lt; ContextTokens, and together with MaxOutputTokens must
-    ///     leave a prompt reserve inside it.
+    ///     agent's reasoning effort and the window.
     /// </summary>
+    /// <remarks>
+    ///     Must be &lt; ContextTokens, and together with MaxOutputTokens must leave a prompt reserve inside it.
+    /// </remarks>
     public int? ReasoningBudgetTokens { get; init; }
 
     /// <summary>Seconds one run's generation may take; omitted takes the node default (900). Range 60..7200.</summary>
@@ -150,10 +152,13 @@ public sealed class BenchmarkProjectDetailResponse : BenchmarkProjectSummaryResp
 
     /// <summary>
     ///     The base-logit digest the project's CURRENT settings recompute, or null when it does not measure KL
-    ///     divergence. A stored KLD figure is served only while a run's digest equals this one — the whole cache key
-    ///     is the comparability gate, not the base model's fingerprint, because the corpus, the chunk count and the
-    ///     format version all move without the fingerprint moving.
+    ///     divergence.
     /// </summary>
+    /// <remarks>
+    ///     A stored KLD figure is served only while a run's digest equals this one — the whole cache key is the
+    ///     comparability gate, not the base model's fingerprint, because the corpus, the chunk count and the format
+    ///     version all move without the fingerprint moving.
+    /// </remarks>
     public string? FidelityKldExpectedDigest { get; init; }
 }
 

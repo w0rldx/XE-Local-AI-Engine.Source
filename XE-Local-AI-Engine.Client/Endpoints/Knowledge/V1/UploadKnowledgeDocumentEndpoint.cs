@@ -11,13 +11,15 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 /// <summary>
-///     FastEndpoints handler for uploading one document into the knowledge base (POST multipart). Enforces the size cap +
-///     extension allowlist, sanitizes the client file name to a leaf (so no client string forms a path), computes the
-///     content hash for dedupe, and persists the encrypted bytes via the blob store. Text extraction, chunking, and
-///     embedding all run later in the background ingestion worker — this handler only stores, then hands the admission
-///     decision (whether a fresh insert or a retryable dedupe hit has to be queued) to
-///     <see cref="IKnowledgeIngestionAdmissionService" />.
+///     Uploads one document into the knowledge base, as multipart.
 /// </summary>
+/// <remarks>
+///     Enforces the size cap and extension allowlist, sanitizes the client file name to a leaf so no client string
+///     forms a path, computes the content hash for dedupe, and persists the encrypted bytes via the blob store. Text
+///     extraction, chunking and embedding all run later in the background ingestion worker: this handler only stores,
+///     then hands the admission decision — a fresh insert or a retryable dedupe hit — to
+///     <see cref="IKnowledgeIngestionAdmissionService" />.
+/// </remarks>
 public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDocumentRequest, UploadKnowledgeDocumentResponse>
 {
     private const string DefaultMimeType = "application/octet-stream";
@@ -122,10 +124,8 @@ public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDo
         var admission = await _ingestionAdmission.AdmitStoredDocumentAsync(result.DocumentId, result.WasInserted, ct);
         if (admission.QueueFull)
         {
-            // The bounded ingestion queue is full: the blob is persisted (so a retry dedupes to it) but background
-            // indexing was not admitted. Fail with the same busy status + Retry-After the conversation upload uses so
-            // the client retries shortly rather than the server growing an unbounded backlog. The worker's drain-sweep
-            // (or a retry once the queue drains) picks the stranded document up.
+            // The bounded ingestion queue is full: the blob is persisted, so a retry dedupes to it, but background indexing was not admitted. Fail with the same busy status
+            // and Retry-After the conversation upload uses, so the client retries shortly rather than the server growing an unbounded backlog; the worker's drain-sweep picks the stranded document up.
             HttpContext.Response.Headers.RetryAfter = "5";
             await Send.StringAsync("The server is busy indexing documents. Please retry shortly.",
                 StatusCodes.Status503ServiceUnavailable,

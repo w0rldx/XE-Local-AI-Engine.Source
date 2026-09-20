@@ -6,12 +6,14 @@ using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Operator-initiated apply of an available app update (POST app-update/apply). Delegates to
-///     <see cref="IAppUpdateService.ApplyAsync" />, which downloads the latest release and schedules Velopack to apply it
-///     after this host exits (no-op when none is available). The endpoint completes its success response before requesting
-///     graceful shutdown, so the browser can enter restart polling without mistaking process exit for an apply failure.
-///     Apply failures surface as a sanitized 400.
+///     Operator-initiated apply of an available app update.
 /// </summary>
+/// <remarks>
+///     Delegates to <see cref="IAppUpdateService.ApplyAsync" />, which downloads the latest release and schedules
+///     Velopack to apply it after this host exits, a no-op when none is available. The endpoint completes its success
+///     response before requesting graceful shutdown, so the browser can enter restart polling without mistaking
+///     process exit for an apply failure. Apply failures surface as a sanitized 400.
+/// </remarks>
 public sealed class ApplyAppUpdateEndpoint : EndpointWithoutRequest<ApplyAppUpdateResponse>, IDesktopOnlyEndpoint
 {
     private readonly IAppUpdateService _updateService;
@@ -35,11 +37,8 @@ public sealed class ApplyAppUpdateEndpoint : EndpointWithoutRequest<ApplyAppUpda
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        // Base `Applying` on the REAL apply outcome (the service live-re-checks GitHub), not a possibly-stale
-        // snapshot. When true, Velopack is waiting for this process to exit; OnCompleted stops the host only after
-        // the JSON response is complete, so the client reliably enters restart polling. An apply failure throws
-        // AppUpdateException, whose contractually sanitized message (no local path or feed URL) the global
-        // DomainValidationExceptionHandler writes as the 400.
+        // Base `Applying` on the REAL apply outcome — the service live-re-checks GitHub — not a stale snapshot. When true Velopack waits for this process to exit, and
+        // OnCompleted stops the host only after the JSON response is complete. An apply failure throws AppUpdateException, whose sanitized message (no local path or feed URL) becomes the 400.
         var applying = await _updateService.ApplyAsync(ct);
         if (applying)
         {

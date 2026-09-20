@@ -7,11 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Read-only adaptive-memory execution-log diagnostics for one agent. Returns a page of metadata-only telemetry
-///     rows (latency/tokens/success/errorClass/configHash/link ids) newest-first — there is NO message content in this
-///     store, so nothing to redact; <c>ErrorClass</c> is an exception type name only by the store contract. Resolves the
-///     agent first so a missing definition returns 404 rather than an empty page. Operator-gated.
+///     Read-only adaptive-memory execution-log diagnostics for one agent: a page of metadata-only telemetry rows
+///     (latency/tokens/success/errorClass/configHash/link ids), newest-first. Operator-gated.
 /// </summary>
+/// <remarks>
+///     There is NO message content in this store, so nothing to redact, and <c>ErrorClass</c> is an exception type
+///     name only by the store contract. The agent is resolved first so a missing definition returns 404 rather than an
+///     empty page.
+/// </remarks>
 public sealed class ListAgentExecutionLogsEndpoint : Endpoint<ListAgentExecutionLogsRequest, ListAgentExecutionLogsResponse>
 {
     // Default page size when the caller supplies none; clamped upper bound keeps a diagnostics fetch bounded.

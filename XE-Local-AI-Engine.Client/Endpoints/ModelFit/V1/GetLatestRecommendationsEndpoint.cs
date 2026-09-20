@@ -7,11 +7,14 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
-///     FastEndpoints handler for the latest cached recommendation snapshot (GET model-fit/recommendations/latest). Reads
-///     cached state only — it never runs the advisor. A cache-miss returns an explicit <c>hasCache:false</c> 200 (not a
-///     404) so the UI can render the empty/diagnostics state. The provider-name query param is gone: the advisor is the
-///     single recommendation backend and writes the fixed <c>llama.cpp</c> provider sentinel into the snapshot key.
+///     FastEndpoints handler for the latest cached recommendation snapshot (GET model-fit/recommendations/latest),
+///     reading cached state only — it never runs the advisor.
 /// </summary>
+/// <remarks>
+///     A cache-miss returns an explicit <c>hasCache:false</c> 200, not a 404, so the UI can render the
+///     empty/diagnostics state. There is no provider-name query param: the advisor is the single recommendation
+///     backend and writes the fixed <c>llama.cpp</c> provider sentinel into the snapshot key.
+/// </remarks>
 public sealed class GetLatestRecommendationsEndpoint : Endpoint<GetLatestRecommendationsRequest, GetLatestRecommendationsResponse>
 {
     /// <summary>The advisor's fixed provider sentinel — the snapshot key the box-aware recommendation is cached under.</summary>

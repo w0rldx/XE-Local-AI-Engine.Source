@@ -9,11 +9,11 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 /// <summary>
 ///     Rewrites a STOPPED instance's variables. 200 and not 202: a created container's environment is immutable, so
 ///     the write is complete when it returns and the values take effect on the next start.
-///     <para>
-///         A FULL replacement of the declared set: the mask sentinel keeps a stored secret, a real value replaces it,
-///         an empty string clears it. Reconfiguring a running instance is a 409 <c>ExternalAppInvalidTransition</c>.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A FULL replacement of the declared set: the mask sentinel keeps a stored secret, a real value replaces it, an
+///     empty string clears it. Reconfiguring a running instance is a 409 <c>ExternalAppInvalidTransition</c>.
+/// </remarks>
 public sealed class UpdateExternalAppVariablesEndpoint : Endpoint<UpdateExternalAppVariablesRequest, ExternalAppInstanceView>
 {
     private readonly IExternalAppService _apps;

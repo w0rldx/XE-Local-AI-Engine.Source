@@ -9,11 +9,14 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 /// <summary>
-///     FastEndpoints handler for uploading one file attachment to a conversation (POST multipart). Enforces the
-///     size cap + extension allowlist and sanitizes the client file name to a leaf (so no client string forms a path),
-///     then hands the file to <see cref="IConversationUploadIngestor" />, which runs the gated extract-and-persist
-///     phase. The storage path is server-generated; the original name is kept only as encrypted display metadata.
+///     Uploads one file attachment to a conversation, as multipart.
 /// </summary>
+/// <remarks>
+///     Enforces the size cap and extension allowlist and sanitizes the client file name to a leaf, so no client string
+///     forms a path, then hands the file to <see cref="IConversationUploadIngestor" />, which runs the gated
+///     extract-and-persist phase. The storage path is server-generated; the original name is kept only as encrypted
+///     display metadata.
+/// </remarks>
 public sealed class UploadConversationFileEndpoint : Endpoint<UploadConversationFileRequest, ConversationUploadedFileResponse>
 {
     private readonly IConversationUploadIngestor _ingestor;

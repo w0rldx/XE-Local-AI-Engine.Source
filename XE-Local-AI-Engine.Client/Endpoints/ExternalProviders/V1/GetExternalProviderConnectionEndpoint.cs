@@ -8,10 +8,12 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
-///     Reads one configured connection by its slug. A slug that is not stored — or one that is not even a well-formed
-///     slug — is a clean 404: both mean "no such connection", and telling them apart would only report the grammar
-///     back to a caller that cannot act on the difference.
+///     Reads one configured connection by its slug.
 /// </summary>
+/// <remarks>
+///     A slug that is not stored — or one that is not even a well-formed slug — is a clean 404: both mean "no such
+///     connection", and telling them apart would only report the grammar back to a caller that cannot act on it.
+/// </remarks>
 public sealed class GetExternalProviderConnectionEndpoint : Endpoint<GetExternalProviderConnectionRequest, ExternalProviderConnectionResponse>
 {
     private readonly IExternalProviderStore _store;

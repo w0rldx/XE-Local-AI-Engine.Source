@@ -12,14 +12,15 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 /// <summary>
 ///     The ONE decision surface: a gate's answer and a stuck node run's intervention are the same human act, so
 ///     <c>Approve</c>, <c>Reject</c>, <c>RequestChanges</c>, <c>Retry</c>, <c>Skip</c> and <c>Abandon</c> all travel
-///     this route into one table, one audit shape and one idempotency path.
-///     <para>
-///         Thin transport and nothing else. The endpoint holds no idempotency logic of its own: the operation id goes
-///         to the runtime, which answers a replayed decision with the recorded one rather than deciding twice. A
-///         DIFFERENT operation id at an already-answered node run is not a replay but a second human act, and it is
-///         refused with the standing decision on the body.
-///     </para>
+///     this route into one table and one idempotency path.
 /// </summary>
+/// <remarks>
+///     One audit shape too. Thin transport and nothing else: the endpoint holds no idempotency logic of its own, and
+///     the operation id goes to
+///     the runtime, which answers a replayed decision with the recorded one rather than deciding twice. A DIFFERENT
+///     operation id at an already-answered node run is not a replay but a second human act, and it is refused with the
+///     standing decision on the body.
+/// </remarks>
 public sealed class DecideDevWorkflowNodeRunEndpoint : Endpoint<DevWorkflowDecisionRequest, DevWorkflowDecisionResultResponse>
 {
     private readonly IDevWorkflowRunService _runs;

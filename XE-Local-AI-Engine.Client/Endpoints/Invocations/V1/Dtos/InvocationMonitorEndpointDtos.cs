@@ -40,10 +40,12 @@ public sealed class InvocationCurrentResponse
     public required bool HasPendingApproval { get; init; }
 
     /// <summary>
-    ///     True while the turn is parked on an <c>ask_user</c> question waiting on the operator. Without it a parked turn
-    ///     reads as an ordinary running invocation with nothing pending. Deliberately CONTENT-FREE: the question text is
-    ///     operator/model content and never travels on this ops endpoint.
+    ///     True while the turn is parked on an <c>ask_user</c> question waiting on the operator.
     /// </summary>
+    /// <remarks>
+    ///     Without it a parked turn reads as an ordinary running invocation with nothing pending. Deliberately
+    ///     CONTENT-FREE: the question text is operator or model content and never travels on this ops endpoint.
+    /// </remarks>
     public required bool HasPendingQuestion { get; init; }
 
     /// <summary>
