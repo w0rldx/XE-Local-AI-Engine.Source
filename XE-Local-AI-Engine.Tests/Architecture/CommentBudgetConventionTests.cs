@@ -33,15 +33,10 @@ public sealed partial class CommentBudgetConventionTests
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "CommentBudgetAllowlist.txt");
 
     /// <summary>
-    ///     Floors a little under today's measurements. A walk that lost its roots, or a scanner that stopped
-    ///     recognising a construct, reads too little and fails here rather than reporting a clean tree.
+    ///     A floor a little under today's file count, which the cleanup batches do not lower. A walk that lost
+    ///     its roots reads too few files and fails here rather than reporting a clean tree.
     /// </summary>
     private const int EnforcedFileFloor = 4200;
-
-    private static readonly (string Rule, int Floor)[] RuleFloors =
-    [
-        ("block", 700), ("remarks", 250), ("run", 4300), ("summary", 6400), ("tag", 100)
-    ];
 
     /// <summary>The rule names, from the measurement itself, so a rule cannot exist without a key.</summary>
     private static readonly string[] Rules = [.. Pairs(default).Select(pair => pair.Rule)];
@@ -186,12 +181,21 @@ public sealed partial class CommentBudgetConventionTests
     }
 
     /// <summary>
-    ///     The guard's own check. A scanner that read quoted text as a comment, or stopped recognising a construct,
-    ///     reports a budget nobody is holding.
+    ///     The guard's own check, and the proof that every rule still fires: a scanner that read quoted text as a
+    ///     comment, or stopped recognising a construct, reports a budget nobody is holding.
     /// </summary>
     [Test]
     public void TheGuard_CountsRealCommentsAndIgnoresLookalikes()
     {
+        var uncovered = Rules
+                        .Where(rule => !MustCount.Any(entry => string.Equals(entry.Rule, rule, StringComparison.Ordinal)))
+                        .ToList();
+
+        AssertEx.Empty(uncovered,
+            "A rule has no case it must count, so nothing proves it still recognises its construct and an "
+            + "allowlist it has stopped feeding reads as a clean tree. Add a snippet for each rule below:"
+            + Environment.NewLine + string.Join(Environment.NewLine, uncovered));
+
         foreach (var (name, source, rule) in MustCount)
         {
             AssertEx.Equal($"{rule}=1",
@@ -210,29 +214,16 @@ public sealed partial class CommentBudgetConventionTests
     }
 
     /// <summary>
-    ///     Non-vacuity. Every assertion above passes on an empty scan, so the scan itself is asserted to be large.
+    ///     Non-vacuity. The budget assertions pass on an empty scan, so the scan itself is asserted to be large.
     /// </summary>
     [Test]
     public void TheScan_ReadsTheWholeEnforcedTree()
     {
-        var (files, _, measured) = Scan.Value;
+        var (files, _, _) = Scan.Value;
 
         AssertEx.True(files >= EnforcedFileFloor,
             $"Only {files} C# files were scanned in the enforced projects, below the floor of "
             + $"{EnforcedFileFloor}. The walk is reading the wrong directories, so this ratchet cannot fire.");
-
-        var thin = RuleFloors
-                   .Select(rule => (rule.Rule, rule.Floor,
-                       Measured: measured.Where(entry => entry.Key.EndsWith($"|{rule.Rule}", StringComparison.Ordinal))
-                                     .Sum(entry => entry.Value)))
-                   .Where(rule => rule.Measured < rule.Floor)
-                   .Select(rule => $"{rule.Rule}: {rule.Measured} measured, floor {rule.Floor}")
-                   .ToList();
-
-        AssertEx.Empty(thin,
-            "A rule measured far less than the tree is known to hold, so that rule has stopped recognising its "
-            + "construct. Lower the floor only together with the batch that genuinely removed the items:"
-            + Environment.NewLine + string.Join(Environment.NewLine, thin));
     }
 
     // ---------------------------------------------------------------- the allowlist
