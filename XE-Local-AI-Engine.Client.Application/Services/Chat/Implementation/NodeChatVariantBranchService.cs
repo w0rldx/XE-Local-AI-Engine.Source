@@ -6,11 +6,13 @@ using static NodeChatMetadataSerializer;
 using static NodeChatPersistenceSql;
 
 /// <summary>
-///     Variant + branch commands behind <see cref="NodeChatPersistenceService" />: recording a regenerated turn as a
-///     sibling variant, listing a turn's variants, and branching a conversation into a new local thread. Reads the
-///     branch source via <see cref="NodeChatReadModel" /> on its own write key before writing under the new
-///     conversation's key (two serialized scopes avoid a cross-conversation lock-ordering hazard).
+///     Variant and branch commands behind <see cref="NodeChatPersistenceService" />: recording a regenerated turn as
+///     a sibling variant, listing a turn's variants, and branching a conversation into a new local thread.
 /// </summary>
+/// <remarks>
+///     It reads the branch source via <see cref="NodeChatReadModel" /> on its own write key before writing under the
+///     new conversation's key; two serialized scopes avoid a cross-conversation lock-ordering hazard.
+/// </remarks>
 internal sealed class NodeChatVariantBranchService
 {
     private const string AssistantRole = "assistant";
@@ -44,21 +46,12 @@ internal sealed class NodeChatVariantBranchService
             return null;
         }
 
-        // Collapse variant groups so the branch is a LINEAR thread: exactly one revision per group, positioned at the
-        // group's ANCHOR (its earliest member's sequence), mirroring the frontend, which renders a variant group at its
-        // oldest sibling and lets any sibling be the active revision (MessageRevisionGrouping.ts). Anchoring by group —
-        // rather than by each message's own sequence — is what makes late regenerations branch correctly: regenerating
-        // an EARLY turn AFTER later turns exist mints a sibling whose sequence lands PAST those later turns, yet that
-        // sibling still belongs to the early turn and must branch at the early position. The selected revision per group
-        // comes from the caller-supplied map (the path the user was viewing); a group with no valid selection falls back
-        // to its newest member. The branch-point turn always contributes exactly the cutoff message, overriding any
-        // caller entry for its group. Without this collapse the copied siblings would render as duplicate stacked
-        // assistant turns (variant_group_id is dropped on copy below). (RC fix + late-sibling anchoring.)
+        // Collapse variant groups so the branch is a LINEAR thread: one revision per group at the group's ANCHOR, which
+        // branches a late regeneration of an early turn early. See docs/wiki/05-chat.md, "Branching a conversation".
         var anchorSequence = SelectedPathResolver.CreateAnchorResolver(source.Messages);
 
-        // The cutoff's anchored position defines how far the branch reaches: a group participates iff its own anchor is
-        // at/upstream of it. When the cutoff is itself a late-created sibling of an early turn, this resolves to the
-        // early position it renders at, not its late raw sequence.
+        // The cutoff's anchored position defines how far the branch reaches: a group participates only if its anchor is
+        // at or upstream of it, and a cutoff that is itself a late sibling resolves to the position it renders at.
         var cutoffAnchor = anchorSequence(cutoff);
         var eligible = source.Messages.Where(message => anchorSequence(message) <= cutoffAnchor).ToArray();
         var selection = BuildValidatedSelection(request.SelectedRevisions, source.Messages, cutoff, anchorSequence, cutoffAnchor);
@@ -71,10 +64,8 @@ internal sealed class NodeChatVariantBranchService
         return await _writer.ExecuteConversationExclusiveAsync(branchedConversationId,
             async (dbContext, token) =>
             {
-                // One transaction around the whole branch (conversation insert + every message copy): the copies are
-                // separate INSERT statements, so without this a cancellation/failure mid-loop would autocommit the
-                // conversation row plus a prefix of its messages, leaving a visible half-copied branch. Mirrors
-                // CreateMessageVariantAsync's transactional insert.
+                // One transaction around the whole branch, conversation insert and every message copy: the copies are
+                // separate INSERTs, so a failure mid-loop would otherwise leave a visible half-copied branch.
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
                 var dbTransaction = transaction.GetDbTransaction();
 
@@ -103,15 +94,13 @@ internal sealed class NodeChatVariantBranchService
                                                  INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id)
                                                  VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id);
                                                  """;
-                    // A branch copy is a new row with a fresh message id, so its content/metadata envelope AAD binds the
-                    // new (branchedConversationId, copyMessageId) pair. message.Content arrives already decrypted from
-                    // the read model, so it is re-encrypted here under the copy's identity.
+                    // A branch copy is a new row with a fresh message id, so its envelope AAD binds the new
+                    // (conversation, message) pair and the already-decrypted content is re-encrypted under it.
                     var copyMessageId = Guid.NewGuid();
                     AddParameter(messageCommand, "$message_id", copyMessageId);
                     AddParameter(messageCommand, "$conversation_id", branchedConversationId);
-                    // Stamp the copy at its group's anchored position (not the chosen sibling's own sequence) so a
-                    // late-created sibling of an early turn lands where the turn renders, keeping the new linear thread
-                    // ordered exactly as the operator saw it. Anchor sequences are unique (each is a distinct source row).
+                    // Stamped at the group's anchored position, not the chosen sibling's own sequence, so the new linear
+                    // thread is ordered exactly as the operator saw it. Anchor sequences are unique per source row.
                     AddParameter(messageCommand, "$sequence", anchorSequence(message));
                     AddParameter(messageCommand, "$role", message.Role);
                     AddParameter(messageCommand, "$content", dbContext.EncryptMessageContent(message.Content, branchedConversationId, copyMessageId));
@@ -140,15 +129,8 @@ internal sealed class NodeChatVariantBranchService
             cancellationToken);
     }
 
-    // Validates the caller-supplied selected-revision map against the source conversation and reduces it to the
-    // entries that actually bear on the branch (upstream of the cutoff). Fails CLOSED on an integrity violation —
-    // an entry whose message does not belong to the conversation, or that is keyed under a variant group it is not
-    // a member of — because such an entry can only come from a stale/tampered client and must not silently pick a
-    // fallback revision. An otherwise-valid entry for a group whose ANCHOR sits after the cutoff (a group the user
-    // navigated downstream of the branch point) is simply dropped: it plays no part in this branch's linear thread.
-    // The comparison is on the group anchor, NOT the selected message's own sequence — a legitimately selected
-    // late-created sibling of an early (upstream) turn carries a sequence past the cutoff yet still belongs to the
-    // branch, and must be kept. Returns null when there is nothing to pin, driving the legacy newest-per-group default.
+    // Validates the caller's selected-revision map and keeps only the entries whose group ANCHOR — never the selected
+    // message's own sequence — is upstream of the cutoff. It fails CLOSED on an integrity violation.
     private static IReadOnlyDictionary<Guid, Guid>? BuildValidatedSelection(IReadOnlyDictionary<Guid, Guid>? requested,
         IReadOnlyList<NodeChatPersistedMessageDto> allMessages,
         NodeChatPersistedMessageDto cutoff,
@@ -238,9 +220,8 @@ internal sealed class NodeChatVariantBranchService
                             await stampCommand.ExecuteNonQueryAsync(token);
                         }
 
-                        // The new sibling variant is an assistant placeholder: same parent (the user turn), shared group.
-                        // The per-response agent attribution is stamped at mint time so the pending variant already
-                        // carries the agent name (symmetric with the send placeholder).
+                        // The new sibling variant is an assistant placeholder with the same parent and a shared group,
+                        // stamped with the per-response agent attribution so the pending variant shows the agent name.
                         await using var insertCommand = dbContext.Database.GetDbConnection().CreateCommand();
                         insertCommand.Transaction = dbTransaction;
                         insertCommand.CommandText = """
@@ -265,11 +246,8 @@ internal sealed class NodeChatVariantBranchService
                         await OpenIfNeededAsync(insertCommand.Connection, token);
                         await insertCommand.ExecuteNonQueryAsync(token);
 
-                        // Minting a new sibling shifts the default selected path (newest sibling wins), which invalidates
-                        // any compaction synopsis built from the prior selection. Clear it in the same transaction so a
-                        // later send never injects a stale summary. ponytail: blunt clear — also drops the synopsis when
-                        // the regenerated turn is newer than the covered range (harmless, the user re-compacts); a
-                        // covered-span hash would invalidate only when the covered messages actually change.
+                        // Minting a sibling shifts the default selected path, so any compaction synopsis is cleared in
+                        // the same transaction. ponytail: blunt clear, a covered-span hash would invalidate less often.
                         await using var clearSummaryCommand = dbContext.Database.GetDbConnection().CreateCommand();
                         clearSummaryCommand.Transaction = dbTransaction;
                         clearSummaryCommand.CommandText =

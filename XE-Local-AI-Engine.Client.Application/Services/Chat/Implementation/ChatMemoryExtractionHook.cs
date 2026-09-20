@@ -6,13 +6,14 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Memory;
 
 /// <summary>
-///     Builds the post-run adaptive-memory hook the pump fires on a Completed/Failed terminal. Both the send and
-///     regenerate paths assemble the same metadata-only execution-log telemetry plus the content-bearing run input and
-///     hand both to the background dispatcher; only the set of user turns they mine differs (the send path includes the
-///     just-sent turn, the regenerate path uses its pre-cutoff context), so that is supplied as a deferred delegate the
-///     hook evaluates at invoke time. The dispatcher owns scope/CT/error isolation, so the returned delegate never
-///     blocks or throws into the pump.
+///     Builds the post-run adaptive-memory hook the pump fires on a Completed or Failed terminal.
 /// </summary>
+/// <remarks>
+///     The send and regenerate paths assemble the same metadata-only telemetry plus the content-bearing run input and
+///     hand both to the background dispatcher; only the set of user turns they mine differs, so that arrives as a
+///     deferred delegate the hook evaluates at invoke time. The dispatcher owns scope, token and error isolation, so
+///     the returned delegate never blocks or throws into the pump.
+/// </remarks>
 internal static class ChatMemoryExtractionHook
 {
     public static Action<InvocationState, NodeChatPumpTerminalResult> Build(IMemoryExtractionDispatcher dispatcher,

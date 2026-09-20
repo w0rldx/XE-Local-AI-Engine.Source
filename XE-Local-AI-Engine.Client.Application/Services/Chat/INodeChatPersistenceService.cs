@@ -5,12 +5,14 @@ public interface INodeChatPersistenceService
     Task<NodeChatConversationDto> CreateConversationAsync(NodeChatCreateConversationRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Idempotent upsert for the caller-supplied conversation id. If a row already exists (any purged state) it
-    ///     is returned unchanged — title/origin/timestamps are NOT overwritten. Otherwise a new row is inserted.
-    ///     Used by the platform path (which has no pre-existing local conversation row) before persisting the
-    ///     synthesized user + assistant messages. The conversation id is caller-supplied (reused from the platform's
-    ///     id), never minted here.
+    ///     Idempotent upsert for the caller-supplied conversation id: an existing row is returned unchanged, whatever
+    ///     its purged state, and otherwise a new one is inserted.
     /// </summary>
+    /// <remarks>
+    ///     Title, origin and timestamps are never overwritten. The platform path, which has no pre-existing local
+    ///     row, calls it before persisting its synthesized messages; the id is reused from the platform's, never
+    ///     minted here.
+    /// </remarks>
     Task<NodeChatConversationDto> EnsureConversationAsync(NodeChatEnsureConversationRequest request, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken = default);
@@ -18,14 +20,15 @@ public interface INodeChatPersistenceService
     Task<NodeChatConversationDto?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The chat-turn read. Returns the same conversation as <see cref="GetConversationAsync" /> with the same message
-    ///     STRUCTURE, but skips transferring, decrypting and parsing the content and metadata blobs of non-user messages
-    ///     the conversation's compaction synopsis has already replaced — work the turn always threw away. Output-equivalent
-    ///     for the turn's two consumers only (context assembly and memory extraction); the implementation's remarks carry
-    ///     the equivalence argument. Anything that RENDERS or RE-PERSISTS a conversation must use
-    ///     <see cref="GetConversationAsync" /> — and so must a turn that replays persisted tool history, which reads the
-    ///     omitted metadata blob of exactly the covered rows this read blanks.
+    ///     The chat-turn read: the same conversation and message STRUCTURE as <see cref="GetConversationAsync" />,
+    ///     minus the payload blobs of non-user messages the compaction synopsis already replaced.
     /// </summary>
+    /// <remarks>
+    ///     It is output-equivalent for the turn's two consumers only, context assembly and memory extraction; the
+    ///     implementation's remarks carry the argument. Anything that RENDERS or RE-PERSISTS a conversation uses
+    ///     <see cref="GetConversationAsync" />, and so must a turn replaying persisted tool history, which reads the
+    ///     very metadata blobs this read blanks.
+    /// </remarks>
     Task<NodeChatConversationDto?> GetConversationForTurnAsync(Guid conversationId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -84,18 +87,19 @@ public interface INodeChatPersistenceService
     Task<NodeChatConversationDto?> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Branches a conversation: clones every message up to and including the target message into a
-    ///     NEW Origin=Local conversation that records <c>branch_of_conversation_id</c> = source. Returns null when the
-    ///     source conversation or target message does not exist.
+    ///     Branches a conversation, cloning every message up to and including the target into a NEW Origin=Local
+    ///     conversation whose <c>branch_of_conversation_id</c> records the source, or null when either is missing.
     /// </summary>
     Task<NodeChatBranchResultDto?> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Records a regenerated assistant turn as a SIBLING VARIANT — never an in-place overwrite. The
-    ///     new message shares a <c>variant_group_id</c> with the original (minted and back-stamped onto the original
-    ///     when it had none) and copies the original's <c>parent_message_id</c>. Returns null when the original message
-    ///     does not exist.
+    ///     Records a regenerated assistant turn as a SIBLING VARIANT, never an in-place overwrite, or null when the
+    ///     original message does not exist.
     /// </summary>
+    /// <remarks>
+    ///     The new message shares a <c>variant_group_id</c> with the original, minted and back-stamped onto it when it
+    ///     had none, and copies the original's <c>parent_message_id</c>.
+    /// </remarks>
     Task<NodeChatMessageVariantDto?> CreateMessageVariantAsync(NodeChatCreateMessageVariantRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>Lists all variants of the logical turn that the given message belongs to, ordered by sequence.</summary>

@@ -4,36 +4,39 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Post-run adaptive-memory extraction orchestration: given a completed (or failed) agent run, mine candidate
-///     lessons with a <b>node-local</b> model only (never the cloud-capable shared chat client — the privacy invariant),
-///     gate out temporary conversations BEFORE any model call, drop near-duplicates of existing memories, and persist
-///     the survivors as <c>Suggested</c>/<c>Extracted</c> playbook actions for human review. Extracted candidates are
-///     inert by construction (the resolver injects only <c>Enabled</c> actions; the eval gate + human approval still
-///     govern promotion). The agent proposes; the system decides.
+///     Post-run adaptive-memory extraction orchestration: it mines candidate lessons from a completed or failed run
+///     and persists the survivors as <c>Suggested</c>/<c>Extracted</c> playbook actions for human review.
 /// </summary>
 /// <remarks>
-///     This service is dispatched off the chat hot path (see <see cref="IMemoryExtractionDispatcher" />) so its model
-///     call never delays the terminal SSE event or fails the user's turn. It is the extraction counterpart to the
-///     privacy-correct analysis path (<c>IPlaybookAnalysisService</c>).
+///     It uses a <b>node-local</b> model only, never the shared cloud-capable client, gates out temporary
+///     conversations BEFORE any model call and drops near-duplicates of existing memories. Extracted candidates are
+///     inert by construction, since the resolver injects only <c>Enabled</c> actions and the eval gate plus human
+///     approval still govern promotion: the agent proposes, the system decides. It is dispatched off the chat hot
+///     path, so its model call never delays the terminal SSE event or fails the user's turn.
 /// </remarks>
 public interface IMemoryExtractionService
 {
     /// <summary>
-    ///     Extracts and persists candidate memories for the run described by <paramref name="run" />. Returns the
-    ///     outcome (whether the temp-chat gate or the disabled gate short-circuited, plus what was proposed vs kept vs
-    ///     deduplicated). A temporary conversation, a missing extraction model, or a run with no distillable lesson all
-    ///     return cleanly with nothing persisted and no throw.
+    ///     Extracts and persists candidate memories for <paramref name="run" />, returning whether a gate
+    ///     short-circuited plus what was proposed, kept and deduplicated.
     /// </summary>
+    /// <remarks>
+    ///     A temporary conversation, a missing extraction model and a run with no distillable lesson all return
+    ///     cleanly, with nothing persisted and no throw.
+    /// </remarks>
     Task<MemoryExtractionOutcome> ExtractAsync(MemoryExtractionRunInput run, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-///     The completed-run inputs the extraction service mines. Carries the user turns + the assistant's answer text + the
-///     failure signal (a Failed terminal status plus the sanitized <see cref="Error" /> string — there is no live
-///     <c>Exception</c> object at the primary seam, only the status + sanitized string; that is enough to flag
-///     <see cref="MemoryScope.Failure" /> eligibility), the link ids, and the temp-chat flag. Message content is held
-///     only in memory for the model call and the dedup compare — it is NEVER written to the execution log.
+///     The completed-run inputs the extraction service mines: the user turns, the assistant's answer, the failure
+///     signal, the link ids and the temp-chat flag.
 /// </summary>
+/// <remarks>
+///     The failure signal is a Failed terminal status plus the sanitized <see cref="Error" /> string, because no live
+///     <c>Exception</c> exists at the primary seam — enough to flag <see cref="MemoryScope.Failure" /> eligibility.
+///     Message content is held in memory only for the model call and the dedup compare; it is NEVER written to the
+///     execution log.
+/// </remarks>
 public sealed record MemoryExtractionRunInput
 {
     public required Guid AgentDefinitionId { get; init; }

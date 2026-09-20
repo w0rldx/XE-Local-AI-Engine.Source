@@ -6,44 +6,16 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Background worker that drains the <see cref="MemoryExtractionDispatcher" /> queue and runs post-run adaptive-memory
-///     extraction per job, bounded to <see cref="MemoryExtractionOptions.MaxConcurrentExtractions" /> concurrent jobs by a
-///     <see cref="SemaphoreSlim" /> (so a burst of terminal turns cannot spin up unbounded concurrent model calls). Each
-///     job runs in its own <c>CreateAsyncScope()</c> with the drain-deadline token — never the chat send token — so a
-///     completed run's memory is never lost to a client-side cancellation, and the request scope being disposed cannot
-///     fault extraction with an <see cref="ObjectDisposedException" />. Replaces the prior unbounded fire-and-forget
-///     <c>Task.Run</c> dispatch; mirrors <c>KnowledgeIngestionWorker</c>.
-///     <para>
-///         Shutdown awareness — a BOUNDED, honest contract. Each job carries conversation content and the queue is purely
-///         in-memory (no persistence recovery), so a job dropped at shutdown is lost for good — shutdown therefore drains
-///         QUEUED work as well as in-flight work. <see cref="StopAsync" /> (1) completes the dispatcher's writer FIRST, so
-///         no new job is accepted (<see cref="MemoryExtractionDispatcher.Dispatch" /> then takes its content-free
-///         dropped-job path) and the read loop can drain the buffered jobs and end on its own; (2) drains the read loop
-///         (which launches every remaining buffered job) AND the in-flight jobs under a single bounded window
-///         (<see cref="MemoryExtractionOptions.ShutdownDrainTimeoutSeconds" />); (3) if that window elapses, cancels
-///         <see cref="_drainDeadline" /> so the read loop stops launching and every straggler observes cancellation, then
-///         awaits their unwinding under a brief FIXED grace (<see cref="PostDeadlineGrace" />) and accounts for any
-///         still-queued jobs as dropped (content-free) before returning. The read loop reads on
-///         <see cref="_drainDeadline" /> (NOT the host stopping token), so a stop cannot abandon jobs already buffered on
-///         the channel; that token is cancelled ONLY when the drain window elapses, so ordinary operation never cancels a
-///         job mid-write.
-///     </para>
-///     <para>
-///         The deliberate trade against unbounded shutdown. Shutdown is capped at the drain window PLUS the fixed grace —
-///         it never waits indefinitely for a job to finish. A job that cooperates with cancellation always unwinds inside
-///         the grace and so never observes a disposed scope factory or semaphore. A job that IGNORES cancellation past the
-///         grace is deliberately ABANDONED: <see cref="StopAsync" /> returns and <see cref="Dispose" /> disposes the
-///         <see cref="_drainDeadline" /> CTS and the <see cref="_concurrency" /> semaphore while that job is still running,
-///         so when it finally resumes it MAY observe disposed host services and its failure is swallowed (the
-///         <see cref="ObjectDisposedException" /> net in <see cref="ReleaseConcurrency" /> and the per-job catch-all are
-///         the last-resort guards for exactly this). Abandonment is not hidden: each abandoned job is counted, logged
-///         content-free, and reported on <see cref="NodeMetrics.MemoryExtractionAbandonedTotal" />. This is the accepted
-///         cost of a bounded shutdown — at most a small, counted number of cancellation-ignoring jobs may lose their
-///         memory write and race disposal, in exchange for a shutdown that always completes promptly.
-///     </para>
-///     All failures are handled inside the job's catch-all, which logs the exception TYPE NAME only — never conversation
-///     content, mirroring the extraction service's text-free discipline.
+///     Background worker draining the <see cref="MemoryExtractionDispatcher" /> queue, running each job in its own
+///     scope on the drain-deadline token rather than the chat send token.
 /// </summary>
+/// <remarks>
+///     Concurrency is bounded by <see cref="MemoryExtractionOptions.MaxConcurrentExtractions" />, and the
+///     drain-deadline token means neither a client-side cancel nor a disposed request scope loses a completed run's
+///     memory. Shutdown drains QUEUED as well as in-flight work, since the queue is in-memory and a dropped job is
+///     lost for good; a job ignoring cancellation past the grace is ABANDONED, counted and metered. Every failure
+///     logs the exception TYPE NAME only. Shutdown contract: <see cref="StopAsync" />.
+/// </remarks>
 public sealed class MemoryExtractionWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -56,14 +28,12 @@ public sealed class MemoryExtractionWorker : BackgroundService
     // disposed. Each task removes itself on completion via a synchronous continuation, so the set only holds running work.
     private readonly ConcurrentDictionary<Task, byte> _inFlight = new();
 
-    // Cancelled ONLY when the shutdown drain window elapses. Per-job work AND the read loop run on this token: during
-    // normal operation it is never cancelled (a completed run's memory write is never lost, and the read loop blocks on an
-    // empty queue), but a job or read that outlives the drain window is cancelled so it stops and disposal can proceed.
+    // Cancelled ONLY when the shutdown drain window elapses, and both the jobs and the read loop run on it: ordinary
+    // operation never cancels it, so no completed run's memory write is lost, but disposal can still proceed.
     private readonly CancellationTokenSource _drainDeadline = new();
 
-    // After the drain window elapses and the drain token is cancelled, this brief grace bounds how long StopAsync waits
-    // for the read loop and the (now-cancelled) stragglers to unwind before it returns and Dispose runs. Cancellation is
-    // cooperative, so a job that observes the token finishes well inside this; it caps a job that ignores the token.
+    // A brief grace bounding how long StopAsync waits for the read loop and the cancelled stragglers to unwind before
+    // Dispose runs. A job that observes the token finishes well inside it; the cap only binds one that ignores it.
     private static readonly TimeSpan PostDeadlineGrace = TimeSpan.FromSeconds(2);
 
     internal MemoryExtractionWorker(IServiceScopeFactory scopeFactory,
@@ -83,21 +53,15 @@ public sealed class MemoryExtractionWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Respond to a host stop by completing the writer so the read loop below drains the buffered jobs and then exits
-        // on its own. StopAsync also completes the writer (idempotently) and bounds the drain; this registration is the
-        // safety net for a stop that trips the token before StopAsync runs. The loop deliberately reads on the drain token,
-        // NOT the stopping token, so a stop can never abandon jobs already buffered on the channel — they are drained.
+        // A host stop completes the writer so the read loop drains and exits on its own, the safety net for a stop
+        // that trips before StopAsync. The loop reads the DRAIN token, so no stop abandons a buffered job.
         await using var stopRegistration = stoppingToken.Register(static state => ((MemoryExtractionDispatcher)state!).CompleteWriter(),
                                                             _dispatcher);
 
         try
         {
-            // Acquire the concurrency slot BEFORE the destructive read, never after. The dispatcher is SingleReader, so a
-            // WaitToReadAsync/TryRead pair is a safe stand-in for the absent multi-reader peek: a job is never removed from
-            // the channel until a slot is in hand. This closes the accounting gap of a dequeue-then-await-slot ordering,
-            // where a job cancelled while awaiting the slot had already left the channel (so the queued-drain misses it) yet
-            // never reached TrackInFlight (so _inFlight misses it) — escaping BOTH the dropped and abandoned counters. Now a
-            // job the drain window cancels stays buffered and is accounted as dropped in StopAsync.
+            // Acquire the concurrency slot BEFORE the destructive read, so no job leaves the channel without one: a
+            // dequeue-then-await-slot ordering loses a job cancelled mid-wait from BOTH counters.
             while (await _dispatcher.Reader.WaitToReadAsync(_drainDeadline.Token))
             {
                 // Gate on the concurrency budget before starting the next job so at most MaxConcurrentExtractions run.
@@ -183,9 +147,8 @@ public sealed class MemoryExtractionWorker : BackgroundService
         }
         catch (Exception exception)
         {
-            // Catch-all: a background memory job must NEVER affect the run path, and must NEVER log conversation content.
-            // Log the exception TYPE NAME only — never the exception object, whose Message/stack could carry conversation
-            // text or model output (same text-free discipline as the exec-log ErrorClass field).
+            // Catch-all: a background memory job must NEVER affect the run path nor log conversation content, so only
+            // the exception TYPE NAME is logged — its Message and stack could carry conversation text.
             _logger.LogWarning("Background memory extraction failed ({ErrorClass}) for agent {AgentId}; the chat run is unaffected.",
                 exception.GetType().Name,
                 job.Telemetry.AgentDefinitionId);
@@ -220,14 +183,12 @@ public sealed class MemoryExtractionWorker : BackgroundService
 
     private async Task AbandonAfterDeadlineAsync()
     {
-        // Cancel the shared drain token: the read loop's ReadAllAsync/WaitAsync throw so it returns, and every in-flight
-        // job observes cancellation and unwinds. Awaiting this BEFORE returning is what keeps Dispose from tearing down the
-        // CTS/semaphore under a still-running job.
+        // Cancel the shared drain token so the read loop returns and every in-flight job unwinds. Awaiting it BEFORE
+        // returning is what keeps Dispose from tearing down the CTS and semaphore under a still-running job.
         await _drainDeadline.CancelAsync();
 
-        // Give the read loop and the stragglers a brief, bounded grace to unwind. Cancellation is cooperative, so a job
-        // that observes the token finishes well inside this; the cap only matters for one that ignores it (for which the
-        // ObjectDisposedException net in ReleaseConcurrency remains the last-resort guard).
+        // A brief bounded grace for the read loop and the stragglers to unwind. The cap only matters for a job that
+        // ignores the token, for which the ObjectDisposedException net in ReleaseConcurrency is the last-resort guard.
         var toAwait = new List<Task>(_inFlight.Keys);
         if (ExecuteTask is { } readLoop)
         {
@@ -255,9 +216,8 @@ public sealed class MemoryExtractionWorker : BackgroundService
             dropped++;
         }
 
-        // Any job still in-flight after the grace ignored cooperative cancellation and is now being ABANDONED: StopAsync is
-        // about to return and Dispose will tear down the CTS/semaphore beneath it (the ObjectDisposedException net in
-        // ReleaseConcurrency is the last-resort guard). Snapshot the count so the deliberate trade is observable, never silent.
+        // A job still in-flight after the grace ignored cancellation and is now ABANDONED: Dispose is about to tear
+        // down the CTS and semaphore beneath it. The count is snapshotted so the deliberate trade is never silent.
         var abandoned = _inFlight.Count;
 
         _logger.LogWarning("Memory extraction worker shutdown drain exceeded {DrainSeconds:F0}s; abandoned {Abandoned} in-flight and dropped {Dropped} queued extraction(s).",

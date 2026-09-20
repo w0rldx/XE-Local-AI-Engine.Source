@@ -44,9 +44,8 @@ internal sealed class NodeChatConversationCommands
         return await _writer.ExecuteConversationExclusiveAsync(conversationId,
             async (dbContext, token) =>
             {
-                // A new conversation inherits the bound agent's default-temporary-chat flag (adaptive-memory write-only
-                // suppression). Read it inline from agent_definitions on the same connection so the seam is self-
-                // contained (no store injected into the raw-SQL write path); an unbound conversation defaults to false.
+                // A new conversation inherits the bound agent's default-temporary-chat flag, read inline on the same
+                // connection so no store is injected into the raw-SQL write path. Unbound defaults to false.
                 var memoryExcluded = await ReadAgentDefaultTemporaryChatAsync(dbContext, request.AgentDefinitionId, token);
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
@@ -85,10 +84,13 @@ internal sealed class NodeChatConversationCommands
 
     /// <summary>
     ///     Reads the bound agent's <c>default_temporary_chat</c> flag on the supplied connection so a new conversation
-    ///     can inherit it. Returns false when there is no binding or the bound definition no longer exists (degrades to
-    ///     non-temporary, matching the resolver's deleted-definition fallback). Raw SELECT to keep the create path
-    ///     self-contained — no agent store is injected into the serialized raw-SQL writer.
+    ///     can inherit it.
     /// </summary>
+    /// <remarks>
+    ///     False when there is no binding or the definition no longer exists, matching the resolver's
+    ///     deleted-definition fallback. A raw SELECT keeps the create path self-contained, with no agent store
+    ///     injected into the serialized raw-SQL writer.
+    /// </remarks>
     private static async Task<bool> ReadAgentDefaultTemporaryChatAsync(NodeChatDbContext dbContext, Guid? agentDefinitionId, CancellationToken cancellationToken)
     {
         if (agentDefinitionId is not { } definitionId)
@@ -116,9 +118,8 @@ internal sealed class NodeChatConversationCommands
         return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
-                // Read the existing row regardless of purged state: an already-purged row still occupies the id,
-                // so we must NOT attempt to recreate it. INSERT OR IGNORE makes the insert race-safe against the
-                // serialized remote dispatch path.
+                // Read the existing row regardless of purged state, because a purged row still occupies the id and must
+                // not be recreated. INSERT OR IGNORE makes the insert race-safe against the remote dispatch path.
                 var existing = await ReadConversationRowAsync(dbContext, request.ConversationId, token);
                 if (existing is not null)
                 {
@@ -194,13 +195,8 @@ internal sealed class NodeChatConversationCommands
         return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
-                // Raw ADO.NET (not ExecuteSqlRawAsync): a cleared selection writes a NULL column, and EF's raw-SQL
-                // parameter builder has no store-type mapping for DBNull, so a typed DbParameter via AddParameter
-                // is required.
-                // Changing the selected variant path invalidates any compaction synopsis: the synopsis was built from the
-                // previously-selected path and covers messages up to a sequence, so a re-selection inside that covered
-                // range would otherwise be misrepresented by stale summary text. Clear it (literal NULLs) so the next send
-                // uses full history until the user re-compacts.
+                // Raw ADO.NET, because a cleared selection writes NULL and EF's raw-SQL parameter builder has no
+                // store-type mapping for DBNull. A path change also clears the synopsis built from the previous one.
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText =
                     "UPDATE conversations SET selected_path_json = $selected_path_json, last_seen_utc = $last_seen_utc, compaction_summary = NULL, compaction_summary_covers_to_sequence = NULL, compaction_summary_updated_at_utc = NULL WHERE conversation_id = $conversation_id AND purged = 0;";
@@ -246,8 +242,7 @@ internal sealed class NodeChatConversationCommands
                     workSessionId = await ReadWorkSessionIdAsync(dbContext, request.ConversationId, token);
 
                     // Delete the complete DB footprint through the shared helper so this path and the retention sweeper
-                    // never drift on which child tables constitute a conversation. On-disk upload blobs are torn down
-                    // after commit below.
+                    // never drift on which child tables make up a conversation. Upload blobs are torn down after commit.
                     await ConversationFootprintPurge.DeleteAsync(dbContext, request.ConversationId, token);
                 }
                 else
@@ -280,10 +275,12 @@ internal sealed class NodeChatConversationCommands
     }
 
     /// <summary>
-    ///     The id of the work session this conversation owns (1:1), or null when it owns none. Read on the writer's own
-    ///     connection rather than through <c>IAgentWorkSessionStore</c>: that store is scoped and this collaborator
-    ///     hangs off a singleton facade, so injecting it would be a captive dependency.
+    ///     The id of the work session this conversation owns one-to-one, or null when it owns none.
     /// </summary>
+    /// <remarks>
+    ///     Read on the writer's own connection rather than through <c>IAgentWorkSessionStore</c>: that store is scoped
+    ///     and this collaborator hangs off a singleton facade, so injecting it would be a captive dependency.
+    /// </remarks>
     private static async Task<Guid?> ReadWorkSessionIdAsync(NodeChatDbContext dbContext, Guid conversationId, CancellationToken cancellationToken)
     {
         return await dbContext.AgentWorkSessions.AsNoTracking()
@@ -301,9 +298,8 @@ internal sealed class NodeChatConversationCommands
         return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
-                // Raw ADO.NET (not ExecuteSqlRawAsync): a cleared title writes a NULL column, and EF's raw-SQL
-                // parameter builder has no store-type mapping for DBNull, so a typed DbParameter via AddParameter
-                // is required. The title is encrypted before writing; null stays null.
+                // Raw ADO.NET, because a cleared title writes NULL and EF's raw-SQL parameter builder has no store-type
+                // mapping for DBNull. The title is encrypted before writing; null stays null.
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = "UPDATE conversations SET title = $title, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
                 AddParameter(command, "$title", EncryptTitle(title, dbContext, request.ConversationId));
@@ -358,9 +354,8 @@ internal sealed class NodeChatConversationCommands
         return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
-                // Raw ADO.NET (not ExecuteSqlRawAsync): the encrypted summary blob and the nullable covered-sequence both
-                // write NULL when cleared, and EF's raw-SQL parameter builder has no store-type mapping for DBNull, so
-                // typed DbParameters via AddParameter are required. The summary is encrypted before writing; null stays null.
+                // Raw ADO.NET, because the summary blob and the covered sequence both write NULL when cleared and EF's
+                // raw-SQL parameter builder has no store-type mapping for DBNull. The summary is encrypted first.
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText =
                     "UPDATE conversations SET compaction_summary = $summary, compaction_summary_covers_to_sequence = $covers_to, compaction_summary_updated_at_utc = $updated_at, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";

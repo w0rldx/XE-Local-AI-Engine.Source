@@ -1,30 +1,33 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Resolves a node-local GGUF (llama.cpp) model's advertised <c>thinking</c>/<c>tools</c> capabilities from its
-///     installed-model descriptor (detected offline from the GGUF chat template, NOT via an Ollama <c>/api/show</c>
-///     probe). The chat send / regenerate paths consult this so a GGUF model is offered tools and a graded reasoning
-///     effort exactly when its template supports them — without ever probing the (absent, in desktop mode) Ollama
-///     daemon.
+///     Resolves a node-local GGUF model's advertised <c>thinking</c> and <c>tools</c> capabilities from its
+///     installed-model descriptor, detected offline from the chat template rather than an Ollama probe.
 /// </summary>
+/// <remarks>
+///     The send and regenerate paths consult it so a GGUF is offered tools and a graded reasoning effort exactly when
+///     its template supports them, without ever probing the Ollama daemon that desktop mode does not have.
+/// </remarks>
 public interface IGgufModelCapabilityResolver
 {
     /// <summary>
-    ///     Resolves the GGUF capabilities for <paramref name="modelName" />, or <see langword="null" /> when no installed
-    ///     GGUF carries that name (the model is served by another runtime — Ollama or Codex — and capabilities must be
-    ///     resolved through that runtime's path instead). The lookup reuses the store's per-file header cache, so a hit
-    ///     reads no file.
+    ///     The GGUF capabilities for <paramref name="modelName" />, or <see langword="null" /> when no installed GGUF
+    ///     carries that name and another runtime's path must resolve it.
     /// </summary>
+    /// <remarks>The lookup reuses the store's per-file header cache, so a hit reads no file.</remarks>
     Task<GgufModelCapabilities?> TryResolveAsync(string modelName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The thinking / tools / vision capabilities advertised by an installed GGUF model.</summary>
 /// <param name="ReasoningBudgetEnforceable">
-///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this model (its chat template
-///     renders a literal reasoning end marker). Read only alongside <paramref name="SupportsThinking" /> — a budget is
-///     sent exclusively on the graded branch. Defaults to <see langword="true" />, the inert safe default: only a
-///     positively-detected closing-tag-less template turns the cap off, so no unknown can silently remove it.
+///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c>, which its chat template must
+///     render a literal reasoning end marker for.
 /// </param>
+/// <remarks>
+///     <c>ReasoningBudgetEnforceable</c> is read only alongside <c>SupportsThinking</c>, since a budget is sent
+///     exclusively on the graded branch. It defaults to <see langword="true" />, the inert safe value: only a
+///     positively-detected closing-tag-less template turns the cap off, so no unknown silently removes it.
+/// </remarks>
 public readonly record struct GgufModelCapabilities(
     bool SupportsThinking,
     bool SupportsTools,

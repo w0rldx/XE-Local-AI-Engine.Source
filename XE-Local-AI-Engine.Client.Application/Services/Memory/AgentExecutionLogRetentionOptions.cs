@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Memory;
 
 /// <summary>
-///     Retention policy for the metadata-only <c>agent_execution_logs</c> telemetry table. The table is append-only (one
-///     row per completed/failed run of a memory-enabled agent), so without a sweep it grows unbounded. The retention
-///     background service deletes rows older than <see cref="RetentionDays" /> on a <see cref="SweepInterval" /> cadence,
-///     and (when set) trims each agent to <see cref="MaxRowsPerAgent" /> newest rows.
+///     Retention policy for the metadata-only <c>agent_execution_logs</c> telemetry table, which is append-only and
+///     so grows unbounded without a sweep.
 /// </summary>
+/// <remarks>
+///     The retention background service deletes rows older than <see cref="RetentionDays" /> on a
+///     <see cref="SweepInterval" /> cadence and, when set, trims each agent to <see cref="MaxRowsPerAgent" /> rows.
+/// </remarks>
 public sealed class AgentExecutionLogRetentionOptions
 {
     public const string Section = "AgentExecutionLogRetention";

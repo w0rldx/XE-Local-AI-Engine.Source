@@ -15,9 +15,8 @@ public interface INodeChatStreamCancellationRegistry
 }
 
 /// <summary>
-///     Thrown when a second stream tries to claim a correlation another in-flight stream already holds — a realistic
-///     client double-invoke, not solely an internal invariant, so <c>LocalChatHub</c> translates it into a
-///     <c>HubException</c> whose sentence the browser can show.
+///     Thrown when a second stream claims a correlation an in-flight stream already holds: a realistic client
+///     double-invoke, so <c>LocalChatHub</c> turns it into a <c>HubException</c> the browser can show.
 /// </summary>
 public sealed class NodeChatStreamAlreadyActiveException : InvalidOperationException
 {

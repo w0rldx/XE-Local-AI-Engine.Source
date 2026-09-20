@@ -5,14 +5,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Memory;
 
 /// <summary>
-///     Retention sweeper for the metadata-only <c>agent_execution_logs</c> table (adaptive-memory diagnostics). The table
-///     is append-only — one row per completed/failed run of a memory-enabled agent — so without a sweep it grows
-///     unbounded. Deletes rows older than <see cref="AgentExecutionLogRetentionOptions.RetentionDays" /> and (when set)
-///     trims each agent to <see cref="AgentExecutionLogRetentionOptions.MaxRowsPerAgent" /> newest rows, on a
-///     <see cref="AgentExecutionLogRetentionOptions.SweepInterval" /> cadence. Each sweep runs on its own DI scope so the
-///     store's <c>DbContext</c> is never shared. Rows stamp <c>CreatedAtUtc</c> in unix-milliseconds, so the cutoff is
-///     computed in ms. Mirrors the scheduler-history retention sweeper.
+///     Retention sweeper for the metadata-only <c>agent_execution_logs</c> table, which is append-only and so grows
+///     unbounded without one.
 /// </summary>
+/// <remarks>
+///     It deletes rows older than <see cref="AgentExecutionLogRetentionOptions.RetentionDays" /> and, when set, trims
+///     each agent to <see cref="AgentExecutionLogRetentionOptions.MaxRowsPerAgent" /> rows, on the configured
+///     cadence. Each sweep runs on its own DI scope so the store's <c>DbContext</c> is never shared, and rows stamp
+///     <c>CreatedAtUtc</c> in unix-milliseconds, so the cutoff is computed in milliseconds too.
+/// </remarks>
 public sealed class AgentExecutionLogRetentionService : BackgroundService
 {
     private readonly ILogger<AgentExecutionLogRetentionService> _logger;
@@ -40,9 +41,8 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
             return;
         }
 
-        // Sweep once at startup rather than waiting a full interval: a node that ran, wrote plaintext-correlation
-        // execution logs, then stayed down past a row's retention window would otherwise keep those rows until the first
-        // post-restart tick. Best-effort — a startup-sweep failure is logged and the periodic loop still runs.
+        // Sweep once at startup rather than waiting a full interval, or a node down past a row's retention window
+        // keeps it until the first tick. Best-effort: a failure is logged and the periodic loop still runs.
         try
         {
             await SweepAsync(stoppingToken);

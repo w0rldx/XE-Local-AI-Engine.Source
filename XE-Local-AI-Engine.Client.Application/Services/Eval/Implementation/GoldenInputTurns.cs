@@ -4,14 +4,15 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     Shared parse + strict validation of a golden case's stored <c>InputTurns</c> JSON, used by BOTH the
-///     create/update validation path (<see cref="GoldenConversationService" />) and the eval-time scoring path
-///     (<see cref="PlaybookEvalService" />) so the two agree on what a usable conversation is. A turn is valid only when
-///     it carries a KNOWN role (<c>user</c>/<c>assistant</c>) and non-blank text; an unknown role is rejected outright
-///     rather than silently collapsed to <c>User</c> (which would reshape the evaluated conversation), and a case with no
-///     valid turns is unusable. Validation applies at create/update; a stored legacy row that fails these rules is read
-///     fine and degrades to an explicit failed case at eval time — never a silent pass on the system prompt alone.
+///     Shared parse and strict validation of a golden case's stored <c>InputTurns</c> JSON, used by BOTH the
+///     create-time validation and the eval-time scoring path, so the two agree on what a usable conversation is.
 /// </summary>
+/// <remarks>
+///     A turn is valid only with a KNOWN role and non-blank text; an unknown role is rejected rather than collapsed
+///     to <c>User</c>, which would reshape the evaluated conversation, and a case with no valid turns is unusable.
+///     Validation applies at create and update, while a stored legacy row that fails these rules reads fine and
+///     degrades to an explicit failed case at eval time, never a silent pass on the system prompt alone.
+/// </remarks>
 internal static class GoldenInputTurns
 {
     internal const string UserRole = "user";
@@ -49,9 +50,8 @@ internal static class GoldenInputTurns
         var mapped = new List<ChatMessage>(raw.Length);
         foreach (var turn in raw)
         {
-            // A JSON `null` element (e.g. `[null]`) deserializes to a null record — treat it as malformed rather than
-            // dereferencing it (turn.Role) into a NullReferenceException that would escape the per-case eval loop and
-            // surface as an unhandled 500 at authoring time.
+            // A JSON null element deserializes to a null record, so it counts as malformed rather than dereferencing
+            // into a NullReferenceException that would escape the per-case loop and surface as an unhandled 500.
             if (turn is null)
             {
                 error = "InputTurns contains a null turn.";

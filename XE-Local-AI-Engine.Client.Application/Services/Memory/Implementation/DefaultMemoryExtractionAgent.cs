@@ -9,13 +9,14 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Default <see cref="IMemoryExtractionAgent" />: runs a <b>node-local</b> model (resolved per-model via
-///     <see cref="ILocalModelProviderResolver" />, never the shared <see cref="IChatClient" /> singleton which can be a
-///     cloud client) and forces a structured JSON response so each candidate carries its scope + confidence. The run's
-///     user turns and assistant answer are read into the model on-node only — they never cross the node boundary.
-///     This type is intentionally not unit-tested against a live model; tests substitute a fake
-///     <see cref="IMemoryExtractionAgent" /> (mirroring the analysis agent seam, so no Ollama is needed in CI).
+///     Default <see cref="IMemoryExtractionAgent" />, running a <b>node-local</b> model and forcing a structured JSON
+///     response so each candidate carries its scope and confidence.
 /// </summary>
+/// <remarks>
+///     The model is resolved per-model through <see cref="ILocalModelProviderResolver" />, never the shared
+///     <see cref="IChatClient" /> singleton that can be a cloud client, so the run's turns and answer never cross the
+///     node boundary. Tests substitute a fake agent, mirroring the analysis seam, so CI needs no Ollama.
+/// </remarks>
 internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -40,18 +41,15 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
     {
         ArgumentNullException.ThrowIfNull(run);
 
-        // Disabled gate: no node-local extraction model configured => no model call, no candidate. Mirrors the
-        // embedding-ranker disabled gate so CI stays deterministic without Ollama. (The service also checks this, but
-        // the agent owns the privacy-critical model call, so it guards independently.)
+        // Disabled gate: with no node-local extraction model there is no model call and no candidate. The service
+        // checks this too, but the agent owns the privacy-critical call, so it guards independently.
         if (string.IsNullOrWhiteSpace(_options.ExtractionModelName))
         {
             return [];
         }
 
-        // Route the configured extraction model to the runtime that serves it (persisted map, else the configured
-        // default provider = ollama, so an un-repointed model behaves exactly as the analysis path). Node-local only —
-        // never the cloud singleton. THIS resolution is the privacy invariant: conversation content only ever reaches a
-        // provider.CreateChatClient(...) client, never the shared cloud-capable IChatClient.
+        // Route the extraction model to the runtime that serves it, node-local only and never the cloud singleton.
+        // THIS resolution IS the privacy invariant: conversation content only ever reaches a per-provider client.
         var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ExtractionModelName, cancellationToken);
         var selection = new LocalModelSelection
         {

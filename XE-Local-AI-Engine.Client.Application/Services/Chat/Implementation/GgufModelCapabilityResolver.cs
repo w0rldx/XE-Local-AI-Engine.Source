@@ -3,11 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     <see cref="IGgufModelCapabilityResolver" /> over <see cref="IGgufModelStore" />: matches the requested model name
-///     against the installed GGUF descriptors (whose <c>IsToolCapable</c>/<c>IsReasoningCapable</c> were detected from
-///     the chat template and cached per file) and surfaces the thinking/tools flags. A name that matches no installed
-///     GGUF returns <see langword="null" /> so the caller falls back to the Ollama/Codex capability path.
+///     <see cref="IGgufModelCapabilityResolver" /> over <see cref="IGgufModelStore" />, matching the requested name
+///     against the installed GGUF descriptors and surfacing their thinking and tools flags.
 /// </summary>
+/// <remarks>
+///     Those descriptor flags were detected from the chat template and cached per file. A name that matches no
+///     installed GGUF returns <see langword="null" />, so the caller falls back to the Ollama or Codex path.
+/// </remarks>
 internal sealed class GgufModelCapabilityResolver : IGgufModelCapabilityResolver
 {
     private readonly IGgufModelStore _ggufModelStore;
@@ -36,12 +38,8 @@ internal sealed class GgufModelCapabilityResolver : IGgufModelCapabilityResolver
             return null;
         }
 
-        // Vision is sourced from the descriptor's IsMultimodalCapable, which is true only when a local mmproj projector
-        // companion is present — the same file that gates the llama-server --mmproj launch — so it never claims a vision
-        // capability the runtime cannot serve.
-        // The reasoning-budget flag rides the same descriptor: it was detected from THIS model's chat template, so a
-        // graded model whose template renders no reasoning end marker is carried through as unenforceable and the
-        // marker emitters drop its (silently ignored) budget instead of pretending it caps anything.
+        // Vision comes from IsMultimodalCapable, true only with the mmproj companion that gates the --mmproj launch,
+        // and the reasoning-budget flag rides the same descriptor, so neither claims what the runtime cannot serve.
         return new GgufModelCapabilities(descriptor.IsReasoningCapable,
             descriptor.IsToolCapable,
             descriptor.IsMultimodalCapable,

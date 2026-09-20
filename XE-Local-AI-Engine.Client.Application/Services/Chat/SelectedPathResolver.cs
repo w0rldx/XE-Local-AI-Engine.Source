@@ -1,12 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Minimal, node-agnostic view of a single conversation message that the
-///     <see cref="SelectedPathResolver" /> needs in order to resolve the selected linear path.
-///     Callers map their own message type (node <c>NodeChatMessageResponse</c>, platform DTOs, etc.)
-///     into this shape. Only the fields the resolution algorithm reads live here; the resolver returns
-///     the caller's original objects, so no other message data needs to be projected.
+///     Minimal, node-agnostic view of one conversation message, holding only the fields
+///     <see cref="SelectedPathResolver" /> reads to resolve the selected linear path.
 /// </summary>
+/// <remarks>
+///     Callers map their own message type into this shape, and the resolver returns their original objects, so no
+///     other message data needs projecting.
+/// </remarks>
 public interface ISelectedPathMessage
 {
     /// <summary>Stable identifier of the message.</summary>
@@ -29,27 +30,16 @@ public interface ISelectedPathMessage
 }
 
 /// <summary>
-///     Standalone, dependency-free resolver that collapses a conversation's full message set into the
-///     linear "selected path" — exactly one variant per variant group, ordered by sequence.
-///     IMPORTANT: This component must stay node-agnostic so the platform side can reuse it. Do NOT add
-///     references to node-only services (DbContext, persistence, SignalR, FastEndpoints, DTOs). It operates
-///     solely on the <see cref="ISelectedPathMessage" /> abstraction plus the caller-supplied selection map.
-///     Resolution rules:
-///     <list type="bullet">
-///         <item>Messages without a <c>VariantGroupId</c> are always included.</item>
-///         <item>
-///             For each variant group, include ONLY the selected variant. The selection comes from the
-///             supplied map (<c>variantGroupId -&gt; selectedMessageId</c>); if the group has no recorded selection
-///             (or the recorded id is no longer present), default to the NEWEST sibling — highest <c>Sequence</c>,
-///             tie-broken by latest <c>CreatedAtUtc</c> then largest <c>MessageId</c>.
-///         </item>
-///         <item>Non-destructive: deselected siblings are simply omitted from the output, never mutated.</item>
-///         <item>The output is ordered by <c>Sequence</c> ascending.</item>
-///     </list>
-///     Ordering by the raw <c>Sequence</c> is only correct while no variant group holds a late-minted sibling; every
-///     caller that builds model context or folds history must re-order/filter through
-///     <see cref="CreateAnchorResolver{TMessage}" /> instead. See that method for why.
+///     Standalone, dependency-free resolver collapsing a conversation's full message set into the linear "selected
+///     path": exactly one variant per group, ordered by ascending sequence.
 /// </summary>
+/// <remarks>
+///     It must stay node-agnostic so the platform side can reuse it: no reference to a node-only service, and it
+///     operates solely on <see cref="ISelectedPathMessage" /> plus the caller's selection map. An ungrouped message
+///     is always included; a group contributes ONLY its selected variant, defaulting to the NEWEST sibling, and a
+///     deselected sibling is omitted, never mutated. Raw <c>Sequence</c> ordering holds only while no group has a
+///     late-minted sibling, so context builders re-order through <see cref="CreateAnchorResolver{TMessage}" />.
+/// </remarks>
 public static class SelectedPathResolver
 {
     /// <summary>
@@ -121,34 +111,18 @@ public static class SelectedPathResolver
     }
 
     /// <summary>
-    ///     Builds the ANCHOR lookup for <paramref name="messages" />: the logical position of each message, which is its
-    ///     variant group's EARLIEST member sequence (ungrouped messages anchor at their own sequence). Callers must order
-    ///     and filter the resolved path by this, never by the chosen sibling's own <c>Sequence</c>.
-    ///     <para>
-    ///         Why: <c>Sequence</c> is a physical insertion counter, so regenerating an EARLY turn AFTER later turns
-    ///         exist mints a sibling whose sequence lands PAST those later turns even though it still belongs to the
-    ///         early turn. Ordering by the raw sequence puts that sibling at the tail (breaking user/assistant
-    ///         alternation), and any <c>Sequence &lt;= cutoff</c> filter drops it outright. The frontend already anchors
-    ///         variant groups this way (<c>MessageRevisionGrouping.ts</c>), so this keeps the model's context matching
-    ///         what the user sees.
-    ///     </para>
-    ///     <para>
-    ///         Backward compatibility: a conversation with no variants has anchor == raw sequence for every message, so
-    ///         a previously persisted <c>CompactionSummaryCoversToSequence</c> is unchanged there. A conversation that
-    ///         already had variant groups AND a synopsis written under the old raw semantics may read that value one or
-    ///         more slots too high once, so the first post-upgrade send folds an extra early turn into the synopsis; the
-    ///         next compaction re-derives and persists the anchor, so it self-heals and no migration is performed.
-    ///     </para>
+    ///     Builds the ANCHOR lookup for <paramref name="messages" />: each message's logical position, which is its
+    ///     variant group's EARLIEST member sequence, or its own when it is ungrouped.
     /// </summary>
     /// <typeparam name="TMessage">The caller's message type, adapted to <see cref="ISelectedPathMessage" />.</typeparam>
-    /// <param name="messages">
-    ///     ALL conversation messages, including the siblings the selected path omits — the anchor is a property of the
-    ///     whole group, so passing only the resolved path would anchor each group at its chosen sibling instead.
-    /// </param>
-    /// <returns>
-    ///     A lookup from message to anchor sequence. A message whose group is absent from <paramref name="messages" />
-    ///     falls back to its own sequence.
-    /// </returns>
+    /// <param name="messages">ALL conversation messages, including the siblings the selected path omits.</param>
+    /// <returns>A lookup from message to anchor sequence, falling back to a message's own sequence.</returns>
+    /// <remarks>
+    ///     Callers order and filter the resolved path by this, never by the chosen sibling's own <c>Sequence</c>,
+    ///     which is a physical insertion counter: regenerating an EARLY turn after later turns exist mints a sibling
+    ///     whose sequence lands past them, so raw ordering puts it at the tail and a <c>Sequence &lt;= cutoff</c>
+    ///     filter drops it. The anchor is a property of the whole group, which is why every sibling must be passed.
+    /// </remarks>
     public static Func<TMessage, int> CreateAnchorResolver<TMessage>(IEnumerable<TMessage> messages)
         where TMessage : ISelectedPathMessage
     {

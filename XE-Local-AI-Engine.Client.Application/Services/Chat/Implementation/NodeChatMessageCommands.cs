@@ -11,18 +11,18 @@ using static NodeChatPersistenceSql;
 
 /// <summary>
 ///     Message-write commands behind <see cref="NodeChatPersistenceService" />: user-message persistence, the
-///     assistant placeholder, and the correlated status/content transitions (queued/streaming/flush/terminalize/
-///     cancel). Shares the single <see cref="NodeChatPersistenceWriter" /> so per-message write-key serialization is
-///     preserved.
+///     assistant placeholder, and the correlated status and content transitions.
 /// </summary>
+/// <remarks>
+///     It shares the single <see cref="NodeChatPersistenceWriter" /> so per-message write-key serialization holds.
+/// </remarks>
 internal sealed class NodeChatMessageCommands
 {
     private const string UserRole = "user";
     private const string AssistantRole = "assistant";
 
-    // Upper bound on distinct source statuses a guarded transition can enumerate — the largest allowed-source set in
-    // NodeChatMessageTransitions (the terminalize set: pending / queued / streaming / cancelled). Smaller sets bind the
-    // spare slots by repeating a real member, so the IN clause stays a fixed constant statement.
+    // Upper bound on the distinct source statuses a guarded transition can enumerate, the largest set in
+    // NodeChatMessageTransitions. A smaller set repeats a real member, so the IN clause stays a fixed constant.
     private const int MaxSourceStatusSlots = 4;
 
     public NodeChatMessageCommands(NodeChatPersistenceWriter writer)
@@ -31,20 +31,16 @@ internal sealed class NodeChatMessageCommands
         _writer = writer;
     }
 
-    // How a run-envelope write reconciles with an envelope the message may already have. InsertIfAbsent keeps the first
-    // write (a pre-run cancel's thin envelope, a startup reconcile backfill) — never clobbering a real one. Upsert lets
-    // the pump's authoritative terminalize ENRICH a thin cancel envelope in place: a mid-run cancel writes a thin
-    // Cancelled envelope, then the run's real completion supersedes the row (Cancelled is a whitelisted terminalize
-    // source) and must overwrite that envelope so its terminal_status/tokens match the winning row's final status.
+    // How a run-envelope write reconciles with one the message may already have: InsertIfAbsent keeps the first write,
+    // Upsert lets the pump's terminalize enrich a thin cancel envelope so its status and tokens match the row.
     private enum RunEnvelopeWriteMode
     {
         InsertIfAbsent,
         Upsert
     }
 
-    // Correlated message update, keyed on (conversation, message, request). The guarded variant additionally requires the
-    // current status to be one of the source statuses bound below, so a guarded transition (cancel / flush / terminalize)
-    // is rejected atomically at the SQLite layer once the row has left the permitted set.
+    // Correlated message update, keyed on (conversation, message, request). The guarded variant also requires the
+    // current status to be a bound source status, so a transition is rejected atomically at the SQLite layer.
     private const string CorrelatedUpdateSql = """
                                                UPDATE messages
                                                SET content = $content, metadata_json = $metadata_json, updated_at_utc = $updated_at_utc, status = $status, error = $error
@@ -86,16 +82,12 @@ internal sealed class NodeChatMessageCommands
                                                       WHERE NOT EXISTS (SELECT 1 FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id);
                                                       """;
 
-    // The ChatRunEnvelope record_kind as a SQL literal. It must equal (int)AgentExecutionLogRecordKind.ChatRunEnvelope so
-    // the upsert's ON CONFLICT WHERE matches the filtered unique index predicate; a const string (not the runtime cast) is
-    // required so EnvelopeUpsertSql stays a compile-time constant (CA2100). If it ever drifts from the enum the ON CONFLICT
-    // clause resolves against no index and SQLite throws, so the enrich-a-thin-cancel-envelope test fails loud.
+    // The ChatRunEnvelope record_kind as a SQL literal, which must equal the enum value or the upsert's ON CONFLICT
+    // WHERE resolves against no index and SQLite throws. A const string keeps EnvelopeUpsertSql constant (CA2100).
     private const string EnvelopeRecordKindLiteral = "1";
 
-    // Upsert: the pump's authoritative terminalize wins, so on a conflict with an existing envelope (a thin one a prior
-    // cancel wrote) it overwrites every run-outcome column in place — keeping envelope terminal_status/tokens == the row's
-    // final status. The conflict target's WHERE mirrors the filtered unique index so SQLite resolves it against that
-    // partial index; the id / record_kind / message_id conflict keys are left as first written.
+    // Upsert: the pump's terminalize wins, overwriting every run-outcome column of a thin prior envelope in place. The
+    // conflict target's WHERE mirrors the filtered unique index, and the conflict keys stay as first written.
     private const string EnvelopeUpsertSql = $"""
                                               INSERT INTO agent_execution_logs
                                                   {EnvelopeColumns}
@@ -239,10 +231,8 @@ internal sealed class NodeChatMessageCommands
             reasoningTokens: null,
             request.ReplaceContent,
             cancellationToken,
-            // A partial flush is a mid-stream content advance, not a conversation-level event: it fires per debounce
-            // window and would otherwise run a second UPDATE (conversation touch) every time. The conversation was
-            // already touched when the turn started (placeholder/queued/streaming) and is touched again at terminalize,
-            // so skipping it here drops a redundant write from the hot streaming path without changing recency order.
+            // A partial flush is a mid-stream content advance, not a conversation-level event, and the conversation was
+            // already touched at the turn's start and is touched again at terminalize, so recency order is unchanged.
             touchConversation: false,
             // A late flush must never mutate a row that already terminalized (or was cancelled): guard to the non-terminal
             // source set so a debounced tail arriving after the terminal is an atomic no-op.
@@ -273,9 +263,8 @@ internal sealed class NodeChatMessageCommands
             request.Parts,
             request.GenerationDurationMs,
             requiredCurrentStatuses: NodeChatMessageTransitions.TerminalizeSources(request.Status),
-            // Durable run envelope written atomically with the terminal row: both commit or roll back together.
-            // Upsert: the pump's authoritative terminalize is the winning outcome, so it enriches/overwrites any thin
-            // envelope a prior cancel wrote for this message (see RunEnvelopeWriteMode), keeping envelope status == row status.
+            // Durable run envelope written atomically with the terminal row: both commit or roll back together. Upsert,
+            // so the winning terminalize overwrites any thin envelope a prior cancel wrote for this message.
             envelope: request.Envelope,
             envelopeWriteMode: RunEnvelopeWriteMode.Upsert,
             // KB sources that grounded this turn; null on paths that retrieved nothing preserves any
@@ -287,14 +276,8 @@ internal sealed class NodeChatMessageCommands
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // A cancel is a terminal transition, so it writes its run envelope atomically in the same guarded UPDATE — the
-        // envelope block only fires when the cancel actually transitions the row (a rejected/idempotent cancel returns
-        // before it and writes nothing). This closes the gap where a cancel-before-queued/streaming left a terminal
-        // Cancelled row envelope-less until the next startup reconcile. The payload is thin: there is no InvocationState
-        // at cancel time, so invocation id / tokens / duration / chunk counts are unknown and omitted (mirrors the
-        // interrupted terminalize); the terminal status/success and bound agent id are derived from the winning row. It
-        // is InsertIfAbsent so a real envelope already present (e.g. a race where the run's terminalize committed first)
-        // is never clobbered by this thinner one.
+        // A cancel is a terminal transition, so it writes its envelope in the same guarded UPDATE, or a cancel before
+        // queued leaves the row envelope-less until the next reconcile. Thin, and InsertIfAbsent so it never clobbers.
         var envelope = new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L, TraceId = CurrentTraceId() };
 
         var message = await UpdateCorrelatedMessageAsync(request.Correlation,
@@ -314,10 +297,8 @@ internal sealed class NodeChatMessageCommands
             envelope: envelope,
             envelopeWriteMode: RunEnvelopeWriteMode.InsertIfAbsent);
 
-        // The guard leaves an already-terminal message untouched, so report the true persisted status and only claim a
-        // cancellation when the message actually landed in the Cancelled state. This is idempotent: a repeat cancel of an
-        // already-cancelled message reports Cancelled with no second rewrite, while a cancel that raced a completed /
-        // failed / interrupted terminalize reports that terminal status with Cancelled = false.
+        // The guard leaves an already-terminal message untouched, so report the true persisted status and claim a
+        // cancellation only when the row actually landed in Cancelled. A repeat cancel is therefore idempotent.
         var cancelled = string.Equals(message.Status, NodeChatMessageStatusValues.Cancelled, StringComparison.Ordinal);
         return new NodeChatCancelResultDto { Correlation = request.Correlation, Status = message.Status, Cancelled = cancelled };
     }
@@ -345,9 +326,8 @@ internal sealed class NodeChatMessageCommands
         var metadata = SerializeMetadata(metadataJson, reasoning, model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null, agentDefinitionId,
             agentName, reasoningEffort);
 
-        // Conversation-exclusive: sequence allocation + insert must not interleave with another insert or a delete on
-        // the same conversation. The allocate + insert + conversation-touch run in ONE transaction so a failed insert
-        // rolls the allocation back cleanly and the retry re-reads a fresh MAX(sequence).
+        // Conversation-exclusive: the sequence allocation and insert must not interleave with another insert or delete
+        // on this conversation, and they share ONE transaction so a failed insert rolls the allocation back.
         return await _writer.ExecuteConversationExclusiveAsync(conversationId,
             async (dbContext, token) =>
             {
@@ -461,11 +441,8 @@ internal sealed class NodeChatMessageCommands
                     throw new NodeChatMessageCorrelationNotFoundException("The correlated node chat request id did not match the persisted message.");
                 }
 
-                // Transition guard (cancel / flush / terminalize): a write is only allowed from one of the source statuses
-                // the caller declared via NodeChatMessageTransitions. Once the row has left that set — e.g. a terminalize
-                // already ran, or a cancel/flush arrives after a terminal — the update is skipped and the true current
-                // state is returned unchanged. The per-message write lock makes this read authoritative; the
-                // AND status IN (...) predicate below re-enforces it atomically at the SQLite layer.
+                // Transition guard: a write is allowed only from a source status the caller declared. The per-message
+                // lock makes this read authoritative and the AND status IN (...) predicate below re-enforces it.
                 if (requiredCurrentStatuses is not null && !requiredCurrentStatuses.Contains(current.Status))
                 {
                     return current;
@@ -489,17 +466,13 @@ internal sealed class NodeChatMessageCommands
                 // KB sources are reported once at terminalize; a null arg (partial flush) preserves any
                 // existing value, mirroring the parts/duration preservation above.
                 var nextSources = sources ?? current.Sources;
-                // Agent attribution and the reasoning effort are stamped once at placeholder/variant mint and never
-                // updated here, so always preserve them from current — otherwise a later flush/terminalize would
-                // re-serialize the blob without those fields and silently drop the per-response attribution.
+                // Agent attribution and the reasoning effort are stamped once at mint and never updated here, so they
+                // are always preserved from current, or a later flush would re-serialize the blob without them.
                 var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens, nextParts,
                     current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs, nextSources);
 
-                // When a run envelope must be written, the message UPDATE, the envelope insert, and the conversation touch
-                // run in ONE transaction so the terminal row and its content-free envelope commit or roll back together
-                // (no swallowed best-effort write — an envelope failure fails/retries the terminalize like
-                // any persistence failure). Non-terminal updates (flush / queued / streaming) keep the prior
-                // single-statement autocommit path unchanged, so the hot streaming path is untouched.
+                // With an envelope to write, the message UPDATE, the envelope insert and the conversation touch share
+                // ONE transaction; a non-terminal update keeps the single-statement autocommit path of the hot path.
                 var writeEnvelope = envelope is not null && IsTerminalStatus(nextStatus);
                 await using var transaction = writeEnvelope
                     ? await dbContext.Database.BeginTransactionAsync(token)
@@ -511,9 +484,8 @@ internal sealed class NodeChatMessageCommands
                     command.Transaction = transaction.GetDbTransaction();
                 }
 
-                // Two constant statements (never string-built from input): the guarded form appends the atomic
-                // 'AND status IN (...)' source-status predicate so the transition is rejected at the SQLite layer if the
-                // row is no longer in the permitted set. Its placeholder count matches the cancellable status set below.
+                // Two constant statements, never string-built from input: the guarded form appends the atomic
+                // 'AND status IN (...)' predicate, whose placeholder count matches the status set bound below.
                 if (requiredCurrentStatuses is null)
                 {
                     command.CommandText = CorrelatedUpdateSql;
@@ -546,18 +518,15 @@ internal sealed class NodeChatMessageCommands
                 var affected = await command.ExecuteNonQueryAsync(token);
                 if (requiredCurrentStatuses is not null && affected == 0)
                 {
-                    // The atomic predicate rejected the write because the row reached a terminal status; return the true
-                    // current state without a rewrite, an envelope, or a conversation touch. An opened transaction simply
-                    // disposes without a commit — nothing was written.
+                    // The atomic predicate rejected the write because the row is terminal, so return the true current
+                    // state with no rewrite, envelope or touch; an opened transaction disposes without a commit.
                     return current;
                 }
 
                 if (writeEnvelope)
                 {
-                    // The terminal status/success and the bound agent id are taken from THIS winning write, so the
-                    // envelope can never disagree with the row. The write mode governs reconciliation with any envelope the
-                    // message already has: InsertIfAbsent (cancel, backfill) keeps the first write; Upsert (the pump's
-                    // authoritative terminalize) enriches/overwrites a thin cancel envelope so its fields match the final row.
+                    // The terminal status, success flag and bound agent id come from THIS winning write, so the envelope
+                    // can never disagree with the row; the write mode governs reconciliation with an existing envelope.
                     await WriteRunEnvelopeRowAsync(dbContext,
                         transaction?.GetDbTransaction(),
                         correlation,
@@ -603,18 +572,8 @@ internal sealed class NodeChatMessageCommands
             cancellationToken);
     }
 
-    // Writes the content-free durable run-envelope row for a terminalized message on the caller's raw connection, enlisted
-    // in the terminalize transaction, so the envelope commits atomically with the terminal row. Metadata only: NO prompt /
-    // completion / tool-argument content is written. Uses AddParameter (the same helper as the message writes) so a null
-    // optional binds as SQL NULL. Two constant statements, never string-built from input; the <paramref name="writeMode" />
-    // selects between them:
-    //   - InsertIfAbsent — INSERT ... WHERE NOT EXISTS on (record_kind, message_id): a message already enveloped (a startup
-    //     recovery backfill, or a race that terminalized first) is never duplicated or overwritten; the first write wins.
-    //   - Upsert — INSERT ... ON CONFLICT(message_id) WHERE record_kind = envelope DO UPDATE: the pump's authoritative
-    //     terminalize enriches/overwrites a thin cancel envelope in place so its terminal_status/tokens match the row's
-    //     final status. The conflict target's WHERE mirrors the filtered unique index (ix_agent_execution_logs_envelope_
-    //     message_id) so SQLite resolves it against that partial index; id / record_kind / message_id are conflict keys and
-    //     are not reassigned.
+    // Writes the content-free run-envelope row on the caller's raw connection, enlisted in the terminalize transaction.
+    // Metadata ONLY: no prompt, completion or tool-argument content. See docs/wiki/05-chat.md, "The run envelope".
     private static async Task WriteRunEnvelopeRowAsync(NodeChatDbContext dbContext,
         DbTransaction? transaction,
         NodeChatMessageCorrelation correlation,
@@ -658,10 +617,8 @@ internal sealed class NodeChatMessageCommands
         AddParameter(command, "$config_hash", string.Empty);
         AddParameter(command, "$terminal_status", terminalStatus);
         AddParameter(command, "$latency_ms", envelope.DurationMs);
-        // The envelope is the COST ledger, so it takes the turn totals summed over the turn's provider rounds when the
-        // pump supplied them. The message's own tokens are the LAST round's — context occupancy, not cost — and they
-        // remain the fallback for every caller that supplies no totals: the restart-recovery backfill, the thin cancel
-        // envelope and the platform path, whose rows therefore keep exactly the values they have always had.
+        // The envelope is the COST ledger, so it takes the turn totals summed over the provider rounds when the pump
+        // supplied them. The message's own tokens are the LAST round's — context occupancy — and are the fallback.
         AddParameter(command, "$prompt_tokens", envelope.TurnInputTokens ?? promptTokens);
         AddParameter(command, "$completion_tokens", envelope.TurnOutputTokens ?? completionTokens);
         AddParameter(command, "$reasoning_tokens", envelope.TurnReasoningTokens ?? reasoningTokens);
@@ -683,9 +640,8 @@ internal sealed class NodeChatMessageCommands
         _ = await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    // W3C trace id of the ambient activity (for cross-correlation with exported traces), or null when no activity is in
-    // scope. A default (all-zero) id is treated as absent. Mirrors the pump's helper so a cancel-written thin envelope
-    // carries the same best-effort correlation the interrupted terminalize does.
+    // W3C trace id of the ambient activity, for cross-correlation with exported traces, or null when no activity is in
+    // scope. A default all-zero id counts as absent.
     private static string? CurrentTraceId()
     {
         if (Activity.Current is not { } activity)

@@ -8,13 +8,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 
 /// <summary>
-///     Default <see cref="IGoldenHarvestService" /> (deterministic, no model). Reads an agent's most-recent
-///     thumbs-up sources via <see cref="IGoldenHarvestSourceStore" />, dedups against already-harvested source messages,
-///     and stages each fresh candidate inert through <see cref="IGoldenConversationService.CreateHarvestedAsync" /> (so
-///     the same validation/caps/encryption apply). The seeded rubric is the operator-approved answer (judge path); the input
-///     turns are the lead-up conversation serialized as camelCase {role,text} to match the eval runner's parse. No turn
-///     or answer text is ever logged — only counts and ids.
+///     Default <see cref="IGoldenHarvestService" />, deterministic and model-free: it reads an agent's most-recent
+///     thumbs-up sources, dedups against already-harvested messages and stages each fresh candidate inert.
 /// </summary>
+/// <remarks>
+///     Staging runs through <see cref="IGoldenConversationService.CreateHarvestedAsync" />, so the same validation,
+///     caps and encryption apply. The seeded rubric is the operator-approved answer, on the judge path, and the input
+///     turns are the lead-up conversation serialized to match the eval runner's parse. Only counts and ids are logged.
+/// </remarks>
 internal sealed class GoldenHarvestService : IGoldenHarvestService
 {
     // Title prefix marking a harvested candidate + the rubric seed template (judge path: the approved answer is the scoring
@@ -148,9 +149,8 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
         return JsonSerializer.Serialize(payload, InputTurnsSerializerOptions);
     }
 
-    // Surrogate-pair-safe truncation (mirrors FeedbackInsightsService.Truncate): never split a surrogate pair, which
-    // would serialize a lone surrogate to U+FFFD. StringInfo measures text elements; we cut on the nearest element
-    // boundary at or below the cap.
+    // Surrogate-pair-safe truncation: a split pair serializes a lone surrogate to U+FFFD, so StringInfo measures text
+    // elements and the cut lands on the nearest element boundary at or below the cap.
     private static string Truncate(string value, int maxLength)
     {
         if (value.Length <= maxLength)

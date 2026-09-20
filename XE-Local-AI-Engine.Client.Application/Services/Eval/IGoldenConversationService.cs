@@ -4,14 +4,16 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Application-layer orchestration over <see cref="IGoldenConversationStore" /> for the golden set (manual
-///     authoring) plus harvested-candidate staging. Validates the supplied fields (non-blank
-///     Title, existing owning agent, non-empty InputTurns, at least one of {Assertion, Rubric}) and delegates
-///     persistence to the store. The manual create path pins <see cref="GoldenConversationSource.Manual" />; the
-///     harvested create path pins <see cref="GoldenConversationSource.Harvested" /> and stages the case inert
-///     (<c>Enabled == false</c>) until the operator approves it. Delete is ownership-guarded so one agent's route cannot
-///     touch another agent's golden case.
+///     Application-layer orchestration over <see cref="IGoldenConversationStore" /> for the manually authored golden
+///     set plus harvested-candidate staging.
 /// </summary>
+/// <remarks>
+///     It validates the supplied fields — a non-blank title, an existing owning agent, non-empty input turns and at
+///     least one of assertion or rubric — then delegates persistence. The manual path pins
+///     <see cref="GoldenConversationSource.Manual" />; the harvested path pins
+///     <see cref="GoldenConversationSource.Harvested" /> and stages the case inert until the operator approves it.
+///     Delete is ownership-guarded, so one agent's route cannot touch another's golden case.
+/// </remarks>
 public interface IGoldenConversationService
 {
     /// <summary>
@@ -22,38 +24,45 @@ public interface IGoldenConversationService
     Task<GoldenConversationRecord> CreateAsync(GoldenConversationCreateInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Validates (the same rules as <see cref="CreateAsync" />, plus non-null provenance ids) and persists a new
-    ///     <see cref="GoldenConversationSource.Harvested" /> golden candidate staged inert (<c>Enabled == false</c>)
-    ///     regardless of the input's Enabled flag, returning the stored record. The operator promotes it into the active
-    ///     set via <see cref="ApproveHarvestedAsync" />.
+    ///     Validates and persists a new <see cref="GoldenConversationSource.Harvested" /> candidate, staged inert
+    ///     whatever the input's Enabled flag says.
     /// </summary>
+    /// <remarks>
+    ///     The rules are <see cref="CreateAsync" />'s plus non-null provenance ids, and the operator promotes the
+    ///     result into the active set through <see cref="ApproveHarvestedAsync" />.
+    /// </remarks>
     Task<GoldenConversationRecord> CreateHarvestedAsync(GoldenConversationCreateInput input, CancellationToken cancellationToken = default);
 
     /// <summary>Returns every golden case for <paramref name="agentDefinitionId" />, ordered by CreatedAtUtc.</summary>
     Task<IReadOnlyList<GoldenConversationRecord>> ListByAgentAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Promotes a staged harvested candidate into the active golden set: enables the case with <paramref name="id" />
-    ///     only when it belongs to <paramref name="agentDefinitionId" />, is <see cref="GoldenConversationSource.Harvested" />
-    ///     and currently disabled. Returns the updated record, or <c>null</c> when no such case exists (the endpoint maps
-    ///     <c>null</c> to 404) — the same ownership guard as the manual-authoring and analysis-review paths.
+    ///     Promotes a staged harvested candidate into the active golden set, enabling <paramref name="id" /> only
+    ///     when it belongs to <paramref name="agentDefinitionId" />, is harvested and is currently disabled.
     /// </summary>
+    /// <remarks>
+    ///     It returns the updated record, or <c>null</c> when no such case exists, which the endpoint maps to 404 —
+    ///     the same ownership guard the manual-authoring and analysis-review paths use.
+    /// </remarks>
     Task<GoldenConversationRecord?> ApproveHarvestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Removes the golden case with <paramref name="id" /> only when it belongs to <paramref name="agentDefinitionId" />
-    ///     (the agent named on the route). Returns <c>true</c> when a row was deleted, <c>false</c> when no case has that
-    ///     id or it belongs to a different agent — the same ownership guard as the manual-authoring and analysis-review paths.
+    ///     Removes the golden case with <paramref name="id" /> only when it belongs to the agent named on the route,
+    ///     returning whether a row was deleted.
     /// </summary>
+    /// <remarks>It is <c>false</c> for an unknown id and for one owned by a different agent alike.</remarks>
     Task<bool> DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-///     Mutable fields of a golden case supplied on create. <see cref="Enabled" /> defaults to <c>true</c> so a manual
-///     case participates in the next eval run unless the operator parks it (the harvested create path forces it inert).
-///     <see cref="Source" />, <see cref="SourceMessageId" /> and <see cref="SourceConversationId" /> carry harvest
-///     provenance; they default to a Manual case with no provenance so the manual create path keeps compiling unchanged.
+///     Mutable fields of a golden case supplied on create.
 /// </summary>
+/// <remarks>
+///     <see cref="Enabled" /> defaults to <c>true</c>, so a manual case joins the next eval run unless the operator
+///     parks it, while the harvested path forces it inert. <see cref="Source" />,
+///     <see cref="SourceMessageId" /> and <see cref="SourceConversationId" /> carry harvest provenance and default to
+///     a Manual case with none.
+/// </remarks>
 public sealed class GoldenConversationCreateInput
 {
     public required Guid AgentDefinitionId { get; init; }

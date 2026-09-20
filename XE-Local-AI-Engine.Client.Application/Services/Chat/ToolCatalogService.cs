@@ -4,16 +4,14 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 
 /// <summary>
-///     The tool-catalog endpoint's only door to the node's tool catalog and to the node approval policy, so the badge an
-///     operator sees is computed by the same policy runtime enforcement applies rather than by a second rule at the HTTP
-///     edge.
-///     <para>
-///         The composition lives in its own type because <see cref="ILocalToolOfferProvider" /> deliberately consults no
-///         <see cref="IToolApprovalPolicy" /> anywhere (see that interface's own documentation): the raw declared flag is
-///         what it returns, and each caller composes it. This type is that composition for the catalog read, and it keeps
-///         the endpoint from having to take the <c>AI.Agent</c> policy contract itself.
-///     </para>
+///     The tool-catalog endpoint's only door to the node's tool catalog and approval policy, so the badge an operator
+///     sees is computed by the policy runtime enforcement applies, not a second rule at the HTTP edge.
 /// </summary>
+/// <remarks>
+///     The composition lives in its own type because <see cref="ILocalToolOfferProvider" /> deliberately consults no
+///     <see cref="IToolApprovalPolicy" />: it returns the raw declared flag and each caller composes it. This is that
+///     composition for the catalog read, and it keeps the endpoint from taking the <c>AI.Agent</c> policy contract.
+/// </remarks>
 public sealed class ToolCatalogService
 {
     private readonly ILocalToolOfferProvider _localToolOfferProvider;

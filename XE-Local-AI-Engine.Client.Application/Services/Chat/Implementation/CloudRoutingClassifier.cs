@@ -6,19 +6,23 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 internal sealed record CloudRoutingClassification(bool RoutesToCloud, bool Faulted);
 
 /// <summary>
-///     The single cloud-routing classification both the per-turn chat path (<see cref="ChatTurnResolver" />) and the
-///     per-participant path (<see cref="ModelCapabilityResolver" />) use. Shared rather than mirrored, because the two
-///     were byte-identical copies and a change to only one of them would let a model be classified local on one path
-///     while it egresses to the cloud on the other.
+///     The single cloud-routing classification the per-turn chat path (<see cref="ChatTurnResolver" />) and the
+///     per-participant path (<see cref="ModelCapabilityResolver" />) share.
 /// </summary>
+/// <remarks>
+///     Shared rather than mirrored: a change to only one of two copies would let a model be classified node-local on
+///     one path while it egresses to the cloud on the other.
+/// </remarks>
 internal static class CloudRoutingClassifier
 {
     /// <summary>
-    ///     Classifies whether <paramref name="model" /> would ROUTE to a cloud provider, reading the cloud factory's
-    ///     shared short-TTL routing snapshot — the same source the send path routes from — so classification and
-    ///     routing cannot diverge. On any snapshot read failure the result FAILS CLOSED
-    ///     (<c>RoutesToCloud: true, Faulted: true</c>) so the private-data gates withhold rather than leak.
+    ///     Classifies whether <paramref name="model" /> would ROUTE to a cloud provider.
     /// </summary>
+    /// <remarks>
+    ///     It reads the cloud factory's shared short-TTL routing snapshot, the same source the send path routes from,
+    ///     so classification and routing cannot diverge. Any snapshot read failure FAILS CLOSED
+    ///     (<c>RoutesToCloud: true, Faulted: true</c>) so the private-data gates withhold rather than leak.
+    /// </remarks>
     public static CloudRoutingClassification Classify(IActiveCloudChatClientFactory cloudChatClientFactory, ILogger logger, string model)
     {
         try

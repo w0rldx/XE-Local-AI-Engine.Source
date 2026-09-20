@@ -39,28 +39,11 @@ internal sealed class NodeChatReadModel
     ///     not transferred, decrypted or parsed.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         Compaction shapes what a turn SENDS, not what it LOADS, so a long conversation paid a full decrypt +
-    ///         JSON-parse of its entire history before every first token — including the messages the synopsis had already
-    ///         replaced. This is a load-side cap on exactly that dead work.
-    ///     </para>
-    ///     <para>
-    ///         <strong>Why it is output-equivalent.</strong> Only two consumers read a turn conversation's messages, and
-    ///         each provably ignores the omitted payloads: <c>ConversationContextBuilder.Build</c> drops every message at or below
-    ///         the covered sequence outright (that IS the compaction filter), and <c>CollectUserTurns</c> keeps only
-    ///         <c>role == "user"</c> messages, which the cap never touches at any sequence. Message STRUCTURE — id,
-    ///         sequence, role, variant group, timestamps — is always loaded in full, so
-    ///         <see cref="SelectedPathResolver" /> still sees every branch and resolves the identical selected path;
-    ///         a variant group whose siblings straddle the boundary is therefore still resolved from the complete sibling
-    ///         set, and only then filtered by sequence.
-    ///     </para>
-    ///     <para>
-    ///         Use <see cref="GetConversationAsync" /> for anything that renders or re-persists a conversation (the UI
-    ///         load, regeneration, branching, compaction itself) — those need every payload. A caller-managed
-    ///         integration continuation uses it too, and for the same reason: with tool history on, the builder KEEPS a
-    ///         covered assistant row for the tool parts persisted in its <c>metadata_json</c>, so the equivalence
-    ///         argument above no longer holds for that caller.
-    ///     </para>
+    ///     It is a load-side cap on dead work: compaction shapes what a turn SENDS, not what it LOADS. It is
+    ///     output-equivalent because both consumers of a turn conversation ignore the omitted payloads, and structure
+    ///     always loads in full, so <see cref="SelectedPathResolver" /> resolves an identical path. Anything that
+    ///     renders or re-persists a conversation uses <see cref="GetConversationAsync" /> — see
+    ///     <c>docs/wiki/05-chat.md</c>, "The turn-scoped read".
     /// </remarks>
     public Task<NodeChatConversationDto?> GetConversationForTurnAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
@@ -102,9 +85,8 @@ internal sealed class NodeChatReadModel
                     ? (int?)null
                     : conversationReader.GetInt32(14);
 
-                // The cap fires only under the SAME condition ConversationContextBuilder.Build uses to drop the covered
-                // messages — a non-empty synopsis AND a covered sequence — so a conversation that has never been
-                // compacted loads byte-for-byte what it always did.
+                // The cap fires only under the SAME condition ConversationContextBuilder.Build drops covered messages
+                // on, so a conversation that has never been compacted loads byte-for-byte what it always did.
                 var omitNonUserPayloadsAtOrBelowSequence = capPayloadsToCompactionBoundary && compactionSummary is { Length: > 0 }
                     ? compactionCoversToSequence
                     : null;

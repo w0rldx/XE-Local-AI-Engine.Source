@@ -4,15 +4,15 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 
 /// <summary>
-///     Default <see cref="IMemoryExtractionDispatcher" />. Owns the post-run extraction queue as a BOUNDED single-reader
-///     <see cref="Channel{T}" /> of <see cref="MemoryExtractionJob" />s. Singleton: the queue outlives any request scope.
-///     <para>
-///         <see cref="Dispatch" /> is non-blocking (it must never delay the chat pump), so it TRY-writes and, when the
-///         queue is at capacity, DROPS the newest job with a text-free warning rather than blocking or growing without
-///         limit — each job carries conversation content, so an unbounded backlog would retain that content in memory
-///         indefinitely. The <see cref="MemoryExtractionWorker" /> drains this queue under a bounded concurrency gate.
-///     </para>
+///     Default <see cref="IMemoryExtractionDispatcher" />, owning the post-run extraction queue as a BOUNDED
+///     single-reader <see cref="Channel{T}" /> whose singleton lifetime outlives any request scope.
 /// </summary>
+/// <remarks>
+///     <see cref="Dispatch" /> must never delay the chat pump, so it TRY-writes and DROPS the newest job with a
+///     text-free warning at capacity rather than blocking or growing: each job carries conversation content, so an
+///     unbounded backlog would retain it in memory indefinitely. <see cref="MemoryExtractionWorker" /> drains the
+///     queue under a bounded concurrency gate.
+/// </remarks>
 internal sealed class MemoryExtractionDispatcher : IMemoryExtractionDispatcher
 {
     private readonly Channel<MemoryExtractionJob> _queue;
@@ -38,11 +38,13 @@ internal sealed class MemoryExtractionDispatcher : IMemoryExtractionDispatcher
     public ChannelReader<MemoryExtractionJob> Reader => _queue.Reader;
 
     /// <summary>
-    ///     Completes the queue writer so no further jobs are accepted. After this, <see cref="Dispatch" /> takes the
-    ///     dropped-job path (its TryWrite returns false), and the worker's read loop drains whatever is buffered and then
-    ///     ends on its own rather than being abandoned. Idempotent — safe to call more than once (the worker completes it
-    ///     at shutdown and also via a stop-token callback), so it uses <c>TryComplete</c> rather than <c>Complete</c>.
+    ///     Completes the queue writer so no further job is accepted.
     /// </summary>
+    /// <remarks>
+    ///     After it, <see cref="Dispatch" /> takes the dropped-job path and the worker's read loop drains what is
+    ///     buffered and ends on its own rather than being abandoned. It uses <c>TryComplete</c> so it stays
+    ///     idempotent, because the worker completes it both at shutdown and from a stop-token callback.
+    /// </remarks>
     public void CompleteWriter()
     {
         _ = _queue.Writer.TryComplete();

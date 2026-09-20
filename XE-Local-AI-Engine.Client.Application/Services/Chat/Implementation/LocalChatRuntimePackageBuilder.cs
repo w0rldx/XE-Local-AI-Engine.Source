@@ -49,9 +49,8 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // Deliberately NOT fed into the config hash below (mirrors SupportsThinking): sampling is a loopback-only
             // per-send knob, so the no-override path keeps a byte-identical hash and the cross-repo digest stays stable.
             SamplingOptions = request.SamplingOptions,
-            // Deliberately NOT fed into the config hash below (mirrors SupportsThinking/SamplingOptions above): the
-            // unattended flag is an execution-context bit, not agent configuration, so the SAME agent run on a schedule
-            // and run interactively keep a byte-identical hash and the cross-repo digest stays stable.
+            // Deliberately NOT fed into the config hash: the unattended flag is an execution-context bit, not agent
+            // configuration, so the same agent hashes identically on a schedule and interactively.
             IsUnattended = request.IsUnattended,
             // Deliberately NOT fed into the config hash below (same reason as IsUnattended): the relevance filter
             // narrows only the provider-bound tools array, so opting out must leave the digest byte-identical.
@@ -64,16 +63,14 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // Normalize an empty assigned-skill set to null so the no-skills loopback package carries no skill payload
             // and the config hash below stays byte-identical to the pre-skills digest (the cross-repo round-trip guard).
             Skills = skills,
-            // Resolved custom tools ride the package for the session-approval memo only; they are NOT folded into the
-            // config hash (their schema/name/approval already ride AllowedTools, which IS hashed). Empty → null so the
-            // no-custom-tool package stays byte-identical to before this feature.
+            // Resolved custom tools ride the package for the session-approval memo only, NOT the config hash, since
+            // their schema, name and approval already ride the hashed AllowedTools. Empty resolves to null.
             CustomTools = request.CustomTools is { Count: > 0 } resolvedCustomTools ? resolvedCustomTools : null,
             // Per-send decoding constraint (benchmark judge only). Same posture as SamplingOptions above: NOT fed into
             // the config hash, so the null path stays byte-identical and the cross-repo digest is unmoved.
             ResponseJsonSchema = request.ResponseJsonSchema,
-            // UNLIKE SupportsThinking/Sampling above, the resolved skill set IS fed into the config hash: skill bodies
-            // ride MAF progressive disclosure (NOT in ResolvedSystemPrompt), so a body edit/rename/picklist change would
-            // not move the prompt — folding the set (body HASHED, WhenWritingNull) is what invalidates resume.
+            // The resolved skill set IS fed into the config hash: skill bodies ride MAF progressive disclosure, not
+            // ResolvedSystemPrompt, so folding the set with the body hashed is what invalidates a stale resume.
             ConfigHash = RuntimePackageConfigHash.Compute(request.AgentDefinitionVersion,
                 request.ResolvedSystemPrompt,
                 MapAllowedTools(allowedTools),

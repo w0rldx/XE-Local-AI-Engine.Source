@@ -3,17 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using System.Text;
 
 /// <summary>
-///     Accumulates the ordered interleave of reasoning segments and tool cards for a single assistant turn so the
-///     terminal persist can write a <see cref="NodeChatMessagePart" /> list (the render source of truth on reload).
-///     The local front doors (<c>NodeChatStreamService</c> / <c>NodeChatRegenerationService</c>) are the only place
-///     that observes BOTH producers of the turn — the reasoning deltas fanned out by the persistence pump and the
-///     tool-call lifecycle events — so accumulation lives here, fed by both handlers under one lock.
-///     Ordering model (Option A): reasoning deltas extend the trailing reasoning segment; a tool event between two
-///     reasoning runs closes the current reasoning segment, so a turn can show more than one Thoughts block. Tool
-///     calls collapse requested-&gt;completed by tool-call id (the completed phase fills the result), guarding the
-///     duplicate-tool-part class of bug. Each part is stamped with the shared monotonic stream sequence when it is
-///     opened, preserving global order even though the two producers run concurrently.
+///     Accumulates the ordered interleave of reasoning segments and tool cards for one assistant turn, so the
+///     terminal persist can write the <see cref="NodeChatMessagePart" /> list that renders on reload.
 /// </summary>
+/// <remarks>
+///     The local front doors are the only place observing BOTH producers — the pump's reasoning deltas and the
+///     tool-call lifecycle — so accumulation lives here, fed by both handlers under one lock. Reasoning deltas extend
+///     the trailing segment and a tool event between two reasoning runs closes it, so a turn can show more than one
+///     Thoughts block. Tool calls collapse requested to completed by tool-call id, guarding the duplicate-part bug
+///     class, and each part is stamped with the shared monotonic sequence when opened, preserving global order.
+/// </remarks>
 public sealed class NodeChatPartAccumulator
 {
     private readonly List<MutablePart> _parts = [];
@@ -122,21 +121,18 @@ public sealed class NodeChatPartAccumulator
     }
 
     /// <summary>
-    ///     Appends a non-fatal turn notice as its own part (kind <see cref="NodeChatMessagePartKinds.Notice" />,
-    ///     unconditionally — notices are fire-once events, not a requested/completed pair, so there is nothing to
-    ///     collapse by id). <paramref name="kind" /> is the <c>TurnNoticeKind</c> enum name, stored in
-    ///     <see cref="NodeChatMessagePart.Name" />; <paramref name="message" /> is the sanitized text, stored in
-    ///     <see cref="NodeChatMessagePart.Text" />; <paramref name="detail" /> is the notice's optional sanitized
-    ///     structured detail (the dispatch reason code, the effective model name), stored in
-    ///     <see cref="NodeChatMessagePart.State" />.
-    ///     <para>
-    ///         The part record's generic members carry a per-KIND meaning — a notice part already stores the notice
-    ///         kind in <c>Name</c>, which holds a tool name on a tool part — and <c>State</c> is the free member a
-    ///         notice part has never used. Reusing it keeps the persisted <c>metadata_json</c> blob's shape, and
-    ///         therefore the wire schema, exactly as it is: a reloaded turn renders the detail its live stream showed
-    ///         without a new field on any contract.
-    ///     </para>
+    ///     Appends a non-fatal turn notice as its own part, unconditionally: a notice is a fire-once event, not a
+    ///     requested-completed pair, so there is nothing to collapse by id.
     /// </summary>
+    /// <param name="kind">The <c>TurnNoticeKind</c> name, stored in <see cref="NodeChatMessagePart.Name" />.</param>
+    /// <param name="message">The sanitized text, stored in <see cref="NodeChatMessagePart.Text" />.</param>
+    /// <param name="sequence">The shared stream sequence stamped on the part when it opens.</param>
+    /// <param name="detail">Optional sanitized detail, stored in <see cref="NodeChatMessagePart.State" />.</param>
+    /// <remarks>
+    ///     The part record's generic members carry a per-KIND meaning, and <c>State</c> is the free member a notice
+    ///     part has never used. Reusing it keeps the persisted <c>metadata_json</c> shape — and therefore the wire
+    ///     schema — exactly as it is, so a reloaded turn renders the detail its live stream showed.
+    /// </remarks>
     public void AppendNotice(string kind, string message, long sequence, string? detail = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(kind);
@@ -171,9 +167,8 @@ public sealed class NodeChatPartAccumulator
 
     private sealed class MutablePart
     {
-        // Reasoning deltas append delta-by-delta; a StringBuilder keeps the whole segment O(n) to build instead of
-        // the O(n^2) a repeated string concat costs. Tool parts never append text, so the builder stays null for them
-        // and Text materializes once at Snapshot().
+        // Reasoning appends delta by delta, so a StringBuilder builds the segment in linear rather than quadratic time.
+        // Tool parts never append text, so the builder stays null and Text materializes once at Snapshot().
         private StringBuilder? _text;
 
         public MutablePart(string kind, long sequence)

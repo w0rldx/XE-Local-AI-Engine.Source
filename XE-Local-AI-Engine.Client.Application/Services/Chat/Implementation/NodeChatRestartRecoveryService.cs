@@ -26,12 +26,8 @@ public sealed class NodeChatRestartRecoveryService
             {
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
 
-                // Terminalize every non-terminal assistant row regardless of Origin (Local loopback AND
-                // Origin=Remote platform mirrors): a restart orphans both the same way. The status list is the
-                // recovery source set from NodeChatMessageTransitions.RecoverySources — pending, queued (held before
-                // the collision lease is acquired), and streaming — so a crash mid-queue does not leave a row dangling
-                // forever, and a terminal row (including a user Cancelled) is never downgraded to Interrupted. A unit
-                // test pins this literal to that table set so the two cannot drift.
+                // Terminalize every non-terminal assistant row whatever its Origin, since a restart orphans local and
+                // mirrored rows alike. A unit test pins this status literal to NodeChatMessageTransitions.RecoverySources.
                 var recoveredCount = await dbContext.Database.ExecuteSqlRawAsync(sql: """
                                                                                       UPDATE messages
                                                                                       SET status = {0},
@@ -51,15 +47,8 @@ public sealed class NodeChatRestartRecoveryService
                     ],
                     token);
 
-                // Durable run-envelope reconcile: a crash or an envelope-write failure after ANY terminal
-                // message commit — completed, failed, cancelled, or interrupted — can leave that assistant row without an
-                // envelope. Backfill one envelope per terminal assistant message that lacks one, in the SAME transaction,
-                // deriving the terminal status and success FROM the persisted message row (so the envelope matches the row's
-                // actual outcome), the bound agent id from the row, and a deterministic id = message_id. Because it selects
-                // FROM messages it can never orphan (a purged message has no row to select), and the NOT EXISTS guard plus
-                // the filtered unique index keep it idempotent (already-enveloped rows are skipped, re-runs never
-                // duplicate). Tokens / duration / model are unknown at reconcile and left empty — the row records the
-                // terminal lifecycle, not the (lost) generation detail.
+                // Durable run-envelope reconcile: a crash after a terminal commit can leave a row envelope-less, so one
+                // is backfilled FROM the persisted row, in this transaction, idempotently through the NOT EXISTS guard.
                 _ = await dbContext.Database.ExecuteSqlRawAsync(sql: """
                                                                      INSERT INTO agent_execution_logs
                                                                          (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, request_id,

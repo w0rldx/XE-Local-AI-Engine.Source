@@ -3,18 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.Eval;
 using System.Text.Json;
 
 /// <summary>
-///     The plaintext JSON shape persisted to <c>PlaybookAction.EvalResult</c> before a Suggested action may be promoted:
-///     ids + pass/fail flags + counts only (no transcripts, no free text), so it is structural — not sensitive. The same
-///     shape is read back by the promote gate to decide whether the eval passed and is current
-///     (<see cref="ActionVersionAtEval" /> ties the pass to the action's content snapshot — see the gate's staleness
-///     check). Positional record so System.Text.Json binds JSON properties to the constructor parameters by name.
-///     <see cref="GoldenCaseCount" /> is the number of cases actually evaluated; <see cref="GoldenCaseTotal" /> is the
-///     full enabled golden-set size BEFORE the per-run cap, so the operator can see when a run only evaluated a subset
-///     (an INCOMPLETE run, <c>GoldenCaseCount &lt; GoldenCaseTotal</c>, which the promote gate refuses to authorize).
-///     <see cref="EvaluationFingerprint" /> is a stable hash of the behaviour-affecting inputs (base instructions,
-///     sibling enabled actions, golden set, model, evaluator version); the promote gate recomputes it and requires a
-///     match, so a context change after the eval blocks promotion even when the action's own version is unchanged.
+///     The plaintext JSON persisted to <c>PlaybookAction.EvalResult</c> before a Suggested action may be promoted:
+///     ids, pass/fail flags and counts only, so it is structural rather than sensitive.
 /// </summary>
+/// <remarks>
+///     The promote gate reads it back to decide whether the eval passed and is current, with
+///     <see cref="ActionVersionAtEval" /> tying the pass to the action's content snapshot. It is a positional record,
+///     so System.Text.Json binds by constructor parameter name. <see cref="GoldenCaseCount" /> is what was actually
+///     evaluated and <see cref="GoldenCaseTotal" /> the full enabled set BEFORE the cap, so an INCOMPLETE run is
+///     visible and refused, and the gate recomputes <see cref="EvaluationFingerprint" /> and requires a match.
+/// </remarks>
 public sealed record PlaybookEvalResult(
     bool Passed,
     long EvaluatedAtUtc,

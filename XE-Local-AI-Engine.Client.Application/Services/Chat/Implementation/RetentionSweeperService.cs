@@ -9,15 +9,16 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
-///     Ages out whole conversations once they pass the configured retention window, deleting the complete footprint the
-///     interactive immediate-purge deletes: every child DB row (via <see cref="INodeRetentionStore" />) <b>and</b> the
-///     on-disk upload blobs plus the artifact bytes of any work session the conversation owned. Retention permanently
-///     destroys user chat history, so it is <b>disabled by default</b> —
-///     see <see cref="ChatRetentionOptions" />. The DB rows are deleted and committed first; the on-disk blobs are torn
-///     down after the commit, and an orphan resweep on each pass removes any upload directory whose conversation row no
-///     longer exists (covering a crash between the commit and the blob teardown), so an interruption can never leave a
-///     permanent orphan.
+///     Ages out whole conversations once they pass the configured retention window, deleting the same footprint the
+///     interactive immediate purge does.
 /// </summary>
+/// <remarks>
+///     That footprint is every child DB row, via <see cref="INodeRetentionStore" />, plus the on-disk upload blobs and
+///     the artifact bytes of any work session the conversation owned. Retention permanently destroys user chat
+///     history, so it is <b>disabled by default</b> — see <see cref="ChatRetentionOptions" />. The rows are committed
+///     first and the blobs torn down after, and an orphan resweep each pass removes any upload directory whose
+///     conversation row is gone, so an interruption can never leave a permanent orphan.
+/// </remarks>
 public sealed class RetentionSweeperService : BackgroundService
 {
     private readonly ILogger<RetentionSweeperService> _logger;
@@ -46,9 +47,8 @@ public sealed class RetentionSweeperService : BackgroundService
         {
             _logger.LogInformation("Chat retention is disabled; conversations are never auto-deleted. Set {Section}:Enabled=true to enable it.", ChatRetentionOptions.Section);
 
-            // Inactivity-based conversation deletion stays gated on Enabled, but the orphaned-upload resweep must run
-            // regardless: a failed interactive purge can strand an upload directory whose conversation row is already
-            // gone, and with retention disabled (the default) nothing else would ever reconcile it.
+            // Inactivity-based deletion stays gated on Enabled, but the orphaned-upload resweep runs regardless: a
+            // failed interactive purge can strand a directory that nothing else would reconcile while disabled.
             await RunOrphanResweepOnceAsync(stoppingToken);
             return;
         }
@@ -102,16 +102,12 @@ public sealed class RetentionSweeperService : BackgroundService
         var workSessionStore = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         var workSessionArtifactBlobStore = scope.ServiceProvider.GetRequiredService<IWorkSessionArtifactBlobStore>();
 
-        // Production timestamps are Unix MILLISECONDS (created/last-seen are written with ToUnixTimeMilliseconds), so the
-        // cutoff must be milliseconds too — a seconds cutoff is ~1000x smaller than any real last_seen and the age
-        // predicate would never fire.
+        // Production timestamps are Unix MILLISECONDS, so the cutoff must be too: a seconds cutoff is a thousandfold
+        // smaller than any real last_seen and the age predicate would never fire.
         var cutoffUtc = _timeProvider.GetUtcNow().Subtract(TimeSpan.FromDays(_options.RetentionDays)).ToUnixTimeMilliseconds();
 
-        // Select candidates lock-free, then delete each one under the conversation's exclusive write lock, re-checking
-        // eligibility inside the deletion transaction. This coordinates with the interactive send/touch/purge paths (all
-        // of which run under the same per-conversation lock), so retention can neither delete a conversation touched
-        // after selection nor let a concurrent send strand an orphan after a blind delete. Only conversations actually
-        // deleted get their on-disk upload blobs torn down.
+        // Candidates are selected lock-free, then deleted under the conversation's exclusive write lock with
+        // eligibility re-checked inside the transaction, so a conversation touched after selection survives.
         var candidateConversationIds = await retentionStore.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken);
 
         var deletedConversations = new List<(Guid ConversationId, Guid? WorkSessionId)>(candidateConversationIds.Count);
@@ -135,9 +131,8 @@ public sealed class RetentionSweeperService : BackgroundService
             await uploadedFileStore.DeleteAllForConversationAsync(conversationId, cancellationToken);
             if (workSessionId is { } sessionId)
             {
-                // Work-session artifact bytes live on disk under the session id, so the row purge cannot reach them.
-                // Unlike uploaded files, artifact directories have no orphan resweep; a crash between the commit and
-                // this call can therefore strand one directory.
+                // Work-session artifact bytes live on disk under the session id, out of the row purge's reach, and
+                // unlike uploads they have no orphan resweep, so a crash before this call strands one directory.
                 workSessionArtifactBlobStore.DeleteSession(sessionId);
             }
         }
@@ -152,9 +147,8 @@ public sealed class RetentionSweeperService : BackgroundService
         }
     }
 
-    // Runs the orphaned-upload resweep on its own scope, independent of the inactivity-based conversation deletion.
-    // Used at startup in both enabled and disabled modes; failure-tolerant so a resweep error never crashes the host.
-    // Internal so a test can drive it deterministically with retention disabled.
+    // Runs the orphaned-upload resweep on its own scope, at startup in both enabled and disabled modes, and is
+    // failure-tolerant so a resweep error never crashes the host. Internal so a test can drive it deterministically.
     internal async Task RunOrphanResweepOnceAsync(CancellationToken cancellationToken)
     {
         try

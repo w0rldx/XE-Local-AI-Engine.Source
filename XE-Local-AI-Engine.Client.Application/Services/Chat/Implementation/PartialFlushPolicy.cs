@@ -3,23 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 
 /// <summary>
-///     Decides when the streaming pump persists its accumulated content. A partial flush REWRITES the whole message —
-///     it re-serializes, re-encrypts and re-writes the full accumulated content and metadata — so a fixed-interval
-///     cadence makes per-turn write volume quadratic in output length: at a steady token rate, flush <c>k</c> rewrites
-///     <c>k</c> units of text, and the total is the sum, not the length.
-///     <para>
-///         The fix is one predicate: flush when the unpersisted tail has reached a FRACTION of what is already
-///         persisted. Bounding the delta at <c>≥ GrowthFraction · persisted</c> bounds the rewrite-to-append ratio at
-///         <c>1 / GrowthFraction</c> regardless of message length, so the total rewritten across a turn of <c>n</c>
-///         characters is linear in <c>n</c>. The interval floor keeps a fast stream from flushing more often than the
-///         cadence this replaced; the interval ceiling keeps a stream too slow to trip the growth trigger checkpointing
-///         anyway, which is what bounds crash loss.
-///     </para>
-///     <para>
-///         The caller keeps two unconditional flushes outside this predicate: the FIRST partial (so a turn is durable
-///         from its first token) and any TERMINAL (so the final content is never deferred).
-///     </para>
+///     Decides when the streaming pump persists its accumulated content.
 /// </summary>
+/// <remarks>
+///     A partial flush REWRITES the whole message, so a fixed-interval cadence makes per-turn write volume quadratic
+///     in output length. The predicate instead flushes when the unpersisted tail reaches a FRACTION of what is
+///     persisted, bounding the rewrite-to-append ratio at <c>1 / GrowthFraction</c> whatever the length. The interval
+///     floor stops a fast stream flushing more often than the cadence this replaced, and the ceiling checkpoints a
+///     stream too slow to trip the growth trigger. The FIRST partial and any TERMINAL flush unconditionally.
+/// </remarks>
 internal static class PartialFlushPolicy
 {
     /// <summary>

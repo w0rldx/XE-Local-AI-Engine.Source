@@ -1,13 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Reusable, authoritative server-side guard that rejects mutations targeting an
-///     <c>Origin=Remote</c> conversation. Remote-origin rows are node-local mirrors of platform-served chats and
-///     are view-only on the node: they must never sync back, and the node retains no epoch key to re-drive them.
-///     Applied to ALL content/state mutation entry points (send, rename, pin, archive, branch, revision, feedback,
-///     regenerate). UI hiding is cosmetic; this guard is the source of truth. The guard reads only the plaintext
-///     <c>origin</c> column — it never touches the epoch key registry or retains any epoch key.
+///     The authoritative server-side guard rejecting mutations that target an <c>Origin=Remote</c> conversation.
 /// </summary>
+/// <remarks>
+///     Remote-origin rows are node-local mirrors of platform-served chats and are view-only: they must never sync
+///     back, and the node retains no epoch key to re-drive them. It applies to ALL content and state mutation entry
+///     points, and UI hiding is cosmetic beside it. It reads only the plaintext <c>origin</c> column, never touching
+///     the epoch key registry.
+/// </remarks>
 public interface INodeChatMutationGuard
 {
     /// <summary>
@@ -44,11 +45,13 @@ public sealed class NodeChatMutationGuard : INodeChatMutationGuard
 }
 
 /// <summary>
-///     Thrown when a mutation targets a read-only (<c>Origin=Remote</c>) conversation. On the REST path the global
-///     <c>ConflictExceptionHandler</c> turns it into a 409 <c>ConflictProblemDetails</c> with
-///     <c>conflictType = ReadOnlyConversation</c> — endpoints must let it propagate, never catch it. The local
-///     send/stream path lets it propagate to the caller.
+///     Thrown when a mutation targets a read-only (<c>Origin=Remote</c>) conversation.
 /// </summary>
+/// <remarks>
+///     On the REST path the global <c>ConflictExceptionHandler</c> turns it into a 409 with
+///     <c>conflictType = ReadOnlyConversation</c>, so endpoints must let it propagate and never catch it; the local
+///     send and stream path propagates it to the caller.
+/// </remarks>
 public sealed class NodeChatReadOnlyConversationException : InvalidOperationException
 {
     public NodeChatReadOnlyConversationException(Guid conversationId) : base($"Conversation {conversationId} is read-only because it has remote origin.")

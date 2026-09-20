@@ -5,23 +5,16 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     Default <see cref="ILocalDefaultChatModelResolver" />. Resolves the local-default chat model from the installed
-///     GGUF (llama.cpp) models ONLY — never Ollama. An installed GGUF is chat-capable by construction; a model is
-///     excluded when its PERSISTED effective kind (<c>OverrideKind ?? DetectedKind</c>) is a non-chat kind
-///     (<see cref="ModelKind.Embedding" /> or <see cref="ModelKind.Reranker" />), OR — belt-and-suspenders, since a
-///     freshly-installed GGUF has NO persisted row — when its NAME identifies an embedding model
-///     (<see cref="ModelKindDetector.IsEmbeddingName" />, matching EMBED/NOMIC-EMBED/BGE-… fragments) or a reranker
-///     (<see cref="ModelKindDetector.IsRerankerName" />, matching RERANK). An explicit operator override to a chat-
-///     eligible kind wins over the name heuristic (a corrected model stays eligible). A model absent from the
-///     classifications table (no row) whose name is neither an embedding nor a reranker name, or whose effective kind is
-///     Unknown or Chat, stays eligible — matching the chat picker.
-///     <para>
-///         This resolver reads only from <see cref="IModelClassificationStore" /> (a plain DB read) and NEVER triggers
-///         the Ollama <c>/api/show</c> detection probe. Passing <c>Digest=null</c> to
-///         <c>IModelClassificationService.ClassifyAsync</c> would miss the cache and re-probe a now-dead Ollama on every
-///         local-default send; using the store directly avoids that entirely.
-///     </para>
+///     Default <see cref="ILocalDefaultChatModelResolver" />, resolving the local-default chat model from the
+///     installed GGUF (llama.cpp) models ONLY — never Ollama.
 /// </summary>
+/// <remarks>
+///     An installed GGUF is chat-capable by construction. A model is excluded when its persisted effective kind
+///     (<c>OverrideKind ?? DetectedKind</c>) is <see cref="ModelKind.Embedding" /> or
+///     <see cref="ModelKind.Reranker" />, or — belt and braces, since a fresh GGUF has no row — when its NAME matches
+///     one, which an explicit operator override outranks. It reads only <see cref="IModelClassificationStore" />,
+///     never the Ollama probe <c>ClassifyAsync</c> would re-run against a dead daemon on every local-default send.
+/// </remarks>
 public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolver
 {
     private readonly IGgufModelStore _ggufModelStore;
@@ -49,9 +42,8 @@ public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolv
             return null;
         }
 
-        // Read the persisted classifications for all installed GGUFs in one DB round-trip.
-        // A missing row means unknown/unprobed → eligible. We exclude ONLY when the effective
-        // kind (OverrideKind ?? DetectedKind) is explicitly a non-chat kind (Embedding or Reranker).
+        // The persisted classifications for every installed GGUF in one DB round-trip. A missing row means unprobed
+        // and therefore eligible; only an explicitly non-chat effective kind excludes a model.
         var records = await _modelClassificationStore.ListAsync(cancellationToken);
         var classificationIndex = records.ToDictionary(static r => r.ModelName, static r => r, StringComparer.OrdinalIgnoreCase);
 
@@ -84,11 +76,13 @@ public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolv
     }
 
     /// <summary>
-    ///     Returns <c>true</c> when the model must be excluded from the local-default chat pick: its persisted effective
-    ///     kind is a non-chat kind (<see cref="ModelKind.Embedding" /> or <see cref="ModelKind.Reranker" />), or its name
-    ///     identifies an embedding/reranker model and the operator did NOT explicitly override the kind to a chat-eligible
-    ///     one. An explicit chat-eligible override wins over the name heuristic, so a corrected model stays eligible.
+    ///     Whether the model must be excluded from the local-default chat pick.
     /// </summary>
+    /// <remarks>
+    ///     It is excluded when its persisted effective kind is <see cref="ModelKind.Embedding" /> or
+    ///     <see cref="ModelKind.Reranker" />, or when its name identifies one and the operator did not override the
+    ///     kind to a chat-eligible one — so a corrected model stays eligible.
+    /// </remarks>
     private static bool IsExcludedFromChat(IReadOnlyDictionary<string, ModelClassificationRecord> index,
         string modelName)
     {

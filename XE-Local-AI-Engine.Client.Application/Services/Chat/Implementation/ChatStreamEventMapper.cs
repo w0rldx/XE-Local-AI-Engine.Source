@@ -7,13 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
 ///     The single source of truth for turning persisted messages and tool-call lifecycle payloads into
-///     <see cref="ChatStreamEvent" />s. The local send path (<see cref="NodeChatStreamService" />), the regenerate
-///     path (<see cref="NodeChatRegenerationService" />), and the reconnect/resume path
-///     (<see cref="InvocationResumeRegistry" />) all map through here so a live stream and a resumed stream can never
-///     drift in wire shape (event type, field placement, phase-gated tool fields). Identity fields are passed in
-///     explicitly because the sources differ (a correlation on the live paths, the invocation id on the resume path);
-///     the mapping of every other field is identical.
+///     <see cref="ChatStreamEvent" />s.
 /// </summary>
+/// <remarks>
+///     The send, regenerate and resume paths all map through here, so a live stream and a resumed one can never drift
+///     in wire shape — event type, field placement, phase-gated tool fields. Identity fields are passed explicitly
+///     because the sources differ, a correlation live and the invocation id on resume; everything else maps alike.
+/// </remarks>
 internal static class ChatStreamEventMapper
 {
     // Web defaults => camelCase property names, matching every other JSON payload the chat stream carries (tool
@@ -21,10 +21,12 @@ internal static class ChatStreamEventMapper
     private static readonly JsonSerializerOptions QuestionsJsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    ///     Maps a persisted terminal message status to its stream event type. Used when a lifecycle mark (queued /
-    ///     streaming) is rejected because the row already reached a terminal status (a cancel raced ahead of the run):
-    ///     the caller emits this terminal event instead of the queued/streaming event and aborts.
+    ///     Maps a persisted terminal message status to its stream event type.
     /// </summary>
+    /// <remarks>
+    ///     Used when a lifecycle mark is rejected because a cancel raced ahead of the run and the row is already
+    ///     terminal: the caller emits this event instead of the queued or streaming one and aborts.
+    /// </remarks>
     public static string TerminalEventType(string status)
     {
         return status switch
@@ -37,17 +39,15 @@ internal static class ChatStreamEventMapper
     }
 
     /// <summary>
-    ///     Maps a persisted row to a LIFECYCLE or TERMINAL event — pending / queued / streaming / completed / cancelled
-    ///     / failed / interrupted, and the user's own persisted message. These carry the full
-    ///     <see cref="ChatStreamEvent.Content" />/<see cref="ChatStreamEvent.Reasoning" /> from the row, which is
-    ///     affordable because there is at most one of them per turn.
-    ///     <para>
-    ///         It deliberately cannot build an <see cref="ChatStreamEventTypes.AssistantDelta" />: the delta path took
-    ///         its content from the persisted row too, which is what made the wire cost of a turn quadratic in its
-    ///         output length. Deltas go through <see cref="DeltaEvent" />, which has no access to a row at all — the
-    ///         type system now answers "which fields does this event carry", instead of a caller's discipline.
-    ///     </para>
+    ///     Maps a persisted row to a LIFECYCLE or TERMINAL event, and to the user's own persisted message.
     /// </summary>
+    /// <remarks>
+    ///     These carry the row's full <see cref="ChatStreamEvent.Content" /> and
+    ///     <see cref="ChatStreamEvent.Reasoning" />, affordable because there is at most one per turn. It deliberately
+    ///     cannot build an <see cref="ChatStreamEventTypes.AssistantDelta" />: a delta sourced from a persisted row
+    ///     makes the wire cost of a turn quadratic in its output length. Deltas go through <see cref="DeltaEvent" />,
+    ///     which has no access to a row at all, so the type system answers which fields an event carries.
+    /// </remarks>
     public static ChatStreamEvent MessageEvent(string type,
         NodeChatMessageCorrelation correlation,
         NodeChatPersistedMessageDto message,
@@ -81,16 +81,15 @@ internal static class ChatStreamEventMapper
     }
 
     /// <summary>
-    ///     Builds one live <see cref="ChatStreamEventTypes.AssistantDelta" />: the content/reasoning increment plus the
-    ///     character offset each begins at, and NOTHING else — no accumulated content, no model, no token counts.
-    ///     <para>
-    ///         Note it takes no <see cref="NodeChatPersistedMessageDto" />. A delta frame no longer needs a database row,
-    ///         which is what lets the SSE cadence run at ~25 frames/s while persistence flushes on a far slower,
-    ///         growth-triggered cadence. The offsets are the client's gap detector: it appends the delta at the offset
-    ///         it expected, and re-subscribes (receiving an <see cref="ChatStreamEventTypes.AssistantSnapshot" />) if
-    ///         the offsets do not line up.
-    ///     </para>
+    ///     Builds one live <see cref="ChatStreamEventTypes.AssistantDelta" />: the content and reasoning increment plus
+    ///     the character offset each begins at, and NOTHING else.
     /// </summary>
+    /// <remarks>
+    ///     It takes no <see cref="NodeChatPersistedMessageDto" />, so a delta frame needs no database row, which is
+    ///     what lets the SSE cadence run far ahead of the slower, growth-triggered flush. The offsets are the client's
+    ///     gap detector: it appends at the offset it expected and re-subscribes, receiving an
+    ///     <see cref="ChatStreamEventTypes.AssistantSnapshot" />, if they do not line up.
+    /// </remarks>
     public static ChatStreamEvent DeltaEvent(NodeChatMessageCorrelation correlation,
         long timestampMs,
         long sequence,
@@ -117,14 +116,14 @@ internal static class ChatStreamEventMapper
 
     /// <summary>
     ///     Builds an <see cref="ChatStreamEventTypes.AssistantSnapshot" />: an authoritative replacement of the
-    ///     client's accumulated text, with the offsets the next delta continues from. Used by the resume replay, and by
-    ///     the repair paths a client reaches through <c>ResumeMessage</c> after a gap or a queue overflow.
-    ///     <para>
-    ///         Its status stays <c>streaming</c> — a snapshot is a mid-stream state replacement, never a terminal. The
-    ///         resume path stamps the invocation id as BOTH the message id and the request id, as it does for tool-call
-    ///         and notice replay, so the ids are passed explicitly rather than as a correlation.
-    ///     </para>
+    ///     client's accumulated text, with the offsets the next delta continues from.
     /// </summary>
+    /// <remarks>
+    ///     Used by the resume replay and by the repair paths a client reaches through <c>ResumeMessage</c> after a gap
+    ///     or a queue overflow. Its status stays <c>streaming</c>, because a snapshot is a mid-stream replacement and
+    ///     never a terminal. The resume path stamps the invocation id as BOTH the message id and the request id, so
+    ///     the ids are passed explicitly rather than as a correlation.
+    /// </remarks>
     public static ChatStreamEvent SnapshotEvent(Guid conversationId,
         Guid messageId,
         Guid requestId,
@@ -150,17 +149,16 @@ internal static class ChatStreamEventMapper
     }
 
     /// <summary>
-    ///     Builds an <see cref="ChatStreamEventTypes.AssistantReconcile" />: "this stream is no longer contiguous —
-    ///     resynchronize". Carries no payload beyond the correlation and a sequence, because the repair carries the
-    ///     state: the client re-subscribes through <c>ResumeMessage</c> and its first frame is an authoritative
-    ///     <see cref="SnapshotEvent" />.
-    ///     <para>
-    ///         Raised when a bounded stream queue overflowed (<see cref="ChatStreamEventSink" />) or when a resume
-    ///         replay snapshot was too large to send (<see cref="InvocationResumeRegistry" />). The client consumes it
-    ///         in the adapter and surfaces nothing to the user; <c>chat_stream_reconcile_total</c> is the signal that
-    ///         it is happening.
-    ///     </para>
+    ///     Builds an <see cref="ChatStreamEventTypes.AssistantReconcile" />, telling the client that this stream is no
+    ///     longer contiguous and it must resynchronize.
     /// </summary>
+    /// <remarks>
+    ///     It carries no payload beyond the correlation and a sequence, because the repair carries the state: the
+    ///     client re-subscribes through <c>ResumeMessage</c> and its first frame is an authoritative
+    ///     <see cref="SnapshotEvent" />. It is raised when a bounded stream queue overflowed or when a resume replay
+    ///     snapshot was too large to send. The client surfaces nothing to the user;
+    ///     <c>chat_stream_reconcile_total</c> is the signal that it is happening.
+    /// </remarks>
     public static ChatStreamEvent ReconcileEvent(NodeChatMessageCorrelation correlation,
         long timestampMs,
         long sequence)
@@ -228,9 +226,8 @@ internal static class ChatStreamEventMapper
         InvocationRuntimePhase phase,
         long timestampMs,
         long sequence,
-        // When the phase CHANGED, off InvocationState. A different clock from timestampMs, which is the frame's send
-        // time off the caller's injected TimeProvider — under a test clock the two disagree by decades, and nothing
-        // may relate them.
+        // When the phase CHANGED, off InvocationState. A different clock from timestampMs, the frame's send time off
+        // the injected TimeProvider: under a test clock the two disagree by decades, and nothing may relate them.
         DateTimeOffset? phaseChangedAtUtc = null)
     {
         return new ChatStreamEvent
@@ -286,19 +283,15 @@ internal static class ChatStreamEventMapper
     }
 
     /// <summary>
-    ///     Maps a pending tool-approval request to an <see cref="ChatStreamEventTypes.ApprovalRequested" /> stream event.
-    ///     The tool-call id rides <see cref="ChatStreamEvent.ToolCallId" /> so the client attaches the
-    ///     Approve/Deny controls to the matching tool-call card; the approval request id rides
-    ///     <see cref="ChatStreamEvent.ApprovalRequestId" /> for the resolve round-trip. Deliberately NOT accumulated into
-    ///     the persisted <c>parts[]</c>: the pending approval is transient live state, and a reloaded terminal turn shows
-    ///     the executed/rejected tool result, never a lingering approval prompt.
-    ///     <para>
-    ///         A blank call id / tool name maps to a null wire field rather than an empty string. The live path always
-    ///         populates both; the reconnect replay rebuilds the payload from <c>InvocationApprovalState</c>, whose
-    ///         CallId/ToolName are optional (a platform-hub approval carries only an id and a description). A null tells
-    ///         the client "no card to attach this to" — an empty string would look like a real, unmatchable id.
-    ///     </para>
+    ///     Maps a pending tool-approval request to an <see cref="ChatStreamEventTypes.ApprovalRequested" /> event.
     /// </summary>
+    /// <remarks>
+    ///     The tool-call id rides <see cref="ChatStreamEvent.ToolCallId" /> so the client attaches the controls to the
+    ///     matching card, and the request id rides <see cref="ChatStreamEvent.ApprovalRequestId" /> for the resolve
+    ///     round-trip. It is deliberately NOT accumulated into the persisted <c>parts[]</c>: a reloaded terminal turn
+    ///     shows the tool result, never a lingering prompt. A blank call id or tool name maps to a null wire field,
+    ///     which tells the client there is no card to attach to; an empty string would look like an unmatchable id.
+    /// </remarks>
     public static ChatStreamEvent ApprovalRequestedEvent(Guid conversationId,
         Guid messageId,
         Guid requestId,
@@ -325,20 +318,15 @@ internal static class ChatStreamEventMapper
     }
 
     /// <summary>
-    ///     Maps a pending <c>ask_user</c> question to a <see cref="ChatStreamEventTypes.QuestionRequested" /> stream
-    ///     event. Shaped exactly like <see cref="ApprovalRequestedEvent" /> — the tool-call id rides
-    ///     <see cref="ChatStreamEvent.ToolCallId" /> so the client attaches the question card to the matching tool-call
-    ///     card, and the request id rides <see cref="ChatStreamEvent.QuestionRequestId" /> for the resolve round-trip —
-    ///     with the questions themselves serialized into <see cref="ChatStreamEvent.Questions" />, because a client
-    ///     cannot render an answerable prompt from a correlation id alone.
-    ///     <para>
-    ///         Deliberately NOT accumulated into the persisted <c>parts[]</c>, for the same reason the approval event is
-    ///         not: the prompt is transient live state that the resolve endpoint clears, and a reloaded terminal turn
-    ///         shows the tool result (the operator's answer, or the not-answered sentinel) rather than a lingering form.
-    ///         A still-PENDING question survives a reconnect through <c>InvocationState.PendingQuestion</c> instead —
-    ///         see <see cref="InvocationResumeRegistry" />.
-    ///     </para>
+    ///     Maps a pending <c>ask_user</c> question to a <see cref="ChatStreamEventTypes.QuestionRequested" /> event.
     /// </summary>
+    /// <remarks>
+    ///     Shaped exactly like <see cref="ApprovalRequestedEvent" />, with the questions themselves serialized into
+    ///     <see cref="ChatStreamEvent.Questions" />, because a client cannot render an answerable prompt from a
+    ///     correlation id alone. It is NOT accumulated into the persisted <c>parts[]</c> for the same reason: a
+    ///     reloaded terminal turn shows the tool result rather than a lingering form. A still-PENDING question
+    ///     survives a reconnect through <c>InvocationState.PendingQuestion</c> instead.
+    /// </remarks>
     public static ChatStreamEvent QuestionRequestedEvent(Guid conversationId,
         Guid messageId,
         Guid requestId,

@@ -12,16 +12,16 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Default <see cref="IConversationSummarizer" />: runs a NODE-LOCAL model (resolved per-model via
-///     <see cref="ILocalModelProviderResolver" />, never the shared cloud-capable <see cref="IChatClient" /> singleton)
-///     at temperature 0 to fold an older conversation span into a compact synopsis. Conversation content reaches the
-///     model on-node only — it never crosses the node boundary. A span larger than
-///     <see cref="ConversationCompactionOptions.MaxInputCharsPerSummarizationCall" /> is folded in multiple passes
-///     (running summary + next batch) so no single provider request exceeds the model's context window — the
-///     oversized-conversation case this feature most needs to handle. Not unit-tested against a live model; tests
-///     substitute a fake <see cref="IConversationSummarizer" /> (mirroring the memory-extraction agent seam, so CI needs
-///     no runtime).
+///     Default <see cref="IConversationSummarizer" />, running a NODE-LOCAL model at temperature 0 to fold an older
+///     conversation span into a compact synopsis.
 /// </summary>
+/// <remarks>
+///     The model is resolved per-model through <see cref="ILocalModelProviderResolver" />, never the shared
+///     cloud-capable singleton, so conversation content never crosses the node boundary. A span larger than
+///     <see cref="ConversationCompactionOptions.MaxInputCharsPerSummarizationCall" /> folds in multiple passes, a
+///     running summary plus the next batch, so no request exceeds the model's window. Tests substitute a fake
+///     summarizer, mirroring the memory-extraction seam, so CI needs no runtime.
+/// </remarks>
 internal sealed class ConversationSummarizer : IConversationSummarizer
 {
     private readonly ConversationCompactionOptions _options;
@@ -30,10 +30,8 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
     // a drift between them silently invalidates every budget decision.
     private readonly string _systemPrompt;
 
-    // The synopsis ceiling is rendered at HALF the configured cap, never hard-coded. A ceiling close to the cap is
-    // what the first live round proved wrong: the running summary reached the cap within a few folds and the rune-safe
-    // clamp in FoldAsync then cut the tail off EVERY later fold, which is the exact fidelity loss this prompt exists
-    // to remove. Half leaves the model room to keep merging instead of hitting the clamp.
+    // The synopsis ceiling renders at HALF the configured cap, never hard-coded: a ceiling near the cap lets the
+    // running summary reach it within a few folds, after which the rune-safe clamp cuts the tail off every later one.
     private const string SystemPromptTemplate = """
                                                 You compress an ongoing chat conversation into a single compact synopsis so the assistant can keep going
                                                 after the older turns are dropped from its context window.
@@ -61,13 +59,8 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
-        // Budget accounting is in characters and RequestFitsBudget measures the SERIALIZED form. The default encoder
-        // escapes every non-ASCII rune to \uXXXX, so a Han character costs 6 budget characters - pinning the synopsis
-        // language would make a CJK running summary unaffordable and abort compaction. Relaxed escaping is safe here:
-        // this JSON is a node-local model request body, never rendered as HTML, never embedded in a script or an
-        // attribute, never persisted, and it stays valid JSON. It frees BMP runes only; supplementary scalars (emoji)
-        // are still written as two escapes, so the probe frame below is unchanged. Keep these options private to this
-        // class - any reuse on a rendered surface breaks that argument.
+        // Budget accounting measures the SERIALIZED form, where the default encoder charges six characters per Han
+        // rune. Relaxed escaping is safe only for a body that is never rendered, so keep these options private.
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
@@ -99,9 +92,8 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
             return null;
         }
 
-        // Route the model to the runtime that serves it (persisted map, else the configured default provider). Node-local
-        // only — never the cloud singleton. THIS resolution is the privacy invariant: conversation content only ever
-        // reaches a provider.CreateChatClient(...) client.
+        // Route the model to the runtime that serves it, node-local only and never the cloud singleton. THIS
+        // resolution IS the privacy invariant: conversation content only ever reaches a per-provider chat client.
         var provider = await _providerResolver.ResolveProviderForModelAsync(input.ModelName, cancellationToken);
         var selection = new LocalModelSelection
         {
@@ -112,13 +104,8 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         // IChatClient is IDisposable — dispose the per-run node-local client.
         using var chatClient = provider.CreateChatClient(selection).WithProviderTelemetry();
 
-        // Fold the span in batches bounded by the TOTAL model-facing character budget (system prompt + serialized
-        // user JSON, including the running summary) so no single request overruns the model's context window. An
-        // individually oversized message is split into contiguous fragments; sending it alone would still violate the
-        // bound this option promises.
-        // If ANY pass yields nothing, abort the whole summarization (return null) — a partial summary that silently
-        // omits a failed batch would let the caller advance the covered-sequence past messages that were never
-        // summarized, dropping them from every later prompt. Failing whole leaves coverage unchanged; the user retries.
+        // The span folds in batches bounded by the TOTAL model-facing budget, splitting an oversized message into
+        // fragments. A pass yielding nothing aborts everything, or the covered sequence advances past lost messages.
         var budget = Math.Max(1, _options.MaxInputCharsPerSummarizationCall);
         var running = string.IsNullOrWhiteSpace(input.PriorSummary) ? null : input.PriorSummary;
         var batch = new List<ConversationSummarizerMessage>();
@@ -195,24 +182,13 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         {
             Temperature = 0f,
 
-            // A token cap numerically equal to the CHARACTER cap below. At least one character per token holds for Latin
-            // and for CJK — where a Qwen3-class tokenizer runs about 1.3 characters per token — so on those scripts the
-            // cap sits above the character backstop and cannot bind first. It is NOT a universal property: byte-fallback
-            // BPE spends several tokens per character for any character outside its merge table (Georgian, Burmese,
-            // Devanagari, rare CJK, most emoji), and for a synopsis in such a script the token cap CAN bind before the
-            // character backstop. TruncateAtRuneBoundary below therefore stays the only guarantee on synopsis length.
-            // Deliberately LOOSE: the cap's job is to stop a reasoning model spending a 64k window on one fold, not to
-            // size the synopsis. Same Math.Max(1, ...) guard the character truncation already uses, so a pathological
-            // configured value cannot produce a non-positive cap.
+            // A deliberately LOOSE token cap whose job is to stop a reasoning model spending a whole window on one
+            // fold. It can bind first on a byte-fallback script, so TruncateAtRuneBoundary is the only length guarantee.
             MaxOutputTokens = Math.Max(1, _options.MaxSummaryChars)
         };
 
-        // Reasoning OFF for a fold: a synopsis needs no scratchpad, and an unbounded reasoning block would spend the
-        // MaxOutputTokens cap above and return no synopsis at all. Written exactly as InvocationAgentFactory.CreateAsync
-        // writes it — the Ollama `think` field AND the llama.cpp template marker together, because the two runtimes read
-        // different halves. GATED on the model's thinking capability for the two reasons that factory records: Ollama
-        // rejects `think` on a non-thinking model, and a NATIVE-reasoning template (gpt-oss harmony) has no
-        // enable_thinking kwarg and must never be sent one.
+        // Reasoning OFF for a fold, or an unbounded reasoning block spends the token cap and returns no synopsis.
+        // Written as InvocationAgentFactory writes it, both halves at once, and GATED on the thinking capability.
         if (supportsThinking)
         {
             chatOptions.AdditionalProperties = new AdditionalPropertiesDictionary

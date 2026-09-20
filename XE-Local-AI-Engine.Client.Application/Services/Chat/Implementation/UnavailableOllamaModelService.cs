@@ -10,21 +10,11 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 ///     OFF (<c>XE_OLLAMA_RUNTIME_ENABLED=false</c>).
 /// </summary>
 /// <remarks>
-///     <para>
-///         WHY this exists: <c>OllamaModelService</c> takes an <c>IOllamaApiClient</c>, whose only registration
-///         lives inside the gated <c>AddOllamaLocalModelProvider</c>. Registering the real service unconditionally
-///         therefore broke a gate-off node — a Development host failed <c>ValidateOnBuild</c> outright, and any other
-///         host threw at the first resolve of the model catalog, capacity, classification, model-fit or the three
-///         local-model endpoints.
-///     </para>
-///     <para>
-///         Behaviour mirrors a box with no Ollama daemon, which every consumer already handles: the two list probes
-///         answer empty, availability is false, and each member that cannot answer without a daemon throws
-///         <see cref="HttpRequestException" /> with no <see cref="HttpRequestException.StatusCode" /> — the exact
-///         transport failure a refused connection produces, and the one
-///         <c>GetLocalModelDetailsEndpoint</c>, <c>ModelClassificationService</c> and <c>UnloadLocalModelEndpoint</c>
-///         already map to their "Ollama not reachable" outcome.
-///     </para>
+///     It exists because <c>OllamaModelService</c> takes an <c>IOllamaApiClient</c> whose only registration lives
+///     inside the gated <c>AddOllamaLocalModelProvider</c>, so registering the real service unconditionally breaks a
+///     gate-off node. Its behaviour mirrors a box with no daemon, which every consumer already handles: list probes
+///     answer empty, availability is false, and anything needing a daemon throws <see cref="HttpRequestException" />
+///     with no <see cref="HttpRequestException.StatusCode" />, which consumers map to "Ollama not reachable".
 /// </remarks>
 internal sealed class UnavailableOllamaModelService : IOllamaModelService
 {

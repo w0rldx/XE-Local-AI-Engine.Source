@@ -4,17 +4,16 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
 /// <summary>
-///     Builds the ordered <see cref="ConversationMessageDto" /> context one turn SENDS, from the conversation as it is
-///     persisted plus the turn's own user message. Extracted verbatim from the chat send path so a second caller — an
-///     integration execution continuing a caller-managed session — replays a conversation exactly as chat does, rather
-///     than growing a second, quietly diverging assembly of the same history.
-///     <para>
-///         A static class with no interface and no DI registration, the shape <see cref="CompactionContextResolver" />
-///         already has: it is a pure function of its arguments. The regenerate path keeps its OWN builder
-///         (<c>NodeChatRegenerationService.BuildRegenerationContext</c>) because it takes a cutoff and splices
-///         compaction only below it — different semantics, not a duplicate.
-///     </para>
+///     Builds the ordered <see cref="ConversationMessageDto" /> context one turn SENDS, from the persisted
+///     conversation plus the turn's own user message.
 /// </summary>
+/// <remarks>
+///     It was extracted verbatim from the chat send path so an integration execution continuing a caller-managed
+///     session replays a conversation exactly as chat does, rather than growing a second, diverging assembly. It is a
+///     static class with no interface and no DI registration, the shape <see cref="CompactionContextResolver" />
+///     already has, because it is a pure function of its arguments. The regenerate path keeps its own builder: it
+///     takes a cutoff and splices compaction only below it, which is different semantics, not a duplicate.
+/// </remarks>
 internal static class ConversationContextBuilder
 {
     public static IReadOnlyList<ConversationMessageDto> Build(NodeChatConversationDto conversation,
@@ -26,23 +25,13 @@ internal static class ConversationContextBuilder
         bool includeToolHistory = false,
         int toolResultExcerptChars = ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars)
     {
-        // Collapse variant siblings to the selected path FIRST (one variant per group, newest by default), then
-        // apply the existing content/status filters. Without this every regenerated sibling would be sent as
-        // context; the resolver keeps only the chosen branch.
-        // Every ordering/filtering below runs in ANCHOR space (the group's earliest member sequence), never on the
-        // chosen sibling's own sequence: regenerating an EARLY turn after later turns exist mints a sibling whose raw
-        // sequence lands past them, which would otherwise splice that answer in at the tail and break alternation.
-        // See SelectedPathResolver.CreateAnchorResolver. With no variants anchor == raw sequence, so a persisted
-        // CompactionSummaryCoversToSequence written before this change stays valid.
+        // Variant siblings collapse to the selected path FIRST, or every regenerated sibling would be sent. Everything
+        // below runs in ANCHOR space, never a sibling's own sequence, which would break user/assistant alternation.
         var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
 
-        // The synthetic context messages (attachment inlining, then knowledge-base grounding, then the compaction
-        // synopsis) apply to plain chat only and are prepended so the model reads their content before the recent
-        // conversation history. They take the first slots and the history shifts down by their count. Attachments precede
-        // knowledge so uploaded files (explicitly attached this conversation) read ahead of the retrieved knowledge
-        // supplement; the compaction synopsis comes last of the three so the condensed older history sits immediately
-        // before the recent verbatim turns.
+        // The synthetic context messages are plain-chat only and take the first slots, so the history shifts down by
+        // their count: attachments, then knowledge, then the synopsis, which sits nearest the verbatim turns.
         var leadingContext = new List<ConversationMessageDto>(capacity: 4);
         if (attachmentContext is not null)
         {
@@ -70,15 +59,12 @@ internal static class ConversationContextBuilder
             });
         }
 
-        // The ids of turns kept below the compaction cutoff ONLY for their tool exchanges. Such a turn contributes its
-        // actions and nothing else: the synopsis already carries whatever prose it had, so replaying the text as well
-        // would say the same thing twice. Null while nothing is compacted, which is the ordinary case.
+        // The ids of turns kept below the compaction cutoff ONLY for their tool exchanges: such a turn contributes its
+        // actions and nothing else, since the synopsis already carries its prose. Null while nothing is compacted.
         HashSet<Guid>? exchangeOnlySurvivors = null;
 
-        // Non-destructive compaction: when a synopsis covers messages up to a sequence, send it in their place and drop
-        // those older messages from the verbatim history. The originals remain persisted — this only shapes what is sent,
-        // and the newest turns beyond the covered sequence are always kept verbatim. The synopsis message itself is
-        // minted by the shared CompactionContextResolver so the regenerate path splices an identical one.
+        // Non-destructive compaction: a synopsis is sent in place of the messages it covers, which only shapes what is
+        // SENT. It is minted by the shared CompactionContextResolver so the regenerate path splices an identical one.
         if (CompactionContextResolver.Resolve(conversation, leadingContext.Count) is { } compaction)
         {
             leadingContext.Add(compaction.Summary);
@@ -123,28 +109,28 @@ internal static class ConversationContextBuilder
     }
 
     /// <summary>
-    ///     The unchanged send filter: a completed, content-bearing turn. Kept as its own predicate so the tool-history
-    ///     branch reads as an ADDITION to it rather than a rewrite of it — with the flag off the two together are the
-    ///     original expression exactly.
+    ///     The send filter: a completed, content-bearing turn. It is its own predicate so the tool-history branch
+    ///     reads as an ADDITION rather than a rewrite, and with that flag off the two are the original expression.
     /// </summary>
     private static bool IsSendable(NodeChatPersistedMessageDto message) =>
         !string.IsNullOrWhiteSpace(message.Content)
         && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal);
 
     /// <summary>
-    ///     Whether a turn at or below the compaction cutoff outlives it anyway. The synopsis is PROSE — it summarizes
-    ///     text and never records the actions a turn took — so ANY turn that completed a tool call survives the fold for
-    ///     its exchanges, whatever its status and whether or not the summarizer read its text. A survivor that WAS
-    ///     sendable survives for its exchanges alone: <see cref="Build" /> blanks its content and reasoning, because the
-    ///     synopsis already carries them and re-sending them verbatim would say the same thing twice.
+    ///     Whether a turn at or below the compaction cutoff outlives it anyway.
     /// </summary>
+    /// <remarks>
+    ///     The synopsis is PROSE: it summarizes text and never records the actions a turn took, so ANY turn that
+    ///     completed a tool call survives the fold for its exchanges, whatever its status. A survivor that WAS
+    ///     sendable survives for its exchanges alone — <see cref="Build" /> blanks its content and reasoning, which
+    ///     the synopsis already carries.
+    /// </remarks>
     internal static bool SurvivesCompactionForToolHistory(NodeChatPersistedMessageDto message, bool includeToolHistory) =>
         includeToolHistory && HasCompletedToolPart(message);
 
     /// <summary>
-    ///     Whether an ASSISTANT turn carries at least one completed tool part. Such a turn is kept even when it is
-    ///     <c>Failed</c>/<c>Cancelled</c> or its text is blank: a run that called a tool and then died left a real side
-    ///     effect, and hiding it is exactly the hole replaying tool history exists to close.
+    ///     Whether an ASSISTANT turn carries at least one completed tool part, which keeps it even when it failed or
+    ///     its text is blank: a run that called a tool and then died left a real side effect.
     /// </summary>
     private static bool HasCompletedToolPart(NodeChatPersistedMessageDto message) =>
         string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
@@ -152,9 +138,8 @@ internal static class ConversationContextBuilder
         && parts.Any(IsCompletedToolPart);
 
     /// <summary>
-    ///     The exchange list <see cref="Build" /> would attach to this persisted turn with tool history on, or null when
-    ///     it carries none. Internal so the step bound's projection measures exactly what the send path will carry
-    ///     rather than a second, quietly diverging idea of it.
+    ///     The exchange list <see cref="Build" /> would attach to this turn with tool history on, or null when it
+    ///     carries none. Internal, so the step bound measures exactly what the send path will carry.
     /// </summary>
     internal static IReadOnlyList<ConversationToolExchange>? ProjectSendableToolExchanges(NodeChatPersistedMessageDto message, int toolResultExcerptChars) =>
         string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
@@ -162,12 +147,14 @@ internal static class ConversationContextBuilder
             : null;
 
     /// <summary>
-    ///     Projects an assistant turn's persisted tool parts into the replayable exchanges, ordered by the part sequence
-    ///     the accumulator stamped. A requested-but-never-completed part is skipped: an orphan call with no result is
-    ///     worse than no call at all. Each result is capped here, at projection time, so a single huge historical result
-    ///     cannot ride every later continuation unbounded — with the same marker the context budgeter uses, so one
-    ///     result truncated twice does not read as two different results.
+    ///     Projects an assistant turn's persisted tool parts into replayable exchanges, ordered by the stamped part
+    ///     sequence.
     /// </summary>
+    /// <remarks>
+    ///     A requested-but-never-completed part is skipped, since an orphan call with no result is worse than no call
+    ///     at all. Each result is capped at projection time so one huge historical result cannot ride every later
+    ///     continuation, with the same marker the context budgeter uses, so a twice-truncated result still reads as one.
+    /// </remarks>
     private static IReadOnlyList<ConversationToolExchange>? ProjectToolExchanges(NodeChatPersistedMessageDto message, int toolResultExcerptChars)
     {
         if (message.Parts is not { Count: > 0 } parts)

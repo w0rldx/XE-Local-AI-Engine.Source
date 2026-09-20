@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Shared conversation-title derivation. The platform path synthesizes a title from the first user
-///     turn in the runtime package's conversation context; this keeps that rule identical to the local
-///     last-message preview truncation (see <c>NodeChatPersistenceService.Preview</c>): trim and clamp the first
-///     non-empty user message to 120 chars, NULL when none (the client falls back to "Untitled conversation").
+///     Shared conversation-title derivation: trim and clamp the first non-empty user message to 120 characters, or
+///     NULL when there is none, and the client then shows "Untitled conversation".
 /// </summary>
+/// <remarks>
+///     The platform path synthesizes its title from the first user turn in the runtime package's context, and this
+///     keeps that rule identical to the local last-message preview truncation.
+/// </remarks>
 public static class NodeChatTitle
 {
     private const int MaxLength = 120;

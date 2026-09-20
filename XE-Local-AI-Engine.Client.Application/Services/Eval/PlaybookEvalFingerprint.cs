@@ -5,18 +5,16 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Computes a stable fingerprint over every behaviour-affecting input of a playbook eval run, so a recorded pass can
-///     only authorize promotion while those inputs are unchanged. The action's own <c>Version</c> (checked separately by
-///     the promote gate) covers edits to the action itself; this fingerprint extends staleness detection to the
-///     SURROUNDING context an eval also depends on — the agent's base instructions, the sibling enabled actions, the
-///     golden set, and the eval model (both its configured NAME and its resolved weight IDENTITY) — so a promote is
-///     blocked when any of them changed after the eval ran, even though the action's version did not. Folding the model
-///     identity alongside the name closes the same-name-swap trap: a model updated under the SAME name (an Ollama /
-///     llama.cpp weight swap) leaves the name unchanged but changes the identity token, so the fingerprint no longer
-///     matches and a re-eval is forced before the recorded pass can be trusted against the new weights. It hashes
-///     ids/versions/timestamps (and a hash of the base instructions), never raw sensitive content, so it is safe to
-///     persist alongside the plaintext eval-result JSON.
+///     Computes a stable fingerprint over every behaviour-affecting input of a playbook eval run, so a recorded pass
+///     authorizes promotion only while those inputs are unchanged.
 /// </summary>
+/// <remarks>
+///     The action's own <c>Version</c> covers edits to the action; this extends staleness detection to the
+///     SURROUNDING context — base instructions, sibling enabled actions, golden set, and the eval model's configured
+///     NAME and resolved weight IDENTITY. Folding the identity closes the same-name-swap trap: a model re-pulled
+///     under the SAME name moves the token, forcing a re-eval. It hashes only ids, versions, timestamps and an
+///     instructions hash, never raw content, so it is safe beside the plaintext eval-result JSON.
+/// </remarks>
 public static class PlaybookEvalFingerprint
 {
     /// <summary>
@@ -26,18 +24,17 @@ public static class PlaybookEvalFingerprint
     public const string EvaluatorVersion = "v1";
 
     /// <summary>
-    ///     Computes the fingerprint. <paramref name="enabledGoldenCases" /> is the FULL enabled golden set (before any
-    ///     per-run <c>MaxGoldenCases</c> cap), so raising the cap does not move the fingerprint but adding/removing/editing
-    ///     a golden case does. Inputs are ordered deterministically before hashing.
+    ///     Computes the fingerprint, over deterministically ordered inputs.
     /// </summary>
-    /// <param name="modelName">The configured eval model NAME. Kept alongside the identity so a re-point to a different name still moves the fingerprint.</param>
+    /// <param name="enabledGoldenCases">The FULL enabled golden set, before the per-run cap.</param>
+    /// <param name="modelName">The configured eval model NAME, so a re-point to another name moves the value.</param>
     /// <param name="modelIdentity">
-    ///     The resolved weight IDENTITY token for the eval model (from <c>IEvalModelIdentityResolver</c>): a content
-    ///     hash / revision+size+download-time for a llama.cpp GGUF, an Ollama content digest, or the explicit
-    ///     <c>"unverified"</c> sentinel when no identity source could be resolved. A same-name weight swap changes this
-    ///     token (so the fingerprint no longer matches), and an unverifiable run yields the sentinel — distinct from any
-    ///     verified token — so it can never collide with a verified run of the same name.
+    ///     The resolved weight IDENTITY token, or its explicit <c>"unverified"</c> sentinel.
     /// </param>
+    /// <remarks>
+    ///     Raising the per-run cap therefore does not move the fingerprint but editing the golden set does. The
+    ///     sentinel shares no prefix with a verified token, so an unverifiable run never collides with a verified one.
+    /// </remarks>
     public static string Compute(Guid suggestedActionId,
         int suggestedActionVersion,
         string agentInstructions,

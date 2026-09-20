@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Drafting;
 
 /// <summary>
-///     Drafts agent-definition and skill content from an operator description using a NODE-LOCAL model only. The service
-///     PROPOSES — it persists nothing and decides nothing: the returned draft populates the operator's form and only the
-///     existing agent/skill CRUD endpoints write it. Implementations run fail-closed (an ineligible model never reaches a
-///     provider) and never contend with a live invocation (see the draft admission gate).
+///     Drafts agent-definition and skill content from an operator description using a NODE-LOCAL model only.
 /// </summary>
+/// <remarks>
+///     The service PROPOSES: it persists and decides nothing, the returned draft populates the operator's form, and
+///     only the existing CRUD endpoints write it. Implementations run fail-closed, so an ineligible model never
+///     reaches a provider, and never contend with a live invocation.
+/// </remarks>
 public interface IConfigDraftService
 {
     /// <summary>Drafts an agent definition (name / description / instructions) from <paramref name="request" />.</summary>
@@ -43,11 +45,13 @@ public sealed class ConfigDraftRequest
 }
 
 /// <summary>
-///     A normalized draft. Every field has already been trimmed, clamped to its entity cap, and — for skills — re-validated
-///     against the MAF name rules; nothing here is raw model output. <see cref="GeneratedAtUtc" /> and
-///     <see cref="ContentHash" /> are stamped server-side and travel back with the save so the save path can compute
-///     <c>wasEdited</c> (see <see cref="DraftContentHash" /> for the canonical form both sides must agree on).
+///     A normalized draft: every field is already trimmed, clamped to its entity cap and, for a skill, re-validated
+///     against the MAF name rules, so nothing here is raw model output.
 /// </summary>
+/// <remarks>
+///     <see cref="GeneratedAtUtc" /> and <see cref="ContentHash" /> are stamped server-side and travel back with the
+///     save so it can compute <c>wasEdited</c>; <see cref="DraftContentHash" /> holds the canonical form.
+/// </remarks>
 public sealed class ConfigDraft
 {
     public required string Name { get; init; }

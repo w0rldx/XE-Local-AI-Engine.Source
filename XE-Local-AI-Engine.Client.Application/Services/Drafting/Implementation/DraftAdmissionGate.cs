@@ -5,18 +5,14 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
 /// <summary>
-///     Non-queueing admission gate for AI-assisted drafting. A draft is a foreground, operator-initiated generation on
-///     the same single local runtime an invocation uses, so it must refuse rather than wait: one draft at a time
-///     (<see cref="SemaphoreSlim" /> with a zero-timeout wait), and none at all while an invocation is in flight
-///     (a non-terminal <see cref="IWorkerEventDispatcher.CurrentInvocation" /> or <see cref="IInvocationRunner.ActiveInvocationCount" />
-///     — both are consulted because they terminalize at slightly different points). A refusal surfaces as a 409, never a
-///     queued request. Singleton — the slot is process-wide.
+///     Non-queueing admission gate for AI-assisted drafting: one draft at a time, and none at all while an
+///     invocation is in flight, refused as a 409 rather than queued.
 /// </summary>
 /// <remarks>
-///     ponytail: best-effort check-then-run. An invocation that starts in the milliseconds between the busy check and the
-///     model call still overlaps this draft, and background memory extraction bypasses the gate entirely (locked decision
-///     7). Both overlaps are short and llama-server queues them; a real fix is a cross-path admission service, which is
-///     its own epic.
+///     A draft is a foreground generation on the same single local runtime an invocation uses, so it refuses rather
+///     than waits, and the slot is process-wide. ponytail: best-effort check-then-run — an invocation starting
+///     between the check and the call still overlaps, as does background memory extraction, which bypasses the gate;
+///     llama-server queues both, and the real fix is a cross-path admission service.
 /// </remarks>
 internal sealed class DraftAdmissionGate : IDisposable
 {
@@ -35,6 +31,11 @@ internal sealed class DraftAdmissionGate : IDisposable
     ///     drafts cannot both observe an idle node, then check the invocation signals and hand the slot straight back
     ///     when the node is busy.
     /// </summary>
+    /// <remarks>
+    ///     Both <see cref="IWorkerEventDispatcher.CurrentInvocation" /> and
+    ///     <see cref="IInvocationRunner.ActiveInvocationCount" /> are consulted, because they terminalize at slightly
+    ///     different points.
+    /// </remarks>
     public bool TryAcquire([NotNullWhen(true)] out IDisposable? lease)
     {
         lease = null;
@@ -45,10 +46,8 @@ internal sealed class DraftAdmissionGate : IDisposable
             return false;
         }
 
-        // CurrentInvocation is the dispatcher's LAST invocation, not only a live one — it keeps the completed state
-        // around for the status surface (live-verified: it still carries Status=Completed minutes after a chat turn
-        // ends). Only a non-terminal status means the node is actually busy; treating any non-null state as busy
-        // would leave drafting refusing 409 forever after the first chat turn of the process lifetime.
+        // CurrentInvocation is the dispatcher's LAST invocation, not only a live one, since it keeps the completed
+        // state for the status surface. Only a non-terminal status means busy, or drafting 409s forever after turn one.
         if (_workerEventDispatcher.CurrentInvocation is { Status: InvocationStatus.Pending or InvocationStatus.Assigned or InvocationStatus.Running }
             || _invocationRunner.ActiveInvocationCount > 0)
         {

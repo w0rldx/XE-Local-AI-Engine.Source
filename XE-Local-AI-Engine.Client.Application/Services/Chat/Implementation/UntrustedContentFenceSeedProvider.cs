@@ -5,14 +5,15 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Default <see cref="IUntrustedContentFenceSeedProvider" />. Derives the fence seed with HKDF-SHA256 from the node
-///     key (the same key-holder infrastructure the encrypted stores use) — never the RAW key, and never the public
-///     conversation id alone. The node key is the HKDF input keying material, the conversation id is the salt (so the
-///     seed is stable per conversation and distinct across conversations), and a constant purpose label is the HKDF
-///     <c>info</c> (domain-separating this use from every other derivation of the same key). The 32-byte output is
-///     hex-encoded so it drops straight into the string-seed framing API. A client that knows only the conversation id
-///     cannot reproduce the seed without the node key, so it cannot forge the fence's closing marker.
+///     Default <see cref="IUntrustedContentFenceSeedProvider" />, deriving the fence seed with HKDF-SHA256 from the
+///     node key — never the RAW key, and never the public conversation id alone.
 /// </summary>
+/// <remarks>
+///     The node key is the input keying material, the conversation id is the salt, so the seed is stable per
+///     conversation and distinct across them, and a constant purpose label is the <c>info</c>, domain-separating this
+///     use from every other derivation of the same key. The 32-byte output is hex-encoded for the string-seed framing
+///     API. A client that knows only the conversation id cannot reproduce it, so it cannot forge a closing marker.
+/// </remarks>
 public sealed class UntrustedContentFenceSeedProvider : IUntrustedContentFenceSeedProvider
 {
     private const int SeedByteLength = 32;

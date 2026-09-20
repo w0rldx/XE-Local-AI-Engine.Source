@@ -3,10 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Models;
 
 /// <summary>
-///     Regenerates an assistant turn as a SIBLING VARIANT, driving the run through the SAME shared
-///     runner/pump as a normal local turn. Symmetric with <see cref="INodeChatStreamService" />: one call mints the
-///     linked variant placeholder (reusing <see cref="INodeChatPersistenceService.CreateMessageVariantAsync" />),
-///     then drives + streams it — assistant-queued/streaming/delta/completed — over the local hub.
+///     Regenerates an assistant turn as a SIBLING VARIANT, driving the run through the same shared runner and pump as
+///     a normal local turn: one call mints the linked variant placeholder, then drives and streams it.
 /// </summary>
 /// <remarks>
 ///     The endpoint/dispatcher stays thin: this service owns only the orchestration (build context up to the parent
@@ -23,9 +21,8 @@ public interface INodeChatRegenerationService
     ///     conversation and <see cref="NodeChatMessageNotFoundException" /> for an unknown original message.
     /// </summary>
     /// <param name="samplingOptions">
-    ///     Developer-gated per-turn sampling overrides, the same ones the send path carries on
-    ///     <c>NodeChatStreamRequest.SamplingOptions</c>. Null — the default — leaves the runtime package byte-identical
-    ///     to a regenerate built without overrides.
+    ///     Developer-gated per-turn sampling overrides, the same the send path carries; null leaves the package
+    ///     byte-identical.
     /// </param>
     IAsyncEnumerable<ChatStreamEvent> RegenerateAsync(Guid conversationId,
         Guid originalMessageId,
@@ -38,9 +35,8 @@ public interface INodeChatRegenerationService
 }
 
 /// <summary>
-///     Thrown when a chat operation names a conversation that does not exist. Caller-triggerable (stale UI state, a
-///     conversation deleted on another device), not an internal invariant, so <c>LocalChatHub</c> translates it into
-///     a <c>HubException</c> whose sentence the browser can show.
+///     Thrown when a chat operation names a conversation that does not exist. It is caller-triggerable, not an
+///     internal invariant, so <c>LocalChatHub</c> turns it into a <c>HubException</c> the browser can show.
 /// </summary>
 public sealed class NodeChatConversationNotFoundException : InvalidOperationException
 {

@@ -1,14 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     A small, allocation-light async reader-writer lock used by <see cref="NodeChatPersistenceWriter" /> to model the
-///     per-conversation lock hierarchy. Multiple readers run concurrently; a writer runs alone. It is
-///     <b>writer-preferring</b>: once a writer is waiting, new readers queue behind it, so the frequent writer op
-///     (message-sequence allocation on every turn) cannot be starved by a burst of reads. Waits honor cancellation.
-///
-///     <para>Not reentrant — callers must not re-enter while holding either side. The node chat persistence paths never
-///     nest a same-conversation acquire, so reentrancy cannot arise.</para>
+///     A small, allocation-light async reader-writer lock <see cref="NodeChatPersistenceWriter" /> models the
+///     per-conversation lock hierarchy with: readers run concurrently, a writer runs alone.
 /// </summary>
+/// <remarks>
+///     It is <b>writer-preferring</b> — once a writer waits, new readers queue behind it — so the frequent writer
+///     operation, message-sequence allocation on every turn, cannot be starved by a burst of reads. Waits honor
+///     cancellation. It is NOT reentrant, and the node chat persistence paths never nest a same-conversation acquire.
+/// </remarks>
 internal sealed class AsyncReaderWriterLock
 {
     private readonly LinkedList<Waiter> _waitingReaders = new();

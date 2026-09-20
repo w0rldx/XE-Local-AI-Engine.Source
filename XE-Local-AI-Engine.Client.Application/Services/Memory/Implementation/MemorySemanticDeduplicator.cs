@@ -9,32 +9,27 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
-///     Default <see cref="IMemorySemanticDeduplicator" />. Embeds lexically-surviving candidates with the node-local
-///     embedding model (resolved on the configured provider via the shared <see cref="IEmbeddingModelResolver" />, the
-///     same seam the knowledge-base and playbook-retrieval lanes use) and drops any candidate whose cosine similarity to
-///     an existing live memory of the same scope reaches the configured threshold.
-///     Privacy/robustness invariants (mirroring <c>EmbeddingPlaybookRetrievalRanker</c> and the KB staleness guard):
-///     the embedding provider is node-local only (never a shared/cloud client); existing-memory vectors live in a
-///     RAM-only, bounded cache keyed by (id, version, resolved-model) and are never persisted or logged; the candidate is
-///     re-embedded every run; and semantic dedup is skipped entirely unless the resolution
-///     <see cref="EmbeddingModelResolution.IsConfident" /> — so a transient provider outage degrades to lexical-only
-///     rather than mass-deduping (silently swallowing) legitimate new candidates. Registered as a singleton so the cache
-///     is long-lived.
+///     Default <see cref="IMemorySemanticDeduplicator" />: it embeds lexically-surviving candidates with the
+///     node-local model and drops any whose cosine similarity to a live memory of the same scope hits the threshold.
 /// </summary>
+/// <remarks>
+///     The model resolves on the configured provider through the shared <see cref="IEmbeddingModelResolver" />, the
+///     seam the knowledge-base and retrieval lanes use, and is node-local only. Existing-memory vectors live in a
+///     RAM-only bounded cache, never persisted or logged, while a candidate is re-embedded every run. Dedup is
+///     skipped entirely unless <see cref="EmbeddingModelResolution.IsConfident" />, so a transient outage degrades to
+///     lexical-only rather than silently swallowing legitimate candidates. It is a singleton so the cache is long-lived.
+/// </remarks>
 internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
 {
-    // Byte ceiling on the existing-memory vector cache, alongside the configured entry bound. 4 MiB holds well over the
-    // default 512 entries at 768 dimensions and caps a 4096-dimension model at ~256 — the entry bound alone would let
-    // the same configuration retain 8 MB. Mirrors the playbook ranker's ceiling.
+    // Byte ceiling on the vector cache, alongside the configured entry bound: 4 MiB holds well over the default entry
+    // count at 768 dimensions and caps a 4096-dimension model, which the entry bound alone would let reach 8 MB.
     private const long EmbeddingCacheMaxBytes = 4L * 1024 * 1024;
 
     // Flat allowance per entry for the key struct plus dictionary node — the budget bounds RAM, it does not measure it.
     private const long EntryOverheadBytes = 64;
 
-    // RAM-only existing-memory embedding cache keyed by (memory id, version, embedding model). Version invalidates an
-    // edited memory; the model name guards against cosine'ing a stale-dimension vector against a new model's candidate.
-    // Eviction is coldest-first within both bounds, and concurrent extraction runs missing on the same memory share one
-    // embedding round-trip rather than each paying the single-slot embedding server.
+    // RAM-only cache keyed by memory id, version and embedding model: the version invalidates an edited memory and the
+    // model name stops a stale-dimension vector being cosined against a new model's candidate. Eviction is coldest-first.
     private readonly ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache;
     private readonly IEmbeddingModelResolver _embeddingModelResolver;
     private readonly ILogger<MemorySemanticDeduplicator> _logger;
@@ -71,9 +66,8 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         ArgumentNullException.ThrowIfNull(existing);
         ArgumentNullException.ThrowIfNull(candidates);
 
-        // Disabled gate: the master switch off, or no embedding provider configured => semantic dedup is a clean no-op
-        // and the caller keeps its lexical-only result. Mirrors the ranker's "lexical stays default" disabled gate: no
-        // provider is resolved and no embedding client is constructed.
+        // Disabled gate: with the master switch off or no provider configured, semantic dedup is a clean no-op and the
+        // caller keeps its lexical-only result; no provider is resolved and no embedding client is constructed.
         if (!_options.SemanticDedupEnabled || string.IsNullOrWhiteSpace(_options.SemanticDedupEmbeddingProviderName))
         {
             return MemorySemanticDedupResult.NotApplied;
@@ -95,9 +89,8 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {
-            // Any node-local embedding hiccup (model not pulled, Ollama/llama-server down, transport error, or an
-            // unregistered provider name -> InvalidOperationException from the resolver) degrades to lexical-only
-            // (NOT-applied) so the run never mass-dedups legitimate new candidates. No candidate/memory text is logged.
+            // Any node-local embedding hiccup — an unpulled model, a down runtime, a transport error, an unregistered
+            // provider — degrades to NOT-applied, so the run never mass-dedups. No candidate or memory text is logged.
             _logger.LogWarning(exception, "Semantic memory dedup failed; falling back to lexical-only dedup for this run.");
             return MemorySemanticDedupResult.NotApplied;
         }
@@ -108,8 +101,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         CancellationToken cancellationToken)
     {
         // Resolve the provider, then the ACTUAL installed embedding model on it. IsConfident is the outage guard: a
-        // non-confident resolution (provider unreachable, or nothing installed matched) skips semantic dedup entirely so
-        // a transient outage can never silently swallow legitimate new candidates — exactly the KB corpus-reset guard.
+        // non-confident resolution skips semantic dedup, so no transient outage silently swallows a candidate.
         var providerName = _options.SemanticDedupEmbeddingProviderName;
         var provider = _providerResolver.ResolveProvider(providerName);
         var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
@@ -135,9 +127,8 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
             textByKey[keys[index]] = existing[index].Behavior;
         }
 
-        // The cache resolves the existing memories it can (and waits on a concurrent run already embedding the same
-        // memory); the remaining misses plus every candidate go out as ONE batch, so a run still costs a single
-        // embedding round-trip. Candidates are always re-embedded (they have no stable identity yet) and never cached.
+        // The cache resolves what it can and waits on a concurrent run embedding the same memory; the misses plus
+        // every candidate go out as ONE batch. Candidates have no stable identity, so they are never cached.
         var candidateVectors = new ReadOnlyMemory<float>[candidates.Count];
         var existingVectors = await _cache.GetOrAddManyAsync(keys, EmbedMissingExistingAsync, cancellationToken);
 
@@ -167,9 +158,8 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
 
             var generated = await generator.GenerateAsync(batchTexts, options: null, token);
 
-            // A well-behaved generator returns exactly one embedding per input, in order. A short/partial response would
-            // make the positional indexing throw; signal a degrade instead so the run never drops candidates on a
-            // misbehaving embedder.
+            // A well-behaved generator returns exactly one embedding per input, in order; a partial response would
+            // make the positional indexing throw, so signal a degrade and never drop candidates on a bad embedder.
             if (generated.Count != batchTexts.Count)
             {
                 return null;
@@ -198,9 +188,8 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         var threshold = _options.SemanticDedupSimilarityThreshold;
         var duplicateIndexes = new HashSet<int>();
 
-        // Indexes of candidates accepted so far (not flagged duplicate). Comparing a later candidate against earlier
-        // accepted candidates collapses two paraphrases proposed in the same run; a flagged duplicate is never a
-        // comparison target (it will not be persisted).
+        // Indexes of the candidates accepted so far: comparing a later one against them collapses two paraphrases
+        // proposed in the same run, and a flagged duplicate is never a comparison target since it is not persisted.
         var acceptedCandidateIndexes = new List<int>(candidates.Count);
 
         for (var candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)

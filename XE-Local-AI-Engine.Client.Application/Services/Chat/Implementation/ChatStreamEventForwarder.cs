@@ -4,24 +4,16 @@ using System.Threading.Channels;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-///     Fans the worker dispatcher's per-invocation events into ONE turn's stream: invocation-state snapshots go to the
-///     pump's channel, tool-call / turn-notice / approval / question payloads go straight to the SSE sink. Every handler
-///     filters on the turn's own <c>requestId</c>, so a concurrent turn's events are never mixed in.
-///     <para>
-///         Ordered <c>parts[]</c> accumulation happens HERE for the tool-call and turn-notice payloads (they are part of
-///         the reload render source), and deliberately NOT for approvals or questions: those are transient live state
-///         that the loopback resolve endpoint clears, and a reloaded terminal turn shows the executed/rejected tool
-///         result rather than a lingering prompt. A question still pending when the browser reconnects is replayed from
-///         <c>InvocationState.PendingQuestion</c> by the resume registry.
-///     </para>
-///     <para>
-///         Subscription happens in the constructor so it covers pre-run notice production (cloud attachment/knowledge
-///         withholding) and every pre-ownership exit — a staging or package-construction failure cannot leak handlers.
-///         <see cref="Dispose" /> is idempotent: the caller unsubscribes explicitly AFTER draining the run tasks (the
-///         runner may fire its Completed terminal after the SSE loop exits), and the enclosing <c>using</c> is only the
-///         safety net for the early-exit paths.
-///     </para>
+///     Fans the worker dispatcher's per-invocation events into ONE turn's stream: state snapshots to the pump's
+///     channel, tool-call, notice, approval and question payloads straight to the SSE sink.
 /// </summary>
+/// <remarks>
+///     Every handler filters on the turn's own <c>requestId</c>, so a concurrent turn's events are never mixed in.
+///     Ordered <c>parts[]</c> accumulation happens HERE for tool calls and notices, part of the reload render source,
+///     and not for approvals or questions, which the resolve endpoint clears; a question still pending on reconnect
+///     is replayed from <c>InvocationState.PendingQuestion</c>. Subscription happens in the constructor so it covers
+///     every pre-ownership exit, and <see cref="Dispose" /> is idempotent.
+/// </remarks>
 internal sealed class ChatStreamEventForwarder : IDisposable
 {
     private readonly NodeChatMessageCorrelation _correlation;

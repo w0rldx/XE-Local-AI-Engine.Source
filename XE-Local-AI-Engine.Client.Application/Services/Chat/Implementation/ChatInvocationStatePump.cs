@@ -8,24 +8,15 @@ using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
 ///     Fans the shared invocation pump's persisted results out as SSE <see cref="ChatStreamEvent" />s for a local
-///     response. Owned by both the send and regenerate paths so the flush cadence, the burst-coalescing, and
-///     the interrupted-terminal handling stay identical between them. The pump itself (<see cref="INodeChatInvocationPump" />)
-///     owns all persistence; this only translates its output into the ordered stream events, sharing the caller's
-///     <see cref="NodeChatStreamSequence" /> with the streaming-transition event so every event stays monotonically ordered.
-///     <para>
-///         EMITTING and PERSISTING run on separate cadences, tracked by separate cursors. An emitted frame is a pure
-///         delta (<see cref="ChatStreamEventMapper.DeltaEvent" />) that needs no database row, so the client can be fed
-///         at ~25 frames/s while persistence flushes only when the message has GROWN enough to be worth rewriting
-///         (<see cref="PartialFlushPolicy" />). Coupling them is what previously forced one full-message rewrite per
-///         100 ms; decoupling them is what keeps a 2 s flush window from becoming a 2 s UI stall.
-///     </para>
-///     <para>
-///         Events leave through an <see cref="IChatStreamEventSink" /> rather than a raw channel writer, so the queue
-///         is bounded and a write NEVER waits. That matters here specifically: this pump owns persistence as well as
-///         emission, so a write blocking on a lagging consumer would stall the database writes the run's real terminal
-///         depends on. The sink drops instead, and repairs the whole stream rather than the frame.
-///     </para>
+///     response, shared by the send and regenerate paths so their cadences and terminal handling stay identical.
 /// </summary>
+/// <remarks>
+///     <see cref="INodeChatInvocationPump" /> owns all persistence; this only orders its output on the caller's
+///     <see cref="NodeChatStreamSequence" />. EMITTING and PERSISTING run on separate cadences and cursors: a frame
+///     is a pure delta needing no database row, while a flush waits until the message has GROWN enough to be worth
+///     rewriting (<see cref="PartialFlushPolicy" />). Events leave through an <see cref="IChatStreamEventSink" />,
+///     whose bounded queue NEVER makes a write wait, or the run's terminal would stall behind a lagging consumer.
+/// </remarks>
 public sealed class ChatInvocationStatePump
 {
     // Error text stamped on the row when the persistence pump itself faults — distinct from a
@@ -55,9 +46,8 @@ public sealed class ChatInvocationStatePump
         NodeChatPartAccumulator parts,
         Action<InvocationState, NodeChatPumpTerminalResult>? onTerminal,
         CancellationToken cancellationToken,
-        // KB sources that grounded this turn, computed up front by the send path before generation and
-        // captured here so they land on the terminal row's metadata_json. Null/empty for turns that used no knowledge
-        // base (e.g. the regenerate path, which passes none) — which preserves any existing persisted sources.
+        // KB sources that grounded this turn, computed up front by the send path so they land on the terminal row's
+        // metadata_json. Null or empty for a turn that used no knowledge base, preserving any persisted sources.
         IReadOnlyList<NodeChatMessageSource>? sources = null)
     {
         // How much has been WRITTEN, and how much has been SENT. They advance independently — see the class remarks.
@@ -69,19 +59,16 @@ public sealed class ChatInvocationStatePump
         var lastPartialFlushTimestamp = 0L;
         var lastEmitTimestamp = 0L;
         var emitDebounceInterval = TimeSpan.FromMilliseconds(_options.EmitDebounceMs);
-        // The last runtime phase surfaced to the client, so a pre-first-token phase transition is emitted once per
-        // distinct phase (the "Loading model…" indicator). Coalescing keeps the newest snapshot per burst, so
-        // this tracks the CURRENT phase, not every intermediate one — which is exactly what the indicator needs.
+        // The last runtime phase surfaced to the client, so a pre-first-token transition is emitted once per distinct
+        // phase. Coalescing keeps the newest snapshot per burst, so this tracks the CURRENT phase, not every one.
         InvocationRuntimePhase? lastEmittedPhase = null;
         // The freshest content-bearing snapshots the cadences deferred. Retained so a graceful end-of-stream that never
         // delivers a terminal still writes (and sends) the tail rather than a stale cursor.
         InvocationState? pendingPartialState = null;
         InvocationState? pendingEmitState = null;
 
-        // Sends one snapshot's content/reasoning growth as a delta-only AssistantDelta. No I/O at all: the delta is
-        // sliced straight out of the snapshot at the emit cursor, so a frame costs the delta, not the message. Each
-        // InvocationState carries the FULL accumulated content/reasoning, so emitting only the latest snapshot after
-        // coalescing still sends everything between the cursor and that snapshot as one contiguous delta.
+        // Sends one snapshot's growth as a delta-only AssistantDelta, sliced out of the snapshot at the emit cursor
+        // with no I/O. Each state carries the FULL accumulation, so the latest snapshot alone is still contiguous.
         async Task EmitDeltaAsync(InvocationState snapshotToEmit)
         {
             var content = snapshotToEmit.StreamedContent;
@@ -101,13 +88,8 @@ public sealed class ChatInvocationStatePump
             hasEmitted = true;
 
             var deltaSequence = sequence.Next();
-            // The reasoning delta and its SSE event share this emit-time sequence. Tool parts stamp their own
-            // sequence synchronously when the tool lifecycle fires on the separate event channel, so deferring the
-            // reasoning append can push a reasoning segment behind a tool part that streamed just after it — a
-            // pre-existing reasoning<->tool interleave skew bounded by one emit window. This is display-only: the
-            // reasoning text and the tool parts are all retained; only their relative order at a tool boundary can
-            // shift within that window. The accumulator is fed from the EMIT path, not the persist path, precisely so
-            // this window stays the 40 ms emit cadence rather than the far slower flush cadence.
+            // The reasoning delta and its SSE event share this emit-time sequence while tool parts stamp their own, so
+            // order at a tool boundary can shift by one emit window — which feeding from the EMIT path keeps small.
             parts.AppendReasoning(reasoningDelta, deltaSequence);
 
             await eventSink.WriteAsync(ChatStreamEventMapper.DeltaEvent(correlation,
@@ -140,9 +122,8 @@ public sealed class ChatInvocationStatePump
         {
             await foreach (var state in stateReader.ReadAllAsync(cancellationToken))
             {
-                // Coalesce a burst: when the runner produces states faster than we persist, they queue on the
-                // channel. Drain the backlog and keep only the newest snapshot (never draining past a terminal), so
-                // a burst of per-token states collapses into a single flush without losing content.
+                // Coalesce a burst: drain the backlog and keep only the newest snapshot, never draining past a
+                // terminal, so a burst of per-token states collapses into a single flush without losing content.
                 var latest = state;
                 while (!NodeChatInvocationPump.IsTerminal(latest.Status) && stateReader.TryRead(out var queued))
                 {
@@ -151,23 +132,16 @@ public sealed class ChatInvocationStatePump
 
                 var isTerminal = NodeChatInvocationPump.IsTerminal(latest.Status);
 
-                // Surface a pre-first-token runtime-phase transition (preparing/loading/generating) as a content-free
-                // AssistantPhase event so the client renders "Loading model…" during a cold load. Emitted before the
-                // content flush and only for a non-terminal state whose phase changed; the warm wait between "loading"
-                // and "generating" is where the indicator earns its keep.
-                // The diff stays on the PHASE alone. RuntimePhaseChangedAtUtc is written only when the phase actually
-                // changes, so it can never move without the phase moving — widening this condition to include the
-                // timestamp would buy nothing and could only produce duplicate events.
+                // A pre-first-token phase transition is a content-free AssistantPhase event, emitted only for a
+                // non-terminal state whose PHASE changed; RuntimePhaseChangedAtUtc moves only when the phase does.
                 if (!isTerminal && latest.RuntimePhase is { } runtimePhase && runtimePhase != lastEmittedPhase)
                 {
                     lastEmittedPhase = runtimePhase;
                     await eventSink.WriteAsync(ChatStreamEventMapper.PhaseEvent(correlation, runtimePhase, NowUnixMilliseconds(), sequence.Next(), latest.RuntimePhaseChangedAtUtc), cancellationToken);
                 }
 
-                // Send first, on the fast cadence. The first delta emits immediately so the first token is visible
-                // without waiting a window, and a terminal emits its tail unconditionally so the client's accumulated
-                // text already equals the terminal's content by the time the terminal lands (the terminal carries the
-                // full text as a backstop, but the common path must never need it to correct anything).
+                // Send first, on the fast cadence: the first delta emits immediately, and a terminal emits its tail
+                // unconditionally so the client's text already equals the terminal's and never needs correcting.
                 if (isTerminal
                     || !hasEmitted
                     || _timeProvider.GetElapsedTime(lastEmitTimestamp) >= emitDebounceInterval)
@@ -180,10 +154,8 @@ public sealed class ChatInvocationStatePump
                     pendingEmitState = latest;
                 }
 
-                // Persist second, on the slow cadence. A flush rewrites the whole message, so it waits until the
-                // message has GROWN enough to be worth rewriting rather than running on a fixed clock — see
-                // PartialFlushPolicy. Terminal/error and the first partial still flush immediately; between flushes the
-                // snapshot is deferred so it is not lost if the stream ends without a terminal.
+                // Persist second, on the slow cadence: a flush rewrites the whole message, so it waits on GROWTH rather
+                // than a clock. A terminal and the first partial flush immediately; between flushes state is deferred.
                 if (isTerminal
                     || !hasFlushedPartial
                     || PartialFlushPolicy.ShouldFlush(persistCursor.Content.Length + persistCursor.Reasoning.Length,
@@ -207,9 +179,8 @@ public sealed class ChatInvocationStatePump
                     var terminal = await _invocationPump.TerminalizeAsync(correlation, latest, requestedModel, snapshot, sources);
                     terminalPersisted = true;
 
-                    // Post-run adaptive memory: hand the just-persisted terminal to the (background, fire-and-forget)
-                    // extraction hook before the SSE write so the run context is captured immediately. The hook never
-                    // blocks or throws into the pump (it only schedules work on its own scope).
+                    // Post-run adaptive memory: the just-persisted terminal goes to the fire-and-forget extraction hook
+                    // before the SSE write, and the hook never blocks or throws into the pump.
                     onTerminal?.Invoke(latest, terminal);
 
                     await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType,
@@ -229,8 +200,7 @@ public sealed class ChatInvocationStatePump
             if (!terminalPersisted)
             {
                 // Send, then flush, any tail the two cadences deferred, so the interrupted terminal is written from the
-                // freshest content rather than a stale cursor — and so the deferred reasoning tail still reaches
-                // parts[], which the emit path owns.
+                // freshest content and the deferred reasoning tail still reaches parts[], which the emit path owns.
                 if (pendingEmitState is not null)
                 {
                     await EmitDeltaAsync(pendingEmitState);
@@ -250,13 +220,8 @@ public sealed class ChatInvocationStatePump
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !terminalPersisted)
         {
-            // Deliberate trade-off: the cancelled message is terminalized from the last-persisted cursor, NOT from a
-            // deferred pendingPartialState, so a user cancel can drop up to one flush window of tail tokens off the
-            // cancelled turn. Re-flushing here is not an option — the cancellation token is already tripped, so
-            // FlushDeltaAsync/WriteAsync would just throw again. Accepted because a cancelled turn is discarded output
-            // anyway. The growth-triggered cadence widens this window from ~100 ms to at most
-            // PartialFlushMaxIntervalMs of output (~400 characters at 50 tok/s), which is the same trade-off at a
-            // larger but still bounded size.
+            // Deliberate trade-off: a cancelled message terminalizes from the last-persisted cursor, so a cancel drops
+            // up to one flush window of tail tokens. Re-flushing cannot work with the token already tripped.
             await TerminalizeInterruptedStreamAsync(eventSink,
                 correlation,
                 sequence.Next(),
@@ -265,13 +230,8 @@ public sealed class ChatInvocationStatePump
         }
         catch (Exception) when (!terminalPersisted)
         {
-            // A FlushDeltaAsync/TerminalizeAsync exception (a persistence fault, not a user cancel — those
-            // are handled above) would otherwise propagate while the finally only TryComplete()s the writer as a NORMAL
-            // end, leaving the row streaming until the next restart's recovery reconcile. Idempotently terminalize the
-            // row Failed and emit the Failed terminal SSE, then rethrow so the caller cancels the run and surfaces the
-            // fault. The NodeChatMessageTransitions atomic `AND status IN (...)` guard makes this Failed terminalize a
-            // no-op over any real terminal that committed concurrently, so a late fault-terminalize can never overwrite
-            // a genuine outcome.
+            // A persistence fault would otherwise propagate while the finally ends the writer NORMALLY, leaving the row
+            // streaming until the next reconcile. The atomic status guard makes this Failed terminalize a safe no-op.
             await TerminalizeFaultedStreamAsync(eventSink, correlation, requestedModel, persistCursor, parts, sequence.Next(), sources);
             throw;
         }
@@ -281,10 +241,8 @@ public sealed class ChatInvocationStatePump
         }
     }
 
-    // Terminalizes the row Failed after a persistence-pump fault from the last-persisted cursor and emits the
-    // Failed terminal SSE. Best-effort: if the terminalize itself throws (the persistence layer is likely down, which
-    // caused the original fault), it is swallowed here — the caller still rethrows the ORIGINAL fault, and the
-    // restart-recovery reconcile is the backstop for the row.
+    // Terminalizes the row Failed from the last-persisted cursor after a pump fault and emits the Failed SSE. A throw
+    // from the terminalize itself is swallowed: the caller rethrows the ORIGINAL fault and recovery backstops the row.
     private async Task TerminalizeFaultedStreamAsync(IChatStreamEventSink eventSink,
         NodeChatMessageCorrelation correlation,
         string? requestedModel,
@@ -295,9 +253,8 @@ public sealed class ChatInvocationStatePump
     {
         try
         {
-            // A synthetic Failed state carries the last-persisted content/reasoning so the terminal row keeps whatever
-            // streamed before the fault. There is no live InvocationState in this catch — tokens/duration are unknown and
-            // left null; the model attribution falls back to the requested model.
+            // A synthetic Failed state carries the last-persisted content so the row keeps whatever streamed before the
+            // fault. No live InvocationState exists here, so tokens and duration are null and the model is the request's.
             var faultedState = new InvocationState
             {
                 InvocationId = correlation.RequestId,

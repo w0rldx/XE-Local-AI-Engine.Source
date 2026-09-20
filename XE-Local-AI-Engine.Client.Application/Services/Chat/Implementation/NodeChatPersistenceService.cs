@@ -4,13 +4,15 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
-///     Facade over the node chat persistence path. Implements <see cref="INodeChatPersistenceService" /> by delegating
-///     to focused collaborators (conversation commands, read model, message commands, variant/branch, feedback), all
-///     composed from the single <see cref="NodeChatPersistenceWriter" /> so the per-conversation/per-message write-key
-///     serialization is unchanged. Message content and metadata are AES-encrypted at rest on both the raw-ADO and EF
-///     paths (versioned read-both envelope via <c>NodeChatContentProtection</c>); the collaborators exchange plaintext
-///     in memory.
+///     Facade over the node chat persistence path, delegating to focused collaborators for conversations, reads,
+///     messages, variants and feedback.
 /// </summary>
+/// <remarks>
+///     All of them are composed from the single <see cref="NodeChatPersistenceWriter" />, so the per-conversation and
+///     per-message write-key serialization is unchanged. Message content and metadata are AES-encrypted at rest on
+///     both the raw-ADO and EF paths through <c>NodeChatContentProtection</c>'s versioned read-both envelope; the
+///     collaborators exchange plaintext in memory.
+/// </remarks>
 public sealed class NodeChatPersistenceService : INodeChatPersistenceService
 {
     private readonly NodeChatConversationCommands _conversations;
@@ -19,10 +21,8 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
     private readonly NodeChatReadModel _readModel;
     private readonly NodeChatVariantBranchService _variants;
 
-    // The uploaded-file and work-session artifact blob stores are optional dependencies: the DI container injects the
-    // real singletons in production so conversation-delete also tears down the on-disk attachments and work-session
-    // artifact bytes, while existing shorter test constructions stay valid (they exercise paths that create neither, so
-    // a null store simply skips that disk cleanup).
+    // The blob stores are optional: production injects the real singletons so a conversation delete also tears down
+    // on-disk attachments and artifact bytes, while a null store simply skips that cleanup for a test construction.
     public NodeChatPersistenceService(NodeChatPersistenceWriter writer,
         IConversationUploadedFileStore? uploadedFileStore = null,
         IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore = null)

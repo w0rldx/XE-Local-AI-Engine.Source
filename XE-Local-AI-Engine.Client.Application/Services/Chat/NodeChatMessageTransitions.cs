@@ -1,22 +1,23 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     The authoritative message-status transition table. Each writer intent (cancel, partial flush, terminalize, and
-///     restart/replay recovery) declares the set of source statuses it may transition FROM. Every correlated UPDATE
-///     enforces its set atomically inside the SQL predicate, so a write from a disallowed source status is an atomic
-///     no-op rather than a read-then-write race. Terminal rows (completed / failed / interrupted) are never a legal
-///     source, with a single deliberate exception: the pump's authoritative terminalize may supersede a Cancelled row
-///     (see <see cref="TerminalizeSources" />).
+///     The authoritative message-status transition table: each writer intent declares the source statuses it may
+///     transition FROM.
 /// </summary>
+/// <remarks>
+///     Every correlated UPDATE enforces its set atomically inside the SQL predicate, so a write from a disallowed
+///     source is an atomic no-op rather than a read-then-write race. A terminal row is never a legal source, with one
+///     deliberate exception: the pump's authoritative terminalize may supersede a Cancelled row (see
+///     <see cref="TerminalizeSources" />).
+/// </remarks>
 public static class NodeChatMessageTransitions
 {
     // The non-terminal lifecycle states; identical to the cancellable set. A cancel, a partial flush, and restart
     // recovery may all fire only from these — none may mutate a row that has already reached a terminal status.
     private static IReadOnlySet<string> NonTerminal => NodeChatMessageStatusValues.Cancellable;
 
-    // The non-terminal states plus Cancelled: the source set for the pump's true-outcome terminals. Cancelled is
-    // whitelisted so an authoritative completion/failure supersedes an optimistic HTTP-cancel marker, and a cancel
-    // terminalize over an already-cancelled row is the idempotent final-content write.
+    // The non-terminal states plus Cancelled, the source set for the pump's true-outcome terminals: an authoritative
+    // completion supersedes an optimistic HTTP-cancel marker, and a cancel over one is the idempotent final write.
     private static readonly IReadOnlySet<string> NonTerminalOrCancelled = new HashSet<string>(StringComparer.Ordinal)
     {
         NodeChatMessageStatusValues.Pending,
@@ -25,9 +26,8 @@ public static class NodeChatMessageTransitions
         NodeChatMessageStatusValues.Cancelled
     };
 
-    // Streaming's legitimate predecessors: Queued on the local send/regen path (pending -> queued -> streaming) and
-    // Pending on the platform path (the worker coordinator marks streaming straight off the pending placeholder, with no
-    // queued step). Terminal rows are excluded, so a stream can never resurrect a cancelled/finished message.
+    // Streaming's legitimate predecessors: Queued on the local path and Pending on the platform path, which has no
+    // queued step. Terminal rows are excluded, so a stream can never resurrect a finished message.
     private static readonly IReadOnlySet<string> PendingOrQueued = new HashSet<string>(StringComparer.Ordinal)
     {
         NodeChatMessageStatusValues.Pending,
@@ -55,13 +55,15 @@ public static class NodeChatMessageTransitions
     public static IReadOnlySet<string> RecoverySources => NonTerminal;
 
     /// <summary>
-    ///     Source statuses the pump's authoritative terminalize may fire from when writing <paramref name="terminalStatus" />.
-    ///     Interrupted (stream loss) may only overwrite a non-terminal row, so it can never downgrade a user Cancelled. The
-    ///     true-outcome terminals (completed / failed / cancelled) additionally whitelist Cancelled as a source: the pump
-    ///     derives its status from the real run outcome and emits the single SSE terminal, so an authoritative completion is
-    ///     allowed to supersede an optimistic HTTP-cancel marker. Every terminal source other than that whitelisted
-    ///     Cancelled (i.e. completed / failed / interrupted) is rejected.
+    ///     The source statuses the pump's authoritative terminalize may fire from when writing
+    ///     <paramref name="terminalStatus" />.
     /// </summary>
+    /// <remarks>
+    ///     Interrupted may overwrite only a non-terminal row, so it can never downgrade a user Cancelled. The
+    ///     true-outcome terminals additionally whitelist Cancelled as a source, because the pump derives its status
+    ///     from the real run outcome, so an authoritative completion supersedes an optimistic cancel marker. Every
+    ///     other terminal source is rejected.
+    /// </remarks>
     public static IReadOnlySet<string> TerminalizeSources(string terminalStatus)
     {
         ArgumentNullException.ThrowIfNull(terminalStatus);

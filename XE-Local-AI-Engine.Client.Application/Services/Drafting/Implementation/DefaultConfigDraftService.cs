@@ -17,24 +17,16 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
-///     Default <see cref="IConfigDraftService" />. Clones the memory-extraction agent's shape — resolver →
-///     <c>CreateChatClient</c> → <c>GetResponseAsync&lt;T&gt;</c> → <c>TryGetResult</c> fail-soft, positional bound-free
-///     envelope records — and adds the two guards a foreground, operator-triggered generation needs:
-///     <list type="number">
-///         <item>
-///             fail-closed eligibility, evaluated BEFORE any provider work: the model must be in the installed inventory,
-///             carry a PERSISTED <see cref="ModelKind.Chat" /> classification, and be served by an allowlisted node-local
-///             runtime (llama.cpp always; Ollama only on a loopback endpoint). Unknown, unclassified, cloud and
-///             remote-Ollama models are rejected. The check is read-only — it reads
-///             <see cref="IModelClassificationStore" /> directly rather than <c>IModelClassificationService</c>, which
-///             would probe <c>/api/show</c> and write the detection cache;
-///         </item>
-///         <item>the <see cref="DraftAdmissionGate" />, so a draft never contends with or queues behind a live run.</item>
-///     </list>
-///     <para>
-///         Nothing here writes to the database, and no failure result or log line ever carries model-emitted text.
-///     </para>
+///     Default <see cref="IConfigDraftService" />, cloning the memory-extraction agent's fail-soft shape and adding
+///     the two guards a foreground, operator-triggered generation needs.
 /// </summary>
+/// <remarks>
+///     Eligibility is fail-closed and evaluated BEFORE any provider work: the model must be installed, carry a
+///     PERSISTED <see cref="ModelKind.Chat" /> classification and be served by an allowlisted node-local runtime.
+///     That check reads <see cref="IModelClassificationStore" /> directly, never the service that would probe
+///     <c>/api/show</c> and write the cache. The <see cref="DraftAdmissionGate" /> then keeps a draft from contending
+///     with a live run, and nothing here writes to the database or logs model-emitted text.
+/// </remarks>
 internal sealed class DefaultConfigDraftService : IConfigDraftService
 {
     private const int MaxAgentDescriptionLength = 2000;
@@ -150,9 +142,8 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         string eligibleProviderName,
         CancellationToken cancellationToken)
     {
-        // Drafting is a model request, so its budget is the operator's node-level "Maximum message request timeout" —
-        // the same knob that bounds a chat send/regenerate — read LIVE here so a Save applies without a node restart.
-        // An explicit Drafting:GenerationTimeout still wins as a drafting-specific ceiling.
+        // Drafting is a model request, so its budget is the operator's node-level maximum message request timeout,
+        // read LIVE so a Save applies without a restart. An explicit Drafting:GenerationTimeout still wins.
         var generationTimeout = _options.GenerationTimeout
                                 ?? TimeSpan.FromSeconds((await _nodeSettingsStore.LoadAsync(cancellationToken))
                                     .MaxMessageRequestTimeoutSeconds);
@@ -163,14 +154,12 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         ChatResponse<TEnvelope> response;
         try
         {
-            // Provider resolution runs INSIDE the timeout mapping: it takes the linked token, so a stalled
-            // provider-map read elapsing the budget must surface as the same typed failure as a stalled generation —
-            // not as an unhandled OperationCanceledException the endpoint turns into a 500.
+            // Provider resolution runs INSIDE the timeout mapping on the linked token, so a stalled map read surfaces
+            // as the same typed failure as a stalled generation, not an unhandled cancel the endpoint 500s.
             var provider = await _providerResolver.ResolveProviderForModelAsync(request.ModelName, generationCancellation.Token);
 
-            // The resolver routes an unmapped model to the configured DEFAULT provider, so it is not a guard on its
-            // own: if the runtime it picked is not the one eligibility cleared, refuse rather than generate on an
-            // unvetted route.
+            // The resolver routes an unmapped model to the configured DEFAULT provider, so it guards nothing on its
+            // own: a runtime other than the one eligibility cleared is refused rather than generated on.
             if (!string.Equals(provider.ProviderName, eligibleProviderName, StringComparison.OrdinalIgnoreCase))
             {
                 return DraftResult.Failed(DraftFailureKind.ModelNotEligible,
@@ -217,10 +206,13 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
     }
 
     /// <summary>
-    ///     Fail-closed eligibility (invariant 1). Returns the allowlisted provider that serves
-    ///     <paramref name="modelName" />, or <see langword="null" /> when the model may not be drafted with. Read-only:
-    ///     the persisted classification is read directly, so no detection probe runs and no cache row is written.
+    ///     Fail-closed eligibility: the allowlisted provider that serves <paramref name="modelName" />, or
+    ///     <see langword="null" /> when the model may not be drafted with.
     /// </summary>
+    /// <remarks>
+    ///     It is read-only — the persisted classification is read directly — so no detection probe runs and no cache
+    ///     row is written.
+    /// </remarks>
     private async Task<string?> ResolveEligibleProviderAsync(string modelName, CancellationToken cancellationToken)
     {
         var classification = await _modelClassificationStore.GetByNameAsync(modelName, cancellationToken);
@@ -315,10 +307,10 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
     }
 
     /// <summary>
-    ///     Re-validates the model-asserted skill name with MAF's own validator (the code that runs when the skill is
-    ///     built into an <c>AgentInlineSkill</c>), slugifies it when it fails, and falls back to a generated safe name
-    ///     when even the slug is unusable. The operator can rename it in the form either way.
+    ///     Re-validates the model-asserted skill name with MAF's own validator, slugifies it when that fails, and
+    ///     falls back to a generated safe name when even the slug is unusable.
     /// </summary>
+    /// <remarks>The validator is the code that runs when the skill becomes an <c>AgentInlineSkill</c>.</remarks>
     private static string NormalizeSkillName(string? value)
     {
         var candidate = Clamp(value, MaxSkillNameLength);
@@ -344,10 +336,10 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
     }
 
     /// <summary>
-    ///     Minimal Agent-Skills slugifier (no such helper exists in the repo): lowercase ASCII alphanumerics, every other
-    ///     run collapsed to a single hyphen, no leading/trailing hyphen. MAF rejects consecutive hyphens, so the collapse
-    ///     is load-bearing rather than cosmetic.
+    ///     Minimal Agent-Skills slugifier, since the repo has no such helper: lowercase ASCII alphanumerics, every
+    ///     other run collapsed to one hyphen, none leading or trailing.
     /// </summary>
+    /// <remarks>MAF rejects consecutive hyphens, so the collapse is load-bearing rather than cosmetic.</remarks>
     private static string Slugify(string value)
     {
         var builder = new StringBuilder(value.Length);

@@ -5,21 +5,16 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-///     Shared per-invocation persistence pump. It consumes the <see cref="InvocationState" /> deltas a
-///     single agent run produces and persists them to node SQLite through <see cref="INodeChatPersistenceService" />
-///     — flushing streamed partials and terminalizing the assistant message — for BOTH front doors:
-///     <list type="bullet">
-///         <item>
-///             local loopback (<see cref="NodeChatStreamService" />), which additionally turns each persisted state
-///             into a <see cref="ChatStreamEvent" /> for its SSE response;
-///         </item>
-///         <item>the platform path (<c>WorkerEventDispatcher</c>), which only needs the persistence side.</item>
-///     </list>
-///     The pump owns no agent logic and no transport: it is driven one <see cref="InvocationState" /> at a time by
-///     the caller (the caller decides where states come from — a local channel or the dispatcher's
-///     <c>InvocationStateChanged</c> stream). It is the write counterpart to the read-only
-///     <see cref="InvocationResumeRegistry" />, which translates the same states into resume events.
+///     Shared per-invocation persistence pump: it consumes one agent run's <see cref="InvocationState" /> deltas and
+///     persists them through <see cref="INodeChatPersistenceService" /> for both front doors.
 /// </summary>
+/// <remarks>
+///     It flushes streamed partials and terminalizes the assistant message for the local loopback
+///     (<see cref="NodeChatStreamService" />), which additionally turns each persisted state into a
+///     <see cref="ChatStreamEvent" />, and for the platform path, which needs only the persistence side. It owns no
+///     agent logic and no transport, and is driven one state at a time by the caller. It is the write counterpart to
+///     the read-only <see cref="InvocationResumeRegistry" />, which turns the same states into resume events.
+/// </remarks>
 public sealed class NodeChatInvocationPump : INodeChatInvocationPump
 {
     private readonly INodeChatPersistenceService _persistence;
@@ -40,11 +35,14 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
     }
 
     /// <summary>
-    ///     Persists a streamed content/reasoning delta if the incoming state has advanced past
-    ///     <paramref name="cursor" />. Returns the updated cursor and, when a delta was persisted, the persisted
-    ///     message plus the raw delta slices so the caller can emit a stream event. When nothing advanced the
-    ///     returned <see cref="NodeChatPumpFlushResult.Persisted" /> is null and the cursor is unchanged.
+    ///     Persists a streamed content or reasoning delta if the incoming state advanced past
+    ///     <paramref name="cursor" />.
     /// </summary>
+    /// <remarks>
+    ///     It returns the updated cursor and, when a delta was persisted, the persisted message plus the raw delta
+    ///     slices so the caller can emit a stream event. When nothing advanced,
+    ///     <see cref="NodeChatPumpFlushResult.Persisted" /> is null and the cursor is unchanged.
+    /// </remarks>
     public async Task<NodeChatPumpFlushResult> FlushDeltaAsync(NodeChatMessageCorrelation correlation,
         InvocationState state,
         NodeChatPumpCursor cursor,
@@ -77,10 +75,13 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
     }
 
     /// <summary>
-    ///     Terminalizes the assistant message from a terminal <see cref="InvocationState" /> (Completed / Cancelled /
-    ///     Failed). Always persists on <see cref="CancellationToken.None" /> so the terminal row is written even when
-    ///     the run was cancelled. Returns the persisted message and the resolved terminal status/event type.
+    ///     Terminalizes the assistant message from a terminal <see cref="InvocationState" />, returning the persisted
+    ///     message and the resolved terminal status and event type.
     /// </summary>
+    /// <remarks>
+    ///     It always persists on <see cref="CancellationToken.None" />, so the terminal row is written even when the
+    ///     run was cancelled.
+    /// </remarks>
     public async Task<NodeChatPumpTerminalResult> TerminalizeAsync(NodeChatMessageCorrelation correlation,
         InvocationState state,
         string? requestedModel,
@@ -94,16 +95,13 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
             throw new ArgumentException($"Invocation status '{state.Status}' is not terminal.", nameof(state));
         }
 
-        // Durable run ledger: the envelope payload rides INTO the terminalize command so its content-free
-        // row is written in the SAME transaction as the terminal message row (both commit or roll back together — no
-        // swallowed best-effort write). The terminal status/success and the bound agent id are derived from the winning
-        // persisted row inside that transaction, so they are not carried here.
+        // Durable run ledger: the envelope payload rides INTO the terminalize command so its content-free row commits
+        // in the SAME transaction as the terminal row. The status and agent id come from the winning row inside it.
         var durationMs = state.GenerationDurationMs
                          ?? (state.CompletedAt is { } completedAt ? Math.Max(val1: 0L, (long)(completedAt - state.StartedAt).TotalMilliseconds) : 0L);
 
-        // Attribute the turn's tokens to the fine-grained provider that served it, resolved from the same model id that
-        // rides into terminalize (state.ModelUsed ?? requestedModel). Best-effort: the resolver never throws and is bounded,
-        // degrading to 'unknown' on any failure/timeout, so provider attribution can never break or stall terminalization.
+        // Attributes the turn's tokens to the provider that served it, from the same model id that rides into
+        // terminalize. The resolver never throws and is bounded, degrading to 'unknown', so it cannot stall the write.
         var provider = await _usageProviderResolver.ResolveAsync(state.ModelUsed ?? requestedModel, CancellationToken.None);
         var envelope = new AgentRunEnvelopeMetadata
         {
@@ -128,10 +126,8 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
             TurnReasoningTokens = state.TurnReasoningTokens
         };
 
-        // A cancelled turn persists NO error text — a user cancel (or an operator eject,
-        // also Cancelled-category) is an outcome, not a failure, so it must not leave a red error banner on the row.
-        // Failures keep their classified message. Derived from the winning terminal status the state maps to, so the
-        // envelope's FailureCategory (a content-free ledger field) is untouched — only the user-facing Error is cleared.
+        // A cancelled turn persists NO error text: a user cancel or an operator eject is an outcome, not a failure, so
+        // it leaves no red banner. Only the user-facing Error is cleared; the envelope's FailureCategory is untouched.
         var terminalError = terminalStatus == NodeChatMessageStatusValues.Cancelled ? null : state.Error;
 
         var persisted = await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
@@ -159,9 +155,8 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
         },
             CancellationToken.None);
 
-        // The transition guard may have rejected this terminalize (the row already reached a different terminal), so the
-        // persisted row is the authoritative winning state. The returned status and the single SSE terminal are built from
-        // it rather than the requested terminal.
+        // The transition guard may have rejected this terminalize, so the persisted row is the authoritative winning
+        // state and both the returned status and the single SSE terminal are built from it.
         var winningStatus = persisted.Status;
 
         return new NodeChatPumpTerminalResult { Persisted = persisted, TerminalStatus = winningStatus, EventType = MapTerminalEventType(winningStatus, eventType) };
@@ -182,10 +177,8 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
             ? ChatStreamEventTypes.AssistantCancelled
             : ChatStreamEventTypes.AssistantInterrupted;
 
-        // Durable run ledger: a stream that ended without a terminal invocation state still gets one
-        // envelope row, written atomically with the terminal message row. Thinner than the state-driven path — there is no
-        // InvocationState here, so invocation id / tokens / duration / chunk counts are unknown and omitted; the terminal
-        // status (derived from the winning row) carries the interrupted/cancelled outcome.
+        // Durable run ledger: a stream that ended without a terminal state still gets one envelope row, written
+        // atomically with the terminal message row. It is thin — no InvocationState exists here — but carries the status.
         var envelope = new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L, TraceId = CurrentTraceId() };
 
         // A user cancel persists NO error text; an interrupted stream (process/stream
@@ -241,8 +234,7 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
     }
 
     // Maps a persisted terminal MESSAGE status back to its stream event type, so the emitted SSE terminal reflects the
-    // row that actually won rather than the requested terminal. Falls back to the requested event for any unexpected
-    // (non-terminal) status, which the terminalize path cannot produce.
+    // row that won. Any unexpected non-terminal status, which this path cannot produce, keeps the requested event.
     private static string MapTerminalEventType(string terminalStatus, string requestedEventType)
     {
         return terminalStatus switch

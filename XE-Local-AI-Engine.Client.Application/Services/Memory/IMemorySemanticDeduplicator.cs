@@ -3,27 +3,26 @@ namespace XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Semantic (embedding-cosine) dedup layer for extracted memory candidates. It runs ON TOP OF the always-on lexical
-///     dedup in <c>MemoryExtractionService</c>: given the candidates that already survived the lexical (normalized-text)
-///     pass, it embeds each candidate's behaviour with the node-local embedding model and flags any that are cosine-near
-///     an existing live memory of the SAME scope (a paraphrase the exact lexical key misses). The lexical pass stays the
-///     fast/robust baseline; this only catches near-duplicates it cannot.
-///     The layer is gated on <c>EmbeddingModelResolution.IsConfident</c>: with no confident node-local embedding model
-///     (provider unreachable, or nothing installed matched) — or any embedding failure — it returns
-///     <see cref="MemorySemanticDedupResult.NotApplied" /> so the caller keeps its lexical-only result. A transient
-///     provider outage therefore NEVER mass-dedups (silently swallows) legitimate new candidates. Candidate/memory text
-///     never leaves the node; existing-memory vectors are held in a RAM-only, bounded cache keyed by
-///     (id, version, resolved-model-name) and are never persisted or logged; the query candidate is re-embedded per run.
+///     Semantic (embedding-cosine) dedup for extracted memory candidates, running ON TOP OF the always-on lexical
+///     dedup to catch the paraphrases an exact lexical key misses.
 /// </summary>
+/// <remarks>
+///     Each candidate that survived the lexical pass is embedded with the node-local model and flagged when it is
+///     cosine-near a live memory of the SAME scope. It is gated on <c>EmbeddingModelResolution.IsConfident</c>: no
+///     confident model, or any embedding failure, returns <see cref="MemorySemanticDedupResult.NotApplied" /> so the
+///     caller keeps its lexical-only result and a transient outage never mass-dedups legitimate candidates. Text
+///     never leaves the node, and memory vectors live in a RAM-only bounded cache that is never persisted or logged.
+/// </remarks>
 internal interface IMemorySemanticDeduplicator
 {
     /// <summary>
-    ///     Flags which of <paramref name="candidates" /> are semantic duplicates of an existing live memory (same scope)
-    ///     or of an earlier accepted candidate in this same batch. The returned indexes are positions into
-    ///     <paramref name="candidates" />. When semantic dedup does not run (disabled, no confident embedding model, or an
-    ///     embedding failure) the result is <see cref="MemorySemanticDedupResult.NotApplied" /> and the caller must keep
-    ///     every candidate (lexical-only fallback).
+    ///     Flags which of <paramref name="candidates" /> duplicate a live memory of the same scope, or an earlier
+    ///     accepted candidate in this batch, as positions into <paramref name="candidates" />.
     /// </summary>
+    /// <remarks>
+    ///     When semantic dedup does not run — disabled, no confident embedding model, or an embedding failure — the
+    ///     result is <see cref="MemorySemanticDedupResult.NotApplied" /> and the caller keeps every candidate.
+    /// </remarks>
     Task<MemorySemanticDedupResult> FindSemanticDuplicatesAsync(IReadOnlyList<MemoryDedupExisting> existing,
         IReadOnlyList<MemoryDedupCandidate> candidates,
         CancellationToken cancellationToken);
@@ -54,11 +53,12 @@ internal sealed class MemoryDedupCandidate
 
 /// <summary>
 ///     Outcome of one <see cref="IMemorySemanticDeduplicator.FindSemanticDuplicatesAsync" /> call.
-///     <see cref="Applied" /> is <c>true</c> only when semantic dedup actually ran (a confident embedding model produced
-///     comparable vectors); <see cref="DuplicateIndexes" /> then holds the candidate positions to drop. When
-///     <see cref="Applied" /> is <c>false</c> the caller keeps every candidate — the lexical-only fallback that guarantees
-///     no candidate is dropped during a provider outage.
 /// </summary>
+/// <remarks>
+///     <see cref="Applied" /> is <c>true</c> only when semantic dedup actually ran, and
+///     <see cref="DuplicateIndexes" /> then holds the positions to drop. When it is <c>false</c> the caller keeps
+///     every candidate, the lexical-only fallback that drops nothing during a provider outage.
+/// </remarks>
 internal sealed class MemorySemanticDedupResult
 {
     public required bool Applied { get; init; }

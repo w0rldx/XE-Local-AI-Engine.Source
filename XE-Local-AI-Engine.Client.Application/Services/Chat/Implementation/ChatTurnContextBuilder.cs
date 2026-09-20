@@ -207,9 +207,8 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
         }
         catch (Exception exception)
         {
-            // Retrieval is a best-effort supplement: a failure (embedding provider down, connection error, etc.) must
-            // never fail the send or the rerun. Log and proceed with no knowledge context. The two sentences are kept
-            // distinct so a log search still separates a send from a regenerate.
+            // Retrieval is a best-effort supplement, so a failure never fails the send or the rerun. The two sentences
+            // stay distinct so a log search still separates a send from a regenerate.
             if (isRegeneratedTurn)
             {
                 _logger.LogWarning(exception, "Knowledge-base grounding failed for the regenerated plain-chat turn; proceeding without it.");
@@ -250,10 +249,8 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
             return null;
         }
 
-        // The staged paths carry the uploaded files' names, which are ATTACKER-INFLUENCED. Fence the path list as
-        // untrusted DATA (using the same server-secret per-conversation seed as the plain-chat composer, so the hint is
-        // byte-stable across sends) so a crafted file name cannot read as an instruction. The surrounding text is the
-        // trusted, node-authored pointer telling the model to read the fenced paths with its file tools.
+        // The staged paths carry ATTACKER-INFLUENCED file names, so the list is fenced as untrusted DATA under the same
+        // per-conversation seed the plain-chat composer uses; only the surrounding pointer text is node-authored.
         var fileLines = string.Join('\n', stagedAttachmentPaths.Select(static path => "- " + path));
         return "The files the user uploaded to this conversation have been staged into your read-only workspace. Before "
                + "answering, read them with your file tools — call read_file with the exact path listed below (and no "

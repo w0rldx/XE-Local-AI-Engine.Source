@@ -6,13 +6,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
-///     Default <see cref="IMemoryExtractionService" />. Gates temporary conversations BEFORE any model call (the single
-///     write-only suppression point — the retrieval path is never gated), no-ops when no node-local extraction model is
-///     configured, asks the node-local extraction agent for candidate memories, drops near-duplicates of the agent's
-///     existing <c>Suggested</c>/<c>Enabled</c> memories, and persists the survivors as <c>Suggested</c>/<c>Extracted</c>
-///     actions for human review. Candidates are inert by construction (the resolver injects only <c>Enabled</c> actions);
-///     promotion stays an eval-gated, human step.
+///     Default <see cref="IMemoryExtractionService" />: it asks the node-local agent for candidate memories, drops
+///     near-duplicates of existing live ones and persists the survivors for human review.
 /// </summary>
+/// <remarks>
+///     It gates temporary conversations BEFORE any model call, the single write-only suppression point, since the
+///     retrieval path is never gated, and no-ops when no node-local extraction model is configured. Candidates are
+///     inert by construction, because the resolver injects only <c>Enabled</c> actions, so promotion stays an
+///     eval-gated human step.
+/// </remarks>
 internal sealed class MemoryExtractionService : IMemoryExtractionService
 {
     private readonly IMemoryExtractionAgent _extractionAgent;
@@ -43,9 +45,8 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
     {
         ArgumentNullException.ThrowIfNull(run);
 
-        // Temp-chat gate FIRST: a memory-excluded conversation never extracts — no model call, no candidate.
-        // This is the SINGLE write-only enforcement point; retrieval is never gated on this flag, so a temp chat still
-        // gets existing enabled memory injected.
+        // Temp-chat gate FIRST: a memory-excluded conversation never extracts. This is the SINGLE write-only
+        // enforcement point — retrieval is never gated, so a temp chat still gets existing enabled memory injected.
         if (run.MemoryExcluded)
         {
             return MemoryExtractionOutcome.SuppressedByTempChat();
@@ -96,10 +97,8 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
                 continue;
             }
 
-            // Secret scan BOTH free-text fields the model produced before they are persisted for human review — the
-            // extraction agent reads raw conversation content, so a leaked PEM/PAT/JWT/high-entropy secret must be
-            // rejected or redacted exactly as the AgentHome proposal path handles it. The scanner treats its `content`
-            // argument as redactable; the metadata/evidence arguments are the reject-only channels, so pass empties.
+            // Secret-scan BOTH model-produced free-text fields before persisting them, since the agent reads raw
+            // conversation content. The scanner's `content` argument is redactable and the others are reject-only.
             var behaviorScan = MemoryProposalSecretScanner.Scan(type: string.Empty,
                 operation: string.Empty,
                 proposal.Behavior,
@@ -131,10 +130,8 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
             accepted.Add(new AcceptedCandidate { Behavior = behavior, TriggerCondition = triggerCondition, Scope = proposal.Scope, Confidence = proposal.Confidence });
         }
 
-        // PASS 2 — semantic (embedding-cosine) dedup ON TOP OF lexical: drop a lexically-distinct candidate that is a
-        // paraphrase of an existing live memory. Gated on a confident node-local embedding model; on no model / any
-        // embedding failure it returns NotApplied and every lexically-surviving candidate is kept (no mass-dedup on
-        // outage). The embed text never leaves the node and is never persisted (see MemorySemanticDeduplicator).
+        // PASS 2 — semantic dedup ON TOP OF lexical, dropping a lexically-distinct paraphrase of a live memory. With
+        // no confident embedding model, or any failure, it returns NotApplied and every survivor is kept.
         var semantic = await _semanticDeduplicator.FindSemanticDuplicatesAsync(BuildSemanticExisting(existing),
             [.. accepted.Select(static candidate => new MemoryDedupCandidate { Scope = candidate.Scope, Behavior = candidate.Behavior })],
             cancellationToken);
@@ -178,9 +175,8 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
 
     private static IReadOnlyList<MemoryDedupExisting> BuildSemanticExisting(IReadOnlyList<PlaybookActionRecord> existing)
     {
-        // The semantic comparison set mirrors the lexical one: only live (Suggested/Enabled) actions gate re-proposal. A
-        // legacy untyped action (null MemoryScope) keys under Procedural so it dedupes a procedural candidate, matching
-        // BuildDedupKeys. Id+Version key its RAM-only cached vector; Behavior is the embedded text.
+        // The semantic comparison set mirrors the lexical one: only live actions gate re-proposal, and a legacy
+        // untyped action keys under Procedural. Id and version key its cached vector; Behavior is the embedded text.
         return
         [
             .. existing
@@ -210,9 +206,8 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
 
     private static HashSet<DedupKey> BuildDedupKeys(IReadOnlyList<PlaybookActionRecord> existing)
     {
-        // Only live actions matter for dedup: a rejected (Archived) or disabled action should not block re-proposing.
-        // A legacy untyped action (null MemoryScope) keys under Procedural so a manually-authored equivalent still
-        // dedupes a procedural candidate.
+        // Only live actions matter for dedup, so an archived or disabled one never blocks re-proposing. A legacy
+        // untyped action keys under Procedural, so a manually-authored equivalent still dedupes a candidate.
         return existing
                .Where(static action => action.State is PlaybookActionState.Suggested or PlaybookActionState.Enabled)
                .Select(static action => ToDedupKey(action.Behavior, action.MemoryScope ?? MemoryScope.Procedural))

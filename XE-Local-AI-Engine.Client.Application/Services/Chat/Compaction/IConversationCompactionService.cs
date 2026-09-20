@@ -32,38 +32,41 @@ public sealed class ConversationCompactionResult
 
     public long? UpdatedAtUtc { get; init; }
 
-    // The local model that actually produced the synopsis, and whether it differs from the model the user selected
-    // (true only when a cloud/unknown selection was transparently downgraded to a node-local model). Lets the UI tell
-    // the user their chat was summarized on-device instead of with their cloud selection.
+    // The local model that produced the synopsis, and whether it differs from the user's selection, which is true
+    // only on a downgrade, so the UI can say the chat was summarized on-device.
     public string? ModelUsed { get; init; }
 
     public bool UsedFallbackModel { get; init; }
 }
 
 /// <summary>
-///     Orchestrates non-destructive conversation compaction: selects the older span (everything before the recent-keep
-///     window that the existing synopsis does not already cover), summarizes it with a node-local model, and persists the
-///     synopsis. The original messages are never deleted — only what is SENT on later turns changes.
+///     Orchestrates non-destructive conversation compaction: it selects the older span the existing synopsis does
+///     not cover, summarizes it with a node-local model and persists the result.
 /// </summary>
+/// <remarks>The original messages are never deleted; only what is SENT on later turns changes.</remarks>
 public interface IConversationCompactionService
 {
     /// <summary>
-    ///     Compacts the conversation's older turns into (or extends) its synopsis. Idempotent when nothing new is
-    ///     foldable. <paramref name="requestedModel" /> is the model the user is chatting with; it is used for
-    ///     summarization when it is an installed LOCAL chat model, otherwise a node-local default is used so conversation
-    ///     content never leaves the machine (a cloud/unknown selection degrades to local). Blank uses the node default.
+    ///     Compacts the conversation's older turns into its synopsis, or extends one, and is idempotent when nothing
+    ///     new is foldable.
     /// </summary>
+    /// <param name="requestedModel">The model to summarize with, if it is an installed LOCAL chat model.</param>
+    /// <remarks>Anything else, including a blank, degrades to a node-local default, so content stays on-machine.</remarks>
     Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default) =>
         CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, cancellationToken);
 
     /// <summary>
-    ///     The same compaction with an explicit keep window. <paramref name="recentMessagesToKeepVerbatim" /> overrides
-    ///     <see cref="ConversationCompactionOptions.RecentMessagesToKeepVerbatim" /> for this call only (clamped to the
-    ///     same floor of 2), so a caller that knows its conversation does not depend on verbatim history can fold it
-    ///     down to the last exchange. A work-session step is that caller: its state block is rebuilt from the database
-    ///     every step, so the transcript beyond the previous step carries nothing the model still needs. Null keeps the
-    ///     configured window, which is what the operator-driven chat compaction passes.
+    ///     The same compaction with an explicit keep window.
     /// </summary>
+    /// <param name="recentMessagesToKeepVerbatim">
+    ///     Overrides <see cref="ConversationCompactionOptions.RecentMessagesToKeepVerbatim" /> for this call only,
+    ///     clamped to the same floor of 2; null keeps the configured window.
+    /// </param>
+    /// <remarks>
+    ///     A caller that knows its conversation does not depend on verbatim history can fold down to the last
+    ///     exchange. A work-session step is that caller: its state block is rebuilt from the database every step, so
+    ///     the transcript beyond the previous one carries nothing the model still needs.
+    /// </remarks>
     Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
         string? requestedModel,
         int? recentMessagesToKeepVerbatim,

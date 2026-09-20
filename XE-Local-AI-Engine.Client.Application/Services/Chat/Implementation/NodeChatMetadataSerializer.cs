@@ -5,9 +5,9 @@ using System.Text.Json;
 
 /// <summary>
 ///     Shared serialization helpers for the node chat raw-ADO persistence path: content byte encoding, the
-///     <c>metadata_json</c> blob, and the conversation <c>selected_path_json</c> map. Pure functions; all node chat
-///     persistence collaborators consume these via <c>using static</c>.
+///     <c>metadata_json</c> blob and the conversation <c>selected_path_json</c> map.
 /// </summary>
+/// <remarks>Pure functions; every persistence collaborator consumes them via <c>using static</c>.</remarks>
 internal static class NodeChatMetadataSerializer
 {
     private static readonly JsonSerializerOptions MetadataJsonOptions = new(JsonSerializerDefaults.Web);

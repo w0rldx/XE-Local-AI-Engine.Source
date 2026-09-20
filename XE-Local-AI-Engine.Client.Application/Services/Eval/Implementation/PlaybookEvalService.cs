@@ -12,13 +12,15 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Default <see cref="IPlaybookEvalService" />. Re-runs the real agent loop over the
-///     agent's golden conversation set with the candidate prompt (baseline + the Suggested action) vs the current
-///     baseline, scores each case (assertion or node-local judge), and persists a plaintext
-///     <see cref="PlaybookEvalResult" /> on the action so the promote gate can decide. Resolves ONE node-local
-///     <see cref="IChatClient" /> for the whole run (never the shared/cloud singleton) and passes it into the runner +
-///     judge, so golden text + agent output never leave the node. Offline / batch only — never on the chat hot path.
+///     Default <see cref="IPlaybookEvalService" />: it re-runs the real agent loop over the golden set with the
+///     candidate prompt against the current baseline and persists a plaintext result on the action.
 /// </summary>
+/// <remarks>
+///     Each case is scored by assertion or node-local judge, and the promote gate reads the persisted
+///     <see cref="PlaybookEvalResult" />. ONE node-local <see cref="IChatClient" /> is resolved for the whole run,
+///     never the shared cloud singleton, and passed into both the runner and the judge, so golden text and agent
+///     output never leave the node. It is offline and batch only, never on the chat hot path.
+/// </remarks>
 internal sealed class PlaybookEvalService : IPlaybookEvalService
 {
     /// <summary>
@@ -97,10 +99,8 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         // Suggested action's behaviour. The gate measures the marginal effect of promoting THIS action.
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(agentId, cancellationToken);
 
-        // Mirror ListEnabledByAgentAsync ordering (Priority, then CreatedAtUtc): once the Suggested action is promoted
-        // it is re-ordered by that same key, so the candidate prompt must place it per priority — not merely append it
-        // last — for the eval to score it in the SAME position the post-promotion injection will. The baseline stays
-        // Compose(Instructions, enabled) since `enabled` is already store-ordered.
+        // Mirror the store's enabled-action ordering: a promoted action is re-ordered by that same key, so the
+        // candidate prompt must place it by priority rather than append it, or the eval scores the wrong position.
         var candidateActions = enabled
                                .Append(suggested)
                                .OrderBy(static action => action.Priority)
@@ -112,10 +112,8 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         var goldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentId, cancellationToken);
         var goldenCaseTotal = goldenCases.Count;
 
-        // Fingerprint the behaviour-affecting inputs over the FULL enabled golden set (before any per-run cap) so the
-        // promote gate can detect a base-instruction / sibling-action / golden-set / model change after this eval ran.
-        // The model identity (weight digest) is folded in alongside the name so a same-name weight swap between eval and
-        // promote invalidates the fingerprint; an unresolvable identity records the explicit unverified sentinel.
+        // Fingerprint the behaviour-affecting inputs over the FULL golden set, before any per-run cap, so the promote
+        // gate detects a later change. The model IDENTITY folds in beside the name, so a same-name swap invalidates it.
         var modelIdentity = await _modelIdentityResolver.ResolveAsync(_options.ModelName, cancellationToken);
         var fingerprint = PlaybookEvalFingerprint.Compute(suggested.Id,
             suggested.Version,
@@ -142,9 +140,8 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
             goldenCases = [.. goldenCases.Take(_options.MaxGoldenCases)];
         }
 
-        // Route the configured eval model to the runtime that serves it (persisted map, else the configured default
-        // provider = ollama — an un-repointed model behaves exactly as before). Node-local only — never the
-        // shared/cloud singleton.
+        // Route the configured eval model to the runtime that serves it, node-local only and never the shared cloud
+        // singleton, so golden text reaches a per-provider client alone.
         var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken);
         var selection = new LocalModelSelection
         {
@@ -171,9 +168,8 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         IChatClient chatClient,
         CancellationToken cancellationToken)
     {
-        // Unusable stored turns (malformed JSON, no turns, an unknown role, or a blank-text turn) cannot demonstrate
-        // quality — record an EXPLICIT failed case (no model call) rather than silently evaluating the system prompt
-        // alone, which would let a broken case pass. Validation blocks these at create/update; this covers legacy rows.
+        // Unusable stored turns cannot demonstrate quality, so record an EXPLICIT failed case with no model call
+        // rather than evaluate the system prompt alone. Create-time validation blocks these; this covers legacy rows.
         if (!GoldenInputTurns.TryParse(goldenCase.InputTurns, out var turns, out var turnsError))
         {
             _logger.LogWarning("Golden case {GoldenCaseId} has unusable input turns ({Reason}); recording an explicit failed case.", goldenCase.Id, turnsError);
@@ -203,14 +199,8 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         var regressed = caseResults.Count(static caseResult => caseResult.Regressed);
         var improved = caseResults.Count(static caseResult => !caseResult.BaselinePass && caseResult.CandidatePass);
 
-        // Passed requires two independent signals, BOTH surfaced honestly via the counts below:
-        //   1. No-regression   (RegressedCaseCount == 0)      — no prior-good case broke.
-        //   2. Absolute floor  (CandidatePassCount  > 0)      — at least one case actually passed.
-        // The absolute floor closes a gap: a run where EVERY baseline and candidate case fails has zero regressions but
-        // proves nothing, and must NOT pass on the no-regression signal alone. Also requires at least one evaluated case
-        // (no-regression is unprovable with zero cases). Passed is a subset property; completeness
-        // (GoldenCaseCount == GoldenCaseTotal) is enforced separately by the promote gate, so a subset "pass" of a
-        // truncated run still cannot authorize promotion.
+        // Passing needs no regression AND an absolute floor of one real pass over at least one evaluated case: an
+        // all-failing run regresses nothing yet proves nothing. Completeness is the promote gate's own check.
         var passed = caseResults.Count > 0 && regressed == 0 && candidatePass > 0;
 
         return new PlaybookEvalResult(passed,

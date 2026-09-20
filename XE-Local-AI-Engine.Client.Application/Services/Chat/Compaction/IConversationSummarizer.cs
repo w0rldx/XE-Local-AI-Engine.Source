@@ -26,11 +26,13 @@ public sealed class ConversationSummarizerInput
 }
 
 /// <summary>
-///     Produces a compact, prose synopsis of an older conversation span using a NODE-LOCAL model only (never the shared
-///     cloud-capable client) — the same privacy invariant the memory-extraction agent holds: conversation content only
-///     ever reaches a per-run <c>provider.CreateChatClient(...)</c> client. The synopsis merges any prior synopsis with
-///     the newer span so repeated compaction is incremental rather than lossy.
+///     Produces a compact, prose synopsis of an older conversation span using a NODE-LOCAL model only, merging any
+///     prior synopsis with the newer span so repeated compaction is incremental rather than lossy.
 /// </summary>
+/// <remarks>
+///     It holds the same privacy invariant as the memory-extraction agent: conversation content only ever reaches a
+///     per-run <c>provider.CreateChatClient(...)</c> client, never the shared cloud-capable one.
+/// </remarks>
 public interface IConversationSummarizer
 {
     /// <summary>

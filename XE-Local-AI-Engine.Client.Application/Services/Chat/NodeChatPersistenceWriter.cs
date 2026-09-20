@@ -4,36 +4,16 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Serializes node chat persistence writes under a per-conversation lock hierarchy so conversation-wide invariants
-///     (contiguous, unique message sequences; delete/purge atomicity) hold under concurrent sends, regenerations, and
-///     deletes.
-///
-///     <para><b>Lock hierarchy.</b> Each conversation has one reader-writer lock:</para>
-///     <list type="bullet">
-///         <item>
-///             <b>Conversation-exclusive</b> (writer) — sequence allocation + message insert, conversation lifecycle
-///             (create/ensure/rename/pin/archive/select-path), and delete/purge. Holds the writer side, so nothing else
-///             on the same conversation runs concurrently. This is what makes <c>MAX(sequence)+1</c> allocation race-free
-///             and stops a delete from interleaving with a message write.
-///         </item>
-///         <item>
-///             <b>Conversation-shared</b> (reader) — read-only conversation/message queries. Multiple run in parallel;
-///             all are excluded against a conversation-exclusive op (so a read never observes a half-applied delete).
-///         </item>
-///         <item>
-///             <b>Message-update</b> — a payload UPDATE to an ALREADY-allocated row (streaming flush / queued / streaming
-///             / terminalize / cancel / feedback). Holds the conversation lock in <em>shared</em> mode plus a
-///             per-<c>(conversation, message)</c> exclusive lock: updates to different messages run in parallel, updates
-///             to the same message serialize, and every update is mutually excluded against a conversation delete via the
-///             shared/exclusive relationship. The nesting order is always conversation-lock first, then message-lock, and
-///             the exclusive side never takes a message lock, so no cross-lock deadlock is reachable.
-///         </item>
-///     </list>
-///
-///     <para><b>Bounded lock map.</b> Gates (and the per-message locks inside them) are reference-counted and removed the
-///     moment they fall idle, so the map is bounded by the number of <em>concurrently active</em> conversations, not by
-///     the number of conversations or messages ever seen.</para>
+///     Serializes node chat persistence writes under a per-conversation lock hierarchy, so contiguous unique message
+///     sequences and delete atomicity hold under concurrent sends, regenerations and deletes.
 /// </summary>
+/// <remarks>
+///     Each conversation has one reader-writer lock with three uses, described in <c>docs/wiki/05-chat.md</c> under
+///     "The persistence lock hierarchy": exclusive for sequence allocation, the conversation lifecycle and delete;
+///     shared for read-only queries; and, for a payload UPDATE, shared plus a per-message exclusive lock. The nesting
+///     order is always conversation lock then message lock and the exclusive side never takes a message lock, so no
+///     cross-lock deadlock is reachable. Gates are reference-counted and dropped the moment they fall idle.
+/// </remarks>
 public sealed class NodeChatPersistenceWriter
 {
     private readonly Dictionary<Guid, ConversationGate> _gates = new();
@@ -107,10 +87,13 @@ public sealed class NodeChatPersistenceWriter
     }
 
     /// <summary>
-    ///     Runs <paramref name="persistenceOperation" /> as a payload UPDATE of an already-allocated message row: the
-    ///     conversation's shared (reader) lock plus a per-message exclusive lock. Updates to different messages run in
-    ///     parallel; updates to the same message serialize; all are excluded against a conversation delete.
+    ///     Runs <paramref name="persistenceOperation" /> as a payload UPDATE of an already-allocated message row,
+    ///     under the conversation's shared lock plus a per-message exclusive lock.
     /// </summary>
+    /// <remarks>
+    ///     Updates to different messages run in parallel, updates to the same message serialize, and all are excluded
+    ///     against a conversation delete.
+    /// </remarks>
     public async Task<TResult> ExecuteMessageUpdateAsync<TResult>(Guid conversationId,
         Guid messageId,
         Func<NodeChatDbContext, CancellationToken, Task<TResult>> persistenceOperation,

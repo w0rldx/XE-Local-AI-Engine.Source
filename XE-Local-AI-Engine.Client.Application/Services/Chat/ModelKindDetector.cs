@@ -34,12 +34,14 @@ public static class ModelKindDetector
     ];
 
     /// <summary>
-    ///     Upper-cased name fragments that identify a reranker (cross-encoder) model. Rerankers score a
-    ///     query/document pair rather than generate text, so they have no completion head and must never reach the chat
-    ///     picker. Ollama advertises no distinct reranker capability token, so the NAME is the only reliable signal —
-    ///     which is why the reranker check runs BEFORE the embedding check (a name such as <c>bge-reranker-v2-m3</c>
-    ///     matches the <c>BGE-</c> embedding prefix too, and the reranker classification is the correct one).
+    ///     Upper-cased name fragments that identify a reranker (cross-encoder) model, which scores a query and
+    ///     document pair rather than generating text and so must never reach the chat picker.
     /// </summary>
+    /// <remarks>
+    ///     Ollama advertises no distinct reranker capability token, so the NAME is the only reliable signal, and the
+    ///     reranker check runs BEFORE the embedding one because a name like <c>bge-reranker-v2-m3</c> also matches
+    ///     the <c>BGE-</c> embedding prefix while reranker is the correct classification.
+    /// </remarks>
     private static readonly string[] RerankerNameFragments =
     [
         "RERANK"
@@ -51,9 +53,8 @@ public static class ModelKindDetector
     /// </summary>
     public static ModelKind FromCapabilities(IReadOnlyList<string>? capabilities, string modelName)
     {
-        // A reranker exposes no distinct Ollama capability token, so its NAME is the only reliable signal even when
-        // capabilities ARE reported (a cross-encoder can advertise an embedding capability). Check it first so a
-        // reranker is never misclassified as Embedding or Chat.
+        // A reranker exposes no distinct Ollama capability token, and a cross-encoder can advertise an embedding one,
+        // so its NAME is the only reliable signal and is checked first.
         if (IsRerankerName(modelName))
         {
             return ModelKind.Reranker;
@@ -81,54 +82,62 @@ public static class ModelKindDetector
     }
 
     /// <summary>
-    ///     True when the model NAME alone identifies an embedding-only model (case-insensitive fragment/prefix match),
-    ///     independent of any reported capabilities. Used where only a name is available (for example an installed GGUF
-    ///     descriptor <c>&lt;repo&gt;:&lt;quant&gt;</c> carries no capability probe) to keep an embedding model out of the
-    ///     chat surfaces and to auto-resolve it for knowledge-base embedding. Never guesses Chat.
+    ///     True when the model NAME alone identifies an embedding-only model, independent of reported capabilities.
     /// </summary>
+    /// <remarks>
+    ///     It is used where only a name is available — an installed GGUF descriptor carries no capability probe — to
+    ///     keep an embedding model out of the chat surfaces and auto-resolve it for knowledge-base embedding. It
+    ///     never guesses Chat.
+    /// </remarks>
     public static bool IsEmbeddingName(string modelName)
     {
         return FromNameHeuristic(modelName) == ModelKind.Embedding;
     }
 
     /// <summary>
-    ///     True when the model NAME alone identifies a reranker (cross-encoder) model (case-insensitive fragment match),
-    ///     independent of any reported capabilities. Used where only a name is available (an installed GGUF descriptor
-    ///     <c>&lt;repo&gt;:&lt;quant&gt;</c> carries no capability probe) to keep a reranker out of the chat surfaces and
-    ///     tag it correctly in the model list. Takes precedence over <see cref="IsEmbeddingName" /> — a reranker name
-    ///     that also matches an embedding prefix (for example <c>bge-reranker-…</c>) is a reranker, not an embedding.
+    ///     True when the model NAME alone identifies a reranker (cross-encoder) model, independent of reported
+    ///     capabilities.
     /// </summary>
+    /// <remarks>
+    ///     It is used where only a name is available, to keep a reranker out of the chat surfaces and tag it in the
+    ///     model list, and it takes precedence over <see cref="IsEmbeddingName" />: a name that matches both, such as
+    ///     <c>bge-reranker-…</c>, is a reranker.
+    /// </remarks>
     public static bool IsRerankerName(string modelName)
     {
         return FromNameHeuristic(modelName) == ModelKind.Reranker;
     }
 
     /// <summary>
-    ///     True when the model NAME identifies a speculative-decoding draft model — its registry key carries the draft
-    ///     quant marker (<c>…:MTP-Q8_0</c>) that <see cref="GgufDraftModel" /> stamps on a drafter at discovery/rescan.
-    ///     Unlike the embedding/reranker fragments this is an exact structural marker, not a heuristic, so it cannot
-    ///     misfire on a base model whose name merely mentions MTP (<c>unsloth/Qwen3.6-27B-MTP-GGUF:Q6_K</c>).
+    ///     True when the model NAME identifies a speculative-decoding draft model, its registry key carrying the
+    ///     draft quant marker (<c>…:MTP-Q8_0</c>) <see cref="GgufDraftModel" /> stamps on a drafter at discovery.
     /// </summary>
+    /// <remarks>
+    ///     Unlike the embedding and reranker fragments this is an exact structural marker, not a heuristic, so it
+    ///     cannot misfire on a base model whose name merely mentions MTP
+    ///     (<c>unsloth/Qwen3.6-27B-MTP-GGUF:Q6_K</c>).
+    /// </remarks>
     public static bool IsDraftName(string modelName)
     {
         return GgufDraftModel.IsDraftModelName(modelName);
     }
 
     /// <summary>
-    ///     True when the supplied Ollama capabilities advertise the <c>thinking</c> capability (case-insensitive). A
-    ///     model without it returns HTTP 400 for any <c>think</c> request field, so the loopback path gates the field on
-    ///     this. Null/empty capabilities (older daemon or offline) are treated as NOT thinking-capable — the safe choice
-    ///     that avoids the 400 while still allowing a plain chat.
+    ///     True when the supplied Ollama capabilities advertise <c>thinking</c>, which the loopback path gates the
+    ///     <c>think</c> field on because a model without it answers HTTP 400.
     /// </summary>
+    /// <remarks>
+    ///     Null or empty capabilities, from an older daemon or an offline one, count as NOT thinking-capable: the
+    ///     safe choice that avoids the 400 while still allowing a plain chat.
+    /// </remarks>
     public static bool SupportsThinking(IReadOnlyList<string>? capabilities)
     {
         return capabilities is { Count: > 0 } && ContainsCapability(capabilities, ThinkingCapability);
     }
 
     /// <summary>
-    ///     True when the supplied Ollama capabilities advertise the <c>tools</c> capability (case-insensitive). A model
-    ///     without it cannot drive tool calls, so the loopback path withholds all tool offers. Null/empty capabilities
-    ///     are treated as NOT tool-capable (the safe default).
+    ///     True when the supplied Ollama capabilities advertise <c>tools</c>; without it the loopback path withholds
+    ///     every tool offer, and null or empty capabilities are NOT tool-capable, the safe default.
     /// </summary>
     public static bool SupportsTools(IReadOnlyList<string>? capabilities)
     {

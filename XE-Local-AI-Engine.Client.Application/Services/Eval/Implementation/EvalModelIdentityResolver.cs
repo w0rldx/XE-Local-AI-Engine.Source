@@ -5,27 +5,16 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     Default <see cref="IEvalModelIdentityResolver" />. Resolves the strongest weight identity available for the
-///     configured eval model across the two local runtimes, preferring the default llama.cpp runtime:
-///     <list type="number">
-///         <item>
-///             <b>llama.cpp GGUF</b> (the default runtime) via the on-disk GGUF registry: the verified content hash
-///             (the LFS OID) when exposed — a true weight identity — else revision + on-disk size + download-time, all of
-///             which change when the model is re-downloaded under the same name.
-///         </item>
-///         <item>
-///             <b>Ollama</b> (the gated secondary runtime) via the digest-keyed model-classification cache: the model's
-///             Ollama content digest, present when the model was probed via <c>/api/show</c>.
-///         </item>
-///         <item>
-///             Neither resolvable → <see cref="EvalModelIdentity.Unverified" />: an explicit sentinel, logged as a
-///             Warning, so the fingerprint records the run as identity-unverifiable rather than silently trusting the name.
-///         </item>
-///     </list>
-///     The identity for the SAME weights is stable across reads (download-time / hash / digest are persisted, never
-///     "now"), so a fingerprint recorded at eval time still matches at promote time when no swap happened. Never throws:
-///     any lookup failure falls through to the next source and ultimately to the unverified sentinel.
+///     Default <see cref="IEvalModelIdentityResolver" />, resolving the strongest weight identity available across
+///     the two local runtimes and preferring the default llama.cpp one.
 /// </summary>
+/// <remarks>
+///     A GGUF resolves from the on-disk registry: the verified content hash when the LFS OID is exposed, else
+///     revision, size and download-time, all of which move on a same-name re-download. An Ollama model resolves from
+///     the digest-keyed classification cache. Neither yields <see cref="EvalModelIdentity.Unverified" />, an explicit
+///     sentinel logged as a Warning. The identity for the SAME weights is stable across reads, since every source is
+///     persisted rather than "now", and no lookup failure throws: it falls through to the next source.
+/// </remarks>
 internal sealed class EvalModelIdentityResolver : IEvalModelIdentityResolver
 {
     private readonly IModelClassificationStore _classificationStore;
@@ -52,9 +41,8 @@ internal sealed class EvalModelIdentityResolver : IEvalModelIdentityResolver
             return EvalModelIdentity.Unverified;
         }
 
-        // (1) llama.cpp GGUF — the default runtime. The registry carries the strongest weight identity: the verified
-        // content hash when the LFS OID was exposed, else revision + size + download-time (a re-download always changes
-        // DownloadedAtUtc, so a same-name swap invalidates even without a hash).
+        // (1) llama.cpp GGUF, the default runtime, whose registry carries the strongest identity: the content hash
+        // when the LFS OID was exposed, else revision, size and a download-time a re-download always moves.
         try
         {
             var entry = await _ggufRegistry.FindAsync(modelName, cancellationToken);
@@ -95,9 +83,8 @@ internal sealed class EvalModelIdentityResolver : IEvalModelIdentityResolver
             _logger.LogDebug(exception, "Classification-store weight-identity lookup failed for eval model {ModelName}.", modelName);
         }
 
-        // (3) No identity source resolved — record the explicit unverified sentinel rather than silently trusting the
-        // name. A later run that CAN resolve an identity produces a different (verified) token, so the fingerprint
-        // changes and forces a re-eval the moment the model becomes identifiable.
+        // (3) No identity source resolved, so record the explicit unverified sentinel rather than trust the name. A
+        // later run that CAN resolve one produces a verified token, forcing a re-eval the moment it becomes possible.
         _logger.LogWarning(
             "Could not resolve a weight identity for eval model {ModelName}; the eval fingerprint records it as identity-unverified so a same-name weight swap cannot silently keep a recorded pass trusted against different weights.",
             modelName);

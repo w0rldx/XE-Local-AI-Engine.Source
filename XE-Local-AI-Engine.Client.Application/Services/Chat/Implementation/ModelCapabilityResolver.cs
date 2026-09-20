@@ -8,14 +8,16 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
-///     Default <see cref="IModelCapabilityResolver" />. Routes the capability lookup by the model's provider so an id is
-///     never classified against a runtime that has never seen it: Codex and Azure Foundry ids use their declared
-///     capability matrices, an external OpenAI-compatible model uses the operator's own declarations, a llama.cpp GGUF
-///     reads its offline chat-template capabilities (no Ollama probe, no network), and only an Ollama-routed model hits
-///     <c>/api/show</c> (cache-first). This is the one provider-routing decision in the codebase: the orchestration
-///     resolver resolves each participant's capabilities from its OWN effective model through it, and
-///     <see cref="ChatTurnResolver" /> resolves the chat turn's active model through it too.
+///     Default <see cref="IModelCapabilityResolver" />, routing the capability lookup by the model's provider so an
+///     id is never classified against a runtime that has never seen it.
 /// </summary>
+/// <remarks>
+///     Codex and Azure Foundry ids use their declared matrices, an external OpenAI-compatible model uses the
+///     operator's own declarations, a llama.cpp GGUF reads its offline chat-template capabilities with no Ollama
+///     probe and no network, and only an Ollama-routed model hits <c>/api/show</c>, cache-first. This is the one
+///     provider-routing decision in the codebase: both the orchestration resolver, per participant, and
+///     <see cref="ChatTurnResolver" />, per turn, resolve through it.
+/// </remarks>
 public sealed class ModelCapabilityResolver : IModelCapabilityResolver
 {
     // What an ext: id resolves to when its registration is gone: not capable, and cloud, so the private-data gates
@@ -57,11 +59,8 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
             return NotCapableLocal;
         }
 
-        // A Codex cloud model is NOT an Ollama model: classifying it against the local runtime's /api/show would
-        // mis-detect it (the runtime has never seen it). Use the Codex provider's declared capability matrix
-        // instead. Codex models reason by default, so thinking is on; tool calling tracks the V0 matrix, which now
-        // ENABLES tools for all Codex ids (de-risk verified — encrypted reasoning round-trips through the stateless
-        // tool loop). Cloud providers ignore the unknown think property, so the reasoning gate stays inert on the wire.
+        // A Codex cloud model is NOT an Ollama model, so its declared matrix replaces an /api/show probe the runtime
+        // could only mis-detect. Thinking is on and tools track the V0 matrix; a cloud provider ignores `think`.
         if (CodexModelCatalog.IsCodexModel(model))
         {
             return new ModelCapabilitySnapshot(SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling, IsCloud: true)
@@ -72,11 +71,8 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
             };
         }
 
-        // An external OpenAI-compatible model is classified from the OPERATOR'S declarations, never a probe: only
-        // POST /v1/chat/completions is universal across llama.cpp, vLLM, LM Studio and hosted APIs, and none of them
-        // advertises tool, vision or reasoning support in a way that can be trusted across all four. Placed before the
-        // cloud-routing check because an ext: id deliberately falls THROUGH cloud selection (the orphan guard) — so
-        // that check would report it node-local and hand a hosted endpoint the private-data gates.
+        // An external OpenAI-compatible model is classified from the OPERATOR'S declarations, never a probe. It is
+        // checked before cloud routing, which an ext: id falls through and would report a hosted endpoint as local.
         if (ExternalModelId.HasExternalScheme(model))
         {
             if (await _modelTrustResolver.TryResolveExternalAsync(model, cancellationToken) is not { } registration)
@@ -89,20 +85,14 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
                 registration.Connection.Locality == ExternalProviderLocality.Cloud)
             {
                 SupportsVision = registration.Model.SupportsVision,
-                // Vacuously enforceable: this provider emits no llama-server reasoning-budget field at all, so there is
-                // no cap that could be silently accepted and ignored. Reporting false would suppress a marker nothing
-                // on this wire reads.
+                // Vacuously enforceable: this provider emits no llama-server reasoning-budget field, so no cap can be
+                // silently accepted and ignored, and reporting false would suppress a marker nothing here reads.
                 ReasoningBudgetEnforceable = true
             };
         }
 
-        // Azure/cloud LOCALITY is resolved from the SAME short-TTL routing snapshot the cloud factory routes from — the
-        // single source of truth — never an independent credential-store read that could FAIL while the factory still
-        // routes the deployment to Azure from its cached snapshot (which would classify a participant local while it
-        // egresses to the cloud, leaking through the private-data gate). A genuine snapshot read failure FAILS CLOSED to
-        // cloud so the gate withholds. A non-Codex model that routes to a cloud provider is an Azure Foundry deployment,
-        // so advertise Azure's capability matrix; on a fail-closed fault keep the conservative non-thinking/non-tools
-        // default. IsCloud feeds ONLY the private-data gates — thinking/tools are separate fields of the snapshot.
+        // Cloud LOCALITY comes from the SAME routing snapshot the factory routes from, never an independent credential
+        // read that could fail and classify an egressing participant as local; a read failure FAILS CLOSED to cloud.
         var (routesToCloud, routingFaulted) = CloudRoutingClassifier.Classify(_activeCloudChatClientFactory, _logger, model);
         if (routesToCloud)
         {
@@ -111,13 +101,8 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
                 : new ModelCapabilitySnapshot(SupportsThinking: false, AzureFoundryProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
-        // /api/show classification only makes sense for an Ollama-routed model. A llama.cpp (GGUF) model has no Ollama
-        // entry, so probing the local runtime would always fail — and in desktop mode there is no Ollama daemon at all,
-        // so the probe would stall (up to the connect timeout) on every send. Instead, read the GGUF's capabilities
-        // detected offline from its chat template (cheap, cached per file — no Ollama probe, no network), matching the
-        // model-list classification (LocalModelsMapper.ToLlamaCppModelResponses). Skip the doomed probe for any
-        // non-Ollama provider; for a llama.cpp model the GGUF detection supplies thinking/tools, otherwise the safe
-        // default applies.
+        // /api/show only makes sense for an Ollama-routed model: a GGUF has no entry and desktop mode has no daemon, so
+        // the probe would stall every send. A GGUF reads its chat template offline; other providers take the default.
         var providerName = await _localModelProviderResolver
                                  .ResolveProviderNameForModelAsync(model, cancellationToken);
         if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))

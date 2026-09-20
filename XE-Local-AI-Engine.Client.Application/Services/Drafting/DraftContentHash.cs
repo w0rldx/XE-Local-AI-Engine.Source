@@ -4,25 +4,16 @@ using System.Security.Cryptography;
 using System.Text;
 
 /// <summary>
-///     The ONE canonical hash over drafted content. Two call sites must agree byte-for-byte or the provenance
-///     <c>wasEdited</c> flag is meaningless:
-///     <list type="number">
-///         <item>the draft service stamps <see cref="ConfigDraft.ContentHash" /> over the normalized draft it returns;</item>
-///         <item>the save path recomputes it over the fields the operator actually submitted and compares.</item>
-///     </list>
-///     <para>
-///         <b>Canonical form</b> — each of the three content fields is taken as <c>null</c> ⇒ empty, CRLF/CR line endings
-///         folded to LF, then trimmed of leading/trailing whitespace; the three normalized values are joined with the
-///         ASCII unit separator (<c>U+001F</c>, which cannot occur in submitted text) in the fixed order
-///         name, description, content; the UTF-8 bytes of that string are SHA-256'd and rendered as lowercase hex.
-///         Line-ending folding is load-bearing: a browser textarea round-trips LF content back as CRLF, which would
-///         otherwise read as an operator edit.
-///     </para>
-///     <para>
-///         The hash is provenance, NOT a security control — this is a single-operator local node, so an operator can
-///         trivially forge it against themselves (locked decision 9: informational provenance, no signed receipts).
-///     </para>
+///     The ONE canonical hash over drafted content, which the draft service stamps on
+///     <see cref="ConfigDraft.ContentHash" /> and the save path recomputes over what the operator submitted.
 /// </summary>
+/// <remarks>
+///     Both sides must agree byte-for-byte or the provenance <c>wasEdited</c> flag is meaningless. Canonically, each
+///     of the three fields is null-to-empty, CRLF and CR folded to LF, then trimmed; the three are joined with
+///     <c>U+001F</c>, which cannot occur in submitted text, in the order name, description, content, and SHA-256'd to
+///     lowercase hex. The line-ending fold is load-bearing: a browser textarea returns LF content as CRLF, which
+///     would otherwise read as an edit. The hash is provenance, NOT a security control, on a single-operator node.
+/// </remarks>
 public static class DraftContentHash
 {
     private const char FieldSeparator = '\u001F';

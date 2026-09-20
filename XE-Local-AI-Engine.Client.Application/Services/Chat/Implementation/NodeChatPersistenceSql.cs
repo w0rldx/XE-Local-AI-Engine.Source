@@ -10,15 +10,16 @@ using static NodeChatMetadataSerializer;
 
 /// <summary>
 ///     Shared raw-ADO helpers for the node chat persistence path: low-level <see cref="DbCommand" /> wiring plus the
-///     row read/probe queries every collaborator reuses. Pure functions over a caller-supplied
-///     <see cref="NodeChatDbContext" />; consumed via <c>using static</c>. The serialization of content/metadata is
-///     delegated to <see cref="NodeChatMetadataSerializer" />.
+///     row read and probe queries every collaborator reuses.
 /// </summary>
+/// <remarks>
+///     Pure functions over a caller-supplied <see cref="NodeChatDbContext" />, consumed via <c>using static</c>.
+///     Content and metadata serialization is delegated to <see cref="NodeChatMetadataSerializer" />.
+/// </remarks>
 internal static class NodeChatPersistenceSql
 {
-    // Opens the node chat connection if needed AND applies the WAL/busy_timeout/synchronous pragmas on the open.
-    // This is the single choke point every raw-ADO node-chat read/write routes through, so it is where the raw path gets
-    // the same connection posture the EF interceptor applies to EF-initiated opens.
+    // Opens the connection if needed AND applies the WAL, busy_timeout and synchronous pragmas. Every raw-ADO
+    // node-chat read and write routes through here, so the raw path gets the EF interceptor's connection posture.
     internal static Task OpenIfNeededAsync(DbConnection? connection, CancellationToken cancellationToken)
     {
         return NodeSqlitePragmas.OpenAndConfigureAsync(connection, cancellationToken);
@@ -33,10 +34,13 @@ internal static class NodeChatPersistenceSql
     }
 
     /// <summary>
-    ///     Allocates the next contiguous sequence for a conversation as <c>MAX(sequence)+1</c>. The read must run inside
-    ///     the same transaction as the insert that consumes it (and under the conversation-exclusive write lock), or two
-    ///     concurrent inserts observe the same maximum and collide on the unique <c>(conversation_id, sequence)</c> index.
+    ///     Allocates the next contiguous sequence for a conversation as <c>MAX(sequence)+1</c>.
     /// </summary>
+    /// <remarks>
+    ///     The read must run inside the same transaction as the insert that consumes it, and under the
+    ///     conversation-exclusive write lock, or two concurrent inserts observe the same maximum and collide on the
+    ///     unique <c>(conversation_id, sequence)</c> index.
+    /// </remarks>
     internal static async Task<int> NextSequenceAsync(NodeChatDbContext dbContext, Guid conversationId, DbTransaction? transaction, CancellationToken cancellationToken)
     {
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
@@ -48,15 +52,12 @@ internal static class NodeChatPersistenceSql
         return Convert.ToInt32(result, CultureInfo.InvariantCulture);
     }
 
-    // Extended result code raised by SQLite when an insert violates a UNIQUE index. The value 2067 is
-    // SQLITE_CONSTRAINT_UNIQUE. On the messages table the only unique index covers conversation id plus sequence, so
-    // this result identifies a sequence collision. A duplicate primary key surfaces as SQLITE_CONSTRAINT_PRIMARYKEY
-    // 1555 instead and is deliberately NOT retried — that is a genuine duplicate message id, not an allocation race.
+    // SQLITE_CONSTRAINT_UNIQUE. The messages table's only unique index covers conversation id plus sequence, so this
+    // identifies a sequence collision; a duplicate primary key surfaces as 1555 and is deliberately NOT retried.
     private const int SqliteConstraintUnique = 2067;
 
-    // Defense in depth: the conversation-exclusive write lock already makes in-process sequence allocation race-free, so
-    // a unique-index conflict can only come from a second OS process on the same database file. Re-read MAX(sequence)
-    // and retry a bounded number of times before surfacing the failure.
+    // Defense in depth: the conversation-exclusive write lock already makes in-process allocation race-free, so a
+    // unique-index conflict can only be a second OS process. Re-read MAX(sequence) a bounded number of times.
     internal const int MaxSequenceAllocationAttempts = 5;
 
     internal static bool IsUniqueConstraintViolation(Exception exception)
@@ -148,17 +149,15 @@ internal static class NodeChatPersistenceSql
     }
 
     /// <summary>
-    ///     Reads a single message. Filters in SQL rather than materializing the whole conversation and picking one out of
-    ///     it: this sits on the streaming partial-flush path (<c>UpdateCorrelatedMessageAsync</c>, ~10 calls a second for
-    ///     the length of a turn), where the previous shape AEAD-decrypted and JSON-parsed EVERY message in the
-    ///     conversation to return one — making each flush cost grow with conversation length.
-    ///     <para>
-    ///         Precisely: the decrypt/deserialize work drops to a single row. The row SCAN is still bounded by the
-    ///         conversation's <c>IX_messages_conversation_id</c> range rather than seeking the primary key, because the
-    ///         shared query's <c>$message_id IS NULL OR …</c> guard is not sargable. That is deliberate — reusing one
-    ///         query is what keeps the two reads projection-identical, and the scan was never the expensive part.
-    ///     </para>
+    ///     Reads a single message, filtering in SQL rather than materializing the whole conversation.
     /// </summary>
+    /// <remarks>
+    ///     This sits on the streaming partial-flush path, so decrypting and parsing every message to return one makes
+    ///     each flush cost grow with conversation length. The decrypt work therefore drops to a single row, while the
+    ///     SCAN stays bounded by the conversation's index range rather than seeking the primary key, because the
+    ///     shared query's <c>$message_id IS NULL OR …</c> guard is not sargable — deliberate, since reusing one query
+    ///     keeps the two reads projection-identical and the scan was never the expensive part.
+    /// </remarks>
     internal static async Task<NodeChatPersistedMessageDto?> ReadMessageAsync(NodeChatDbContext dbContext, Guid conversationId, Guid messageId, CancellationToken cancellationToken)
     {
         var messages = await ReadMessagesAsync(dbContext, conversationId, cancellationToken, filterMessageId: messageId);
@@ -169,17 +168,15 @@ internal static class NodeChatPersistenceSql
     ///     Reads every message of a conversation, ordered by sequence.
     /// </summary>
     /// <param name="omitNonUserPayloadsAtOrBelowSequence">
-    ///     Load-side cap for the chat-turn read (see <c>NodeChatReadModel.GetConversationForTurnAsync</c>). When set, the
-    ///     encrypted <c>content</c> and <c>metadata_json</c> blobs of every NON-user message at or below this sequence are
-    ///     selected as NULL, so they are neither transferred, AEAD-decrypted, nor JSON-parsed; their content surfaces as
-    ///     <see cref="string.Empty" /> and their metadata-derived fields as null. Structure (id, sequence, role, variant
-    ///     group, timestamps) is always loaded in full, so selected-path resolution is unaffected. <c>null</c> — the
-    ///     default every other caller uses — loads everything, exactly as before.
+    ///     Load-side cap: the payload blobs of NON-user messages at or below it are NULL; <c>null</c> loads all.
     /// </param>
-    /// <param name="filterMessageId">
-    ///     When set, restricts the read to that one message (see <see cref="ReadMessageAsync" />). Sharing this method
-    ///     rather than writing a second query is what guarantees the single-message read projects an identical DTO.
-    /// </param>
+    /// <param name="filterMessageId">Restricts the read to one message (see <see cref="ReadMessageAsync" />).</param>
+    /// <remarks>
+    ///     A capped payload is neither transferred, AEAD-decrypted nor JSON-parsed; its content surfaces as
+    ///     <see cref="string.Empty" /> and its metadata-derived fields as null, while structure always loads in full,
+    ///     so selected-path resolution is unaffected. Sharing this method rather than writing a second query is what
+    ///     guarantees the single-message read projects an identical DTO.
+    /// </remarks>
     internal static async Task<IReadOnlyList<NodeChatPersistedMessageDto>> ReadMessagesAsync(NodeChatDbContext dbContext,
         Guid conversationId,
         CancellationToken cancellationToken,
@@ -187,11 +184,8 @@ internal static class NodeChatPersistenceSql
         Guid? filterMessageId = null)
     {
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-        // LEFT JOIN the node-local feedback row so the conversation read carries each message's feedback state
-        // (rating/comment) inline — the client derives feedback from the message instead of a per-message GET.
-        // The two CASE expressions apply the optional load-side payload cap documented above; with the parameter null
-        // (every caller but the chat turn) both collapse to a plain column read. `lower(role)` is the conservative
-        // direction: an unexpected casing keeps the payload rather than dropping it.
+        // LEFT JOIN the feedback row so the read carries each message's rating and comment inline. The two CASE
+        // expressions apply the load-side payload cap, and `lower(role)` keeps a payload on unexpected casing.
         command.CommandText = """
                               SELECT m.message_id, m.conversation_id, m.request_id, m.sequence, m.role,
                                      CASE WHEN $omit_payloads_at_or_below IS NOT NULL AND m.sequence <= $omit_payloads_at_or_below AND lower(m.role) <> 'user'

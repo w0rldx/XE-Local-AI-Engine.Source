@@ -10,17 +10,15 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-///     Live-invocation tracker backing reconnect/resume. It mirrors the dispatcher's
-///     <see cref="IWorkerEventDispatcher.InvocationStateChanged" /> stream into a per-invocation snapshot + state
-///     fan-out so a reconnecting client can re-attach with a fresh consumer, and mirrors
-///     <see cref="IWorkerEventDispatcher.ToolCallLifecycleChanged" /> so the resumed stream carries the same
-///     tool-call timeline the original stream did. It owns no agent logic — it only translates
-///     <see cref="InvocationState" /> snapshots and <see cref="ToolCallLifecyclePayload" />s into
-///     <see cref="ChatStreamEvent" />s the same way the local pump does.
-///     Resume streams number their events from zero with their own counter; the client rebases them onto the
-///     original stream's sequence space at the reconnect boundary (NodeChatAdapter), so the registry must only
-///     guarantee that its own events are contiguous and ascending.
+///     Live-invocation tracker backing reconnect and resume.
 /// </summary>
+/// <remarks>
+///     It mirrors <see cref="IWorkerEventDispatcher.InvocationStateChanged" /> into a per-invocation snapshot and
+///     state fan-out so a reconnecting client re-attaches with a fresh consumer, and
+///     <see cref="IWorkerEventDispatcher.ToolCallLifecycleChanged" /> so the resumed stream carries the original
+///     tool-call timeline. It owns no agent logic. Resume streams number their events from zero with their own
+///     counter, which the client rebases at the reconnect boundary, so only contiguity and ascent are guaranteed.
+/// </remarks>
 public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 {
     private readonly ConcurrentDictionary<Guid, LiveInvocation> _live = new();
@@ -87,9 +85,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         var lastReasoning = snapshot.StreamedThinkingContent;
         var sequence = 0L;
 
-        // A snapshot too large to replay reconciles instead: the client refetches the persisted conversation, which
-        // holds the same text, for one request. Deliberately not a TRUNCATED snapshot — truncating would invent a
-        // partial-replacement semantic the protocol does not have, and every reader of it would have to know.
+        // A snapshot too large to replay reconciles instead, so the client refetches the persisted conversation. A
+        // TRUNCATED snapshot is deliberately not used: it would invent a partial-replacement semantic the wire lacks.
         if (lastContent.Length + lastReasoning.Length > _options.MaxReplaySnapshotChars)
         {
             live.Unsubscribe(subscriber);
@@ -97,19 +94,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             yield break;
         }
 
-        // The request ids of the pending prompts (question / tool approval) this resume stream has already emitted.
-        // Every state publish carries the still-pending slot, so without this the prompt would be re-emitted on every
-        // delta; a request id is minted once per prompt, so first-seen-wins is exact. Scoped to this consumer, so two
-        // concurrently reconnected browsers each get the prompt exactly once.
+        // The request ids of the pending prompts this stream already emitted: every state publish carries the still-
+        // pending slot, and an id is minted once per prompt, so first-seen-wins is exact and scoped to this consumer.
         var replayedPrompts = new HashSet<string>(StringComparer.Ordinal);
 
-        // Replay the tool-call timeline, then the notice timeline, accumulated so far, then the content accumulated
-        // so far, so the reconnecting client renders the in-flight assistant message (tool cards and notices
-        // included) immediately before live items continue in order. The content replay is an AssistantSnapshot
-        // (full Content/Reasoning, no delta fields): the client applies Content as a replacement, and a delta here
-        // would be appended to whatever the client already rendered before the reconnect, duplicating it. It is also
-        // what resets the client's delta-offset counters, which is why the same event serves gap and overflow repair —
-        // both reach it by re-subscribing through this method.
+        // Replay the tool-call timeline, the notices, then the content, before live items continue. That content is an
+        // AssistantSnapshot applied as a REPLACEMENT, and it resets the delta offsets, repairing a gap or an overflow.
         foreach (var toolCall in toolHistory)
         {
             yield return ToToolCallEvent(snapshot, toolCall, sequence++);
@@ -120,9 +110,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             yield return ToNoticeEvent(snapshot, notice, sequence++);
         }
 
-        // Then any prompt the turn is currently PARKED on, after the tool timeline that carries the card it attaches
-        // to. Without this a mid-turn reload permanently loses the controls and the run stays blocked until it times
-        // out — fatal for a question, which the turn cannot proceed without.
+        // Then any prompt the turn is PARKED on, after the tool timeline carrying the card it attaches to, or a
+        // mid-turn reload loses the controls and the run stays blocked until it times out.
         foreach (var promptEvent in BuildPendingPromptEvents(snapshot, replayedPrompts, sequence))
         {
             yield return promptEvent;
@@ -137,15 +126,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             sequence++);
 
-        // The last runtime phase this resume stream has surfaced. ONE mechanism serves both the opening replay below
-        // and the live loop: the replay is simply its first iteration, so the two cannot drift apart. Mirrors the diff
-        // ChatInvocationStatePump.PumpAsync keeps for the same anti-spam reason — a state publish that changes only
-        // content must not re-emit the phase.
+        // The last runtime phase this stream surfaced. ONE mechanism serves the opening replay and the live loop, so
+        // they cannot drift, and a state publish that changed only content does not re-emit the phase.
         InvocationRuntimePhase? lastEmittedPhase = null;
 
-        // Always the ORIGINAL change time off the state, never a fresh stamp: replaying "the phase changed just now"
-        // would reset the reloading client's elapsed timer to zero, the exact confusion this field exists to remove.
-        // timestampMs is the FRAME's send time and stays on the registry's own clock; the two are unrelated.
+        // Always the ORIGINAL change time off the state, never a fresh stamp, or the reloading client's elapsed timer
+        // resets to zero. timestampMs is the FRAME's send time and stays on the registry's own clock.
         ChatStreamEvent PhaseEventFor(InvocationState phaseState, InvocationRuntimePhase phase, long phaseSequence)
         {
             return ChatStreamEventMapper.PhaseEvent(new NodeChatMessageCorrelation { ConversationId = phaseState.ConversationId, MessageId = phaseState.InvocationId, RequestId = phaseState.InvocationId },
@@ -155,9 +141,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 phaseState.RuntimePhaseChangedAtUtc);
         }
 
-        // Replayed AFTER the snapshot: the client's assistant-snapshot reducer arm rebuilds the streaming message, so a
-        // phase yielded before it would be discarded. Without this a reload during a cold load renders no
-        // "Loading model…" affordance and no elapsed time — the hang-shaped screen this feature exists to remove.
+        // Replayed AFTER the snapshot, because the client's snapshot reducer arm rebuilds the streaming message and
+        // would discard an earlier phase, leaving a cold-load reload with no affordance and no elapsed time.
         if (IsNonTerminal(snapshot.Status) && snapshot.RuntimePhase is { } resumedPhase)
         {
             lastEmittedPhase = resumedPhase;
@@ -166,12 +151,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
         try
         {
-            // The invocation can go terminal in the window between ResumeAsync's non-terminal validation and
-            // this first Subscribe. When it does, OnInvocationStateChanged runs Publish(terminal) then Complete() before
-            // our channel is (or right as it is) registered — so the live loop below would never carry a terminal event
-            // (the channel is already completed, or was completed by Complete()). The snapshot taken under Subscribe's
-            // lock already reflects that terminal, so emit it directly and finish rather than ending the resume stream
-            // with no terminal (which would leave the consumer waiting for a terminal that never arrives).
+            // The invocation can go terminal between ResumeAsync's validation and this Subscribe, completing the
+            // channel; the snapshot taken under its lock reflects it, so emit it rather than end with no terminal.
             if (TryMapTerminal(snapshot.Status, out var snapshotTerminalType, out var snapshotTerminalStatus))
             {
                 yield return ToEvent(snapshotTerminalType,
@@ -187,9 +168,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
             await foreach (var item in subscriber.Reader.ReadAllAsync(cancellationToken))
             {
-                // This consumer's own queue overflowed, so its stream is no longer contiguous — an approval or a tool
-                // result may have been the item that fell off. Tell it to re-resume rather than guessing which kind
-                // was safe to lose.
+                // This consumer's queue overflowed, so its stream is no longer contiguous and the lost item may have
+                // been an approval or a tool result. Tell it to re-resume rather than guess what was safe to lose.
                 if (subscriber.TryConsumeReconcile())
                 {
                     yield return ReconcileEvent(live.LatestState, sequence++, "queue_overflow");
@@ -212,9 +192,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                     continue;
                 }
 
-                // Before the delta block, so a phase change that arrives together with the first content still
-                // precedes that content. A reconnect while queued would otherwise show no phase at all, and a
-                // reconnect during a load would never see the Generating transition.
+                // Before the delta block, so a phase change arriving with the first content still precedes it: a
+                // reconnect while queued would otherwise show no phase, and one during a load miss Generating.
                 if (IsNonTerminal(state.Status) && state.RuntimePhase is { } livePhase && livePhase != lastEmittedPhase)
                 {
                     lastEmittedPhase = livePhase;
@@ -226,9 +205,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
                 if (hasContentDelta || hasReasoningDelta)
                 {
-                    // The slice bases ARE the wire offsets: the client appends each delta at the offset it expected and
-                    // re-resumes if they do not line up. Both offsets ride every delta even when only one side
-                    // advanced, so a stalled side still confirms its position.
+                    // The slice bases ARE the wire offsets: the client appends at the offset it expected and re-resumes
+                    // if they disagree. Both ride every delta even when one side stalled, so it confirms its position.
                     var contentOffset = lastContent.Length;
                     var reasoningOffset = lastReasoning.Length;
                     var contentDelta = hasContentDelta ? state.StreamedContent[contentOffset..] : null;
@@ -245,9 +223,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                         reasoningOffset);
                 }
 
-                // A prompt raised while this resume stream is attached arrives as a state publish (the dispatcher
-                // records the pending slot BEFORE fanning the live event out), so the same dedupe covers both the
-                // snapshot replay above and the live case here — a prompt is emitted exactly once per consumer.
+                // A prompt raised while this stream is attached arrives as a state publish, because the dispatcher
+                // records the pending slot BEFORE fanning out, so the one dedupe covers replay and live alike.
                 foreach (var promptEvent in BuildPendingPromptEvents(state, replayedPrompts, sequence))
                 {
                     yield return promptEvent;
@@ -276,9 +253,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
     /// <summary>
     ///     Tells this consumer to resynchronize: dispose the subscription and re-enter through <c>ResumeMessage</c>,
-    ///     whose first frame is an authoritative snapshot. Raised when the consumer's own queue overflowed or when the
-    ///     replay snapshot was too large to send. Silent to the user by design — the counter is the only signal.
+    ///     whose first frame is an authoritative snapshot.
     /// </summary>
+    /// <remarks>
+    ///     Raised when the consumer's own queue overflowed or when the replay snapshot was too large to send. Silent
+    ///     to the user by design — the counter is the only signal.
+    /// </remarks>
     private ChatStreamEvent ReconcileEvent(InvocationState state, long sequence, string reason)
     {
         NodeMetrics.ChatStreamReconcileTotal.Add(1, new KeyValuePair<string, object?>("reason", reason));
@@ -295,9 +275,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
         if (!terminal)
         {
-            // TryGetValue first: this runs once per streamed token, and every publish after the first finds the entry
-            // already there. The GetOrAdd fallback takes the state as a factory ARGUMENT so the miss path does not
-            // allocate a capturing closure either.
+            // TryGetValue first: this runs once per streamed token and every publish after the first hits. The GetOrAdd
+            // fallback takes the state as a factory ARGUMENT so the miss path allocates no capturing closure either.
             if (!_live.TryGetValue(state.InvocationId, out var live))
             {
                 live = _live.GetOrAdd(state.InvocationId,
@@ -309,9 +288,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             return;
         }
 
-        // Terminal: fan the terminal state out to any attached resume consumers so they observe it, then
-        // remove the entry. A subsequent resume request finds nothing and the client re-fetches the persisted
-        // (terminalized) conversation instead.
+        // Terminal: fan the state out to any attached consumers so they observe it, then remove the entry. A later
+        // resume request finds nothing and the client refetches the persisted, terminalized conversation.
         if (_live.TryRemove(state.InvocationId, out var existing))
         {
             existing.Publish(state);
@@ -324,9 +302,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
     private void OnToolCallLifecycleChanged(object? sender, ToolCallLifecycleChangedEventArgs args)
     {
-        // Tool lifecycle without a tracked live invocation means the run never reported Assigned/Running (or is
-        // already terminal); there is nothing to fan out and nothing to record — the persisted parts[] remain the
-        // source of truth on reload.
+        // Tool lifecycle without a tracked live invocation means the run never reported Assigned or Running, or is
+        // already terminal: nothing to fan out, and the persisted parts[] remain the source of truth on reload.
         if (_live.TryGetValue(args.Payload.InvocationId, out var live))
         {
             live.PublishToolCall(args.Payload);
@@ -344,12 +321,14 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     }
 
     /// <summary>
-    ///     Builds a TERMINAL event from a live state — the only remaining use for a full-content event on this path.
-    ///     Content and reasoning are carried unconditionally: a terminal is one frame per turn, so its cost is
-    ///     irrelevant, and it doubles as the backstop that converges any client whose delta stream fell behind.
-    ///     Deltas go through <see cref="ChatStreamEventMapper.DeltaEvent" /> and the opening replay through
-    ///     <see cref="ChatStreamEventMapper.SnapshotEvent" />; neither may be built here.
+    ///     Builds a TERMINAL event from a live state, the only remaining use for a full-content event on this path.
     /// </summary>
+    /// <remarks>
+    ///     Content and reasoning ride it unconditionally: a terminal is one frame per turn, and it doubles as the
+    ///     backstop that converges any client whose delta stream fell behind. Deltas go through
+    ///     <see cref="ChatStreamEventMapper.DeltaEvent" /> and the opening replay through
+    ///     <see cref="ChatStreamEventMapper.SnapshotEvent" />; neither may be built here.
+    /// </remarks>
     private ChatStreamEvent ToEvent(string type,
         InvocationState state,
         long sequence,
@@ -383,9 +362,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         ToolCallLifecyclePayload payload,
         long sequence)
     {
-        // Route through the same mapper the live send/regenerate paths use so a resumed stream's tool-call events are
-        // wire-identical to the ones the original stream emitted. Resume events stamp the invocation id as BOTH the
-        // message id and the request id; the client remaps them to the assistant message id at the reconnect boundary.
+        // Routed through the same mapper the live paths use, so a resumed tool-call event is wire-identical. Resume
+        // events stamp the invocation id as BOTH message and request id; the client remaps them on reconnect.
         return ChatStreamEventMapper.ToolCallEvent(state.ConversationId,
             state.InvocationId,
             state.InvocationId,
@@ -395,19 +373,15 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     }
 
     /// <summary>
-    ///     Builds the replay events for whatever human prompt the invocation is currently parked on — a pending
+    ///     Builds the replay events for whatever human prompt the invocation is parked on — a pending
     ///     <c>ask_user</c> question and/or a pending tool approval — skipping any this consumer already received.
-    ///     Returns an empty list on the overwhelmingly common no-prompt path.
-    ///     <para>
-    ///         The pending slots are the ONLY outward surface a reconnecting browser has for these prompts: neither
-    ///         event is accumulated into the persisted <c>parts[]</c> (both are transient live state), and the live
-    ///         <c>ApprovalRequestedChanged</c>/<c>UserQuestionRequestedChanged</c> fan-out reached only the original
-    ///         stream, which the reload tore down. Both events route through the same
-    ///         <see cref="ChatStreamEventMapper" /> the live paths use, so a replayed prompt is wire-identical to a
-    ///         live one; a resume stream stamps the invocation id as both the message id and the request id, as it
-    ///         does for tool-call and notice replay.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The pending slots are the ONLY outward surface a reconnecting browser has for these prompts: neither is
+    ///     accumulated into the persisted <c>parts[]</c>, and the live fan-out reached only the stream the reload tore
+    ///     down. Both route through the same <see cref="ChatStreamEventMapper" /> the live paths use, so a replayed
+    ///     prompt is wire-identical. The common no-prompt path returns an empty list.
+    /// </remarks>
     private List<ChatStreamEvent> BuildPendingPromptEvents(InvocationState state, HashSet<string> replayedPrompts, long sequence)
     {
         if (state.PendingQuestion is null && state.PendingApproval is null)
@@ -435,9 +409,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 sequence + events.Count));
         }
 
-        // The approval slot's CallId/ToolName are optional (a platform-hub approval carries neither). The mapper maps a
-        // blank to a null wire field, so the client can still render the prompt — it just cannot attach it to a
-        // specific tool-call card. Populating them for a locally-raised approval is the runner's job.
+        // The approval slot's CallId and ToolName are optional, since a platform-hub approval carries neither; the
+        // mapper maps a blank to null, so the client renders the prompt unattached to any tool-call card.
         if (state.PendingApproval is { } approval && replayedPrompts.Add(approval.RequestId))
         {
             events.Add(ChatStreamEventMapper.ApprovalRequestedEvent(state.ConversationId,
@@ -450,9 +423,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                     CallId = approval.CallId ?? string.Empty,
                     ToolName = approval.ToolName ?? string.Empty,
                     Description = approval.Description,
-                    // Fail CLOSED on a slot that never recorded the runner's answer: a replayed card that offers
-                    // "Approve for this session" the node cannot honor is the bug this flag exists to end, and the
-                    // operator can still approve once.
+                    // Fail CLOSED on a slot that never recorded the runner's answer: a replayed card must not offer a
+                    // session scope the node cannot honor, and a one-off approval still works.
                     SessionScopeEligible = approval.SessionScopeEligible ?? false
                 },
                 timestampMs,
@@ -545,18 +517,18 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     }
 
     /// <summary>
-    ///     One live invocation: the latest snapshot, the tool-call timeline so far, and the set of attached resume
-    ///     consumers. Each consumer gets its own BOUNDED channel so a slow reader never blocks the dispatcher's
-    ///     publish path and never grows without limit either — a browser that reconnects but stops reading used to
-    ///     retain every state publish for the rest of the run. History append and subscriber registration share one
-    ///     lock, so every tool event lands in a consumer's replayed history XOR on its channel — never both, never
-    ///     neither.
+    ///     One live invocation: the latest snapshot, the tool-call timeline so far, and the attached resume consumers.
     /// </summary>
+    /// <remarks>
+    ///     Each consumer gets its own BOUNDED channel, so a reader that reconnects and then stops reading neither
+    ///     blocks the dispatcher's publish path nor retains every state publish for the rest of the run. History
+    ///     append and subscriber registration share one lock, so every tool event lands in a consumer's replayed
+    ///     history XOR on its channel — never both, never neither.
+    /// </remarks>
     private sealed class LiveInvocation
     {
-        // Caps the replayed tool timeline for pathological turns; the iteration cap bounds real turns far below
-        // this. When exceeded the oldest entries drop — the terminal-gated refetch restores the full persisted
-        // timeline anyway.
+        // Caps the replayed tool timeline for pathological turns; the iteration cap bounds real turns far below it.
+        // The oldest entries drop when exceeded, and the terminal-gated refetch restores the persisted timeline.
         private const int MaxRecordedToolEvents = 256;
 
         // A turn notice fires at most a handful of times (one model substitution, a few distinct tools disabled,
@@ -569,10 +541,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         private readonly Lock _syncRoot = new();
         private readonly ChatStreamBudgetOptions _options;
 
-        // Latched under _syncRoot when Complete() runs (the terminal state has been published and the then-attached
-        // subscribers completed). A Subscribe that races in AFTER Complete would otherwise register a channel that no
-        // future publish/complete will ever finish. Once set it never clears; the entry is removed from the
-        // registry at the same time, so no non-terminal publish can follow.
+        // Latched under _syncRoot when Complete() runs, or a Subscribe racing in after it would register a channel no
+        // future publish will ever finish. It never clears: the registry entry is removed at the same time.
         private bool _completed;
 
         public LiveInvocation(InvocationState initialState, ChatStreamBudgetOptions options)
@@ -581,11 +551,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             LatestState = initialState;
         }
 
-        // The dispatcher hands every InvocationStateChanged subscriber a fresh, never-subsequently-mutated snapshot
-        // (see WorkerEventDispatcher.PublishStateChanged), so a published state is effectively immutable: it can be
-        // stored and fanned out by reference without a defensive copy. LatestState stays correct for a late resumer
-        // because each publish swaps in the newest snapshot, and a zero-subscriber publish (the common case) does no
-        // copying at all.
+        // The dispatcher hands every subscriber a fresh, never-subsequently-mutated snapshot, so a published state is
+        // effectively immutable and is stored and fanned out by reference, with no copying on a zero-subscriber publish.
         public InvocationState LatestState { get; private set; }
 
         public void Publish(InvocationState state)
@@ -640,9 +607,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         /// </summary>
         /// <exception cref="InvalidOperationException">
         ///     More than <c>MaxSubscribersPerInvocation</c> consumers are already attached. The cap REJECTS the new
-        ///     consumer rather than evicting an existing one: a runaway reconnect loop in one tab must never knock a
-        ///     working browser off its own stream. The rejected caller sees the same failure shape as "not resumable"
-        ///     and falls back to refetching the persisted conversation.
+        ///     consumer rather than evicting an existing one, so a runaway reconnect loop in one tab cannot knock a
+        ///     working browser off its stream; the rejected caller falls back to refetching the conversation.
         /// </exception>
         public ResumeSubscriber Subscribe(out InvocationState snapshot,
             out IReadOnlyList<ToolCallLifecyclePayload> toolHistory,
@@ -656,10 +622,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 toolHistory = [.. _toolHistory];
                 noticeHistory = [.. _noticeHistory];
 
-                // The invocation already reached its terminal and Complete() ran (which completed and cleared
-                // the then-attached subscribers). Registering a channel now would leave a reader that no future
-                // publish/complete ever finishes, so hand back an already-completed channel. The snapshot above is the
-                // terminal state (Publish precedes Complete under this same lock), which ResumeCoreAsync emits directly.
+                // Complete() already ran, so registering a channel now would leave a reader nothing ever finishes:
+                // hand back a completed one. The snapshot above is the terminal state, which ResumeCoreAsync emits.
                 if (_completed)
                 {
                     subscriber.Complete();
@@ -707,12 +671,13 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     }
 
     /// <summary>
-    ///     One attached resume consumer: its bounded queue plus the latch that records whether that queue overflowed.
-    ///     The queue drops rather than waiting, because it is written under <c>LiveInvocation</c>'s lock on the
-    ///     dispatcher's publish path — a wait there would stall every other consumer AND the run itself. What the drop
-    ///     costs is repaired at the stream level: the consumer is told to re-resume, exactly as an overflowing live
-    ///     stream is.
+    ///     One attached resume consumer: its bounded queue plus the latch recording whether that queue overflowed.
     /// </summary>
+    /// <remarks>
+    ///     The queue drops rather than waits, because it is written under <c>LiveInvocation</c>'s lock on the
+    ///     dispatcher's publish path, where a wait would stall every other consumer AND the run itself. The drop is
+    ///     repaired at the stream level: the consumer is told to re-resume, exactly as an overflowing live stream is.
+    /// </remarks>
     private sealed class ResumeSubscriber
     {
         private readonly Channel<ResumeItem> _channel;

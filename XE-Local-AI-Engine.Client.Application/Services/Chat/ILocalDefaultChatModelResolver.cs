@@ -1,20 +1,22 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Resolves the model a "Local runtime default" send (request model unspecified) should run on. The local default
-///     resolves ONLY to an installed GGUF (llama.cpp) chat-capable model and NEVER to Ollama: Ollama stays opt-in, so a
-///     user who explicitly selects an Ollama model is unaffected, but the local default must not silently route a stale
-///     config/node-settings id to a (possibly absent) Ollama daemon.
+///     Resolves the model a "Local runtime default" send, one that names no model, should run on.
 /// </summary>
+/// <remarks>
+///     It resolves ONLY to an installed GGUF chat-capable model and NEVER to Ollama, which stays opt-in: an explicit
+///     Ollama pick is unaffected, but the default must not route a stale id to a possibly absent daemon.
+/// </remarks>
 public interface ILocalDefaultChatModelResolver
 {
     /// <summary>
-    ///     Resolves the local-default chat model name, or <see langword="null" /> when no installed GGUF chat model is
-    ///     available (the caller then surfaces a clear "no chat model installed" error rather than routing to a dead
-    ///     provider). Enumerates the installed GGUF models, drops Embedding-classified ones (the same chat-capability
-    ///     notion the chat picker uses — see <c>LocalModelsMapper.ToLlamaCppModelResponses</c> / <c>ModelKind</c>), and
-    ///     applies the pick order: <paramref name="persistedDefault" /> iff it is an installed GGUF chat model, else the
-    ///     first installed GGUF chat model (most-recently-modified, tie-break by name).
+    ///     The local-default chat model name, or <see langword="null" /> when no installed GGUF chat model exists, so
+    ///     the caller can surface "no chat model installed" rather than route to a dead provider.
     /// </summary>
+    /// <remarks>
+    ///     It enumerates the installed GGUF models, drops the Embedding-classified ones on the same chat-capability
+    ///     notion the chat picker uses, then picks <paramref name="persistedDefault" /> if it is an installed GGUF
+    ///     chat model, else the most-recently-modified one, tie-broken by name.
+    /// </remarks>
     Task<string?> ResolveAsync(string? persistedDefault, CancellationToken cancellationToken = default);
 }

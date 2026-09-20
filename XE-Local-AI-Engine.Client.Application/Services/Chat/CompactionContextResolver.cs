@@ -5,18 +5,15 @@ using XE_Local_AI_Engine.Client.Models;
 
 /// <summary>
 ///     Resolves a conversation's non-destructive compaction synopsis into the ONE synthetic context message that
-///     replaces the covered history, shared by every path that assembles a turn's context (the send path's
-///     <c>ConversationContextBuilder.Build</c> and the regenerate path's
-///     <c>NodeChatRegenerationService.BuildRegenerationContext</c>). Both must splice identically: a compacted
-///     conversation that regenerates would otherwise re-send the verbatim messages the synopsis already replaced.
-///     <para>
-///         The originals stay persisted — this only shapes what is SENT. Callers prepend
-///         <c>Summary</c> to their leading context and drop every message whose ANCHOR sequence is at or below
-///         <c>CoveredSequence</c> from the verbatim history — anchors, not raw sequences, because that is the space
-///         <c>ConversationCompactionService</c> computed the covered value in
-///         (<see cref="SelectedPathResolver.CreateAnchorResolver{TMessage}" />).
-///     </para>
+///     replaces the covered history, shared by the send and regenerate context builders.
 /// </summary>
+/// <remarks>
+///     Both must splice identically, or a compacted conversation that regenerates re-sends the verbatim messages the
+///     synopsis already replaced. The originals stay persisted; this only shapes what is SENT. Callers prepend
+///     <c>Summary</c> to their leading context and drop every message whose ANCHOR sequence is at or below
+///     <c>CoveredSequence</c> — anchors, not raw sequences, because that is the space
+///     <c>ConversationCompactionService</c> computed the covered value in.
+/// </remarks>
 internal static class CompactionContextResolver
 {
     /// <summary>
@@ -35,9 +32,8 @@ internal static class CompactionContextResolver
             return null;
         }
 
-        // The synopsis is model-produced from attacker-controlled conversation text. It is DATA with derived
-        // provenance, not a trusted instruction: fence the entire value with an unpredictable nonce so an instruction
-        // preserved by summarization cannot escape into the surrounding prompt as if the node authored it.
+        // The synopsis is model-produced from attacker-controlled text, so it is DATA, not a trusted instruction: the
+        // whole value is fenced under an unpredictable nonce so nothing summarization preserved can escape it.
         var fencedSummary = UntrustedContentFraming.WrapDocument(summary,
         [
             new KeyValuePair<string, string?>("source", "conversation-compaction-summary")

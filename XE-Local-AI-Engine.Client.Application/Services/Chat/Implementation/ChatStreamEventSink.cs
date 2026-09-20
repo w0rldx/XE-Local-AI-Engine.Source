@@ -6,29 +6,16 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 
 /// <summary>
-///     The bounded event queue for one streaming turn. Six producers write it concurrently and exactly one consumer
-///     (the SSE loop) drains it, so it is a <see cref="Channel{T}" /> underneath — but a BOUNDED one, on two axes, and
-///     one that never makes a producer wait.
-///     <para>
-///         Why not unbounded: on client disconnect the SSE <c>await foreach</c> exits while every producer keeps
-///         writing, with no reader, for the rest of the run. Every event was retained until the iterator finished.
-///         <see cref="Detach" /> closes that by turning writes into no-ops, and the bound caps what a merely-SLOW
-///         consumer can accumulate before then.
-///     </para>
-///     <para>
-///         Why not <see cref="BoundedChannelFullMode.Wait" />: the pump both writes here and owns persistence, so
-///         blocking a write on a full queue would stall the database writes the run's real terminal depends on. The
-///         queue therefore drops, and a drop is repaired at the STREAM level, not the event level: one
-///         <c>assistant-reconcile</c> tells the client to re-subscribe through <c>ResumeMessage</c>, whose first frame
-///         is an authoritative snapshot. Dropping selectively would risk silently losing an approval — and there is no
-///         per-kind policy that can be safely written, because the client cannot render a turn that is missing one.
-///     </para>
-///     <para>
-///         Deltas are coalesced at the PRODUCER (the pump's emit debounce), never here, so a coalesced delta consumes
-///         exactly one sequence number and the client's ordering guard never waits on a hole. What is dropped here has
-///         already consumed a sequence — which is precisely why a drop must reconcile rather than pass unremarked.
-///     </para>
+///     The bounded event queue for one streaming turn: six concurrent producers, one consumer draining it, bounded on
+///     two axes and never making a producer wait.
 /// </summary>
+/// <remarks>
+///     It is not unbounded because on a disconnect the SSE loop exits while every producer writes on;
+///     <see cref="Detach" /> turns those writes into no-ops and the bound caps what a merely SLOW consumer holds. It
+///     does not <see cref="BoundedChannelFullMode.Wait" /> because the pump both writes here and owns persistence, so
+///     a blocked write would stall the run's terminal. It drops instead and repairs at the STREAM level, with one
+///     <c>assistant-reconcile</c>: no per-kind policy is safe, since a turn missing an approval cannot render.
+/// </remarks>
 public sealed class ChatStreamEventSink : IChatStreamEventSink
 {
     private const string DroppedByCapacity = "queue_capacity";
@@ -40,9 +27,8 @@ public sealed class ChatStreamEventSink : IChatStreamEventSink
     private readonly NodeChatStreamSequence _sequence;
     private readonly TimeProvider _timeProvider;
 
-    // Set when an enqueue was refused for either reason; cleared by the reader when it emits the reconcile. An int
-    // rather than a bool so the read-and-clear is one atomic operation, which is what makes "exactly one reconcile per
-    // burst of drops" true without a lock on the write path.
+    // Set when an enqueue was refused, cleared by the reader when it emits the reconcile. An int, not a bool, so the
+    // read-and-clear is atomic and one burst of drops yields exactly one reconcile without locking the write path.
     private int _reconcileNeeded;
 
     private long _queuedChars;
@@ -145,10 +131,12 @@ public sealed class ChatStreamEventSink : IChatStreamEventSink
     }
 
     /// <summary>
-    ///     The characters one event contributes to the queue's memory footprint. Only the fields that can be large are
-    ///     counted — a tool result or an argument blob is the realistic way a bounded-by-COUNT queue still holds
-    ///     hundreds of megabytes; the correlation ids and status strings are noise beside them.
+    ///     The characters one event contributes to the queue's memory footprint.
     /// </summary>
+    /// <remarks>
+    ///     Only the fields that can be large are counted: a tool result or an argument blob is how a bounded-by-COUNT
+    ///     queue still holds hundreds of megabytes, and the ids and status strings are noise beside them.
+    /// </remarks>
     private static int CharCost(ChatStreamEvent streamEvent)
     {
         return (streamEvent.Delta?.Length ?? 0)

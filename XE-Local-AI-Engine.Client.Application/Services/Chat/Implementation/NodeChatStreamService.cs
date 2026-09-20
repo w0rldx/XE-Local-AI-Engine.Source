@@ -23,14 +23,12 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 {
     private const int AgentDefinitionVersion = 1;
 
-    // A cancel that lands BEFORE the invocation itself starts — while the turn is still waiting for the shared
-    // collision-queue lease, or between acquiring it and the Streaming transition. Distinct from the runner's own
-    // cancellation terminals so a turn stopped in the queue is never reported as a model/invocation timeout.
+    // A cancel landing before the invocation starts: still waiting for the collision-queue lease, or between acquiring
+    // it and the Streaming transition. Distinct from the runner's terminals so a queue stop never reads as a timeout.
     private const string PreRunCancelledMessage = "Stopped before the response started (cancelled while queued).";
 
-    // The tools whose presence in a turn's offer means the selected agent can read files through the AgentHome sandbox
-    // (the read-only coder tools plus the run_in_agent_home gateway). When any is offered AND the conversation has
-    // uploaded attachments, the sandbox is re-staged with this conversation's attachments before the tool loop runs.
+    // The tools whose presence in an offer means the agent can read files through the AgentHome sandbox. When any is
+    // offered AND the conversation has attachments, the sandbox is re-staged with them before the tool loop runs.
     private static readonly HashSet<string> AgentHomeCapableToolNames = new(StringComparer.Ordinal)
     {
         CoderToolDefinition.ListFilesToolName,
@@ -151,27 +149,12 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             cancellationToken);
         yield return ToMessageEvent(ChatStreamEventTypes.UserMessagePersisted, correlation, userMessage, sequence.Next());
 
-        // Resolve the active model and the bound/selected agent BEFORE minting the assistant placeholder, because the
-        // placeholder is stamped with the resolved agent's id + display-name snapshot (per-response attribution). The
-        // resolve has no dependency on the placeholder (it reads conversation, trimmedContent, selectedPath), so the
-        // hoist is safe; the emitted SSE order below is unchanged: UserMessagePersisted -> AssistantPending ->
-        // AssistantQueued.
+        // Resolved BEFORE the assistant placeholder is minted, because the placeholder is stamped with the resolved
+        // agent's id and display name. It reads only conversation, content and path, so the emitted order is unchanged.
         var resolution = await ResolveTurnAsync(request, conversation, activeModelOverride: null, trimmedContent, cancellationToken);
 
-        // GRAPH-C4-2's runtime half, enforced at the ONE boundary where the answer cannot go stale. A development-
-        // workflow Agent node that declares no WriteExecute capability arms this on every turn of the session it drives;
-        // the earlier check at node dispatch resolves the definition separately and is therefore the friendly refusal,
-        // not the enforcing one — the definition can be widened, or deleted so the turn falls back to the default
-        // persona and its whole offer, in the window between that check and this send. So the rule is asked of the
-        // OFFER this turn will really hand the model, resolved once and reused verbatim below: one resolution, one
-        // decision, nothing left in between for an edit to land in. The supervisor turns the throw into the gate's own
-        // row and the session's terminal reason.
-        //
-        // Resolved early ONLY for a turn that armed the rule, and deliberately: the offer read is part of the
-        // pre-ownership window every other turn relies on (a client that disconnects while GetEnableToolsAsync is in
-        // flight must find a placeholder to terminalize), so an unarmed send resolves it in its usual place below and
-        // moves not at all. An armed turn has no browser behind it, and refusing before the placeholder exists is what
-        // keeps a refused step from leaving a stranded row.
+        // GRAPH-C4-2 is asked of the OFFER this turn really hands the model, resolved once here and reused verbatim
+        // below; only an armed turn resolves early, so a refusal leaves no stranded assistant row.
         ChatToolOffer? declaredWriteOffer = null;
         if (request.RefuseUndeclaredWrites)
         {
@@ -184,35 +167,22 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
         var assistantPlaceholder = await PersistAssistantPlaceholderAsync(request, resolution, assistantMessageId, requestId, cancellationToken);
 
-        // The assistant row now exists as Pending, but run ownership (the pump + runner + their protective finally) is
-        // not wired until further below. If the client disconnects in this window — including during the awaited
-        // GetEnableToolsAsync / attachment staging before the tasks are created — the iterator is disposed and the row
-        // would otherwise sit Pending/Queued until the restart reaper. This guard terminalizes it to Interrupted on any
-        // pre-ownership teardown; once ownership is established it becomes a no-op and the pump owns the terminal.
+        // The row is Pending but run ownership (pump, runner, their finally) is not wired yet, so a disconnect in this
+        // window would leave it Pending until the restart reaper. The guard terminalizes it Interrupted, then no-ops.
         await using var preOwnershipGuard = new PreOwnershipTerminalizationGuard(_persistence, correlation, _timeProvider, _logger);
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, assistantPlaceholder, sequence.Next());
 
-        // The operator's node-level "Maximum message request timeout" (Node Settings) is what bounds a single local chat
-        // turn — without threading it here the package fell back to TimeoutSettings' own default and a raised setting
-        // was silently ignored. Only the invocation timeout is operator-controlled; the tool-call and stream-idle
-        // timeouts keep their defaults. When the setting equals the TimeoutSettings default the package — and therefore
-        // its config hash — is byte-identical to a package built without an explicit Timeouts.
-        //
-        // Loaded HERE rather than next to the package build below because the same ceiling is stamped on the queued and
-        // streaming events: the browser's stream watchdog must know it before the collision-queue wait, which is the
-        // first stretch of the turn where nothing at all arrives on the wire.
+        // Only the invocation timeout is operator-controlled, and at the TimeoutSettings default the package and its
+        // config hash stay byte-identical. Loaded here because the queued and streaming events stamp this ceiling.
         var runtimeNodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
 
-        // The turn is Queued until the collision-queue lease is acquired in RunInvocationAsync; it transitions to
-        // Streaming only when the invocation actually starts. This keeps a turn waiting behind another invocation
-        // visibly "queued" rather than prematurely "streaming".
+        // The turn stays Queued until RunInvocationAsync acquires the collision-queue lease, so a turn waiting behind
+        // another invocation reads as "queued" rather than prematurely "streaming".
         var queuedMessage = await _persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken);
         if (!string.Equals(queuedMessage.Status, NodeChatMessageStatusValues.Queued, StringComparison.Ordinal))
         {
-            // The queued mark was rejected because the row already reached a terminal status — a cancel raced ahead of run
-            // ownership (before the cancellation registration below exists). Surface the terminal the row actually holds
-            // and abort: never wire a pump/runner for an already-finalized turn. The pre-ownership guard stands down as a
-            // no-op (its Interrupted terminalize cannot downgrade the terminal row).
+            // The queued mark was rejected because a cancel raced ahead of run ownership and the row is already terminal.
+            // Surface the terminal the row holds and abort: never wire a pump or runner for a finalized turn.
             yield return ToMessageEvent(ChatStreamEventMapper.TerminalEventType(queuedMessage.Status), correlation, queuedMessage, sequence.Next());
             yield break;
         }
@@ -220,13 +190,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next(),
             invocationTimeoutSeconds: runtimeNodeSettings.MaxMessageRequestTimeoutSeconds);
 
-        // The run/persistence lifecycle is owned by the shared runner, NOT by the client connection. When the
-        // client cancellationToken fires on disconnect we must only stop forwarding SSE events to the browser;
-        // we must never cancel the run or the persistence pump, otherwise the pump would terminalize the message
-        // as interrupted before the runner reported its real terminal of Completed or Failed. runCancellation is
-        // therefore deliberately NOT linked to cancellationToken — it is tripped only by a genuine user cancel,
-        // the stop button routed through the cancellation registry via CancelNodeChatMessageEndpoint, which also
-        // cancels the runner's own loop so the pump persists the true Cancelled terminal.
+        // The run and persistence lifecycle belongs to the runner, not the client connection: runCancellation is
+        // deliberately NOT linked to cancellationToken and is tripped only by a user cancel through the registry.
         using var runCancellation = new CancellationTokenSource();
         using var registration = _cancellationRegistry.Register(correlation, () =>
         {
@@ -241,41 +206,31 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             SingleReader = true,
             SingleWriter = false
         });
-        // Six producers write this sink concurrently: the delta/terminal emits in the invocation-state pump, the
-        // streaming-transition emit in RunInvocationAsync (the run-transition), the tool-call lifecycle emits in
-        // OnToolCallLifecycleChanged, the turn-notice emits in OnTurnNoticeChanged, the pending-approval emits in
-        // OnApprovalRequestedChanged, and the pending-question emits in OnUserQuestionRequestedChanged. It is BOUNDED
-        // and never makes a producer wait — on a client disconnect the SSE loop below exits while all six keep
-        // writing, which is exactly the case Detach() in this method's finally exists to stop retaining.
+        // Six producers write this sink concurrently: pump deltas and terminals, the run transition, the tool-call
+        // lifecycle, turn notices, approval requests and user questions. It is BOUNDED and never makes one wait.
         var eventSink = new ChatStreamEventSink(correlation, sequence, _streamBudgetOptions.Value, _timeProvider);
 
-        // Accumulates the ordered reasoning/tool interleave so the terminal persist can write parts[] (the reload
-        // render source). Fed by BOTH producers: the forwarder's tool/notice handlers and the reasoning deltas in the
-        // pump loop.
+        // Accumulates the ordered reasoning/tool interleave so the terminal persist can write parts[], the reload render
+        // source. Fed by BOTH producers: the forwarder's tool/notice handlers and the pump loop's reasoning deltas.
         var parts = new NodeChatPartAccumulator();
 
-        // Subscribe before pre-run notice production (cloud attachment/knowledge withholding) so those notices reach
-        // the stream. The scope also covers every pre-ownership exit, preventing handler leaks when staging or package
-        // construction fails before the pump/runner teardown exists.
+        // Subscribed before pre-run notice production so the cloud-withholding notices reach the stream. The scope also
+        // covers every pre-ownership exit, so a staging or package-construction failure cannot leak handlers.
         using var eventSubscription = new ChatStreamEventForwarder(_eventDispatcher, correlation, requestId, stateChannel.Writer, eventSink, sequence, parts, _timeProvider);
 
         // The armed turn's offer, already settled above and reused verbatim so the rule judged the same list the package
         // carries; every other turn resolves it right here, exactly where it always did.
         var toolOffer = declaredWriteOffer ?? await ResolveToolOfferAsync(request, resolution, cancellationToken);
         var offerTools = toolOffer.OfferTools;
-        // The ask_user withdrawal, applied to the single FINAL list rather than to each of the resolvers that union the
-        // tool in, so it holds whichever of them produced this turn's offer. The orchestration participants' own lists
-        // ride the compiled spec instead of this one and are filtered where the package is built.
+        // The ask_user withdrawal applies to the single FINAL list, so it holds whichever resolver produced this offer.
+        // Orchestration participants' own lists ride the compiled spec instead and are filtered where it is built.
         var allowedTools = request.SuppressAskUser ? AskUserToolOffer.Withdraw(toolOffer.AllowedTools) : toolOffer.AllowedTools;
 
         var attachmentsAllowed = AreAttachmentsAllowed(resolution);
         await ReportPreRunNoticesAsync(request, resolution, offerTools, attachmentsAllowed, requestId, cancellationToken);
 
-        // Agent mode: when the selected agent can read files through the AgentHome sandbox (its offer includes the
-        // read-only coder tools or run_in_agent_home), re-stage the sandbox with THIS conversation's uploaded attachments
-        // BEFORE building the turn context, so list_files/read_file/search_text see them under attachments/. The stager
-        // returns the exact staged paths (empty when Agent Mode is off, there are no extracted files, OR attachments are
-        // withheld from a cloud effective model).
+        // Agent mode: when the offer includes the sandbox file tools, re-stage the sandbox with THIS conversation's
+        // attachments BEFORE building the turn context, so the file tools see them under attachments/.
         var isAgentHomeTurn = offerTools && OffersAgentHomeTools(allowedTools);
         var staging = isAgentHomeTurn && attachmentsAllowed
             ? await StageConversationAttachmentsAsync(request.ConversationId, runCancellation.Token)
@@ -327,13 +282,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             // KB sources that grounded this turn land on the terminal row's metadata_json; null when
             // the turn used no knowledge base.
             turnContext.KnowledgeSources);
-        // The AgentHome sandbox is touched only by the tool calls inside the run, so hand the workspace back the moment
-        // the run finishes rather than when this whole stream unwinds. Everything after the run — the pump's terminal
-        // hook (memory extraction can be a model call of its own), the drain below, and this iterator's own teardown —
-        // happens AFTER the client has already seen the terminal event and can have sent its next turn. The lease never
-        // queues, so any of that still holding it answers that next turn with "the AgentHome workspace is busy" for a
-        // workspace nothing is using. The scope-level disposal above stays as the fallback for a throw before this
-        // point; both are idempotent.
+        // The sandbox is touched only by the run's tool calls, so the workspace goes back when the run ends rather than
+        // when this stream unwinds; the lease never queues, so holding it longer fails the next turn as "busy".
         runTask = ReleaseSandboxAfterAsync(RunInvocationAsync(package,
                 assistantMessageId,
                 stateChannel.Writer,
@@ -347,16 +297,14 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                 runCancellation.Token),
             staging?.Preparation);
 
-        // Ownership is now established: the pump + runner are running and the finally below drives every row to the
-        // runner's true terminal, so the pre-ownership guard must stand down (a client disconnect from here on must NOT
-        // terminalize — the run keeps going and the pump persists its real terminal).
+        // Ownership is established: the pump and runner drive every row to the runner's true terminal, so the
+        // pre-ownership guard stands down — a disconnect from here on must NOT terminalize.
         preOwnershipGuard.OwnershipEstablished();
 
         try
         {
-            // Forward persisted events to the client. The client cancellationToken stops THIS loop only (e.g. the
-            // browser/SignalR stream unsubscribed or disconnected). It does not cancel the run or the pump: those
-            // keep going on runCancellation.Token so the runner reaches its real terminal and the pump persists it.
+            // The client cancellationToken stops THIS forwarding loop only. The run and pump keep going on
+            // runCancellation.Token so the runner reaches its real terminal and the pump persists it.
             await foreach (var streamEvent in eventSink.ReadAllAsync(cancellationToken))
             {
                 yield return streamEvent;
@@ -364,26 +312,12 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         }
         finally
         {
-            // The SSE consumer is gone. Detach FIRST, before draining the tasks below: from here every producer's
-            // write is a no-op, so the abandoned stream retains nothing for the (possibly long) remainder of the run.
-            // Detach deliberately does not COMPLETE the queue — the pump reads a write fault as a persistence fault
-            // and would terminalize the row Failed.
+            // Detach FIRST, before draining below: every producer write becomes a no-op so the abandoned stream retains
+            // nothing. It deliberately does not COMPLETE the queue — the pump reads a write fault as a persistence fault.
             eventSink.Detach();
 
-            // Do NOT cancel runCancellation here on a client disconnect. Let runTask and pumpTask drain to the
-            // runner's true terminal (Completed/Failed/Cancelled) so persistence follows the runner's lifecycle,
-            // not the client connection's. A genuine user cancel already tripped runCancellation via the registry.
-            //
-            // DECISION: because the run keeps going, RunInvocationAsync also holds the collision-slot
-            // lease until the runner finishes, so a disconnected mid-run turn keeps the slot alive. Accepted as-is
-            // for single-user local — at most one queued turn waits, then both persist correctly. If contended
-            // multi-session local ever matters, add an explicit disconnect->cancel path distinct from this SSE
-            // unsubscribe; do NOT free the slot from here, which would resurrect the interrupted-terminal bug.
-            //
-            // IMPORTANT: unsubscribe AFTER awaiting runTask/pumpTask, not before. The runner may fire
-            // InvocationStateChanged (the Completed terminal) after the SSE loop exits. If we unsubscribe first,
-            // the terminal state never reaches the stateChannel, the pump ends without a terminal, and the message
-            // is falsely persisted as interrupted.
+            // Never cancel runCancellation on a disconnect: both tasks drain to the runner's true terminal, so the run
+            // holds the collision slot until it ends. Freeing the slot here resurrects the interrupted-terminal bug.
             await DrainRunAsync(pumpTask, runTask, runCancellation, eventSubscription, requestId);
         }
     }
@@ -400,9 +334,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         double preRunDurationMs,
         CancellationToken cancellationToken)
     {
-        // Queue behind any in-flight invocation (local or platform) before assigning, rather than failing the
-        // turn. The lease holds the shared slot for this run; cancelling while still queued aborts the wait and
-        // terminalizes the turn as cancelled below.
+        // Queue behind any in-flight invocation rather than failing the turn. The lease holds the shared slot; a cancel
+        // while still queued aborts the wait and terminalizes the turn as cancelled below.
         IAsyncDisposable? lease = null;
 
         try
@@ -425,9 +358,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                                    invocationTimeoutSeconds: package.Timeouts.InvocationTimeoutSeconds),
                                cancellationToken);
 
-            // A "Local runtime default" send that resolved no installed GGUF chat model fails BEFORE any provider
-            // invocation with a dedicated category, so the client sees an actionable "pull a model" terminal rather
-            // than the stale-id "Provider unreachable.".
+            // A "Local runtime default" send that resolved no installed GGUF chat model fails BEFORE any provider call,
+            // so the client sees an actionable "pull a model" terminal rather than the stale-id "Provider unreachable.".
             if (requiresInstalledChatModel)
             {
                 throw new NoChatModelInstalledException();
@@ -474,10 +406,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     }
 
     /// <summary>
-    ///     Collects the user turns for extraction: the prior completed user turns on the selected path plus the just-sent
-    ///     user turn, ordered. Assistant turns are excluded — the agent's own answer is supplied separately as the run's
-    ///     <c>AssistantResponse</c>. Content is held only for the in-scope model call/dedup; it is never persisted here.
+    ///     Collects the user turns for extraction: the prior completed user turns on the selected path plus the
+    ///     just-sent one, ordered.
     /// </summary>
+    /// <remarks>
+    ///     Assistant turns are excluded — the agent's own answer is supplied separately as the run's
+    ///     <c>AssistantResponse</c>. Content is held only for the in-scope model call and dedup, never persisted here.
+    /// </remarks>
     private static IReadOnlyList<MemoryExtractionTurn> CollectUserTurns(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto userMessage,
         IReadOnlyDictionary<Guid, Guid>? selectedPath)
@@ -497,9 +432,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                .ToArray();
     }
 
-    // Emits the AttachmentsWithheld notice when a cloud effective model would otherwise have received attachment content
-    // but the operator has not opted in — but ONLY when the conversation actually has attachments to withhold, so a
-    // plain cloud chat with no attachments stays silent. Reuses the same turn-notice fan-out as the runner's notices.
+    // Emits the AttachmentsWithheld notice when a cloud effective model would have received attachment content without
+    // the operator's opt-in, but only when there is something to withhold, so a plain cloud chat stays silent.
     private async Task ReportAttachmentsWithheldIfPresentAsync(NodeChatStreamRequest request,
         string? effectiveModel,
         Guid requestId,
@@ -521,9 +455,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                              });
     }
 
-    // Emits the KnowledgeWithheld notice when the user opted into knowledge grounding for a plain-chat turn but a cloud
-    // effective model would have received it without the operator's data-access opt-in. Mirrors the attachments-withheld
-    // fan-out; the turn still runs, just without knowledge-base context.
+    // Emits the KnowledgeWithheld notice when a plain-chat turn opted into grounding but a cloud effective model would
+    // have received it without the operator's opt-in. The turn still runs, just without knowledge-base context.
     private async Task ReportKnowledgeWithheldAsync(string? effectiveModel, Guid requestId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -538,14 +471,14 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     }
 
     /// <summary>
-    ///     Reads the conversation this send belongs to and settles which variant branch shapes its history. A selection
-    ///     map on the request is the authoritative, just-clicked path: it is persisted BEFORE the conversation is read.
-    ///     That write also CLEARS the stored compaction synopsis (a synopsis built on the previous path can misrepresent
-    ///     the newly selected branch), and the turn-scoped read skips exactly the blobs that synopsis covers — so
-    ///     reading first would build the turn from a synopsis the database no longer has, on top of history whose
-    ///     covered messages were never decrypted. With no map on the request, the selection already persisted on the
-    ///     conversation wins.
+    ///     Reads the conversation this send belongs to and settles which variant branch shapes its history.
     /// </summary>
+    /// <remarks>
+    ///     A selection map on the request is the authoritative, just-clicked path and is persisted BEFORE the read,
+    ///     because that write also CLEARS the stored compaction synopsis and the turn-scoped read skips exactly the
+    ///     blobs the synopsis covers: reading first would build the turn from a synopsis the database no longer has,
+    ///     over history whose covered messages were never decrypted. With no map, the persisted selection wins.
+    /// </remarks>
     private async Task<ChatTurnLoad> LoadTurnAsync(NodeChatStreamRequest request, CancellationToken cancellationToken)
     {
         // Reject sends to a remote-origin (view-only) conversation before any persistence happens. The guard is
@@ -556,21 +489,16 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             ? await _persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest { ConversationId = request.ConversationId, SelectedPath = request.SelectedPath, UpdatedAtUtc = NowUnixMilliseconds() }, cancellationToken)
             : null;
 
-        // Turn-scoped read: same message structure, minus the content/metadata blobs of the non-user messages this
-        // conversation's compaction synopsis has already replaced — ConversationContextBuilder.Build drops them by sequence and
-        // CollectUserTurns keeps only user roles, so decrypting them was always dead work. Never use this variant for a
-        // conversation that will be rendered or re-persisted.
+        // Turn-scoped read: the same message structure minus the content and metadata blobs this conversation's
+        // compaction synopsis replaced. Never use it for a conversation that will be rendered or re-persisted.
         var conversation = await _persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken)
                            ?? throw new NodeChatConversationNotFoundException(request.ConversationId);
 
         return new ChatTurnLoad { Conversation = conversation, SelectedPath = persistedSelectedPath ?? conversation.SelectedPath };
     }
 
-    // Mints the assistant row this turn streams into. It is stamped with the model that will actually run (the agent pin
-    // when honored, the user's explicit dropdown pick when it suppressed the pin, else the local-default) — never the
-    // raw request model — so the attribution shown in the UI matches the run from the first pending frame. The effort is
-    // stamped with the same precedence as the runtime package (EffectiveReasoningEffort: an agent's pinned effort wins
-    // over the request's selection, unless the caller's is a pin too), and it survives reload off the metadata blob.
+    // Mints the assistant row this turn streams into, stamped with the model that will actually run — never the raw
+    // request model — and with the package's own effort precedence, so both match the run and survive reload.
     private Task<NodeChatPersistedMessageDto> PersistAssistantPlaceholderAsync(NodeChatStreamRequest request,
         ChatTurnResolution resolution,
         Guid assistantMessageId,
@@ -592,30 +520,27 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     }
 
     /// <summary>
-    ///     The effort this turn runs at. A bound agent's pinned effort wins over the one the send carried, because the
-    ///     pin is configuration and the send's is the composer's selection — unless the caller says its own is a pin
-    ///     too, which is what a development-workflow node's authored effort is.
+    ///     The effort this turn runs at: a bound agent's pinned effort wins over the one the send carried.
     /// </summary>
+    /// <remarks>
+    ///     The pin is configuration and the send's value is the composer's selection — unless the caller says its own
+    ///     is a pin too, which is what a development-workflow node's authored effort is.
+    /// </remarks>
     private static string? EffectiveReasoningEffort(NodeChatStreamRequest request, string? resolvedEffort) =>
         request.ReasoningEffortOverridesAgentPin
             ? request.ReasoningEffort ?? resolvedEffort
             : resolvedEffort ?? request.ReasoningEffort;
 
     /// <summary>
-    ///     Resolves whether this turn offers tools and, if so, which ones travel in the runtime package. Tools are
-    ///     offered only when the client asked for them AND the node has the agent tool engine enabled AND the active
-    ///     model advertises the tools capability; the invocation factory resolves the matching executables from the
-    ///     registry by name. A bound definition narrows the offer to its allowed set (already run through the node
-    ///     approval policy, custom tools merged, in <see cref="ChatTurnResolver" />).
-    ///     <para>
-    ///         The unbound/deleted-agent fallback builds the raw offer here via the async provider (so its custom tools
-    ///         merge in too) and applies the SAME node policy (tighten-only) — otherwise a node-wide policy would be
-    ///         bypassable by a plain unbound chat turn. With no policy configured the Permissive floor is identity, so
-    ///         the fallback offer is byte-identical to the raw catalog offer. A custom tool called on this agentless
-    ///         path is not session-approvable (the package carries no CustomTools without a resolved agent), so it
-    ///         re-prompts each time — the safe direction.
-    ///     </para>
+    ///     Resolves whether this turn offers tools and, if so, which ones travel in the runtime package.
     /// </summary>
+    /// <remarks>
+    ///     Tools are offered only when the client asked, the node tool engine is enabled and the model advertises the
+    ///     capability. A bound definition narrows the offer to its allowed set (node approval policy already applied,
+    ///     custom tools merged, in <see cref="ChatTurnResolver" />); the unbound fallback builds the raw offer here and
+    ///     applies the SAME tighten-only policy, or an unbound turn would bypass a node-wide one. A custom tool on that
+    ///     agentless path is not session-approvable and re-prompts each time, the safe direction.
+    /// </remarks>
     private async Task<ChatToolOffer> ResolveToolOfferAsync(NodeChatStreamRequest request, ChatTurnResolution resolution, CancellationToken cancellationToken)
     {
         var enableTools = await _runtimeSettings.GetEnableToolsAsync(cancellationToken);
@@ -644,14 +569,15 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     }
 
     /// <summary>
-    ///     Cloud-egress consent: node-local conversation attachments are private data, so they reach a cloud model only
-    ///     when the operator opted in (<c>KnowledgeBase:AllowCloudModelAccess</c>). "A cloud model would receive it" is
-    ///     not only the orchestrator's own effective model: an ORCHESTRATION broadcasts ONE shared seed to every
-    ///     participant (per-participant tool stripping cannot redact content already in the seed), so a single cloud
-    ///     PARTICIPANT — even under a local root — must withhold the shared attachment context too. This is the
-    ///     load-bearing egress gate; the offer provider additionally withholds the file/knowledge tools for a cloud
-    ///     model.
+    ///     Whether this turn's attachments may travel, the load-bearing cloud-egress gate.
     /// </summary>
+    /// <remarks>
+    ///     Node-local attachments are private data and reach a cloud model only under
+    ///     <c>KnowledgeBase:AllowCloudModelAccess</c>. An orchestration broadcasts ONE shared seed to every
+    ///     participant, so a single cloud PARTICIPANT under a local root withholds the shared attachment context too —
+    ///     per-participant tool stripping cannot redact a seed. The offer provider additionally withholds the file and
+    ///     knowledge tools for a cloud model.
+    /// </remarks>
     private bool AreAttachmentsAllowed(ChatTurnResolution resolution)
     {
         var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
@@ -668,10 +594,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         Guid requestId,
         CancellationToken cancellationToken)
     {
-        // An Orchestrator agent whose orchestration did not compile runs as a lone single agent. That used to be
-        // visible only in a server log, so an operator saw an ordinary answer and no hint that the team never ran. Emit
-        // ONE notice naming the typed reason. NotOrchestrated (a Single-kind agent, or no bound agent) has no notice, so
-        // the overwhelmingly common path stays silent.
+        // An Orchestrator agent whose orchestration did not compile runs as a lone single agent, so emit ONE notice
+        // naming the typed reason. NotOrchestrated (a Single-kind or unbound agent) has none, so the common path is silent.
         if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
         {
             await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
@@ -695,20 +619,16 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
         await ReportAttachmentsWithheldIfPresentAsync(request, cloudModelForNotice, requestId, cancellationToken);
 
-        // KB grounding rides the SAME cloud-egress gate as attachments: when the user opted into knowledge
-        // grounding for a plain-chat turn but the turn reaches a cloud model without the operator's data-access
-        // opt-in, no retrieval runs and a visible notice names the model. Plain chat only — agent mode uses the
-        // gated search_knowledge_base tool (withheld by the offer provider), so this notice is not duplicated there.
+        // KB grounding rides the SAME cloud-egress gate as attachments. Plain chat only — agent mode reaches the data
+        // through the gated search_knowledge_base tool, withheld by the offer provider, so the notice is not duplicated.
         if (request.UseKnowledgeBase && !offerTools)
         {
             await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken);
         }
     }
 
-    // Re-stages the AgentHome sandbox with THIS conversation's uploaded attachments. Returns the lease the caller must
-    // dispose alongside the user-visible reason the turn must fail; a busy workspace yields BOTH (the lease still has to
-    // be released). A staging failure is never fatal to the process — it terminalizes this one turn — but a genuine
-    // cancel propagates untouched.
+    // Re-stages the AgentHome sandbox with THIS conversation's attachments. Returns the lease the caller must dispose
+    // alongside any failure reason — a busy workspace yields BOTH — while a genuine cancel propagates untouched.
     private async Task<SandboxStagingOutcome> StageConversationAttachmentsAsync(Guid conversationId, CancellationToken cancellationToken)
     {
         ConversationSandboxPreparation? preparation = null;
@@ -738,9 +658,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         return new SandboxStagingOutcome { Preparation = preparation, Error = error };
     }
 
-    // Terminalizes the assistant row Failed for a pre-run refusal (no invocation ever started, hence the zero-duration
-    // content-free envelope). Uses CancellationToken.None deliberately: the row must reach a terminal even when the
-    // caller's token has already fired.
+    // Terminalizes the assistant row Failed for a pre-run refusal, hence the zero-duration content-free envelope.
+    // CancellationToken.None is deliberate: the row must reach a terminal even when the caller's token already fired.
     private Task<NodeChatPersistedMessageDto> TerminalizeAssistantFailureAsync(NodeChatMessageCorrelation correlation, string error)
     {
         return _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
@@ -754,9 +673,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             CancellationToken.None);
     }
 
-    // Composes the synthetic context messages prepended to this turn. Two cancellation surfaces are in play and the
-    // distinction is load-bearing: the attachment/image reads follow the CLIENT token (a disconnect stops them), while
-    // knowledge retrieval follows the RUN token so a user stop aborts the search.
+    // Composes the synthetic context messages prepended to this turn. The attachment and image reads follow the CLIENT
+    // token, so a disconnect stops them; knowledge retrieval follows the RUN token so a user stop aborts the search.
     private async Task<ChatTurnContext> BuildTurnContextAsync(NodeChatStreamRequest request,
         ChatTurnResolution resolution,
         bool offerTools,
@@ -766,15 +684,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         CancellationTokenSource runCancellation,
         CancellationToken cancellationToken)
     {
-        // The synthetic prepended context differs by mode: plain chat inlines the extracted text directly; agent mode
-        // injects only a short pointer naming the staged files (the agent reads their content through its tools, so the
-        // text is not double-fed). The pointer is what stops a weak model from guessing a wrong file name. When
-        // attachments are withheld from a cloud effective model, neither path composes anything (staged paths are empty
-        // and the plain-chat inline is skipped).
+        // The prepended context differs by mode: plain chat inlines the extracted text, agent mode injects only a
+        // pointer naming the staged files, which is what stops a weak model from guessing a wrong file name.
         ConversationMessageDto? attachmentContext;
-        // Knowledge-base grounding: a second synthetic context message inlined into plain chat when the user
-        // opted in, plus the provenance of the inlined hits so the terminal row records them as sources. Null on
-        // every path that does not ground on the knowledge base (agent mode, opt-out, cloud-withheld, empty retrieval).
+        // Knowledge grounding: a second synthetic message inlined into plain chat, plus the provenance of the inlined
+        // hits. Null on every path that does not ground (agent mode, opt-out, cloud-withheld, empty retrieval).
         ConversationMessageDto? knowledgeContext = null;
         IReadOnlyList<NodeChatMessageSource>? knowledgeSources = null;
         if (offerTools)
@@ -802,10 +716,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             attachmentContext = null;
         }
 
-        // Image parts are attached INDEPENDENTLY of the tool/text branch above so a vision model receives them in plain
-        // chat, tool-enabled chat, AND agent mode (the offerTools branch only stages TEXT for the file tools; images have
-        // no Markdown to stage and would otherwise be silently dropped). Gated on the same cloud-egress guard as
-        // attachments and on the effective model actually being vision-capable.
+        // Image parts attach INDEPENDENTLY of the tool/text branch so a vision model receives them in plain, tool-enabled
+        // and agent chat alike; images have no Markdown to stage and would otherwise be dropped. Same egress gate.
         ConversationMessageDto? imageContext = null;
         if (attachmentsAllowed && resolution.SupportsVision)
         {
@@ -815,12 +727,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         return new ChatTurnContext { Attachment = attachmentContext, Image = imageContext, Knowledge = knowledgeContext, KnowledgeSources = knowledgeSources };
     }
 
-    // Assembles the runtime package the invocation runs from. The active-model precedence, the effective-agent
-    // resolution and the orchestration spec were all settled up front by ResolveTurnAsync (so the placeholder could be
-    // stamped with the resolved agent's attribution); they are reused here unchanged. Only the invocation timeout is
-    // operator-controlled — the tool-call and stream-idle timeouts keep their defaults, and when the operator's value
-    // equals the TimeoutSettings default the package (and therefore its config hash) is byte-identical to one built
-    // without an explicit Timeouts.
+    // Assembles the runtime package the invocation runs from; the active model, effective agent and orchestration spec
+    // were settled by ResolveTurnAsync and are reused unchanged. Only the invocation timeout is operator-controlled.
     private async Task<RuntimePackage> BuildRuntimePackageAsync(NodeChatStreamRequest request,
         ChatTurnResolution resolution,
         IReadOnlyList<ConversationMessageDto> conversationContext,
@@ -853,26 +761,21 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             // Per-agent opt-out from the send-time tool-relevance filter; not hashed, so an opted-out agent keeps a
             // byte-identical config hash.
             DisableToolRelevanceFilter = resolved?.DisableToolRelevanceFilter ?? false,
-            // Model-selection provenance for the runner's reasoning-effort dispatcher; false = pinned, never swap.
-            // A work-session step never swaps, whatever its provenance says — and every development-workflow node runs
-            // as one. The graph was authored against a model; a node that authors neither a model nor an effort, bound
-            // to an agent that pins neither, would otherwise be swap-eligible, and a workflow step silently served by a
-            // different model is not a decision the graph's author made. IsWorkSessionTurn is set unconditionally by
-            // the work-session supervisor, so it covers those turns whether or not the node authored anything.
+            // Model-selection provenance for the runner's reasoning-effort dispatcher; false means pinned, never swap.
+            // A work-session step never swaps: the graph was authored against a model, so no silent substitution.
             AllowAutoModelSwap = resolution.AllowAutoModelSwap && !request.IsWorkSessionTurn
         });
     }
 
     /// <summary>
-    ///     The post-run adaptive-memory hook, fired once when the pump persists a Completed/Failed terminal — but ONLY
-    ///     when the resolved agent has the playbook enabled AND opts into extraction. Retrieval/injection rides
-    ///     <c>PlaybookEnabled</c> alone (already baked into the resolved prompt); <c>MemoryExtractionEnabled</c>
-    ///     additionally gates whether this run mines NEW candidates, so a retrieval-only agent still uses its memory but
-    ///     learns nothing new — and skips the extraction round-trip entirely. Built here rather than inside the pump so
-    ///     it closes over the run context the stream service already holds (resolved agent, conversation temp flag, user
-    ///     turns, package config hash) and the pump stays content-free. The dispatch is fire-and-forget (its own scope +
-    ///     fresh CT) so it never delays the SSE.
+    ///     Builds the post-run adaptive-memory hook, fired once when the pump persists a Completed or Failed terminal.
     /// </summary>
+    /// <remarks>
+    ///     It runs only when the resolved agent has the playbook enabled AND opts into extraction: retrieval rides
+    ///     <c>PlaybookEnabled</c> alone, while <c>MemoryExtractionEnabled</c> gates mining NEW candidates, so a
+    ///     retrieval-only agent learns nothing new. Built here rather than in the pump so it closes over the run
+    ///     context and the pump stays content-free; the dispatch is fire-and-forget so it never delays the SSE.
+    /// </remarks>
     private Action<InvocationState, NodeChatPumpTerminalResult>? BuildMemoryExtractionHook(ChatTurnResolution resolution,
         NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto userMessage,
@@ -890,9 +793,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             : null;
     }
 
-    // Releases the AgentHome workspace as soon as the invocation itself is over, whatever its outcome, then lets the
-    // run's result reach DrainRunAsync unchanged. Disposal is idempotent, so the caller's scope-level disposal remains
-    // the fallback.
+    // Releases the AgentHome workspace as soon as the invocation is over, whatever its outcome, then lets the run's
+    // result reach DrainRunAsync unchanged. Disposal is idempotent, so the scope-level disposal remains the fallback.
     private static async Task ReleaseSandboxAfterAsync(Task runTask, ConversationSandboxPreparation? preparation)
     {
         try
@@ -908,12 +810,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         }
     }
 
-    // Drains the run after the SSE consumer is gone. The pump is observed FIRST: on a persistence fault it faults here,
-    // so cancel the run rather than let a still-generating runner produce output that can no longer be persisted (a user
-    // cancel or a normal completion leaves the pump task completed, not faulted). The event subscription is disposed
-    // only once BOTH tasks are observed — the runner may fire InvocationStateChanged (the Completed terminal) after the
-    // SSE loop exits, and unsubscribing earlier would leave the pump without a terminal and the row falsely persisted as
-    // interrupted.
+    // Drains the run after the SSE consumer is gone. The pump is observed FIRST so a persistence fault cancels the run,
+    // and the subscription is disposed only once BOTH are observed, or a late terminal would read as interrupted.
     private async Task DrainRunAsync(Task pumpTask, Task runTask, CancellationTokenSource runCancellation, IDisposable eventSubscription, Guid requestId)
     {
         try
@@ -956,15 +854,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         return allowedTools is not null && allowedTools.Any(tool => AgentHomeCapableToolNames.Contains(tool.Name));
     }
 
-    // Same resource name AgentInstructionProvider.GetBaseScaffold uses (AI.Agent/Instructions/BaseScaffold.txt); kept
-    // as a local literal here to avoid taking a DI dependency on IAgentInstructionProvider in this already-large
-    // constructor, mirroring how InstructionsResource is already read directly rather than through the provider.
+    // The same resource AgentInstructionProvider.GetBaseScaffold reads, kept as a local literal to avoid a DI
+    // dependency on IAgentInstructionProvider in this already-large constructor.
     private const string BaseScaffoldResourceName = "XE_Local_AI_Engine.AI.Agent.Instructions.BaseScaffold.txt";
 
     /// <summary>
-    ///     Reads the embedded chat prompt for the true null-definition fallback (no bound agent at all) and prepends
-    ///     the same versioned base scaffold a resolved, non-opted-out agent definition gets, so an unbound send is
-    ///     covered identically to a bound one.
+    ///     Reads the embedded chat prompt for the null-definition fallback and prepends the same versioned base
+    ///     scaffold a resolved agent gets, so an unbound send is covered identically to a bound one.
     /// </summary>
     private static async Task<string> LoadResolvedSystemPromptAsync(LocalChatAgentOptions options)
     {
@@ -979,9 +875,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         return string.IsNullOrWhiteSpace(scaffold) ? persona : $"{scaffold.TrimEnd()}\n\n{persona}";
     }
 
-    // Reads an embedded manifest resource: the bytes are already in the loaded assembly image, so there is no I/O a
-    // caller could usefully abandon and nothing a token would shorten. CancellationToken.None is the analyzers'
-    // documented "intentionally not propagating" opt-out, not a claim about who may cancel the enclosing turn.
+    // Reads an embedded manifest resource: the bytes are already in the loaded assembly image, so there is no I/O to
+    // abandon. CancellationToken.None is the analyzers' documented "intentionally not propagating" opt-out.
     private static async Task<string> LoadEmbeddedResourceAsync(string resourceName)
     {
         var assembly = typeof(LocalChatAgentOptions).Assembly;
@@ -993,31 +888,26 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
     /// <summary>
     ///     Derives the offer-time active model and the effective agent head, then defers to the shared
-    ///     <see cref="ChatTurnResolver" /> for capability/definition/orchestration resolution so the assistant
-    ///     placeholder can be stamped with the resolved agent's attribution. The effective-agent precedence is
-    ///     <c>request.AgentDefinitionId ?? conversation.AgentDefinitionId ?? (memoized) Default Assistant id</c>;
-    ///     resolving the Default Assistant on a cold conversation must NOT throw — a missing seed yields a null id, the
-    ///     resolver returns null, and the caller keeps the embedded default persona + full offer + the client
-    ///     "Default Assistant" label.
+    ///     <see cref="ChatTurnResolver" /> for capability, definition and orchestration resolution.
     /// </summary>
+    /// <remarks>
+    ///     The effective-agent precedence is <c>request.AgentDefinitionId ?? conversation.AgentDefinitionId ??
+    ///     (memoized) Default Assistant id</c>. Resolving the Default Assistant on a cold conversation must NOT throw:
+    ///     a missing seed yields a null id, the resolver returns null, and the caller keeps the embedded default
+    ///     persona, the full offer and the client "Default Assistant" label.
+    /// </remarks>
     private async Task<ChatTurnResolution> ResolveTurnAsync(NodeChatStreamRequest request,
         NodeChatConversationDto conversation,
         string? activeModelOverride,
         string trimmedContent,
         CancellationToken cancellationToken)
     {
-        // Resolve the offer-time active model with the SAME precedence the model list/selection uses
-        // (ListLocalModelsEndpoint): an explicit request model first, then the operator's node-default selection
-        // (StoredNodeSettings.DefaultModelName), then the static config fallback. Without the node-default step a
-        // "Local default" send (request.Model is null) would resolve the static fallback instead of the model the
-        // operator set as the node default, so a tool-capable node default would never satisfy the capability gate
-        // and run_in_agent_home would be withheld even with a tool-capable model selected.
+        // Precedence: explicit request model, then the operator's node default, then the static config fallback. Without
+        // the middle step a tool-capable node default never becomes active, so the gate withholds run_in_agent_home.
         string? activeModel;
         var requiresInstalledChatModel = false;
-        // The user explicitly picked a concrete model in the chat dropdown when there is no upstream override AND
-        // request.Model is a real id (non-blank; the "Local default" sentinel arrives as null/blank). That pick must
-        // win over a bound agent's pinned ModelProfile for BOTH the run and the persisted attribution, so it suppresses
-        // the pin in the resolve below (honorModelProfile=false) and becomes the effective model directly.
+        // A concrete dropdown pick (no upstream override and a non-blank request.Model) must win over a bound agent's
+        // pinned ModelProfile for BOTH the run and the attribution, so it suppresses the pin in the resolve below.
         var userPickedConcreteModel = activeModelOverride is null && !string.IsNullOrWhiteSpace(request.Model);
         if (activeModelOverride is not null)
         {
@@ -1031,26 +921,21 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         }
         else
         {
-            // "Local runtime default": resolve to an installed GGUF (llama.cpp) chat-capable model — never Ollama. The
-            // operator's persisted node default is honored only when it is itself an installed GGUF chat model. When no
-            // GGUF chat model is installed the resolver returns null; flag the turn so RunInvocationAsync surfaces a
-            // clear ModelNotInstalled terminal instead of routing the stale config/node-settings id to a dead provider.
+            // "Local runtime default" resolves to an installed GGUF chat model, never Ollama, and honors the node
+            // default only when it is one. A null resolve flags the turn so RunInvocationAsync says ModelNotInstalled.
             var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
             activeModel = await _localDefaultChatModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
             requiresInstalledChatModel = activeModel is null;
         }
 
-        // Effective-agent precedence: the just-clicked per-send selection wins, then the legacy conversation binding,
-        // then the seeded Default Assistant (mode-off persona). The default id is memoized for the process lifetime so
-        // the mode-off hot path avoids a DB round-trip per send.
+        // Effective-agent precedence: the per-send selection, then the conversation binding, then the seeded Default
+        // Assistant. The default id is memoized for the process lifetime so the mode-off hot path skips a DB read.
         var effectiveAgentId = request.AgentDefinitionId
                                ?? conversation.AgentDefinitionId
                                ?? await _defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken);
 
-        // The just-sent user turn is the relevance-retrieval query (inert below the threshold / unbound, so the prompt
-        // stays byte-identical). The shared resolver gates thinking/tools by the model's advertised capabilities and
-        // resolves the definition + any orchestration spec, returning the effective model both the package and the
-        // persisted attribution stamp from.
+        // The just-sent user turn is the relevance-retrieval query, inert below the threshold or unbound. The shared
+        // resolver gates thinking and tools by capability and returns the effective model both stamps come from.
         return await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, trimmedContent, userPickedConcreteModel, cancellationToken);
     }
 

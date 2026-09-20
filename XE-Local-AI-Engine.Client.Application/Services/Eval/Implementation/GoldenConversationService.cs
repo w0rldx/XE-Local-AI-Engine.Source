@@ -6,12 +6,15 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 
 /// <summary>
 ///     Default <see cref="IGoldenConversationService" /> for manual golden-case authoring and harvested-candidate
-///     staging. Validates a golden case before persisting (non-blank Title, existing owning agent, non-empty
-///     InputTurns, at least one of {Assertion, Rubric}, boundary length caps) and applies the same IDOR-safe ownership
-///     guard to delete/approve as the manual-authoring and analysis-review paths. The manual create path pins Source=Manual; the harvested
-///     create path pins Source=Harvested + stages the case inert. Reuses <see cref="PlaybookActionValidationException" />
-///     so callers map a validation failure the same way for both playbook surfaces.
+///     staging.
 /// </summary>
+/// <remarks>
+///     It validates a case before persisting — non-blank title, existing owning agent, non-empty input turns, at
+///     least one of assertion or rubric, and the boundary length caps — and applies the same IDOR-safe ownership
+///     guard to delete and approve that the other playbook paths use. The manual path pins Source=Manual and the
+///     harvested one pins Source=Harvested and stages the case inert. It reuses
+///     <see cref="PlaybookActionValidationException" />, so callers map a failure identically on both surfaces.
+/// </remarks>
 internal sealed class GoldenConversationService : IGoldenConversationService
 {
     // Boundary length caps (mirror the PlaybookAction free-text 20_000 cap). The Title is a short operator label, the
@@ -88,9 +91,8 @@ internal sealed class GoldenConversationService : IGoldenConversationService
 
     public async Task<GoldenConversationRecord?> ApproveHarvestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
-        // Ownership + staging guard: only promote a harvested, currently-disabled case that belongs to the route agent,
-        // so one agent's route cannot approve another agent's case (IDOR), and a manual or already-active case is never
-        // flipped here. Any miss returns null so the endpoint maps it to 404.
+        // Ownership and staging guard: only a harvested, currently-disabled case belonging to the route agent is
+        // promoted, so no route approves another agent's case and no manual or active case is flipped here.
         var existing = await _store.GetByIdAsync(id, cancellationToken);
         if (existing is null
             || existing.AgentDefinitionId != agentDefinitionId
@@ -116,9 +118,8 @@ internal sealed class GoldenConversationService : IGoldenConversationService
         return await _store.DeleteAsync(id, cancellationToken);
     }
 
-    // Shared boundary validation for both create paths (DRY — keeps manual and harvested creates identical): non-blank
-    // Title/InputTurns, at least one scoring signal, the four length caps, and an existing owning agent (the FK demands
-    // it; reject up front rather than surface a downstream constraint failure).
+    // Shared boundary validation keeping the manual and harvested creates identical: non-blank title and turns, at
+    // least one scoring signal, the four length caps, and an owning agent the FK demands, rejected up front.
     private async Task ValidateAsync(GoldenConversationCreateInput input, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -168,18 +169,15 @@ internal sealed class GoldenConversationService : IGoldenConversationService
             throw new PlaybookActionValidationException($"Agent definition '{input.AgentDefinitionId}' does not exist.");
         }
 
-        // Semantic InputTurns validation: at least one turn, each carrying a known role (user/assistant) and non-blank
-        // text. An unknown role is rejected here rather than silently collapsed to User at eval time (which would
-        // reshape the evaluated conversation), and a case with no valid turns cannot be evaluated.
+        // Semantic turn validation: at least one turn, each with a known role and non-blank text. An unknown role is
+        // rejected here rather than collapsed to User at eval time, which would reshape the evaluated conversation.
         if (!GoldenInputTurns.TryParse(input.InputTurns, out _, out var turnsError))
         {
             throw new PlaybookActionValidationException(turnsError ?? "InputTurns is invalid.");
         }
 
-        // Semantic Assertion validation: an assertion must carry at least one meaningful (non-blank) required or
-        // forbidden phrase — otherwise it passes any output (empty .All is vacuously true, empty .Any trivially absent),
-        // a zero-quality bypass. When it does not, a Rubric must be present to score the case instead. This closes the
-        // empty-array-assertion bypass at authoring time (the judge fails such cases closed for legacy rows).
+        // Semantic assertion validation: an assertion must carry a non-blank required or forbidden phrase, or it
+        // passes any output, so without one a rubric must score the case instead. The judge fails legacy rows closed.
         if (!string.IsNullOrWhiteSpace(input.Assertion))
         {
             var assertion = GoldenAssertion.TryParse(input.Assertion);

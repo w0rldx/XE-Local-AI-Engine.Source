@@ -4,10 +4,13 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
-///     Distinguishes the four states a stored assertion string can be in, so the judge can treat a corrupt constraint
-///     differently from a genuinely-absent one. Authoring rejects <see cref="Malformed" /> outright; the judge, which
-///     also runs over legacy/corrupt stored rows, must FAIL such a case rather than silently score it on the rubric.
+///     The four states a stored assertion string can be in, so the judge treats a corrupt constraint differently from
+///     a genuinely absent one.
 /// </summary>
+/// <remarks>
+///     Authoring rejects <see cref="Malformed" /> outright, while the judge, which also runs over legacy and corrupt
+///     stored rows, must FAIL such a case rather than silently score it on the rubric.
+/// </remarks>
 internal enum AssertionParseState
 {
     /// <summary>Blank (null/whitespace) string: no deterministic signal was supplied for this case.</summary>
@@ -24,26 +27,23 @@ internal enum AssertionParseState
 }
 
 /// <summary>
-///     Parsed golden assertion (the deterministic phrase-check scoring signal). Null/blank phrases are filtered on parse
-///     so an empty or whitespace phrase can never gate a case — an empty required phrase would "pass" any output
-///     (<c>"".Contains("")</c> is true, and an empty <c>.All</c> is vacuously true), an empty forbidden phrase would fail
-///     everything. <see cref="HasMeaningfulSignal" /> is <see langword="false" /> when neither array holds a non-blank
-///     phrase; such an assertion proves nothing and must not auto-pass. Shared by the judge (deterministic scoring) and
-///     <see cref="GoldenConversationService" /> (create/update validation) so both agree on what a usable assertion is.
+///     Parsed golden assertion, the deterministic phrase-check scoring signal, with null and blank phrases filtered
+///     on parse so neither can ever gate a case.
 /// </summary>
+/// <remarks>
+///     An empty required phrase would pass any output, since an empty <c>.All</c> is vacuously true, and an empty
+///     forbidden phrase would fail everything. <see cref="HasMeaningfulSignal" /> is <see langword="false" /> when
+///     neither array holds a non-blank phrase, because such an assertion proves nothing and must not auto-pass. The
+///     judge and <see cref="GoldenConversationService" /> share it, so scoring and validation agree on what is usable.
+/// </remarks>
 internal sealed class GoldenAssertion
 {
     public required IReadOnlyList<string> RequiredPhrases { get; init; }
 
     public required IReadOnlyList<string> ForbiddenPhrases { get; init; }
 
-    // Web defaults keep camelCase naming + case-insensitive matching so a correctly-spelled wire payload still binds,
-    // but System.Text.Json otherwise IGNORES members it cannot map — so {"requiredPhrase":[...]} (a typo / schema drift)
-    // would parse into an all-empty assertion, be classified ValidNoSignal, and silently drop the intended deterministic
-    // gate to the rubric judge. Disallow makes an unmapped member throw JsonException, which TryParse turns into null →
-    // Classify returns Malformed → the judge records an explicit failed case and authoring rejects the input. Likewise a
-    // duplicate property is a corrupt payload where the silently-kept last value could differ from the author's intent, so
-    // reject it too (.NET 10 JsonException on duplicates).
+    // Web defaults keep camelCase matching, but System.Text.Json otherwise IGNORES members it cannot map, so a typo'd
+    // property would parse to an all-empty assertion. Disallowing one, and a duplicate, throws into Malformed instead.
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
@@ -78,11 +78,12 @@ internal sealed class GoldenAssertion
     }
 
     /// <summary>
-    ///     Classifies a stored assertion string into one of the four <see cref="AssertionParseState" /> values, so a
-    ///     caller can distinguish a blank string (<see cref="AssertionParseState.Absent" />) from a non-blank string that
-    ///     fails to parse (<see cref="AssertionParseState.Malformed" />) — a distinction <see cref="TryParse" /> collapses
-    ///     (both return <see langword="null" />). <paramref name="assertion" /> is populated only for the two Valid states.
+    ///     Classifies a stored assertion string into one of the four <see cref="AssertionParseState" /> values.
     /// </summary>
+    /// <remarks>
+    ///     It distinguishes a blank string from a non-blank one that fails to parse, which <see cref="TryParse" />
+    ///     collapses by returning null for both, and populates <paramref name="assertion" /> only when valid.
+    /// </remarks>
     public static AssertionParseState Classify(string? assertionJson, out GoldenAssertion? assertion)
     {
         assertion = null;

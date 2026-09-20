@@ -28,13 +28,14 @@ internal sealed class ChatTurnResolution
     public bool ReasoningBudgetEnforceable { get; init; } = true;
 
     /// <summary>
-    ///     Whether the runner's reasoning-effort dispatcher may replace the effective model for this turn. Named for the
-    ///     PERMISSION rather than the state, so the <see langword="false" /> default is by construction "the model is
-    ///     pinned, never swap it" — unknown provenance can only fail closed. It is <see langword="true" /> on ONE turn
-    ///     shape: no explicit user pick AND no honored agent pin, i.e. the node's default model was chosen for this turn
-    ///     and nobody asked for a specific one. Carried because the provenance lives only here — the runtime package
-    ///     retains the EFFECTIVE model and not how it was chosen.
+    ///     Whether the runner's reasoning-effort dispatcher may replace the effective model for this turn.
     /// </summary>
+    /// <remarks>
+    ///     Named for the PERMISSION rather than the state, so the <see langword="false" /> default reads "pinned,
+    ///     never swap" and unknown provenance can only fail closed. It is <see langword="true" /> on ONE turn shape:
+    ///     no explicit user pick AND no honored agent pin. It is carried here because the provenance lives nowhere
+    ///     else — the runtime package retains the EFFECTIVE model, not how it was chosen.
+    /// </remarks>
     public bool AllowAutoModelSwap { get; init; }
 
     /// <summary>

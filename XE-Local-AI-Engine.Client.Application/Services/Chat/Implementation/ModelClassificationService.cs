@@ -7,10 +7,12 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Resolves effective model kinds over the classification store, lazily probing Ollama's <c>/api/show</c>
-///     capabilities and caching them by content digest. The effective kind is <c>override ?? detected</c> (defaulting
-///     to <see cref="ModelKind.Unknown" />); detection failures are swallowed so a list never fails because the
-///     daemon is offline.
+///     capabilities and caching them by content digest.
 /// </summary>
+/// <remarks>
+///     The effective kind is <c>override ?? detected</c>, defaulting to <see cref="ModelKind.Unknown" />, and
+///     detection failures are swallowed so a list never fails because the daemon is offline.
+/// </remarks>
 internal sealed class ModelClassificationService : IModelClassificationService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -67,11 +69,8 @@ internal sealed class ModelClassificationService : IModelClassificationService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
-        // Clear the override and return the cleared row's effective kind (now DetectedKind, defaulting to Unknown). We do
-        // NOT eagerly probe here: an override-only row carries a null Digest, so probing now would cache Digest=null and
-        // the next list (which knows the real live digest) would see a mismatch and immediately re-probe — a redundant
-        // double probe. Detection happens lazily on the next ClassifyAsync with the real digest, mirroring the override
-        // (PUT) nuance where the React client invalidates the list rather than trusting the mutation response.
+        // Clear the override and return the cleared row's effective kind. It deliberately does NOT probe: an
+        // override-only row has a null Digest, so caching that would make the next list re-probe immediately.
         var cleared = await _store.SetOverrideAsync(modelName, overrideKind: null, cancellationToken);
         return ToResult(cleared);
     }

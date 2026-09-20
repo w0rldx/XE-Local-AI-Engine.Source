@@ -4,11 +4,13 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     Default <see cref="IConversationCompactionService" />. Loads the conversation, picks the older span that is not
-///     already covered by the existing synopsis and sits before the recent-keep window, summarizes it on-node, and
-///     persists the (extended) synopsis via <see cref="INodeChatPersistenceService.SetCompactionSummaryAsync" />. The
-///     original messages are untouched.
+///     Default <see cref="IConversationCompactionService" />: it loads the conversation, picks the older span the
+///     existing synopsis does not cover and that sits before the recent-keep window, then summarizes it on-node.
 /// </summary>
+/// <remarks>
+///     The extended synopsis persists through
+///     <see cref="INodeChatPersistenceService.SetCompactionSummaryAsync" />, leaving the originals untouched.
+/// </remarks>
 internal sealed class ConversationCompactionService : IConversationCompactionService
 {
     private readonly INodeChatPersistenceService _persistence;
@@ -61,19 +63,12 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
             return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.ConversationNotFound };
         }
 
-        // Collapse regenerated variant siblings to the SELECTED path FIRST — exactly what the send path does via
-        // SelectedPathResolver — so compaction folds only the messages the user actually chose. Without this, rejected
-        // sibling answers would be merged into the synopsis while the send path later drops the selected messages through
-        // the covered sequence, feeding future turns content the user never picked.
+        // Variant siblings collapse to the SELECTED path FIRST, exactly as the send path does, so compaction folds
+        // only what the user chose; otherwise a rejected answer is merged while the chosen one is dropped as covered.
         var selected = SelectedPathResolver.Resolve(conversation.Messages, conversation.SelectedPath);
 
-        // Order and fold in ANCHOR space (each group's earliest member sequence), exactly as the send/regenerate paths
-        // build their context. A sibling minted by regenerating an EARLY turn after later turns exist carries a raw
-        // sequence past them, so raw-sequence ordering would treat that stale answer as the newest message: it would
-        // survive the keep-verbatim window while a genuinely recent exchange got folded away instead. See
-        // SelectedPathResolver.CreateAnchorResolver. The cutoff persisted below as CompactionSummaryCoversToSequence is
-        // therefore an anchor too — with no variants anchor == raw sequence, so values written before this change stay
-        // valid, and the send/regenerate paths compare against it in the same space.
+        // Ordering and folding run in ANCHOR space, as the send path does, or a late-regenerated early answer reads as
+        // the newest message. The persisted CompactionSummaryCoversToSequence is therefore an anchor too.
         var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
 
         // Only completed, content-bearing messages are sendable history — the same filter the send path applies before
@@ -113,10 +108,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
             };
         }
 
-        // Summarize with the model the user is chatting with when it is an installed LOCAL chat model. The resolver
-        // returns the requested model iff it is a local GGUF chat model, otherwise it falls back to an installed local
-        // default — so a cloud selection (or an unknown/stale id) transparently degrades to a node-local model and
-        // conversation content never leaves the machine. A blank request falls back to the node's configured default.
+        // Summarize with the user's model only when it is an installed LOCAL chat model: anything else degrades to a
+        // node-local default, so conversation content never leaves the machine.
         var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
         var preferred = string.IsNullOrWhiteSpace(requestedModel) ? nodeSettings.DefaultModelName : requestedModel;
         var model = await _localDefaultChatModelResolver.ResolveAsync(preferred, cancellationToken);
@@ -130,10 +123,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         // ran on a node-local model instead. The UI surfaces this so the on-device downgrade is never silent.
         var usedFallbackModel = !string.IsNullOrWhiteSpace(requestedModel) && !string.Equals(model, requestedModel, StringComparison.OrdinalIgnoreCase);
 
-        // The SAME provider-routed capability resolution the chat turn uses, on the model the fold will actually run on.
-        // A miss resolves NOT-capable, which sends no thinking fields — the safe direction. Resolved here rather than
-        // inside the summarizer because IModelCapabilityResolver is scoped and the summarizer is a singleton, so
-        // injecting it there would capture a scoped dependency.
+        // The SAME provider-routed capability resolution a chat turn uses, on the model the fold will run on, where a
+        // miss safely resolves NOT-capable. It is resolved here because the scoped resolver cannot live in a singleton.
         var capabilities = await _modelCapabilityResolver.ResolveAsync(model, cancellationToken);
 
         var summary = await _summarizer

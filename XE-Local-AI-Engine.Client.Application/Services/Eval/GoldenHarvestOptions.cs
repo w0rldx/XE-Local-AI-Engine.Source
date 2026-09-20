@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Eval;
 
 /// <summary>
-///     Options for deterministic golden harvest runs. <see cref="MaxProposals" /> hard-caps how many candidates a single
-///     harvest run persists (review-load + write-cost guard); <see cref="MaxThumbsUpScan" /> caps how many most-recent
-///     thumbs-up sources the read boundary scans per run. No model name — harvest invokes no LLM, so unlike the
-///     eval/analysis options there is nothing to default at composition time.
+///     Options for deterministic golden harvest runs: <see cref="MaxProposals" /> hard-caps the candidates one run
+///     persists, and <see cref="MaxThumbsUpScan" /> the most-recent thumbs-up sources the read boundary scans.
 /// </summary>
+/// <remarks>
+///     There is no model name, because harvest invokes no LLM, so unlike the eval and analysis options nothing needs
+///     defaulting at composition time.
+/// </remarks>
 public sealed class GoldenHarvestOptions
 {
     public const string Section = "GoldenHarvest";
