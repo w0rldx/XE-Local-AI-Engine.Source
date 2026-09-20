@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Semantic retrieval arm of the hybrid search pipeline. Scores stored chunk vectors against a pre-embedded query
-///     vector and returns the closest chunks. Implementations must only ever compare vectors built by the SAME embedding
-///     model: a same-dimension, different-model vector is incomparable and would rank as valid garbage. Scoped: an
-///     implementation reads through the request-scoped <see cref="Persistence.NodeChatDbContext" /> connection.
+///     Semantic retrieval arm of the hybrid search pipeline: scores stored chunk vectors against a pre-embedded query
+///     vector and returns the closest chunks.
 /// </summary>
+/// <remarks>
+///     Implementations must only ever compare vectors built by the SAME embedding model: a same-dimension,
+///     different-model vector is incomparable and would rank as valid garbage. Scoped: an implementation reads through
+///     the request-scoped <see cref="Persistence.NodeChatDbContext" /> connection.
+/// </remarks>
 public interface IVectorSearch
 {
     /// <summary>
@@ -14,9 +17,7 @@ public interface IVectorSearch
     /// </summary>
     /// <param name="queryVector">The query embedding (already built via the query-intent prefix and the current model).</param>
     /// <param name="embeddingModel">The current embedding model and model-scope filter key.</param>
-    /// <param name="limit">Maximum number of hits to return.</param>
     /// <param name="documentId">Optional scope: when set, only chunks of this document are considered.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     Task<IReadOnlyList<VectorSearchHit>> SearchAsync(ReadOnlyMemory<float> queryVector,
         string embeddingModel,
         string vectorIdentity,

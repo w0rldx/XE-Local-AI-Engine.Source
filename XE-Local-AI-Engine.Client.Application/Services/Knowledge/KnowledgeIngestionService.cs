@@ -9,11 +9,13 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
-///     Default <see cref="IKnowledgeIngestionService" />. Drives one document through the pipeline, advancing
-///     <c>knowledge_documents.status</c> at each transition and setting a content-free <c>failure_reason</c> on any step
-///     failure. The final Indexed transition is performed atomically by <see cref="IKnowledgeIndexWriter" />. All failure
-///     logging is exception-type-only — no chunk or document text ever reaches a log.
+///     Default <see cref="IKnowledgeIngestionService" />: drives one document through the pipeline, advancing
+///     <c>knowledge_documents.status</c> at each transition and setting a content-free <c>failure_reason</c> on failure.
 /// </summary>
+/// <remarks>
+///     The final Indexed transition is performed atomically by <see cref="IKnowledgeIndexWriter" />. No chunk or document
+///     text ever reaches a log.
+/// </remarks>
 public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
 {
     private const string ContentMissingReason = "The document content could not be found.";
@@ -90,21 +92,11 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     ///     Logs an ingestion failure with the exception TYPE plus the causal chain's messages.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         This deliberately logs more than the type name. It previously recorded only
-    ///         <c>exception.GetType().Name</c>, on the reasoning that a document may contain sensitive text — but a
-    ///         TRANSPORT failure's message is not document content, and dropping it left the operator with a bare
-    ///         <c>(ClientResultException)</c>: no status, no server response, no failing step. A completely deterministic,
-    ///         100%-reproducible embedding-server rejection was undiagnosable from logs because of it.
-    ///     </para>
-    ///     <para>
-    ///         The no-content-in-logs rule is preserved by the SOURCES, not by suppressing the message: every reason this
-    ///         pipeline raises is a fixed const string (see this type's <c>*Reason</c> fields and
-    ///         <see cref="KnowledgeChunkEmbedder" />'s), the provider layer sanitizes llama-server's response before it
-    ///         becomes an exception message, and no chunk or document text is ever interpolated into either. The inner
-    ///         chain is walked because the actionable detail is always in the innermost transport exception, never in the
-    ///         <see cref="KnowledgeIngestionException" /> wrapper.
-    ///     </para>
+    ///     A bare type name leaves the operator without a status, a server response or a failing step, and a TRANSPORT
+    ///     failure's message is not document content. The no-content-in-logs rule is preserved by the SOURCES, not by
+    ///     suppressing the message: every reason this pipeline raises is a fixed const string (this type's <c>*Reason</c>
+    ///     fields and <see cref="KnowledgeChunkEmbedder" />'s), the provider layer sanitizes llama-server's response, and no
+    ///     chunk text is interpolated into either. The actionable detail lives in the innermost transport exception.
     /// </remarks>
     private void LogIngestionFailure(Guid documentId, Exception exception)
     {
@@ -177,10 +169,8 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             return;
         }
 
-        // Token-aware sizing: tighten the chunk budget to the resolved embedding model's context window when it
-        // is discoverable, so a chunk and its heading prefix fit the window. Best-effort — a null window (provider down /
-        // no advertised context length) falls back to the configured MaxChunkTokens; a provider failure surfaces at the
-        // embed step below, not here.
+        // Token-aware sizing: tighten the chunk budget to the resolved embedding window when discoverable, so a chunk and
+        // its heading prefix fit it. Best-effort — a null window keeps MaxChunkTokens; a provider failure surfaces at embed.
         var embeddingContextWindow = await _embedder.ResolveEmbeddingContextWindowAsync(cancellationToken);
         var chunking = _chunkingService.Chunk(extraction.Document!, embeddingContextWindow);
         chunking = ApplySourceMetadata(chunking, revision.Extension, revision.SourcePath);
@@ -224,9 +214,8 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
 
         var indexChunks = BuildIndexChunks(chunking.Chunks, embeddingResult.Vectors, embeddingResult.Dimension);
 
-        // Stamp the RESOLVED model that actually produced the vectors (not the configured name) as both the document row's
-        // embedding_model and every chunk-vector scope key, so a later same-dimension model swap makes stored-name differ
-        // from the current resolved name → the catalog flags the document stale → the operator reindexes it.
+        // Stamp the RESOLVED model that produced the vectors, not the configured name, on the document row and every
+        // chunk-vector scope key, so a later same-dimension swap has the catalog flag the document stale for a reindex.
         var input = new KnowledgeIndexInput
         {
             DocumentId = documentId,
@@ -238,9 +227,8 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             Chunks = indexChunks
         };
 
-        // The writer performs the final Indexed transition atomically. A false result means the document was deleted or
-        // replaced mid-flight (the stale write was skipped); the dispatcher preserves any deferred replacement admission.
-        // On success push Indexed, since the writer sets it inside its own transaction rather than through SetStatusAsync.
+        // The writer performs the final Indexed transition atomically; false means the document was deleted or replaced
+        // mid-flight, so the stale write was skipped. On success push Indexed: the writer set it in its own transaction.
         var indexed = await _indexWriter.WriteAsync(input, cancellationToken);
         if (indexed)
         {

@@ -31,9 +31,12 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
 {
     /// <summary>
     ///     The record schema the teacher is asked for and — crucially — the ORIGINAL schema every generated record is
-    ///     validated against. The MEAI adapter rewrites what the teacher actually sees (all-required, bounds folded into
-    ///     the description), so only this copy expresses what the definition really requires.
+    ///     validated against.
     /// </summary>
+    /// <remarks>
+    ///     The MEAI adapter rewrites what the teacher actually sees (all-required, bounds folded into the
+    ///     description), so only this copy expresses what the definition really requires.
+    /// </remarks>
     private static readonly JsonElement RecordSchema = JsonDocument.Parse("""
                                                                           {
                                                                             "type": "object",
@@ -96,9 +99,8 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
         {
             _ = await _store.CompleteGenerationAsync(work.DatasetId, DatasetGenerationWorkStatus.Cancelled, errorMessage: null, CancellationToken.None);
 
-            // An operator cancel is an ordinary outcome, already recorded — rethrowing it would make the queue log a
-            // "queue failed" error for work that ended exactly as asked. Only a host stop propagates, because that is
-            // the loop's own signal to return.
+            // An operator cancel is an ordinary outcome, already recorded: rethrowing it would make the queue log a
+            // "queue failed" error for work that ended exactly as asked. Only a host stop propagates — the loop's own signal.
             if (cancellationToken.IsCancellationRequested)
             {
                 throw;
@@ -120,16 +122,14 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
 
     private async Task GenerateAsync(DatasetGenerationClaimedWork work, CancellationToken cancellationToken)
     {
-        // The PINNED body, not the live definition row: an edit between the dataset's creation and this run would
-        // otherwise swap the teacher, the tool snapshot or the instructions while the dataset still claims the
-        // DefinitionVersion it was created at.
+        // The PINNED body, not the live definition row: an edit between the dataset's creation and this run would otherwise
+        // swap the teacher, the tool snapshot or the instructions while the dataset still claims its DefinitionVersion.
         var definition = DatasetDefinitionService.ReadPinnedBody(work.Dataset)
                          ?? throw new TrainingValidationException(DatasetDefinitionService.UnpinnedDatasetReason);
         var plan = BuildPlan(definition);
 
-        // Checked here as well as in the runner: this is the seam that RESOLVES a provider and builds the client, and
-        // reaching it with an ext: id would construct a live connection to the external endpoint before the runner's
-        // own guard ever saw the first turn.
+        // Checked here as well as in the runner: this is the seam that RESOLVES a provider and builds the client, so reaching
+        // it with an ext: id would open a live connection to the external endpoint before the runner's guard saw the first turn.
         TrainingModelEligibility.EnsureNotExternal(definition.TeacherModelName, "dataset generation teachers");
 
         var provider = await _providerResolver.ResolveProviderForModelAsync(definition.TeacherModelName, cancellationToken);
@@ -207,9 +207,8 @@ public sealed class DatasetGenerationExecutor : IDatasetGenerationExecutor
     {
         await _store.RecordRejectedSampleAsync(datasetId, cancellationToken);
         _ = _events.Append(datasetId, DatasetGenerationEventKind.Rejected, new DatasetGenerationPayload { Reason = reason });
-        // The hub buffer is transient and evicted when the run terminalizes; the count survives but the reason would
-        // not. Log it so a rejection stays diagnosable after the fact (invariant: fail-visible, never fail-silent).
-        // Reasons are validator/transport messages, never sample content.
+        // The hub buffer is transient and evicted when the run terminalizes; the count survives but the reason would not, so
+        // log it (invariant: fail-visible, never fail-silent). Reasons are validator/transport messages, never sample content.
         _logger.LogInformation("Dataset {DatasetId} rejected a generated sample: {Reason}", datasetId, reason ?? "(no reason recorded)");
     }
 

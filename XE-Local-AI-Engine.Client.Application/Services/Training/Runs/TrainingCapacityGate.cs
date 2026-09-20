@@ -21,11 +21,10 @@ public sealed class TrainingCapacityReservation : IDisposable
 /// </summary>
 /// <remarks>
 ///     Deliberately NOT routed through <c>ICapacityService</c>: a <c>CapacityRequest</c> is
-///     <c>(ModelName, ModelRole, RequiredContextTokens)</c> and a training run has no model identity, no role and no
-///     context window — every field would have to be faked, and the down-tier loop behind it would then "helpfully"
-///     admit a smaller model that does not exist. The reservation goes straight onto
-///     <see cref="IPendingFootprintLedger" />, which is the part that actually matters: it is the process-wide byte
-///     budget every concurrent spawn decision reads, so a run's bytes are visible to an inference spawn and vice versa.
+///     <c>(ModelName, ModelRole, RequiredContextTokens)</c> and a training run has no model identity, no role and no context
+///     window — every field would have to be faked, and the down-tier loop behind it would then "helpfully" admit a smaller
+///     model that does not exist. The reservation goes straight onto <see cref="IPendingFootprintLedger" />, the process-wide
+///     byte budget every concurrent spawn decision reads, so a run's bytes are visible to an inference spawn and vice versa.
 /// </remarks>
 public interface ITrainingCapacityGate
 {

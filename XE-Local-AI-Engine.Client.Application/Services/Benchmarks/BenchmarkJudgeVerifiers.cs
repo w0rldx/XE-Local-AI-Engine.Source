@@ -6,22 +6,16 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 /// <summary>
-///     The server-side half of a rubric: every criterion whose kind is not <c>llm</c> is decided HERE, deterministically,
-///     against the same graded projection the judge model would have been shown
-///     (<see cref="BenchmarkOutputParts.ForJudge" />) — so the stored evidence answers questions about the same text the
-///     rubric was applied to.
+///     The server-side half of a rubric: every criterion whose kind is not <c>llm</c> is decided HERE,
+///     deterministically, against the same graded projection the judge model would have been shown
+///     (<see cref="BenchmarkOutputParts.ForJudge" />).
 /// </summary>
 /// <remarks>
-///     <para>
-///         Pure and side-effect free: no I/O, no clock, no randomness. Two runs of the same criterion against the same
-///         answer produce the same verdict and the same detail string, which is what makes a verified score comparable
-///         at all.
-///     </para>
-///     <para>
-///         <b>Fail closed.</b> A verifier that cannot run — a config that got past the validator or a runtime
-///         fault — throws, and the judging fails with a reason. It never returns "not passed", because 0 is a real
-///         score an answer can earn and "unmeasurable" is not one.
-///     </para>
+///     Pure and side-effect free: no I/O, no clock, no randomness, so two runs of the same criterion against the same
+///     answer produce the same verdict and the same detail string — which is what makes a verified score comparable
+///     at all, and what makes the stored evidence answer questions about the text the rubric was applied to. FAIL
+///     CLOSED: a verifier that cannot run — a config that got past the validator, or a runtime fault — throws and the
+///     judging fails with a reason. It never returns "not passed", because 0 is a real score an answer can earn.
 /// </remarks>
 public static class BenchmarkJudgeVerifiers
 {
@@ -72,9 +66,8 @@ public static class BenchmarkJudgeVerifiers
         var kind = BenchmarkJudgeCriterionKinds.Normalize(criterion.Kind);
         if (BenchmarkJudgeCriterionKinds.IsExecutionVerified(kind))
         {
-            // Not decidable here by construction: this class is pure and synchronous, and pythonTests needs the
-            // compute sandbox. Throwing rather than falling through to the constraint branch keeps a routing mistake a
-            // failed judging instead of a criterion silently decided by the wrong verifier.
+            // Not decidable here by construction: this class is pure and synchronous, and pythonTests needs the compute sandbox.
+            // Throwing rather than falling through to the constraint branch keeps a routing mistake a failed judging instead of a criterion silently decided by the wrong verifier.
             throw new BenchmarkExecutionException($"Rubric criterion '{criterion.Id}' is decided by execution, not by a pure verifier.");
         }
 
@@ -236,9 +229,11 @@ public static class BenchmarkJudgeVerifiers
 
     /// <summary>
     ///     The first fenced JSON block, or the whole trimmed answer — models fence a JSON answer more often than not.
+    /// </summary>
+    /// <remarks>
     ///     Scanned rather than matched: the pattern that finds a fence needs a negative lookahead, which is exactly
     ///     what the linear-time engine every other pattern here uses refuses to compile.
-    /// </summary>
+    /// </remarks>
     private static string ExtractJson(string answer)
     {
         const string Fence = "```";

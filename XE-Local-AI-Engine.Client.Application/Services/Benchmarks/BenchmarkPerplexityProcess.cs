@@ -7,12 +7,12 @@ using System.Text.RegularExpressions;
 
 /// <summary>
 ///     Runs one <c>llama-perplexity</c> child process to completion and returns what it printed.
-///     <para>
-///         A seam of its own rather than the training spawner: that one is Linux-only and scrubs a Python environment
-///         this has no use for, while every platform that ships a llama.cpp runtime ships this tool. It exists mainly
-///         so the parser can be tested against captured real output instead of a 27B model.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A seam of its own rather than the training spawner: that one is Linux-only and scrubs a Python environment this
+///     has no use for, while every platform that ships a llama.cpp runtime ships this tool. It exists mainly so the
+///     parser can be tested against captured real output instead of a 27B model.
+/// </remarks>
 public interface IBenchmarkPerplexityRunner
 {
     Task<BenchmarkPerplexityProcessResult> RunAsync(string executablePath, IReadOnlyList<string> arguments, CancellationToken cancellationToken);
@@ -130,28 +130,23 @@ public sealed class BenchmarkPerplexityRunner : IBenchmarkPerplexityRunner
     }
 }
 
-/// <summary>
-///     Reads the summary blocks <c>llama-perplexity</c> prints. Every pattern here was captured from the shipped
-///     b10201 binary, not from upstream documentation, because the two disagree in three ways that each read as
-///     "unparseable" rather than as an error:
-///     <list type="bullet">
-///         <item>a KL-divergence run prints NO <c>Final estimate</c> line at all — its perplexity is
-///             <c>Mean PPL(Q)</c> inside the statistics block;</item>
-///         <item>the statistics blocks separate a value from its error with <c>±</c>, while the plain perplexity
-///             line uses <c>+/-</c>;</item>
-///         <item>top-token agreement is printed as <c>Same top p</c>, not as any phrase containing "agreement".</item>
-///     </list>
-///     Fail-closed by construction: every method returns <see langword="null" /> when the expected line is absent, and
-///     the caller turns that into a FAILED measurement rather than one with null numbers — "unmeasurable" and
-///     "measured as nothing" are different facts, and only the second is a number.
-/// </summary>
+/// <summary>Reads the summary blocks <c>llama-perplexity</c> prints.</summary>
+/// <remarks>
+///     Every pattern here was captured from the shipped b10201 binary, not from upstream documentation, because the
+///     two disagree in three ways that each read as "unparseable" rather than as an error — see
+///     docs/wiki/20-benchmarks.md ("Quant fidelity — perplexity and KL divergence (display only)"). Fail-closed by
+///     construction: every method returns <see langword="null" /> when the expected line is absent, and the caller
+///     turns that into a FAILED measurement — "unmeasurable" and "measured as nothing" are different facts.
+/// </remarks>
 public static partial class BenchmarkPerplexityOutputParser
 {
     /// <summary>
-    ///     <c>Final estimate: PPL = 6.7983 +/- 0.07405</c>, printed by a plain perplexity run and by the KLD BASE
-    ///     phase. Not anchored at line start: llama.cpp prefixes its output with a timestamped log marker, so an
-    ///     anchored pattern matches nothing on a real run.
+    ///     <c>Final estimate: PPL = 6.7983 +/- 0.07405</c>, printed by a plain perplexity run and by the KLD BASE phase.
     /// </summary>
+    /// <remarks>
+    ///     Not anchored at line start: llama.cpp prefixes its output with a timestamped log marker, so an anchored
+    ///     pattern matches nothing on a real run.
+    /// </remarks>
     [GeneratedRegex(@"Final estimate:\s*PPL\s*=\s*(?<mean>[0-9]+(?:\.[0-9]+)?)\s*\+/-\s*(?<error>[0-9]+(?:\.[0-9]+)?)",
         RegexOptions.ExplicitCapture | RegexOptions.NonBacktracking)]
     private static partial Regex FinalEstimatePattern { get; }
@@ -179,11 +174,11 @@ public static partial class BenchmarkPerplexityOutputParser
         RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.NonBacktracking)]
     private static partial Regex SameTopTokenPattern { get; }
 
-    /// <summary>
-    ///     The perplexity a run reported, from whichever of the two shapes this invocation produced. A KLD run is
-    ///     tried FIRST: it prints its perplexity inside the statistics block and no final-estimate line, so looking
-    ///     for the plain shape first would find nothing and discard a measurement that succeeded.
-    /// </summary>
+    /// <summary>The perplexity a run reported, from whichever of the two shapes this invocation produced.</summary>
+    /// <remarks>
+    ///     A KLD run is tried FIRST: it prints its perplexity inside the statistics block and no final-estimate line,
+    ///     so looking for the plain shape first would find nothing and discard a measurement that succeeded.
+    /// </remarks>
     public static BenchmarkPerplexityReading? TryParsePerplexity(string? output)
     {
         if (output is null)
@@ -194,11 +189,12 @@ public static partial class BenchmarkPerplexityOutputParser
         return Reading(MeanQuantPerplexityPattern, output) ?? Reading(FinalEstimatePattern, output);
     }
 
-    /// <summary>
-    ///     The KL-divergence block. The mean is required — it is the number the axis is about; the p99 and the
-    ///     top-token agreement beside it are recorded when present and left null when a build stops printing them,
-    ///     because a missing SECONDARY figure is not a reason to discard a measurement that did happen.
-    /// </summary>
+    /// <summary>The KL-divergence block.</summary>
+    /// <remarks>
+    ///     The mean is required — it is the number the axis is about. The p99 and the top-token agreement beside it
+    ///     are recorded when present and left null when a build stops printing them, because a missing SECONDARY
+    ///     figure is not a reason to discard a measurement that did happen.
+    /// </remarks>
     public static BenchmarkKldReading? TryParseKld(string? output)
     {
         if (output is null || Value(MeanKldPattern, output) is not { } mean)

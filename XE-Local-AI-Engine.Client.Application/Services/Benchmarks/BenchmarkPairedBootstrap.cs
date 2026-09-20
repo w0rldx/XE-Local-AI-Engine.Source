@@ -2,9 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
 ///     The paired difference between two measurement cells over the items they SHARE, with a percentile bootstrap
-///     interval around it. <see cref="Separated" /> is false exactly when 0 lies inside the interval, allowing a
-///     reader to say: "these two are not separated by this suite".
+///     interval around it.
 /// </summary>
+/// <remarks>
+///     <see cref="Separated" /> is false exactly when 0 lies inside the interval, allowing a reader to say: "these two
+///     are not separated by this suite".
+/// </remarks>
 public sealed record BenchmarkPairedDelta
 {
     /// <summary>How many items were rankable in BOTH cells; the resampling unit is one of these.</summary>
@@ -66,10 +69,8 @@ public static class BenchmarkPairedBootstrap
         }
 
         var means = new double[replicates];
-        // Seeded `Random`, exactly as BenchmarkBradleyTerry does: the seeded constructor keeps the legacy sequence for
-        // compatibility, and nothing here is stored anyway — a hypothetical runtime change would move a DISPLAYED
-        // interval, not a persisted score or an input hash. (The NIAH generator makes the opposite call for the
-        // opposite reason: its bytes feed an item's input hash.)
+        // Seeded `Random`, exactly as BenchmarkBradleyTerry does: the seeded constructor keeps the legacy sequence, and nothing here is stored anyway — a runtime change would move
+        // a DISPLAYED interval, not a persisted score or an input hash. (The NIAH generator makes the opposite call for the opposite reason: its bytes feed an item's input hash.)
 #pragma warning disable S2245 // A bootstrap must be reproducible: the seed IS the point, and no security decision reads it.
         var random = new Random(0);
 #pragma warning restore S2245

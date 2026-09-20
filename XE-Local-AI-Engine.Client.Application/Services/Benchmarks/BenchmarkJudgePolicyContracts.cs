@@ -12,26 +12,26 @@ using System.Text.Json.Serialization;
 /// </summary>
 public static class BenchmarkJudgePolicyVersions
 {
-    /// <summary>
-    ///     3 since the length-neutrality sentence entered <c>BenchmarkJudgePromptV2.SystemPrompt</c>. The prompt TEXT
-    ///     is hashed nowhere, so this integer is the only thing that can separate two judgings across a wording change:
-    ///     without the bump, verdicts taken either side of it share a policy revision and a cohort generation and get
-    ///     dense-ranked against each other after having been asked different questions. A policy still carrying 2 is
-    ///     rejected by <see cref="BenchmarkJudgePolicyValidationCodes.PromptVersionUnsupported" />, which is the
-    ///     existing forced-re-judge path.
-    /// </summary>
+    /// <summary>3 since the length-neutrality sentence entered <c>BenchmarkJudgePromptV2.SystemPrompt</c>.</summary>
+    /// <remarks>
+    ///     The prompt TEXT is hashed nowhere, so this integer is the only thing that can separate two judgings across a
+    ///     wording change: without the bump, verdicts taken either side of it share a policy revision and a cohort
+    ///     generation and get dense-ranked against each other after having been asked different questions. A policy
+    ///     still carrying 2 is rejected by <see cref="BenchmarkJudgePolicyValidationCodes.PromptVersionUnsupported" />,
+    ///     which is the existing forced-re-judge path.
+    /// </remarks>
     public const int PromptVersion = 3;
 
     public const int OutputSchemaVersion = 2;
     public const int RubricVersion = 1;
 
-    /// <summary>
-    ///     The pairwise prompt and output-schema versions, kept beside the pointwise pair for the same reason: the
-    ///     prompt TEXT is hashed nowhere. They are POLICY MEMBERS rather than bare constants (orders 8 and 9), exactly
-    ///     as <see cref="PromptVersion" /> and <see cref="OutputSchemaVersion" /> are at orders 2 and 3, so a pairwise
-    ///     wording change lands inside <c>ComputePolicyHash</c> — and a pointwise prompt edit still does not churn
-    ///     pairwise verdicts, nor the reverse.
-    /// </summary>
+    /// <summary>The pairwise prompt and output-schema versions, kept beside the pointwise pair.</summary>
+    /// <remarks>
+    ///     Same reason: the prompt TEXT is hashed nowhere. They are POLICY MEMBERS rather than bare constants (orders 8
+    ///     and 9), exactly as <see cref="PromptVersion" /> and <see cref="OutputSchemaVersion" /> are at orders 2 and
+    ///     3, so a pairwise wording change lands inside <c>ComputePolicyHash</c> — and a pointwise prompt edit still
+    ///     does not churn pairwise verdicts, nor the reverse.
+    /// </remarks>
     public const int PairwisePromptVersion = 1;
 
     public const int PairwiseOutputSchemaVersion = 1;
@@ -46,19 +46,17 @@ public static class BenchmarkJudgePolicyVersions
     public const int MaximumReferenceAnswerLength = 32768;
 }
 
-// Every record below is serialized into the policy hash, so each one pins its property order explicitly with
-// JsonPropertyOrder. Reordering a declaration must never silently change a hash, and the policy must never inherit the
-// declaration order of a type it does not own.
-/// <param name="Kind">
-///     How this criterion is decided: <see cref="BenchmarkJudgeCriterionKinds.Llm" /> (the legacy-compatible default
-///     for a criterion without an explicit kind) hands it to the judge model; every other kind is checked server-side
-///     by <see cref="BenchmarkJudgeVerifiers" /> with no inference at all.
-/// </param>
-/// <param name="Config">
-///     The kind's configuration as canonical JSON, or <see langword="null" /> for <c>llm</c>. Canonicalized by
-///     <see cref="BenchmarkJudgePolicyCanonicalizer" /> so two operators who typed the same rules in a different key
-///     order hash identically.
-/// </param>
+// Every record below is serialized into the policy hash, so each one pins its property order explicitly with JsonPropertyOrder:
+// reordering a declaration must never silently change a hash, and the policy must never inherit the declaration order of a type it does not own.
+/// <summary>One weighted rubric criterion, as the policy hash sees it.</summary>
+/// <remarks>
+///     <see cref="BenchmarkJudgeCriterionKinds.Llm" /> is the legacy-compatible default for a criterion carrying no
+///     explicit kind; every other kind is checked server-side by <see cref="BenchmarkJudgeVerifiers" />.
+///     <paramref name="Config" /> is canonicalized by <see cref="BenchmarkJudgePolicyCanonicalizer" /> so two
+///     operators who typed the same rules in a different key order hash identically.
+/// </remarks>
+/// <param name="Kind">How this criterion is decided: the judge model, or a server-side verifier with no inference at all.</param>
+/// <param name="Config">The kind's configuration as canonical JSON, or <see langword="null" /> for <c>llm</c>.</param>
 public sealed record BenchmarkJudgeRubricCriterionV1(
     [property: JsonPropertyOrder(0)]
     string Id,
@@ -79,11 +77,12 @@ public sealed record BenchmarkJudgeRubricV1(
     [property: JsonPropertyOrder(1)]
     IReadOnlyList<BenchmarkJudgeRubricCriterionV1> Criteria);
 
-/// <summary>
-/// The judge model identity a policy hashes over. Deliberately narrower than <see cref="BenchmarkInstalledModelSnapshotV1"/>:
-/// only fields whose change actually changes a score belong in the policy hash, so a registry-alias or provider-mapping
-/// churn does not spawn a spurious policy revision.
-/// </summary>
+/// <summary>The judge model identity a policy hashes over.</summary>
+/// <remarks>
+/// Deliberately narrower than <see cref="BenchmarkInstalledModelSnapshotV1"/>: only fields whose change actually
+/// changes a score belong in the policy hash, so a registry-alias or provider-mapping churn does not spawn a spurious
+/// policy revision.
+/// </remarks>
 public sealed record BenchmarkJudgePolicyModelV1(
     [property: JsonPropertyOrder(0)]
     string ModelName,
@@ -208,13 +207,19 @@ public static class BenchmarkJudgePolicyValidator
     private static readonly SearchValues<char> CriterionIdCharacters =
         SearchValues.Create("abcdefghijklmnopqrstuvwxyz0123456789-_");
 
+    /// <summary>
+    ///     Validates a judge policy: the structural rules always, and the version constants this build supports when
+    ///     <paramref name="strictVersions" /> is set.
+    /// </summary>
+    /// <remarks>
+    ///     A version constant moving must never make an already-stored revision unreadable: bumping
+    ///     <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> made `GET benchmarks/projects/{id}` 500, the whole
+    ///     project header vanished from the UI, and it took the re-save control that heals the revision with it.
+    ///     Everything else checked here is structural and holds for any row this build could have written.
+    /// </remarks>
     /// <param name="strictVersions">
     ///     <see langword="true" /> on WRITE and immediately before EXECUTION: the policy must carry the versions this
-    ///     build supports. <see langword="false" /> on READ — a version constant moving must never make an
-    ///     already-stored revision unreadable. It did once: bumping <see cref="BenchmarkJudgePolicyVersions.PromptVersion" />
-    ///     made `GET benchmarks/projects/{id}` 500, the whole project header vanished from the UI, and it took the
-    ///     re-save control that heals the revision with it. Everything else checked here is structural and holds for
-    ///     any row this build could have written.
+    ///     build supports. <see langword="false" /> on READ.
     /// </param>
     public static void Validate(BenchmarkJudgePolicyV1 policy, bool strictVersions = true)
     {
@@ -256,11 +261,11 @@ public static class BenchmarkJudgePolicyValidator
         ValidateRubric(policy.Rubric, strictVersions);
     }
 
-    /// <summary>
-    ///     The judging mode, and the pairwise versions that ride with it. Checked on WRITE and EXECUTION only: a
-    ///     stored blob must still READ, or the constant moving would take the project header down with it — the same
-    ///     rule the prompt/output-schema versions live under.
-    /// </summary>
+    /// <summary>The judging mode, and the pairwise versions that ride with it.</summary>
+    /// <remarks>
+    ///     Checked on WRITE and EXECUTION only: a stored blob must still READ, or the constant moving would take the
+    ///     project header down with it — the same rule the prompt/output-schema versions live under.
+    /// </remarks>
     private static void ValidateMode(BenchmarkJudgePolicyV1 policy, bool strictVersions)
     {
         if (!strictVersions)
@@ -338,10 +343,8 @@ public static class BenchmarkJudgePolicyValidator
                     $"A judge rubric criterion weight must be between {BenchmarkJudgePolicyVersions.MinimumCriterionWeight} and {BenchmarkJudgePolicyVersions.MaximumCriterionWeight}.");
             }
 
-            // Verifiable configuration is parsed HERE, at activation, and by the same parser the executor uses. A
-            // config the validator waves through is a judging that fails at run time with nothing to show for the GPU
-            // it already reserved. A failed judging must not be converted into score 0, so the operator's only signal
-            // would be a failed attempt. Strict path only: a stored revision must stay readable.
+            // Verifiable configuration is parsed HERE, at activation, by the same parser the executor uses: a config the validator waves through is a judging that fails at run time with the GPU
+            // already reserved. A failed judging must not be converted into score 0, so the operator's only signal would be a failed attempt. Strict path only: a stored revision must stay readable.
             if (strictVersions)
             {
                 _ = BenchmarkJudgeVerifierConfig.Parse(criterion.Kind, criterion.Config);
@@ -468,12 +471,12 @@ public static class BenchmarkJudgeRubricDefaults
     /// <summary>
     ///     The one preset that costs no GPU: every criterion is decided server-side, so a project judging under it
     ///     completes with no llama-server spawn at all.
-    ///     <para>
-    ///         Unlike the three model-judged presets, this one does NOT share their criterion ids and weights — it
-    ///         cannot, because a verifiable criterion is a different question. <see cref="FinalAnswerId" />'s expected
-    ///         value is a placeholder the operator must edit to their task; the other two are usable as they stand.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Unlike the three model-judged presets, this one does NOT share their criterion ids and weights — it cannot,
+    ///     because a verifiable criterion is a different question. <see cref="FinalAnswerId" />'s expected value is a
+    ///     placeholder the operator must edit to their task; the other two are usable as they stand.
+    /// </remarks>
     public static BenchmarkJudgeRubricV1 Verifiable() =>
         new(BenchmarkJudgePolicyVersions.RubricVersion,
         [
@@ -501,16 +504,15 @@ public static class BenchmarkJudgeRubricDefaults
 
     /// <summary>
     ///     The execution preset: one criterion, decided by RUNNING the answer's code against the operator's hidden
-    ///     tests rather than by asking a model to read it. It is a single criterion at full weight on purpose — the
-    ///     tests either pass or they do not, and averaging that against a model's opinion of the same code reintroduces
-    ///     exactly the judgement this preset exists to replace.
-    ///     <para>
-    ///         Both halves are placeholders the operator must edit: <c>testCode</c> is the hidden test suite, and
-    ///         <c>exports</c> names the symbols those tests call. It needs <c>Compute:Enabled</c> on a node whose
-    ///         sandbox can isolate and can enforce resource ceilings; where it cannot, runs are left unranked with
-    ///         <c>verifier-unavailable</c> rather than scored 0.
-    ///     </para>
+    ///     tests rather than by asking a model to read it.
     /// </summary>
+    /// <remarks>
+    ///     A single criterion at full weight on purpose — the tests either pass or they do not, and averaging that
+    ///     against a model's opinion of the same code reintroduces exactly the judgement this preset replaces. Both
+    ///     halves are placeholders the operator must edit: <c>testCode</c> is the hidden test suite, <c>exports</c>
+    ///     names the symbols those tests call. It needs <c>Compute:Enabled</c> on a node whose sandbox can isolate and
+    ///     enforce resource ceilings; where it cannot, runs are left unranked with <c>verifier-unavailable</c>, not 0.
+    /// </remarks>
     public static BenchmarkJudgeRubricV1 CodeExecution() =>
         new(BenchmarkJudgePolicyVersions.RubricVersion,
         [

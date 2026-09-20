@@ -15,31 +15,33 @@ public enum KnowledgeQueryValidation
     TooLong
 }
 
-/// <summary>
-///     Shared bounds for a knowledge-base search query. The agent tool JSON schema, the agent tool handler, and the HTTP
-///     search endpoint all validate through <see cref="ValidateAndNormalize" /> so the advertised limit and the two
-///     authoritative validation sites cannot drift apart, and both forward the SAME normalized (trimmed) query to search.
-///     <see cref="MaxQueryLength" /> is the stricter historical content bound (the endpoint's 1000, versus the tool
-///     schema's former advisory 2000); <see cref="MaxRawQueryLength" /> is a raw transport cap applied BEFORE trimming so
-///     a pathologically whitespace-padded payload cannot slip a huge raw string past the trimmed content check.
-/// </summary>
+/// <summary>Shared bounds for a knowledge-base search query.</summary>
+/// <remarks>
+///     The agent tool JSON schema, the agent tool handler, and the HTTP search endpoint all validate through
+///     <see cref="ValidateAndNormalize" />, so the advertised limit and the two authoritative validation sites cannot
+///     drift apart, and both forward the SAME normalized, trimmed query to search. <see cref="MaxQueryLength" /> is the
+///     stricter content bound; <see cref="MaxRawQueryLength" /> is a raw transport cap applied BEFORE trimming, so a
+///     pathologically whitespace-padded payload cannot slip a huge raw string past the trimmed content check.
+/// </remarks>
 public static class KnowledgeQueryLimits
 {
     /// <summary>Maximum number of characters accepted in a knowledge-base search query, measured after trimming.</summary>
     public const int MaxQueryLength = 1000;
 
-    /// <summary>
-    ///     Maximum RAW length accepted before trimming, at twice the content bound. This rejects an oversized transport
-    ///     payload (e.g. 100k spaces wrapped around a short query) up front, while still allowing reasonable surrounding
-    ///     whitespace around a full-length query.
-    /// </summary>
+    /// <summary>Maximum RAW length accepted before trimming, at twice the content bound.</summary>
+    /// <remarks>
+    ///     This rejects an oversized transport payload — 100k spaces wrapped around a short query — up front, while still
+    ///     allowing reasonable surrounding whitespace around a full-length query.
+    /// </remarks>
     public const int MaxRawQueryLength = MaxQueryLength * 2;
 
     /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="query" /> exceeds <see cref="MaxQueryLength" /> characters
-    ///     after trimming surrounding whitespace. Callers guard for a null / whitespace query first; this method only
-    ///     evaluates the trimmed content bound.
+    ///     Returns <see langword="true" /> when <paramref name="query" /> exceeds <see cref="MaxQueryLength" />
+    ///     characters after trimming surrounding whitespace.
     /// </summary>
+    /// <remarks>
+    ///     Callers guard for a null or whitespace query first; this method only evaluates the trimmed content bound.
+    /// </remarks>
     public static bool ExceedsMaxLength(string query)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -47,10 +49,12 @@ public static class KnowledgeQueryLimits
     }
 
     /// <summary>
-    ///     Validates the raw query against both the raw transport cap and the trimmed content bound, and — when
-    ///     <see cref="KnowledgeQueryValidation.Valid" /> — returns the normalized (trimmed) query the caller MUST forward
-    ///     to search. Rejecting on the raw length first means a whitespace-padded oversized payload never reaches the trim.
+    ///     Validates the raw query against both the raw transport cap and the trimmed content bound, returning on
+    ///     <see cref="KnowledgeQueryValidation.Valid" /> the normalized, trimmed query the caller MUST forward to search.
     /// </summary>
+    /// <remarks>
+    ///     Rejecting on the raw length first means a whitespace-padded oversized payload never reaches the trim.
+    /// </remarks>
     public static KnowledgeQueryValidation ValidateAndNormalize(string? rawQuery, out string normalizedQuery)
     {
         normalizedQuery = string.Empty;

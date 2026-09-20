@@ -5,12 +5,15 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     <see cref="IClientLocalToolHandler" /> for <c>read_surrounding_chunks</c> (ClientLocal). JSON-in / JSON-out:
-///     returns the neighbor window around a matched chunk through the scoped <see cref="IContextExpansionService" />
-///     resolved from a FRESH DI scope per call. The anchor is identified by <c>documentId</c> + <c>chunkIndex</c> (the
-///     coordinates a search hit carries); <c>before</c>/<c>after</c> select how many neighbors on each side. Read-only,
-///     so it auto-runs; gated by <c>KnowledgeBase:AgentToolsEnabled</c>.
+///     <see cref="IClientLocalToolHandler" /> for <c>read_surrounding_chunks</c> (ClientLocal): JSON-in, JSON-out,
+///     returning the neighbor window around a matched chunk.
 /// </summary>
+/// <remarks>
+///     The scoped <see cref="IContextExpansionService" /> is resolved from a FRESH DI scope per call. The anchor is
+///     identified by <c>documentId</c> plus <c>chunkIndex</c>, the coordinates a search hit carries, and
+///     <c>before</c>/<c>after</c> select how many neighbors on each side. Read-only, so it auto-runs; gated by
+///     <c>KnowledgeBase:AgentToolsEnabled</c>.
+/// </remarks>
 internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -95,9 +98,8 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
                      {
                          chunkId = neighbor.ChunkId,
                          chunkIndex = neighbor.ChunkIndex,
-                         // The attacker-controlled section heading AND the neighbor chunk body are DATA, not
-                         // instructions: fence them together inside one nonce-delimited untrusted region so no
-                         // attacker-controlled string is emitted outside the boundary.
+                         // The attacker-controlled section heading AND the neighbor body are DATA, not instructions:
+                         // fence them in one nonce-delimited untrusted region, so no such string leaves the boundary.
                          contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
                          content = UntrustedContentFraming.WrapDocument(neighbor.Content,
                          [

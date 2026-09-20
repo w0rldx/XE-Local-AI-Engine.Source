@@ -13,104 +13,96 @@ internal static class DocumentExtractionLimits
     public const int DefaultMaxOutputChars = 5_000_000;
 
     /// <summary>
-    ///     Hard ceiling on the RAW upload bytes copied into the seekable buffer that feeds extraction (PdfPig and the
-    ///     Open XML SDK both seek, so a forward-only upload stream must be materialized first). This caps the raw input
-    ///     copy — not any decompressed or parser-expanded output — so it is simply a second bound on the in-memory buffer,
-    ///     independent of the per-file upload cap. Copying past this ceiling fails extraction cleanly
-    ///     (<see cref="DocumentExtractionStatus.Failed"/>) instead of risking an out-of-memory crash.
-    ///     <para>
-    ///         The per-file upload cap (<c>Security:MaxUploadFileSizeMb</c>, default 25 MiB, operator-configurable up to
-    ///         512 MiB) is the primary bound and is stricter than this ceiling under the default, so this guard can never
-    ///         fire out of the box. The headroom above the default is deliberate: this ceiling only bites when an operator
-    ///         raises the upload cap above 200 MiB, keeping the extraction buffer bounded even then. Parser-internal
-    ///         expansion is NOT bounded here — the reader still decompresses the container internally; that is caught after
-    ///         materialization by the output char cap and the expansion-ratio guard.
-    ///     </para>
+    ///     Hard ceiling on the RAW upload bytes copied into the seekable buffer that feeds extraction.
     /// </summary>
+    /// <remarks>
+    ///     PdfPig and the Open XML SDK both seek, so a forward-only upload stream must be materialized first. This caps the
+    ///     raw input copy, not decompressed output: a second bound on the in-memory buffer, independent of the per-file
+    ///     upload cap (<c>Security:MaxUploadFileSizeMb</c>, default 25 MiB, up to 512 MiB), which is the primary and
+    ///     stricter bound by default, so this only bites above a 200 MiB cap. Copying past it fails extraction cleanly
+    ///     instead of risking an OOM crash; parser-internal expansion is caught later by the char cap and ratio guard.
+    /// </remarks>
     public const long MaxBufferedInputBytes = 200L * 1024 * 1024;
 
     /// <summary>
-    ///     Upper bound on the total characters a STRUCTURED extraction (<c>ExtractStructuredAsync</c>) may yield. Unlike
-    ///     the conversation path, the structured document is returned verbatim (the chunker needs its heading structure),
-    ///     so nothing capped its aggregate size before it reached chunking/persistence. Exceeding this fails extraction
-    ///     cleanly. Deliberately generous — larger than <see cref="DefaultMaxOutputChars"/> because chunking bounds each
-    ///     chunk separately — so only a pathologically large document is rejected.
+    ///     Upper bound on the total characters a STRUCTURED extraction (<c>ExtractStructuredAsync</c>) may yield.
     /// </summary>
+    /// <remarks>
+    ///     Unlike the conversation path, the structured document is returned verbatim because the chunker needs its
+    ///     heading structure, so nothing else caps its aggregate size before chunking and persistence. Exceeding this
+    ///     fails extraction cleanly. It is deliberately larger than <see cref="DefaultMaxOutputChars" />, since chunking
+    ///     bounds each chunk separately, so only a pathologically large document is rejected.
+    /// </remarks>
     public const int DefaultMaxStructuredOutputChars = 20_000_000;
 
     /// <summary>
-    ///     Expansion-ratio ceiling: the ratio of extracted characters to the bytes read from the upload. A parser can
-    ///     inflate a small container far beyond the absolute char cap's expectation (a tiny zip/pdf expanding into an
-    ///     enormous text body), which the absolute cap alone would still persist as long as it stayed under the ceiling.
-    ///     Output whose char count exceeds <c>inputBytes * ratio</c> — and clears
-    ///     <see cref="MinCharsForExpansionGuard"/> so ordinary small files are never flagged — fails extraction cleanly.
+    ///     Expansion-ratio ceiling: the ratio of extracted characters to the bytes read from the upload.
     /// </summary>
+    /// <remarks>
+    ///     A parser can inflate a small container far beyond the absolute char cap's expectation — a tiny zip or pdf
+    ///     expanding into an enormous text body — which the absolute cap alone would still persist while it stayed under
+    ///     the ceiling. Output whose char count exceeds <c>inputBytes * ratio</c>, and clears
+    ///     <see cref="MinCharsForExpansionGuard" /> so ordinary small files are never flagged, fails extraction cleanly.
+    /// </remarks>
     public const int DefaultMaxExpansionRatio = 200;
 
-    /// <summary>
-    ///     Floor below which the expansion-ratio guard never fires. A small file legitimately produces a small,
-    ///     high-ratio output (a 20-byte note rendering to 40 chars is a 2x ratio that means nothing); the ratio guard is
-    ///     only meaningful once the absolute output is already large.
-    /// </summary>
+    /// <summary>Floor below which the expansion-ratio guard never fires.</summary>
+    /// <remarks>
+    ///     A small file legitimately produces a small, high-ratio output — a 20-byte note rendering to 40 chars is a 2x
+    ///     ratio that means nothing — so the ratio guard is only meaningful once the absolute output is already large.
+    /// </remarks>
     public const int MinCharsForExpansionGuard = 1_000_000;
 
-    /// <summary>
-    ///     Maximum synchronous in-request conversation extractions admitted at once. Each extraction buffers the whole
-    ///     upload (up to the per-file cap) in memory, so unbounded concurrent uploads could aggregate to an
-    ///     out-of-memory condition even though each single file is within its cap. The gate admits this many and rejects
-    ///     the rest with a busy status. Knowledge-base extraction runs in the background worker (already bounded) and is
-    ///     not gated here.
-    /// </summary>
+    /// <summary>Maximum synchronous in-request conversation extractions admitted at once.</summary>
+    /// <remarks>
+    ///     Each extraction buffers the whole upload, up to the per-file cap, in memory, so unbounded concurrent uploads
+    ///     could aggregate to an out-of-memory condition even though each single file is within its cap. The gate admits
+    ///     this many and rejects the rest with a busy status. Knowledge-base extraction runs in the already-bounded
+    ///     background worker and is not gated here.
+    /// </remarks>
     public const int DefaultMaxConcurrentExtractions = 4;
 
     /// <summary>
-    ///     Pre-parse ceiling on the number of entries a ZIP-based container (e.g. <c>.docx</c>) may declare. Read
-    ///     straight from the archive's End Of Central Directory record (and the Zip64 EOCD record when the classic
-    ///     count field is saturated) BEFORE any <see cref="System.IO.Compression.ZipArchive"/> is constructed — so an
-    ///     archive padded with an absurd number of members (an entry-count zip bomb) is rejected while allocating ZERO
-    ///     entry objects. This matters because reading <c>ZipArchive.Entries</c> materializes the WHOLE central
-    ///     directory (an entry object per member) up front, so a metadata-heavy archive would otherwise allocate before
-    ///     an in-loop counter could run. Only after the declared count clears this ceiling is the archive opened for the
-    ///     size/ratio pass, which then materializes at most ceiling-count entry METADATA (never the decompressed bytes);
-    ///     the post-parse actual-output checks remain the backstop. A legitimate Office document has at most a few dozen
-    ///     parts, so this is deliberately generous.
+    ///     Pre-parse ceiling on the number of entries a ZIP-based container such as <c>.docx</c> may declare.
     /// </summary>
+    /// <remarks>
+    ///     Read from the archive's End Of Central Directory record — and the Zip64 EOCD when the classic count field is
+    ///     saturated — BEFORE any <see cref="System.IO.Compression.ZipArchive" /> is constructed, so an entry-count zip
+    ///     bomb is rejected while allocating ZERO entry objects: reading <c>ZipArchive.Entries</c> materializes the WHOLE
+    ///     central directory up front. Only once the declared count clears this ceiling is the archive opened for the
+    ///     size/ratio pass, which materializes at most that many entry METADATA, never decompressed bytes.
+    /// </remarks>
     public const int DefaultMaxCompressedEntryCount = 10_000;
 
     /// <summary>
-    ///     Pre-parse ceiling on the SUM of the declared uncompressed lengths of a ZIP container's entries
-    ///     (<c>ZipArchiveEntry.Length</c>, read from the central directory — no decompression). Rejecting here bounds the
-    ///     memory the parser would otherwise allocate expanding a small compressed container into a huge one. Deliberately
-    ///     generous (512 MiB) so no realistic Office document is rejected; the true bomb shape (tens of MB compressed
-    ///     declaring gigabytes uncompressed) sits far above it.
-    ///     <para>
-    ///         A hostile archive can LIE in its central directory (declare a small size, then expand hugely), so this
-    ///         header-trusting check is NOT the only guard: the post-parse output-char cap and expansion-ratio guard in
-    ///         <see cref="DocumentTextExtractor"/> remain the backstop that measures the ACTUAL expanded output. The two
-    ///         layers together are the defense in depth — cheap honest-header rejection up front, real-output rejection
-    ///         behind it.
-    ///     </para>
+    ///     Pre-parse ceiling on the SUM of the declared uncompressed lengths of a ZIP container's entries.
     /// </summary>
+    /// <remarks>
+    ///     Read as <c>ZipArchiveEntry.Length</c> from the central directory, with no decompression, this bounds the memory
+    ///     the parser would allocate expanding a small compressed container into a huge one. Deliberately generous at
+    ///     512 MiB: no realistic Office document is rejected, while the true bomb shape sits far above it. A hostile
+    ///     archive can LIE in its central directory, so the post-parse output-char cap and expansion-ratio guard in
+    ///     <see cref="DocumentTextExtractor" /> remain the backstop measuring the ACTUAL expanded output.
+    /// </remarks>
     public const long DefaultMaxDeclaredUncompressedBytes = 512L * 1024 * 1024;
 
-    /// <summary>
-    ///     Pre-parse ceiling on a ZIP container's declared expansion ratio: the SUM of declared uncompressed entry
-    ///     lengths divided by the SUM of their compressed lengths, both read from the central directory. A classic zip
-    ///     bomb declares a ratio in the thousands; ordinary Office XML compresses well under 20x, so this generous 200x
-    ///     ceiling (matching <see cref="DefaultMaxExpansionRatio"/>) flags only pathological archives. As with
-    ///     <see cref="DefaultMaxDeclaredUncompressedBytes"/>, a lying central directory is caught behind this by the
-    ///     post-parse guards.
-    /// </summary>
+    /// <summary>Pre-parse ceiling on a ZIP container's declared expansion ratio.</summary>
+    /// <remarks>
+    ///     That ratio is the SUM of declared uncompressed entry lengths divided by the SUM of their compressed lengths,
+    ///     both read from the central directory. A classic zip bomb declares a ratio in the thousands and ordinary Office
+    ///     XML compresses well under 20x, so this generous 200x ceiling — matching
+    ///     <see cref="DefaultMaxExpansionRatio" /> — flags only pathological archives. As with
+    ///     <see cref="DefaultMaxDeclaredUncompressedBytes" />, a lying central directory is caught by the post-parse guards.
+    /// </remarks>
     public const int DefaultMaxCompressionRatio = 200;
 
-    /// <summary>
-    ///     Pre-parse ceiling on the page count a PDF declares. PdfPig exposes <c>NumberOfPages</c> as soon as the
-    ///     document is opened (it reads the cross-reference/catalog, not the per-page content streams), so a PDF that
-    ///     declares an outrageous page count is rejected before its pages' text is extracted — the expensive step.
-    ///     Deliberately generous: a large legitimate book runs a few thousand pages, so 10_000 rejects only abusive
-    ///     inputs. PDF preflight is limited to this cheap page-count signal the library exposes; the post-parse output
-    ///     char cap and expansion-ratio guard remain the backstop for a PDF that declares few pages but expands each into
-    ///     an enormous text body.
-    /// </summary>
+    /// <summary>Pre-parse ceiling on the page count a PDF declares.</summary>
+    /// <remarks>
+    ///     PdfPig exposes <c>NumberOfPages</c> as soon as the document is opened, reading the cross-reference and catalog
+    ///     rather than the per-page content streams, so an outrageous declared count is rejected before the expensive text
+    ///     extraction. Deliberately generous: a large legitimate book runs a few thousand pages. PDF preflight is limited
+    ///     to this cheap signal, so the post-parse char cap and ratio guard remain the backstop for a PDF that declares
+    ///     few pages but expands each into an enormous text body.
+    /// </remarks>
     public const int DefaultMaxPdfPageCount = 10_000;
 }

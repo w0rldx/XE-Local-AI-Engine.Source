@@ -12,11 +12,11 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 /// </summary>
 internal sealed class BaseArtifactService : IBaseArtifactService
 {
-    /// <summary>
-    ///     Headroom demanded on top of the manifest's own reported size. A checkpoint that exactly fills the volume
-    ///     leaves nothing for the frozen dataset copy, the run's work directory, or the export — all of which land on
-    ///     the same disk immediately afterwards.
-    /// </summary>
+    /// <summary>Headroom demanded on top of the manifest's own reported size.</summary>
+    /// <remarks>
+    ///     A checkpoint that exactly fills the volume leaves nothing for the frozen dataset copy, the run's work
+    ///     directory, or the export — all of which land on the same disk immediately afterwards.
+    /// </remarks>
     internal const long DiskHeadroomBytes = 10L * 1024 * 1024 * 1024;
 
     private readonly IBaseCheckpointStore _checkpointStore;

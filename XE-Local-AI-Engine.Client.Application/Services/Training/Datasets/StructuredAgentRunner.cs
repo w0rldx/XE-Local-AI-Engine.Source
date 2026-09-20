@@ -18,16 +18,16 @@ public interface IStructuredAgentRunner
 }
 
 /// <summary>
-///     Structured-output teacher runner. Modeled on <c>MafPlaybookEvalAgentRunner</c>'s shape — threadless
-///     <see cref="ChatClientAgent" />, no ctor instructions, a single leading system seed message — but it is a separate
-///     type: that runner hard-codes an empty tool set and has no response-format parameter, and its eval-gate contract
-///     depends on both.
-///     <para>
-///         <see cref="TeacherOutputMode.Constrained" /> sets <see cref="ChatOptions.ResponseFormat" />; the llama.cpp
-///         provider already forwards the json-schema variant verbatim, so no raw-body patch is needed here.
-///         <see cref="TeacherOutputMode.ValidateAfter" /> sets none and leaves post-hoc validation to the pipeline.
-///     </para>
+///     Structured-output teacher runner: a threadless <see cref="ChatClientAgent" />, no ctor instructions, a single
+///     leading system seed message.
 /// </summary>
+/// <remarks>
+///     Modeled on <c>MafPlaybookEvalAgentRunner</c>'s shape but a separate type, because that runner hard-codes an
+///     empty tool set, has no response-format parameter, and its eval-gate contract depends on both.
+///     <see cref="TeacherOutputMode.Constrained" /> sets <see cref="ChatOptions.ResponseFormat" /> — the llama.cpp
+///     provider already forwards the json-schema variant verbatim, so no raw-body patch is needed here — while
+///     <see cref="TeacherOutputMode.ValidateAfter" /> sets none and leaves post-hoc validation to the pipeline.
+/// </remarks>
 public sealed class StructuredAgentRunner : IStructuredAgentRunner
 {
     private readonly TimeSpan _turnTimeout = TurnTimeout;
@@ -57,12 +57,12 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
     private const string AgentName = "dataset-teacher";
     private const string AgentDescription = "Training dataset generation teacher.";
 
-    /// <summary>
-    ///     Upper bound for one teacher turn. Live-found (2026-08-15): a non-streaming completion to llama-server that
-    ///     never came back parked the whole generation queue with the server reporting every slot idle — nothing
-    ///     upstream carries a deadline, so this seam owns it. A turn that overruns is that sample's failure, never
-    ///     the run's, and never a wedge.
-    /// </summary>
+    /// <summary>Upper bound for one teacher turn.</summary>
+    /// <remarks>
+    ///     Live-found: a non-streaming completion to llama-server that never came back parked the whole generation
+    ///     queue with the server reporting every slot idle, and nothing upstream carries a deadline, so this seam
+    ///     owns it. A turn that overruns is that sample's failure, never the run's, and never a wedge.
+    /// </remarks>
     internal static readonly TimeSpan TurnTimeout = TrainingAiClientPolicy.TurnTimeout;
 
     private readonly IModelCapabilityResolver _capabilityResolver;
@@ -94,8 +94,7 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
         }
 
         // No tools are offered to the teacher: it DESCRIBES the call it would make inside the structured record, and the
-        // headless executor is the only thing that ever executes one. Handing it live tools would execute them here,
-        // outside the approval gate.
+        // headless executor is the only thing that ever executes one. Live tools here would execute outside the approval gate.
         var agent = new ChatClientAgent(chatClient,
             instructions: null,
             name: AgentName,

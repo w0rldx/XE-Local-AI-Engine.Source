@@ -5,11 +5,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>The cohort limits pairwise judging runs under. Small numbers, because the cost is quadratic.</summary>
 public static class BenchmarkPairwisePolicy
 {
-    /// <summary>
-    ///     Eligible runs per cohort. Twelve runs is 12·11 = 132 judge calls, which at a 32B judge's ~40 s a call is
-    ///     already ~90 minutes of GPU time for ONE project. Past the cap nothing new is paired and the excess runs say
-    ///     so: a sampled sub-tournament would be a silently biased one, and a refusal an operator can see beats it.
-    /// </summary>
+    /// <summary>Eligible runs per cohort.</summary>
+    /// <remarks>
+    ///     Twelve runs is 12·11 = 132 judge calls, which at a 32B judge's ~40 s a call is already ~90 minutes of GPU
+    ///     time for ONE project. Past the cap nothing new is paired and the excess runs say so: a sampled
+    ///     sub-tournament would be a silently biased one, and a refusal an operator can see beats it.
+    /// </remarks>
     public const int MaximumRuns = 12;
 
     /// <summary>At or above this, the pre-flight estimate is worth putting in front of the operator before they commit.</summary>
@@ -17,9 +18,11 @@ public static class BenchmarkPairwisePolicy
 
     /// <summary>
     ///     The share of fitted verdicts that may have had a truncated side before the cohort refuses to aggregate.
+    /// </summary>
+    /// <remarks>
     ///     Each answer is bounded to half the judge window in pairwise mode, so a long answer is cut harder here than
     ///     it is pointwise — which is itself a bias, and one worth refusing rather than publishing.
-    /// </summary>
+    /// </remarks>
     public const double MaximumTruncatedShare = 0.20;
 }
 
@@ -57,17 +60,20 @@ public interface IBenchmarkPairwisePlanner
 {
     /// <summary>
     ///     Brings the project's pairwise cohort up to date: both orders of every unordered pair of its eligible runs.
+    /// </summary>
+    /// <remarks>
     ///     A no-op unless the project's current judge policy is in pairwise mode. Idempotent and incremental — adding
     ///     one run to a group of N enqueues 2N new comparisons, not N(N+1).
-    /// </summary>
+    /// </remarks>
     /// <returns>How many comparisons this call enqueued.</returns>
     Task<int> EnsurePairsAsync(Guid projectId, CancellationToken cancellationToken);
 
-    /// <summary>
-    ///     Startup reconciliation. A crash between "a primary succeeded" and "its pairs were enqueued" would otherwise
-    ///     leave a cohort permanently one comparison short, and every run in it stuck on <c>pairwise-pending</c> with
-    ///     nothing that would ever notice. Idempotent, so re-running it costs one read per judged project.
-    /// </summary>
+    /// <summary>Startup reconciliation.</summary>
+    /// <remarks>
+    ///     A crash between "a primary succeeded" and "its pairs were enqueued" would otherwise leave a cohort
+    ///     permanently one comparison short, and every run in it stuck on <c>pairwise-pending</c> with nothing that
+    ///     would ever notice. Idempotent, so re-running it costs one read per judged project.
+    /// </remarks>
     Task ReconcilePairwiseAsync(CancellationToken cancellationToken);
 
     /// <summary>The call count and ETA for the project's current eligible set.</summary>
@@ -102,12 +108,12 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
         _logger = logger;
     }
 
-    /// <summary>
-    ///     Every unordered pair of the eligible set, formed ONLY inside one task case. Two answers to different
-    ///     questions were never comparable, so a candidate whose case identity differs is in a different group and is
-    ///     never paired across. A single-case project naturally produces one group; a suite relies on the same stored
-    ///     identity to keep its cases separate without reinterpreting existing comparisons.
-    /// </summary>
+    /// <summary>Every unordered pair of the eligible set, formed ONLY inside one task case.</summary>
+    /// <remarks>
+    ///     Two answers to different questions were never comparable, so a candidate whose case identity differs is in
+    ///     a different group and is never paired across. A single-case project naturally produces one group; a suite
+    ///     relies on the same stored identity to keep its cases separate without reinterpreting existing comparisons.
+    /// </remarks>
     /// <param name="maximumRuns">The cohort cap; candidates past it are returned as capped and never paired.</param>
     public static BenchmarkPairwisePlan Plan(IReadOnlyList<BenchmarkPairwiseCandidate> candidates, int maximumRuns)
     {
@@ -157,9 +163,8 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
             return 0;
         }
 
-        // The judge runtime is resolved ONCE for the whole cohort, exactly as the pointwise seed resolves it once for
-        // the revision: it depends only on the policy, and resolving per pair could straddle a runtime swap mid-loop
-        // and split one cohort's verdicts across two execution identities — which the fit then refuses outright.
+        // The judge runtime is resolved ONCE for the whole cohort, exactly as the pointwise seed resolves it once for the revision: it depends only on the policy.
+        // Resolving per pair could straddle a runtime swap mid-loop and split one cohort's verdicts across two execution identities — which the fit then refuses outright.
         BenchmarkJudgeRuntimeResolution resolution;
         try
         {
@@ -170,9 +175,8 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
                                               or BenchmarkSnapshotException
                                               or KeyNotFoundException)
         {
-            // Nothing is enqueued: a comparison with no runtime could only fail, and a failed comparison holds no slot
-            // and tells the operator nothing the next attempt would not. The cohort stays pending and re-tries on the
-            // next primary success or restart, by which time the judge model may be back.
+            // Nothing is enqueued: a comparison with no runtime could only fail, and a failed comparison holds no slot and tells the operator nothing the next attempt would not.
+            // The cohort stays pending and re-tries on the next primary success or restart, by which time the judge model may be back.
             _logger.LogWarning(exception, "Benchmark project {ProjectId}: the judge runtime is unresolved, so no pairwise comparisons were enqueued.", projectId);
             return 0;
         }
@@ -199,9 +203,8 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
             {
                 _ = await EnsurePairsAsync(projectId, cancellationToken);
 
-                // A cohort whose comparisons all terminalized while the fit was being published — or before the
-                // process died — has verdicts and no active fit. The fit is a pure function of stored verdicts, so
-                // re-triggering it here is the whole of that recovery.
+                // A cohort whose comparisons all terminalized while the fit was being published — or before the process died — has verdicts and no active fit.
+                // The fit is a pure function of stored verdicts, so re-triggering it here is the whole of that recovery.
                 _ = await _fitter.TryPublishAsync(projectId, cancellationToken);
             }
             catch (Exception exception) when (exception is BenchmarkStoreException or BenchmarkExecutionException)

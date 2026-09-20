@@ -2,15 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.Images;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     On-demand image-job orchestrator. Mirrors the GGUF download coordinator: an in-flight
-///     <see cref="System.Threading.CancellationTokenSource" /> registry keyed by job id, coarse throttled progress push,
-///     and detached run tasks. Generation is <b>serialized to at most one running job</b> (extra jobs stay
-///     <see cref="ImageJobStatus.Queued" /> in this coordinator and are NOT handed to the runtime until the slot frees),
-///     so a cancel that must tree-kill the daemon has a blast radius of exactly one job. Singleton — the
-///     registry must outlive the request that started a job. Job status is persisted to <c>image_jobs</c>; the produced
-///     image is persisted encrypted-at-rest before the coordinator marks the job succeeded.
-/// </summary>
+/// <summary>On-demand image-job orchestrator, mirroring the GGUF download coordinator.</summary>
+/// <remarks>
+///     An in-flight <see cref="System.Threading.CancellationTokenSource" /> registry keyed by job id, coarse throttled
+///     progress push, and detached run tasks. Generation is serialized to at most one running job — extra jobs stay
+///     <see cref="ImageJobStatus.Queued" /> here and are NOT handed to the runtime until the slot frees — so a cancel
+///     that must tree-kill the daemon has a blast radius of exactly one job. Singleton: the registry outlives the
+///     request. Job status is persisted to <c>image_jobs</c>; the image is persisted encrypted-at-rest before success.
+/// </remarks>
 public interface IImageJobCoordinator
 {
     /// <summary>
@@ -19,12 +18,12 @@ public interface IImageJobCoordinator
     /// </summary>
     Task<Guid> EnqueueAsync(CreateImageJobInput input, CancellationToken cancellationToken);
 
-    /// <summary>
-    ///     Requests cancellation of a tracked job by signalling its token: a still-queued job is dropped to
-    ///     <see cref="ImageJobStatus.Cancelled" /> without ever calling the runtime; a generating job's token is cancelled
-    ///     (the runtime performs the queued-cancel or kill+restart). Returns <see langword="false" /> when the job is
-    ///     unknown or already terminal.
-    /// </summary>
+    /// <summary>Requests cancellation of a tracked job by signalling its token.</summary>
+    /// <remarks>
+    ///     A still-queued job is dropped to <see cref="ImageJobStatus.Cancelled" /> without ever calling the runtime,
+    ///     while a generating job's token is cancelled and the runtime performs the queued-cancel or kill+restart. Returns
+    ///     <see langword="false" /> when the job is unknown or already terminal.
+    /// </remarks>
     Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken);
 
     /// <summary>Reads one job's current status view, or <see langword="null" /> when unknown.</summary>
@@ -35,10 +34,12 @@ public interface IImageJobCoordinator
 
     /// <summary>
     ///     Deletes a terminal job with its generated image(s) — the rows first, then the encrypted blobs on disk.
+    /// </summary>
+    /// <remarks>
     ///     A job that is still <see cref="ImageJobStatus.Queued" /> or <see cref="ImageJobStatus.Generating" /> is
     ///     refused outright (<see cref="ImageJobDeleteOutcome.NotTerminal" />); cancel it first. Mirrors the benchmark
     ///     project delete, which refuses an active run rather than cancelling it on the operator's behalf.
-    /// </summary>
+    /// </remarks>
     Task<ImageJobDeleteOutcome> DeleteAsync(Guid jobId, CancellationToken cancellationToken);
 
     /// <summary>

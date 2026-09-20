@@ -1,20 +1,22 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Lexical retrieval arm of the hybrid search pipeline. Runs an FTS5 <c>MATCH</c> over <c>chunk_fts</c> (the
-///     external-content full-text index mirroring <c>knowledge_document_chunks.content</c>) and returns the best-matching
-///     chunks ranked by BM25. Scoped: it reads through the request-scoped <see cref="Persistence.NodeChatDbContext" />
-///     connection. The untrusted query is always escaped before it reaches <c>MATCH</c> so operator characters can never
-///     inject FTS query syntax.
+///     Lexical retrieval arm of the hybrid search pipeline: an FTS5 <c>MATCH</c> over <c>chunk_fts</c> returning the
+///     best-matching chunks ranked by BM25.
 /// </summary>
+/// <remarks>
+///     <c>chunk_fts</c> is the external-content index mirroring <c>knowledge_document_chunks.content</c>. Scoped: reads
+///     through the request-scoped <see cref="Persistence.NodeChatDbContext" /> connection. The untrusted query is always
+///     escaped before it reaches <c>MATCH</c>, so operator characters can never inject FTS query syntax.
+/// </remarks>
 public interface IFtsSearch
 {
-    /// <summary>
-    ///     Returns up to <paramref name="limit" /> chunks matching <paramref name="query" />, best first. A blank query or
-    ///     a query with no indexable terms yields an empty list rather than an error. When <paramref name="documentId" />
-    ///     is non-null, the scope is pushed into the SQL <c>WHERE</c> clause so a scoped search over a large corpus cannot
-    ///     miss the target document's chunks.
-    /// </summary>
+    /// <summary>Returns up to <paramref name="limit" /> chunks matching <paramref name="query" />, best first.</summary>
+    /// <remarks>
+    ///     A blank query, or one with no indexable terms, yields an empty list rather than an error. A non-null
+    ///     <paramref name="documentId" /> is pushed into the SQL <c>WHERE</c> clause, so a scoped search over a large
+    ///     corpus cannot miss the target document's chunks.
+    /// </remarks>
     Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query, int limit, Guid? documentId, CancellationToken cancellationToken) =>
         SearchAsync(query, limit, documentId, KnowledgeCollectionScope.DefaultId, cancellationToken);
 

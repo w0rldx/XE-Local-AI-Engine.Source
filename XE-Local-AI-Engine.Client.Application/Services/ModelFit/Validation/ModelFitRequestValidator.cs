@@ -4,22 +4,25 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
 /// <summary>
-///     Server-side validation of a model-fit run's intent params. This is mandatory because llmfit does
-///     no input validation of its own (it silently accepts an unknown <c>--use-case</c> and exits 0). The validator
-///     allowlists the use-case (the six llmfit-supported values), bounds the limit, allowlists the provider, and routes
-///     a benchmark model name through the existing <see cref="ModelNameValidator" />. Returns a sanitized error string,
-///     or <c>null</c> when the params are valid.
+///     Server-side validation of a model-fit run's intent params, mandatory because llmfit does no input validation
+///     of its own: it silently accepts an unknown <c>--use-case</c> and exits 0.
 /// </summary>
+/// <remarks>
+///     Allowlists the use-case (the six llmfit-supported values), bounds the limit, allowlists the provider, and
+///     routes a benchmark model name through <see cref="ModelNameValidator" />. Returns a sanitized error string, or
+///     <c>null</c> when the params are valid.
+/// </remarks>
 public sealed class ModelFitRequestValidator
 {
     /// <summary>The inclusive lower bound for the recommend limit.</summary>
     public const int MinLimit = 1;
 
-    /// <summary>
-    ///     The inclusive upper bound for the recommend limit. The advisor only inspects a small fixed window of repos
-    ///     (<c>DefaultRepoSearchLimit = 12</c>), so a low ceiling is realistic; it is kept identical to the handler's
-    ///     JSON-schema <c>maximum</c> (50) so the endpoint/trigger/validator and the scheduled-run schema agree on one bound.
-    /// </summary>
+    /// <summary>The inclusive upper bound for the recommend limit.</summary>
+    /// <remarks>
+    ///     The advisor only inspects a small fixed window of repos (<c>DefaultRepoSearchLimit = 12</c>), so a low
+    ///     ceiling is realistic. Kept identical to the handler's JSON-schema <c>maximum</c> (50) so the endpoint,
+    ///     trigger, validator and scheduled-run schema agree on one bound.
+    /// </remarks>
     public const int MaxLimit = 50;
 
     /// <summary>The six llmfit-supported use-case values. Matched ordinally and case-sensitively.</summary>

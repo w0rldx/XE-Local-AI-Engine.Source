@@ -2,28 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     The Benchmarks endpoints' only door onto <see cref="IBenchmarkStore" />: the project, run, task-item, cell,
-///     fidelity and pairwise rows an endpoint reads to build a response, plus the row-level writes that have no
-///     other owner (deleting a project or a run, the operator's score, enqueueing a fidelity measurement). An
-///     endpoint is the HTTP edge and may not take a persistence store itself (the endpoint-dependency rule), so each
-///     call arrives here unchanged.
-///     <para>
-///         Deliberately a pass-through and nothing more. It holds no state between calls, adds no validation, no
-///         ordering and no defaulting, and every member carries the store's own parameter list, defaults included — the
-///         store keeps deciding not-found, version conflicts and what a null field means, and the endpoints keep the
-///         404/400/409 wording, the projections and the paging arithmetic they own today.
-///     </para>
-///     <para>
-///         Domain operations stay with the services that own them and are absent here on purpose: project create and
-///         edit, the judge-policy change and the project or run re-judge on <see cref="IBenchmarkProjectService" />;
-///         task-item create, edit, delete and reorder on <see cref="IBenchmarkTaskItemService" />; starting and
-///         freezing runs on <see cref="IBenchmarkRunFreezeService" /> and <see cref="IBenchmarkRunBatchService" />;
-///         cancellation on <see cref="IBenchmarkCancellationService" />; the export projections on
-///         <see cref="IBenchmarkExportQuery" />. So is every member of the store only the queue, the executors and the
-///         startup reconciliation drive.
-///     </para>
-/// </summary>
+/// <summary>The Benchmarks endpoints' only door onto <see cref="IBenchmarkStore" />.</summary>
+/// <remarks>
+///     An endpoint may not take a persistence store (the endpoint-dependency rule), so every call arrives here
+///     unchanged: the rows an endpoint reads, plus the row-level writes with no other owner.
+///     Deliberately a pass-through — no state, no validation, no ordering, no defaulting, every member carrying the
+///     store's own parameter list and defaults — so the store keeps deciding not-found and version conflicts and the
+///     endpoints keep the 404/400/409 wording, the projections and the paging arithmetic. Domain operations stay on their own services: see docs/wiki/20-benchmarks.md ("Where things live").
+/// </remarks>
 public sealed class BenchmarkRecordService
 {
     private readonly IBenchmarkStore _store;

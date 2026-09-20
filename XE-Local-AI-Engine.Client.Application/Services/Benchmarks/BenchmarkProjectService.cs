@@ -23,10 +23,12 @@ public interface IBenchmarkProjectService
 
     /// <summary>
     ///     Changes the quant-fidelity settings of a project that may already be frozen, and optionally queues a
-    ///     measurement for every succeeded cell that has none. A base-model or chunk-count change mints a new expected
-    ///     comparability digest, which makes previously stored KLD figures read as stale — no attempt is deleted or
-    ///     rewritten.
+    ///     measurement for every succeeded cell that has none.
     /// </summary>
+    /// <remarks>
+    ///     A base-model or chunk-count change mints a new expected comparability digest, which makes previously stored
+    ///     KLD figures read as stale — no attempt is deleted or rewritten.
+    /// </remarks>
     Task<BenchmarkProjectFidelityChange> UpdateFidelityAsync(Guid projectId,
         long expectedVersion,
         BenchmarkProjectFidelitySettings settings,
@@ -81,9 +83,8 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     {
         var (input, policy) = await ValidateAsync(draft, cancellationToken);
 
-        // Project, judge AND item 0 in one store call, so a failure between them cannot persist a project with
-        // judging off — or with no question to ask — that the operator could only retry into a duplicate. Every
-        // project created from here therefore has its items already; the lazy backfill is left for older rows only.
+        // Project, judge AND item 0 in one store call, so a failure between them cannot persist a project with judging off — or with no question to ask — that the
+        // operator could only retry into a duplicate. Every project created from here therefore has its items already; the lazy backfill is left for older rows only.
         return await _benchmarkStore.CreateProjectAsync(input,
                                         ToPolicyChange(policy),
                                         [new BenchmarkTaskItemInput { PromptJson = input.CoreTaskJson }],
@@ -106,9 +107,8 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
             await EnsureItemOverridesFitAsync(projectId, policy.Rubric, cancellationToken);
         }
 
-        // An unfrozen project edits its judge exactly the way a frozen one does — get-or-create plus repoint, never an
-        // in-place edit of a revision — minus the re-judge, because it has no runs to re-judge. Both halves commit
-        // together: an edit that lost its judge change would leave the project judging under the replaced policy.
+        // An unfrozen project edits its judge exactly the way a frozen one does — get-or-create plus repoint, never an in-place edit of a revision — minus the re-judge,
+        // because it has no runs to re-judge. Both halves commit together: an edit that lost its judge change would leave the project judging under the replaced policy.
         return await _benchmarkStore.UpdateProjectAsync(projectId,
                                         expectedVersion,
                                         input,
@@ -158,11 +158,8 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
 
         var current = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
 
-        // Changing the judge invalidates every score already given under the old one. The operator confirms that
-        // explicitly rather than discovering a silently re-scored project.
-        //
-        // Both answers are given BEFORE the policy is built, because building it takes the VERIFYING model lease,
-        // which re-hashes every member file: a 22 GB judge made this refusal take 57 s to say no.
+        // Changing the judge invalidates every score already given under the old one, so the operator confirms it explicitly rather than discovering a silently re-scored project. Both answers
+        // are given BEFORE the policy is built, because building it takes the VERIFYING model lease, which re-hashes every member file: a 22 GB judge made this refusal take 57 s to say no.
         if (draft is not null && !confirmRejudge && await _benchmarkStore.CountRunsAsync(projectId, cancellationToken) > 0)
         {
             if (MatchesCurrentPolicy(draft, current))
@@ -257,16 +254,14 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
 
     /// <summary>
     ///     Resolves the judge runtime ONCE for the revision, for the store to seed every eligible run's attempt with.
-    ///     The runtime depends only on the policy, so resolving it per run would repeat identical work and could
-    ///     straddle a runtime swap mid-loop, splitting one re-judge across two cohorts.
-    ///     <para>
-    ///         A PAIRWISE policy seeds no attempt at all. Its cohort is judged by the comparisons
-    ///         <see cref="IBenchmarkPairwisePlanner.EnsurePairsAsync" /> plans immediately after this activation, so a
-    ///         pointwise attempt per run would queue a second judging of every run that the mode never asked for — and
-    ///         the planner resolves the runtime itself, which is why this does not even take the verifying lease. The
-    ///         seed is still returned, because it is what pins the revision the caller resolved against.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The runtime depends only on the policy, so resolving it per run would repeat identical work and could
+    ///     straddle a runtime swap mid-loop, splitting one re-judge across two cohorts. A PAIRWISE policy seeds no
+    ///     attempt at all: its cohort is judged by the comparisons
+    ///     <see cref="IBenchmarkPairwisePlanner.EnsurePairsAsync" /> plans right after activation, and the planner
+    ///     resolves the runtime itself — hence no verifying lease here. The seed still pins the caller's revision.
+    /// </remarks>
     private async Task<BenchmarkJudgeAttemptSeed> BuildCohortSeedAsync(BenchmarkJudgePolicyV1 policy,
         Guid? expectedRevisionId,
         CancellationToken cancellationToken)
@@ -383,16 +378,15 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
 
     /// <summary>
     ///     The base model's content fingerprint, read from the eligible-model catalog rather than taken from the
-    ///     caller. Two reasons it is not client-writable: it is an input to the KLD comparability digest, so a wrong
-    ///     value would make incomparable numbers compare equal; and resolving it here is what proves the named model
-    ///     is an eligible local GGUF at all.
-    ///     <para>
-    ///         The catalog reads recorded registry facts without re-hashing every member file, which is why selecting
-    ///         a 25 GB base model does not cost a minute of hashing on save. The fidelity executor re-verifies the
-    ///         fingerprint against a verifying lease before it measures anything, so a file swapped under an unchanged
-    ///         name fails there rather than being silently measured.
-    ///     </para>
+    ///     caller.
     /// </summary>
+    /// <remarks>
+    ///     Two reasons it is not client-writable: it is an input to the KLD comparability digest, so a wrong value
+    ///     would make incomparable numbers compare equal, and resolving it here is what proves the named model is an
+    ///     eligible local GGUF at all. The catalog reads recorded registry facts without re-hashing every member file,
+    ///     so selecting a 25 GB base model does not cost a minute of hashing on save; the fidelity executor
+    ///     re-verifies the fingerprint against a verifying lease, so a file swapped under one name fails there.
+    /// </remarks>
     private async Task<string?> ResolveKldBaseFingerprintAsync(bool kldEnabled,
         int? chunks,
         string? baseModelName,
@@ -426,21 +420,15 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>
-    ///     Builds the hashable policy from the operator's draft: the judge model's identity as installed right now, the
-    ///     deterministic sampling every judging replays, and the rubric.
-    /// </summary>
-    /// <summary>
     ///     Whether a draft would rebuild the policy the project already carries, decided WITHOUT verifying the model.
-    ///     Everything a policy hashes over is here except the model's content fingerprint and member hashes, which only
-    ///     the verifying lease can produce — so the stored identity is reused for those and the model NAME is compared
-    ///     on its own. The comparison is the real canonicalizer, not a field-by-field re-implementation: a member added
-    ///     to the policy is then covered here the moment it enters the hash.
-    ///     <para>
-    ///         Ceiling, and the honest outcome: a judge model whose FILE changed on disk under an unchanged name reads
-    ///         as unchanged here, so the re-save is a no-op instead of a re-judge. The verifying path still detects it
-    ///         the next time the policy is actually built — the same answer, one save later.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Everything a policy hashes over is here except the model's content fingerprint and member hashes, which
+    ///     only the verifying lease can produce — so the stored identity is reused for those and the model NAME is
+    ///     compared on its own. The comparison is the real canonicalizer, not a field-by-field re-implementation: a
+    ///     member added to the policy is covered here the moment it enters the hash. Ceiling: a judge model whose FILE
+    ///     changed under an unchanged name reads as unchanged, and the verifying path detects it one save later.
+    /// </remarks>
     private static bool MatchesCurrentPolicy(BenchmarkJudgePolicyDraft draft, BenchmarkJudgePolicyRevisionRecord? current)
     {
         if (current?.PolicyJson is null)
@@ -479,14 +467,14 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     /// <summary>
     ///     Refuses a rubric that would strand an item's verifier override — one naming a criterion the new rubric
     ///     drops, renames, or gives an incompatible kind.
-    ///     <para>
-    ///         The alternative was to accept the rubric and mark the affected items revised. It was rejected as the
-    ///         larger and less honest option: a stranded override is not a stale answer to a question that moved, it is
-    ///         a question with no expected answer at all, and quietly unranking the item hides an edit the operator can
-    ///         still take back. Refusing names both halves of the fix — clear the item's override, or keep the
-    ///         criterion — and costs one read of an at-most-20-row table.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Accepting the rubric and marking the affected items revised is NOT the alternative taken: a stranded
+    ///     override is not a stale answer to a question that moved, it is a question with no expected answer at all,
+    ///     and quietly unranking the item hides an edit the operator can still take back. Refusing names both halves
+    ///     of the fix — clear the item's override, or keep the criterion — and costs one read of an at-most-20-row
+    ///     table.
+    /// </remarks>
     private async Task EnsureItemOverridesFitAsync(Guid projectId, BenchmarkJudgeRubricV1 rubric, CancellationToken cancellationToken)
     {
         foreach (var item in await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken))
@@ -510,6 +498,10 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         }
     }
 
+    /// <summary>
+    ///     Builds the hashable policy from the operator's draft: the judge model's identity as installed right now,
+    ///     the deterministic sampling every judging replays, and the rubric.
+    /// </summary>
     private async Task<BenchmarkJudgePolicyV1> BuildPolicyAsync(BenchmarkJudgePolicyDraft draft, CancellationToken cancellationToken)
     {
         var modelName = draft.ModelName?.Trim();
@@ -572,13 +564,14 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         }
     }
 
-    /// <summary>
-    ///     The reasoning budget must leave room for an answer. On its own it is bounded like the output budget; with an
-    ///     output budget ALSO pinned the two are additive inside one window, and a pair that sums past the context is a
-    ///     project that can only ever produce truncated runs — the model spends the budget thinking, hits the ceiling,
-    ///     and every run is excluded from its own ranking. A coarse prompt reserve is included because the task and the
-    ///     system prompt occupy the same window and are not zero.
-    /// </summary>
+    /// <summary>The reasoning budget must leave room for an answer.</summary>
+    /// <remarks>
+    ///     On its own it is bounded like the output budget; with an output budget ALSO pinned the two are additive
+    ///     inside one window, and a pair that sums past the context is a project that can only ever produce truncated
+    ///     runs — the model spends the budget thinking, hits the ceiling, and every run is excluded from its own
+    ///     ranking. A coarse prompt reserve is included because the task and the system prompt occupy the same window
+    ///     and are not zero.
+    /// </remarks>
     private static void ValidateReasoningBudget(int? reasoningBudgetTokens, int? maxOutputTokens, int contextTokens)
     {
         if (reasoningBudgetTokens is not { } budget)

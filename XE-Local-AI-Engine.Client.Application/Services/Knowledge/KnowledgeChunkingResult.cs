@@ -2,9 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
 ///     Deterministic output of splitting a structured document into retrieval units: the ordered section list plus the
-///     ordered chunk list. Each chunk references the ordinal of its owning section so the index writer can link a chunk
-///     row to its persisted section GUID.
+///     ordered chunk list.
 /// </summary>
+/// <remarks>
+///     Each chunk references the ordinal of its owning section, so the index writer can link a chunk row to its
+///     persisted section GUID.
+/// </remarks>
 public sealed record KnowledgeChunkingResult
 {
     /// <summary>The document's sections in document order (an implicit section 0 covers pre-heading content).</summary>

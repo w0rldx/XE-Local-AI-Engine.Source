@@ -8,29 +8,22 @@ using XE_Local_AI_Engine.Client.Persistence;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
-///     Startup background service that L2-normalizes any legacy (pre-normalization) chunk vectors in place so the managed
-///     cosine search can score with a plain dot product. New writes are normalized at ingestion unconditionally; this is
-///     the one-time backfill for rows written before that shipped. Because cosine similarity is scale-invariant,
-///     rescaling a stored vector to unit length changes NO cosine result, so the pass is safe to run against a live corpus
-///     and never alters ranking — it only enables the faster scoring path once complete.
+///     Startup background service that L2-normalizes any legacy, pre-normalization chunk vectors in place, so the managed
+///     cosine search can score with a plain dot product.
 /// </summary>
 /// <remarks>
-///     Completion is tracked by a durable marker row in <c>chat_maintenance_state</c> (the same one-shot-maintenance table
-///     the content-encryption backfill uses; a plain table so <c>VACUUM</c> preserves it). The pass runs in bounded,
-///     independently-committed batches paged by <c>rowid</c>, so an interrupted run leaves earlier batches durably
-///     normalized and the marker unset; the next startup re-runs, and re-normalizing an already-unit vector is a no-op
-///     within a float ULP (idempotent). Until the marker is set the in-memory
-///     <see cref="IKnowledgeVectorNormalizationState" /> latch stays false and the search stays on the scale-invariant
-///     cosine path, which is correct regardless of whether a given row is normalized yet. Safe on an empty database (no
-///     rows → marker set immediately). Runs once per startup.
+///     New writes are normalized at ingestion; this is the one-time backfill for rows written before that, and it never
+///     alters ranking. Completion is recorded by a durable marker row in <c>chat_maintenance_state</c>, the
+///     one-shot-maintenance table the content-encryption backfill uses — plain, so <c>VACUUM</c> preserves it. Batches are
+///     bounded, paged by <c>rowid</c> and committed independently, so an interrupted run leaves earlier batches normalized,
+///     the marker unset, and the next startup re-runs; re-normalizing a unit vector is a no-op within a float ULP.
 /// </remarks>
 public sealed class KnowledgeVectorNormalizationBackfillService : BackgroundService
 {
     internal const int DefaultBatchSize = 500;
 
-    // One-shot completion marker, mirroring NodeChatContentEncryptionBackfillService's use of the same table. The row's
-    // presence means "every stored vector for this database has been normalized"; its absence means the backfill still
-    // has to run. Suffixed v1 so a future re-normalization (e.g. a different normalization definition) can use a new key.
+    // One-shot completion marker, mirroring NodeChatContentEncryptionBackfillService's use of the same table: the row's
+    // presence means every stored vector is normalized. Suffixed v1 so a new normalization definition can take a new key.
     private const string MarkerName = "knowledge_vector_normalization_v1";
 
     private const string IsMarkerSetSql = "SELECT EXISTS(SELECT 1 FROM chat_maintenance_state WHERE name = $name);";
@@ -67,11 +60,13 @@ public sealed class KnowledgeVectorNormalizationBackfillService : BackgroundServ
     }
 
     /// <summary>
-    ///     Runs one startup pass: if the durable marker shows a prior run already finished, just latch the in-memory state
-    ///     and return; otherwise normalize every stored vector in batches, set the marker, and latch the state. Internal so
-    ///     a test can drive one deterministic pass. Never throws: cancellation and unexpected errors are logged (or
-    ///     swallowed for cancellation) and the marker is left unset so the next startup retries.
+    ///     Runs one startup pass: latches the in-memory state when the durable marker shows a prior run finished,
+    ///     otherwise normalizes every stored vector in batches, sets the marker, and latches the state.
     /// </summary>
+    /// <remarks>
+    ///     Internal so a test can drive one deterministic pass. Never throws: cancellation is swallowed and unexpected
+    ///     errors are logged, with the marker left unset so the next startup retries.
+    /// </remarks>
     internal async Task RunOnceAsync(CancellationToken cancellationToken)
     {
         try
@@ -107,11 +102,13 @@ public sealed class KnowledgeVectorNormalizationBackfillService : BackgroundServ
     }
 
     /// <summary>
-    ///     Normalizes every row of <c>knowledge_chunk_vectors</c> to unit L2 length in place, in <paramref name="batchSize" />
-    ///     batches paged by <c>rowid</c> and each committed in its own transaction. Zero-magnitude vectors are left exactly
-    ///     as they are (they carry no direction). Returns the number of rows written. Internal + static so a test can drive
-    ///     it directly against a raw connection.
+    ///     Normalizes every row of <c>knowledge_chunk_vectors</c> to unit L2 length in place, in
+    ///     <paramref name="batchSize" /> batches paged by <c>rowid</c>, each committed in its own transaction.
     /// </summary>
+    /// <remarks>
+    ///     Zero-magnitude vectors are left exactly as they are, carrying no direction to normalize. Returns the number of
+    ///     rows written. Internal and static so a test can drive it directly against a raw connection.
+    /// </remarks>
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "Every statement is a fixed internal constant with bound parameters; no value is concatenated into the command text.")]
     internal static async Task<long> NormalizeVectorsAsync(DbConnection connection, int batchSize, CancellationToken cancellationToken)

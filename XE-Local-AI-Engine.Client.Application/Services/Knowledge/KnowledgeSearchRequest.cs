@@ -58,19 +58,23 @@ public sealed class KnowledgeSearchHit
     /// <summary>Global order of the matched chunk within the document.</summary>
     public required int ChunkIndex { get; init; }
 
-    /// <summary>
-    ///     The owning document's current catalog/pipeline status at retrieval time. A hit only ever exists because the
-    ///     document has queryable chunks, so a non-<see cref="KnowledgeDocumentStatus.Indexed" /> status means those
-    ///     chunks are the last successfully-indexed projection while a re-index is pending/running/failed.
-    /// </summary>
+    /// <summary>The owning document's current catalog and pipeline status at retrieval time.</summary>
+    /// <remarks>
+    ///     A hit only ever exists because the document has queryable chunks, so a status other than
+    ///     <see cref="KnowledgeDocumentStatus.Indexed" /> means those chunks are the last successfully-indexed projection
+    ///     while a re-index is pending, running or failed.
+    /// </remarks>
     public required KnowledgeDocumentStatus DocumentStatus { get; init; }
 
     /// <summary>
-    ///     True when <see cref="DocumentStatus" /> is not <see cref="KnowledgeDocumentStatus.Indexed" /> — i.e. the
-    ///     content is a last-known-good projection served while the document is mid-reindex or its latest re-ingest
-    ///     failed. The retrieval surfaces (agent tool output, REST/citation payloads, UI) disclose this so a consumer
-    ///     never treats potentially-stale content as freshly indexed.
+    ///     True when the content is a last-known-good projection, served while the document is mid-reindex or its latest
+    ///     re-ingest failed.
     /// </summary>
+    /// <remarks>
+    ///     Set whenever <see cref="DocumentStatus" /> is not <see cref="KnowledgeDocumentStatus.Indexed" />. Every
+    ///     retrieval surface — agent tool output, REST and citation payloads, the UI — discloses it, so a consumer never
+    ///     treats potentially-stale content as freshly indexed.
+    /// </remarks>
     public required bool ServingLastKnownGood { get; init; }
 
     public string CollectionId { get; init; } = KnowledgeCollectionScope.DefaultId;

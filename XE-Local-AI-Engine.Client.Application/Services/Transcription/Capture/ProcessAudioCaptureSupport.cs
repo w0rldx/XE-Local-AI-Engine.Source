@@ -8,12 +8,14 @@ internal static class ProcessAudioCaptureSupport
 {
     /// <summary>
     ///     Microsoft documents <c>AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS</c> — the struct that actually carries the
-    ///     loopback mode — as Windows Server 2022 / build 20348. NAudio annotates
-    ///     <c>WasapiRecorderBuilder.WithProcessLoopback</c> with <c>[SupportedOSPlatform("windows10.0.19041.0")]</c>,
-    ///     but that is an ANALYZER annotation satisfying CA1416, not compatibility evidence. Gate the capability on
-    ///     the documented number: being wrong this way hides a feature, being wrong the other way is a hard COM
-    ///     failure the operator cannot act on.
+    ///     loopback mode — as Windows Server 2022 / build 20348.
     /// </summary>
+    /// <remarks>
+    ///     NAudio annotates <c>WasapiRecorderBuilder.WithProcessLoopback</c> with
+    ///     <c>[SupportedOSPlatform("windows10.0.19041.0")]</c>, but that is an ANALYZER annotation satisfying CA1416,
+    ///     not compatibility evidence. The capability is gated on the documented number: being wrong this way hides a
+    ///     feature, being wrong the other way is a hard COM failure the operator cannot act on.
+    /// </remarks>
     internal const int MinimumWindowsBuild = 20348;
 
     /// <summary>

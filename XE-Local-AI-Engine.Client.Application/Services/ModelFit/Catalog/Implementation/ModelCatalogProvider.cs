@@ -4,17 +4,16 @@ using Microsoft.Extensions.Options;
 
 /// <summary>
 ///     Default <see cref="IModelCatalogProvider" />: bundled at construction, optionally kept fresh from
-///     <see cref="ModelCatalogOptions.RefreshUrl" />. Singleton — an in-memory
-///     <see cref="_current" /> snapshot is served on every read; a refresh (TTL-triggered or forced) is serialized
-///     through <see cref="_refreshGate" /> so concurrent readers never trigger a fetch stampede.
-///     <para>
-///         Fallback chain on a failed remote fetch/validation: keep serving an already-effective remote/last-good
-///         snapshot unchanged (a transient failure must never regress a working cache); otherwise fall back to the
-///         persisted last-good remote catalog; otherwise the bundled seed. A successful fetch replaces the in-memory
-///         snapshot AND persists the raw JSON so a restart with the network down still serves the last-good remote
-///         catalog rather than regressing to bundled.
-///     </para>
+///     <see cref="ModelCatalogOptions.RefreshUrl" />. Singleton, so every read is served from the in-memory
+///     <see cref="_current" /> snapshot.
 /// </summary>
+/// <remarks>
+///     A refresh, TTL-triggered or forced, is serialized through <see cref="_refreshGate" /> so concurrent readers
+///     never trigger a fetch stampede. On a failed remote fetch or validation an already-effective remote/last-good
+///     snapshot is kept unchanged (a transient failure must never regress a working cache), else the persisted
+///     last-good remote catalog, else the bundled seed. A successful fetch replaces the snapshot AND persists the raw
+///     JSON, so a restart with the network down still serves last-good remote.
+/// </remarks>
 internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
 {
     private readonly IModelCatalogCacheStore _cacheStore;
@@ -24,9 +23,8 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
     private readonly SemaphoreSlim _refreshGate = new(initialCount: 1, maxCount: 1);
     private readonly TimeProvider _timeProvider;
 
-    // Both fields are only ever mutated while holding _refreshGate; GetCatalogAsync's TTL check reads them without the
-    // lock as a fast-path best-effort peek — a torn/stale read there only means an occasional extra refresh attempt
-    // (harmless), never a correctness issue, and RefreshCoreAsync re-checks them under the lock before acting.
+    // Both fields are mutated only while holding _refreshGate; GetCatalogAsync's TTL check peeks at them lock-free, so a
+    // stale read costs at most one extra refresh attempt, and RefreshCoreAsync re-checks them under the lock before acting.
     private ModelCatalogSnapshot _current;
     private DateTimeOffset _lastAttemptUtc = DateTimeOffset.MinValue;
 
@@ -83,9 +81,8 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
         await _refreshGate.WaitAsync(cancellationToken);
         try
         {
-            // Re-check under the lock: a concurrent (TTL-triggered) caller may already have refreshed while this one
-            // waited. This debounce is skipped entirely when force is set (RefreshAsync) — an operator-triggered
-            // refresh must always attempt a fetch, even seconds after the last one succeeded.
+            // Re-check under the lock: a concurrent TTL-triggered caller may already have refreshed while this one waited.
+            // The debounce is skipped when force is set (RefreshAsync); an operator-triggered refresh always fetches.
             if (!force && attemptAtUtc - _lastAttemptUtc < options.RefreshTtl && _current.Source != ModelCatalogSource.Bundled)
             {
                 return _current;

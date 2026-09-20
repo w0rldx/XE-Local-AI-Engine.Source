@@ -1,21 +1,27 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     The enqueue seam the upload endpoint calls after storing a document's blob. It writes the document id
-///     onto a bounded background queue and returns immediately; the background worker drains the queue and runs the
-///     ingestion state machine with bounded concurrency. Singleton — it owns the queue and no scoped state. Because the
-///     queue is bounded, a burst of uploads cannot grow it without limit: an admission that arrives while the queue is
-///     full is rejected (<see cref="KnowledgeIngestionEnqueueResult.QueueFull" />) rather than silently dropped, so the
-///     caller can surface a retryable busy response instead of accreting unbounded pending work.
+///     The enqueue seam the upload endpoint calls after storing a document's blob: it writes the document id onto a
+///     bounded background queue and returns immediately.
 /// </summary>
+/// <remarks>
+///     The background worker drains the queue and runs the ingestion state machine with bounded concurrency. Singleton:
+///     it owns the queue and no scoped state. The bound means a burst of uploads cannot grow the queue without limit —
+///     an admission arriving while it is full is rejected with
+///     <see cref="KnowledgeIngestionEnqueueResult.QueueFull" /> rather than silently dropped, so the caller surfaces a
+///     retryable busy response instead of accreting unbounded pending work.
+/// </remarks>
 public interface IKnowledgeIngestionDispatcher
 {
     /// <summary>
-    ///     Attempts to queue one document for background ingestion. Returns <see cref="KnowledgeIngestionEnqueueResult.Accepted" />
-    ///     when the id was admitted. If that id is already queued or in flight, coalesces the request into one deferred
-    ///     follow-up run. Returns <see cref="KnowledgeIngestionEnqueueResult.QueueFull" /> when the bounded queue is at
-    ///     capacity (the caller then reports a retryable busy condition). Never blocks waiting for space.
+    ///     Attempts to queue one document for background ingestion, never blocking to wait for space.
     /// </summary>
+    /// <remarks>
+    ///     Returns <see cref="KnowledgeIngestionEnqueueResult.Accepted" /> when the id was admitted; an id already
+    ///     queued or in flight is coalesced into one deferred follow-up run. Returns
+    ///     <see cref="KnowledgeIngestionEnqueueResult.QueueFull" /> when the bounded queue is at capacity, and the
+    ///     caller then reports a retryable busy condition.
+    /// </remarks>
     ValueTask<KnowledgeIngestionEnqueueResult> EnqueueAsync(Guid documentId, CancellationToken cancellationToken);
 }
 

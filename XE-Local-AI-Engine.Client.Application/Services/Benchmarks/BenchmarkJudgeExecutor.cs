@@ -14,10 +14,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Runs one judge attempt: the rubric policy the attempt was enqueued under, the judge runtime frozen onto that
-///     attempt, and the durable evidence — receipt, environment facts and the rank-cohort key — recorded against the
-///     attempt rather than the run, because a run is judged many times.
+///     Runs one judge attempt: the rubric policy it was enqueued under, the judge runtime frozen onto it, and the
+///     durable evidence — receipt, environment facts and the rank-cohort key.
 /// </summary>
+/// <remarks>The evidence is recorded against the ATTEMPT rather than the run, because a run is judged many times.</remarks>
 public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
 {
     private const string FingerprintChangedMessage = "The installed judge model changed after the benchmark was created.";
@@ -125,19 +125,15 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             policyHash = revision.PolicyHash;
             var policy = BenchmarkJudgeSerialization.DeserializePolicy(revision.PolicyJson!.Value.Span);
 
-            // Fail closed on a revision this build no longer judges under. READS are deliberately tolerant of an
-            // outdated version so the project stays open and re-savable; EXECUTION is not. Judging under the current
-            // prompt while the revision promises an older one would file the verdict in the same cohort as verdicts
-            // taken under the old wording — exactly what the version exists to prevent.
+            // Fail closed on a revision this build no longer judges under: READS stay tolerant so the project remains open and re-savable, EXECUTION does not.
+            // Judging under the current prompt while the revision promises an older one files the verdict in the same cohort as verdicts taken under the old wording.
             if (!BenchmarkJudgePolicyValidator.VersionsAreCurrent(policy))
             {
                 throw new BenchmarkExecutionException(OutdatedPolicyVersionMessage);
             }
 
-            // The rubric is the question; a task item is one instance of it. A suite whose items all had to share one
-            // expected answer could only ask one question, so an item may override the policy's reference answer and
-            // any criterion's verifier config. The generated long-context cases are exactly that shape: one `exact`
-            // criterion in the rubric, one expected passcode per case.
+            // The rubric is the question; a task item is one instance of it, so an item may override the policy's reference answer and any criterion's verifier config.
+            // A suite whose items all shared one expected answer could ask only one question. The generated long-context cases are that shape: one `exact` criterion, one expected passcode per case.
             policy = await ApplyItemOverridesAsync(policy, work.Run, token);
 
             var runtime = attempt.JudgeRuntimeJson is { } runtimeJson
@@ -150,9 +146,8 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                 throw new BenchmarkExecutionException("The primary benchmark result is unavailable for judging.");
             }
 
-            // Verifiable criteria are decided HERE — before the model lease, before capacity admission, before any
-            // spawn — because a rubric that needs no model must cost no GPU. A verifier that cannot run throws and
-            // fails the attempt; it never contributes a 0, which is a score an answer can genuinely earn.
+            // Verifiable criteria are decided HERE — before the model lease, capacity admission and any spawn — because a rubric that needs no model must cost no GPU.
+            // A verifier that cannot run throws and fails the attempt; it never contributes a 0, which is a score an answer can genuinely earn.
             var graded = BenchmarkOutputParts.ForJudge(BenchmarkExecutionSerialization.DeserializeParts(output.Span),
                 Math.Min(runtime.RequestedContextTokens, runtime.Runtime.ContextTokens));
             var verifiable = policy.Rubric.Criteria.Where(static criterion => BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind)).ToArray();
@@ -160,9 +155,8 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             List<BenchmarkJudgeVerifierResultV1> verified = [];
             foreach (var criterion in verifiable)
             {
-                // Two paths, because only one of them can be unscorable. A pure verifier is a function of the answer
-                // text; pythonTests runs the answer's code in the compute sandbox, so it is async and it refuses —
-                // fail-closed, with the run left unranked — on a host that cannot be trusted to run it.
+                // Two paths, because only one of them can be unscorable: a pure verifier is a function of the answer text, while
+                // pythonTests runs the answer's code in the compute sandbox and refuses fail-closed — run left unranked — on a host that cannot be trusted to run it.
                 verified.Add(BenchmarkJudgeCriterionKinds.IsExecutionVerified(criterion.Kind)
                     ? await _pythonTests.VerifyAsync(criterion, answerText, token)
                     : BenchmarkJudgeVerifiers.Verify(criterion, answerText));
@@ -175,10 +169,8 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                 return;
             }
 
-            // Mixed rubric: the model is shown ONLY its own criteria, because BenchmarkJudgeResultParser.ReadCriteria
-            // demands the array length match the rubric it parses against. The verified scores are merged back and
-            // BenchmarkJudgeScoreCalculator.Compute re-checks the union against the FULL rubric, so the merge is
-            // checked rather than trusted.
+            // Mixed rubric: the model is shown ONLY its own criteria, because BenchmarkJudgeResultParser.ReadCriteria demands the array length match the rubric it parses against.
+            // The verified scores merge back and BenchmarkJudgeScoreCalculator.Compute re-checks the union against the FULL rubric, so the merge is checked rather than trusted.
             var judgedPolicy = policy with
             {
                 Rubric = policy.Rubric with
@@ -196,14 +188,8 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             // The host facts this judging ran on, captured before anything is reserved or spawned. Non-throwing.
             environment = await _environmentFacts.CaptureAsync(runtime.Runtime.Variant, token);
 
-            // Admission sizes against the frozen judge runtime's own context and its own frozen KV-cache type (null ⇒
-            // f16), not the project's request.
-            // No launch admission — see BenchmarkRunExecutor: the judge spawns its own process from frozen arguments.
-            // A rejection is transient by nature — it means something holds the bytes RIGHT NOW — and the judge is
-            // dequeued by the SAME FIFO consumer that just ran the primary, so it routinely arrives while the primary's
-            // llama-server is still handing its VRAM back. Wait and re-decide instead of terminalizing the attempt.
-            // ONE budget for the whole phase — see BenchmarkWaitBudget: the capacity wait and the exclusive-spawn
-            // wait after it share this allowance rather than each taking a full one.
+            // Admission sizes against the frozen judge runtime's own context and its own frozen KV-cache type (null ⇒ f16), not the project's request. No launch admission (see BenchmarkRunExecutor).
+            // The judge spawns its own process from frozen arguments; a rejection is waited out on ONE BenchmarkWaitBudget shared with the exclusive-spawn wait after it (see BenchmarkAdmissionRetry).
             var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
                                                                new CapacityRequest
@@ -227,10 +213,8 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                                                                token);
 
             using var reservation = decision.Reservation;
-            // Truncation and the silent-incomplete beside it are read through the shared predicates, not local copies:
-            // the judging still runs — a truncated answer is a real answer that scored badly, and an absent one is a
-            // real result too — but both the payload and the system prompt say which it is, and ranking must exclude
-            // exactly the runs the judge was told about.
+            // Truncation and the silent-incomplete beside it are read through the shared predicates, not local copies. The judging still runs — a truncated answer is a real answer that scored badly —
+            // but both the payload and the system prompt say which it is, and ranking must exclude exactly the runs the judge was told about.
             var package = BuildJudgePackage(snapshot, judgedPolicy, runtime, graded,
                 BenchmarkPrimaryStopReasons.IsTruncated(work.Run.PrimaryStopReason),
                 BenchmarkPrimaryStopReasons.IsIncomplete(work.Run.PrimaryStopReason));
@@ -331,12 +315,12 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     /// <summary>
     ///     The policy as THIS run's task item asks it: each criterion's verifier config resolved as item override ??
     ///     policy config, and the reference answer likewise.
-    ///     <para>
-    ///         Deliberately not a policy-hash change. The override lives on the item, so it is inside the item's input
-    ///         hash and inside the project's item-set hash — which is what unranks the stale answers to it — and
-    ///         moving the POLICY hash instead would force a project-wide re-judge of every item that did not change.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Deliberately not a policy-hash change. The override lives on the item, so it is inside the item's input hash
+    ///     and inside the project's item-set hash — which is what unranks the stale answers to it — and moving the
+    ///     POLICY hash instead would force a project-wide re-judge of every item that did not change.
+    /// </remarks>
     private async Task<BenchmarkJudgePolicyV1> ApplyItemOverridesAsync(BenchmarkJudgePolicyV1 policy, BenchmarkRunRecord run, CancellationToken cancellationToken)
     {
         if (run.TaskItemId is not { } itemId)
@@ -348,23 +332,16 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
         var item = items.FirstOrDefault(entry => entry.Id == itemId);
         if (item is null)
         {
-            // The item was deleted after the run was frozen. The ranking read already excludes such a run as
-            // item-set-revised, so judging it under the policy's own configuration costs nothing and refusing would
-            // turn a stale row into a failed attempt.
+            // The item was deleted after the run was frozen. The ranking read already excludes such a run as item-set-revised,
+            // so judging it under the policy's own configuration costs nothing, while refusing would turn a stale row into a failed attempt.
             return policy;
         }
 
         var referenceAnswer = BenchmarkTaskItemService.DecodeOptional(item.ReferenceAnswerJson) ?? policy.ReferenceAnswer;
         var overrides = ReadVerifierOverrides(item);
 
-        // An override that matches no criterion is not a no-op. Applying nothing and grading on leaves this item
-        // measured against the POLICY's expected answer — another item's question — and the score would look like any
-        // other. The item write refuses this, so reaching it means the rubric moved afterwards; the run is left
-        // unranked under its own reason rather than scored.
-        // An override that matches no criterion is not a no-op. Applying nothing and grading on leaves this item
-        // measured against the POLICY's expected answer — another item's question — and the score would look like any
-        // other. The item write refuses this, so reaching it means the rubric moved afterwards; the run is left
-        // unranked under its own reason rather than scored.
+        // An override that matches no criterion is not a no-op: applying nothing measures this item against the POLICY's expected answer — another item's question — and the score
+        // looks like any other. The item write refuses this, so reaching it means the rubric moved afterwards; the run is left unranked under its own reason rather than scored.
         if (overrides.Keys.FirstOrDefault(id => !policy.Rubric.Criteria.Any(criterion => string.Equals(criterion.Id, id, StringComparison.Ordinal)))
             is { } unmatched)
         {
@@ -423,10 +400,14 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
         }
     }
 
+    /// <summary>Builds the judge turn's runtime package from the frozen snapshot, the policy and the graded answer.</summary>
+    /// <remarks>
+    ///     <paramref name="graded" /> is computed by the CALLER so the verifiers and the model grade byte-identical
+    ///     text; the raw per-delta transcript of a thinking model does not fit the frozen judge window.
+    /// </remarks>
     /// <param name="graded">
-    ///     The stored transcript reduced to its visible answer (see <see cref="BenchmarkOutputParts.ForJudge" />) and
-    ///     bounded against the frozen judge window — the raw per-delta transcript of a thinking model does not fit it.
-    ///     Computed by the caller so the verifiers and the model grade byte-identical text.
+    ///     The stored transcript reduced to its visible answer (see <see cref="BenchmarkOutputParts.ForJudge" />),
+    ///     bounded against the frozen judge window.
     /// </param>
     private RuntimePackage BuildJudgePackage(BenchmarkRuntimeSnapshotV1 snapshot,
         BenchmarkJudgePolicyV1 policy,
@@ -463,18 +444,20 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             Timeouts = BenchmarkFrozenPolicies.FrozenTimeouts(),
             SamplingOptions = BenchmarkRunExecutor.ToSamplingOptions(runtime.Sampling, runtime.RequestedContextTokens),
             IsUnattended = true,
-            // The prompt ASKS for this shape and the parser refuses anything else, which cost one judge invocation in
-            // three against a small model. Constraining the decode makes the two agree instead of hoping they do; the
-            // response-format schema drops the string-length bounds the parser still enforces (see the constant).
+            // The prompt ASKS for this shape and the parser refuses anything else, which cost one judge invocation in three against a small model.
+            // Constraining the decode makes the two agree; the response-format schema drops the string-length bounds the parser still enforces (see the constant).
             ResponseJsonSchema = JudgeResponseFormatSchema
         });
     }
 
     /// <summary>
-    ///     Terminalizes a judging every one of whose criteria was decided server-side. Nothing is leased, admitted or
-    ///     spawned, so the attempt carries no launch receipt and no measured execution identity — it gets the
-    ///     <see cref="BenchmarkJudgeExecutionKey.VerifiedSentinel" /> instead, which joins its cohort deterministically.
+    ///     Terminalizes a judging every one of whose criteria was decided server-side.
     /// </summary>
+    /// <remarks>
+    ///     Nothing is leased, admitted or spawned, so the attempt carries no launch receipt and no measured execution
+    ///     identity — it gets the <see cref="BenchmarkJudgeExecutionKey.VerifiedSentinel" /> instead, which joins its
+    ///     cohort deterministically.
+    /// </remarks>
     private async Task CompleteVerifiedAsync(BenchmarkClaimedWork work,
         BenchmarkJudgePolicyV1 policy,
         IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifiers,
@@ -515,11 +498,12 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     }
 
     /// <summary>
-    ///     Folds the verified criteria into whatever the model scored and recomputes the 0..100 against the FULL
-    ///     rubric. A verified criterion is worth 10 or 0; the rubric's own weights do the rest, through the same
-    ///     calculator a purely model-judged rubric goes through — which also rejects a merge that does not cover the
-    ///     rubric exactly.
+    ///     Folds the verified criteria into whatever the model scored and recomputes the 0..100 against the FULL rubric.
     /// </summary>
+    /// <remarks>
+    ///     A verified criterion is worth 10 or 0; the rubric's own weights do the rest, through the same calculator a
+    ///     purely model-judged rubric goes through — which also rejects a merge that does not cover the rubric exactly.
+    /// </remarks>
     private static BenchmarkJudgeResultV2 Merge(BenchmarkJudgeResultV2 judged,
         BenchmarkJudgeRubricV1 fullRubric,
         IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifiers)
@@ -543,9 +527,12 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
 
     /// <summary>
     ///     Writes the attempt's launch evidence and, in the same insert-if-null write, the rank-cohort key derived from
-    ///     it. The key is computed fail-closed: an execution this node cannot fully describe gets no key, and the
-    ///     attempt stays permanently unranked rather than joining a cohort it cannot be shown to belong to.
+    ///     it.
     /// </summary>
+    /// <remarks>
+    ///     The key is computed fail-closed: an execution this node cannot fully describe gets no key, and the attempt
+    ///     stays permanently unranked rather than joining a cohort it cannot be shown to belong to.
+    /// </remarks>
     private async Task CheckpointAsync(BenchmarkClaimedWork work,
         BenchmarkJudgeAttemptRecord? attempt,
         string? policyHash,

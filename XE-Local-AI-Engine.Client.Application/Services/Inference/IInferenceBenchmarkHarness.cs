@@ -4,10 +4,10 @@ using System.Text;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Drives a FIXED golden transcript against a transient profiling llama-server process and captures the comparable
-///     throughput/latency/cache/VRAM metrics for one inference profile. The transcript and sampling are fixed so two
-///     profiles benchmarked on the same box are directly comparable.
+///     Drives a FIXED golden transcript against a transient profiling llama-server process and captures the
+///     comparable throughput/latency/cache/VRAM metrics for one inference profile.
 /// </summary>
+/// <remarks>The transcript and sampling are fixed, so two profiles benchmarked on the same box are directly comparable.</remarks>
 public interface IInferenceBenchmarkHarness
 {
     /// <summary>Runs the golden transcript against the <paramref name="context" /> endpoint and returns its measured metrics.</summary>
@@ -201,11 +201,13 @@ public sealed record InferenceBenchmarkSpec
 }
 
 /// <summary>
-///     The measured outcome of one role-specific benchmark run. Chat keeps TG/PP/cache/tool metrics; embedding and
-///     reranker add item throughput, latency distribution, batch shape, and output-correctness evidence. Global-free VRAM
-///     and llama.cpp's process-local budget are recorded separately so WDDM pressure cannot masquerade as a valid run.
-///     Any figure that could not be derived is <see langword="null" />.
+///     The measured outcome of one role-specific benchmark run: chat keeps TG/PP/cache/tool metrics; embedding and
+///     reranker add item throughput, latency distribution, batch shape and output-correctness evidence.
 /// </summary>
+/// <remarks>
+///     Global-free VRAM and llama.cpp's process-local budget are recorded separately so WDDM pressure cannot
+///     masquerade as a valid run. Any figure that could not be derived is <see langword="null" />.
+/// </remarks>
 public sealed record InferenceBenchmarkMetrics
 {
     /// <summary>Whether the run completed; <see langword="false" /> blocks the freeze gate.</summary>

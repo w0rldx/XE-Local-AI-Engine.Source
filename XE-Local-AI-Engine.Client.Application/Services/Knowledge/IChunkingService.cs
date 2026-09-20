@@ -9,17 +9,17 @@ using Microsoft.Extensions.DataIngestion;
 public interface IChunkingService
 {
     /// <summary>
-    ///     Walks the document's heading structure and produces the ordered section list plus size-bounded, overlapping
-    ///     chunks. A document with no headers yields a single implicit section. Chunk size is token-aware: a section is cut
-    ///     at whichever bound — a per-chunk token budget or the character ceiling — is reached first (always at a whitespace
-    ///     boundary), so a chunk and its heading prefix stay within the embedding model's context window.
+    ///     Walks the document's heading structure and produces the ordered section list plus size-bounded, overlapping chunks.
     /// </summary>
-    /// <param name="document">The structured document to split.</param>
+    /// <remarks>
+    ///     A document with no headers yields a single implicit section. A section is cut at whichever bound is reached
+    ///     first — the per-chunk token budget or the character ceiling — always at a whitespace boundary, so a chunk plus
+    ///     its heading prefix stays inside the embedding model's context window. A supplied context window tightens the
+    ///     token budget to that window minus a safety reserve, so a smaller-window embedder yields smaller chunks.
+    /// </remarks>
     /// <param name="embeddingContextWindowTokens">
-    ///     The resolved embedding model's advertised context window in tokens, when discoverable at ingestion time. When
-    ///     supplied and positive it TIGHTENS the per-chunk token budget (window minus a safety reserve) so a smaller-window
-    ///     embedder yields correspondingly smaller chunks; it never enlarges chunks beyond the configured budget. When
-    ///     <see langword="null" /> the configured <c>MaxChunkTokens</c> governs.
+    ///     Resolved embedding context window in tokens; a positive value tightens the per-chunk token budget (never
+    ///     enlarges it), <see langword="null" /> keeps the configured <c>MaxChunkTokens</c>.
     /// </param>
     KnowledgeChunkingResult Chunk(IngestionDocument document, int? embeddingContextWindowTokens = null);
 }

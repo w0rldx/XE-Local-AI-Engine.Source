@@ -5,17 +5,16 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
-///     Default <see cref="IModelFitQueryService" />: a thin cache reader over the model-fit stores. It composes the
-///     sanitized snapshot-summary store and the normalized recommendation store. It takes NO dependency on the refresh
-///     service, so a read can never start an advisor run. The approved-image store dependency is gone (the approved-image
-///     concept was removed when the advisor replaced the Docker/llmfit recommendation backend).
-///     <para>
-///         On the read path it also reconciles each row's install state against the node's actually-installed Ollama
-///         models (<see cref="IOllamaModelService.ListLocalModelsAsync" />). Listing the node's installed models is a
-///         node-local read — NOT an advisor run — so the no-runner invariant still holds. The enrichment is best-effort:
-///         if the install list can't be read, each row keeps its stored flag.
-///     </para>
+///     Default <see cref="IModelFitQueryService" />: a thin cache reader composing the sanitized snapshot-summary
+///     store and the normalized recommendation store. It takes NO dependency on the refresh service, so a read can
+///     never start an advisor run, and none on approved images.
 /// </summary>
+/// <remarks>
+///     On the read path it reconciles each row's install state against the node's actually-installed Ollama models
+///     (<see cref="IOllamaModelService.ListLocalModelsAsync" />). Listing the node's installed models is a node-local
+///     read, NOT an advisor run, so the no-runner invariant still holds. The enrichment is best-effort: if the install
+///     list cannot be read, each row keeps its stored flag.
+/// </remarks>
 public sealed class ModelFitQueryService : IModelFitQueryService
 {
     private readonly ILogger<ModelFitQueryService> _logger;
@@ -75,12 +74,15 @@ public sealed class ModelFitQueryService : IModelFitQueryService
     }
 
     /// <summary>
-    ///     Returns <paramref name="recommendations" /> with each row's <c>IsInstalled</c> set from the node's actually-
-    ///     installed Ollama models rather than llmfit's offline flag. A row is installed iff its <c>PullModelName</c> (the
-    ///     exact Ollama tag) matches an installed tag (case-insensitive, with <c>:latest</c> elided so a bare name matches
-    ///     its tagged form). Rows with a null <c>PullModelName</c> have no tag to match and are reported not-installed.
-    ///     Best-effort: if the install list cannot be read (e.g. Ollama unreachable) the stored flags are returned as-is.
+    ///     Returns <paramref name="recommendations" /> with each row's <c>IsInstalled</c> set from the node's
+    ///     actually-installed Ollama models rather than llmfit's offline flag.
     /// </summary>
+    /// <remarks>
+    ///     A row is installed iff its <c>PullModelName</c> (the exact Ollama tag) matches an installed tag,
+    ///     case-insensitively and with <c>:latest</c> elided so a bare name matches its tagged form. A row with a null
+    ///     <c>PullModelName</c> has no tag to match and is reported not-installed. Best-effort: if the install list
+    ///     cannot be read (Ollama unreachable) the stored flags are returned as-is.
+    /// </remarks>
     private async Task<IReadOnlyList<ModelFitRecommendationRecord>> ApplyNodeInstallStateAsync(IReadOnlyList<ModelFitRecommendationRecord> recommendations,
         CancellationToken cancellationToken)
     {

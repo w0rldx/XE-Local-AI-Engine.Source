@@ -61,12 +61,11 @@ public sealed class BenchmarkBradleyTerryFit
 ///     dependency: the MM update is a dozen lines and the prior is one constant.
 /// </summary>
 /// <remarks>
-///     Two properties are load-bearing and neither is a hope. A symmetric <see cref="PriorPseudoCount" /> pseudo-count
-///     on every pair that was actually compared gives every participating run a win total strictly above zero, so
-///     complete separation — a run that wins everything, or loses everything — still has a finite unique maximum
-///     instead of driving a log to negative infinity. And the bootstrap resamples whole UNORDERED PAIRS: the two
-///     presentation orders of one pair are the same observation measured twice to cancel position bias, so splitting
-///     them across replicates would reintroduce exactly the bias the swap exists to remove.
+///     Two properties are load-bearing. A symmetric <see cref="PriorPseudoCount" /> pseudo-count on every pair that
+///     was actually compared gives every participating run a win total strictly above zero, so complete separation —
+///     a run that wins or loses everything — still has a finite unique maximum instead of driving a log to negative
+///     infinity. And the bootstrap resamples whole UNORDERED PAIRS: the two presentation orders of one pair are the
+///     same observation measured twice to cancel position bias, so splitting them would reintroduce that bias.
 /// </remarks>
 public static class BenchmarkBradleyTerry
 {
@@ -96,17 +95,16 @@ public static class BenchmarkBradleyTerry
     public const string VerdictB = "b";
     public const string VerdictTie = "tie";
 
-    /// <summary>
-    ///     Fits the verdicts and bootstraps an interval for every run that gets a strength. Runs outside the largest
-    ///     connected component are returned with no score: cross-component strengths are not comparable, and averaging
-    ///     them would invent an ordering the verdicts never established.
-    /// </summary>
+    /// <summary>Fits the verdicts and bootstraps an interval for every run that gets a strength.</summary>
+    /// <remarks>
+    ///     Runs outside the largest connected component are returned with no score: cross-component strengths are not
+    ///     comparable, and averaging them would invent an ordering the verdicts never established.
+    ///     <paramref name="maximumIterations" /> is a parameter only so the refuse-on-non-convergence branch is
+    ///     reachable from a test: with the prior in place no real cohort reaches 500 sweeps, and a branch nothing can
+    ///     exercise is a branch nothing pins.
+    /// </remarks>
     /// <param name="replicates">Bootstrap replicates; 0 fits without intervals (the fixtures' fast path).</param>
-    /// <param name="maximumIterations">
-    ///     The MM sweep cap. Defaults to <see cref="MaximumIterations" /> and is a parameter only so the
-    ///     refuse-on-non-convergence branch is reachable from a test — with the prior in place, no real cohort can
-    ///     reach 500 sweeps, and a branch nothing can exercise is a branch nothing pins.
-    /// </param>
+    /// <param name="maximumIterations">The MM sweep cap, defaulting to <see cref="MaximumIterations" />.</param>
     public static BenchmarkBradleyTerryFit Fit(IReadOnlyList<BenchmarkPairwiseVerdict> verdicts,
         int replicates = DefaultReplicates,
         int maximumIterations = MaximumIterations)
@@ -181,12 +179,12 @@ public static class BenchmarkBradleyTerry
         return new BenchmarkPairwiseRunScore { RunId = run, Score = score, CiLow = Percentile(ordered, 0.025), CiHigh = Percentile(ordered, 0.975), Comparisons = counts[index], BootstrapAppearances = ordered.Length, Reason = null };
     }
 
-    /// <summary>
-    ///     Collapses the ordered verdicts into one aggregate per unordered pair. A tie contributes 0.5 to each side and
-    ///     1 to the total — Rao–Kupper's fitted tie threshold is deliberately not built: it estimates a third parameter
-    ///     from far fewer tie observations than a 12-run cohort produces, and the 0.5 split is what the published
-    ///     arena fits use.
-    /// </summary>
+    /// <summary>Collapses the ordered verdicts into one aggregate per unordered pair.</summary>
+    /// <remarks>
+    ///     A tie contributes 0.5 to each side and 1 to the total. Rao–Kupper's fitted tie threshold is deliberately
+    ///     NOT built: it estimates a third parameter from far fewer tie observations than a 12-run cohort produces,
+    ///     and the 0.5 split is what the published arena fits use.
+    /// </remarks>
     private static PairAggregate[] Aggregate(IReadOnlyList<BenchmarkPairwiseVerdict> verdicts, IReadOnlyDictionary<Guid, int> indexByRun)
     {
         var byPair = new Dictionary<(int A, int B), (double WinsA, double WinsB, int Total)>();
@@ -327,9 +325,12 @@ public static class BenchmarkBradleyTerry
 
     /// <summary>
     ///     Maps log-strengths to the existing 0..100 projection as the estimated probability of beating an AVERAGE
-    ///     opponent in this cohort. Deliberately not <c>100·p/max(p)</c>, which would pin the winner at 100 forever and
-    ///     reintroduce the saturation the pairwise mode exists to remove.
+    ///     opponent in this cohort.
     /// </summary>
+    /// <remarks>
+    ///     Deliberately NOT <c>100·p/max(p)</c>, which would pin the winner at 100 forever and reintroduce the
+    ///     saturation the pairwise mode exists to remove.
+    /// </remarks>
     private static Dictionary<int, int> MapScores(IReadOnlyList<double> logStrengths, IReadOnlySet<int> component)
     {
         if (component.Count == 0)

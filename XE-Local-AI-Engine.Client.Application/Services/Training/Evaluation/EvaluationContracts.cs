@@ -16,11 +16,11 @@ public enum EvaluationTarget
 }
 
 /// <summary>
-///     The frozen hold-out membership, persisted (encrypted) in <c>training_evaluation_runs.membership_json</c>. It
-///     carries sample ids that select trajectories from the training run's encrypted, immutable corpus. The membership
-///     does not duplicate sample content because the run-owned corpus is the replay source of truth.
+///     The frozen hold-out membership, persisted (encrypted) in <c>training_evaluation_runs.membership_json</c>: the
+///     sample ids that select trajectories from the training run's encrypted, immutable corpus.
 /// </summary>
 /// <remarks>
+///     The membership does not duplicate sample content because the run-owned corpus is the replay source of truth.
 ///     Both sides of a comparison take this membership from the SAME training run's freeze, which is the whole reason
 ///     their accuracies are comparable. <see cref="DatasetContentFingerprint" /> identifies the dataset version that
 ///     produced the corpus; later live-dataset edits do not change or invalidate that frozen replay.
@@ -129,11 +129,12 @@ public sealed class EvaluationRejectedException : Exception
     }
 }
 
-/// <summary>
-///     A tool the model is OFFERED but can never execute. An evaluation is a single turn whose whole question is
-///     "which call would the model make", so the offer needs a name and a parameter schema and nothing else; invoking
-///     it would mean the evaluation had run somebody's tool, which is exactly what it must not do.
-/// </summary>
+/// <summary>A tool the model is OFFERED but can never execute.</summary>
+/// <remarks>
+///     An evaluation is a single turn whose whole question is "which call would the model make", so the offer needs a
+///     name and a parameter schema and nothing else; invoking it would mean the evaluation had run somebody's tool,
+///     which is exactly what it must not do.
+/// </remarks>
 internal sealed class DeclaredOnlyAIFunction : AIFunction
 {
     private static readonly JsonElement EmptyObjectSchema = JsonDocument.Parse("""{"type":"object"}""").RootElement.Clone();

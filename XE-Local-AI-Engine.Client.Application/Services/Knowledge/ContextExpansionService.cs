@@ -57,20 +57,30 @@ public sealed class ContextExpansionService : IContextExpansionService
                 cancellationToken);
     }
 
-    // Defensive cap on how many disjoint ranges are packed into one parameterized OR-disjunction, so the bound-parameter
-    // count stays well under SQLite's per-statement limit even for a pathological anchor set (each range is 2 parameters
-    // plus the shared document-id parameter). A document with more disjoint ranges than this splits into that few extra
-    // queries; the common sparse top-k is one range set well under the cap and issues a single query.
+    /// <summary>
+    ///     Defensive cap on how many disjoint ranges are packed into one parameterized OR-disjunction, keeping the
+    ///     bound-parameter count well under SQLite's per-statement limit.
+    /// </summary>
+    /// <remarks>
+    ///     Each range is two parameters plus the shared document-id parameter, so even a pathological anchor set stays
+    ///     inside the limit. A document with more disjoint ranges than this splits into that few extra queries; the
+    ///     common sparse top-k is one range set well under the cap and issues a single query.
+    /// </remarks>
     private const int MaxRangesPerQuery = 300;
 
-    // Total chunk rows the last ExpandBatchAsync call actually hydrated from the database. Test-only seam
-    // (internal + InternalsVisibleTo) that lets a test assert hydration is bounded to the union of the anchors' windows
-    // rather than the min-to-max span across distant hits; not part of the public contract.
+    /// <summary>Total chunk rows the last <c>ExpandBatchAsync</c> call actually hydrated from the database.</summary>
+    /// <remarks>
+    ///     Test-only seam (internal + <c>InternalsVisibleTo</c>) letting a test assert hydration is bounded to the union
+    ///     of the anchors' windows rather than the min-to-max span across distant hits; not part of the public contract.
+    /// </remarks>
     internal int LastBatchRowsHydrated { get; private set; }
 
-    // Number of DB commands the last ExpandBatchAsync call issued. Test-only seam that proves the one-query-per-document
-    // contract: every disjoint range of a document is read by a SINGLE parameterized query (barring the defensive
-    // range-chunking fallback above); not part of the public contract.
+    /// <summary>Number of DB commands the last <c>ExpandBatchAsync</c> call issued.</summary>
+    /// <remarks>
+    ///     Test-only seam proving the one-query-per-document contract: every disjoint range of a document is read by a
+    ///     SINGLE parameterized query, barring the defensive range-chunking fallback above; not part of the public
+    ///     contract.
+    /// </remarks>
     internal int LastBatchQueryCount { get; private set; }
 
     public async Task<IReadOnlyList<IReadOnlyList<KnowledgeNeighborChunk>>> ExpandBatchAsync(IReadOnlyList<KnowledgeNeighborAnchor> anchors,
@@ -90,12 +100,8 @@ public sealed class ContextExpansionService : IContextExpansionService
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
 
-        // Per document, merge only OVERLAPPING or ADJACENT anchor windows into DISJOINT ranges, then read ALL of that
-        // document's ranges in ONE parameterized query (an OR of BETWEEN predicates) — never a single min-to-max span, so
-        // two far-apart hits never drag in the intervening chunks, and never one query per range, so a sparse top-k stays a
-        // single round trip per document. Each anchor is then sliced from the document's combined ascending rows; because
-        // an anchor's window lies wholly inside one merged range that was read, the slice is byte-for-byte what
-        // ExpandAsync(anchor) returns.
+        // Per document, merge only OVERLAPPING or ADJACENT anchor windows into disjoint ranges and read them all in one
+        // query: never a min-to-max span (no intervening chunks), never one query per range (one round trip per document).
         var rowsByDocument = new Dictionary<Guid, IReadOnlyList<KnowledgeNeighborChunk>>();
         foreach (var group in anchors.GroupBy(static anchor => anchor.DocumentId))
         {
@@ -108,9 +114,8 @@ public sealed class ContextExpansionService : IContextExpansionService
         {
             var lower = anchor.ChunkIndex - safeWindow;
             var upper = anchor.ChunkIndex + safeWindow;
-            // The document's combined rows are ascending by chunk_index; slice this anchor's window out of them. All rows in
-            // [lower, upper] were read (the window is inside one of the disjoint ranges), so the slice is complete and
-            // ordered.
+            // The document's combined rows are ascending by chunk_index and every row in [lower, upper] was read (the
+            // window lies inside one disjoint range), so slicing this anchor's window out of them is complete and ordered.
             var anchorWindow = rowsByDocument[anchor.DocumentId]
                                .Where(chunk => chunk.ChunkIndex >= lower && chunk.ChunkIndex <= upper)
                                .ToList();
@@ -120,9 +125,8 @@ public sealed class ContextExpansionService : IContextExpansionService
         return results;
     }
 
-    // Merges overlapping or adjacent (touching, i.e. no unindexed gap) windows into disjoint ascending ranges. A window
-    // separated from the previous one by even a single unindexed position starts a new range, so a distant anchor never
-    // widens an earlier range across the gap between them.
+    // Merges overlapping or adjacent (touching, no unindexed gap) windows into disjoint ascending ranges; a window past
+    // even one unindexed position starts a new range, so a distant anchor never widens an earlier range across the gap.
     private static List<TextWindow> MergeWindows(IEnumerable<TextWindow> windows)
     {
         var merged = new List<TextWindow>();
@@ -141,10 +145,8 @@ public sealed class ContextExpansionService : IContextExpansionService
         return merged;
     }
 
-    // Reads every disjoint range of one document in a SINGLE parameterized query (an OR of BETWEEN predicates over the
-    // shared document-id filter), splitting into additional queries only if the range count exceeds the defensive
-    // per-query cap. Rows come back ascending by chunk_index; across the (ascending, disjoint) chunk batches the appended
-    // result stays globally ascending. Updates the row-count and query-count seams.
+    // Reads every disjoint range of one document in a SINGLE parameterized query (an OR of BETWEEN over the shared
+    // document-id filter), splitting only past the per-query cap; rows stay globally ascending. Updates both seams.
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification =
             "The OR-disjunction is a fixed count of $loN/$hiN placeholder pairs generated from an internal range count; every bound and id is a bound parameter and no value is concatenated into the command text.")]

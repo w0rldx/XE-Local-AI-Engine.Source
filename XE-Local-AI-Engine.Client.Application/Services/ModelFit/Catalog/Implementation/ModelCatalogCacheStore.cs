@@ -4,10 +4,13 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     File-backed <see cref="IModelCatalogCacheStore" />: a single small JSON file in the node data directory, guarded
-///     by a lock and written owner-only on non-Windows. Mirrors <c>NodeSettingsStore</c>'s persistence shape but keeps
-///     the remote catalog cache in its own file — this is a raw fetched document, not a settings key.
+///     File-backed <see cref="IModelCatalogCacheStore" />: a single small JSON file in the node data directory,
+///     guarded by a lock and written owner-only on non-Windows.
 /// </summary>
+/// <remarks>
+///     Mirrors <c>NodeSettingsStore</c>'s persistence shape but keeps the remote catalog cache in its own file — this
+///     is a raw fetched document, not a settings key.
+/// </remarks>
 internal sealed class ModelCatalogCacheStore : IModelCatalogCacheStore, IDisposable
 {
     private const string CacheFileName = "model-catalog-remote-cache.json";

@@ -21,22 +21,14 @@ public sealed class BenchmarkJudgeExecutionGpuV1
 
 /// <summary>
 ///     A stable, versioned projection of what a judging actually executed on: the effective launch receipt plus the
-///     environment facts, reduced to the fields that can change a score's comparability. Deliberately excludes every
-///     per-launch diagnostic — capture clock, file mtimes and sizes, pids, paths, timings — so two judgings on an
-///     unchanged node produce the same value, while a runtime update, a different KV type or a moved placement do not.
+///     environment facts, reduced to the fields that can change a score's comparability.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Property order is pinned because the record is canonically serialized and hashed into the rank-cohort key.
-///         Reordering or renaming a member silently re-keys every cohort already stored.
-///     </para>
-///     <para>
-///         <b>Accepted ceiling:</b> <see cref="RuntimeBundleIdentity" /> is the runtime's cheap identity (file names,
-///         sizes, mtimes and sampled validation hashes) plus the executable's full fresh SHA-256. A shared library
-///         edited in an unsampled region with size and mtime preserved would alias. That is not an operational path —
-///         a runtime update moves the version, the sizes and the mtimes, all of which are in here. The upgrade path is
-///         a content-addressed bundle identity computed at install time, swapped in as a v2 field.
-///     </para>
+///     Every per-launch diagnostic — capture clock, file mtimes and sizes, pids, paths, timings — is excluded, so two
+///     judgings on an unchanged node produce the same value while a runtime update, a different KV type or a moved
+///     placement do not. Property order is pinned because the record is canonically serialized and hashed into the
+///     rank-cohort key: reordering or renaming a member silently re-keys every cohort already stored. Accepted
+///     ceiling: see docs/wiki/20-benchmarks.md ("Scoring").
 /// </remarks>
 public sealed class BenchmarkJudgeExecutionIdentityV1
 {
@@ -112,24 +104,23 @@ public sealed class BenchmarkJudgeExecutionIdentityV1
 public static class BenchmarkJudgeExecutionKey
 {
     /// <summary>
-    ///     The cohort key of a judging that ran NO model because every rubric criterion was decided server-side. A
-    ///     constant, not a hash: such an attempt has no runtime to describe, and having none is not the same as having
-    ///     an incomplete description of one — <c>execution-identity-incomplete</c> would unrank it forever.
-    ///     <para>
-    ///         <b>Safe only because the judging MODE and every criterion's kind and config are inside
-    ///         <c>ComputePolicyHash</c>.</b> That is what makes one policy revision provably one rubric composition, so
-    ///         a constant key cannot merge attempts that were graded differently. If any of those ever moved out of the
-    ///         policy hash, this sentinel starts joining unlike things and must be revisited with them.
-    ///     </para>
+    ///     The cohort key of a judging that ran NO model because every rubric criterion was decided server-side.
     /// </summary>
+    /// <remarks>
+    ///     A constant, not a hash: such an attempt has no runtime to describe, and having none is not the same as
+    ///     having an incomplete description of one — <c>execution-identity-incomplete</c> would unrank it forever.
+    ///     Safe ONLY because the judging MODE and every criterion's kind and config are inside
+    ///     <c>ComputePolicyHash</c>, which is what makes one policy revision provably one rubric composition. If any
+    ///     of those ever moves out of the policy hash, this sentinel starts joining unlike things.
+    /// </remarks>
     public const string VerifiedSentinel = "verified:v1";
 
-    /// <summary>
-    ///     The identity for this judging, or <see langword="null" /> when it cannot be completed. Returns null for an
-    ///     <c>unknown</c> backend (where the work ran was never measured) and for any launch that loaded a LoRA,
-    ///     projector or draft model (the adapter/base closure is not identified yet, so two such launches cannot be
-    ///     shown to be the same execution).
-    /// </summary>
+    /// <summary>The identity for this judging, or <see langword="null" /> when it cannot be completed.</summary>
+    /// <remarks>
+    ///     Null for an <c>unknown</c> backend (where the work ran was never measured) and for any launch that loaded a
+    ///     LoRA, projector or draft model (the adapter/base closure is not identified yet, so two such launches cannot
+    ///     be shown to be the same execution).
+    /// </remarks>
     public static BenchmarkJudgeExecutionIdentityV1? TryBuild(LlamaServerLaunchReceipt? receipt, RuntimeEnvironmentFactsV1? environment)
     {
         if (receipt is null || environment is null)
@@ -167,9 +158,8 @@ public static class BenchmarkJudgeExecutionKey
                            .ThenBy(static gpu => gpu.TotalBytes)
                            .ToArray();
 
-        // A CPU-variant spawn runs without a placement sniffer, so counts are legitimately absent — the backend token
-        // (cpu vs metal-unverified) already separates those cohorts. Everything that IS a GPU build, including one
-        // that placed nothing, must carry its counts and at least one GPU identity or it cannot be compared.
+        // A CPU-variant spawn runs without a placement sniffer, so counts are legitimately absent — the backend token (cpu vs metal-unverified) already separates those cohorts.
+        // Everything that IS a GPU build, including one that placed nothing, must carry its counts and at least one GPU identity or it cannot be compared.
         var isCpuVariant = receipt.Variant == GpuVariant.Cpu;
         if (!isCpuVariant && (placement.OffloadedLayers is null || placement.TotalLayers is null || gpus.Length == 0))
         {

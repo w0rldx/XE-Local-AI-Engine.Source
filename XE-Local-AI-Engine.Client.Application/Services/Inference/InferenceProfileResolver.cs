@@ -6,23 +6,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     DB-backed <see cref="IInferenceProfileResolver" />. Replaces the supervisor's self-satisfying explore-only
-///     default (registered LAST so it wins) and turns a persisted profile into the launch args for a cold spawn:
-///     <see cref="ResolvedLaunchArguments.Explore" /> until a profile is frozen, otherwise the frozen profile's replay
-///     args — re-validating a <see cref="InferenceProfileStatus.Frozen" /> profile through
-///     <see cref="IInferenceInvalidationEvaluator" /> first and demoting it to <see cref="InferenceProfileStatus.Stale" />
-///     when its baseline no longer holds.
+///     DB-backed <see cref="IInferenceProfileResolver" />: turns a persisted profile into the launch args for a cold
+///     spawn — <see cref="ResolvedLaunchArguments.Explore" /> until a profile is frozen, otherwise the frozen
+///     profile's replay args. Registered LAST so it wins over the supervisor's explore-only default.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Singleton on the cold spawn path. <see cref="IInferenceProfileStore" /> is SCOPED, so the resolver resolves
-///         it through a fresh <see cref="IServiceScopeFactory" /> scope per call rather than capturing the scoped store
-///         in a singleton.
-///     </para>
-///     <para>
-///         This path must NEVER throw: a corrupt persisted arg combo (for example a KV pairing that violates the replay
-///         invariant) degrades to explore (auto-fit), never an exception out of the supervisor's spawn.
-///     </para>
+///     A <see cref="InferenceProfileStatus.Frozen" /> profile is re-validated through
+///     <see cref="IInferenceInvalidationEvaluator" /> first and demoted to <see cref="InferenceProfileStatus.Stale" />
+///     when its baseline no longer holds. Singleton on the cold spawn path: <see cref="IInferenceProfileStore" /> is
+///     SCOPED, so the resolver resolves it through a fresh <see cref="IServiceScopeFactory" /> scope per call. This
+///     path must NEVER throw — a corrupt persisted arg combo degrades to explore (auto-fit), never an exception.
 /// </remarks>
 public sealed class InferenceProfileResolver : IInferenceProfileResolver
 {
@@ -68,9 +61,8 @@ public sealed class InferenceProfileResolver : IInferenceProfileResolver
         switch (record.Status)
         {
             case InferenceProfileStatus.Explored:
-                // Explored rows are optimizer drafts, not serving policy. Normal serving must keep auto-fit active until
-                // the operator freezes a benchmark-justified profile. BenchmarkAsync explicitly builds and supplies its
-                // draft replay arguments, so that protected profiling path does not pass through this resolver.
+                // Explored rows are optimizer drafts, not serving policy: normal serving keeps auto-fit active until the
+                // operator freezes a benchmark-justified profile. BenchmarkAsync supplies its own draft replay args, bypassing this.
                 return ResolvedLaunchArguments.Explore();
 
             case InferenceProfileStatus.Frozen:

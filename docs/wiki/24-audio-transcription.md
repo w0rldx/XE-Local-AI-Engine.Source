@@ -120,6 +120,36 @@ Cancellation is registered **before** the transcode, not after it, so a cancel a
 its own — `IWhisperTranscriber` acquires and releases one inside each call, and a nested second lease would either
 deadlock or double-count.
 
+### The transcoder's ffmpeg process
+
+`FfmpegAudioTranscoder` resolves `ffmpeg` (`ffmpeg.exe` on Windows) once, at construction, by walking `PATH` split on
+`Path.PathSeparator`. That is the same algorithm the whisper.cpp provider's own probe
+(`WhisperFfmpegProbe.ResolveFromPath`) uses, mirrored rather than shared because the probe is private to that provider
+and this repository has no shared executable resolver to reuse. An operator who installs ffmpeg while the node is
+running gets the capability at the next restart — the granularity every other PATH-resolved tool here has.
+
+**Arguments are never client-derived.** Both paths are server-generated `Guid`-named files inside the engine's own
+temporary directory, and they travel through `ProcessStartInfo.ArgumentList` with no shell in the path, so nothing a
+caller sends can reach the argument list. `-nostdin` plus a closed standard input keeps a malformed file from parking
+the child on a prompt nobody can answer — the same posture the source-build command runner uses. Both pipes are
+drained concurrently with the wait, because a child that fills one and is never read deadlocks instead of exiting;
+neither reader ever throws, so both are safe to await after a kill.
+
+**A kill is a signal, not an exit**, and awaiting the two pipe readers proves nothing about it: both were started with
+the caller's token, so on cancellation each returns at once through its own catch instead of reading to end-of-stream.
+`WaitForExitAfterKillAsync` therefore waits on a 10-second bound the caller's cancellation cannot reach. Without it
+the method rethrows while the child may still be writing, and the upload slot's disposal then runs against a live
+writer — on Windows that delete fails, is swallowed by design, and the operator's audio survives the request. The
+bound exists because a wait that cannot end is worse than a surviving file: an unkillable child would otherwise park
+the request forever.
+
+**The refusal an operator reads is `SanitizeTail`'s work.** With `-hide_banner -loglevel error` there is no banner and
+no progress chatter to discard, so every line that arrives is already an error; the last one is taken because it is
+the most specific — the earlier lines are the demuxer's guesses on the way to it. ffmpeg writes that line as
+`<absolute input path>: Invalid data found when processing input`. That path is engine-generated, yet it still spells
+out the node's data directory, and the string is persisted into the encrypted `error_message` column and returned on
+the wire, so the path is dropped rather than merely shortened.
+
 ## Audio is never persisted
 
 This is the feature's load-bearing privacy rule, and it is enforced in four places rather than asserted once:
@@ -220,14 +250,22 @@ calls into it per lane.
 
 - **The clock is audio time, not wall time**, derived from the cumulative pushed byte count via
   `WavPcm16.BytesPerMillisecond` (32, at 16 kHz mono int16) rather than summed per frame — a per-frame sum would let
-  a frame under one millisecond of bytes never advance the clock at all.
+  a frame under one millisecond of bytes never advance the clock at all (sixteen two-byte frames carry one
+  millisecond, and each `2 / 32` truncates to nothing, so the lane would buffer forever). Re-deriving the time from
+  the total makes the frame partition irrelevant, which is why the hub may accept any even frame length.
 - **A tick fires every second of audio** and asks whether a window is due.
 - **The watermark is the whole de-duplication mechanism, never text matching.** A returned segment commits when its
   end is at least `TailGuardMs` (800 ms) before the current audio end, its text is non-empty, and its start is at or
   after the watermark; a segment starting before the watermark is discarded because overlapping windows re-transcribe
   audio already said.
 - **At `MaxWindowSeconds` (clamped 2–10, default 5) the window is force-committed** with the tail guard suspended,
-  so no window ever exceeds the cap; a push that would cross it is split rather than accepted whole.
+  so no window ever exceeds the cap; a push that would cross it is split rather than accepted whole. Audio is never
+  cropped out of a window: the whole uncommitted span is submitted, so no millisecond passes the watermark without
+  having been offered to the transcriber at least once.
+- **Suspended means suspended, not "zero milliseconds of guard".** A model routinely reports an end time a little
+  past the audio it was given — VAD padding does it, and the recorded fixture answers a 2000 ms window with a segment
+  ending at 2020 ms — so a guard of zero would still reject those, and the caller then frees the audio anyway, losing
+  text with nothing left to re-transcribe it from.
 - **A graceful end flushes the retained tail** with the same guard suspended, so audio shorter than one window still
   reaches the model at least once.
 - **The known ceiling: one word may be inserted, dropped or duplicated per forced boundary.** Windows are cut with
@@ -246,8 +284,11 @@ calls into it per lane.
   which is also how [Windows per-application capture](#windows-per-application-capture) feeds a lane without a
   socket — `AttachProducer` / `ILiveAudioProducer` / `LiveProducerRegistration` are the seam for a non-hub producer.
 - Every commit — allocating `Seq` (from 1, or after the row's last persisted seq), persisting when the session is
-  `Persist`, then publishing — crosses one session-wide lock. **Persistence is a subscriber of the commit, never its
-  source**: a persist-free dictation session (S6) streams the identical event sequence with no rows behind it.
+  `Persist`, then publishing — crosses one session-wide lock, because the client's watermark depends on publication
+  order: with allocation alone serialized, a lane that stalled inside its write would publish sequence two before
+  sequence one and the client would discard the first segment permanently. **Persistence is a subscriber of the
+  commit, never its source**: a persist-free dictation session (S6) streams the identical event sequence with no rows
+  behind it, so nothing may make a publish conditional on a write.
 - **One termination path, `EndAsync(reason)`, with six callers:** the hub's `EndSession` (`Completed`);
   cancel/delete via `TranscriptionService.CancelAsync` (`Cancelled`); the disconnect grace,
   `Transcription:AbandonedSessionGraceSeconds` (60 s) with no hub connection left (`Abandoned`); a 60 s

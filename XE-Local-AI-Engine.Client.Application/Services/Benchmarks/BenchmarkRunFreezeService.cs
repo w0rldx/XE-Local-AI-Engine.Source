@@ -12,27 +12,18 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public interface IBenchmarkRunFreezeService
 {
-    /// <returns>
-    ///     The created runs in queue order — the warm-up first when one was asked for, then repeats 1..N. Never empty.
-    /// </returns>
+    /// <summary>Freezes a start request into runs and queues the whole group in one transaction.</summary>
+    /// <returns>The created runs in queue order — the warm-up first when one was asked for, then repeats 1..N. Never empty.</returns>
     /// <remarks>
-    ///     A repeat is a fresh <c>llama-server</c> per run, by the unchanged design of the benchmark queue: each run
-    ///     claims the exclusive runtime, spawns, measures, and releases it. So repeats measure cold-launch to
-    ///     cold-launch variance INCLUDING model load, not steady-state variance within one process. That is deliberate
-    ///     and is what an operator comparing two models on this node actually experiences.
-    ///     <para>
-    ///         In <see cref="BenchmarkRepeatMode.Throughput" /> mode the frozen sampling is deterministic (temperature
-    ///         0, fixed seed), so the ANSWER is the same across repeats and what they quantify is throughput jitter.
-    ///         <see cref="BenchmarkRepeatMode.AnswerVariance" /> advances the SEED per repeat instead, so the runs of
-    ///         one group differ in exactly one input and the spread of answers is the measurement. Either way the seed
-    ///         and the temperature are sampling, never launch arguments, so every run of a group still shares one
-    ///         <c>LaunchIdentity</c>.
-    ///     </para>
+    ///     Each repeat claims the exclusive runtime and spawns a fresh <c>llama-server</c>, so repeats measure
+    ///     cold-launch variance INCLUDING model load. <see cref="BenchmarkRepeatMode.Throughput" /> holds sampling
+    ///     deterministic and quantifies throughput jitter; <see cref="BenchmarkRepeatMode.AnswerVariance" /> advances
+    ///     the SEED per repeat so the spread of answers is the measurement. Seed and temperature are sampling, never
+    ///     launch arguments, so every run of a group shares one <c>LaunchIdentity</c>.
     /// </remarks>
     /// <param name="scope">
-    ///     Work shared across one launch REQUEST — the capability probe and the verified model leases. Null makes the
-    ///     call self-contained, which is what a single-run launch wants; a batch passes one scope through every cell so
-    ///     the probe runs once and each distinct model is verified once. The caller owns the scope's lifetime.
+    ///     Work shared across one launch REQUEST — the capability probe and verified model leases. Null makes the call
+    ///     self-contained; the caller owns a supplied scope.
     /// </param>
     Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkRunStartRequest request,
         BenchmarkFreezeScope? scope = null,
@@ -41,18 +32,24 @@ public interface IBenchmarkRunFreezeService
     /// <summary>
     ///     The decide half of <see cref="StartAsync" />: everything that can refuse the request — the verified model
     ///     lease, the eligibility, the agent resolution, the project version, the run-count ceiling — with nothing
-    ///     written. Use it with <see cref="CommitAsync" /> when SEVERAL models must be validated before ANY of them is
-    ///     queued; a single launch wants <see cref="StartAsync" />, which is the two halves back to back.
+    ///     written.
     /// </summary>
+    /// <remarks>
+    ///     Paired with <see cref="CommitAsync" /> when SEVERAL models must be validated before ANY of them is queued; a
+    ///     single launch wants <see cref="StartAsync" />, which is the two halves back to back.
+    /// </remarks>
     Task<BenchmarkFrozenRunPlan> FreezeAsync(BenchmarkRunStartRequest request,
         BenchmarkFreezeScope? scope = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Writes whole plans in ONE all-or-nothing insert: one transaction, one compare-and-swap on the project
-    ///     version they were all frozen against, the runs queued in plan order. Every plan must name the same project
-    ///     at the same expected version, because nothing is committed between them.
+    ///     version they were all frozen against, the runs queued in plan order.
     /// </summary>
+    /// <remarks>
+    ///     Every plan must name the same project at the same expected version, because nothing is committed between
+    ///     them.
+    /// </remarks>
     /// <returns>The created runs, one list per plan, in the order the plans were given.</returns>
     Task<IReadOnlyList<IReadOnlyList<BenchmarkRunRecord>>> CommitAsync(IReadOnlyList<BenchmarkFrozenRunPlan> plans,
         CancellationToken cancellationToken = default);
@@ -88,11 +85,11 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     /// <summary>The most repeats one request may enqueue. Ten cold launches of a large model is already ~an hour.</summary>
     public const int MaxRepeatCount = 10;
 
-    /// <summary>
-    ///     The most runs one freeze may enqueue, counting the product of LEAF task items and repeats (warm-up
-    ///     included). <see cref="MaxRepeatCount" /> bounds one cell; this bounds the whole request, because a suite
-    ///     multiplies the two and a matrix past this point is unschedulable rather than merely slow.
-    /// </summary>
+    /// <summary>The most runs one freeze may enqueue — LEAF task items x repeats, warm-up included.</summary>
+    /// <remarks>
+    ///     <see cref="MaxRepeatCount" /> bounds one cell; this bounds the whole request, because a suite multiplies the
+    ///     two and a matrix past this point is unschedulable rather than merely slow.
+    /// </remarks>
     public const int MaxRunsPerRequest = 100;
 
     /// <summary>
@@ -236,9 +233,8 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         var warmup = request.Warmup;
         var expectedProjectVersion = request.ExpectedProjectVersion;
 
-        // A scope of our own when the caller passed none, so a bare freeze still behaves as it did: acquire, verify,
-        // release. A caller-supplied scope outlives this call and is NOT disposed here — which is what lets a pair
-        // hold its leases across two freezes and one commit.
+        // A scope of our own when the caller passed none: acquire, verify, release. A caller-supplied scope outlives
+        // this call and is NOT disposed here, which is what lets a pair hold its leases across two freezes and one commit.
         await using var ownedScope = scope is null ? new BenchmarkFreezeScope() : null;
         var freezeScope = scope ?? ownedScope!;
         var trimmedPrimary = primaryModelName.Trim();
@@ -271,10 +267,8 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             throw new BenchmarkValidationException("The project has no runnable task item.");
         }
 
-        // The second half of the long-context refusal. Expansion already compared these two numbers, but a project's
-        // context window is editable afterwards, and a probe silently truncated to a smaller window measures the
-        // window rather than the model — so the check that decides is the one taken against the context this freeze
-        // is actually about to use.
+        // The second half of the long-context refusal: the project's context window is editable after expansion compared
+        // these numbers, and a probe silently truncated to a smaller window measures the window rather than the model.
         foreach (var probe in leafItems)
         {
             if (BenchmarkNiahCase.TryRead(probe) is { } probeCase && probeCase.ContextTokens > project.ContextTokens)
@@ -294,32 +288,21 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
 
         var primarySnapshot = BenchmarkInstalledModelSnapshotMapper.ToSnapshot(primary);
 
-        // One capability read per REQUEST: the primary and the judge launch the same binary, asking twice could
-        // straddle a runtime swap and freeze two different answers into one batch, and the variant is taken from
-        // the same inspection that produced the capabilities so a second selection cannot disagree with the
-        // manifest whose digest we record.
+        // One capability read per REQUEST: the primary and the judge launch the same binary, and a second inspection
+        // could straddle a runtime swap or select a variant disagreeing with the manifest whose digest is recorded.
         var (binaryCapabilities, variant) = await freezeScope.InspectAsync(_launchResolver, cancellationToken);
         var primaryLaunch = await _launchResolver
                                   .ResolveAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, variant, cancellationToken);
-        // The enforceability answer is frozen off the capabilities read ABOVE, not re-resolved at execution: a
-        // model swap or a re-detection between freeze and run must not change what a frozen run replays.
-        //
-        // SupportsThinking is half the answer, not a separate question. A model that does not reason at all cannot
-        // have its reasoning capped, and GgufModelCapabilities defaults ReasoningBudgetEnforceable to true — the inert
-        // safe answer for a model nothing was detected about — so freezing that field alone said "enforceable" for
-        // every non-thinking model. The budget then went out on the wire, llama-server accepted it and ignored it
-        // (no think-end tags in the template), and the one thing that would have told the operator — the
-        // ReasoningBudgetSkipLog notice — never fired, because the marker was written rather than skipped.
+        // Frozen off the capabilities read ABOVE, never re-resolved at execution: a model swap or re-detection must not change what a frozen run replays. The conjunction with
+        // SupportsThinking is load-bearing — GgufModelCapabilities defaults ReasoningBudgetEnforceable to true. See docs/wiki/20-benchmarks.md ("Freeze — what a launch produces").
         var reasoningBudgetEnforceable = capabilities.SupportsThinking && capabilities.ReasoningBudgetEnforceable;
         var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling(project.MaxOutputTokens,
             project.ReasoningBudgetTokens,
             project.ReasoningBudgetTokens is null ? null : reasoningBudgetEnforceable);
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-        // ONE resolution per LEAF ITEM. The task text is the resolver's retrieval query, so the system prompt and the
-        // skills behind it can legitimately differ between items, and the dependency set that guards the commit is
-        // derived from that resolution. The binary capability probe and the variant selection above stay ONCE per
-        // freeze — a second selection could disagree with the manifest whose digest we record.
+        // ONE resolution per LEAF ITEM: the task text is the resolver's retrieval query, so the system prompt and skills
+        // may legitimately differ per item, and the dependency set guarding the commit derives from that resolution.
         var frozenItems = new List<FrozenTaskItem>(leafItems.Length);
         foreach (var item in leafItems)
         {
@@ -348,12 +331,8 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             });
         }
 
-        // One snapshot per DISTINCT (item, sampling), memoized. Throughput mode has exactly one sampling, so a
-        // single-item project's group is byte-for-byte the single shared payload it has always been; answer-variance
-        // mode gets one per repeat, differing ONLY in the seed. The ITEM half of the key is load-bearing: the earlier
-        // single-item cache keyed on the seed alone, and fanning out over items without widening it would hand every
-        // item the FIRST item's serialized snapshot — every run answering item 0's prompt while its task_item_id column
-        // claimed otherwise, with nothing failing loudly.
+        // One snapshot per DISTINCT (item, sampling), memoized; answer-variance repeats differ ONLY in the seed.
+        // The ITEM half of the key is load-bearing: keyed on the seed alone, every run answers item 0's prompt while its task_item_id column claims otherwise, and nothing fails loudly.
         var serializedSnapshots = new Dictionary<(Guid ItemId, string Seed), byte[]>();
 
         byte[] SnapshotFor(FrozenTaskItem item, BenchmarkSamplingSnapshotV1 sampling)
@@ -388,27 +367,19 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         var isGroup = repeatCount > 1 || warmup;
         var repeatGroupId = isGroup ? Guid.NewGuid() : (Guid?)null;
 
-        // A CELL groups the ITEMS of one measurement; a REPEAT GROUP groups the REPEATS of one item. They coincide
-        // whenever both exist — same GUID, one identity, nothing to keep in sync — and a multi-item freeze needs a
-        // cell even when it has no repeats to group. Deriving the cell from the repeat group alone put every run of a
-        // 3-item single-repeat suite in its own singleton cell, so every cell was missing two of three items and the
-        // project ranked nothing.
+        // A CELL groups the ITEMS of one measurement; a REPEAT GROUP groups the REPEATS of one item. They share one GUID
+        // where both exist, and a multi-item freeze needs a cell even with no repeats to group, or every cell is missing items and the project ranks nothing.
         var cellGroupId = repeatGroupId ?? (leafItems.Length > 1 ? Guid.NewGuid() : (Guid?)null);
 
-        // Null lets the store stamp the run's own singleton cell, which is what a one-item one-repeat freeze is and
-        // what every pre-suite run already carries. A warm-up sits at index 0 and so forms its own cell, which the
-        // ranking read drops before grouping — a stamp is an identity, not a ranking decision.
+        // Null lets the store stamp the run's own singleton cell — a one-item one-repeat freeze, and every pre-suite run.
+        // A warm-up sits at index 0 and forms its own cell, which the ranking read drops: a stamp is an identity, not a ranking decision.
         string? CellKeyFor(int repeatIndex) =>
             cellGroupId is { } id
                 ? "cell:" + id.ToString("D") + ":" + repeatIndex.ToString(CultureInfo.InvariantCulture)
                 : null;
 
-        // The work queue is FIFO by queue sequence, so building the commands in this order is what makes the
-        // repeats run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is
-        // queued. Items are the INNER loop, so a partially drained queue yields whole comparable cells rather than
-        // one item across every cell. The whole group goes in through ONE store call: a per-run insert, each chaining
-        // its compare-and-swap on its predecessor, let a concurrent writer land mid-group, so the caller got a
-        // conflict and no ids while the runs already inserted stayed queued and ran anyway.
+        // FIFO by queue sequence, so repeat-major/item-minor runs the repeats back-to-back — warm-up first, then 1..N — and a partly drained queue still yields whole comparable cells. The whole group
+        // goes in through ONE store call: per-run inserts chaining their compare-and-swap let a concurrent writer land mid-group, returning a conflict and no ids while the inserted runs still ran.
         var commands = repeatIndexes
                        .Select(repeatIndex => SamplingFor(primarySampling, request.RepeatMode, temperature, repeatIndex))
                        .SelectMany(sampling => frozenItems.Select(item => new BenchmarkStartRunCommand
@@ -445,13 +416,15 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     }
 
     /// <summary>
-    ///     The verifying acquire, with the one failure the freeze path owns mapped to its declared 422. Verification
-    ///     moved OFF the catalog listing onto freeze, so a model whose files no longer match its registry entry now
-    ///     lists happily and fails here — an unmapped <see cref="InstalledGgufSnapshotException" /> is in neither
-    ///     <c>BenchmarkExceptionFilter.IsHandled</c> nor the endpoints' <see cref="KeyNotFoundException" /> clause, so
-    ///     it escaped as a 500 and, in a batch, killed every cell after it instead of rejecting one. The store's own
-    ///     reason is logged, never returned.
+    ///     The verifying acquire, with the one failure the freeze path owns mapped to its declared 422.
     /// </summary>
+    /// <remarks>
+    ///     Verification sits on freeze rather than the catalog listing, so a model whose files no longer match its
+    ///     registry entry lists happily and fails here. An unmapped <see cref="InstalledGgufSnapshotException" /> is in
+    ///     neither <c>BenchmarkExceptionFilter.IsHandled</c> nor the endpoints' <see cref="KeyNotFoundException" />
+    ///     clause, so it escapes as a 500 and, in a batch, kills every cell after it instead of rejecting one. The
+    ///     store's own reason is logged, never returned.
+    /// </remarks>
     private async Task<IBenchmarkInstalledModelLease> AcquireVerifiedAsync(string modelName, CancellationToken cancellationToken)
     {
         try
@@ -465,12 +438,12 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         }
     }
 
-    /// <summary>
-    ///     The sampling one repeat is frozen with. Throughput mode hands back the shared deterministic sampling
-    ///     untouched, so nothing about that payload changes. Answer-variance mode advances the seed by the repeat index
-    ///     off the same base seed and applies the requested temperature — the two runs of a group then differ in
-    ///     exactly one input, which is what makes the spread of answers attributable.
-    /// </summary>
+    /// <summary>The sampling one repeat is frozen with.</summary>
+    /// <remarks>
+    ///     Throughput mode hands back the shared deterministic sampling untouched. Answer-variance mode advances the
+    ///     seed by the repeat index off the same base seed and applies the requested temperature, so the runs of a
+    ///     group differ in exactly one input — which is what makes the spread of answers attributable.
+    /// </remarks>
     private static (int RepeatIndex, BenchmarkSamplingSnapshotV1 Sampling) SamplingFor(BenchmarkSamplingSnapshotV1 deterministic,
         BenchmarkRepeatMode mode,
         double temperature,
@@ -520,9 +493,9 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
 
     /// <summary>
     ///     One leaf task item, resolved: the prompt a run of it is asked, the agent runtime that prompt resolved to,
-    ///     the dependency set captured from that resolution, and the guard that re-checks the set at commit. One per
-    ///     item, because the task text is the resolver's retrieval query.
+    ///     the dependency set captured from that resolution, and the guard that re-checks the set at commit.
     /// </summary>
+    /// <remarks>One per item, because the task text is the resolver's retrieval query.</remarks>
     private sealed record FrozenTaskItem
     {
         public required BenchmarkTaskItemRecord Item { get; init; }

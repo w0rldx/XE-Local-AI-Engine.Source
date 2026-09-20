@@ -5,13 +5,14 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
-/// <summary>
-///     Durable encrypted-at-rest <see cref="IGeneratedImageStore" />. The image bytes are encrypted on disk by
-///     <see cref="ImageBlobProtector" /> under <c>INodeDataDirectory.Root/generated-images/{jobId}/{imageId}.png</c>; the
-///     <c>generated_images</c> metadata row is written/read over the raw-SQL path (matching the uploaded-file store — the
-///     row carries no encrypted column). Singleton: it opens a fresh DbContext scope per operation and depends only on
-///     singletons (data directory, sqlite key holder, time provider).
-/// </summary>
+/// <summary>Durable encrypted-at-rest <see cref="IGeneratedImageStore" />.</summary>
+/// <remarks>
+///     The image bytes are encrypted on disk by <see cref="ImageBlobProtector" /> under
+///     <c>INodeDataDirectory.Root/generated-images/{jobId}/{imageId}.png</c>; the <c>generated_images</c> metadata row
+///     is written and read over the raw-SQL path, matching the uploaded-file store, because the row carries no
+///     encrypted column. Singleton: it opens a fresh DbContext scope per operation and depends only on singletons
+///     (data directory, sqlite key holder, time provider).
+/// </remarks>
 public sealed class GeneratedImageStore : IGeneratedImageStore
 {
     private const string RootFolderName = "generated-images";
@@ -123,15 +124,12 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
     {
         ArgumentNullException.ThrowIfNull(storagePaths);
 
-        // Every path is proved to resolve under the blob root before it is unlinked. The stored value is
-        // server-computed today (AddAsync builds it from two minted Guids), but this is the deletion boundary: it
-        // enforces its own invariant rather than trusting a column, so a legacy, migrated or hand-edited row can
-        // never make this method delete a file it does not own.
+        // Every path is proved to resolve under the blob root before it is unlinked. The stored value is server-computed today (AddAsync builds it from two minted
+        // Guids), but this is the deletion boundary: it enforces its own invariant rather than trusting a column, so a legacy, migrated or hand-edited row cannot make it delete.
         var blobRoot = Path.GetFullPath(Path.Combine(_dataDirectory.Root, RootFolderName));
 
-        // The recorded storage_path is unlinked rather than a path recomputed from the current data directory: the
-        // row is what says where the bytes actually landed, and a node whose data directory moved would otherwise
-        // leave every older blob behind.
+        // The recorded storage_path is unlinked rather than a path recomputed from the current data directory: the row is what says where the bytes actually
+        // landed, and a node whose data directory moved would otherwise leave every older blob behind.
         foreach (var storagePath in storagePaths)
         {
             if (!PathContainment.IsUnderRoot(storagePath, blobRoot))

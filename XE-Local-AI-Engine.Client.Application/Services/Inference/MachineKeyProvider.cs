@@ -3,14 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     Default <see cref="IMachineKeyProvider" />. Reads <see cref="StoredNodeSettings.MachineKey" />; when it is absent
-///     it generates a fresh <see cref="Guid" /> (<c>"N"</c> format) through
-///     <see cref="INodeSettingsStore.UpdateAsync" /> (preserving every other setting, and adopting a key a racing
-///     writer minted first rather than overwriting it), and caches the key the store actually holds for the process
-///     lifetime. Generate-once is serialized so two concurrent first-callers cannot mint two different keys.
-///     Registered as a singleton.
+///     Default <see cref="IMachineKeyProvider" />: reads <see cref="StoredNodeSettings.MachineKey" /> and caches the
+///     key the store actually holds for the process lifetime. Registered as a singleton.
 /// </summary>
-/// <remarks>The key is LOCAL-ONLY and is never emitted in telemetry, aggregates, or logs.</remarks>
+/// <remarks>
+///     When the key is absent it mints a fresh <see cref="Guid" /> (<c>"N"</c> format) through
+///     <see cref="INodeSettingsStore.UpdateAsync" />, preserving every other setting and adopting a key a racing
+///     writer minted first rather than overwriting it. Generate-once is serialized so two concurrent first-callers
+///     cannot mint two different keys. The key is LOCAL-ONLY and never emitted in telemetry, aggregates or logs.
+/// </remarks>
 public sealed class MachineKeyProvider : IMachineKeyProvider, IDisposable
 {
     private readonly SemaphoreSlim _gate = new(initialCount: 1, maxCount: 1);
@@ -49,12 +50,8 @@ public sealed class MachineKeyProvider : IMachineKeyProvider, IDisposable
             var key = settings.MachineKey;
             if (string.IsNullOrWhiteSpace(key))
             {
-                // Mint through the store's read-modify-write, not a load here and a save there. This gate serializes
-                // the callers inside THIS provider only; a settings save (which writes the file whole) or a second
-                // provider instance can still land between the load above and the write. Under UpdateAsync the
-                // mutation re-reads the latest record under the store's lock, so whoever gets there first mints and
-                // everyone after adopts that key instead of overwriting it with a second one — which would orphan
-                // every frozen inference profile, since profiles are keyed by machine key.
+                // Mint through the store's read-modify-write: this gate serializes only THIS provider's callers, so UpdateAsync
+                // re-reading under the store's lock is what makes everyone adopt the first key — a second key orphans every frozen profile, which is keyed by machine key.
                 var persisted = await _settingsStore.UpdateAsync(latest => string.IsNullOrWhiteSpace(latest.MachineKey)
                                                             ? latest with
                                                             {

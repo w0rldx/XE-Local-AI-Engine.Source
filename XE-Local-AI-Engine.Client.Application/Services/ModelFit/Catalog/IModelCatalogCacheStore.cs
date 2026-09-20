@@ -1,12 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 
 /// <summary>
-///     Persists the last successfully-fetched-and-validated remote catalog so it survives a restart: when the node
-///     starts with a configured <see cref="ModelCatalogOptions.RefreshUrl" /> but the network is unreachable, the
-///     provider serves this instead of silently regressing to the (potentially much older) bundled seed. Mirrors
-///     <c>INodeSettingsStore</c>'s tiny-local-JSON-file persistence pattern; a separate file (not the shared node
-///     settings file) since this is a raw catalog document, not a settings key.
+///     Persists the last successfully-fetched-and-validated remote catalog so a node that starts with a configured
+///     <see cref="ModelCatalogOptions.RefreshUrl" /> but no network serves it instead of silently regressing to the
+///     (potentially much older) bundled seed.
 /// </summary>
+/// <remarks>
+///     Mirrors <c>INodeSettingsStore</c>'s tiny-local-JSON-file persistence pattern, but in its own file rather than
+///     the shared node settings file: this is a raw catalog document, not a settings key.
+/// </remarks>
 public interface IModelCatalogCacheStore
 {
     /// <summary>Loads the persisted last-good remote catalog, or <see langword="null" /> when none has ever been saved / it could not be read.</summary>

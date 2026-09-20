@@ -32,35 +32,27 @@ public sealed class HeadlessToolOutcome
 
 public interface IHeadlessToolExecutor
 {
-    /// <summary>
-    ///     Executes one generated tool call under the training approval gate. Real execution requires BOTH
-    ///     <see cref="ToolCategory.ReadLocal" /> AND a composed effective approval of <see langword="false" />; anything
-    ///     else routes to the mock engine or returns a clearly-marked validation-only outcome. Never throws for a bad
-    ///     call — a failure is a per-sample outcome, not a crash.
-    /// </summary>
+    /// <summary>Executes one generated tool call under the training approval gate.</summary>
+    /// <remarks>
+    ///     Real execution requires BOTH <see cref="ToolCategory.ReadLocal" /> AND a composed effective approval of
+    ///     <see langword="false" />; anything else routes to the mock engine or returns a clearly-marked
+    ///     validation-only outcome. Never throws for a bad call — a failure is a per-sample outcome, not a crash.
+    /// </remarks>
     Task<HeadlessToolOutcome> ExecuteAsync(string toolName, string argumentsJson, string? teacherModelName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
 ///     The policy-aware execution seam for dataset generation. It deliberately does NOT go through
-///     <c>ApiToolCallBridge.ExecuteApiToolCallAsync</c>: that overload is a hub/worker round-trip (it registers a pending
-///     tool call, sends a payload over SignalR and awaits a remote result) and executes nothing in-process.
-///     <para>
-///         This class owns the two things generation adds on top of a plain in-process call — the teacher model's OFFER
-///         as the catalog (so a capability-gated or custom tool resolves exactly as the teacher saw it) and the MOCK
-///         envelope for everything real execution is not permitted to run. Real execution itself is delegated whole to
-///         <see cref="IToolInvocationService.InvokeAsync" />, which owns executable resolution across BOTH registries,
-///         the structural approval floor, argument validation, the call and its classification. Its own
-///         <see cref="IToolApprovalPolicy.RequiresApproval" /> call below stays the tested enforcement point for the
-///         mock/real routing decision; the shared seam re-composes the same approval because its contract is that no
-///         caller can skip a gate, and the read is an idempotent settings lookup.
-///     </para>
-///     <para>
-///         Generation deliberately does not emit <c>IToolApprovalAuditRecorder</c> records in v1. Every layer
-///         outcome (including this one) is persisted per sample in <c>ValidationJson</c>, which is the audit surface for
-///         generation; the interactive-chat recorder is not part of this audit path.
-///     </para>
+///     <c>ApiToolCallBridge.ExecuteApiToolCallAsync</c>: that overload is a hub/worker round-trip and executes
+///     nothing in-process.
 /// </summary>
+/// <remarks>
+///     It owns the two things generation adds on top of a plain in-process call — the teacher model's OFFER as the
+///     catalog, so a capability-gated or custom tool resolves exactly as the teacher saw it, and the MOCK envelope
+///     for everything real execution is not permitted to run. Real execution is delegated whole to
+///     <see cref="IToolInvocationService.InvokeAsync" />, and this class's own
+///     <see cref="IToolApprovalPolicy.RequiresApproval" /> call below stays the tested mock/real enforcement point.
+/// </remarks>
 internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
 {
     /// <summary>
@@ -69,12 +61,12 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
     /// </summary>
     private const string GenerationNodeKey = "training:dataset-generation";
 
-    /// <summary>
-    ///     Effectively unbounded, and deliberately so: this class imposed no budget before the shared seam existed, and
-    ///     a generation run is already cancellable through the token its caller threads in. It is a finite span rather
-    ///     than <see cref="Timeout.InfiniteTimeSpan" /> because the seam treats a non-positive budget as already spent,
-    ///     and <c>CancelAfter</c> refuses anything past <see cref="int.MaxValue" /> milliseconds.
-    /// </summary>
+    /// <summary>Effectively unbounded, and deliberately so: a generation run is already cancellable through the token its caller threads in.</summary>
+    /// <remarks>
+    ///     It is a finite span rather than <see cref="Timeout.InfiniteTimeSpan" /> because the seam treats a
+    ///     non-positive budget as already spent, and <c>CancelAfter</c> refuses anything past
+    ///     <see cref="int.MaxValue" /> milliseconds.
+    /// </remarks>
     private static readonly TimeSpan UnboundedBudget = TimeSpan.FromMilliseconds(int.MaxValue);
 
     private readonly IToolApprovalPolicy _approvalPolicy;
@@ -138,14 +130,14 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
         return await RespondFromMockAsync(offer.Name, argumentsElement, requiresApproval, cancellationToken);
     }
 
-    /// <summary>
-    ///     The real call, delegated whole to the shared invocation seam. Its refusals map back onto this class's own
-    ///     vocabulary: a structural approval refusal (the registry pre-wrap, or a policy that tightened between this
-    ///     class's compose and the seam's) is MOCKED, never unwrapped, because headless generation has no route to a
-    ///     human approval round-trip; a risk-class refusal is mocked for the same reason the caller's gate would have
-    ///     mocked it. Everything else — an unresolvable tool, invalid arguments, a spent budget, a throwing tool — is
-    ///     one sample's failure. A cancellation is the generation RUN's, so it is rethrown rather than recorded.
-    /// </summary>
+    /// <summary>The real call, delegated whole to the shared invocation seam.</summary>
+    /// <remarks>
+    ///     Its refusals map back onto this class's own vocabulary: a structural approval refusal (the registry pre-wrap, or a
+    ///     policy that tightened between this class's compose and the seam's) is MOCKED, never unwrapped, because headless
+    ///     generation has no route to a human approval round-trip, and a risk-class refusal is mocked for the same reason the
+    ///     caller's gate would have. Everything else — an unresolvable tool, invalid arguments, a spent budget, a throwing
+    ///     tool — is one sample's failure; a cancellation is the generation RUN's, so it is rethrown rather than recorded.
+    /// </remarks>
     private async Task<HeadlessToolOutcome> ExecuteRealAsync(string toolName,
         string argumentsJson,
         JsonElement argumentsElement,
@@ -207,11 +199,15 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
     }
 
     /// <summary>
-    ///     The generated arguments as one JSON object element, which is what the MOCK engine matches its rules against.
-    ///     The real path hands the raw text straight to the shared seam, which parses it into the bag the validator and
-    ///     the function both read — so this parse exists only for the mock, and its message may still carry the parser's
-    ///     detail because a per-sample reason is written into <c>ValidationJson</c>, not onto an operator surface.
+    ///     The generated arguments as one JSON object element, which is what the MOCK engine matches its rules
+    ///     against.
     /// </summary>
+    /// <remarks>
+    ///     The real path hands the raw text straight to the shared seam, which parses it into the bag the validator
+    ///     and the function both read — so this parse exists only for the mock, and its message may still carry the
+    ///     parser's detail because a per-sample reason is written into <c>ValidationJson</c>, not onto an operator
+    ///     surface.
+    /// </remarks>
     private static bool TryParseArguments(string argumentsJson, out JsonElement element, out string error)
     {
         element = default;

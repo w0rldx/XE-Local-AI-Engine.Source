@@ -8,13 +8,13 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Keeps one operator-selected local chat model resident by periodically routing it to its owning provider and
-///     invoking the provider's idempotent warm operation. Settings are re-read on every poll, so enable/disable, model,
-///     and interval changes take effect without restarting the node.
+///     invoking the provider's idempotent warm operation.
 /// </summary>
 /// <remarks>
-///     For llama.cpp, every due warm call reaches <c>EnsureRunningAsync</c>: a cold model is loaded, while an already
-///     running process is reused and its idle timestamp is refreshed. The service must not skip that reuse touch merely
-///     because a process is resident, or the supervisor's idle reaper would still evict it.
+///     Settings are re-read on every poll, so enable/disable, model and interval changes take effect without
+///     restarting the node. For llama.cpp, every due warm call reaches <c>EnsureRunningAsync</c>: a cold model is
+///     loaded, while an already running process is reused and its idle timestamp refreshed. The service must not skip
+///     that reuse touch merely because a process is resident, or the supervisor's idle reaper would still evict it.
 /// </remarks>
 public sealed class KeepModelWarmBackgroundService : BackgroundService
 {

@@ -10,10 +10,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
-///     Captures the versioned identity of every launch-affecting fact that makes a persisted replay comparable. The
-///     canonical document deliberately represents llama.cpp-owned batch defaults as an explicit mode rather than
-///     treating an absent numeric value as equivalent to any particular default.
+///     Captures the versioned identity of every launch-affecting fact that makes a persisted replay comparable.
 /// </summary>
+/// <remarks>
+///     The canonical document deliberately represents llama.cpp-owned batch defaults as an explicit mode rather than
+///     treating an absent numeric value as equivalent to any particular default.
+/// </remarks>
 public interface ILaunchPolicyFingerprintProvider
 {
     Task<LaunchPolicyFingerprint> CaptureAsync(InferenceProfileFingerprintInput input, CancellationToken ct);
@@ -111,6 +113,14 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
         };
     }
 
+    /// <summary>Captures the versioned launch-policy fingerprint for <paramref name="input" />.</summary>
+    /// <remarks>
+    ///     The canonical document is an anonymous type serialized with <c>JsonSerializerDefaults.Web</c>, which writes
+    ///     nulls, so no member can be omitted conditionally and adding one would change every hash ever produced. A
+    ///     fact outside that shape is therefore APPENDED as a fixed literal suffix, which can never be read as
+    ///     document content (<c>BindValidationHash</c> combines values the same way), and folded at its default so a
+    ///     node that never touched the knob hashes exactly the bytes it always has.
+    /// </remarks>
     public async Task<LaunchPolicyFingerprint> CaptureAsync(InferenceProfileFingerprintInput input, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -303,19 +313,8 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
 
         var json = JsonSerializer.Serialize(canonical, SerializerOptions);
 
-        // D13 — the node's SELECTED KV-cache type is part of a profile's identity, so a frozen profile explored under a
-        // different type goes stale and re-explores instead of replaying a type the operator has since changed. The KV
-        // pair inside the canonical document above is the profile's OWN frozen one (MatchesAsync rebuilds it from the
-        // same row, so it can never mismatch); this is the node's current selection, which is a different fact.
-        //
-        // It is APPENDED after a complete JSON document rather than added as a member: the canonical shape is an
-        // anonymous type serialized with JsonSerializerDefaults.Web, which writes nulls, so no member can be omitted
-        // conditionally and adding one would change every hash ever produced. A fixed literal suffix can never be read
-        // as document content. BindValidationHash already combines values outside the JSON the same way.
-        //
-        // And it is FOLDED at the default: a node that never touched the knob hashes exactly the bytes it has always
-        // hashed, so shipping this invalidates no stored profile. A CPU spawn never quantizes KV, so a CPU row must not
-        // go stale for a knob that cannot reach it.
+        // D13: the node's SELECTED KV-cache type is part of a profile's identity, so a frozen profile explored under another type goes stale
+        // instead of replaying a type the operator has since changed. A CPU spawn never quantizes KV, so a CPU row must not stale for a knob it cannot reach.
         var selectedKv = ResolveSelectedKvCacheIdentity();
         if (requestedVariant != GpuVariant.Cpu
             && !string.Equals(selectedKv, LlamaServerKvCacheTypes.Q8_0, StringComparison.Ordinal))
@@ -326,9 +325,8 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
 
-    // The KV-cache type this node would launch with today. EnableGpuKvCacheQuantization is what the launch policy
-    // actually tests, so the flag and the type collapse into one token here: quantization off reads as f16 whatever the
-    // type string says.
+    // The KV-cache type this node would launch with today. EnableGpuKvCacheQuantization is what the launch policy actually
+    // tests, so the flag and the type collapse into one token here: quantization off reads as f16 whatever the type says.
     private string ResolveSelectedKvCacheIdentity() =>
         _launchPolicyOptions.EnableGpuKvCacheQuantization
             ? _launchPolicyOptions.KvCacheType
@@ -336,10 +334,12 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
 
     /// <summary>
     ///     The adapter member of a LoRA model's identity — <see langword="null" /> for an ordinary model, so an entry
-    ///     without an adapter contributes a stable absent marker rather than a shifting shape. Uses the registry's
-    ///     recorded member fingerprint (not a file read): it already commits to the adapter's bytes and size, and the
-    ///     entry's own RegistryRevision commits to it in turn.
+    ///     without an adapter contributes a stable absent marker rather than a shifting shape.
     /// </summary>
+    /// <remarks>
+    ///     Uses the registry's recorded member fingerprint, not a file read: it already commits to the adapter's bytes
+    ///     and size, and the entry's own RegistryRevision commits to it in turn.
+    /// </remarks>
     private async Task<object?> ResolveAdapterIdentityAsync(string modelName, CancellationToken ct)
     {
         var entry = await _modelRegistry.FindAsync(modelName, ct);

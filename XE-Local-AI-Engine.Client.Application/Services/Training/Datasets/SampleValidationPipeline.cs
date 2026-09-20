@@ -43,10 +43,13 @@ public interface ISampleValidationPipeline
 }
 
 /// <summary>
-///     The ordered validation layers for one generated turn: record schema → tool-name resolution → argument validation
-///     → execution → optional critic. EVERY layer's outcome is persisted with the sample (invariant #7), including the
-///     ones that passed, so a dataset is auditable without re-running generation.
+///     The ordered validation layers for one generated turn: record schema → tool-name resolution → argument
+///     validation → execution → optional critic.
 /// </summary>
+/// <remarks>
+///     EVERY layer's outcome is persisted with the sample (invariant #7), including the ones that passed, so a
+///     dataset is auditable without re-running generation.
+/// </remarks>
 public sealed class SampleValidationPipeline : ISampleValidationPipeline
 {
     private const string CriticPrompt =
@@ -72,9 +75,8 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
         ArgumentNullException.ThrowIfNull(context);
         var layers = new List<SampleValidationLayerResultV1>();
 
-        // Layer 1 — record schema. Validated against the ORIGINAL schema, never the one the teacher saw: the MEAI
-        // adapter rewrites a json-schema response format (all-required, bounds folded into the description), so
-        // re-validating against the rewritten copy would silently accept a record the definition never asked for.
+        // Layer 1 — record schema, validated against the ORIGINAL schema, never the one the teacher saw: the MEAI adapter
+        // rewrites a json-schema response format (all-required, bounds in the description), so re-validating there accepts too much.
         if (!TryReadRecord(rawCompletion, context.RecordSchema, out var record, out var schemaReason))
         {
             layers.Add(new SampleValidationLayerResultV1 { Layer = "record-schema", Passed = false, ScoredBy = "schema", Reason = schemaReason });
@@ -114,9 +116,8 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
             parts.Add(new TrainingSamplePartV1("text", parts.Count, record.AssistantText));
         }
 
-        // The single-call boundary. Today's record shape can only ever produce one tool part, so this is the pin that
-        // turns a later multi-call record into a visible rejection instead of a sample the scorer would grade by its
-        // FIRST call and quietly ignore the rest of.
+        // The single-call boundary. Today's record shape can only ever produce one tool part, so this pin turns a later
+        // multi-call record into a visible rejection instead of a sample the scorer grades by its FIRST call, ignoring the rest.
         if (TrainingSampleParts.IsMultiCall(parts))
         {
             layers.Add(new SampleValidationLayerResultV1 { Layer = "tool-name", Passed = false, ScoredBy = "tool-name", Reason = TrainingSampleParts.MultiCallUnsupportedReason });
@@ -200,11 +201,12 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
         return argumentsValid && executed;
     }
 
-    /// <summary>
-    ///     Layer 5 — the optional critic. Deterministic first: a sample whose parts are structurally hollow fails without
-    ///     ever reaching a model. The LLM pass runs only when the definition enables it, and fails CLOSED — a critic that
-    ///     errors, or answers anything but "good", marks the sample bad.
-    /// </summary>
+    /// <summary>Layer 5 — the optional critic.</summary>
+    /// <remarks>
+    ///     Deterministic first: a sample whose parts are structurally hollow fails without ever reaching a model. The
+    ///     LLM pass runs only when the definition enables it, and fails CLOSED — a critic that errors, or answers
+    ///     anything but "good", marks the sample bad.
+    /// </remarks>
     private async Task<bool> RunCriticAsync(TeacherSampleRecordV1 record,
         SampleValidationContext context,
         List<SampleValidationLayerResultV1> layers,

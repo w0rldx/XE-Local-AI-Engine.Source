@@ -4,20 +4,16 @@ using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Reclaims knowledge-base document blobs whose <c>knowledge_documents</c> row is gone. The purge service commits the
-///     row deletes first and removes the encrypted bytes afterwards, so a failed (or never-reached) file delete strands a
-///     file nothing can ever read again — and a repeat purge cannot collect it, because the row it keys on no longer
-///     exists. This is the knowledge counterpart of <see cref="Chat.Implementation.RetentionSweeperService" />'s orphaned
-///     upload-directory resweep: enumerate the on-disk ids, probe for the owning row, delete what nothing owns.
-///     <para>
-///         Runs once per start, not on a timer: an orphan can only appear when a delete-time file operation fails, which
-///         is rare, and nothing else creates them while the node runs. It cannot race an in-flight upload, because
-///         <see cref="KnowledgeDocumentBlobStore.AddAsync" /> always commits the row before the blob is renamed into
-///         place, so a file whose id has no row is always already dead.
-///     </para>
-///     Best-effort by design: a sweep failure is logged and swallowed — reclaiming disk space must never block or fail
-///     host startup, and a missed run simply retries on the next one.
+///     Reclaims knowledge-base document blobs whose <c>knowledge_documents</c> row is gone: enumerate the on-disk ids,
+///     probe for the owning row, delete what nothing owns.
 /// </summary>
+/// <remarks>
+///     The purge service commits the row deletes first and removes the bytes afterwards, so a failed or never-reached file
+///     delete strands a file nothing can read again, and a repeat purge cannot collect it because the row it keys on is
+///     gone. It is the knowledge counterpart of <see cref="Chat.Implementation.RetentionSweeperService" />'s orphaned
+///     upload-directory resweep, runs once per start, and cannot race an upload because
+///     <see cref="KnowledgeDocumentBlobStore.AddAsync" /> commits the row first. Best-effort: a failure never blocks startup.
+/// </remarks>
 public sealed class KnowledgeBlobOrphanSweeper : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;

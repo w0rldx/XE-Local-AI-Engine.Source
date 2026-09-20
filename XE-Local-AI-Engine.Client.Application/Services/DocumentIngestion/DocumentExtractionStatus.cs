@@ -1,10 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 
-/// <summary>
-///     Outcome of extracting an uploaded document to Markdown/plaintext. Persisted as the enum name on the
-///     <c>conversation_uploaded_files.extraction_status</c> column and surfaced to the chat/agent surfaces. This is the
-///     canonical definition owned by the persistence lane; the extraction service produces these values.
-/// </summary>
+/// <summary>Outcome of extracting an uploaded document to Markdown or plaintext.</summary>
+/// <remarks>
+///     Persisted as the enum name on the <c>conversation_uploaded_files.extraction_status</c> column and surfaced to the
+///     chat and agent surfaces. This is the canonical definition owned by the persistence lane; the extraction service
+///     produces these values.
+/// </remarks>
 public enum DocumentExtractionStatus
 {
     /// <summary>Extraction has not run yet (row created before the extractor completed).</summary>

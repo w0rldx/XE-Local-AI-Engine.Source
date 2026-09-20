@@ -4,12 +4,14 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
 ///     The Training runtime Operator endpoints' only door onto the provider's runtime service and prerequisite
-///     probe: the status read, the prerequisite report, and the install / cancel / remove verbs. An endpoint is the
-///     HTTP edge and may not take a concrete provider's contract itself (the endpoint-dependency rule), so each call
-///     arrives here unchanged — this type adds no policy of its own, decides nothing about install outcomes or
-///     refusals, and re-exposes only the members those four endpoints call. The interpreter-path lookup the run
-///     executor and the export service use stays off this surface deliberately: no endpoint asks for it.
+///     probe: the status read, the prerequisite report, and the install / cancel / remove verbs.
 /// </summary>
+/// <remarks>
+///     An endpoint is the HTTP edge and may not take a concrete provider's contract itself (the endpoint-dependency rule), so
+///     each call arrives here unchanged — this type adds no policy of its own, decides nothing about install outcomes or
+///     refusals, and re-exposes only the members those four endpoints call. The interpreter-path lookup the run executor and
+///     the export service use stays off this surface deliberately: no endpoint asks for it.
+/// </remarks>
 public sealed class TrainingRuntimeOrchestrationService
 {
     private readonly ITrainingRuntimeService _runtime;

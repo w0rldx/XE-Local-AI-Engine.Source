@@ -7,18 +7,18 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
-/// <summary>
-///     Reads a generated case's own parameters back off the item that carries them. The case is self-describing on
-///     purpose: the freeze re-checks the probe length against the project window without parsing a haystack back out
-///     of a prompt, and the UI has a label without re-deriving one.
-/// </summary>
+/// <summary>Reads a generated case's own parameters back off the item that carries them.</summary>
+/// <remarks>
+///     The case is self-describing on purpose: the freeze re-checks the probe length against the project window
+///     without parsing a haystack back out of a prompt, and the UI has a label without re-deriving one.
+/// </remarks>
 public static class BenchmarkNiahCase
 {
-    /// <summary>
-    ///     The case an item describes, or <see langword="null" /> when the item is not a generated case. Throws when
-    ///     it IS one and its parameters cannot be read: a probe nothing can vouch for must not quietly skip the
-    ///     length check that exists to stop it measuring the context window instead of the model.
-    /// </summary>
+    /// <summary>The case an item describes, or <see langword="null" /> when the item is not a generated case.</summary>
+    /// <remarks>
+    ///     Throws when it IS one and its parameters cannot be read: a probe nothing can vouch for must not quietly
+    ///     skip the length check that exists to stop it measuring the context window instead of the model.
+    /// </remarks>
     public static BenchmarkNiahCaseV1? TryRead(BenchmarkTaskItemRecord item)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -41,25 +41,19 @@ public static class BenchmarkNiahCase
     }
 }
 
-/// <summary>
-///     A single-needle long-context probe, as an operator configures it. One case is generated per
-///     (<see cref="ContextTokens" /> x <see cref="NeedleDepthPercent" />) pair, and every case is an ordinary task
-///     item with its own id — so the caps, the staleness hashes and the export all reach it without knowing what NIAH
-///     is.
-/// </summary>
+/// <summary>A single-needle long-context probe, as an operator configures it.</summary>
+/// <remarks>
+///     One case is generated per (<see cref="ContextTokens" /> x <see cref="NeedleDepthPercent" />) pair, and every
+///     case is an ordinary task item with its own id — so the caps, the staleness hashes and the export all reach it
+///     without knowing what NIAH is. Averaging 0-or-10 recall into a rubric mean would say a model that missed the
+///     needle wrote a worse answer, so the cases are scored and reported on their own axis; the flag lives here
+///     because the item draft's own default is <see langword="true" /> — right for an authored prompt, wrong for a probe.
+/// </remarks>
 /// <param name="CriterionId">
-///     Which rubric criterion each generated case overrides with its own expected passcode. It must name an
-///     <c>exact</c> criterion in the project's judge policy: the case supplies the answer, the policy supplies the
-///     kind. Defaults to <see cref="BenchmarkNiahGenerator.DefaultCriterionId" />.
+///     Which rubric criterion each case overrides with its expected passcode; it must name an <c>exact</c> criterion — the case supplies the answer, the policy the kind.
 /// </param>
 /// <param name="Seed">Mixed into every case's derivation, so two projects can probe the same sizes over different text.</param>
-/// <param name="CountsTowardScore">
-///     Whether the generated cases enter the project's ranked mean. <see langword="false" /> by default: recall is a
-///     capability, not quality, and averaging 0-or-10 recall into a rubric mean says a model that missed the needle
-///     wrote a worse answer. The cases are still scored and still reported — on their own axis. The flag lives here
-///     rather than on the item draft because the draft's own default is <see langword="true" />, which is right for an
-///     authored prompt and wrong for a probe.
-/// </param>
+/// <param name="CountsTowardScore">Whether the cases enter the project's ranked mean. <see langword="false" />: recall is a capability, not quality.</param>
 public sealed record BenchmarkNiahConfigV1(
     IReadOnlyList<int>? ContextTokens = null,
     IReadOnlyList<int>? NeedleDepthPercent = null,
@@ -69,18 +63,16 @@ public sealed record BenchmarkNiahConfigV1(
     int Seed = 0,
     bool CountsTowardScore = false);
 
-/// <summary>
-///     What ONE generated case is, kept on the case's own <c>GeneratorConfigJson</c> so the case is self-describing:
-///     the freeze re-checks <see cref="ContextTokens" /> against the project window without parsing the haystack back
-///     out of the prompt, and the UI has a label without re-deriving one.
-/// </summary>
+/// <summary>What ONE generated case is, kept on its own <c>GeneratorConfigJson</c> so the case is self-describing.</summary>
+/// <remarks>
+///     The freeze re-checks <see cref="ContextTokens" /> against the project window without parsing the haystack back
+///     out of the prompt, and the UI has a label without re-deriving one. <see cref="ApproximateTokens" /> comes from
+///     the same approximation the knowledge chunker sizes windows with, which UNDER-counts — which is why the haystack
+///     is built to a fraction of the request rather than to the request itself; the framing then takes back some of
+///     that margin, so a case lands near the requested length without exceeding it.
+/// </remarks>
 /// <param name="ContextTokens">The REQUESTED probe length. What the refusal compares against the project's window.</param>
-/// <param name="ApproximateTokens">
-///     What the WHOLE prompt estimates to — haystack, framing and question — by the same approximation the knowledge
-///     chunker sizes windows with. It under-counts, which is why the haystack is built to a fraction of the request
-///     rather than to the request itself; the framing then takes back some of that margin, so this lands near the
-///     requested length without exceeding it.
-/// </param>
+/// <param name="ApproximateTokens">What the WHOLE prompt estimates to — haystack, framing and question.</param>
 /// <param name="Label">
 ///     The display name, and deliberately hedged (<c>≈32k @ 50%</c>). A probe that silently ran at 26k instead of 32k
 ///     is worse than one labelled approximate.
@@ -94,15 +86,13 @@ public sealed record BenchmarkNiahCaseV1(
     string Subject,
     string Corpus);
 
-/// <summary>
-///     Builds the haystacks. Pure and seeded: the same parent id, the same configuration and the same shipped corpus
-///     produce the same prompt bytes on every machine, which is what lets a generated case be replayed like any
-///     authored one — and what lets its <c>InputHash</c> mean something.
-/// </summary>
+/// <summary>Builds the haystacks — pure and seeded.</summary>
 /// <remarks>
-///     Deliberately expanded at item-WRITE time rather than at freeze. A case generated during a freeze would have no
-///     durable identity: nothing to stamp on the run, nothing for the caps to count, and no way for the ranking read
-///     to know how many probes a cell owed.
+///     The same parent id, configuration and shipped corpus produce the same prompt bytes on every machine, which is
+///     what lets a generated case be replayed like any authored one — and what lets its <c>InputHash</c> mean
+///     something. Deliberately expanded at item-WRITE time rather than at freeze: a case generated during a freeze
+///     would have no durable identity — nothing to stamp on the run, nothing for the caps to count, and no way for
+///     the ranking read to know how many probes a cell owed.
 /// </remarks>
 public static class BenchmarkNiahGenerator
 {
@@ -112,16 +102,13 @@ public static class BenchmarkNiahGenerator
     public const string DefaultNeedleTemplate = "The secret passcode for {city} is {code}.";
     public const string DefaultQuestionTemplate = "What is the secret passcode for {city}?";
 
-    /// <summary>
-    ///     The fraction of the requested length the haystack is actually built to.
-    ///     <para>
-    ///         The token count is an approximation — weighted characters over four — and it under-counts English
-    ///         prose, so building to the full request would overshoot the real tokenization and truncate the tail of
-    ///         the haystack inside the model's window. Truncation is the one failure a recall probe must not have:
-    ///         a needle that fell off the end measures the window, not the model. So the generator aims low, and the
-    ///         label says it aims low.
-    ///     </para>
-    /// </summary>
+    /// <summary>The fraction of the requested length the haystack is actually built to.</summary>
+    /// <remarks>
+    ///     The token count is an approximation — weighted characters over four — and it under-counts English prose, so
+    ///     building to the full request would overshoot the real tokenization and truncate the tail of the haystack
+    ///     inside the model's window. Truncation is the one failure a recall probe must not have: a needle that fell
+    ///     off the end measures the window, not the model. So the generator aims low, and the label says it aims low.
+    /// </remarks>
     public const double TargetFraction = 0.90;
 
     /// <summary>Below this a haystack is too short to hide anything and the depths stop being distinguishable.</summary>
@@ -133,11 +120,11 @@ public static class BenchmarkNiahGenerator
     private const string PasscodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private const int PasscodeLength = 6;
 
-    /// <summary>
-    ///     The subjects a needle is written about. A fixed list rather than a corpus-derived one: the question has to
-    ///     name the subject unambiguously, and a name lifted out of wikitext may occur a hundred more times in the
-    ///     haystack — which turns a recall probe into a disambiguation one.
-    /// </summary>
+    /// <summary>The subjects a needle is written about — a fixed list, not a corpus-derived one.</summary>
+    /// <remarks>
+    ///     The question has to name the subject unambiguously, and a name lifted out of wikitext may occur a hundred
+    ///     more times in the haystack — which turns a recall probe into a disambiguation one.
+    /// </remarks>
     private static readonly string[] Subjects =
     [
         "Lisbon", "Reykjavik", "Montevideo", "Ulaanbaatar", "Ljubljana", "Wellington",
@@ -167,7 +154,7 @@ public static class BenchmarkNiahGenerator
     /// </summary>
     /// <param name="projectContextTokens">
     ///     The project's frozen window. A case longer than it is refused HERE, while the operator is still looking at
-    ///     the form, rather than an hour into a batch — and the freeze re-checks it anyway.
+    ///     the form, and the freeze re-checks it anyway.
     /// </param>
     public static IReadOnlyList<GeneratedCase> Expand(Guid parentItemId, BenchmarkNiahConfigV1 config, int projectContextTokens)
     {
@@ -215,9 +202,12 @@ public static class BenchmarkNiahGenerator
 
     /// <summary>
     ///     The <c>exact</c> criterion override one case carries, as the item's verifier config: <c>{criterionId:
-    ///     {expected, normalize}}</c>. Case-insensitive and whitespace-collapsing, because a recall probe is asking
-    ///     whether the model FOUND the passcode, not whether it echoed the shift key.
+    ///     {expected, normalize}}</c>.
     /// </summary>
+    /// <remarks>
+    ///     Case-insensitive and whitespace-collapsing, because a recall probe asks whether the model FOUND the
+    ///     passcode, not whether it echoed the shift key.
+    /// </remarks>
     public static string VerifierConfigJson(string criterionId, string expectedAnswer)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(criterionId);
@@ -309,11 +299,12 @@ public static class BenchmarkNiahGenerator
         };
     }
 
-    /// <summary>
-    ///     The probe as the model sees it. The answer instruction is emphatic because the case is graded by exact
-    ///     match with no judge model behind it: a correct passcode wrapped in a sentence scores the same as a wrong
-    ///     one, and the only defence against measuring formatting instead of recall is asking plainly.
-    /// </summary>
+    /// <summary>The probe as the model sees it.</summary>
+    /// <remarks>
+    ///     The answer instruction is emphatic because the case is graded by exact match with no judge model behind it:
+    ///     a correct passcode wrapped in a sentence scores the same as a wrong one, and the only defence against
+    ///     measuring formatting instead of recall is asking plainly.
+    /// </remarks>
     private static string BuildPrompt(string haystack, string question, string attribution)
     {
         var builder = new StringBuilder(haystack.Length + 512);

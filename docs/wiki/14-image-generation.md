@@ -52,7 +52,11 @@ Operator (React) ──REST /api/local/v1/images/* ──▶ FastEndpoints
 - **`DeleteAsync`** removes a terminal job with its images — see [Deleting a job](#deleting-a-job).
 - **`SnapshotBufferedEvents`** returns a late hub subscriber's replay log. The coordinator keeps a per-job ordered event buffer (cap 128) that lingers ~5 minutes after a terminal event so a client that connects late can catch up.
 
-Progress is **coarse status only** — never the prompt, a path, or a step/percent — and non-terminal pushes are throttled to at most one per second per job. On success the image is persisted encrypted-at-rest **before** the job is marked `Succeeded`.
+Progress carries the coarse status plus the runtime's generation timeline (phase, step counters, seconds per iteration, estimated remaining) — **never the prompt and never a path**. Job state is persisted to `image_jobs` through a fresh DI scope per operation.
+
+Which pushes go out, and which are buffered, follows one rule. A **milestone** — the initial push, every terminal push, and every generation-phase transition — always goes out and is always buffered, so an operator-visible phase change is never delayed and never dropped. A **step tick inside the current phase** is throttled to at most one per second per job (a fast GPU samples several steps per second) and is never buffered: at a couple of pushes a second a minute-long job would evict its own opening events off the front of the 128-entry log, and a late subscriber would replay stale step counters and no phase transitions at all. A cadence-driven sweep evicts expired replay logs, so the last jobs' logs do not linger on an idle node waiting for another job to arrive.
+
+On success the image is persisted encrypted-at-rest **before** the job is marked `Succeeded`.
 
 ## The runtime (stable-diffusion.cpp)
 
@@ -124,6 +128,26 @@ All endpoints are loopback/local-only, operator-authenticated, and secret-redact
 
 > **Download progress is polled, not pushed.** Unlike generation jobs, image-model downloads have no hub: `GET images/models/downloads` is the progress surface, and the React model manager polls it while a download is pending. Byte counts plus part index/count are reported, so a multi-part weight download is legible; cancellation goes through `POST images/models/downloads/cancel`.
 
+## Restart and recovery
+
+`DisposeAsync` is the graceful path the DI container prefers: it cancels every in-flight job, then drains the run tasks for a short bound so they can persist their terminal state (`Cancelled`) before the process exits.
+
+Anything that outlives that drain — a hard crash, a kill, a drain timeout — is terminalized by `ImageJobStartupReconciler` on the next boot. The coordinator's in-memory registry does not survive a restart, so without it a row left `Queued` or `Generating` would never be transitioned again and would show as stuck forever. The reconciler marks them `Failed` with a content-free reason (`ImageJobStartupReconciler.InterruptedReason` — never the prompt or a path) and pushes a status event so a connected UI updates.
+
+**Interrupted jobs are never auto-retried.** Image generation is expensive and nondeterministic, so the operator resubmits explicitly. This mirrors the scheduler's stale-run reconciliation in `Program`.
+
+The ordering that makes the pass race-free: migrations are applied in `Program` before the host runs; hosted services then start in registration order; and the web host (Kestrel) starts after all of them. Since the create-job endpoint is the only production enqueue path, reconciliation always completes before a new job could race it.
+
+## Model fit for a diffusion set
+
+`ImageModelFitEstimator` scores a file-set against the host's memory budget before an operator commits to a multi-gigabyte install.
+
+It is deliberately **not** `MemoryFitEstimator.Estimate`. That estimator's whole model is a transformer LLM's: it needs block counts, attention head counts, an embedding length and a llama.cpp quant-byte table to size a KV cache. A diffusion transformer has no KV cache, and a GGUF diffusion file exposes none of those fields, so feeding it here would produce a confident number with nothing behind it. What genuinely reuses is the **hardware probe**: the image estimator shares `MemoryFitEstimator.ResolveFitBudgetBytes`, so an image verdict is scored against the identical budget the LLM advisor uses and cannot drift from it.
+
+**Only the diffusion part is a VRAM cost.** `ImageServerArgumentBuilder.BuildBackendSpec` pins the text encoder and VAE to the CPU on every GPU backend (`diffusion=cuda0,te=cpu,vae=cpu`), so charging an 18 GB Qwen-Image set's full weight against VRAM would reject a set that runs fine. In CPU mode there is no such split and the whole set is resident in RAM.
+
+A set is called a comfortable `Fits` below 80% of the budget rather than tight; the remaining headroom absorbs the runtime's own allocations and the working buffers a diffusion step needs beyond the weights. `Unknown` is a first-class verdict, not a soft "probably fine": `HardwareProfiler` leaves VRAM unmeasured on every non-NVIDIA GPU (and on NVIDIA without `nvidia-smi`), there is no budget to score against, and the CPU budget is the wrong one because the box would run on the GPU.
+
 ## Deleting a job
 
 Nothing is deleted until an operator asks. `IImageJobCoordinator.DeleteAsync` is the whole path. The node connection enforces foreign keys, so the `ON DELETE CASCADE` declared on `generated_images` does fire; the explicit ordered delete in `ImageJobStore.DeleteAsync` stays because it also collects the storage paths the blob teardown needs, which no cascade can do.
@@ -143,7 +167,7 @@ The job's replay log is dropped with it, so a late hub subscriber replays nothin
 1. **Generation is serialized to one job.** The single-slot semaphore is what makes a kill+restart cancel safe — never widen it without redesigning cancellation.
 2. **The image is persisted before the job is marked succeeded**, encrypted-at-rest.
 3. **No sd-server flag/route/HTTP shape escapes `Providers.StableDiffusionCpp`** (architecture invariant §3).
-4. **Progress is coarse status only** — never the prompt, a path, or a step/percent (privacy §10).
+4. **Progress never carries the prompt or a path** (privacy §10). The coarse status and the generation timeline (phase, step counters, rate, estimate) are what a push may contain.
 5. **The sd-server port range (18200–18299) is disjoint from llama.cpp's (18100–18199)** — keep them from ever colliding.
 6. **Managed runtime records are authoritative and fail closed.** Never fall back to another binary after drift without an explicit operator remove/repair.
 7. **Eject before build/remove.** Runtime mutation must not race active jobs, spawn/readiness, or a resident daemon.

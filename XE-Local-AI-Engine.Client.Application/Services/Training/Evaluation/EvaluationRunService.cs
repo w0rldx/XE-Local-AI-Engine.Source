@@ -11,16 +11,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     Creation, listing, resume and cancellation of evaluation runs.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Creation is where the membership is copied: BOTH sides of a comparison take the hold-out sample ids from the
-///         SAME training run's freeze, so the base model and the tuned model answer exactly the same questions. Deriving
-///         a fresh split per side would make the two accuracies incomparable while looking like they compared something.
-///     </para>
-///     <para>
-///         Scoring replays the encrypted, run-owned frozen corpus rather than live dataset rows. Stable sample ids in
-///         that corpus bind the membership to the exact trajectories that were present when the run was created, so a
-///         later review edit cannot alter or prevent an evaluation of that run.
-///     </para>
+///     Creation is where the membership is copied: BOTH sides of a comparison take the hold-out sample ids from the SAME
+///     training run's freeze, so the base and the tuned model answer exactly the same questions — a fresh split per side would
+///     make the two accuracies incomparable while looking like they compared something. Scoring replays the encrypted,
+///     run-owned frozen corpus rather than live dataset rows, and stable sample ids bind the membership to the trajectories
+///     present when the run was created, so a later review edit cannot alter or prevent an evaluation of that run.
 /// </remarks>
 public interface IEvaluationRunService
 {

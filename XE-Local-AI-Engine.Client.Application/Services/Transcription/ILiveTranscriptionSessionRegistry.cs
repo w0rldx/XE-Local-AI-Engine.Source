@@ -8,17 +8,11 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     session ends through.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Audio enters here, not through <see cref="ITranscriptionService" />.</b> <see cref="PushAudioAsync" />
-///         knows nothing about SignalR, connections or hub contexts, so the browser (through the hub) and an in-host
-///         capture source are two callers of one method rather than two paths. A persist-free session never touches
-///         <see cref="ITranscriptionService" /> at all, which is why the seam cannot live there.
-///     </para>
-///     <para>
-///         Registered as a singleton with no <c>IHostedService</c>: the end-to-end test factory removes every hosted
-///         service, so a background-timer design would be dead there. Everything is driven by pushed frames plus
-///         timers created from the injected <see cref="TimeProvider" />.
-///     </para>
+///     Audio enters HERE, not through <see cref="ITranscriptionService" />: <see cref="PushAudioAsync" /> knows nothing about
+///     SignalR, connections or hub contexts, so the browser (through the hub) and an in-host capture source are two callers of
+///     one method rather than two paths, and a persist-free session never touches <see cref="ITranscriptionService" /> at all.
+///     Registered as a singleton with no <c>IHostedService</c>, because the end-to-end test factory removes every hosted
+///     service; everything is driven by pushed frames plus timers created from the injected <see cref="TimeProvider" />.
 /// </remarks>
 public interface ILiveTranscriptionSessionRegistry
 {

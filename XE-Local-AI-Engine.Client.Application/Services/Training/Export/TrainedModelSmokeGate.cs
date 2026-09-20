@@ -13,21 +13,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     The one gate between a staged export and the model registry.
 /// </summary>
 /// <remarks>
-///     <para>
-///         It answers two questions a digest cannot: does <c>llama-server</c> actually load this file, and does the
-///         model still emit a syntactically valid tool call afterwards. Fine-tuning is exactly the operation that can
-///         destroy tool-calling while leaving a file that loads perfectly, so a load-only check would pass the models
-///         most worth catching.
-///     </para>
-///     <para>
-///         This is Training's ONLY use of <see cref="IGpuModelLoadAdmission" />: a run holds the GPU through its own
-///         exclusivity and never takes the load gate, but the smoke launch is an ordinary short GPU load and
-///         serializes against every other one exactly like a chat spawn.
-///     </para>
-///     <para>
-///         A model-side failure is a RESULT, never an exception — "this artifact cannot serve" is the verdict the
-///         caller asked for, and it is recorded on the artifact so the operator sees the reason next to the file.
-///     </para>
+///     It answers two questions a digest cannot: does <c>llama-server</c> actually load this file, and does the model still emit
+///     a syntactically valid tool call afterwards. Fine-tuning is exactly the operation that can destroy tool-calling while
+///     leaving a file that loads perfectly, so a load-only check would pass the models most worth catching. This is Training's
+///     ONLY use of <see cref="IGpuModelLoadAdmission" />: a run holds the GPU through its own exclusivity, but a smoke launch is
+///     an ordinary short GPU load. A model-side failure is a RESULT, never an exception, and is recorded on the artifact.
 /// </remarks>
 public sealed class TrainedModelSmokeGate : ITrainedModelSmokeGate
 {

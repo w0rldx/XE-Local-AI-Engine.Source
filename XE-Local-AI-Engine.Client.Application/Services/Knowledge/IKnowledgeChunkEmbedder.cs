@@ -2,11 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
 ///     Embeds a document's chunk texts through the node-local embedding provider and returns one <c>float32</c> BLOB per
-///     chunk, laid out in the platform's native byte order (aligned by index to the input), together with the RESOLVED
-///     embedding model name that produced them and the vector dimension they were produced at. Applies the document
-///     embedding prefix and batches the work; a transport/model failure or a within-run dimension inconsistency throws a
-///     content-free <see cref="KnowledgeIngestionException" />.
+///     chunk, aligned by index to the input.
 /// </summary>
+/// <remarks>
+///     Blobs are laid out in the platform's native byte order and carry the RESOLVED embedding model name that produced
+///     them plus the vector dimension they were produced at. Applies the document embedding prefix and batches the work;
+///     a transport/model failure, or a within-run dimension inconsistency, throws a content-free
+///     <see cref="KnowledgeIngestionException" />.
+/// </remarks>
 public interface IKnowledgeChunkEmbedder
 {
     /// <summary>
@@ -16,12 +19,15 @@ public interface IKnowledgeChunkEmbedder
     Task<KnowledgeEmbeddingResult> EmbedAsync(IReadOnlyList<string> chunkContents, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Best-effort resolution of the CONFIDENTLY-resolved embedding model's advertised context window (in tokens), for
-    ///     token-aware chunk sizing. Returns <see langword="null" /> when the window is unknown — the provider is
-    ///     unreachable, the resolution is not confident, or the resolved model advertises no context length — so the caller
-    ///     falls back to the configured chunk-token budget. This never throws for a provider/transport failure (chunking
-    ///     must proceed regardless); a genuine caller cancellation still propagates.
+    ///     Best-effort resolution of the CONFIDENTLY-resolved embedding model's advertised context window in tokens, for
+    ///     token-aware chunk sizing.
     /// </summary>
+    /// <remarks>
+    ///     Returns <see langword="null" /> when the window is unknown — provider unreachable, resolution not confident, or
+    ///     the resolved model advertises no context length — so the caller falls back to the configured chunk-token
+    ///     budget. Never throws for a provider/transport failure, because chunking must proceed regardless; a genuine
+    ///     caller cancellation still propagates.
+    /// </remarks>
     Task<int?> ResolveEmbeddingContextWindowAsync(CancellationToken cancellationToken);
 
     /// <summary>
@@ -45,11 +51,14 @@ public sealed class KnowledgeEmbeddingDescriptor
 
 /// <summary>
 ///     The embedding blobs for a set of chunks plus the RESOLVED embedding model name that produced them and the vector
-///     dimension observed for this run. The resolved name (not the configured name) is the single identity the ingestion
-///     lane stamps on the document row and every chunk-vector scope key, so the model that built the vectors always equals
-///     the name they are keyed under; the dimension is stamped on each vector row alongside it. Dimension is derived from
-///     the vectors themselves — no static config constant — so any model's native width is honored.
+///     dimension observed for this run.
 /// </summary>
+/// <remarks>
+///     The resolved name — not the configured name — is the single identity the ingestion lane stamps on the document
+///     row and every chunk-vector scope key, so the model that built the vectors always equals the name they are keyed
+///     under. The dimension is stamped on each vector row alongside it and is derived from the vectors themselves, with
+///     no static config constant, so any model's native width is honored.
+/// </remarks>
 public sealed class KnowledgeEmbeddingResult
 {
     /// <summary>One little-endian <c>float32</c> embedding blob per input chunk, aligned by index.</summary>

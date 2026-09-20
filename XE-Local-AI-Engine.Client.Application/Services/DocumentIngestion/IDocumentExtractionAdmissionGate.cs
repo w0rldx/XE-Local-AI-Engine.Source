@@ -2,12 +2,13 @@ namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 
 using System.Diagnostics.CodeAnalysis;
 
-/// <summary>
-///     Bounds how many synchronous, in-request document extractions run at once. Each extraction buffers a whole upload
-///     (up to the per-file cap) in memory and parses it, so unbounded concurrent uploads can aggregate to an
-///     out-of-memory condition even when every single file is within its size cap. The conversation upload endpoint
-///     acquires admission before extracting and rejects with a busy status when the gate is full.
-/// </summary>
+/// <summary>Bounds how many synchronous, in-request document extractions run at once.</summary>
+/// <remarks>
+///     Each extraction buffers a whole upload, up to the per-file cap, in memory and parses it, so unbounded concurrent
+///     uploads can aggregate to an out-of-memory condition even when every single file is within its size cap. The
+///     conversation upload endpoint acquires admission before extracting and rejects with a busy status when the gate is
+///     full.
+/// </remarks>
 public interface IDocumentExtractionAdmissionGate
 {
     /// <summary>

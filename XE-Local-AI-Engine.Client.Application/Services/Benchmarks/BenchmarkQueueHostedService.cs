@@ -5,11 +5,12 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training;
 
-/// <summary>
-///     Single-consumer durable FIFO for benchmark runs. A shared <see cref="IGpuWorkGate" /> hold is taken BEFORE the
-///     claim and released only when the work is done, so an exclusive holder (a training run, an evaluation, an export)
-///     can never admit beside a benchmark that is already executing.
-/// </summary>
+/// <summary>Single-consumer durable FIFO for benchmark runs.</summary>
+/// <remarks>
+///     A shared <see cref="IGpuWorkGate" /> hold is taken BEFORE the claim and released only when the work is done, so
+///     an exclusive holder (a training run, an evaluation, an export) can never admit beside a benchmark that is
+///     already executing.
+/// </remarks>
 public sealed class BenchmarkQueueHostedService : BackgroundService
 {
     private readonly TimeSpan _pollInterval;
@@ -43,10 +44,8 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
         var reconciled = false;
         while (!stoppingToken.IsCancellationRequested)
         {
-            // Nothing is CLAIMED until recovery has succeeded once. Guarding the throw kept the host up, but the loop
-            // then ran on regardless and the rows the previous process left Running — which only recovery
-            // terminalizes — stayed orphaned for this process's whole lifetime, stalling the single consumer behind
-            // them. The poll interval is the backoff.
+            // Nothing is CLAIMED until recovery has succeeded once: rows the previous process left Running are terminalized only by recovery,
+            // and left orphaned they stall the single consumer behind them for this process's whole lifetime. The poll interval is the backoff.
             if (!recovered)
             {
                 recovered = await RecoverAsync(stoppingToken);
@@ -57,19 +56,16 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
                 }
             }
 
-            // Pairwise reconciliation is BEST-EFFORT and gates nothing. It re-enqueues comparisons a crash left
-            // missing, which is a cohort's problem and not this consumer's: blocking the claim on it would let one
-            // persistently failing planner starve every primary, judge and fidelity run for the process's lifetime.
-            // Retried on the same poll interval until it lands once.
+            // Pairwise reconciliation is BEST-EFFORT and gates nothing: it re-enqueues comparisons a crash left missing, which is a cohort's problem, not this consumer's. Blocking the claim
+            // on it would let one persistently failing planner starve every primary, judge and fidelity run for the process's lifetime. Retried on the poll interval until it lands once.
             if (!reconciled)
             {
                 reconciled = await ReconcilePairwiseAsync(stoppingToken);
             }
 
             BenchmarkClaimedWork? work = null;
-            // The gate is taken BEFORE the claim and held through execution. Refusing at the CLAIM rather than at the
-            // executor keeps queued benchmark work queued: it resumes on the next poll once the exclusive holder
-            // releases, instead of being terminalized as failed with no retry to fall back on — attempt pins to 1.
+            // The gate is taken BEFORE the claim and held through execution. Refusing at the CLAIM rather than at the executor keeps queued benchmark work queued:
+            // it resumes on the next poll once the exclusive holder releases, instead of being terminalized as failed with no retry to fall back on — attempt pins to 1.
             var admission = _gpuWorkGate.TryBeginShared(GpuWorkKind.Benchmark);
             try
             {
@@ -115,9 +111,8 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
             {
                 if (work is null)
                 {
-                    // The CLAIM failed. An exception escaping here would end ExecuteAsync and, under the default
-                    // BackgroundServiceExceptionBehavior.StopHost, take the whole node down over a transient database
-                    // failure. work stays null, so the poll wait below is already the backoff.
+                    // The CLAIM failed. An exception escaping here would end ExecuteAsync and, under the default BackgroundServiceExceptionBehavior.StopHost,
+                    // take the whole node down over a transient database failure. work stays null, so the poll wait below is already the backoff.
                     _logger.LogError(exception, "Benchmark queue failed while claiming work; retrying after the poll interval.");
                 }
                 else
@@ -140,14 +135,14 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
     }
 
     /// <summary>
-    ///     A work kind this build has no executor for. It is terminalized as failed rather than left claimed: a
-    ///     Running item nothing will ever finish stalls the single-consumer queue behind it forever, and an item that
-    ///     silently succeeded would publish a measurement nothing took.
-    ///     <para>
-    ///         Every kind this build knows has an arm above, so reaching here means a database written by a NEWER
-    ///         build. That is a real state, and it fails closed with a reason an operator can act on.
-    ///     </para>
+    ///     A work kind this build has no executor for.
     /// </summary>
+    /// <remarks>
+    ///     Terminalized as failed rather than left claimed: a Running item nothing will ever finish stalls the
+    ///     single-consumer queue behind it forever, and an item that silently succeeded would publish a measurement
+    ///     nothing took. Every kind this build knows has an arm above, so reaching here means a database written by a
+    ///     NEWER build — a real state, failed closed with a reason an operator can act on.
+    /// </remarks>
     private async Task TerminalizeUnsupportedAsync(IServiceProvider services, BenchmarkClaimedWork work, CancellationToken cancellationToken)
     {
         var reason = $"Benchmark work of kind {work.Kind} is not supported by this build.";
@@ -163,14 +158,15 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
     }
 
     /// <summary>
-    ///     Guarded like the loop below and like both sibling queues: this runs BEFORE the first claim, so a throw here
-    ///     ends ExecuteAsync and, under the default BackgroundServiceExceptionBehavior.StopHost, takes the node down —
-    ///     a transient database failure at startup must cost unrecovered work items, not the host.
-    ///     <para>
-    ///         Answers whether it SUCCEEDED, because a failure must not cost the work items either: the caller retries
-    ///         on the poll interval and claims nothing until this returns true.
-    ///     </para>
+    ///     Recovers the work items a previous process left Running, before the first claim.
     /// </summary>
+    /// <remarks>
+    ///     Guarded like the loop below and like both sibling queues: a throw here ends ExecuteAsync and, under the
+    ///     default BackgroundServiceExceptionBehavior.StopHost, takes the node down — a transient database failure at
+    ///     startup must cost unrecovered work items, not the host. Answers whether it SUCCEEDED, because a failure
+    ///     must not cost the work items either: the caller retries on the poll interval and claims nothing until this
+    ///     returns true.
+    /// </remarks>
     private async Task<bool> RecoverAsync(CancellationToken cancellationToken)
     {
         try
@@ -195,18 +191,15 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
 
     /// <summary>
     ///     Re-enqueues the comparisons a crash left missing: a kill between a primary succeeding and its pairs being
-    ///     enqueued leaves a cohort permanently one comparison short, with every run in it stuck pending and nothing
-    ///     that would ever notice.
-    ///     <para>
-    ///         Separate from <c>RecoverAsync</c> and gating NOTHING. It is one cohort's problem, and a planner that
-    ///         keeps throwing must not starve every primary, judge and fidelity run for the process's lifetime — which
-    ///         is what folding it into the claim gate did. Answers whether it landed, so the loop stops retrying it.
-    ///     </para>
-    ///     <para>
-    ///         The planner is resolved optionally: a host that composed the queue without one cannot have enqueued
-    ///         pairwise work either, so there is nothing to reconcile and nothing to retry.
-    ///     </para>
+    ///     enqueued leaves a cohort permanently one comparison short, every run in it stuck pending.
     /// </summary>
+    /// <remarks>
+    ///     Separate from <c>RecoverAsync</c> and gating NOTHING: it is one cohort's problem, and a planner that keeps
+    ///     throwing must not starve every primary, judge and fidelity run for the process's lifetime — which is what
+    ///     folding it into the claim gate did. Answers whether it landed, so the loop stops retrying it. The planner
+    ///     is resolved optionally: a host that composed the queue without one cannot have enqueued pairwise work
+    ///     either, so there is nothing to reconcile and nothing to retry.
+    /// </remarks>
     private async Task<bool> ReconcilePairwiseAsync(CancellationToken cancellationToken)
     {
         try

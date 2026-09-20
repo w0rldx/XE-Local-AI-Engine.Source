@@ -6,11 +6,14 @@ using XE_Local_AI_Engine.Client.Persistence;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
-///     Default <see cref="IKnowledgeIndexWriter" />. Writes sections, chunks, and vectors for a document over the raw-SQL
-///     path in a single transaction so the FTS insert triggers fire and the write is atomic. Scoped: it depends on the
-///     scoped <see cref="NodeChatDbContext" /> and runs inside the per-ingestion-job scope. The write is idempotent — it
-///     first purges any existing rows for the document (ordered vectors → chunks → sections) so a retry does not duplicate.
+///     Default <see cref="IKnowledgeIndexWriter" />: writes a document's sections, chunks, and vectors over the raw-SQL
+///     path in a single transaction, so the FTS insert triggers fire and the write is atomic.
 /// </summary>
+/// <remarks>
+///     The write is idempotent: it first purges any existing rows for the document, ordered vectors → chunks → sections,
+///     so a retry does not duplicate. Scoped: it depends on the scoped <see cref="NodeChatDbContext" /> and runs inside
+///     the per-ingestion-job scope.
+/// </remarks>
 public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
 {
     private readonly NodeChatDbContext _dbContext;
@@ -168,10 +171,8 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
                 _ = await chunkCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            // Store the vector L2-normalized. Cosine similarity is scale-invariant, so unit-length storage changes no
-            // ranking, but it lets the search score with a plain dot product (query normalized once, one pass per
-            // candidate) instead of recomputing both norms per row. A zero-magnitude embedding has no direction and is
-            // left exactly as produced (the search skips it, matching the old cosine-NaN behavior).
+            // Store the vector L2-normalized: cosine is scale-invariant, so unit length changes no ranking but lets the
+            // search use a plain dot product. A zero-magnitude embedding has no direction and stays exactly as produced.
             var embeddingBytes = chunk.Embedding.ToArray();
             KnowledgeVectorMath.NormalizeBytesInPlace(embeddingBytes);
 

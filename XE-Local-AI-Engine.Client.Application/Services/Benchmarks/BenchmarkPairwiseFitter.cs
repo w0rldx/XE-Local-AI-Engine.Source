@@ -6,10 +6,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public interface IBenchmarkPairwiseFitter
 {
     /// <summary>
-    ///     Fits and publishes the project's pairwise cohort, if it is complete and not already published. Called after
-    ///     every comparison terminalization and from startup reconciliation; a no-op until the LAST comparison of the
-    ///     cohort lands, because a fit over a partial tournament is a different tournament.
+    ///     Fits and publishes the project's pairwise cohort, if it is complete and not already published.
     /// </summary>
+    /// <remarks>
+    ///     Called after every comparison terminalization and from startup reconciliation; a no-op until the LAST
+    ///     comparison of the cohort lands, because a fit over a partial tournament is a different tournament.
+    /// </remarks>
     /// <returns><see langword="true" /> when this call published a fit.</returns>
     Task<bool> TryPublishAsync(Guid projectId, CancellationToken cancellationToken);
 }
@@ -18,12 +20,11 @@ public interface IBenchmarkPairwiseFitter
 ///     Turns a completed cohort of pairwise verdicts into ONE immutable fit row with ONE active pointer.
 /// </summary>
 /// <remarks>
-///     Three refusals sit in front of the arithmetic, and all three publish a row that carries the REASON and no
-///     scores rather than publishing nothing at all. A fit that silently fails to appear is indistinguishable, on the
-///     ranking read, from a cohort still judging — and telling those apart without re-reading every verdict on every
-///     page fetch is exactly what the one-row design exists for. The refusals themselves are strict on purpose: a fit
-///     blending two judge runtimes, or fitted over the subset that happens to match, would publish a number over a set
-///     the operator never chose.
+///     Three refusals sit in front of the arithmetic, and all three publish a row carrying the REASON and no scores
+///     rather than publishing nothing at all: a fit that silently fails to appear is indistinguishable, on the
+///     ranking read, from a cohort still judging, and telling those apart without re-reading every verdict per page
+///     fetch is what the one-row design exists for. The refusals are strict on purpose — a fit blending two judge
+///     runtimes, or fitted over the subset that happens to match, publishes a number over a set nobody chose.
 /// </remarks>
 public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
 {
@@ -108,11 +109,11 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
         return published;
     }
 
-    /// <summary>
-    ///     A cohort is complete when BOTH presentation orders of every planned pair carry a succeeded comparison. A
-    ///     failed or cancelled one leaves its slot free, so the cohort stays incomplete — and every run in it reads
+    /// <summary>A cohort is complete when BOTH presentation orders of every planned pair carry a succeeded comparison.</summary>
+    /// <remarks>
+    ///     A failed or cancelled one leaves its slot free, so the cohort stays incomplete — and every run in it reads
     ///     <c>pairwise-pending</c> until reconciliation re-enqueues that slot at the next attempt sequence.
-    /// </summary>
+    /// </remarks>
     private static bool IsComplete(BenchmarkPairwiseCohortState cohort)
     {
         var plan = BenchmarkPairwisePlanner.Plan(cohort.Candidates, BenchmarkPairwisePolicy.MaximumRuns);
@@ -127,11 +128,12 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
         return plan.Slots.All(slot => succeeded.Contains((slot.RunAId, slot.RunBId, 0)) && succeeded.Contains((slot.RunAId, slot.RunBId, 1)));
     }
 
-    /// <summary>
-    ///     The gates that run BEFORE the arithmetic. Each refuses the whole fit: nothing is published as a score, and
-    ///     no partial fit over the comparisons that happen to qualify is attempted, because dropping comparisons
-    ///     changes the comparison graph — possibly disconnecting it — under a set nobody chose.
-    /// </summary>
+    /// <summary>The gates that run BEFORE the arithmetic.</summary>
+    /// <remarks>
+    ///     Each refuses the whole fit: nothing is published as a score, and no partial fit over the comparisons that
+    ///     happen to qualify is attempted, because dropping comparisons changes the comparison graph — possibly
+    ///     disconnecting it — under a set nobody chose.
+    /// </remarks>
     private static string? Refuse(BenchmarkPairwiseCohortState cohort, IReadOnlyList<BenchmarkComparisonRecord> succeeded)
     {
         if (cohort.ReferenceExecutionKey is not { } reference)
@@ -182,14 +184,14 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
             : new BenchmarkPairwiseScoreEntry(runId, null, null, null, 0, 0, BenchmarkRunJudgeStates.ReasonPairwiseInsufficient);
     }
 
-    /// <summary>
-    ///     The fit's durable identity. Every input describing what was ASKED — revision, generation, policy hash, both
-    ///     pairwise versions, the case — plus the one describing what ANSWERED: the cohort's promoted judge execution
-    ///     key. A generation counter alone cannot tell a reader whether the fit behind a stored score used the same
-    ///     verdicts, the same prompt, the same case or the same judge runtime. The comparison-set VERSION rather than a
-    ///     hash of the verdicts, so the read path compares one integer instead of re-hashing every verdict per page —
-    ///     and it is strictly stronger: a cancel-then-re-enqueue landing on identical verdicts still bumps it.
-    /// </summary>
+    /// <summary>The fit's durable identity.</summary>
+    /// <remarks>
+    ///     Every input describing what was ASKED — revision, generation, policy hash, both pairwise versions, the case
+    ///     — plus the one describing what ANSWERED: the cohort's promoted judge execution key. A generation counter
+    ///     alone cannot tell a reader whether the fit behind a stored score used the same verdicts, prompt, case or
+    ///     judge runtime. It carries the comparison-set VERSION rather than a hash of the verdicts, so the read path
+    ///     compares one integer, and it is strictly stronger: a cancel-then-re-enqueue on identical verdicts bumps it.
+    /// </remarks>
     private static string ComputeFitKey(BenchmarkJudgePolicyV1 policy, Guid revisionId, BenchmarkPairwiseCohortState cohort) =>
         "v1:" + BenchmarkCanonicalJson.HashOf(new
         {

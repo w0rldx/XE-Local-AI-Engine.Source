@@ -4,21 +4,17 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Startup reconciliation for the image-job registry. A previous process may have died (crash, kill, hard restart)
-///     with jobs still <see cref="ImageJobStatus.Queued" /> or <see cref="ImageJobStatus.Generating" />; the coordinator's
-///     in-memory registry is gone after a restart, so nothing would ever transition those rows again and they would show
-///     as stuck forever. This service terminalizes them on startup and pushes a status event so a connected UI updates.
-///     <para>
-///         <b>Policy: interrupted jobs are NOT auto-retried.</b> Image generation is expensive and nondeterministic, so
-///         the jobs are marked <see cref="ImageJobStatus.Failed" /> with a content-free reason (never the prompt) and the
-///         operator resubmits explicitly. Mirrors the scheduler's stale-run reconciliation in <c>Program</c>.
-///     </para>
-///     <para>
-///         <b>Ordering.</b> Migrations are applied in <c>Program</c> before the host runs; hosted services then start in
-///         registration order, and the web host (Kestrel) starts after all of them — and the create-job endpoint is the
-///         only production enqueue path — so reconciliation always completes before a new job could race it.
-///     </para>
+///     Startup reconciliation for the image-job registry: terminalizes jobs a dead process left
+///     <see cref="ImageJobStatus.Queued" /> or <see cref="ImageJobStatus.Generating" /> and pushes a status event so a
+///     connected UI updates.
 /// </summary>
+/// <remarks>
+///     The coordinator's in-memory registry is gone after a restart, so nothing would ever transition those rows
+///     again and they would show as stuck forever. Interrupted jobs are NOT auto-retried — generation is expensive
+///     and nondeterministic, so they are marked <see cref="ImageJobStatus.Failed" /> with a content-free reason and
+///     the operator resubmits, mirroring the scheduler's stale-run reconciliation in <c>Program</c>. Reconciliation
+///     always completes before a new job could race it. See docs/wiki/14-image-generation.md ("Restart and recovery").
+/// </remarks>
 public sealed class ImageJobStartupReconciler : IHostedService
 {
     /// <summary>Display-safe reason stamped on interrupted jobs. Content-free by design — never the prompt or a path.</summary>

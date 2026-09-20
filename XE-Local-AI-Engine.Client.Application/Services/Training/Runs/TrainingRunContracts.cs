@@ -4,9 +4,11 @@ using System.Text.Json.Serialization;
 
 /// <summary>
 ///     The resolved hyper-parameters a run trains under, persisted (encrypted) in <c>training_runs.options_json</c>.
-///     Frozen at creation: the wizard's computed defaults and any operator override are both resolved before the run is
-///     enqueued, so the trainer reads one settled document rather than re-deriving anything from live hardware.
 /// </summary>
+/// <remarks>
+///     Frozen at creation: the wizard's computed defaults and any operator override are both resolved before the run
+///     is enqueued, so the trainer reads one settled document rather than re-deriving anything from live hardware.
+/// </remarks>
 public sealed record TrainingRunOptionsV1
 {
     public int SchemaVersion { get; init; } = 1;
@@ -161,11 +163,11 @@ public sealed record BaseCheckpointConfigV1
     public string? TorchDtype { get; init; }
 }
 
-/// <summary>
-///     What one run is expected to cost, and whether the box can pay it. Fails toward rejection by construction: the
-///     activation term is inherently fuzzy, so the estimate carries headroom and a floor rather than pretending to
-///     predict VRAM to the megabyte.
-/// </summary>
+/// <summary>What one run is expected to cost, and whether the box can pay it.</summary>
+/// <remarks>
+///     Fails toward rejection by construction: the activation term is inherently fuzzy, so the estimate carries
+///     headroom and a floor rather than pretending to predict VRAM to the megabyte.
+/// </remarks>
 public sealed class TrainingFootprintEstimate
 {
     public required long GpuBytes { get; init; }

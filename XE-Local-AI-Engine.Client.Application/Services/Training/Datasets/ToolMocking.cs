@@ -27,10 +27,13 @@ public interface IToolMockEngine
 public sealed class ToolMockStaticVerifier : IToolMockStaticVerifier
 {
     /// <summary>
-    ///     Markers of a value that would be interpreted rather than compared: template interpolation, shell/command
-    ///     substitution, and spreadsheet-style formulas. A mock is declarative data, so any of these is a hard reject —
-    ///     matching stays a string comparison and can never become an evaluation.
+    ///     Markers of a value that would be interpreted rather than compared: template interpolation, shell or
+    ///     command substitution, and spreadsheet-style formulas.
     /// </summary>
+    /// <remarks>
+    ///     A mock is declarative data, so any of these is a hard reject — matching stays a string comparison and can
+    ///     never become an evaluation.
+    /// </remarks>
     private static readonly string[] ExpressionMarkers = ["{{", "}}", "${", "$(", "#{", "<%", "%>", "`"];
 
     public bool TryParse(ReadOnlySpan<byte> mockJson, out ToolMockBodyV1? body, out string? failureReason)

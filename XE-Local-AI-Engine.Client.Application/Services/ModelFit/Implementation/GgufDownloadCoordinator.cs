@@ -11,25 +11,21 @@ using AcquisitionKind = GgufAcquisitionOperationKind;
 using PreflightKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
 /// <summary>
-///     Default <see cref="IGgufDownloadCoordinator" />. Starts each download on a detached task wired to a per-model
-///     <see cref="CancellationTokenSource" /> kept in an in-memory registry, captures the latest sanitized progress, and
+///     Default <see cref="IGgufDownloadCoordinator" />: starts each download on a detached task wired to a per-model
+///     <see cref="CancellationTokenSource" /> in an in-memory registry, captures the latest sanitized progress, and
 ///     lets a separate request cancel the in-flight download by model name.
-///     <para>
-///         <b>Singleton.</b> The registry must outlive any one request scope (the download runs after the HTTP request
-///         that started it returns). It composes the singleton staged Hugging Face transaction <see cref="IGgufDownloadTransaction" />.
-///     </para>
-///     <para>
-///         <b>Honest limits.</b> Progress and cancellation are best-effort and process-local: the registry is RAM-only
-///         (a node restart drops in-flight state — the partial <c>.part</c> file resumes on the next Start), and cancel
-///         is cooperative (it signals the token; the store stops at the next await/byte boundary). It never reports a
-///         path/URL/token.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <b>Singleton</b>: the registry must outlive any one request scope, because the download runs on after the HTTP
+///     request that started it returns. It composes the singleton staged Hugging Face transaction <see cref="IGgufDownloadTransaction" />.
+///     <b>Honest limits:</b> progress and cancellation are best-effort and process-local. The registry is RAM-only — a
+///     node restart drops in-flight state and the partial <c>.part</c> file resumes on the next Start — and cancel is
+///     cooperative: it signals the token, the store stops at the next await/byte boundary, and no path, URL or token is reported.
+/// </remarks>
 public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
 {
-    // Minimum gap between two pushed Running progress updates for the same model — protects the socket from a
-    // high-frequency byte callback. Terminal phase changes (Completed/Cancelled/Failed) and the initial Running push
-    // always go out immediately, bypassing the throttle.
+    // Minimum gap between two pushed Running progress updates for the same model, protecting the socket from a
+    // high-frequency byte callback; terminal phase changes and the initial Running push bypass the throttle.
     private static readonly TimeSpan ProgressPushInterval = TimeSpan.FromSeconds(1);
 
     private readonly IGgufDownloadEventPublisher _eventPublisher;
@@ -163,9 +159,12 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
 
     /// <summary>
     ///     Adds the just-installed model to the tool-capable allow-list when its GGUF chat template advertises tool
-    ///     calling. Best-effort: a failure here leaves the operator with the existing (possibly stale) list, which is the
-    ///     pre-change behaviour — never a failed download.
+    ///     calling.
     /// </summary>
+    /// <remarks>
+    ///     Best-effort: a failure here leaves the operator with the existing, possibly stale, list — never a failed
+    ///     download.
+    /// </remarks>
     private async Task RegisterToolCapabilityAsync(string modelName, CancellationToken token)
     {
         try
@@ -264,10 +263,8 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         return null;
     }
 
-    // Records the latest status in the registry and broadcasts it to connected operator clients. Running progress pushes
-    // are throttled to at most one per ProgressPushInterval per model so a high-frequency byte callback never floods the
-    // socket; the initial Running push and every terminal phase (Completed/Cancelled/Failed) bypass the throttle and go
-    // out immediately. The registry write is always unconditional, so the list endpoint still serves the freshest bytes.
+    // Records the status in the registry unconditionally — so the list endpoint always serves the freshest bytes — and
+    // broadcasts it, throttled to one Running push per ProgressPushInterval per model; initial and terminal pushes bypass it.
     private void SetStatus(Guid operationId,
         GgufAcquisitionPhase phase,
         long? completedBytes = null,
@@ -311,9 +308,8 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         PublishStatus(status);
     }
 
-    // Maps the internal status to the sanitized hub event at the broadcast boundary (no internal type leaks) and pushes
-    // it fire-and-forget. The Progress<T> callback is synchronous and must not block byte flow, so a push failure is
-    // swallowed with a debug log — the list endpoint remains the authoritative one-shot hydrate either way.
+    // Maps the internal status to the sanitized hub event at the broadcast boundary (no internal type leaks) and pushes it
+    // fire-and-forget: the synchronous Progress<T> callback must not block byte flow, so a push failure is only debug-logged.
     private void PublishStatus(GgufAcquisitionStatus status)
     {
         var hubEvent = new GgufDownloadStatusHubEvent

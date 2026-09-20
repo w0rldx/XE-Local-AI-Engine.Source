@@ -21,9 +21,12 @@ public static class BenchmarkJudgeCriterionKinds
 
     /// <summary>
     ///     Execution scoring: the answer's code is run against the operator's tests in the compute sandbox, and the
-    ///     criterion passes iff every collected case passed. The only kind that is not a pure function of the answer
-    ///     text, and the only one that can be UNSCORABLE rather than merely failed.
+    ///     criterion passes iff every collected case passed.
     /// </summary>
+    /// <remarks>
+    ///     The only kind that is not a pure function of the answer text, and the only one that can be UNSCORABLE
+    ///     rather than merely failed.
+    /// </remarks>
     public const string PythonTests = "pythonTests";
 
     /// <summary>Whether this kind is decided server-side rather than by a model.</summary>
@@ -73,26 +76,24 @@ public sealed record BenchmarkConstraintConfigV1(
     public const string FormatNoMarkdown = "noMarkdown";
 }
 
-/// <summary>
-///     A <c>pythonTests</c> criterion's configuration.
-///     <para>
-///         <c>exports</c> names the symbols the operator's tests call directly (<c>solve(10)</c>); omitted, the tests
-///         reach the candidate through the <c>candidate.…</c> proxy, or through <c>pycall</c> / <c>pyeval</c>, which
-///         are always in the test namespace and need no flag of their own.
-///     </para>
-/// </summary>
+/// <summary>A <c>pythonTests</c> criterion's configuration.</summary>
+/// <remarks>
+///     <c>exports</c> names the symbols the operator's tests call directly (<c>solve(10)</c>); omitted, the tests
+///     reach the candidate through the <c>candidate.…</c> proxy, or through <c>pycall</c> / <c>pyeval</c>, which are
+///     always in the test namespace and need no flag of their own.
+/// </remarks>
 public sealed record BenchmarkPythonTestsConfigV1(
     string? TestCode = null,
     IReadOnlyList<string>? Exports = null,
     int? TimeoutSeconds = null,
     string? Extract = null);
 
-/// <summary>
-///     One criterion's verifiable configuration, parsed and validated once. Produced by
-///     <see cref="BenchmarkJudgeVerifierConfig.Parse" />, which BOTH the policy validator (at activation, discarding
-///     the result) and <see cref="BenchmarkJudgeVerifiers" /> (at execution) call — a second parser is how an
-///     activation-time check and a run-time check drift into disagreeing about the same config.
-/// </summary>
+/// <summary>One criterion's verifiable configuration, parsed and validated once.</summary>
+/// <remarks>
+///     Produced by <see cref="BenchmarkJudgeVerifierConfig.Parse" />, which BOTH the policy validator (at activation,
+///     discarding the result) and <see cref="BenchmarkJudgeVerifiers" /> (at execution) call — a second parser is how
+///     an activation-time check and a run-time check drift into disagreeing about the same config.
+/// </remarks>
 public sealed record BenchmarkVerifierSpec
 {
     public required string Kind { get; init; }
@@ -134,11 +135,12 @@ public static class BenchmarkJudgeVerifierConfig
         PropertyNameCaseInsensitive = false
     };
 
-    /// <summary>
-    ///     The keywords <see cref="BenchmarkJudgeVerifiers" /> actually enforces. A schema naming anything else is
-    ///     REFUSED at activation rather than accepted and silently under-checked — an operator who writes
-    ///     <c>minLength</c> and is never told it does nothing has a criterion that passes answers it should fail.
-    /// </summary>
+    /// <summary>The keywords <see cref="BenchmarkJudgeVerifiers" /> actually enforces.</summary>
+    /// <remarks>
+    ///     A schema naming anything else is REFUSED at activation rather than accepted and silently under-checked — an
+    ///     operator who writes <c>minLength</c> and is never told it does nothing has a criterion that passes answers
+    ///     it should fail.
+    /// </remarks>
     private static readonly string[] SupportedSchemaKeywords =
         ["type", "properties", "required", "items", "enum", "const", "additionalProperties"];
 
@@ -193,9 +195,12 @@ public static class BenchmarkJudgeVerifierConfig
 
     /// <summary>
     ///     The canonical form of a criterion's config, so two operators who typed the same rules with different key
-    ///     order or whitespace produce the same policy hash. Called from the policy canonicalizer, which is the one
-    ///     place the stored blob and the hash are both produced from.
+    ///     order or whitespace produce the same policy hash.
     /// </summary>
+    /// <remarks>
+    ///     Called from the policy canonicalizer, which is the one place the stored blob and the hash are both produced
+    ///     from.
+    /// </remarks>
     public static string? Canonicalize(string? configJson)
     {
         if (string.IsNullOrWhiteSpace(configJson))
@@ -237,10 +242,8 @@ public static class BenchmarkJudgeVerifierConfig
         Regex pattern;
         try
         {
-            // NonBacktracking is the whole ReDoS answer: it runs in time linear in the input and REFUSES to compile
-            // the constructs that make backtracking explode (backreferences, lookaround, atomic groups). Refusing such
-            // a pattern here is cheaper and more honest than accepting it under a backtracking fallback and hoping the
-            // timeout catches it.
+            // NonBacktracking is the whole ReDoS answer: linear in the input, and it REFUSES to compile the constructs that make backtracking explode (backreferences, lookaround, atomic groups).
+            // Refusing such a pattern here is cheaper and more honest than accepting it under a backtracking fallback and hoping the timeout catches it.
             pattern = new Regex(config.Pattern, RegexOptions.NonBacktracking | RegexOptions.CultureInvariant, MatchTimeout);
         }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
@@ -275,10 +278,8 @@ public static class BenchmarkJudgeVerifierConfig
         };
     }
 
-    // ponytail: a dependency-free structural subset of JSON Schema —
-    // type/properties/required/items/enum/const/additionalProperties. The ceiling is enforced rather than hidden: a
-    // schema naming any other keyword is refused at activation, so the subset can never silently under-check. A full
-    // validator can replace this implementation behind the same seam.
+    // ponytail: a dependency-free structural subset of JSON Schema — type/properties/required/items/enum/const/additionalProperties. The ceiling is enforced, not hidden:
+    // a schema naming any other keyword is refused at activation, so the subset can never silently under-check. A full validator can replace this behind the same seam.
     private static void ValidateSchemaShape(JsonElement schema)
     {
         if (schema.ValueKind != JsonValueKind.Object)
@@ -416,18 +417,16 @@ public static class BenchmarkJudgeVerifierConfig
             throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid, "A pythonTests criterion requires the operator's test code.");
         }
 
-        // Bounded at ACTIVATION rather than at judging: the composed harness has to fit inside the sandbox's script
-        // ceiling alongside the model's answer, and an operator who learns that an hour into a batch learns it from
-        // a failed run instead of from the form they were filling in.
+        // Bounded at ACTIVATION rather than at judging: the composed harness has to fit inside the sandbox's script ceiling alongside the model's answer,
+        // and an operator who learns that an hour into a batch learns it from a failed run instead of from the form they were filling in.
         if (config.TestCode.Length > BenchmarkPythonTestsHarness.TestCodeMaxChars)
         {
             throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid,
                 $"A pythonTests criterion's test code must be at most {BenchmarkPythonTestsHarness.TestCodeMaxChars} characters.");
         }
 
-        // Exports are seeded into the test namespace as `solve(10)` shorthands for `candidate.solve(10)`, so each one
-        // has to be a name Python can bind. Refusing here is what keeps the composed program's config a list of plain
-        // identifiers rather than something an operator can shape.
+        // Exports are seeded into the test namespace as `solve(10)` shorthands for `candidate.solve(10)`, so each one has to be a name Python can bind.
+        // Refusing here is what keeps the composed program's config a list of plain identifiers rather than something an operator can shape.
         var exports = config.Exports ?? [];
         if (exports.Count > MaximumExports)
         {

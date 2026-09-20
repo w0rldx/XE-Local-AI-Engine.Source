@@ -3,36 +3,40 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Orchestrates a single model-fit refresh: it profiles the node hardware, discovers candidate GGUF files
-///     from Hugging Face, estimates each file's memory fit, drops the non-fitting / insufficient-metadata ones,
-///     ranks the survivors, tolerantly serializes them to recommendation rows and replaces the cached recommendation
-///     snapshot — all node-local except the HF discovery egress. No Docker, no approved image, no provider name.
-///     <para>
-///         This service is invoked solely by the scheduler handler — there is no bypass execution path. It NEVER touches
-///         scheduler run rows or publishes SignalR (the dispatcher owns those). It re-throws
-///         <see cref="OperationCanceledException" /> so the dispatcher can mark the run cancelled, and returns a failed
-///         result (or throws for an unsupported operation) for every other non-success outcome.
-///     </para>
+///     Orchestrates a single model-fit refresh: profiles the node hardware, discovers candidate GGUF files from
+///     Hugging Face, estimates each file's memory fit, ranks the survivors and replaces the cached snapshot.
 /// </summary>
+/// <remarks>
+///     Non-fitting and metadata-poor files are dropped and the rows serialized tolerantly. Everything is node-local
+///     except the Hugging Face discovery egress: no Docker, no approved image, no provider name. The scheduler handler
+///     is the only caller — there is no bypass execution path — and this service never touches scheduler run rows or
+///     publishes SignalR (the dispatcher owns those). It re-throws <see cref="OperationCanceledException" /> so the
+///     dispatcher can mark the run cancelled, and returns a failed result (or throws) for any other non-success outcome.
+/// </remarks>
 public interface IModelFitRefreshService
 {
-    /// <summary>
-    ///     Runs one refresh for <paramref name="request" />. <paramref name="reportProgress" /> is the scheduler's
-    ///     (possibly <c>null</c>) progress callback — implementations must null-check before invoking it. Returns the
-    ///     terminal snapshot outcome. Throws <see cref="OperationCanceledException" /> when the node token is cancelled
-    ///     mid-run (after recording a Cancelled snapshot).
-    /// </summary>
+    /// <summary>Runs one refresh for <paramref name="request" /> and returns the terminal snapshot outcome.</summary>
+    /// <param name="reportProgress">
+    ///     The scheduler's progress callback, possibly <c>null</c> — implementations must null-check before invoking
+    ///     it.
+    /// </param>
+    /// <exception cref="OperationCanceledException">
+    ///     The node token was cancelled mid-run, after a Cancelled snapshot was recorded.
+    /// </exception>
     Task<ModelFitRefreshResult> RefreshAsync(ModelFitRefreshRequest request,
         Func<string, int?, CancellationToken, Task>? reportProgress,
         CancellationToken cancellationToken);
 }
 
 /// <summary>
-///     Intent-level request for one model-fit refresh. Carries no command/argv/image-name and no provider — the local
-///     advisor runs box-aware GGUF recommendation entirely in-process (the only egress is the Hugging Face discovery call).
+///     Intent-level request for one model-fit refresh. It carries no command, argv, image name or provider: the local
+///     advisor runs box-aware GGUF recommendation entirely in-process, its only egress the Hugging Face discovery
+///     call.
+/// </summary>
+/// <remarks>
 ///     <see cref="QuantOverride" /> replaces the default <c>Q4_K_M</c> quant when supplied; <see cref="CtxTarget" />
 ///     overrides the context window the KV-cache fit is sized against.
-/// </summary>
+/// </remarks>
 public sealed class ModelFitRefreshRequest
 {
     public required ModelFitOperation Operation { get; init; }

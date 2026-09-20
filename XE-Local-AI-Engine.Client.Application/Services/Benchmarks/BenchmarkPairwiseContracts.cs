@@ -14,11 +14,12 @@ public sealed class BenchmarkPairwiseResultV1
     public required string Rationale { get; init; }
 }
 
-/// <summary>
-///     The pairwise verdict schema, in the same two shapes the pointwise one ships in: the bounded copy that goes into
-///     the prompt so the model is told the limits, and the bound-free copy handed to constrained decoding, because
-///     llama.cpp compiles a response format into GBNF and its sampler initialization breaks on length bounds.
-/// </summary>
+/// <summary>The pairwise verdict schema, in the same two shapes the pointwise one ships in.</summary>
+/// <remarks>
+///     The bounded copy goes into the prompt so the model is told the limits; the bound-free copy is handed to
+///     constrained decoding, because llama.cpp compiles a response format into GBNF and its sampler initialization
+///     breaks on length bounds.
+/// </remarks>
 public static class BenchmarkPairwiseOutputSchemaV1
 {
     public const int MaximumRationaleLength = 2048;
@@ -45,15 +46,14 @@ public static class BenchmarkPairwisePromptV1
         WriteIndented = false
     };
 
-    /// <summary>
-    ///     The instruction every pairwise judging gets. The length-neutrality sentence is carried over verbatim from
-    ///     the pointwise prompt: it is the best-documented judge bias and the only cheap counter to it.
-    ///     <para>
-    ///         Same rule as the pointwise prompt: this text is hashed NOWHERE. Any wording change must bump
-    ///         <see cref="BenchmarkJudgePolicyVersions.PairwisePromptVersion" />, or verdicts taken either side of the
-    ///         edit share a cohort and are fitted against each other as though they answered the same question.
-    ///     </para>
-    /// </summary>
+    /// <summary>The instruction every pairwise judging gets.</summary>
+    /// <remarks>
+    ///     The length-neutrality sentence is carried over verbatim from the pointwise prompt: it is the
+    ///     best-documented judge bias and the only cheap counter to it. Same rule as the pointwise prompt — this text
+    ///     is hashed NOWHERE, so any wording change MUST bump
+    ///     <see cref="BenchmarkJudgePolicyVersions.PairwisePromptVersion" />, or verdicts taken either side of the
+    ///     edit share a cohort and are fitted against each other as though they answered the same question.
+    /// </remarks>
     public const string SystemPrompt =
         "Two answers to the SAME benchmark task are supplied. Judge which one better satisfies the task. "
         + "Do not reward length or verbosity for its own sake, and do not prefer an answer for being shown first. "
@@ -107,11 +107,11 @@ public static class BenchmarkPairwisePromptV1
     }
 }
 
-/// <summary>
-///     Fail-closed parse of one pairwise verdict. Anything outside the schema — a missing member, an unknown verdict
-///     token, a rationale past the bound — fails the comparison rather than being coerced into a verdict, because a
-///     coerced verdict is a vote nobody cast.
-/// </summary>
+/// <summary>Fail-closed parse of one pairwise verdict.</summary>
+/// <remarks>
+///     Anything outside the schema — a missing member, an unknown verdict token, a rationale past the bound — fails
+///     the comparison rather than being coerced into a verdict, because a coerced verdict is a vote nobody cast.
+/// </remarks>
 public static class BenchmarkPairwiseResultParser
 {
     public static BenchmarkPairwiseResultV1 Parse(string? content)
@@ -158,11 +158,11 @@ public static class BenchmarkPairwiseResultParser
         return start >= 0 && end > start ? content[start..(end + 1)] : content;
     }
 
-    /// <summary>
-    ///     Turns a verdict about the PRESENTATION order into one about the canonical pair. With
-    ///     <paramref name="order" /> 1 the runs were shown swapped, so a verdict of <c>a</c> means the canonical B won.
-    ///     This is the whole bookkeeping of the position swap, and it lives in exactly one place.
-    /// </summary>
+    /// <summary>Turns a verdict about the PRESENTATION order into one about the canonical pair.</summary>
+    /// <remarks>
+    ///     With <paramref name="order" /> 1 the runs were shown swapped, so a verdict of <c>a</c> means the canonical
+    ///     B won. This is the whole bookkeeping of the position swap, and it lives in exactly one place.
+    /// </remarks>
     public static string ToCanonicalVerdict(string verdict, int order)
     {
         if (order == 0 || string.Equals(verdict, BenchmarkBradleyTerry.VerdictTie, StringComparison.Ordinal))

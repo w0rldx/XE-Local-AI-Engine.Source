@@ -52,19 +52,33 @@ The route comment makes the contract explicit: *"Cache-first: the latest endpoin
 `MemoryFitEstimator` (`Fit/MemoryFitEstimator.cs`) is a **stateless, I/O-free, Singleton-safe** estimator implementing the oobabooga "GGUF VRAM formula":
 
 ```
-total ≈ weights(quant) + KV_cache + ~0.75 GB runtime overhead + safety margin
-KV_cache = 2 · n_layers · n_kv_heads · head_dim · ctx · bytesPerKvElement
-head_dim = embedding_length / n_heads
+total ≈ weights(quant) + KV_cache + ~0.75 GB CUDA/runtime overhead + safety margin
+KV_cache = n_layers · n_kv_heads · (key_dim + value_dim) · ctx · bytesPerKvElement(kvQuant)
 ```
+
+**Two generalizations beyond the published formula.** The published `2 · n_layers · n_kv_heads · head_dim · ctx · bytesPerKvElement` is the same arithmetic for the common case — symmetric key and value dimensions, no MLA, every layer full-attention — and the two generalizations are what make the estimate right outside it.
+
+First, the per-head key and value dimensions come from the GGUF's explicit `{arch}.attention.key_length` / `value_length` when the header carries them. A derived `head_dim = embedding_length / n_heads` does not describe families like Qwen3, which pin `head_dim = 128` independently of the embedding width. Second, interleaved sliding-window attention (the Gemma family) caps the window-limited layers' KV at the window rather than at the full context.
+
+Supplying the explicit attention geometry is optional: with it absent the estimator derives `head_dim` and treats every layer as full-attention, which reduces the expression to the published one.
+
+**Multi-head Latent Attention (deepseek2) is clamped, never trusted downward.** llama.cpp allocates ONE latent K tensor per layer and no V tensor at all, so the row is `key_length_mla` wide with a single KV head — far below the generic figure. Two inputs to that width are **assumptions, not facts**: llama.cpp sizes the cache as `n_embd_head_k · n_head_kv` (not `n_embd_head_k_mla`), so both "the row is `key_length_mla` wide" and "`n_head_kv` is 1 under MLA" depend on what the deepseek2 loader writes into those hparams, and neither is provable from the published sources. This estimate is **not** display-only — `ProcessContextAllocationResolver` turns it into the `ResourceFootprint` the VRAM admission ledger reserves, and an under-estimate admits a model that then OOMs on load. So the MLA term is clamped with `Math.Max` against the generic term: it can only ever *raise* the estimate, never lower it, until a live measurement against llama.cpp's own `/metrics` KV figure says which assumption holds. Removing the clamp is a one-line change gated on that evidence. The clamp's generic term is whatever the ladder produced; when neither rung is computable the method has already returned the zero estimate, so a header carrying `key_length_mla` but no usable key/value geometry never clamps against zero and never ships the bare MLA figure.
+
+**Confidence.** An estimate whose `head_dim` was *derived* (no explicit key/value length), or whose weights term *fell back to the on-disk file size* because the header carried no param count, is flagged `FitConfidence.Approximate`, so the advisor can present a conservative figure rather than a precise-looking one.
 
 Key decisions, all in code:
 
 - **Budget selection (`MemoryFitEstimator.Estimate`).** Uses GPU VRAM iff `profile.GpuAccelAvailable && profile.VramKnown && profile.VramBytes > 0`; otherwise falls back to `profile.AvailableRamBytes`. The result records which budget it scored against via the `FitMode` enum (`Gpu` / `Cpu`). A model **fits iff `total ≤ budget`**; `HeadroomBytes = budget − estimated` (negative when it doesn't fit).
 - **Weights term (`EstimateWeightsBytes`).** Prefers `paramCount × BytesPerWeight(quant)`; when the GGUF header has no param count it **falls back to the on-disk file size** (the already-quantized weights), so a file is never rejected purely for a missing param count.
 - **Bytes-per-weight table (`BytesPerWeight`).** Maps llama.cpp quant labels (`Q2_K`…`Q8_0`, the `IQ1`…`IQ4` I-quants, `F16`, `F32`) to effective bytes/weight; unknown labels fall back to the `Q4_K_M` density (~0.5625 B/weight ≈ 4.5 bits).
-- **Constants.** `DefaultQuant = "Q4_K_M"`, `RuntimeOverheadBytes ≈ 0.75 GB`, `DefaultSafetyMarginFraction = 0.12` (12% applied to weights+KV before adding the fixed overhead). The KV term can be halved by passing `kvCacheQuantized: true` (8-bit instead of fp16 KV cache).
+- **Constants.** `DefaultQuant = "Q4_K_M"`, `RuntimeOverheadBytes ≈ 0.75 GB`, `DefaultSafetyMarginFraction = 0.12` (12% applied to weights+KV before adding the fixed overhead). The KV term can be halved by passing `kvCacheQuantized: true` (8-bit instead of fp16 KV cache), or chosen three ways with `kvCacheQuant` (`F16` / `Q8_0` / `Q4_0`), which overrides the bool when supplied.
+- **Budget selection, in full.** GPU VRAM is used when acceleration is available *and* VRAM was measured (`GpuAccelAvailable && VramKnown`): **free** VRAM (`AvailableVramBytes`) when the probe supplied it, total dedicated VRAM otherwise. In CPU mode the budget is the node's available RAM — the degrade rule.
 
 Because it is pure, every input is supplied directly by the caller — there is no GGUF parsing inside the estimator. The discovery layer supplies the header DTO.
+
+### Native-format requants are filtered out
+
+`MemoryFitEstimator.FilterOutNativeFormatRequants` drops any candidate that is a pointless requant of a repo that also ships a native, non-requantizable format (MXFP4 / NVFP4). Survivors are every native file plus the genuinely smaller lower-quality quants a tight box needs. It is pure and generic, so both advisor lanes share one guard (`rankOf` is `QuantLadder.QualityRank`, where lower is higher quality).
 
 ## The quant ladder & quality tiers
 
@@ -91,7 +105,7 @@ The advisor recommends *which model*; the **Inference Optimizer** tunes *how an 
 
 - **Explore** — spawns one auto-fit `llama-server`, parses the fitted launch args from its startup banner, and upserts the single **Explored** profile keyed by `(machineKey, model, role, backend)`. The request body carries an optional `contextTokens` operator override that pins **that explore spawn's** `-c` for the one call: it is never persisted (no node setting, no launch-policy option, no fingerprint input), it is silently capped by the model's train ceiling and floor-aligned, so `ctxSize` on the returned profile is the effective window rather than the requested one, and it is **GPU-only** — a non-null value on a CPU-variant node is rejected with a 400 because `llama-fit-params` does not run there. An override is honoured verbatim or the explore **fails**: it routes the allocation down the deterministic-override branch, and `ProcessContextAllocationResolver.TryDownTierForAdmission` down-tiers hardware-tier allocations only, so a window the box cannot fit is rejected at spawn rather than reduced the way an unoverridden explore would be.
 - **Benchmark** — replays the drafted profile under a metrics-enabled spawn against a fixed golden transcript, persists a benchmark snapshot + metric row (Succeeded/Failed). Does **not** freeze.
-- **Freeze** — promotes Explored → **Frozen**, **gated on a most-recent successful benchmark** (fails cleanly, never throws, with no justifying benchmark). A frozen profile is then replayed verbatim on every cold spawn until its baseline (build / hardware / free-VRAM) changes invalidates it back to Stale.
+- **Freeze** — promotes Explored → **Frozen**, **gated on a most-recent successful benchmark** (fails cleanly, never throws, with no justifying benchmark). The gate binds to the **exact profile revision**: only a successful benchmark taken for *this* profile whose recorded launch args still match the profile's current args justifies a freeze, so re-exploring — which rewrites quant / ctx / gpu-layers / kv-types / flash-attn — clears the justification and the operator is told to re-benchmark (`InferenceProfileService.BenchmarkMatchesProfile`). It applies to **future freezes only**; already-frozen profiles are deliberately left untouched, with no retroactive invalidation. A frozen profile is then replayed verbatim on every cold spawn until its baseline (build / hardware / free-VRAM) changes invalidates it back to Stale.
 - **Invalidate** — operator-triggered manual demotion to **Stale** (forces re-explore).
 
 These are exposed as four body-carrying POST actions plus a collection GET — see [Endpoints](#endpoints) below and [09-api-and-hubs.md](09-api-and-hubs.md). The React **Inference Profile panel** (`features/model-fit/components/InferenceProfilePanel.tsx` + `queries/useInferenceProfiles.ts`, mutations `explore`/`benchmark`/`freeze`/`invalidate`) renders this surface. The persisted store + metrics are migration `20260626234754_AddInferenceProfilesAndBenchmarkMetrics` ([08-data-and-persistence.md](08-data-and-persistence.md)).
@@ -122,7 +136,7 @@ A catalog-lane failure (`HttpRequestException` / `IOException` / `TimeoutExcepti
 
 ## The refresh service (the advisor)
 
-`ModelFitRefreshService.RefreshAsync` (`Implementation/ModelFitRefreshService.cs`) is the advisor proper. It is **scoped** (resolved per Quartz fire by the singleton handler through a fresh DI scope). Flow:
+`ModelFitRefreshService.RefreshAsync` (`Implementation/ModelFitRefreshService.cs`) is the advisor proper. It is **scoped** (resolved per Quartz fire by the singleton handler through a fresh DI scope). It owns no scheduler state and publishes no SignalR — the dispatcher owns the run row — and its logs carry the snapshot id, operation, use-case and sanitized status only; raw discovery payloads are never logged. Flow:
 
 1. **Guard** — non-`Recommend` operations are rejected before any snapshot row exists (the `operation != Recommend` guard).
 2. **Validate** intent (`useCase`, `limit`) via `ModelFitRequestValidator` against the fixed allowlist; provider is fixed to the `"llama.cpp"` sentinel.
@@ -131,7 +145,7 @@ A catalog-lane failure (`HttpRequestException` / `IOException` / `TimeoutExcepti
    - **Two-pass discovery per use-case term.** Each mapped HF search term runs **twice** — `GgufSearchSort.Trending` (current download/like velocity) *and* `GgufSearchSort.LastModified` (most recently updated) — and the per-term lists are merged **round-robin** so neither pass dominates. The recency pass surfaces newly-released big models a trending-only search misses once the pool is capped; trending keeps the established-popular repos. Each search is wrapped in a **20 s per-call timeout** (a stalled search maps to a clean `Failed` run, not a hang).
    - Inspect candidate repos **in parallel with bounded concurrency** (`SemaphoreSlim`); a stalled/failing repo is skipped (null candidate) so it never fails the whole run.
    - **Quant-ladder step-down (per repo).** Instead of taking one fixed quant, the advisor walks the repo's files against the [`QuantLadder`](#the-quant-ladder--quality-tiers) from the highest-quality quant **down** to the `Q3_K_M` quality floor (`QuantLadder.FloorRank`), estimating each with `MemoryFitEstimator`, and keeps the highest-quality quant that **fits** the budget. This is why big new models (Gemma-3-27B, Qwen-3.x) now surface at, say, `Q4_K_M` instead of being dropped because their `Q8_0` didn't fit.
-   - **Bucketed capability ranking.** The fitting candidates are ranked **capability-first but bucketed to ~1 GiB** (`EstimatedBytes / CapabilityBucketBytes`, `CapabilityBucketBytes = 1 GiB`) so a trivially-larger model no longer always outranks a much newer or far more popular peer. Within a bucket the order is **downloads (popularity) → last-modified (recency) → trusted-publisher (soft nudge) → repo id (deterministic tie-break)**, then `Take(request.Limit)` (`ModelFitRefreshService.cs`).
+   - **Bucketed capability ranking.** The fitting candidates are ranked **capability-first but bucketed to ~1 GiB** (`EstimatedBytes / CapabilityBucketBytes`, `CapabilityBucketBytes = 1 GiB`) so a trivially-larger model does not outrank a much newer or far more popular peer. Within a bucket the order is **downloads (popularity) → last-modified (recency) → trusted-publisher (soft nudge) → repo id (deterministic tie-break)**, then `Take(request.Limit)` (`ModelFitRefreshService.cs`). "Fits" is conservative: the estimate already carries the 12% safety margin plus the fixed runtime overhead, and repo id sorts last so the order never depends on which parallel repo inspection finished first.
    - Each emitted recommendation also carries `release_date` (the repo's last-modified timestamp) and `is_trusted_publisher` for the UI's recency/trust signals.
 5. **Serialize** the ranked fits to advisor JSON, parse them through `RecommendationJsonParser`, and write the terminal snapshot (`Succeeded`) plus replace the recommendation rows (`IModelFitRecommendationStore.ReplaceForSnapshotAsync`).
 

@@ -1,13 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Bounded, RAM-only cache of recent knowledge-search query embeddings, keyed by the canonical vector identity
-///     plus the exact query text. It lets a repeated query (the dominant retrieval latency is the embedding round trip)
-///     skip re-embedding. The query text is never persisted or logged — it is reduced to a hash for the key, and the
-///     vector lives only in process memory with a hard size bound and a short TTL, honoring the repo rule that embeddings
-///     of potentially-sensitive text are never written to disk. The canonical identity means model, transform-policy, or
-///     width changes can never return a stale vector.
+///     Bounded, RAM-only cache of recent knowledge-search query embeddings, keyed by the canonical vector identity plus
+///     the exact query text, so a repeated query skips the embedding round trip that dominates retrieval latency.
 /// </summary>
+/// <remarks>
+///     The query text is never persisted or logged — it is reduced to a hash for the key, and the vector lives only in
+///     process memory under a hard size bound and a short TTL, honoring the rule that embeddings of
+///     potentially-sensitive text are never written to disk. Keying on the canonical identity means a model,
+///     transform-policy, or width change can never return a stale vector.
+/// </remarks>
 public interface IKnowledgeQueryEmbeddingCache
 {
     /// <summary>

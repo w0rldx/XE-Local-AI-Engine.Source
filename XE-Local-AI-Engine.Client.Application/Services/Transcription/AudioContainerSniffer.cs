@@ -29,16 +29,11 @@ public enum AudioContainer
 ///     Decides what an upload actually is from its first bytes. Pure: it performs no I/O and holds no state.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The file name extension is never consulted. A client that renames an Ogg file to <c>.wav</c> would
-///         otherwise reach the daemon with audio it cannot decode, and the failure would surface as a runtime error
-///         rather than as the "this container is not supported" answer the operator can act on.
-///     </para>
-///     <para>
-///         <b>Why MP3 is tested last.</b> Its bare frame sync is eleven bits wide — <c>0xFF</c> followed by the top
-///         three bits of the next byte — which a great many byte sequences satisfy by accident. Claiming MP3 only
-///         after every structured signature has been ruled out keeps that loose test from shadowing a real container.
-///     </para>
+///     The file name extension is never consulted: a client that renamed an Ogg file to <c>.wav</c> would otherwise reach the
+///     daemon with audio it cannot decode, and the failure would surface as a runtime error rather than as the "this container
+///     is not supported" answer the operator can act on. MP3 is tested LAST because its bare frame sync is eleven bits wide —
+///     <c>0xFF</c> plus the top three bits of the next byte — which a great many byte sequences satisfy by accident; claiming
+///     MP3 only after every structured signature is ruled out keeps that loose test from shadowing a real container.
 /// </remarks>
 public static class AudioContainerSniffer
 {

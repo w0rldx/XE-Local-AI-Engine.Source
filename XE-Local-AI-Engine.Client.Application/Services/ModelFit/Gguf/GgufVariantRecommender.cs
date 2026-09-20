@@ -6,20 +6,19 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="IGgufVariantRecommender" />. Resolves the active llama.cpp backend the same way the inference
-///     profiler does (<see cref="IGpuVariantSelector" /> → <see cref="InferenceBackends.FromVariant" />), probes the
-///     llama.cpp process-local VRAM budget once via <see cref="IProcessVramBudgetProbe" />, then grades each file's
-///     quality tier and fit verdict and flags a single recommended variant. Stateless (singletons only) → singleton.
-///     Read-time computation; degrades to "unknown" rather than throwing when the backend/probe is unavailable.
+///     Default <see cref="IGgufVariantRecommender" />: grades each file's quality tier and fit verdict and flags a
+///     single recommended variant. Stateless (singletons only), so registered as a singleton.
 /// </summary>
+/// <remarks>
+///     Resolves the active llama.cpp backend the same way the inference profiler does
+///     (<see cref="IGpuVariantSelector" /> → <see cref="InferenceBackends.FromVariant" />) and probes the llama.cpp
+///     process-local VRAM budget once via <see cref="IProcessVramBudgetProbe" />. Read-time computation; degrades to
+///     "unknown" rather than throwing when the backend or probe is unavailable.
+/// </remarks>
 public sealed class GgufVariantRecommender : IGgufVariantRecommender
 {
-    // Runtime-headroom margin added to a file's on-disk size before calling it a comfortable fit. The inspect path is the
-    // header-free fast path, so all we have is the file size (≈ weights on disk); resident VRAM also needs the KV cache
-    // and the CUDA/runtime overhead on top. We approximate that unmeasured headroom as a fraction of the file size,
-    // floored at a fixed minimum so a small model still reserves room for the fixed overhead. The fraction mirrors the
-    // advisor's MemoryFitEstimator (~12% safety margin + ~0.75 GiB overhead) but is rounded up conservatively here
-    // because we deliberately skip the per-file header read on this path.
+    // The inspect path skips the per-file header read, so only the on-disk size (≈ weights) is known while resident VRAM
+    // also needs the KV cache and runtime overhead: mirror MemoryFitEstimator's ~12% margin + ~0.75 GiB overhead, rounded up.
     private const double HeadroomFraction = 0.15d;
     private const long MinHeadroomBytes = 1024L * 1024 * 1024; // ~1 GiB floor for fixed KV/runtime overhead.
 
@@ -106,13 +105,17 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         return sizeBytes + margin <= free ? GgufFitVerdict.Fits : GgufFitVerdict.Tight;
     }
 
-    // Picks exactly one recommended variant (files are guaranteed non-empty here). When some files fit, the highest
-    // quality tier among them wins (ties broken by larger size). Otherwise the best Tight file wins by the same order.
-    // When free VRAM is known but nothing fits, the smallest file wins. When VRAM is unknown (no probe ran), a SweetSpot
-    // file is preferred, then a Balanced one, and failing both the median file by size is chosen.
-    // Speculative-decoding drafters are excluded from every branch: a drafter is a companion of the base weights, not a
-    // runnable chat model, and being both tiny and high-quality-looking it would otherwise win the fit-first ordering
-    // outright. Returns -1 (no recommendation) when the repo lists nothing BUT drafters.
+    /// <summary>
+    ///     Picks exactly one recommended variant from the repo's files (guaranteed non-empty here), or <c>-1</c> when
+    ///     the repo lists nothing BUT speculative-decoding drafters.
+    /// </summary>
+    /// <remarks>
+    ///     When some files fit, the highest quality tier among them wins, ties broken by larger size; otherwise the
+    ///     best Tight file by the same order. When free VRAM is known but nothing fits, the smallest file wins. When
+    ///     VRAM is unknown (no probe ran), a SweetSpot file is preferred, then a Balanced one, then the median file by
+    ///     size. Drafters are excluded from every branch: a drafter is a companion of the base weights, not a runnable
+    ///     chat model, and being tiny yet high-quality-looking would otherwise win the fit-first ordering outright.
+    /// </remarks>
     private static int PickRecommendedIndex(IReadOnlyList<GgufRepoFile> files,
         IReadOnlyList<GgufQuantTier> tiers,
         IReadOnlyList<GgufFitVerdict> verdicts)

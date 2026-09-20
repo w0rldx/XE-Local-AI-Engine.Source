@@ -3,10 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using Microsoft.Extensions.DataIngestion;
 
 /// <summary>
-///     Outcome of extracting the structured <see cref="IngestionDocument" /> (sections + headers + paragraphs) from an
-///     uploaded document, before it is flattened to Markdown. Mirrors <see cref="DocumentExtractionResult" /> but carries
-///     the reader's structured document instead of a Markdown string, so the chunking lane can walk the heading structure.
+///     Outcome of extracting the structured <see cref="IngestionDocument" /> — sections, headers, paragraphs — from an
+///     uploaded document, before it is flattened to Markdown.
 /// </summary>
+/// <remarks>
+///     Mirrors <see cref="DocumentExtractionResult" /> but carries the reader's structured document instead of a Markdown
+///     string, so the chunking lane can walk the heading structure.
+/// </remarks>
 public sealed class DocumentStructuredExtractionResult
 {
     /// <summary>How the extraction resolved.</summary>

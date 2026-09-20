@@ -43,9 +43,8 @@ public sealed class FtsSearch : IFtsSearch
         }
 
         await using var command = connection.CreateCommand();
-        // Identifiers are UNINDEXED; title-bearing metadata receives a larger BM25 weight than body text. The document
-        // join applies the same collection boundary as the dense arm before ranking, so no cross-project candidate can
-        // enter fusion or consume the bounded pool.
+        // Identifiers are UNINDEXED and title-bearing metadata carries a larger BM25 weight than body text; the document
+        // join applies the dense arm's collection boundary before ranking, so no cross-project candidate enters fusion.
         command.CommandText = """
                               SELECT chunk_fts.chunk_id, chunk_fts.document_id,
                                      bm25(chunk_fts, 0.0, 0.0, 6.0, 3.0, 8.0, 1.0) AS score
@@ -73,17 +72,14 @@ public sealed class FtsSearch : IFtsSearch
         return hits;
     }
 
-    /// <summary>
-    ///     Escapes an untrusted search string into a safe FTS5 <c>MATCH</c> expression. The string is split on whitespace
-    ///     and each token is wrapped in double quotes (with embedded double quotes doubled), then the quoted tokens are
-    ///     joined with the <c>OR</c> operator. Quoting each token individually makes operator characters
-    ///     (<c>- * : ( ) " ^</c>) and bare keywords (<c>OR AND NOT NEAR</c>) inside a token ordinary text, so the input
-    ///     can never inject query syntax or trigger a MATCH parse error. <c>OR</c> (rather than implicit <c>AND</c>) keeps
-    ///     recall high for RRF fusion: a document matching any term still surfaces, while BM25 continues to rank documents
-    ///     that match more terms higher. A whitespace-only or empty input yields an empty quoted phrase, which is valid
-    ///     FTS5 syntax that matches no rows. Example: <c>embedding model config</c> becomes
-    ///     <c>"embedding" OR "model" OR "config"</c>.
-    /// </summary>
+    /// <summary>Escapes an untrusted search string into a safe FTS5 <c>MATCH</c> expression.</summary>
+    /// <remarks>
+    ///     Splits on whitespace, wraps each token in double quotes with embedded quotes doubled, and joins them with <c>OR</c>.
+    ///     Per-token quoting makes operator characters (<c>- * : ( ) " ^</c>) and bare keywords (<c>OR AND NOT NEAR</c>) ordinary
+    ///     text, so input can never inject query syntax or trigger a MATCH parse error. <c>OR</c> rather than implicit
+    ///     <c>AND</c> keeps recall high for RRF fusion: any matching term surfaces the document, while BM25 still ranks
+    ///     documents matching more terms higher. Empty or whitespace-only input yields an empty quoted phrase matching no rows.
+    /// </remarks>
     public static string EscapeMatchQuery(string query)
     {
         ArgumentNullException.ThrowIfNull(query);

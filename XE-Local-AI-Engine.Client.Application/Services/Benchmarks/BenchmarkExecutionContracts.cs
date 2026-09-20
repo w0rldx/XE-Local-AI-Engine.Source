@@ -123,13 +123,13 @@ public sealed class BenchmarkEventBufferOptions
     public const int DefaultMaxEventCount = 512;
     public const int DefaultMaxUtf8Bytes = 1024 * 1024;
 
-    /// <summary>
-    ///     How many TERMINAL runs keep their (already emptied) buffer entry. The entry carries no output — eviction
-    ///     cleared that — only the sequence bookkeeping that lets a late subscriber be told to reset instead of being
-    ///     answered with silence. Past this many, the oldest are dropped: the hub then compares the run's persisted
-    ///     <c>LastStreamSequence</c> against an empty replay and resets anyway, which is the same answer by another
-    ///     route. Active runs are never dropped, however many there are.
-    /// </summary>
+    /// <summary>How many TERMINAL runs keep their (already emptied) buffer entry.</summary>
+    /// <remarks>
+    ///     The entry carries no output — eviction cleared that — only the sequence bookkeeping that lets a late
+    ///     subscriber be told to reset instead of being answered with silence. Past this many the oldest are dropped:
+    ///     the hub then compares the run's persisted <c>LastStreamSequence</c> against an empty replay and resets
+    ///     anyway, which is the same answer by another route. Active runs are never dropped, however many there are.
+    /// </remarks>
     public const int DefaultMaxRetainedTerminalRuns = 256;
 
     public int MaxEventCount { get; init; } = DefaultMaxEventCount;
@@ -266,15 +266,8 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
             state.Events.Clear();
             state.Utf8Bytes = 0;
 
-            // The entry survives eviction on purpose: emptied of output, it still says "there WAS a stream here and it
-            // is gone", which is what turns a late subscriber's replay into a reset rather than into silence. It is
-            // also the leak — a node that runs a thousand benchmarks kept a thousand of them — so the tombstones are
-            // capped.
-            //
-            // Queue membership is its OWN flag, not PlaintextEvicted: a run is evicted once per terminal PHASE and has
-            // two, and BeginActivePhase clears PlaintextEvicted between them, so keying off it enqueued the same run
-            // twice and halved the effective cap to ~128 runs. Queued stays set for as long as the id is in the queue,
-            // whatever the run does afterwards.
+            // The entry survives eviction on purpose: emptied, it still turns a late subscriber's replay into a reset rather than silence. It is also the leak, so the tombstones are capped.
+            // Queued is its OWN flag, not PlaintextEvicted: a run is evicted once per terminal PHASE and has two, and BeginActivePhase clears it between them — keying the queue off it halves the cap.
             state.PlaintextEvicted = true;
             if (!state.Queued)
             {
@@ -286,9 +279,8 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
             {
                 var oldest = _evicted.Dequeue();
 
-                // Skipped when the run went active again (a judge phase after the primary): its entry belongs to a
-                // live stream now, and dropping it would restart that stream's sequence numbering. Either way the id
-                // leaves the queue, so a run that is spared here can be enqueued again by its next eviction.
+                // Skipped when the run went active again (a judge phase after the primary): its entry belongs to a live stream, and dropping it would restart that stream's sequence numbering.
+                // Either way the id leaves the queue, so a run that is spared here can be enqueued again by its next eviction.
                 if (_runs.TryGetValue(oldest, out var stale))
                 {
                     stale.Queued = false;
@@ -364,13 +356,14 @@ public sealed record BenchmarkOutputPart(
     string? Result = null,
     bool? IsError = null);
 
-/// <summary>
-///     Shaping for a run's output parts. The live capture appends ONE part per stream delta, so a thinking model's turn
-///     arrives as thousands of <c>{"kind":"reasoning","content":" 5"}</c> parts (measured: 476 KB of JSON for a 4.3k-token
-///     answer). Nothing downstream wants that granularity: the terminal write stores the COALESCED form, and the judge
-///     grades a further-reduced projection of it. The part schema is unchanged either way — same kinds, same property
-///     names — so every existing reader (the endpoint DTO, the live pane, the transcript viewer) is unaffected.
-/// </summary>
+/// <summary>Shaping for a run's output parts.</summary>
+/// <remarks>
+///     The live capture appends ONE part per stream delta, so a thinking model's turn arrives as thousands of
+///     <c>{"kind":"reasoning","content":" 5"}</c> parts (measured: 476 KB of JSON for a 4.3k-token answer). Nothing
+///     downstream wants that granularity: the terminal write stores the COALESCED form and the judge grades a
+///     further-reduced projection of it. The part schema is unchanged either way — same kinds, same property names —
+///     so every existing reader (the endpoint DTO, the live pane, the transcript viewer) is unaffected.
+/// </remarks>
 public static class BenchmarkOutputParts
 {
     public const string OutputKind = "output";
@@ -382,18 +375,18 @@ public static class BenchmarkOutputParts
     /// <summary>Appended to the last text part the judge is shown when the answer had to be cut to fit its context.</summary>
     public const string TruncationMarker = "\n\n[truncated: the primary output exceeded the judge context budget]";
 
-    // ponytail: a coarse character allowance rather than a second context budgeter. Four characters per token mirrors
-    // HeuristicTokenEstimator's divisor, and half the window is left for the system prompt, task, rubric, output schema
-    // and the judge's own verdict. Ceiling: tool arguments and results are not counted, so a tool-heavy transcript can
-    // still overrun. Upgrade path is to budget the BUILT payload with ITokenEstimator if that ever bites.
+    // ponytail: a coarse character allowance, not a second context budgeter — four chars per token mirrors HeuristicTokenEstimator's divisor, half the window left for the rest of the judge payload.
+    // Ceiling: tool arguments and results are not counted, so a tool-heavy transcript can still overrun. Upgrade path: budget the BUILT payload with ITokenEstimator.
     private const int EstimatedCharsPerToken = 4;
     private const int MinimumJudgeTextChars = 2048;
 
     /// <summary>
     ///     Merges adjacent text parts of the same kind (output with output, reasoning with reasoning) into one part.
+    /// </summary>
+    /// <remarks>
     ///     Tool-call and tool-result parts pass through untouched and act as boundaries, so the transcript order is
     ///     preserved exactly — text before a tool call never merges with text after it.
-    /// </summary>
+    /// </remarks>
     public static IReadOnlyList<BenchmarkOutputPart> Coalesce(IEnumerable<BenchmarkOutputPart> parts)
     {
         ArgumentNullException.ThrowIfNull(parts);
@@ -446,22 +439,17 @@ public static class BenchmarkOutputParts
         return parts.Any(static part => string.Equals(part.Kind, OutputKind, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(part.Content));
     }
 
-    /// <summary>
-    ///     Whether the turn produced no gradable answer, judged from the parts alone. Two shapes, both of which a
-    ///     provider reports as a CLEAN finish:
-    ///     <list type="bullet">
-    ///         <item>the transcript ENDS on a <c>tool_call</c> — the agent asked for a tool and the turn stopped there,
-    ///         so no <c>tool_result</c> and no answer ever followed;</item>
-    ///         <item>the reasoning-stripped text is empty or whitespace — a thinking model spent the whole turn in its
-    ///         scratchpad.</item>
-    ///     </list>
-    ///     Either way the run reports <c>stop</c> or <c>tool_calls</c>, which reads downstream as a finished answer:
-    ///     the judge grades an empty transcript and the ranking seats the score beside runs that actually answered.
-    ///     <para>
-    ///         Pass the COALESCED parts. The live capture appends one part per delta, so the "last part" of a raw
-    ///         capture is whatever fragment arrived last, not the shape of the turn.
-    ///     </para>
-    /// </summary>
+    /// <summary>Whether the turn produced no gradable answer, judged from the parts alone.</summary>
+    /// <remarks>
+    ///     Two shapes, both of which a provider reports as a CLEAN finish: the transcript ENDS on a <c>tool_call</c> (no
+    ///     <c>tool_result</c> and no answer ever followed), or the reasoning-stripped text is empty or whitespace (a
+    ///     thinking model spent the whole turn in its scratchpad). Either way the run reports <c>stop</c> or
+    ///     <c>tool_calls</c>, which reads downstream as a finished answer: the judge grades an empty transcript and the
+    ///     ranking seats the score beside runs that actually answered.
+    /// </remarks>
+    /// <param name="parts">
+    ///     The COALESCED parts: a raw capture's last part is whatever fragment arrived last, not the shape of the turn.
+    /// </param>
     public static bool IsUnanswered(IReadOnlyList<BenchmarkOutputPart> parts)
     {
         ArgumentNullException.ThrowIfNull(parts);
@@ -475,18 +463,14 @@ public static class BenchmarkOutputParts
         return parts.Count > 0 && string.Equals(parts[^1].Kind, ToolCallKind, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    ///     The parts the judge is shown: <see cref="Coalesce" />d, with every <c>reasoning</c> part DROPPED. Hidden
-    ///     chain-of-thought is not the graded answer — the rubric evaluates the visible output — and on a thinking model
-    ///     the reasoning alone blew the judge context (measured: 107,192 estimated tokens against a 16,384 window, so
-    ///     every judging failed before inference). Text and tool parts are kept, in order.
-    ///     <para>
-    ///         Defensively bounded: if the reasoning-free text still cannot plausibly fit
-    ///         <paramref name="judgeContextTokens" />, the tail is cut and the cut is marked with
-    ///         <see cref="TruncationMarker" /> so the judge grades a visibly partial answer instead of the judging
-    ///         failing outright. Truncation applies to the judge's copy only; the stored transcript keeps every part.
-    ///     </para>
-    /// </summary>
+    /// <summary>The parts the judge is shown: <see cref="Coalesce" />d, with every <c>reasoning</c> part DROPPED.</summary>
+    /// <remarks>
+    ///     Hidden chain-of-thought is not the graded answer — the rubric evaluates the visible output — and on a
+    ///     thinking model the reasoning alone blew the judge context (measured: 107,192 estimated tokens against a
+    ///     16,384 window, so every judging failed before inference). Text and tool parts are kept, in order. Text that
+    ///     still cannot plausibly fit <paramref name="judgeContextTokens" /> is cut and marked with
+    ///     <see cref="TruncationMarker" />; the cut applies to the judge's copy only, never the stored transcript.
+    /// </remarks>
     public static IReadOnlyList<BenchmarkOutputPart> ForJudge(IEnumerable<BenchmarkOutputPart> parts, int judgeContextTokens)
     {
         var graded = Coalesce(parts)
@@ -617,10 +601,13 @@ internal static class BenchmarkSnapshotModelComparer
 
 /// <summary>
 ///     The ONLY serializer for the benchmark run's stored <c>output_parts_json</c> blob (the judge's own blobs ride
-///     <c>BenchmarkJudgeSerialization</c>). Public because a reader must never re-derive the options at the call site:
-///     <see cref="JsonSerializerDefaults.Web" /> is camelCase, so deserializing with default options binds every
-///     property to its default and hands the API a zeroed payload instead of failing.
+///     <c>BenchmarkJudgeSerialization</c>).
 /// </summary>
+/// <remarks>
+///     Public because a reader must never re-derive the options at the call site: <see cref="JsonSerializerDefaults.Web" />
+///     is camelCase, so deserializing with default options binds every property to its default and hands the API a
+///     zeroed payload instead of failing.
+/// </remarks>
 public static class BenchmarkExecutionSerialization
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -717,10 +704,13 @@ public sealed record BenchmarkProjectDraft
     public int? InvocationTimeoutSeconds { get; init; }
 
     /// <summary>
-    ///     The per-run thinking budget frozen into every run's sampling, or <see langword="null" /> to leave the reasoning
-    ///     bounded only by the effort ladder and the window. Validated as <c>1 &lt;= ReasoningBudgetTokens &lt;
-    ///     ContextTokens</c>, and — with an output budget also set — as leaving a prompt reserve inside the context.
+    ///     The per-run thinking budget frozen into every run's sampling, or <see langword="null" /> to leave the
+    ///     reasoning bounded only by the effort ladder and the window.
     /// </summary>
+    /// <remarks>
+    ///     Validated as <c>1 &lt;= ReasoningBudgetTokens &lt; ContextTokens</c>, and — with an output budget also set —
+    ///     as leaving a prompt reserve inside the context.
+    /// </remarks>
     public int? ReasoningBudgetTokens { get; init; }
 
     public bool FidelityEnabled { get; init; }
@@ -807,14 +797,14 @@ public sealed record BenchmarkRunStartRequest
     public double? AnswerVarianceTemperature { get; init; }
 }
 
-/// <summary>
-///     One model's freeze, decided but NOT written. Every read a freeze takes — the verified model lease, the
-///     eligibility, the agent resolution, the project version — has already happened and produced these commands;
+/// <summary>One model's freeze, decided but NOT written.</summary>
+/// <remarks>
+///     Every read a freeze takes — the verified model lease, the eligibility, the agent resolution, the project
+///     version — has already happened and produced these commands;
 ///     <see cref="IBenchmarkRunFreezeService.CommitAsync" /> is the only step that touches the database. That split is
 ///     what lets a PAIR be validated on both sides before either side exists: committing one side first left the
-///     caller with queued runs it was never told the ids of when the other side then failed, and the only retry
-///     available duplicated the committed side.
-/// </summary>
+///     caller with queued runs it was never told the ids of, and the only retry available duplicated that side.
+/// </remarks>
 public sealed class BenchmarkFrozenRunPlan
 {
     public required Guid ProjectId { get; init; }

@@ -11,21 +11,16 @@ using XE_Local_AI_Engine.Client.Persistence;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
-///     Default <see cref="IVectorSearch" />. Streams candidate rows from <c>knowledge_chunk_vectors</c> filtered to the
-///     current embedding model, never comparing vectors across models, and reinterprets each <c>float32</c> BLOB (laid
-///     out in the platform's native byte order) as a <see cref="ReadOnlySpan{Single}" /> over a single reused, pooled
-///     buffer (no per-row allocation), scores it against the query vector, and keeps only the top-k in a bounded
-///     min-heap (no full sort of the whole corpus). Vectors are scored one row at a time; only the resulting scalar
-///     score and identifiers are retained, never the full set of vectors. Scoped: depends on the request-scoped
-///     <see cref="NodeChatDbContext" />.
-///     <para>
-///         Scoring path: once the legacy-vector normalization backfill has completed (<see cref="IKnowledgeVectorNormalizationState" />),
-///         every stored vector is unit length and new writes are normalized at ingestion, so the query is normalized once
-///         and each candidate scored with a plain dot product — one pass instead of the three-accumulator cosine. Until
-///         then the search stays on the scale-invariant <see cref="TensorPrimitives.CosineSimilarity(ReadOnlySpan{float}, ReadOnlySpan{float})" />
-///         path, which returns the identical ranking whether or not a given stored row is normalized yet.
-///     </para>
+///     Default <see cref="IVectorSearch" />: streams candidate rows from <c>knowledge_chunk_vectors</c> filtered to the
+///     current embedding model, scores each one against the query vector, and keeps only the top-k.
 /// </summary>
+/// <remarks>
+///     Vectors are never compared across models. Each <c>float32</c> BLOB, in the platform's native byte order, is
+///     reinterpreted as a <see cref="ReadOnlySpan{Single}" /> over one reused pooled buffer, so no row allocates, and the
+///     top-k lives in a bounded min-heap rather than a full corpus sort; only the scalar score and identifiers are kept,
+///     never the vectors. Scoring follows <see cref="IKnowledgeVectorNormalizationState" />: a plain dot product once
+///     every stored vector is known normalized, scale-invariant cosine until then. Scoped to the request db context.
+/// </remarks>
 public sealed class ManagedCosineVectorSearch : IVectorSearch
 {
     private readonly NodeChatDbContext _dbContext;
@@ -100,9 +95,8 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
             return [];
         }
 
-        // Dot-product fast path once all stored vectors are known-normalized: normalize the query ONCE here, then score
-        // each candidate with a single dot pass. A zero-magnitude query has no direction — every cosine would be NaN and
-        // be skipped, i.e. an empty result — so mirror that exactly and return nothing.
+        // Dot-product fast path once all stored vectors are known-normalized: normalize the query ONCE, then one dot pass
+        // per candidate. A zero-magnitude query has no direction, so mirror cosine's all-NaN, empty result and return none.
         var useDot = _normalizationState.IsComplete;
         float[]? normalizedQueryBuffer = null;
         var scoringQuery = queryVector;
@@ -218,10 +212,8 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
                 float score;
                 if (useDot)
                 {
-                    // Every stored vector is normalized here, EXCEPT a zero-magnitude one which stays exactly zero (it has
-                    // no direction to normalize). Cosine returned NaN for such a row and skipped it; match that by skipping
-                    // an all-zero candidate rather than scoring it a false 0. The check is a vectorized byte scan that
-                    // returns at the first non-zero byte, so it is ~free for the overwhelming non-zero majority.
+                    // Every stored vector is normalized here EXCEPT a zero-magnitude one, which has no direction and stays
+                    // zero; cosine yields NaN and skips it, so skip it too rather than scoring a false 0. The scan is ~free.
                     if (IsZeroVector(candidate))
                     {
                         continue;
@@ -239,9 +231,8 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
                     }
                 }
 
-                // Materialize the id strings + Guids only for rows that actually enter the heap. Once the heap is
-                // full, the overwhelming majority of scanned rows lose to the current worst kept hit — skipping their
-                // id reads drops two string allocations + two Guid parses per rejected row across the whole corpus.
+                // Materialize the id strings and Guids only for rows that actually enter the heap: once it is full most
+                // scanned rows lose to the worst kept hit, so skipping their id reads saves two allocs and two parses each.
                 if (topK.WouldAccept(score, sequence))
                 {
                     topK.Offer(score, sequence, Guid.Parse(reader.GetString(0)), Guid.Parse(reader.GetString(1)));
@@ -264,12 +255,17 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         }
     }
 
-    // Reads the embedding BLOB (ordinal 2) into the reused pooled buffer via the reader's blob stream — no per-row byte[]
-    // allocation — and returns it reinterpreted as float32 in native byte order (the layout the embedder wrote). The buffer
-    // grows only when a row is wider than any seen so far; all rows for one model share a width, so it is rented once.
-    // Cannot be async: C# forbids both a ref parameter and a ByRefLike return in an async method, and this signature
-    // is what keeps the scan allocation-free — the pooled buffer is threaded by ref and the row is handed back as a
-    // span over it. The caller ScanAsync already observes cancellation between rows.
+    /// <summary>
+    ///     Reads the embedding BLOB (ordinal 2) into the reused pooled buffer via the reader's blob stream and returns it
+    ///     reinterpreted as <c>float32</c> in native byte order, the layout the embedder wrote.
+    /// </summary>
+    /// <remarks>
+    ///     No per-row <c>byte[]</c> allocation: the buffer grows only when a row is wider than any seen so far, and all
+    ///     rows for one model share a width, so it is rented once. This cannot be async — C# forbids both a <c>ref</c>
+    ///     parameter and a <c>ByRefLike</c> return in an async method — and that signature is what keeps the scan
+    ///     allocation-free, threading the pooled buffer by ref and handing the row back as a span over it. The caller
+    ///     <c>ScanAsync</c> already observes cancellation between rows.
+    /// </remarks>
     private static ReadOnlySpan<float> ReadCandidateVector(DbDataReader reader, ref byte[]? buffer)
     {
 #pragma warning disable MA0045 // ref parameter and ReadOnlySpan<float> return are both illegal in an async method; see the comment above.
@@ -290,19 +286,15 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         return MemoryMarshal.Cast<byte, float>(buffer.AsSpan(0, length));
     }
 
-    // True when every component is zero (a zero-magnitude vector). ContainsAnyExcept uses value equality, under which
-    // both +0.0 and -0.0 equal 0f, so an all-zero vector of either sign is detected. The scan short-circuits at the first
-    // non-zero byte-equivalent, so it costs essentially nothing for the non-zero majority.
+    // True when every component is zero. ContainsAnyExcept uses value equality, under which both +0.0 and -0.0 equal 0f,
+    // so an all-zero vector of either sign is caught; the scan short-circuits, costing nothing for the non-zero majority.
     private static bool IsZeroVector(ReadOnlySpan<float> vector)
     {
         return !vector.ContainsAnyExcept(0f);
     }
 
-    // Fixed-capacity min-heap that keeps the `limit` best hits with EXACTLY the tie-break of the previous
-    // `OrderByDescending(Score).Take(limit)`: LINQ's OrderByDescending is stable, so among equal scores the earlier-read
-    // row wins and sorts first. That read order is captured as a monotonic sequence and folded into the comparison, so the
-    // bounded selection returns the identical ids in the identical order as a full sort would — at O(n log k) instead of
-    // O(n log n), and O(k) memory instead of materializing every scored row.
+    // Fixed-capacity min-heap keeping the `limit` best hits with a stable tie-break: among equal scores the earlier-read
+    // row wins, via a monotonic sequence folded into the comparison, so this matches a full sort at O(n log k) and O(k).
     private sealed class BoundedTopKSelector
     {
         private readonly Candidate[] _heap;
@@ -313,9 +305,8 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
             _heap = new Candidate[Math.Max(1, capacity)];
         }
 
-        // Cheap pre-check so the caller can skip materializing the row ids for a candidate that would be rejected
-        // anyway. Identical decision logic to Offer — the IsBetter comparison never reads the ids — so gating Offer
-        // behind this changes nothing about the selected set or its order.
+        // Cheap pre-check letting the caller skip materializing row ids for a candidate that would be rejected anyway:
+        // identical decision logic to Offer, whose IsBetter never reads the ids, so the selected set and order are equal.
         public bool WouldAccept(float score, long sequence)
         {
             return _count < _heap.Length || IsBetter(new Candidate(score, sequence, Guid.Empty, Guid.Empty), _heap[0]);

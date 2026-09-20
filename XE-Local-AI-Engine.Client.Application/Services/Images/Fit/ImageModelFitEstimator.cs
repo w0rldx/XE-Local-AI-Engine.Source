@@ -8,11 +8,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 /// <summary>How a diffusion file-set compares to this box's memory budget.</summary>
 public enum ImageModelFitVerdict
 {
-    /// <summary>
-    ///     The budget could not be measured, so no claim is made. This is a first-class outcome, NOT a soft "probably
-    ///     fine": <c>HardwareProfiler</c> leaves VRAM unmeasured on every non-NVIDIA GPU, and rendering that as "Fits"
-    ///     would promise a 13 GB install will run on a box nobody probed.
-    /// </summary>
+    /// <summary>The budget could not be measured, so no claim is made.</summary>
+    /// <remarks>
+    ///     A first-class outcome, NOT a soft "probably fine": <c>HardwareProfiler</c> leaves VRAM unmeasured on every
+    ///     non-NVIDIA GPU, and rendering that as "Fits" would promise a 13 GB install will run on a box nobody probed.
+    /// </remarks>
     Unknown = 0,
 
     /// <summary>Comfortably inside the budget.</summary>
@@ -54,20 +54,11 @@ public readonly record struct ImageModelPartSize(ImageModelPartRole Role, long S
 ///     Scores a diffusion file-set against the host's memory budget.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Deliberately NOT <c>MemoryFitEstimator.Estimate</c>. That estimator's whole model is a transformer LLM's:
-///         it needs block counts, attention head counts, an embedding length and a llama.cpp quant-byte table to size a
-///         KV cache. A diffusion transformer has no KV cache and a GGUF diffusion file exposes none of those fields, so
-///         feeding it here would produce a confident number with nothing behind it. What genuinely reuses is the
-///         <b>hardware probe</b>: this shares <see cref="MemoryFitEstimator.ResolveFitBudgetBytes" /> so an image
-///         verdict is scored against the identical budget the LLM advisor uses, and cannot drift from it.
-///     </para>
-///     <para>
-///         <b>Only the diffusion part is a VRAM cost.</b> <c>ImageServerArgumentBuilder.BuildBackendSpec</c> pins the
-///         text encoder and VAE to the CPU on every GPU backend (<c>diffusion=cuda0,te=cpu,vae=cpu</c>), so charging
-///         an 18 GB Qwen-Image set's full weight against VRAM would reject a set that runs fine. In CPU mode there is
-///         no such split and the whole set is resident in RAM.
-///     </para>
+///     Deliberately NOT <c>MemoryFitEstimator.Estimate</c>: that estimator's model is a transformer LLM's and a GGUF
+///     diffusion file exposes none of the fields it needs. What reuses is the hardware probe —
+///     <see cref="MemoryFitEstimator.ResolveFitBudgetBytes" /> — so an image verdict is scored against the identical
+///     budget the LLM advisor uses. Only the diffusion part is a VRAM cost: <c>ImageServerArgumentBuilder.BuildBackendSpec</c>
+///     pins the text encoder and VAE to the CPU on every GPU backend. See docs/wiki/14-image-generation.md ("Model fit for a diffusion set").
 /// </remarks>
 public static class ImageModelFitEstimator
 {
@@ -95,9 +86,8 @@ public static class ImageModelFitEstimator
 
         var fitsOnDisk = profile.FreeDiskBytes <= 0 || profile.FreeDiskBytes >= totalBytes;
 
-        // A GPU is present but its VRAM was never measured (every non-NVIDIA vendor, and NVIDIA without nvidia-smi).
-        // There is no budget to score against and the CPU budget is the wrong one — the box would run on the GPU. Say
-        // so instead of guessing in either direction.
+        // A GPU is present but its VRAM was never measured (every non-NVIDIA vendor, and NVIDIA without nvidia-smi). There is no budget to score against and the
+        // CPU budget is the wrong one — the box would run on the GPU. Say so instead of guessing in either direction.
         if (profile.GpuVendor is not GpuVendor.None && !profile.VramKnown)
         {
             return new ImageModelFitEstimate { Verdict = ImageModelFitVerdict.Unknown, ResidentBytes = diffusionBytes, TotalBytes = totalBytes, BudgetBytes = 0, FitsOnDisk = fitsOnDisk };

@@ -105,16 +105,8 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             // failed launch still carries them. Non-throwing by contract.
             environment = await _environmentFacts.CaptureAsync(snapshot.PrimaryRuntime.Variant, token);
 
-            // Admission sizes against the context the FROZEN runtime will actually launch with, not the context the
-            // project requested: a profile replay can pin a larger window, and reserving the smaller one under-books.
-            // It also sizes the KV term against the FROZEN KV-cache type (null ⇒ f16), so a q8_0/q4_0 run books the
-            // bytes it will really hold rather than the f16 figure it will never reach.
-            // No launch admission: this run spawns its own exclusive process from the FROZEN replay arguments, so an
-            // admission published here is one nothing ever consumes — and the supervisor refuses to launch against it.
-            // A rejection is transient by nature — it means something holds the bytes RIGHT NOW — so the phase waits
-            // and re-decides on a cadence instead of terminalizing the run on the first no.
-            // ONE budget for the whole phase: the capacity wait below and the exclusive-spawn wait after it both draw
-            // from it, so a phase cannot hold the queue's shared GPU-work admission for two full budgets.
+            // Admission sizes to the FROZEN runtime's context and KV type (null ⇒ f16), not the project's: a replay can pin a larger window, and f16 over-books a q8_0/q4_0 run. No launch admission
+            // — this run spawns an exclusive process from frozen arguments the supervisor refuses to launch against. Rejections wait on ONE BenchmarkWaitBudget shared with the exclusive-spawn wait.
             var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
                                                                new CapacityRequest
@@ -193,18 +185,15 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             var effectiveContext = admission.EffectiveContextTokens
                                    ?? throw new BenchmarkExecutionException("The effective model context was unavailable.");
 
-            // Coalesced HERE, once: the live stream needs one event per delta, storage needs one part per contiguous
-            // run (see BenchmarkOutputParts), and the stop-reason verdict below has to read the SHAPE of the turn,
-            // which a per-delta capture does not show.
+            // Coalesced HERE, once: the live stream needs one event per delta, storage needs one part per contiguous run (see BenchmarkOutputParts),
+            // and the stop-reason verdict below has to read the SHAPE of the turn, which a per-delta capture does not show.
             var parts = BenchmarkOutputParts.Coalesce(capture.Parts);
             var stopReason = ResolveStopReason(terminal.FinishReason, parts);
             var durationMs = terminal.GenerationDurationMs ?? 0;
             var throughput = ToThroughput(terminal.Throughput);
 
-            // tokens/s now MEANS decode throughput (tg) whenever the runtime timed the prompt and the decode
-            // separately: dividing the turn's total tokens by its wall clock blends prefill into generation, so the same
-            // model measured on a long prompt and a short one produced two incomparable numbers. The blended figure
-            // remains the fallback for a runtime that reports no timings, so the column never goes empty.
+            // tokens/s MEANS decode throughput (tg) whenever the runtime timed the prompt and the decode separately: total tokens over wall clock blends prefill into generation, so one model
+            // measured on a long prompt and a short one gives two incomparable numbers. The blended figure stays the fallback for a runtime that reports no timings, so the column never goes empty.
             var tokensPerSecond = throughput?.GenerationTokensPerSecond ?? TokenThroughput.FromMilliseconds(terminal.TotalTokens, durationMs);
             var metricsEvent = _events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.Metrics,
@@ -236,9 +225,8 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
                         DurationMs = durationMs,
                         TotalTokens = terminal.TotalTokens,
                         TokensPerSecond = tokensPerSecond,
-                        // A generation cut off at the token budget still SUCCEEDS — the measurement is real — but the
-                        // run has to carry why it stopped, or the ranking and the judge grade an incomplete answer as
-                        // if it were a finished one.
+                        // A generation cut off at the token budget still SUCCEEDS — the measurement is real — but the run has to carry why it stopped,
+                        // or the ranking and the judge grade an incomplete answer as if it were a finished one.
                         PrimaryStopReason = stopReason,
                         Throughput = throughput
                     });
@@ -252,9 +240,8 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             });
             _events.EvictPlaintext(work.RunId);
 
-            // A newly succeeded run is newly eligible to be compared against every other one. In pointwise mode this
-            // is a no-op; in pairwise mode it is the second of the three places a cohort grows, and it is incremental
-            // — one more run enqueues 2N comparisons, not the whole tournament again.
+            // A newly succeeded run is newly eligible to be compared against every other one, so this is a no-op in pointwise mode.
+            // In pairwise mode it is the second of the three places a cohort grows, and it is incremental — one more run enqueues 2N comparisons, not the whole tournament again.
             _ = await _pairwisePlanner.EnsurePairsAsync(work.Run.ProjectId, CancellationToken.None);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -279,17 +266,14 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
     /// <summary>
     ///     The stop reason to persist: the provider's own token, unless the turn finished cleanly having produced no
     ///     answer, which is recorded as <see cref="BenchmarkPrimaryStopReasons.Incomplete" />.
-    ///     <para>
-    ///         The provider cannot report this. A turn that stopped on an unanswered tool call reports
-    ///         <c>tool_calls</c>, and a thinking model that spent the whole turn reasoning reports <c>stop</c> — both
-    ///         read downstream as a finished answer, so the judge graded an empty transcript and the ranking seated its
-    ///         score beside runs that actually answered. A <c>length</c> stop keeps its own token: that run IS cut off,
-    ///         and <see cref="BenchmarkPrimaryStopReasons.IsTruncated" /> already excludes and annotates it — except
-    ///         when it never emitted an answer either, which is recorded as
-    ///         <see cref="BenchmarkPrimaryStopReasons.ReasoningLength" />: still truncated for every consumer, but it
-    ///         names the reasoning budget as the thing to raise rather than the output budget.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The provider cannot report this: a turn stopped on an unanswered tool call reports <c>tool_calls</c> and a
+    ///     thinking model that spent the whole turn reasoning reports <c>stop</c>, both of which read downstream as a
+    ///     finished answer. A <c>length</c> stop keeps its own token — that run IS cut off and
+    ///     <see cref="BenchmarkPrimaryStopReasons.IsTruncated" /> annotates it — except when it emitted no answer
+    ///     either: <see cref="BenchmarkPrimaryStopReasons.ReasoningLength" /> then names the reasoning budget to raise.
+    /// </remarks>
     internal static string? ResolveStopReason(string? finishReason, IReadOnlyList<BenchmarkOutputPart> parts)
     {
         if (BenchmarkPrimaryStopReasons.IsTruncated(finishReason))
@@ -319,12 +303,14 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             };
 
     /// <summary>
-    ///     Commits primary success together with the run's first judging, in the store's single transaction. The judge
-    ///     runtime is resolved for one specific policy revision BEFORE the call; if the project moved to another
-    ///     revision in the meantime the store rolls the whole thing back, and this re-resolves against the new one. A
-    ///     bounded number of rounds, then the attempt is committed as failed — the measurement is never lost to a
-    ///     judge-configuration race, and the operator re-judges.
+    ///     Commits primary success together with the run's first judging, in the store's single transaction.
     /// </summary>
+    /// <remarks>
+    ///     The judge runtime is resolved for one specific policy revision BEFORE the call; if the project moved to
+    ///     another revision meanwhile the store rolls the whole thing back and this re-resolves against the new one.
+    ///     A bounded number of rounds, then the attempt is committed as failed — the measurement is never lost to a
+    ///     judge-configuration race, and the operator re-judges.
+    /// </remarks>
     private async Task<BenchmarkRunRecord> MarkPrimarySucceededAsync(BenchmarkClaimedWork work, BenchmarkPrimarySuccessCommand command)
     {
         for (var round = 1; round <= JudgePolicyResolutionAttempts; round++)
@@ -408,10 +394,8 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             Skills = runtime.Skills,
             IsUnattended = true,
             CustomTools = runtime.CustomTools,
-            // Passed explicitly off the FROZEN model capability rather than defaulted: the default true is the safe
-            // answer for a caller that does not know, and freeze does know. A model whose chat template renders no
-            // reasoning end marker takes the budget and ignores it, so sending one would advertise a cap that never
-            // held. Null is a run frozen before the member existed, which keeps the old default.
+            // Passed explicitly off the FROZEN model capability rather than defaulted: the default true is the safe answer for a caller that does not know, and freeze does know. A model whose
+            // chat template renders no reasoning end marker takes the budget and ignores it, so sending one advertises a cap that never held. Null is a pre-member run, keeping the old default.
             ReasoningBudgetEnforceable = snapshot.PrimarySampling.ReasoningBudgetEnforceable ?? true
         });
     }

@@ -12,13 +12,13 @@ public sealed class InstalledBaseModelLink
     public required string? ContentFingerprint { get; init; }
 }
 
-/// <summary>
-///     Resolves the installed GGUF counterpart of a base checkpoint repo. Live-found (2026-08-15): nothing wrote
-///     <c>LinkedInstalledModelName</c> on a run, so an adapter export could never be smoke-tested or promoted and a
-///     comparison had no base side. The wizard may name a model explicitly; otherwise the Hugging Face convention that
-///     the official quantized repo is <c>&lt;base&gt;-GGUF</c> (or the same repo id) picks it, and a miss stays a
-///     miss — never a guess by display name.
-/// </summary>
+/// <summary>Resolves the installed GGUF counterpart of a base checkpoint repo.</summary>
+/// <remarks>
+///     Without it an adapter export can never be smoke-tested or promoted and a comparison has no base side. The
+///     wizard may name a model explicitly; otherwise the Hugging Face convention that the official quantized repo is
+///     <c>&lt;base&gt;-GGUF</c> (or the same repo id) picks it, and a miss stays a miss — never a guess by display
+///     name.
+/// </remarks>
 public interface IInstalledBaseModelLinker
 {
     /// <summary>The installed models that can stand in for <paramref name="baseRepoId" />, best match first.</summary>

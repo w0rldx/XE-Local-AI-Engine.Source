@@ -9,9 +9,16 @@ public sealed record BenchmarkJudgeCriterionScoreV2(string Id, int Score, string
 /// <summary>One verifiable criterion's server-side evidence, stored so a verified score is auditable after the fact.</summary>
 public sealed record BenchmarkJudgeVerifierResultV1(string Id, string Kind, bool Passed, string Detail);
 
+/// <summary>
+///     One judging's stored result: the per-criterion scores, the summary, the weighted score, the judge model's
+///     content fingerprint, and the verifier evidence when there was any.
+/// </summary>
+/// <remarks>
+///     <paramref name="Verifiers" /> is written only when present, so a legacy stored result that carries no verifier
+///     evidence round-trips unchanged.
+/// </remarks>
 /// <param name="Verifiers">
 ///     The evidence behind every non-<c>llm</c> criterion, or <see langword="null" /> for a judging that had none.
-///     Written only when present, so a legacy stored result without verifier evidence round-trips unchanged.
 /// </param>
 public sealed record BenchmarkJudgeResultV2(
     int SchemaVersion,
@@ -22,14 +29,14 @@ public sealed record BenchmarkJudgeResultV2(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<BenchmarkJudgeVerifierResultV1>? Verifiers = null);
 
-/// <summary>
-/// The judge's output schema in two shapes. <see cref="Json"/> is the documentation copy embedded in the prompt: bounded,
-/// so the model is TOLD the limits <see cref="BenchmarkJudgeResultParser"/> enforces. <see cref="ResponseFormatJson"/> is
-/// the same schema with every <c>minLength</c>/<c>maxLength</c>/<c>minItems</c>/<c>maxItems</c> removed, and is the one
-/// handed to constrained decoding: llama.cpp compiles a response-format schema into a GBNF grammar, and length bounds
-/// break its sampler initialization. Dropping them from the grammar costs nothing — the parser still rejects anything
-/// outside the bounds.
-/// </summary>
+/// <summary>The judge's output schema in two shapes.</summary>
+/// <remarks>
+/// <see cref="Json"/> is the documentation copy embedded in the prompt: bounded, so the model is TOLD the limits
+/// <see cref="BenchmarkJudgeResultParser"/> enforces. <see cref="ResponseFormatJson"/> is the same schema with every
+/// <c>minLength</c>/<c>maxLength</c>/<c>minItems</c>/<c>maxItems</c> removed, and is the one handed to constrained
+/// decoding: llama.cpp compiles a response-format schema into a GBNF grammar, and length bounds break its sampler
+/// initialization. Dropping them from the grammar costs nothing — the parser still rejects anything outside them.
+/// </remarks>
 public static class BenchmarkJudgeOutputSchemaV2
 {
     public const int MinimumCriterionScore = 0;
@@ -59,11 +66,11 @@ public static class BenchmarkJudgeOutputSchemaV2
         + "\"summary\":{\"type\":\"string\"}}}";
 }
 
-/// <summary>
-/// Weighted rubric score in 0..100, integer arithmetic only, rounded half away from zero. All inputs are non-negative,
-/// so <c>(2·num + den) / (2·den)</c> is that rounding; the maximum numerator (8 × 100 × 10 × 10 = 80 000) leaves room in
-/// an <see cref="int"/> for the doubling.
-/// </summary>
+/// <summary>Weighted rubric score in 0..100, integer arithmetic only, rounded half away from zero.</summary>
+/// <remarks>
+/// All inputs are non-negative, so <c>(2·num + den) / (2·den)</c> is that rounding; the maximum numerator
+/// (8 × 100 × 10 × 10 = 80 000) leaves room in an <see cref="int"/> for the doubling.
+/// </remarks>
 public static class BenchmarkJudgeScoreCalculator
 {
     public static int Compute(BenchmarkJudgeRubricV1 rubric, IReadOnlyList<BenchmarkJudgeCriterionScoreV2> scores)
@@ -231,53 +238,52 @@ public static class BenchmarkJudgePromptV2
         WriteIndented = false
     };
 
-    /// <summary>
-    ///     The instruction every judging gets. The length-neutrality sentence is fixed and unconditional: rewarding a
-    ///     longer answer for being longer is an LLM judge's best-documented bias, and telling it not to is the only
-    ///     cheap counter.
-    ///     <para>
-    ///         THE RULE THIS TEXT LIVES UNDER: it is hashed nowhere. The policy hash covers
-    ///         <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> (an integer), the rubric, the judge model
-    ///         identity, the sampling and the reference answer; the <c>JudgeExecutionKey</c> covers runtime and
-    ///         hardware identity only. So editing a word here changes what every FUTURE judging is asked while every
-    ///         version stays put, and verdicts taken either side of the edit share a policy revision and a cohort
-    ///         generation and get dense-ranked against each other. Any wording change must therefore bump
-    ///         <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> — which is exactly what the length-neutrality
-    ///         sentence did (2 → 3), forcing the existing <c>PromptVersionUnsupported</c> re-judge path.
-    ///     </para>
-    /// </summary>
+    /// <summary>The instruction every judging gets.</summary>
+    /// <remarks>
+    ///     The length-neutrality sentence is fixed and unconditional: rewarding a longer answer for being longer is an
+    ///     LLM judge's best-documented bias. THE RULE THIS TEXT LIVES UNDER: it is hashed nowhere, so any wording
+    ///     change MUST bump <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> — otherwise verdicts taken
+    ///     either side of the edit share a policy revision and a cohort generation and are dense-ranked against each
+    ///     other after having been asked different questions. See docs/wiki/20-benchmarks.md ("The pointwise judge").
+    /// </remarks>
     public const string SystemPrompt =
         "Evaluate only the supplied benchmark task and primary output against the supplied rubric. "
         + "Score every rubric criterion from 0 to 10 and give a short rationale for each score. "
         + "Do not reward length or verbosity for its own sake; score only against the rubric. "
         + "Return exactly one JSON object matching the supplied output schema. Return no markdown and no extra properties.";
 
-    /// <summary>
-    ///     The extra instruction a truncated primary output gets. Appended rather than folded into
-    ///     <see cref="SystemPrompt" /> so a judging of a COMPLETE answer stays byte-identical to every judging that
-    ///     came before — neither the prompt text nor the payload is part of the policy hash or the
-    ///     <c>JudgeExecutionKey</c> (both are hardware/identity only), so an unconditional sentence would silently
-    ///     change what past and future judgings were asked without any version moving.
-    /// </summary>
+    /// <summary>The extra instruction a truncated primary output gets.</summary>
+    /// <remarks>
+    ///     Appended rather than folded into <see cref="SystemPrompt" /> so a judging of a COMPLETE answer stays
+    ///     byte-identical to every judging that came before: neither the prompt text nor the payload is part of the
+    ///     policy hash or the <c>JudgeExecutionKey</c>, so an unconditional sentence would silently change what past
+    ///     and future judgings were asked without any version moving.
+    /// </remarks>
     public const string TruncatedPrimaryOutputInstruction =
         " The primary output was cut off by the token budget before the model finished answering. "
         + "Score it as the incomplete answer it is; do not credit work the model did not produce.";
 
     /// <summary>
     ///     The extra instruction a primary output that answered NOTHING gets — it stopped on an unanswered tool call,
-    ///     or emitted only reasoning. Appended on the same terms as <see cref="TruncatedPrimaryOutputInstruction" />
-    ///     and for the same reason: a run reaching this state used to be graded as if its empty transcript were an
-    ///     answer, and every judging that came before must stay byte-identical.
+    ///     or emitted only reasoning.
     /// </summary>
+    /// <remarks>
+    ///     Appended on the same terms as <see cref="TruncatedPrimaryOutputInstruction" /> and for the same reason: a
+    ///     run in this state is otherwise graded as if its empty transcript were an answer, and every judging that
+    ///     came before must stay byte-identical.
+    /// </remarks>
     public const string IncompletePrimaryOutputInstruction =
         " The model produced no answer at all: the turn ended on an unanswered tool call, or emitted only reasoning. "
         + "Score the absence of an answer; do not credit work the model did not produce.";
 
     /// <summary>
     ///     The system prompt for one judging: the base instruction, plus the notice for a primary output that was cut
-    ///     off or never came. The two are mutually exclusive by construction — a run is recorded as <c>incomplete</c>
-    ///     only when it did NOT stop at the token budget — and truncation wins if a caller ever passes both.
+    ///     off or never came.
     /// </summary>
+    /// <remarks>
+    ///     The two are mutually exclusive by construction — a run is recorded as <c>incomplete</c> only when it did
+    ///     NOT stop at the token budget — and truncation wins if a caller ever passes both.
+    /// </remarks>
     public static string SystemPromptFor(bool primaryOutputTruncated, bool primaryOutputIncomplete = false)
     {
         if (primaryOutputTruncated)
@@ -289,28 +295,15 @@ public static class BenchmarkJudgePromptV2
     }
 
     /// <summary>
-    ///     Embeds the caller's already-shaped pieces verbatim — this builder frames, it never re-serializes.
-    ///     <paramref name="primaryOutputPartsJson" /> must be the GRADED projection of the run's transcript
-    ///     (<see cref="BenchmarkOutputParts.ForJudge" />): coalesced, with reasoning parts removed, because hidden
-    ///     chain-of-thought is not the graded answer and a thinking model's raw transcript does not fit the judge window.
-    ///     The payload's property names and order are unchanged by that narrowing, so neither
-    ///     <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> nor the output-schema version moves.
-    /// </summary>
-    /// <param name="primaryOutputTruncated">
-    ///     Emits <c>primaryOutputTruncated: true</c> after the output parts. Written ONLY when true, so the payload of
-    ///     a complete run stays byte-identical to the one this builder has always produced.
-    /// </param>
-    /// <param name="primaryOutputIncomplete">
-    ///     Emits <c>primaryOutputIncomplete: true</c> on the same terms, for a run that finished cleanly and answered
-    ///     nothing. Mutually exclusive with <paramref name="primaryOutputTruncated" />.
-    /// </param>
-    /// <summary>
     ///     The rubric as the judge model sees it: the four members it has always seen, with the server-side
-    ///     <c>kind</c>/<c>config</c> members removed. The model is never handed a verifiable criterion (an
-    ///     all-verifiable rubric never reaches inference, a mixed one is filtered first), so those two members carry
-    ///     nothing it could use — and emitting them would change the payload bytes of every judging under a legacy
-    ///     revision stored without those fields, which is exactly the drift the prompt-version rule exists to prevent.
+    ///     <c>kind</c>/<c>config</c> members removed.
     /// </summary>
+    /// <remarks>
+    ///     The model is never handed a verifiable criterion (an all-verifiable rubric never reaches inference, a mixed
+    ///     one is filtered first), so those two members carry nothing it could use — and emitting them would change
+    ///     the payload bytes of every judging under a legacy revision stored without those fields, which is exactly
+    ///     the drift the prompt-version rule exists to prevent.
+    /// </remarks>
     private static JsonNode? SerializeRubricForPrompt(BenchmarkJudgeRubricV1 rubric)
     {
         var node = JsonSerializer.SerializeToNode(rubric, PayloadOptions);
@@ -328,6 +321,21 @@ public static class BenchmarkJudgePromptV2
         return node;
     }
 
+    /// <summary>Embeds the caller's already-shaped pieces verbatim — this builder frames, it never re-serializes.</summary>
+    /// <remarks>
+    ///     <paramref name="primaryOutputPartsJson" /> must be the GRADED projection of the run's transcript
+    ///     (<see cref="BenchmarkOutputParts.ForJudge" />): coalesced, reasoning parts removed, because hidden
+    ///     chain-of-thought is not the graded answer and a thinking model's raw transcript does not fit the judge
+    ///     window. That narrowing leaves the payload's property names and order unchanged, so neither
+    ///     <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> nor the output-schema version moves.
+    /// </remarks>
+    /// <param name="primaryOutputTruncated">
+    ///     Emits <c>primaryOutputTruncated: true</c> after the output parts, ONLY when true, so a complete run's
+    ///     payload stays byte-identical.
+    /// </param>
+    /// <param name="primaryOutputIncomplete">
+    ///     Emits <c>primaryOutputIncomplete: true</c> on the same terms, for a clean run that answered nothing.
+    /// </param>
     public static string BuildUserPayloadJson(string taskJson,
         string? referenceAnswer,
         BenchmarkJudgeRubricV1 rubric,

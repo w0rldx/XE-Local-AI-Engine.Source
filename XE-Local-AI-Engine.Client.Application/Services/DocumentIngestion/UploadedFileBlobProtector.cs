@@ -10,12 +10,11 @@ using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 ///     extracted Markdown), keyed off the same node key material as the encrypted DB columns.
 /// </summary>
 /// <remarks>
-///     The DB-column protector (<c>NodePayloadProtector</c>) is internal to the persistence assembly, so this store —
-///     which lives in the application layer and writes blobs to disk outside any DbContext — re-uses the public
-///     <see cref="AesGcmNodeAeadCipher" /> primitive and replicates the exact on-disk framing
-///     (<c>nonce || ciphertext || tag</c>) and associated-data layout (conversation id, file id, column name, schema
-///     version). Distinct column names (<c>file_bytes</c>, <c>file_md</c>) bind each blob to its role so a bytes blob
-///     can never be substituted for an extracted-text blob under the same key.
+///     <c>NodePayloadProtector</c>, the DB-column protector, is internal to the persistence assembly, so this store — in
+///     the application layer, writing blobs to disk outside any DbContext — re-uses the public
+///     <see cref="AesGcmNodeAeadCipher" /> primitive and replicates the exact framing <c>nonce || ciphertext || tag</c>
+///     and associated-data layout (conversation id, file id, column name, schema version). Distinct column names
+///     (<c>file_bytes</c>, <c>file_md</c>) bind each blob to its role, so neither can be substituted for the other.
 /// </remarks>
 internal sealed class UploadedFileBlobProtector
 {

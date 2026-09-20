@@ -23,14 +23,8 @@ public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmi
         bool wasWritten,
         CancellationToken cancellationToken)
     {
-        // Resolve the current status once. Ingestion flips a document out of Pending the instant it starts, so a Pending
-        // row is one that has NOT been ingested — either freshly inserted or a prior upload whose admission a full queue
-        // rejected (503), leaving the persisted blob stranded. Enqueue when the store WROTE the document (a fresh insert,
-        // or a repository document whose bytes changed) OR it is a
-        // dedupe hit in a RETRYABLE state, so retrying a stranded or failed upload actually recovers instead of returning
-        // success for work that was never queued. A dedupe hit already Indexed (or mid-ingestion) is left alone.
-        // Admission is idempotent, so retrying a document already queued is a harmless no-op rather than a duplicate
-        // ingestion.
+        // Resolve the status once: a Pending row has NOT been ingested, so enqueue when the store WROTE the document or
+        // it is a dedupe hit in a RETRYABLE state — a stranded or failed upload then recovers instead of faking success.
         var status = await _catalogService.GetStatusAsync(documentId, cancellationToken)
                      ?? KnowledgeDocumentStatus.Pending;
 
@@ -48,20 +42,11 @@ public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmi
     ///     re-enqueue ingestion.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         Content-hash dedupe means a re-upload never inserts a second row, so re-enqueueing is the ONLY way a
-    ///         re-upload can retry. <see cref="KnowledgeDocumentStatus.Failed" /> belongs here because the app's own
-    ///         failure messages instruct the user to "retry" — and before this it did nothing at all: a failed document
-    ///         was neither freshly inserted nor Pending, so the identical file came back deduped, unqueued, and reported
-    ///         as success, leaving the original Failed row untouched with its original timestamp. The per-row reindex
-    ///         action was the only working retry path, and no message ever mentioned it.
-    ///     </para>
-    ///     <para>
-    ///         <see cref="KnowledgeDocumentStatus.Indexed" /> is excluded so a re-upload of already-indexed content is a
-    ///         cheap no-op rather than a redundant re-index. The in-flight states (Extracting/Chunking/Embedding) are
-    ///         excluded because that work is already running; admission is idempotent, but re-enqueueing them would
-    ///         misreport an in-progress document as newly queued.
-    ///     </para>
+    ///     Content-hash dedupe means a re-upload never inserts a second row, so re-enqueueing is the ONLY way a re-upload
+    ///     can retry. <see cref="KnowledgeDocumentStatus.Failed" /> belongs here because the app's own failure messages
+    ///     instruct the user to retry; without it the identical file comes back deduped, unqueued and reported as success.
+    ///     <see cref="KnowledgeDocumentStatus.Indexed" /> is excluded so a re-upload of indexed content is a cheap no-op,
+    ///     and the in-flight states because re-enqueueing them would misreport running work as newly queued.
     /// </remarks>
     private static bool IsRetryableOnReUpload(KnowledgeDocumentStatus status)
     {

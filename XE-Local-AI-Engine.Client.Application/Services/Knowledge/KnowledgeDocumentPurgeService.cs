@@ -6,14 +6,16 @@ using XE_Local_AI_Engine.Client.Persistence;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
-///     Default <see cref="IKnowledgeDocumentPurgeService" />. Every dependent row is deleted explicitly in
-///     child-to-parent order inside one transaction rather than left to the declared cascades: the chunk delete is
-///     what fires the FTS sync trigger (and whether a cascade would fire it is unmeasured), and chunks must precede
-///     sections because that relationship is SET NULL. The chunk delete fires the FTS delete trigger so the external-content
-///     <c>chunk_fts</c> index stays aligned; the vectors are deleted first because they reference the chunk rows. Only
-///     after the rows commit are the on-disk encrypted bytes removed, with the path derived from the document id plus its
-///     stored extension — never from the display-only <c>storage_path</c> column.
+///     Default <see cref="IKnowledgeDocumentPurgeService" />: every dependent row is deleted explicitly in
+///     child-to-parent order inside one transaction rather than left to the declared cascades.
 /// </summary>
+/// <remarks>
+///     The chunk delete is what fires the FTS sync trigger (and whether a cascade would fire it is unmeasured), and
+///     chunks must precede sections because that relationship is SET NULL. The chunk delete keeps the external-content
+///     <c>chunk_fts</c> index aligned; the vectors are deleted first because they reference the chunk rows. Only after
+///     the rows commit are the on-disk encrypted bytes removed, with the path derived from the document id plus its
+///     stored extension — never from the display-only <c>storage_path</c> column.
+/// </remarks>
 public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeService
 {
     private readonly NodeChatDbContext _dbContext;
@@ -81,11 +83,8 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
 
         await transaction.CommitAsync(cancellationToken);
 
-        // Only after the rows are gone remove the encrypted bytes from disk, so a failure here can never leave a live row
-        // without its content. The rows are already committed, so the delete IS done from the caller's point of view: a
-        // failed file delete is logged and reported as success rather than turned into a 500, and the file itself is
-        // reclaimed by KnowledgeBlobOrphanSweeper on the next start (a repeat purge cannot — its row lookup finds
-        // nothing and returns before it reaches this line). Cancellation still propagates.
+        // Remove the bytes only once the rows are gone, so a failure here can never leave a live row without its content.
+        // The delete is already done for the caller: a failed file delete is logged as success and swept on the next start.
         try
         {
             await _blobStore.DeleteBytesAsync(documentId, extension, cancellationToken);

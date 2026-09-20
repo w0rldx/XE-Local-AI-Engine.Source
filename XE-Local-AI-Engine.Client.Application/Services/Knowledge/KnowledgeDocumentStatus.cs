@@ -2,10 +2,13 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
 ///     Lifecycle state of a knowledge-base document as it advances through the ingestion pipeline
-///     (extract → chunk → embed → index). Persisted as the enum name on the <c>knowledge_documents.status</c> column
-///     and surfaced to the knowledge-base management UI. This is the canonical definition owned by the persistence lane;
-///     the ingestion service produces these values.
+///     (extract → chunk → embed → index).
 /// </summary>
+/// <remarks>
+///     Persisted as the enum name on the <c>knowledge_documents.status</c> column and surfaced to the knowledge-base
+///     management UI. This is the canonical definition owned by the persistence lane; the ingestion service produces
+///     these values.
+/// </remarks>
 public enum KnowledgeDocumentStatus
 {
     /// <summary>The document row and encrypted blob exist, but ingestion has not started.</summary>

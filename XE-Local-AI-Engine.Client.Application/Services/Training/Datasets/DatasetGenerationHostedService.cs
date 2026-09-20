@@ -4,16 +4,16 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Single-consumer durable FIFO for dataset generation — the <c>BenchmarkQueueHostedService</c> shape duplicated, not
-///     generalized. Startup recovery runs once before the loop: an interrupted <c>Running</c> work item is terminalized
-///     as failed (attempt is pinned to 1, so nothing is retried in place) and its replay buffer is evicted.
-///     <para>
-///         The loop takes a shared <see cref="IGpuWorkGate" /> hold BEFORE it CLAIMS and keeps it until the work is
-///         done (decision #13), so an exclusive holder can never admit beside generation that is already executing.
-///         Refusing at the claim rather than at the executor keeps queued work queued: it resumes on the next poll once
-///         the exclusive holder releases, instead of being terminalized as failed.
-///     </para>
+///     Single-consumer durable FIFO for dataset generation — the <c>BenchmarkQueueHostedService</c> shape
+///     duplicated, not generalized.
 /// </summary>
+/// <remarks>
+///     Startup recovery runs once before the loop: an interrupted <c>Running</c> work item is terminalized as failed
+///     (attempt is pinned to 1, so nothing is retried in place) and its replay buffer is evicted. The loop takes a
+///     shared <see cref="IGpuWorkGate" /> hold BEFORE it CLAIMS and keeps it until the work is done (decision #13),
+///     so an exclusive holder can never admit beside generation that is already executing. Refusing at the claim
+///     keeps queued work queued: it resumes on the next poll instead of being terminalized as failed.
+/// </remarks>
 public sealed class DatasetGenerationHostedService : BackgroundService
 {
     private readonly IDatasetGenerationEventBuffer _events;
@@ -49,9 +49,8 @@ public sealed class DatasetGenerationHostedService : BackgroundService
         var recovered = false;
         while (!stoppingToken.IsCancellationRequested)
         {
-            // Nothing is CLAIMED until recovery has succeeded once — the benchmark queue's rule, for the benchmark
-            // queue's reason: only recovery terminalizes the rows the previous process left Running, and a loop that
-            // claims past a failed recovery orphans them for this process's whole lifetime.
+            // Nothing is CLAIMED until recovery has succeeded once — the benchmark queue's rule, for its reason: only
+            // recovery terminalizes rows the previous process left Running, and claiming past a failed recovery orphans them.
             if (!recovered)
             {
                 recovered = await RecoverAsync(stoppingToken);
@@ -89,8 +88,7 @@ public sealed class DatasetGenerationHostedService : BackgroundService
                 if (work is null)
                 {
                     // The CLAIM failed. An exception escaping here would end ExecuteAsync and, under the default
-                    // BackgroundServiceExceptionBehavior.StopHost, take the whole node down over a transient database
-                    // failure. work stays null, so the poll wait below is already the backoff.
+                    // BackgroundServiceExceptionBehavior.StopHost, take the node down over a transient database failure; work stays null, so the poll wait is the backoff.
                     _logger.LogError(exception, "The dataset generation queue failed while claiming work; retrying after the poll interval.");
                 }
                 else

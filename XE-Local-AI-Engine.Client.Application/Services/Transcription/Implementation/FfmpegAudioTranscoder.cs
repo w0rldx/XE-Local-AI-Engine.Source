@@ -8,21 +8,11 @@ using System.Text;
 ///     Default <see cref="IAudioTranscoder" />: shells out to <c>ffmpeg</c> to produce 16 kHz mono WAV.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>PATH resolution.</b> The executable is resolved once, at construction, by walking <c>PATH</c> split on
-///         <see cref="Path.PathSeparator" /> and testing for <c>ffmpeg</c> (<c>ffmpeg.exe</c> on Windows). That is the
-///         same algorithm the whisper.cpp provider's own probe uses, mirrored rather than shared because the probe is
-///         private to that provider and there is no shared executable resolver in this repository to reuse. An
-///         operator who installs ffmpeg while the node is running gets the capability at the next restart, which is
-///         the granularity every other PATH-resolved tool here has.
-///     </para>
-///     <para>
-///         <b>Arguments are never client-derived.</b> Both paths are server-generated <see cref="Guid" />-named files
-///         inside the engine's own temporary directory, and they travel through
-///         <see cref="ProcessStartInfo.ArgumentList" /> with no shell in the path, so nothing a caller sends can reach
-///         the argument list. <c>-nostdin</c> plus a closed standard input keeps a malformed file from parking the
-///         child on a prompt nobody can answer — the same posture the source-build command runner uses.
-///     </para>
+///     <c>ffmpeg</c> is resolved once, at construction, by walking <c>PATH</c> — mirroring
+///     <c>WhisperFfmpegProbe.ResolveFromPath</c>, which is private to the whisper.cpp provider — so an operator who
+///     installs it while the node runs gets the capability at the next restart. Nothing a caller sends reaches the
+///     argument list: both paths are server-generated <see cref="Guid" /> names travelling through
+///     <see cref="ProcessStartInfo.ArgumentList" /> with no shell. See docs/wiki/24-audio-transcription.md ("The transcoder's ffmpeg process").
 /// </remarks>
 public sealed class FfmpegAudioTranscoder : IAudioTranscoder
 {
@@ -96,9 +86,8 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
         // A converter that decides to ask a question reads end-of-file and fails at once instead of hanging.
         process.StandardInput.Close();
 
-        // Both pipes are drained concurrently with the wait: a child that fills one and is never read deadlocks
-        // instead of exiting. Neither reader ever throws — each returns whatever it captured — so they are safe to
-        // await after a kill, which is what keeps a cancelled run from leaving a faulted task unobserved.
+        // Both pipes are drained concurrently with the wait: a child that fills one and is never read deadlocks.
+        // Neither reader throws — each returns what it captured — so both are safe to await after a kill, unfaulted.
         var stderrTask = ReadBoundedAsync(process.StandardError, cancellationToken);
         var stdoutTask = ReadBoundedAsync(process.StandardOutput, cancellationToken);
 
@@ -160,9 +149,8 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
         }
         catch (Exception exception) when (exception is OperationCanceledException or IOException or ObjectDisposedException)
         {
-            // The caller is already unwinding, or the kill tore the pipe down mid-read. Whatever was captured is
-            // enough, and this reader must never be the thing that throws: it is awaited after the kill precisely so
-            // that its task is observed.
+            // The caller is already unwinding, or the kill tore the pipe down mid-read: whatever was captured is
+            // enough. This reader must never throw — it is awaited after the kill precisely so its task is observed.
         }
 
         return captured.ToString();
@@ -172,13 +160,11 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
     ///     Reduces ffmpeg's stderr to one display-safe sentence carrying no filesystem path.
     /// </summary>
     /// <remarks>
-    ///     With <c>-hide_banner -loglevel error</c> there is no banner and no progress chatter to discard; every line
-    ///     that arrives is already an error. The last one is taken because it is the most specific — the earlier lines
-    ///     are the demuxer's guesses on the way to it. ffmpeg writes that line as
-    ///     <c>&lt;absolute input path&gt;: Invalid data found when processing input</c>. That path is engine-generated,
-    ///     yet it still spells out the node's data directory — and this string is persisted into the encrypted
-    ///     <c>error_message</c> column and returned on the wire, so the path is dropped rather than merely shortened.
-    ///     Internal, so the sanitization can be asserted directly; not part of the public contract.
+    ///     With <c>-hide_banner -loglevel error</c> every arriving line is already an error and the last is the most
+    ///     specific — the earlier ones are the demuxer's guesses. ffmpeg writes it as <c>&lt;absolute input path&gt;:
+    ///     Invalid data found when processing input</c>; the path is engine-generated but still spells out the node's
+    ///     data directory, and the string is persisted into the encrypted <c>error_message</c> column and returned on
+    ///     the wire, so the path is dropped rather than shortened. Internal so the sanitization can be asserted.
     /// </remarks>
     internal static string SanitizeTail(string stderr)
     {
@@ -217,12 +203,11 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
     ///     Waits for the killed child to be gone, on a bound the caller's cancellation cannot reach.
     /// </summary>
     /// <remarks>
-    ///     A kill is a signal, not an exit, and awaiting the two pipe readers proves nothing about it: both were
-    ///     started with the CALLER's token, so on cancellation each returns at once through its own catch instead of
-    ///     reading to end-of-stream. Without this wait the method rethrows while the child may still be writing, and
-    ///     the upload slot's disposal then runs against a live writer — on Windows that delete fails, is swallowed by
-    ///     design, and the operator's audio survives the request. The bound exists because a wait that cannot end is
-    ///     worse than a surviving file: an unkillable child would otherwise park the request forever.
+    ///     A kill is a signal, not an exit, and awaiting the two pipe readers proves nothing about it: both use the
+    ///     CALLER's token, so on cancellation each returns at once instead of reading to end-of-stream. Without this
+    ///     wait the method rethrows while the child may still be writing, and the upload slot's disposal then runs
+    ///     against a live writer — on Windows that delete fails, is swallowed by design, and the operator's audio
+    ///     survives the request. The bound exists because an unkillable child would otherwise park the request forever.
     /// </remarks>
     private async Task WaitForExitAfterKillAsync(Process process)
     {
@@ -251,9 +236,8 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
         }
         catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or Win32Exception or AggregateException)
         {
-            // The child already exited, the platform refused the kill, or a descendant survived the tree kill — which
-            // surfaces as an AggregateException. None of these may replace the OperationCanceledException that is
-            // propagating through the caller; there is nothing left to do here either way.
+            // The child already exited, the platform refused the kill, or a descendant survived the tree kill (an
+            // AggregateException). None may replace the propagating OperationCanceledException, and nothing else is left.
         }
     }
 

@@ -13,12 +13,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Role-aware inference benchmark harness. Chat retains the fixed golden transcript; embedding and reranker use their
-///     valid llama-server endpoints with warm-up + repeated measurements, output correctness checks, and median/p95
-///     latency. Every run records global-free VRAM separately from llama.cpp's process-local budget and rejects material
-///     divergence both before the profiling server starts and when it grows during measurement, so WDDM contention cannot
-///     produce silently paged performance numbers.
+///     Role-aware inference benchmark harness: chat retains the fixed golden transcript, while embedding and reranker
+///     use their valid llama-server endpoints with warm-up, repeated measurements, output correctness checks and
+///     median/p95 latency.
 /// </summary>
+/// <remarks>
+///     Every run records global-free VRAM separately from llama.cpp's process-local budget and rejects material
+///     divergence both before the profiling server starts and when it grows during measurement, so WDDM contention
+///     cannot produce silently paged performance numbers.
+/// </remarks>
 public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 {
     private const string PromptTokensMetric = "llamacpp:prompt_tokens_total";
@@ -125,10 +128,14 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     }
 
     /// <summary>
-    ///     Extracts the first sample of the Prometheus metric named <paramref name="name" /> from a <c>/metrics</c> text
-    ///     scrape, or <see langword="null" /> when the metric is absent/unparseable. Pure and culture-invariant so it is
-    ///     unit-testable without a live server. Tolerates label sets and trailing timestamps; comment lines are skipped.
+    ///     Extracts the first sample of the Prometheus metric named <paramref name="name" /> from a <c>/metrics</c>
+    ///     text scrape.
     /// </summary>
+    /// <returns><see langword="null" /> when the metric is absent or unparseable.</returns>
+    /// <remarks>
+    ///     Pure and culture-invariant, so it is unit-testable without a live server. Tolerates label sets and trailing
+    ///     timestamps; comment lines are skipped.
+    /// </remarks>
     public static double? TryParsePromMetric(string? text, string name)
     {
         if (string.IsNullOrEmpty(text) || string.IsNullOrWhiteSpace(name))
@@ -229,8 +236,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var metricsUri = new Uri(endpoint.BaseAddress, "/metrics");
 
         // Every stopwatch below starts after this wrap, so the metadata-only span hop (Activity start/stop plus MEAI's
-        // span-end response materialization, microseconds against an LLM-scale round) is inside the measured region on
-        // both the plain and the tool path — rows frozen before this wrap landed were measured without it.
+        // span-end response materialization, microseconds against an LLM-scale round) is inside the measured region on both paths.
         using var chatClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName).WithProviderTelemetry();
 
         var totalStopwatch = Stopwatch.StartNew();
@@ -746,12 +752,12 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         }
     }
 
-    /// <summary>
-    ///     Aggregate pp/tg tokens per second from two Prometheus scrapes. Cache evidence uses per-request timings, while
-    ///     throughput continues to span the whole benchmark pass through cumulative counters. Only the arithmetic is
-    ///     shared with the benchmark executor's path through <see cref="TokenThroughput" />; these counters publish
-    ///     seconds rather than milliseconds.
-    /// </summary>
+    /// <summary>Aggregate pp/tg tokens per second from two Prometheus scrapes.</summary>
+    /// <remarks>
+    ///     Cache evidence uses per-request timings, while throughput continues to span the whole benchmark pass
+    ///     through cumulative counters. Only the arithmetic is shared with the benchmark executor's path through
+    ///     <see cref="TokenThroughput" />; these counters publish seconds rather than milliseconds.
+    /// </remarks>
     private static double? DeriveRate(string? before, string? after, string tokensMetric, string secondsMetric) =>
         TokenThroughput.FromSeconds(Delta(before, after, tokensMetric), Delta(before, after, secondsMetric));
 

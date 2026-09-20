@@ -6,21 +6,17 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     Default <see cref="IImageModelDownloadCoordinator" />. Runs each file-set download on a detached task, records the
-///     latest sanitized progress in an in-memory registry keyed by model name, and — the point of the type — always lands
-///     the download in an observable terminal phase (<c>Completed</c>/<c>Cancelled</c>/<c>Failed</c>) that the operator
-///     UI polls, instead of swallowing the failure into a log line.
-///     <para>
-///         <b>Singleton.</b> The registry must outlive the request that started the download. It composes the singleton
-///         <see cref="IImageModelStore" />.
-///     </para>
-///     <para>
-///         <b>Honest limits.</b> The registry is RAM-only, so a node restart drops in-flight state (the partial
-///         <c>.part</c> file resumes on the next start). Byte progress is set-relative — the store offsets each part by
-///         the bytes already finished — but the set <i>total</i> is only known when every part declared a size, so a
-///         manually-entered file-set reports advancing bytes against a null total rather than a fabricated percentage.
-///     </para>
+///     Default <see cref="IImageModelDownloadCoordinator" />: each file-set download runs on a detached task, its
+///     sanitized progress goes into an in-memory registry keyed by model name, and it always lands in an observable
+///     terminal phase (<c>Completed</c>/<c>Cancelled</c>/<c>Failed</c>) the UI polls.
 /// </summary>
+/// <remarks>
+///     Singleton, because the registry must outlive the request that started the download; it composes the singleton
+///     <see cref="IImageModelStore" />. Honest limits: the registry is RAM-only, so a node restart drops in-flight
+///     state and the partial <c>.part</c> file resumes on the next start. Byte progress is set-relative — the store
+///     offsets each part by the bytes already finished — but the set TOTAL is known only when every part declared a
+///     size, so a manually-entered file-set reports advancing bytes against a null total, never a fabricated figure.
+/// </remarks>
 public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinator
 {
     // In-flight downloads, each owning the token source that cancels it. Single-flight per model name: the presence of
@@ -53,9 +49,8 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
         // the download rather than an empty registry.
         _status[modelName] = new ImageModelDownloadStatus { ModelName = modelName, Phase = ImageModelDownloadPhase.Running, CompletedBytes = null, TotalBytes = null, SanitizedError = null };
 
-        // Hand the detached run the TOKEN, not the source. The source stays owned by the _inFlight entry (Cancel reads
-        // it there, the run disposes it from there), which keeps a disposable out of an unawaited task's arguments —
-        // the shape CA2025 rejects, because in the general case the caller's `using` would dispose it mid-flight.
+        // Hand the detached run the TOKEN, not the source. The source stays owned by the _inFlight entry (Cancel reads it there, the run disposes it from there),
+        // which keeps a disposable out of an unawaited task's arguments — the shape CA2025 rejects, because the caller's `using` would otherwise dispose it mid-flight.
         _ = RunDownloadAsync(modelName, request, cts.Token);
         return new ImageModelDownloadTicket { ModelName = modelName, AlreadyInFlight = false };
     }
@@ -150,9 +145,8 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
         }
     }
 
-    // Records byte progress WITHOUT ever resurrecting a finished download. Progress<T> marshals its callback through the
-    // captured context, so a tick queued just before completion can be delivered after the terminal write — publishing
-    // it unguarded would flip a Completed/Failed download back to Running and hang the UI on a download that is over.
+    // Records byte progress WITHOUT ever resurrecting a finished download. Progress<T> marshals its callback through the captured context, so a tick queued just
+    // before completion can be delivered after the terminal write; publishing it unguarded would flip a Completed/Failed download back to Running and hang the UI.
     private void ReportRunningProgress(string modelName, PullProgress update)
     {
         _ = _status.AddOrUpdate(modelName,

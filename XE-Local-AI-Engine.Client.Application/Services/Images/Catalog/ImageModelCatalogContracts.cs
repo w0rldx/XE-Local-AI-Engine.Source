@@ -1,12 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Images.Catalog;
 
-/// <summary>
-///     The curated image-model catalog document (schema v1). Bundled as an embedded resource
-///     (<c>image-model-catalog.seed.json</c>) and validated through <see cref="ImageModelCatalogValidator" /> before it
-///     is ever served. Editorial by design — like the GGUF <c>model-catalog.seed.json</c> it mirrors, the entries are
-///     hand-picked and each one's repo/file/size was verified against the live Hub API before being added, because a
-///     one-click install that 404s is worse than an absent row.
-/// </summary>
+/// <summary>The curated image-model catalog document (schema v1).</summary>
+/// <remarks>
+///     Bundled as an embedded resource (<c>image-model-catalog.seed.json</c>) and validated through
+///     <see cref="ImageModelCatalogValidator" /> before it is ever served. Editorial by design — like the GGUF
+///     <c>model-catalog.seed.json</c> it mirrors, the entries are hand-picked and each one's repo/file/size was
+///     verified against the live Hub API before being added, because a one-click install that 404s is worse than an
+///     absent row.
+/// </remarks>
 public sealed record ImageModelCatalogDocument(
     int SchemaVersion,
     string CatalogVersion,
@@ -16,12 +17,12 @@ public sealed record ImageModelCatalogDocument(
 /// <summary>
 ///     One curated image model: everything <c>POST images/models/downloads</c> needs, so installing it is a single
 ///     click instead of a repo id, a file name, a family and a size typed by hand.
-///     <para>
-///         <see cref="Parts" /> is the whole file-set. A part may name its own <c>RepoId</c> — the Qwen-Image set is
-///         genuinely split across repositories — and every part declares its size, which is what makes the free-disk
-///         pre-flight run and the aggregate download percentage computable.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="Parts" /> is the whole file-set. A part may name its own <c>RepoId</c> — the Qwen-Image set is
+///     genuinely split across repositories — and every part declares its size, which is what makes the free-disk
+///     pre-flight run and the aggregate download percentage computable.
+/// </remarks>
 public sealed record ImageModelCatalogEntry(
     string Id,
     string DisplayName,

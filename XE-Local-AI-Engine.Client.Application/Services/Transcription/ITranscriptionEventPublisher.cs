@@ -7,15 +7,11 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     the host supersedes the no-op default with a SignalR-backed implementation.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Publishing is not a reaction to a row being written.</b> A commit is a fact the segmenter produced;
-///         persisting it is one optional consequence. A persist-free session emits the identical event sequence with
-///         nothing in the database behind it, so no implementation may read a published event back out of a store.
-///     </para>
-///     <para>
-///         Enums cross this seam as enums. The wire spelling belongs to the host's publisher, which maps them
-///         explicitly, so renaming a member here cannot change the contract a browser sees.
-///     </para>
+///     Publishing is not a reaction to a row being written: a commit is a fact the segmenter produced and persisting it is one
+///     optional consequence, so a persist-free session emits the identical event sequence with nothing in the database behind
+///     it, and no implementation may read a published event back out of a store. Enums cross this seam as enums — the wire
+///     spelling belongs to the host's publisher, which maps them explicitly, so renaming a member here cannot change the
+///     contract a browser sees.
 /// </remarks>
 public interface ITranscriptionEventPublisher
 {

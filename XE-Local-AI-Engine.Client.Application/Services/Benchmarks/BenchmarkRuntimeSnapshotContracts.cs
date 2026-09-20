@@ -116,32 +116,24 @@ public sealed record BenchmarkLlamaRuntimeSnapshotV1(
             FlashAttention);
 }
 
-/// <summary>
-///     The frozen sampling a run replays.
-///     <para>
-///         EVERY MEMBER ADDED HERE MUST BE NULLABLE AND <see cref="JsonIgnoreCondition.WhenWritingNull" />. The factory
-///         serializes with <see cref="JsonIgnoreCondition.Never" /> and validates a stored payload by RE-HASHING it, so
-///         a member that emits <c>null</c> changes the bytes of every row frozen before it existed and every one of
-///         those runs stops replaying with "configuration hash is invalid". Omitting the member when it is null keeps
-///         a legacy payload byte-identical; a run that actually sets it is a new configuration and legitimately hashes
-///         differently. <c>BenchmarkRuntimeSnapshotV1CompatibilityTests</c> is the guard.
-///     </para>
-/// </summary>
+/// <summary>The frozen sampling a run replays.</summary>
+/// <remarks>
+///     EVERY MEMBER ADDED HERE MUST BE NULLABLE AND <see cref="JsonIgnoreCondition.WhenWritingNull" />. The factory
+///     serializes with <see cref="JsonIgnoreCondition.Never" /> and validates a stored payload by RE-HASHING it, so a
+///     member that emits <c>null</c> changes the bytes of every row frozen before it existed and every one of those
+///     runs stops replaying with "configuration hash is invalid". Omitting a null member keeps a legacy payload
+///     byte-identical. <c>BenchmarkRuntimeSnapshotV1CompatibilityTests</c> is the guard.
+/// </remarks>
 /// <param name="ReasoningBudgetTokens">
-///     The per-request thinking budget (<c>reasoning_budget_tokens</c>) frozen onto the run, or <see langword="null" />
-///     to leave the reasoning bounded only by the effort ladder and the window.
+///     The per-request thinking budget (<c>reasoning_budget_tokens</c>), or <see langword="null" /> for reasoning bounded only by the effort ladder and the window.
 /// </param>
 /// <param name="ReasoningBudgetEnforceable">
-///     What the frozen model's capability snapshot said about llama-server being able to ENFORCE that budget — its
-///     chat template renders a literal reasoning end marker. Frozen rather than re-resolved at execution so a run
-///     replays under the answer that was true when it was created. <see langword="null" /> on a run frozen before this
-///     member existed, which reads as the inert <see langword="true" />: never remove a cap that was working.
+///     Whether llama-server can ENFORCE that budget, frozen. <see langword="null" /> on a pre-member run reads as the
+///     inert <see langword="true" />: never remove a cap that was working.
 /// </param>
 public sealed record BenchmarkSamplingSnapshotV1(
-    // double, unlike its neighbours: this is the one member duplicated onto a plaintext run column and exported, and
-    // a float widened into that double column read back as 0.699999988079071 for a temperature of 0.7. The sampler
-    // still takes a float — SamplingOptions narrows it at the provider boundary, which is what the wire carries
-    // anyway. The serialized bytes are unchanged: 0.7 is 0.7 either way, so no stored snapshot re-hashes differently.
+    // double, unlike its neighbours: the one member duplicated onto a plaintext run column and exported, where a float widened into it reads back as 0.699999988079071 for a temperature of
+    // 0.7. The sampler still takes a float; SamplingOptions narrows it at the provider boundary. Serialized bytes are unchanged — 0.7 is 0.7 either way, so no stored snapshot re-hashes.
     double? Temperature,
     float? TopP,
     int? TopK,
@@ -163,12 +155,13 @@ public static class BenchmarkFrozenPolicies
 {
     public const string FixedSeedPolicy = "fixed";
 
-    /// <summary>
-    ///     The frozen sampling every benchmark generation replays. <paramref name="maxOutputTokens" /> is the project's
-    ///     optional output budget (<c>n_predict</c>); the default keeps generation context-limited and keeps the
-    ///     judge-policy sampling — which never takes a budget — byte-identical to what it has always hashed. The same
-    ///     holds for the two reasoning-budget arguments: omitted, they are omitted from the payload entirely.
-    /// </summary>
+    /// <summary>The frozen sampling every benchmark generation replays.</summary>
+    /// <remarks>
+    ///     <paramref name="maxOutputTokens" /> is the project's optional output budget (<c>n_predict</c>); the default
+    ///     keeps generation context-limited and keeps the judge-policy sampling — which never takes a budget —
+    ///     byte-identical to what it has always hashed. The same holds for the two reasoning-budget arguments:
+    ///     omitted, they are omitted from the payload entirely.
+    /// </remarks>
     public static BenchmarkSamplingSnapshotV1 DeterministicSampling(int? maxOutputTokens = null,
         int? reasoningBudgetTokens = null,
         bool? reasoningBudgetEnforceable = null) =>
@@ -177,10 +170,12 @@ public static class BenchmarkFrozenPolicies
 
     /// <summary>
     ///     Tokens a project's context must keep clear of its own budgets, so a run that pins both a reasoning budget
-    ///     and an output budget still has room for the task, the system prompt and the agent's tool offer. A coarse
-    ///     floor on purpose: the exact prompt is not known when the project is validated, and a floor that refuses the
-    ///     obviously impossible is worth more than a precise one that needs the frozen runtime to compute.
+    ///     and an output budget still has room for the task, the system prompt and the agent's tool offer.
     /// </summary>
+    /// <remarks>
+    ///     A coarse floor on purpose: the exact prompt is not known when the project is validated, and a floor that
+    ///     refuses the obviously impossible is worth more than a precise one that needs the frozen runtime to compute.
+    /// </remarks>
     public const int MinimumPromptReserveTokens = 512;
 
     /// <summary>The generation budget a run gets when its project does not pin one. See <see cref="FrozenTimeouts" />.</summary>
@@ -193,20 +188,15 @@ public static class BenchmarkFrozenPolicies
 
     /// <summary>
     ///     The timeout policy a benchmark generation runs under, pinned here because the node-level
-    ///     <see cref="TimeoutSettings.InvocationTimeoutSeconds" /> default has since moved. A frozen run therefore
-    ///     replays identically across app versions instead of silently inheriting whatever the package builder
-    ///     defaults to. Only the invocation budget is operator-tunable: the tool-call and stream-idle budgets stay
-    ///     pinned because they bound a STALL, not the length of a legitimate answer.
-    ///     <para>
-    ///         <paramref name="invocationTimeoutSeconds" /> is the run's frozen copy of its project's setting. The
-    ///         default moved 300 → 900 deliberately: at 300 a 27B reasoning model was cancelled mid-answer at 307 s
-    ///         before it could finish or hit the context ceiling, so the timeout was measuring the harness rather than
-    ///         the model. A longer budget cannot change what an already-completed run produced — only how many runs get
-    ///         to complete at all.
-    ///     </para>
-    ///     Timeout values are not part of the versioned configuration hash, so changing a pinned timeout is not
-    ///     reflected in that hash.
+    ///     <see cref="TimeoutSettings.InvocationTimeoutSeconds" /> default has since moved.
     /// </summary>
+    /// <remarks>
+    ///     A frozen run replays identically across app versions instead of inheriting whatever the package builder
+    ///     defaults to. Only the invocation budget is operator-tunable — the tool-call and stream-idle budgets bound a
+    ///     STALL, not a legitimate answer's length. The default is 900 s, not 300: at 300 a 27B reasoning model was
+    ///     cancelled mid-answer at 307 s, so the timeout measured the harness rather than the model. Timeout values
+    ///     are NOT part of the versioned configuration hash, so changing a pinned one is not reflected there.
+    /// </remarks>
     public static TimeoutSettings FrozenTimeouts(int? invocationTimeoutSeconds = null) =>
         new()
         {

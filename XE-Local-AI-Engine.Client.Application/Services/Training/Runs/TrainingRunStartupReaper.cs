@@ -10,26 +10,11 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     scratch its run never got to delete.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The receipt is validated on EVERY recorded field before anything is signalled — pid alive, process-group id,
-///         executable realpath, <c>/proc</c> start time, and the run token in the child's own environment. Any single
-///         mismatch means the pid was recycled and this is somebody else's process, so nothing is signalled at all.
-///         This is the <c>SandboxOrphanReaper</c> model. <c>StaleLlamaServerReaper</c>'s model — kill anything whose
-///         executable lives under a known root — is the one to avoid here: the trainer's executable is the shared venv
-///         interpreter, so a path match would reap any Python this node happens to be running.
-///     </para>
-///     <para>
-///         <strong>This class is the only thing that clears a receipt on startup, and it clears one only after the
-///         process behind it is provably gone</strong> — killed, or ruled out as a recycled pid. Everything else
-///         (<see cref="ITrainingRunStore.RecoverOnStartupAsync" />) leaves the column alone, because terminalizing a
-///         run row says nothing about the trainer: a sweep that dropped receipts on the way past would turn a live
-///         orphan into an unkillable one still holding its GPU allocation. That is also why the receipts are read
-///         unpaged and why a receipt whose inspect or kill threw survives to the next startup.
-///     </para>
-///     <para>
-///         The scratch sweep is age-gated like <c>GgufAcquisitionArtifactStartupReaper</c>: a <c>work/</c> directory
-///         older than the stale window belonged to a run that is long gone, and holds decrypted training data.
-///     </para>
+///     Every recorded field is validated before anything is signalled — pid alive, process-group id, executable realpath,
+///     <c>/proc</c> start time, and the run token in the child's own environment — because any mismatch means a recycled pid.
+///     That is the <c>SandboxOrphanReaper</c> model; <c>StaleLlamaServerReaper</c>'s kill-by-executable-root model would reap
+///     any Python this node runs, since the trainer's executable is the shared venv interpreter. The scratch sweep is age-gated
+///     like <c>GgufAcquisitionArtifactStartupReaper</c>: a <c>work/</c> directory past the stale window holds decrypted data.
 /// </remarks>
 public sealed class TrainingRunStartupReaper : IHostedService
 {
@@ -108,11 +93,12 @@ public sealed class TrainingRunStartupReaper : IHostedService
         _ = await store.RecoverOnStartupAsync(cancellationToken);
     }
 
-    /// <summary>
-    ///     Inspects one receipt and clears it only once it is safe to. A receipt whose inspect or kill THREW is left in
-    ///     place and retried on the next startup — dropping it there would strand a live trainer with nothing left to
-    ///     identify it by. Failures are per-receipt: one unreadable <c>/proc</c> entry must not abandon the rest.
-    /// </summary>
+    /// <summary>Inspects one receipt and clears it only once it is safe to.</summary>
+    /// <remarks>
+    ///     A receipt whose inspect or kill THREW is left in place and retried on the next startup — dropping it there
+    ///     would strand a live trainer with nothing left to identify it by. Failures are per-receipt: one unreadable
+    ///     <c>/proc</c> entry must not abandon the rest.
+    /// </remarks>
     private async Task ReapOneAsync(ITrainingRunStore store, TrainingRunLaunchReceipt entry, CancellationToken cancellationToken)
     {
         try

@@ -64,17 +64,13 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
             ManagedRuntime = managedRuntime,
             SelectedModelId = NormalizeSelection(settings.TranscriptionSelectedModelId),
             RecommendedModelId = recommended.Id,
-            // The EFFECTIVE idle timeout, not the stored default: the supervisor's TTL is seeded from
-            // Transcription:IdleTimeoutMinutes when no operator value is stored (NodeRuntimeSettings.GetTranscriptionIdleTimeout),
-            // so reporting the bare default here showed 15 while the reaper was firing at the configured value.
+            // The EFFECTIVE idle timeout, not the stored default: the supervisor's TTL is seeded from Transcription:IdleTimeoutMinutes when no operator value is
+            // stored (NodeRuntimeSettings.GetTranscriptionIdleTimeout), so the bare default would report 15 while the reaper fires at the configured value.
             IdleTimeoutMinutes = settings.TranscriptionIdleTimeoutMinutes
             ?? (_options.IdleTimeoutMinutes > 0 ? _options.IdleTimeoutMinutes : StoredNodeSettings.DefaultTranscriptionIdleTimeoutMinutes),
             VadInstalled = _pathResolver.IsVadInstalled(),
-            // Named, because these are two adjacent booleans: swapped positionally the node would report the VAD
-            // state as the capture capability, and no test of the mapper could catch it.
-            // The capability, not the operating system: it is false on Windows below the documented process-loopback
-            // build too. Computed here rather than in each endpoint so the two routes that project this view cannot
-            // disagree about it.
+            // Named, because two adjacent booleans swapped positionally would report the VAD state as the capture capability, with no mapper test able to catch it.
+            // The capability, not the operating system: false on Windows below the documented process-loopback build too, and computed here so the two projecting routes cannot disagree.
             ProcessCaptureSupported = _processCapture.IsSupported
         };
     }

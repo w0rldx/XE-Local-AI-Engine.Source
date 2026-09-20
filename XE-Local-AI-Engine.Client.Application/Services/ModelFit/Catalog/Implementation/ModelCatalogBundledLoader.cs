@@ -2,11 +2,13 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Catalog.Implementation;
 
 /// <summary>
 ///     Loads the embedded <c>model-catalog.seed.json</c> resource — the always-available fallback the provider serves
-///     when no remote refresh is configured, a remote fetch fails, and no last-good persisted copy exists. Validated
-///     through the same <see cref="ModelCatalogValidator" /> gate as a remote fetch: a bundled-content bug must never
-///     crash the app, so a failed validation degrades to an empty (but schema-valid) catalog with a loud error log
-///     rather than throwing out of the DI graph.
+///     when no remote refresh is configured, a remote fetch fails, and no last-good persisted copy exists.
 /// </summary>
+/// <remarks>
+///     Validated through the same <see cref="ModelCatalogValidator" /> gate as a remote fetch, but a bundled-content
+///     bug must never crash the app: a failed validation degrades to an empty (schema-valid) catalog with a loud error
+///     log rather than throwing out of the DI graph.
+/// </remarks>
 internal static class ModelCatalogBundledLoader
 {
     private const string ResourceNameSuffix = "model-catalog.seed.json";

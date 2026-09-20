@@ -4,11 +4,13 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 
 /// <summary>
-///     Provider-neutral post-generation vector policy shared by knowledge ingestion and query embedding. For a confidently
-///     resolved Nomic v1.5 model, the default policy implements the model card's Matryoshka recipe exactly: population
-///     layer normalization over the full native vector (epsilon 1e-5), truncation to the first 512 components, then L2
-///     normalization. Other models and explicit native mode preserve the provider-native vector.
+///     Provider-neutral post-generation vector policy shared by knowledge ingestion and query embedding.
 /// </summary>
+/// <remarks>
+///     For a confidently resolved Nomic v1.5 model the default policy implements the model card's Matryoshka recipe
+///     exactly: population layer normalization over the full native vector (epsilon 1e-5), truncation to the first 512
+///     components, then L2 normalization. Other models, and explicit native mode, preserve the provider-native vector.
+/// </remarks>
 public static class KnowledgeEmbeddingVectorPolicy
 {
     public const int MatryoshkaWidth = 512;

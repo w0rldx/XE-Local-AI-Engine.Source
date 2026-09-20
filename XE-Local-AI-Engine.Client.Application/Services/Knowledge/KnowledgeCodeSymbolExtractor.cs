@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Deterministic, allocation-bounded extraction of one useful declaration symbol from a code chunk. This is not an
-///     AST replacement; it supplies the weighted lexical field with common class/function identifiers while preserving
-///     the raw chunk as the authoritative search content.
+///     Deterministic, allocation-bounded extraction of one useful declaration symbol from a code chunk.
 /// </summary>
+/// <remarks>
+///     Not an AST replacement: it supplies the weighted lexical field with common class and function identifiers while
+///     preserving the raw chunk as the authoritative search content.
+/// </remarks>
 internal static class KnowledgeCodeSymbolExtractor
 {
     private static readonly string[] DeclarationPrefixes =

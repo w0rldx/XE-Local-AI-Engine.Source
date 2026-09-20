@@ -4,11 +4,12 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
-/// <summary>
-///     Validates a candidate image-model catalog document. Tolerant of parse failures (never throws) but strict on
-///     content: one invalid entry rejects the whole document, so a bad edit can never surface a catalog row whose
-///     one-click install would 404, escape the models directory, or silently disable the free-disk pre-flight.
-/// </summary>
+/// <summary>Validates a candidate image-model catalog document.</summary>
+/// <remarks>
+///     Tolerant of parse failures (never throws) but strict on content: one invalid entry rejects the whole document,
+///     so a bad edit can never surface a catalog row whose one-click install would 404, escape the models directory,
+///     or silently disable the free-disk pre-flight.
+/// </remarks>
 public static class ImageModelCatalogValidator
 {
     /// <summary>The only <see cref="ImageModelCatalogDocument.SchemaVersion" /> this build understands.</summary>

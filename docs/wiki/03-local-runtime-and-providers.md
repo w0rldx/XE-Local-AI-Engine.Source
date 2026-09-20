@@ -266,6 +266,18 @@ Upstream ships no prebuilt Linux CUDA `llama-server`. Rather than leave a Linux 
 
 **The endpoints' door onto the provider (endpoint-dependency rule).** `XE-Local-AI-Engine.Client.Application/Services/ModelFit/LlamaCppRuntimeOrchestrationService.cs` is a pass-through over `IInstalledRuntimeStore`, `ILlamaCppBinaryManager`, `ILlamaCppSourceBuildActivity`, `ILlamaCppSourceBuildPrerequisiteProbe`, `ILlamaCppSourceBuildService`, `ILlamaCppUpdateState` and `ILlamaServerProcessSupervisor`; the source-build, eject and running-models endpoints inject it, never the provider contracts. It also owns the shared remove gate the remove endpoint delegates to (`TryRemoveAsync` — eject-first, with the build-active check repeated under the runtime mutation lease).
 
+Two members sit on that door for a reason unrelated to the endpoints. The supervisor's ensure-running and inference-lease pair is there because `Services/Proxy/LocalModelProxyForwarder` needs both and stays in the host — it owns the `HttpContext` an application service may not — and it is the only caller of that pair. The first-run provisioning trio (GPU-variant probe, binary ensure, acquisition-status report) is there because `BackgroundServices/FirstRunModelProvisioningService` needs all three and stays in the host: the desktop-launch decision it gates on is a host fact (process args plus the Velopack install kind) the application layer cannot resolve. It is the only caller of those three.
+
+**What is deliberately off that surface**, because nothing in the host asks for it — each stays on the contract that owns it:
+
+- `ILlamaCppBinaryManager.InstallTagAsync` and the adopt verbs (`AdoptCudaSourceBuildAsync`, `AdoptSourceBuildAsync`).
+- `ILlamaCppSourceBuildService.RecoverAsync` and `ShutdownAsync` (host-start recovery and the shutdown drain).
+- `ILlamaCppBinaryManager.RemoveSourceBuildAsync` is not a pass-through either: it is reachable only as the delegate the shared remove gate runs under the runtime mutation lease, never as a verb a caller can invoke directly.
+- `IInstalledRuntimeStore.AcquireAsync`, `WriteAsync` and `DeleteAsync` — only `ReadAsync` is re-exposed.
+- `ILlamaCppUpdateState.Store` — only the `Current` snapshot is re-exposed.
+- `ILlamaCppSourceBuildActivity.TryReserve` and `TryRelease` — only `ActiveBuildId` is read, inside the remove gate.
+- The supervisor's eviction (`EvictAsync` / `EvictAllRolesAsync`), profiling (`RunExclusiveProfilingAsync`) and benchmark (`RunExclusiveBenchmarkAsync`) surface, plus `TryAcquireRuntimeMutationLeaseAsync` and `IsKeepWarmSuppressed`, which the remove gate uses internally. `EjectAsync` is the one lifecycle verb that IS re-exposed.
+
 **Request model** (`Contracts/ILlamaCppSourceBuildService.cs`, `LlamaCppSourceBuildRequestValidation.cs`):
 
 - `Backend` ∈ `{Cpu, Vulkan, Cuda}` → `GpuVariant`.

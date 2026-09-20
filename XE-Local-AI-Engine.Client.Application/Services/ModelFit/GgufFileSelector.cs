@@ -5,24 +5,27 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     Shared GGUF-variant ranking core for the advisor's two selection lanes (the explore-lane
-///     <c>ModelFitRefreshService</c> and the catalog-lane <c>CatalogRecommendationService</c>), which previously
-///     reimplemented this ~50-line algorithm near-verbatim. The one real difference between the lanes is how
-///     <see cref="MoeFacts" /> is built per file — the catalog lane derives it from a curated
-///     <c>ModelCatalogEntry</c>, the explore lane has no such entry — so that is the single seam left as a
-///     caller-supplied delegate; everything else (attention-shape derivation, fit filtering, native-format guard,
-///     ceiling/floor ranking) is identical and lives here.
+///     Shared GGUF-variant ranking core for the advisor's two selection lanes, the explore-lane
+///     <c>ModelFitRefreshService</c> and the catalog-lane <c>CatalogRecommendationService</c>.
 /// </summary>
+/// <remarks>
+///     The lanes differ only in how <see cref="MoeFacts" /> is built per file — the catalog lane derives it from a
+///     curated <c>ModelCatalogEntry</c>, the explore lane has no such entry — so that is the single seam left as a
+///     caller-supplied delegate. Everything else (attention-shape derivation, fit filtering, native-format guard,
+///     ceiling/floor ranking) is identical and lives here, so neither lane reimplements it.
+/// </remarks>
 internal static class GgufFileSelector
 {
     /// <summary>
-    ///     Walks <paramref name="files" /> against the <see cref="QuantLadder" />: estimates every file, keeps only the
-    ///     ones that fit the budget, have a computable weights term, and sit at or above the quality floor, then
-    ///     returns the highest quality one that does not exceed the requested <paramref name="quant" /> ceiling. When
-    ///     the only fitting files are higher quality than the ceiling (a roomy box with no file at/below the target
-    ///     quant) it returns the smallest fitting one so the repo still surfaces. Returns <see langword="null" /> when
-    ///     nothing at or above the floor fits.
+    ///     Walks <paramref name="files" /> against the <see cref="QuantLadder" /> and returns the highest-quality file
+    ///     that fits the budget without exceeding the requested <paramref name="quant" /> ceiling.
     /// </summary>
+    /// <remarks>
+    ///     Only files that fit the budget, have a computable weights term and sit at or above the quality floor are
+    ///     considered. When every fitting file is higher quality than the ceiling (a roomy box with no file at or
+    ///     below the target quant) the smallest fitting one is returned so the repo still surfaces.
+    /// </remarks>
+    /// <returns><see langword="null" /> when nothing at or above the floor fits.</returns>
     public static SelectedGgufFile? SelectBestFit(MemoryFitEstimator estimator,
         IReadOnlyList<GgufRepoFile> files,
         string quant,
@@ -67,11 +70,8 @@ internal static class GgufFileSelector
         // prefer a higher-nominal-quality requant of it — the native file caps the repo's recommendable quality.
         var guarded = MemoryFitEstimator.FilterOutNativeFormatRequants(fitting, candidate => candidate.file.Quant, candidate => candidate.rank);
 
-        // Prefer the highest quality at or below the requested ceiling (rank >= ceilingRank == quality <= ceiling). If every
-        // fitting file is higher quality than the ceiling, fall back to the smallest fitting (highest rank) so the repo is
-        // still recommended at a runnable quant.
-        // Estimated footprint is an explicit tie-break when two files share a rank (e.g. two off-ladder labels both map to
-        // the unknown rank, or a repo lists a quant twice) so the pick is deterministic regardless of file order.
+        // Prefer the highest quality at or below the ceiling (rank >= ceilingRank); if every fitting file is higher quality
+        // than it, take the smallest fitting, tie-broken by footprint so repeated/off-ladder ranks pick deterministically.
         var atOrBelowCeiling = guarded.Where(candidate => candidate.rank >= ceilingRank).ToList();
         var chosen = atOrBelowCeiling.Count > 0
             ? atOrBelowCeiling.OrderBy(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First()

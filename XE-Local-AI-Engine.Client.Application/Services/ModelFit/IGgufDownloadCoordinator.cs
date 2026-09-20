@@ -3,26 +3,28 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     Coordinates operator-driven GGUF downloads for the model-fit advisor surface. It owns a per-model
-///     <see cref="System.Threading.CancellationTokenSource" /> registry so a download started by one request can be
-///     cancelled by a separate request, and it tracks the latest sanitized <see cref="GgufDownloadStatus" /> for each
-///     in-flight or recently-finished download so the operator UI can poll progress.
-///     <para>
-///         <b>Honest cancellation:</b> cancel is cooperative — it signals the in-flight download's token, which the
-///         Hugging Face GGUF store (<see cref="IGgufModelStore.EnsureModelAsync" />) honors at the next byte/await
-///         boundary. A download that
-///         has already completed (or was never started) is a no-op cancel. No bytes are force-killed mid-write.
-///     </para>
+///     Coordinates operator-driven GGUF downloads for the model-fit advisor surface: a per-model
+///     <see cref="System.Threading.CancellationTokenSource" /> registry so one request can cancel a download another
+///     started, plus the latest sanitized <see cref="GgufDownloadStatus" /> per download for the operator UI to poll.
 /// </summary>
+/// <remarks>
+///     <b>Honest cancellation:</b> cancel is cooperative — it signals the in-flight download's token, which the
+///     Hugging Face GGUF store (<see cref="IGgufModelStore.EnsureModelAsync" />) honors at the next byte/await
+///     boundary. Cancelling a download that already completed, or was never started, is a no-op. No bytes are
+///     force-killed mid-write.
+/// </remarks>
 public interface IGgufDownloadCoordinator
 {
     /// <summary>
-    ///     Begins (or rejoins) a background download for <paramref name="request" />. The download runs detached on the
-    ///     application lifetime, reporting progress into the per-model status registry; the call returns once the
-    ///     canonical model-name identity is resolved (so the operator tracks/cancels by the SAME identity the model is
-    ///     installed under, even when a base-quant request resolves to an Unsloth Dynamic file). A download already in
-    ///     flight for the same model name is rejoined (idempotent) rather than duplicated.
+    ///     Begins — or rejoins — a background download for <paramref name="request" />; a download already in flight
+    ///     for the same model name is rejoined (idempotent) rather than duplicated.
     /// </summary>
+    /// <remarks>
+    ///     The download runs detached on the application lifetime, reporting progress into the per-model status
+    ///     registry. The call returns once the canonical model-name identity is resolved, so the operator tracks and
+    ///     cancels by the SAME identity the model is installed under, even when a base-quant request resolves to an
+    ///     Unsloth Dynamic file.
+    /// </remarks>
     Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct);
 
     /// <summary>

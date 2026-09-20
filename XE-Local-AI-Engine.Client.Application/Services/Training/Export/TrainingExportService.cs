@@ -18,21 +18,11 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     Turns a finished run's staged HF adapter into a servable GGUF, then proves it loads.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>Exclusivity.</strong> An export takes the same hold a run does — an exclusive
-///         <see cref="IGpuWorkGate" /> admission and the llama.cpp runtime-mutation lease — acquired
-///         BEFORE anything is written, so a refusal is an immediate, harmless 409. The merge step genuinely needs the
-///         GPU; the adapter conversion does not, but it is held to the same single-flight rule rather than given its
-///         own concurrency model for a path that runs for seconds.
-///     </para>
-///     <para>
-///         <strong>The run's status is deliberately never moved.</strong> Training already terminalized the run and
-///         its work item, and the store's terminal transitions are one-way by construction: moving a
-///         <c>Succeeded</c> run to <c>Exporting</c> is refused, and even if it were not, nothing could move it back
-///         (<c>CompleteRunAsync</c> is a no-op once the work item is terminal). An export failure must not be able to
-///         flip a finished run to failed, so the export's own outcome lives entirely on the artifact row — digest,
-///         smoke state, and reason — with live progress on the run hub. A run that succeeded stays succeeded.
-///     </para>
+///     An export takes the same hold a run does — an exclusive <see cref="IGpuWorkGate" /> admission and the llama.cpp
+///     runtime-mutation lease — acquired BEFORE anything is written, so a refusal is an immediate, harmless 409. The merge step
+///     genuinely needs the GPU; the adapter conversion does not, but it is held to the same single-flight rule rather than given
+///     its own concurrency model for a path that runs for seconds. The run's status is deliberately never moved: the export's
+///     outcome lives entirely on the artifact row. See docs/wiki/18-training.md ("5. Export, smoke and promotion").
 /// </remarks>
 public sealed class TrainingExportService : ITrainingExportService
 {
@@ -344,9 +334,7 @@ public sealed class TrainingExportService : ITrainingExportService
         var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
 
         // Replacing a previous unpromoted attempt happens HERE rather than during planning: the staged file name is
-        // deterministic, so a second export overwrites the bytes and the old row's digest would silently stop
-        // describing them — but a start that got refused for a busy GPU must not have destroyed the old row on its
-        // way out.
+        // deterministic, so a second export overwrites the bytes — but a start refused for a busy GPU must not destroy the row.
         TrainingArtifactRecord? artifact = null;
         try
         {
@@ -404,9 +392,8 @@ public sealed class TrainingExportService : ITrainingExportService
         }
         finally
         {
-            // Both intermediates are multi-gigabyte and neither is recoverable value once the run is over. They are
-            // swept on EVERY path, failures included: a quantize that died leaves an f16 file no artifact row points
-            // at, which is a silent disk leak nothing would ever clean up.
+            // Both intermediates are multi-gigabyte and hold no recoverable value once the run is over, so they are swept on
+            // EVERY path, failures included: a quantize that died leaves an f16 file no artifact row points at — a silent leak.
             DeleteBestEffort(Path.Combine(plan.StagedDirectory, MergedCheckpointDirectoryName), directory: true);
             DeleteIntermediateFloatFile(plan);
             _workspace.DeleteWorkDirectory(plan.RunId);
@@ -427,13 +414,13 @@ public sealed class TrainingExportService : ITrainingExportService
         }
     }
 
-    /// <summary>
-    ///     Removes the bytes an artifact row pointed at, once that row is already gone. Contained by construction: only
-    ///     a path inside the run's OWN staged directory is touched, and never the directory itself — an artifact row is
-    ///     operator-facing state, and a path that somehow escaped must cost a log line rather than a recursive delete
-    ///     somewhere else on the box. A failure is logged for the same reason: the row is gone either way, so leaked
-    ///     bytes must at least be visible.
-    /// </summary>
+    /// <summary>Removes the bytes an artifact row pointed at, once that row is already gone.</summary>
+    /// <remarks>
+    ///     Contained by construction: only a path inside the run's OWN staged directory is touched, and never the
+    ///     directory itself — an artifact row is operator-facing state, and a path that somehow escaped must cost a
+    ///     log line rather than a recursive delete somewhere else on the box. A failure is logged for the same
+    ///     reason: the row is gone either way, so leaked bytes must at least be visible.
+    /// </remarks>
     private bool DeleteStagedBytes(TrainingArtifactRecord artifact)
     {
         var staged = Path.GetFullPath(_workspace.StagedDirectory(artifact.RunId));
@@ -554,11 +541,12 @@ public sealed class TrainingExportService : ITrainingExportService
                 cancellationToken);
     }
 
-    /// <summary>
-    ///     Runs one export subprocess to completion, folding the trainer stdio protocol's <c>error</c> line into the
-    ///     failure message when the child speaks it and falling back to the exit status when it does not (the
-    ///     conversion scripts and the quantizer print plain text).
-    /// </summary>
+    /// <summary>Runs one export subprocess to completion.</summary>
+    /// <remarks>
+    ///     The trainer stdio protocol's <c>error</c> line is folded into the failure message when the child speaks
+    ///     it, falling back to the exit status when it does not — the conversion scripts and the quantizer print
+    ///     plain text.
+    /// </remarks>
     private async Task RunSubprocessAsync(ExportPlan plan,
         string executable,
         IReadOnlyList<string> arguments,

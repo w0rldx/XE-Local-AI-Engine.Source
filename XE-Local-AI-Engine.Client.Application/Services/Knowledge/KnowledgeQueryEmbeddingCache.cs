@@ -7,13 +7,16 @@ using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 
 /// <summary>
-///     Default <see cref="IKnowledgeQueryEmbeddingCache" />. A thin policy shell over the shared
-///     <see cref="ByteBudgetedCache{TKey,TValue}" /> — the same component the playbook-retrieval ranker and semantic
-///     memory dedup use — carrying this site's own semantics: the TTL is the cache's master switch (a zero TTL disables
-///     caching outright), the key is the resolved model's policy-family identity plus a SHA-256 hash of the query so the
-///     raw query text is never retained, and each value keeps its exact canonical identity and vector for caller-side
-///     policy/width validation. Registered as a singleton so one cache serves every request.
+///     Default <see cref="IKnowledgeQueryEmbeddingCache" />: a thin policy shell over the shared
+///     <see cref="ByteBudgetedCache{TKey,TValue}" />, the same component the playbook-retrieval ranker and semantic
+///     memory dedup use.
 /// </summary>
+/// <remarks>
+///     This site's own semantics: the TTL is the master switch, a zero TTL disabling caching outright; the key is the
+///     resolved model's policy-family identity plus a SHA-256 hash of the query, so the raw query text is never retained;
+///     and each value keeps its exact canonical identity and vector for caller-side policy and width validation.
+///     Registered as a singleton, so one cache serves every request.
+/// </remarks>
 public sealed class KnowledgeQueryEmbeddingCache : IKnowledgeQueryEmbeddingCache
 {
     // Byte ceiling alongside the configured entry bound: 128 entries is ~0.4 MB at 768 dimensions but ~2 MB at 4096, so

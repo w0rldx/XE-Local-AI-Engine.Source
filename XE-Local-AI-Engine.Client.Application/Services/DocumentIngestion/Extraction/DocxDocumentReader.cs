@@ -7,11 +7,12 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Microsoft.Extensions.DataIngestion;
 
-/// <summary>
-///     Reads text from Word (.docx) files with the Open XML SDK (pure-managed). Plain text is the floor; light
-///     Markdown is layered on best-effort: heading styles map to <c>#</c> levels, list paragraphs to <c>-</c>
-///     bullets, bold/italic runs to <c>**</c>/<c>*</c>, and tables to GitHub-style Markdown tables.
-/// </summary>
+/// <summary>Reads text from Word (.docx) files with the pure-managed Open XML SDK.</summary>
+/// <remarks>
+///     Plain text is the floor; light Markdown is layered on best-effort, with heading styles mapping to <c>#</c> levels,
+///     list paragraphs to <c>-</c> bullets, bold and italic runs to <c>**</c> and <c>*</c>, and tables to GitHub-style
+///     Markdown tables.
+/// </remarks>
 internal sealed class DocxDocumentReader : IngestionDocumentReader
 {
     private const int MaxHeadingLevel = 6;

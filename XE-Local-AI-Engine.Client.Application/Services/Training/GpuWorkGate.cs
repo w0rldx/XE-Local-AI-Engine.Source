@@ -15,19 +15,11 @@ public enum GpuWorkKind
 ///     The node's single admission point for GPU work (ADR 0005 §2).
 /// </summary>
 /// <remarks>
-///     <para>
-///         Exclusive work — a training run, an evaluation run, an export — owns the whole node: it admits only while
-///         nothing else holds the gate at all. Shared work — benchmarks, dataset generation, image jobs — admits only
-///         while no exclusive holder exists, and coexists with other shared holders, which is what those three have
-///         always done through the ordinary inference path.
-///     </para>
-///     <para>
-///         <strong>Both decisions are taken under one lock, and that is the point.</strong> The predecessor was a
-///         process-wide flag plus a set of "is anything else busy" status queries, so a training run could check its
-///         side, a benchmark could check its side, and both could then admit — a check-then-act race with the whole
-///         GPU as the shared resource. Acquiring the gate IS the check; nothing may consult it and act on the answer
-///         afterwards.
-///     </para>
+///     Exclusive work — a training run, an evaluation run, an export — owns the whole node and admits only while nothing else
+///     holds the gate at all. Shared work — benchmarks, dataset generation, image jobs — admits only while no exclusive holder
+///     exists, and coexists with other shared holders, which is what those three have always done through the ordinary
+///     inference path. Both decisions are taken under ONE lock, and that is the point: acquiring the gate IS the check, so
+///     nothing may consult it and act on the answer afterwards — that would be a check-then-act race over the whole GPU.
 /// </remarks>
 public interface IGpuWorkGate
 {

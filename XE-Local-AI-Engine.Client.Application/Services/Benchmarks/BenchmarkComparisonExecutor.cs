@@ -151,9 +151,8 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             var runB = await RequireAnsweredRunAsync(comparison.RunBId, work, token);
             var snapshot = _snapshots.Deserialize(runA.RuntimeSnapshotJson.Span);
 
-            // HALF the judge window each, because both answers plus the task, the reference answer and the verdict
-            // have to fit one context. A long answer is therefore cut harder here than it is pointwise — which is
-            // itself a bias, so the cut is RECORDED and a cohort too full of them refuses to aggregate.
+            // HALF the judge window each, because both answers plus the task, the reference answer and the verdict have to fit one context.
+            // A long answer is therefore cut harder here than it is pointwise — itself a bias, so the cut is RECORDED and a cohort too full of them refuses to aggregate.
             var window = Math.Min(runtime.RequestedContextTokens, runtime.Runtime.ContextTokens) / 2;
             var answerA = BenchmarkOutputParts.ForJudge(BenchmarkExecutionSerialization.DeserializeParts(runA.OutputPartsJson!.Value.Span), window);
             var answerB = BenchmarkOutputParts.ForJudge(BenchmarkExecutionSerialization.DeserializeParts(runB.OutputPartsJson!.Value.Span), window);
@@ -168,11 +167,8 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
 
             environment = await _environmentFacts.CaptureAsync(runtime.Runtime.Variant, token);
 
-            // No launch admission, and a retry around the rejection: a comparison is dequeued by the same single
-            // consumer that just ran the previous one, so it routinely arrives while that llama-server is still
-            // handing its VRAM back. Wait and re-decide rather than terminalizing a comparison over a transient.
-            // ONE budget for the whole phase — see BenchmarkWaitBudget: the capacity wait and the exclusive-spawn
-            // wait after it share this allowance rather than each taking a full one.
+            // No launch admission, plus a retry: the single consumer that just ran the previous comparison dequeues this one, so it routinely arrives while that llama-server is handing VRAM
+            // back. ONE BenchmarkWaitBudget for the phase, shared with the exclusive-spawn wait after it, so a transient rejection is waited out, not terminalized (see BenchmarkAdmissionRetry).
             var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
                                                                new CapacityRequest
@@ -201,9 +197,8 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
                 comparison.Order == 0 ? truncatedB : truncatedA);
             var admission = new BenchmarkContextAdmissionPolicy(runtime.RequestedContextTokens);
 
-            // The capture is reused verbatim from the judge path, keyed by the work item's run. No active phase is
-            // begun for it: a comparison is not a phase of either run, and claiming one would make a run's live view
-            // report a judging that is not about it. The buffered deltas are evicted on the way out.
+            // The capture is reused verbatim from the judge path, keyed by the work item's run. No active phase is begun for it:
+            // a comparison is not a phase of either run, and claiming one would make a run's live view report a judging that is not about it. The buffered deltas are evicted on the way out.
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, _dispatcher, _events);
             var currentVariant = await _variantSelector.SelectVariantAsync(token);
             if (currentVariant != runtime.Runtime.Variant)

@@ -4,28 +4,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     Pure, I/O-free estimator of whether a GGUF model fits the node's memory budget. Implements the oobabooga
-///     "GGUF VRAM formula" (<see href="https://oobabooga.github.io/blog/posts/gguf-vram-formula/" />):
-///     <code>
-///     total ≈ weights(quant) + KV_cache + ~0.75 GB CUDA/runtime overhead + safety margin
-///     KV_cache = n_layers · n_kv_heads · (key_dim + value_dim) · ctx · bytesPerKvElement(kvQuant)
-///     </code>
-///     with two 2026-era corrections: the per-head key/value dimensions come from the GGUF's explicit
-///     <c>{arch}.attention.key_length</c>/<c>value_length</c> when present (the derived <c>embedding_length / n_heads</c>
-///     is wrong for families like Qwen3 that pin <c>head_dim = 128</c>), and interleaved sliding-window attention (Gemma
-///     family) caps the window-limited layers' KV at the window instead of the full context. The budget is the GPU VRAM
-///     when GPU acceleration is available and VRAM was measured (<see cref="HardwareProfile.GpuAccelAvailable" /> &amp;&amp;
-///     <see cref="HardwareProfile.VramKnown" />) — free VRAM (<see cref="HardwareProfile.AvailableVramBytes" />) when the
-///     probe supplied it, total dedicated VRAM otherwise; and the node's available RAM in CPU mode (the degrade rule). It
-///     performs no GGUF parsing — every header input is supplied by the Hugging Face GGUF discovery per-file DTO. A model
-///     fits iff <c>total ≤ budget</c>.
+///     Pure, I/O-free estimator of whether a GGUF model fits the node's memory budget, implementing the oobabooga
+///     "GGUF VRAM formula" (<see href="https://oobabooga.github.io/blog/posts/gguf-vram-formula/" />).
 /// </summary>
 /// <remarks>
-///     Singleton-safe (stateless). The <c>weights</c> term prefers the header param count × bytes-per-weight of the
-///     chosen quant; when the param count is unavailable it falls back to the file's on-disk byte size (the quantized
-///     weights already on disk), so a file is never rejected purely for a missing param count when its size is known.
-///     Estimates whose head_dim was derived (no explicit key/value length) or whose weights fell back to the file size are
-///     flagged <see cref="FitConfidence.Approximate" /> so the advisor can present a conservative figure.
+///     <c>total ≈ weights(quant) + KV_cache + ~0.75 GB CUDA/runtime overhead + safety margin</c>, with
+///     <c>KV_cache = n_layers · n_kv_heads · (key_dim + value_dim) · ctx · bytesPerKvElement(kvQuant)</c>. A model fits
+///     iff <c>total ≤ budget</c>: GPU VRAM when acceleration is available and VRAM was measured, the node's available
+///     RAM in CPU mode (the degrade rule). Stateless and Singleton-safe, parsing no GGUF — every header input comes
+///     from the discovery per-file DTO. See docs/wiki/07-model-fit.md ("The memory-fit estimator (pure core)").
 /// </remarks>
 public sealed class MemoryFitEstimator
 {
@@ -44,11 +31,14 @@ public sealed class MemoryFitEstimator
     /// <summary>
     ///     Conservative default fraction of total weight bytes assumed to live in expert (MoE FFN) tensors when the
     ///     caller supplies <see cref="MoeFacts.ExpertCount" />/<see cref="MoeFacts.ExpertUsedCount" /> but no published
-    ///     active-parameter count. Expert FFN tensors dominate the parameter count in typical llama.cpp MoE
-    ///     architectures (Mixtral/Qwen-MoE/DeepSeek-MoE style), so 85% is a deliberately conservative (i.e. it
-    ///     over-estimates the CPU-offloaded share and under-estimates the GPU-resident share) placeholder used only when
-    ///     a more precise <see cref="MoeFacts.ActiveParamCount" /> figure is unavailable.
+    ///     active-parameter count.
     /// </summary>
+    /// <remarks>
+    ///     Expert FFN tensors dominate the parameter count in typical llama.cpp MoE architectures
+    ///     (Mixtral/Qwen-MoE/DeepSeek-MoE style), so 85% is deliberately conservative — it over-estimates the
+    ///     CPU-offloaded share and under-estimates the GPU-resident share — and is used only when a more precise
+    ///     <see cref="MoeFacts.ActiveParamCount" /> figure is unavailable.
+    /// </remarks>
     public const double DefaultExpertWeightShareFraction = 0.85d;
 
     private readonly double _safetyMarginFraction;
@@ -72,44 +62,19 @@ public sealed class MemoryFitEstimator
     public long OverheadBytes { get; }
 
     /// <summary>
-    ///     Estimates the memory footprint of a model with the given GGUF header metadata at <paramref name="ctxTarget" />
-    ///     tokens against <paramref name="profile" />. <paramref name="kvCacheQuantized" /> selects an 8-bit KV cache
-    ///     (1 byte/element) instead of the default fp16 (2 bytes/element), lowering the KV term so a larger model can fit;
-    ///     pass <paramref name="kvCacheQuant" /> instead for a 3-way choice (F16/Q8_0/Q4_0) — when non-null it overrides
-    ///     <paramref name="kvCacheQuantized" />.
+    ///     Estimates the memory footprint of a model with the given GGUF header metadata at
+    ///     <paramref name="ctxTarget" /> tokens against <paramref name="profile" />.
     /// </summary>
     /// <param name="quant">The chosen quant label (e.g. <c>Q4_K_M</c>) — drives bytes-per-weight when a param count is present.</param>
     /// <param name="paramCount">GGUF param count (n_params), or <see langword="null" /> to fall back to <paramref name="fileSizeBytes" />.</param>
     /// <param name="fileSizeBytes">The on-disk quantized file size; the weights fallback when <paramref name="paramCount" /> is null.</param>
-    /// <param name="blockCount">n_layers (<c>BlockCount</c>).</param>
-    /// <param name="attentionHeadCountKV">n_kv_heads (<c>AttentionHeadCountKV</c>).</param>
-    /// <param name="embeddingLength">Embedding length; the derived <c>head_dim = embeddingLength / n_heads</c> fallback when <paramref name="attention" /> carries no explicit key/value length.</param>
-    /// <param name="attentionHeadCount">n_heads (<c>AttentionHeadCount</c>) — the divisor for the derived head_dim fallback.</param>
-    /// <param name="ctxTarget">Target context window in tokens for the KV-cache sizing.</param>
-    /// <param name="profile">The hardware profile supplying the fit budget.</param>
+    /// <param name="embeddingLength">Embedding length; the derived <c>head_dim = embeddingLength / n_heads</c> fallback when <paramref name="attention" /> carries none.</param>
+    /// <param name="attentionHeadCount">n_heads — the divisor for the derived head_dim fallback.</param>
     /// <param name="kvCacheQuantized">When <see langword="true" />, KV cache is 8-bit (1 byte/element) instead of fp16. Ignored when <paramref name="kvCacheQuant" /> is supplied.</param>
-    /// <param name="moeFacts">
-    ///     Optional Mixture-of-Experts facts. When <see langword="null" /> (the default) behavior is unchanged from the
-    ///     dense-model estimate. When supplied and <see cref="MoeFacts.IsMoe" />, a resident estimate that exceeds the
-    ///     budget is retried as an expert-offload split (GPU: non-expert weights + KV + overhead; CPU: expert weights) —
-    ///     see <see cref="MoeFitVerdict.FitsWithExpertOffload" />.
-    /// </param>
-    /// <param name="kvCacheQuant">
-    ///     Optional explicit KV-cache quantization (<see cref="KvCacheQuant.F16" />/<see cref="KvCacheQuant.Q8_0" />/
-    ///     <see cref="KvCacheQuant.Q4_0" />). When <see langword="null" /> (the default) the legacy
-    ///     <paramref name="kvCacheQuantized" /> bool decides between F16 and Q8_0 — fully behavior-preserving for
-    ///     existing callers.
-    /// </param>
-    /// <param name="attention">
-    ///     Optional explicit attention geometry (key/value lengths + sliding-window facts). When <see langword="null" />
-    ///     (the default) the estimator derives <c>head_dim = embedding_length / n_heads</c> and treats every layer as
-    ///     full-attention — the exact legacy behavior. Supplying it corrects the KV term for families with a decoupled
-    ///     head_dim (Qwen3) or interleaved sliding-window attention (Gemma).
-    /// </param>
-    /// <param name="nativeQuantFormat">
-    ///     When <see langword="true" />, <paramref name="quant" /> is a native, non-requantizable format (MXFP4). Surfaced
-    ///     on the estimate so the advisor's ladder walk never prefers a higher-nominal-quality requant over it.
-    /// </param>
+    /// <param name="moeFacts">MoE facts; when supplied and <see cref="MoeFacts.IsMoe" />, an over-budget resident estimate is retried as an expert-offload split.</param>
+    /// <param name="kvCacheQuant">Explicit KV-cache quantization (F16/Q8_0/Q4_0); when non-null it overrides <paramref name="kvCacheQuantized" />.</param>
+    /// <param name="attention">Explicit attention geometry (key/value lengths, sliding-window facts); null derives head_dim and treats every layer as full-attention.</param>
+    /// <param name="nativeQuantFormat">Marks <paramref name="quant" /> a native, non-requantizable format (MXFP4), so the ladder walk never prefers a requant over it.</param>
     public MemoryFitEstimate Estimate(string quant,
         long? paramCount,
         long fileSizeBytes,
@@ -214,12 +179,15 @@ public sealed class MemoryFitEstimator
 
     /// <summary>
     ///     The memory budget an estimate for <paramref name="profile" /> is scored against: the GPU budget in GPU mode
-    ///     (free VRAM when the probe supplied it, total dedicated VRAM otherwise) and the node's available RAM under the
-    ///     CPU degrade rule. Exposed so a caller that presents or normalizes a fit figure uses the IDENTICAL number this
-    ///     estimator scored against. Two callers previously re-derived this expression inline and one of them was missed
-    ///     when the GPU budget moved from total to free VRAM, so the advisor's score silently disagreed with its own fit
-    ///     verdicts; there is now one definition and no way to drift.
+    ///     (free VRAM when the probe supplied it, total dedicated VRAM otherwise) and the node's available RAM under
+    ///     the CPU degrade rule.
     /// </summary>
+    /// <remarks>
+    ///     Exposed so a caller that presents or normalizes a fit figure uses the IDENTICAL number this estimator
+    ///     scored against. Re-deriving the expression inline is how the advisor's score came to disagree with its own
+    ///     fit verdicts: one of two inline copies was missed when the GPU budget moved from total to free VRAM. There
+    ///     is one definition and no way to drift.
+    /// </remarks>
     public static long ResolveFitBudgetBytes(HardwareProfile profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -228,15 +196,15 @@ public sealed class MemoryFitEstimator
 
     /// <summary>
     ///     Given the fitting candidates for ONE model repo, drops any candidate that is a pointless REQUANT of a model
-    ///     that also ships a native, non-requantizable format (MXFP4 / NVFP4). The weights are already at their trained
-    ///     precision, so re-encoding them at a higher nominal quality, or at the same 4-bit width in a lossy K-quant,
-    ///     buys nothing and costs disk and memory. The best native file therefore caps the repo on BOTH axes: a
-    ///     non-native candidate is dropped when it ranks strictly higher quality than that native file, and also when it
-    ///     is no denser-packed than it (<see cref="BytesPerWeight" /> at or above the native's). What survives is every
-    ///     native file plus the genuinely smaller lower-quality quants a tight box still needs (Q3_K_M, Q2_K, …). When no
-    ///     native-format candidate is present the list is returned unchanged. Pure and generic so both advisor lanes
-    ///     share one guard (lower <paramref name="rankOf" /> == higher quality, per <see cref="QuantLadder.QualityRank" />).
+    ///     that also ships a native, non-requantizable format (MXFP4 / NVFP4).
     /// </summary>
+    /// <remarks>
+    ///     The weights are already at their trained precision, so re-encoding them at a higher nominal quality, or at
+    ///     the same 4-bit width in a lossy K-quant, buys nothing and costs disk and memory. The best native file caps
+    ///     the repo on BOTH axes: a non-native candidate is dropped when it ranks strictly higher quality than that
+    ///     native file AND is no denser-packed (<see cref="BytesPerWeight" /> at or above the native's). With no
+    ///     native candidate the list is returned unchanged; a lower <paramref name="rankOf" /> is a higher quality.
+    /// </remarks>
     public static IReadOnlyList<T> FilterOutNativeFormatRequants<T>(IReadOnlyList<T> candidates,
         Func<T, string> quantOf,
         Func<T, int> rankOf)
@@ -264,11 +232,13 @@ public sealed class MemoryFitEstimator
 
     /// <summary>
     ///     Bytes-per-weight for a quant label (the dominant llama.cpp K-quants, I-quants, native and legacy/full types).
-    ///     Unknown labels fall back to the Q4_K_M density (~0.5625 bytes/weight ≈ 4.5 bits) — a conservative middle ground.
-    ///     The I-quant (IQ*) bit-widths are the measured effective bpw from the llama.cpp Llama-3.1-8B quantize benchmark, so
-    ///     an IQ file is sized at its true density instead of the legacy 4.5bpw default; <c>MXFP4</c> is gpt-oss's native
-    ///     ~4.25 bits/weight MoE format.
     /// </summary>
+    /// <remarks>
+    ///     Unknown labels fall back to the Q4_K_M density (~0.5625 bytes/weight ≈ 4.5 bits) — a conservative middle
+    ///     ground. The I-quant (IQ*) bit-widths are the MEASURED effective bpw from the llama.cpp Llama-3.1-8B
+    ///     quantize benchmark, so an IQ file is sized at its true density instead of the legacy 4.5 bpw default.
+    ///     <c>MXFP4</c> is gpt-oss's native ~4.25 bits/weight MoE format.
+    /// </remarks>
     public static double BytesPerWeight(string quant)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(quant);
@@ -288,11 +258,8 @@ public sealed class MemoryFitEstimator
             "IQ3_XS" => 3.4977d / 8d,
             "IQ3_S" => 3.6606d / 8d,
             "IQ3_M" => 3.7628d / 8d,
-            // NVFP4 is priced at MXFP4's density from measurement, not theory: s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF
-            // ships MXFP4 and NVFP4 conversions of the SAME model from the SAME converter at byte-identical sizes
-            // (5.45 GB each, sampled 2026-07-31). Cross-repo NVFP4 sizes for one base model vary widely
-            // (Qwen3.6-27B: 16.19 GB vs 19.88 GB) because converters differ in how much they keep at high precision,
-            // so a same-repo pair is the only sound apples-to-apples signal.
+            // NVFP4 is priced at MXFP4's density by MEASUREMENT, not theory: s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF ships SAME-model, SAME-converter MXFP4 and NVFP4 conversions at 5.45 GB each.
+            // Cross-repo NVFP4 sizes for one base model vary widely (Qwen3.6-27B: 16.19 vs 19.88 GB) because converters differ in what they keep at high precision, so only a same-repo pair is sound.
             "MXFP4" or "NVFP4" => 4.25d / 8d,
             "Q4_0" or "Q4_1" => 4.5d / 8d,
             "Q4_K_S" or "Q4_K_M" or "Q4_K" => 4.5d / 8d,
@@ -314,16 +281,14 @@ public sealed class MemoryFitEstimator
         return profile is { GpuAccelAvailable: true, VramKnown: true } && profile.VramBytes is > 0;
     }
 
-    /// <summary>
-    ///     The GPU-mode fit budget: free VRAM when it was measured, otherwise total dedicated VRAM. Free VRAM is the
-    ///     direct analogue of the CPU mode's <see cref="HardwareProfile.AvailableRamBytes" /> and is what the launcher
-    ///     actually has to place layers into — a desktop compositor, browser, and any warm sub-agent server routinely
-    ///     hold 1.5–2.5 GB of a 16 GB card before the first model loads. Budgeting against TOTAL VRAM instead scored
-    ///     models as fitting that then demand-page to host RAM on WDDM: no error, no OOM, just a multiple-times
-    ///     slowdown, which reads as "the app is broken" rather than "the model is too big". Falls back to total when
-    ///     free VRAM is unavailable (only NVIDIA reports it) or reads as non-positive, so a missing or nonsensical
-    ///     probe never collapses the budget to zero and drops every model.
-    /// </summary>
+    /// <summary>The GPU-mode fit budget: free VRAM when it was measured, otherwise total dedicated VRAM.</summary>
+    /// <remarks>
+    ///     Free VRAM is the direct analogue of CPU mode's <see cref="HardwareProfile.AvailableRamBytes" /> and what
+    ///     the launcher has to place layers into — a compositor, browser and any warm sub-agent server routinely hold
+    ///     1.5–2.5 GB of a 16 GB card. Budgeting against TOTAL VRAM scores models as fitting that then demand-page to
+    ///     host RAM on WDDM: no error, no OOM, just a multiple-times slowdown reading as a broken app. Falls back to
+    ///     total when free VRAM is unavailable (only NVIDIA reports it) or non-positive, never to zero.
+    /// </remarks>
     private static long ResolveGpuBudgetBytes(HardwareProfile profile)
     {
         return profile.AvailableVramBytes is > 0 ? profile.AvailableVramBytes.Value : profile.VramBytes!.Value;
@@ -348,15 +313,15 @@ public sealed class MemoryFitEstimator
 
     /// <summary>
     ///     Approximates the byte share of <paramref name="weightsBytes" /> that lives in expert (MoE FFN) tensors and
-    ///     would be offloaded to system RAM under <c>--n-cpu-moe</c>. Prefers <see cref="MoeFacts.ActiveParamCount" />
-    ///     when both it and <paramref name="totalParamCount" /> are known: <c>expertParams ≈ totalParams − activeParams</c>
-    ///     (a conservative approximation — "active" params include the currently-routed experts' share, so this slightly
-    ///     over-counts the expert-only portion, which biases the split toward the more spacious CPU/RAM side rather than
-    ///     GPU/VRAM). Falls back to <see cref="DefaultExpertWeightShareFraction" /> of <paramref name="weightsBytes" />
-    ///     when no active-param figure is available (only <see cref="MoeFacts.ExpertCount" />/
-    ///     <see cref="MoeFacts.ExpertUsedCount" /> known). Assumes uniform quant density across expert and non-expert
-    ///     tensors.
+    ///     would be offloaded to system RAM under <c>--n-cpu-moe</c>.
     /// </summary>
+    /// <remarks>
+    ///     Prefers <see cref="MoeFacts.ActiveParamCount" /> when it and <paramref name="totalParamCount" /> are both
+    ///     known: <c>expertParams ≈ totalParams − activeParams</c>, a conservative approximation because "active"
+    ///     params include the currently-routed experts' share, so it slightly over-counts the expert-only portion and
+    ///     biases the split toward the more spacious CPU/RAM side. Falls back to
+    ///     <see cref="DefaultExpertWeightShareFraction" />. Assumes uniform quant density across all tensors.
+    /// </remarks>
     private static long EstimateExpertWeightsBytes(long weightsBytes, long? totalParamCount, MoeFacts moeFacts)
     {
         if (moeFacts.ActiveParamCount is { } active && totalParamCount is { } total && total > active && active > 0)
@@ -368,9 +333,8 @@ public sealed class MemoryFitEstimator
         return (long)(weightsBytes * DefaultExpertWeightShareFraction);
     }
 
-    // The legacy (bool, nullable-enum) pair collapsed to the one enum the KV formula actually needs. Byte-identical to
-    // the pair it replaces: an explicit quant wins, and an absent one is Q8_0 when the caller asked for a quantized KV
-    // cache and F16 otherwise — the same 1 vs 2 bytes/element the pair produced.
+    // The (bool, nullable-enum) pair collapsed to the one enum the KV formula actually needs, byte-identical to the pair it replaces:
+    // an explicit quant wins, and an absent one is Q8_0 when the caller asked for a quantized KV cache and F16 otherwise — the same 1 vs 2 bytes/element.
     private static KvCacheQuant ResolveKvCacheQuant(bool kvCacheQuantized, KvCacheQuant? kvCacheQuant)
     {
         return kvCacheQuant ?? (kvCacheQuantized ? KvCacheQuant.Q8_0 : KvCacheQuant.F16);
@@ -417,10 +381,8 @@ public sealed class MemoryFitEstimator
         return new KvCacheFootprint(estimate.Bytes, bytesPerToken, kvCacheQuant, estimate.HeadDimDerived);
     }
 
-    // KV-cache bytes across all layers. Uses the GGUF's explicit per-head key/value dimensions when supplied (correct for
-    // Qwen3-style decoupled head_dim) and derives head_dim = embedding_length / n_heads otherwise; interleaved
-    // sliding-window layers are capped at the window rather than the full context. Also reports whether head_dim was
-    // derived (for the estimate's confidence).
+    // KV-cache bytes for all layers, from the GGUF's explicit per-head key/value dimensions when supplied (Qwen3-style decoupled head_dim), else head_dim = embedding_length / n_heads.
+    // Interleaved sliding-window layers are capped at the window rather than the full context. Also reports whether head_dim was derived, for the estimate's confidence.
     private static KvCacheEstimate EstimateKvCacheBytes(long blockCount,
         long attentionHeadCountKV,
         long embeddingLength,
@@ -467,19 +429,8 @@ public sealed class MemoryFitEstimator
         // 2 · n_kv_heads · head_dim · bytes when key_dim == value_dim == head_dim (symmetric derived head_dim).
         var perLayerPerToken = attentionHeadCountKV * (keyDim + valueDim) * bytesPerElement;
 
-        // Multi-head Latent Attention (deepseek2): llama.cpp allocates ONE latent K tensor per layer and no V tensor at
-        // all, so the row is key_length_mla wide with a single KV head — far below the generic figure above. Two inputs
-        // to that width are ASSUMPTIONS, not facts: llama.cpp sizes the cache as n_embd_head_k · n_head_kv (not
-        // n_embd_head_k_mla), so both "the row is key_length_mla wide" and "n_head_kv is 1 under MLA" depend on what
-        // the deepseek2 loader writes into those hparams, and neither is provable from the published sources.
-        // This estimate is not display-only — ProcessContextAllocationResolver turns it into the ResourceFootprint the
-        // VRAM admission ledger reserves, and an under-estimate admits a model that then OOMs on load. So the MLA term
-        // is CLAMPED with Math.Max against the generic term: it can only ever raise the estimate, never lower it, until
-        // a live measurement against llama.cpp's own /metrics KV figure says which assumption holds. Removing the clamp
-        // is a one-line change gated on that evidence.
-        // The clamp's generic term is whatever the ladder above produced. When neither rung is computable this method
-        // has already returned the zero estimate, so a header carrying key_length_mla but no usable key/value geometry
-        // never clamps against zero and never ships the bare MLA figure.
+        // Multi-head Latent Attention (deepseek2). The MLA term is CLAMPED with Math.Max against the generic term: it can only ever RAISE the estimate, never lower it, because two
+        // inputs to the MLA row width are ASSUMPTIONS, not facts. Why the clamp and what evidence would remove it: docs/wiki/07-model-fit.md ("The memory-fit estimator (pure core)").
         if (attention?.IsMla == true)
         {
             var mlaPerLayerPerToken = attention.KeyLengthMla!.Value * bytesPerElement;
@@ -490,10 +441,8 @@ public sealed class MemoryFitEstimator
         return new KvCacheEstimate((long)(perLayerPerToken * totalTokensAcrossLayers), headDimDerived);
     }
 
-    // The summed per-layer context lengths the KV cache must hold. Dense or global attention holds the full context on
-    // every layer. Interleaved sliding-window attention (the Gemma family) holds the full context only on the global
-    // layers — every pattern-th layer — and caps each remaining window-limited local layer at the smaller of the context
-    // and the window, matching llama.cpp's separate, smaller sliding-window cache.
+    // The summed per-layer context lengths the KV cache must hold. Dense or global attention holds the full context on every layer. Interleaved sliding-window attention (Gemma)
+    // holds it only on the global layers — every pattern-th — and caps each window-limited local layer at min(context, window), matching llama.cpp's separate smaller cache.
     private static double TotalKvTokensAcrossLayers(long blockCount, long ctxTarget, GgufAttentionShape? attention)
     {
         var window = attention?.SlidingWindow is > 0 ? attention.SlidingWindow : null;

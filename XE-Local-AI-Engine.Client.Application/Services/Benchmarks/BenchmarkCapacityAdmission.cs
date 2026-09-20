@@ -3,18 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
-/// <summary>
-///     How long a benchmark phase waits for local capacity before it gives up. A capacity rejection is transient by
-///     nature — it means something holds the bytes right now — and the primary and judge phases share ONE FIFO
-///     consumer, so a judge dequeued while the preceding primary's llama-server is still releasing its VRAM is the
-///     normal handoff, not an error. Waiting turns that into a delay instead of a terminal failure the operator has to
-///     re-judge by hand.
-/// </summary>
+/// <summary>How long a benchmark phase waits for local capacity before it gives up.</summary>
 /// <remarks>
-///     This is the budget for a whole PHASE, not for one wait. A phase can wait twice — first for capacity, then for
-///     the exclusive spawn — and both waits sit on the queue's single shared GPU-work admission, so two independent
-///     budgets would let one phase hold that admission for twice the configured maximum. A phase therefore takes one
-///     <see cref="BenchmarkWaitBudget" /> before its admission and both waits draw their retries from it.
+///     A capacity rejection is transient — something holds the bytes right now — and the primary and judge phases
+///     share ONE FIFO consumer, so a judge dequeued while the preceding primary's llama-server is still releasing its
+///     VRAM is the normal handoff, not an error. This is the budget for a whole PHASE, not one wait: a phase can wait
+///     twice (capacity, then the exclusive spawn) and both sit on the queue's single shared GPU-work admission, so two
+///     budgets would hold that admission for twice the maximum. See <see cref="BenchmarkWaitBudget" />.
 /// </remarks>
 public sealed class BenchmarkAdmissionRetry
 {
@@ -139,23 +134,14 @@ internal static class BenchmarkCapacityAdmission
 
 /// <summary>
 ///     The one path every queued benchmark phase takes to the supervisor's exclusive profiling spawn.
-///     <para>
-///         A <see cref="LlamaServerProfilingRefusedException" /> is the SAME shape of blocker a capacity rejection is:
-///         a warm role for the model is serving a request right now, and the request ends on its own. Left to reach an
-///         executor's generic catch it terminalizes durable queued work as failed — with the generic
-///         invocation-failed message, since the executors do not translate this type — over a chat that was about to
-///         finish, and a primary/judge/comparison item has no second attempt behind that promise. So it is waited out
-///         instead, and only a spent budget is terminal, naming the model and role that held it.
-///     </para>
-///     <para>
-///         Retrying repeats no work: the refusal is raised by the pre-spawn eviction, before anything is spawned and
-///         before the body runs, and it evicts nothing when it refuses. This wait is the more expensive of a phase's
-///         two, and deliberately so: it holds the queue's shared GPU-work admission and the model lease like the
-///         capacity wait does, and ALSO the capacity reservation, which is taken only once admission has succeeded.
-///         That is why it does not get its own budget — it draws from the phase's remaining share, so the two waits
-///         together can never exceed one <see cref="BenchmarkAdmissionRetry" /> allowance.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A <see cref="LlamaServerProfilingRefusedException" /> is the SAME shape of transient blocker a capacity
+///     rejection is, so it is waited out rather than terminalizing durable queued work as failed; only a spent budget
+///     is terminal, naming the model and role that held it. The wait draws from the phase's remaining
+///     <see cref="BenchmarkAdmissionRetry" /> share, because it also holds the capacity reservation. See
+///     docs/wiki/20-benchmarks.md ("Lifecycle — the work queue, stop reasons, recovery").
+/// </remarks>
 internal static class BenchmarkExclusiveSpawn
 {
     /// <summary>

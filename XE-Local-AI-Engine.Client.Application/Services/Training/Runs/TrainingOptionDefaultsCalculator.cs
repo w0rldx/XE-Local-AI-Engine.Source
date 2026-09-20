@@ -28,11 +28,12 @@ public interface ITrainingOptionDefaultsCalculator
     /// <exception cref="TrainingRunRejectedException">The options do not fit the box, or the checkpoint is unreadable.</exception>
     Task<TrainingRunDefaults> ResolveAsync(Guid baseArtifactId, TrainingRunOptionsV1? requested, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Re-estimates a run's footprint at launch time. The estimate is deliberately not persisted at creation: a run
-    ///     can sit queued for hours, and the reservation has to be sized against the same numbers the admission gate is
-    ///     about to compare with live free VRAM.
-    /// </summary>
+    /// <summary>Re-estimates a run's footprint at launch time.</summary>
+    /// <remarks>
+    ///     The estimate is deliberately not persisted at creation: a run can sit queued for hours, and the
+    ///     reservation has to be sized against the same numbers the admission gate is about to compare with live free
+    ///     VRAM.
+    /// </remarks>
     Task<TrainingFootprintEstimate> EstimateAsync(Guid baseArtifactId, TrainingRunOptionsV1 options, CancellationToken cancellationToken = default);
 }
 

@@ -180,17 +180,11 @@ public sealed class AudioTranscodeException : Exception
 ///     The engine-owned temporary files one upload occupies, and the single thing that deletes them.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>One owner, on purpose.</b> The slot is created before the request body is read and disposed after the
-///         transcription finishes, so every way an upload can end — an overrun, a client disconnect, a mid-copy
-///         <see cref="IOException" />, a cancellation, a failed transcode, a clean success — leaves through the same
-///         <see cref="DisposeAsync" />. Nothing else in the transcription path deletes a file; a second owner could
-///         only produce a double delete or a leak.
-///     </para>
-///     <para>
-///         The transcode destination is registered through <see cref="AddOwnedPath" /> <i>before</i> the converter
-///         starts, because a converter killed halfway still leaves a partial file behind, and that file is audio.
-///     </para>
+///     One owner, on purpose: the slot is created before the request body is read and disposed after the transcription
+///     finishes, so every way an upload can end — an overrun, a client disconnect, a mid-copy <see cref="IOException" />, a
+///     cancellation, a failed transcode, a clean success — leaves through the same <see cref="DisposeAsync" />, and a second
+///     owner could only produce a double delete or a leak. The transcode destination is registered through
+///     <see cref="AddOwnedPath" /> BEFORE the converter starts, because a converter killed halfway leaves a partial audio file.
 /// </remarks>
 public sealed class TranscriptionUploadSlot : IAsyncDisposable
 {
@@ -287,9 +281,8 @@ public sealed class TranscriptionUploadSlot : IAsyncDisposable
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // A temporary file that could not be removed must never turn a finished transcription into a failed
-                // request. Only the leaf name is logged: the path is engine-generated, but the log is not the place
-                // to correlate it with an upload.
+                // A temporary file that could not be removed must never turn a finished transcription into a failed request.
+                // Only the leaf name is logged: the path is engine-generated, but the log is not the place to correlate it.
                 _logger.LogWarning(exception,
                     "Could not delete the temporary transcription file {FileName}.",
                     Path.GetFileName(path));

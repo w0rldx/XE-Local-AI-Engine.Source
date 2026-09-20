@@ -3,10 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     The canonical lowercase backend tokens persisted in an inference profile's <c>backend</c> column and the
-///     <see cref="GpuVariant" />-to-token mapping the resolver uses to key a profile. Kept in one place so the resolver
-///     (which writes the key) and the invalidation evaluator (which reads <c>profile.Backend</c>) agree byte-for-byte.
+///     The canonical lowercase backend tokens persisted in an inference profile's <c>backend</c> column, plus the
+///     <see cref="GpuVariant" />-to-token mapping the resolver uses to key a profile.
 /// </summary>
+/// <remarks>
+///     Kept in one place so the resolver (which writes the key) and the invalidation evaluator (which reads
+///     <c>profile.Backend</c>) agree byte-for-byte.
+/// </remarks>
 internal static class InferenceBackends
 {
     /// <summary>NVIDIA CUDA backend token (Windows prebuilt).</summary>

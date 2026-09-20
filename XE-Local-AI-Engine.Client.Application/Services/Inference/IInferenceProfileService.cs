@@ -3,30 +3,40 @@ namespace XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     The operator-facing Inference Optimizer orchestrator: explore a node-local model to draft launch args, benchmark a
-///     drafted profile against the fixed golden transcript, and freeze a profile once a benchmark has succeeded. Only
-///     node-local GGUF models are eligible — a cloud or missing model is rejected without spawning. Registered SCOPED
-///     (it composes the scoped inference-profile + model-fit stores directly).
+///     The operator-facing Inference Optimizer orchestrator: explore a node-local model to draft launch args,
+///     benchmark a drafted profile against the fixed golden transcript, and freeze a profile once a benchmark has
+///     succeeded.
 /// </summary>
+/// <remarks>
+///     Only node-local GGUF models are eligible — a cloud or missing model is rejected without spawning. Registered
+///     SCOPED, because it composes the scoped inference-profile and model-fit stores directly.
+/// </remarks>
 public interface IInferenceProfileService
 {
     /// <summary>
     ///     Explores <paramref name="modelName" /> for <paramref name="role" />: acquires fitted args from the sibling
-    ///     machine-readable <c>llama-fit-params</c> capability, spawns one auto-fit llama-server, and upserts the single
-    ///     Explored profile for the key. A GPU explore whose helper/startup evidence cannot prove concrete placement fails
-    ///     observably without persisting a partial profile; CPU explores retain the GGUF-context fallback because they do
-    ///     not replay GPU placement. Rejects (no spawn) when the model is not a local GGUF.
+    ///     machine-readable <c>llama-fit-params</c> capability, spawns one auto-fit llama-server, and upserts the
+    ///     single Explored profile for the key.
     /// </summary>
+    /// <remarks>
+    ///     A GPU explore whose helper/startup evidence cannot prove concrete placement fails observably without
+    ///     persisting a partial profile; CPU explores retain the GGUF-context fallback because they do not replay GPU
+    ///     placement. Rejects, without spawning, when the model is not a local GGUF.
+    /// </remarks>
     Task<ExploreResult> ExploreAsync(string modelName, ModelRole role, CancellationToken ct);
 
     /// <summary>
-    ///     Explores with an optional request-scoped context-window override that pins the explore spawn's <c>-c</c> for
-    ///     this call only. <paramref name="contextTokens" /> is <see langword="null" /> for the default hardware-tier
-    ///     behaviour; a value is silently capped by the model's train ceiling, so the returned profile's
-    ///     <see cref="InferenceProfileView.CtxSize" /> is the effective window. The override is GPU-only: a non-null
-    ///     value on a CPU-variant node is rejected without spawning, because <c>llama-fit-params</c> does not run there
-    ///     and the requested window could not be recorded in the profile. Nothing about it is persisted.
+    ///     Explores with an optional request-scoped context-window override that pins the explore spawn's <c>-c</c>
+    ///     for this call only; nothing about it is persisted.
     /// </summary>
+    /// <param name="contextTokens">
+    ///     <see langword="null" /> for the default hardware-tier behaviour; a value is silently capped by the model's
+    ///     train ceiling, so <see cref="InferenceProfileView.CtxSize" /> is the effective window.
+    /// </param>
+    /// <remarks>
+    ///     The override is GPU-only: a non-null value on a CPU-variant node is rejected without spawning, because
+    ///     <c>llama-fit-params</c> does not run there and the requested window could not be recorded in the profile.
+    /// </remarks>
     Task<ExploreResult> ExploreAsync(string modelName, ModelRole role, int? contextTokens, CancellationToken ct);
 
     /// <summary>

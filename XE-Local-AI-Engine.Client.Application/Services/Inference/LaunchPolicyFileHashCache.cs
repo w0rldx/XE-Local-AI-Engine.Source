@@ -5,13 +5,14 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 
 /// <summary>
-///     Process-lifetime cache for exact file SHA-256 values used by launch-policy fingerprints. Cache hits are guarded
-///     by stable file metadata plus small samples from the beginning, middle, and end of the file; file-system change
-///     notifications evict entries even when a writer restores the original length and last-write timestamp.
+///     Process-lifetime cache for exact file SHA-256 values used by launch-policy fingerprints.
 /// </summary>
 /// <remarks>
-///     Registered as a container-owned singleton and injected: every consumer shares one instance, because each holds
-///     a file-system watcher per directory and a second instance watches the same runtime directory twice.
+///     Cache hits are guarded by stable file metadata plus small samples from the beginning, middle and end of the
+///     file; file-system change notifications evict entries even when a writer restores the original length and
+///     last-write timestamp. Registered as a container-owned singleton and injected so every consumer shares one
+///     instance, because each holds a file-system watcher per directory and a second instance would watch the same
+///     runtime directory twice.
 /// </remarks>
 public sealed class LaunchPolicyFileHashCache : IDisposable
 {

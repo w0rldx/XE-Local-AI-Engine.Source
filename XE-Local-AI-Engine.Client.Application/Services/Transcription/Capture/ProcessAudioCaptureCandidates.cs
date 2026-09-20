@@ -2,10 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 
 /// <summary>
 ///     Turns the raw audio sessions a host enumerated into the rows the picker shows. Pure, and deliberately free of
-///     any WASAPI type, so the aggregation runs — and is tested — on every operating system; enumerating the
-///     sessions in the first place is the Windows-only half and lives in
-///     <see cref="WindowsProcessAudioCaptureSource" />.
+///     any WASAPI type, so the aggregation runs — and is tested — on every operating system.
 /// </summary>
+/// <remarks>
+///     Enumerating the sessions in the first place is the Windows-only half and lives in
+///     <see cref="WindowsProcessAudioCaptureSource" />.
+/// </remarks>
 internal static class ProcessAudioCaptureCandidates
 {
     /// <summary>

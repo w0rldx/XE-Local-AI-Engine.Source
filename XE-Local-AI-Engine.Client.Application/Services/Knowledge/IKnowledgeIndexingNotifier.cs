@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Application-side seam the ingestion service calls on every document lifecycle transition so a connected operator
-///     is pushed a status change (the React documents list then invalidates and refetches). Defined in Application so the
-///     scoped ingestion service can depend on it without referencing the Client project or SignalR; the Client host
-///     supplies a hub-backed implementation over <c>IHubContext&lt;KnowledgeBaseHub&gt;</c>. The default registered in
-///     <c>AddNodeKnowledgeBase</c> is a no-op, so Application-only and test hosts resolve a notifier with no hub wired.
+///     Application-side seam the ingestion service calls on every document lifecycle transition, so a connected
+///     operator is pushed a status change and the React documents list invalidates and refetches.
 /// </summary>
+/// <remarks>
+///     Defined in Application so the scoped ingestion service can depend on it without referencing the Client project or
+///     SignalR; the Client host supplies a hub-backed implementation over <c>IHubContext&lt;KnowledgeBaseHub&gt;</c>.
+///     The default registered in <c>AddNodeKnowledgeBase</c> is a no-op, so Application-only and test hosts resolve a
+///     notifier with no hub wired.
+/// </remarks>
 public interface IKnowledgeIndexingNotifier
 {
     /// <summary>
@@ -27,10 +30,13 @@ public static class KnowledgeBaseHubEvents
 }
 
 /// <summary>
-///     Sanitized indexing-status payload. Carries only the document id, its coarse pipeline status, and the instant the
-///     transition was observed — deliberately no file name, chunk text, or failure detail (the list refetch is the source
-///     of truth for the display name and reason).
+///     Sanitized indexing-status payload: only the document id, its coarse pipeline status, and the instant the
+///     transition was observed.
 /// </summary>
+/// <remarks>
+///     Deliberately no file name, chunk text, or failure detail — the list refetch is the source of truth for the
+///     display name and the reason.
+/// </remarks>
 public sealed class KnowledgeDocumentChangedHubEvent
 {
     public required string EventType { get; init; }

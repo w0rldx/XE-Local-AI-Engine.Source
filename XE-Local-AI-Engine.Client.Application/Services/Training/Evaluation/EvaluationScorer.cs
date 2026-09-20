@@ -6,21 +6,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 /// <summary>
-///     The deterministic scorer: one hold-out sample's expectation against what the model actually called. No model is
-///     consulted — every verdict here is reproducible from the persisted sample and the persisted response, which is
-///     what lets a comparison report be recomputed from storage rather than trusted.
+///     The deterministic scorer: one hold-out sample's expectation against what the model actually called. No model
+///     is consulted, so every verdict is reproducible from the persisted sample and the persisted response.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The <c>ScoredBy</c> provenance follows <c>DefaultPlaybookEvalJudge</c>: v1 writes only
-///         <see cref="Deterministic" />. <c>judge</c> is reserved for a later LLM scorer so an existing results blob
-///         can say which verdicts a model produced and which a rule did.
-///     </para>
-///     <para>
-///         Whether a sample is a no-tool sample is decided STRUCTURALLY — the frozen trajectory carries no tool part —
-///         not from its kind label. The kind vocabulary belongs to the dataset definition and an operator is free to
-///         name a no-tool kind anything; the trajectory cannot lie about what it demonstrates.
-///     </para>
+///     A comparison report is therefore recomputed from storage rather than trusted. The <c>ScoredBy</c> provenance follows
+///     <c>DefaultPlaybookEvalJudge</c>: v1 writes only <see cref="Deterministic" />, and <c>judge</c> is reserved for a later LLM
+///     scorer so an existing results blob can say which verdicts a model produced and which a rule did. Whether a sample is a
+///     no-tool sample is decided STRUCTURALLY — the frozen trajectory carries no tool part — not from its kind label: the kind
+///     vocabulary belongs to the dataset definition, while the trajectory cannot lie about what it demonstrates.
 /// </remarks>
 internal static class EvaluationScorer
 {
@@ -70,9 +64,12 @@ internal static class EvaluationScorer
 
     /// <summary>
     ///     The deterministic refusal for a sample no scorer can grade, or <see langword="null" /> when the sample is
-    ///     single-call. An expectation is ONE call, so a multi-call trajectory used to be scored by its first tool part
-    ///     with the rest silently dropped — a failure that read as a verdict.
+    ///     single-call.
     /// </summary>
+    /// <remarks>
+    ///     An expectation is ONE call, so a multi-call trajectory has no gradeable answer: scoring it by its first
+    ///     tool part with the rest silently dropped would be a failure that reads as a verdict.
+    /// </remarks>
     public static TrainingEvaluationResultEntry? RejectMultiCall(Guid sampleId, string kind, TrainingSampleContentV1 content)
     {
         ArgumentNullException.ThrowIfNull(content);
@@ -81,11 +78,12 @@ internal static class EvaluationScorer
             : null;
     }
 
-    /// <summary>
-    ///     Reads what a frozen sample expects. The trajectory mirrors the chat <c>parts[]</c> shape, so the expectation
-    ///     is its single tool part; a sample without one expects no call at all. A multi-call trajectory never reaches
-    ///     here — <see cref="RejectMultiCall" /> is the gate ahead of it.
-    /// </summary>
+    /// <summary>Reads what a frozen sample expects.</summary>
+    /// <remarks>
+    ///     The trajectory mirrors the chat <c>parts[]</c> shape, so the expectation is its single tool part, and a
+    ///     sample without one expects no call at all. A multi-call trajectory never reaches here —
+    ///     <see cref="RejectMultiCall" /> is the gate ahead of it.
+    /// </remarks>
     public static EvaluationExpectation ReadExpectation(TrainingSampleContentV1 content, IReadOnlyList<DatasetToolSnapshotV1> tools)
     {
         ArgumentNullException.ThrowIfNull(content);

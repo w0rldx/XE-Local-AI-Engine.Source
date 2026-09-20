@@ -13,17 +13,11 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     request that started a transcription, and every store call runs in its own dependency-injection scope.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>No activity lease is taken here.</b> The transcriber acquires and releases one inside each
-///         <see cref="IWhisperTranscriber.TranscribeAsync" /> call; a second, nested lease would either deadlock or
-///         double-count. The consequence, accepted for this version, is that a job is lease-free while the upload is
-///         sniffed and transcoded — an eject landing in that window kills the daemon and the following call fails,
-///         which the session records as failed rather than silently truncating.
-///     </para>
-///     <para>
-///         <b>Nothing here deletes a file.</b> Every temporary path belongs to the <see cref="TranscriptionUploadSlot" />
-///         the endpoint disposes; a second owner could only produce a double delete or a leak.
-///     </para>
+///     No activity lease is taken here: the transcriber acquires one inside each
+///     <see cref="IWhisperTranscriber.TranscribeAsync" /> call, and a nested second would deadlock or double-count. A
+///     job is therefore lease-free while the upload is sniffed and transcoded — an eject in that window kills the
+///     daemon and the next call fails, which the session records as failed, never as truncated. Nothing here deletes
+///     a file: every temporary path belongs to the <see cref="TranscriptionUploadSlot" /> the endpoint disposes.
 /// </remarks>
 public sealed class TranscriptionService : ITranscriptionService
 {
@@ -134,13 +128,16 @@ public sealed class TranscriptionService : ITranscriptionService
         return new TranscriptionSessionPage { Items = items, TotalCount = total };
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    ///     Cancels first, then deletes without waiting for the run to unwind: cancellation is a signal, not a join, so
+    ///     a mid-flight transcription can still reach <c>AppendSegmentsAsync</c> or <c>CompleteAsync</c> after the row
+    ///     is gone. That race is benign BY CONTRACT — every store write is keyed on the session id and returns false
+    ///     for a session that no longer exists, and <c>AppendSegmentsAsync</c> checks existence itself so a late
+    ///     append answers false rather than throwing. Tracking the run task to join on it would buy nothing this relies on.
+    /// </remarks>
     public async Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        // Cancel first, then delete without waiting for the run to unwind. Cancellation is a signal, not a join, so a
-        // transcription that is mid-flight can still reach AppendSegmentsAsync or CompleteAsync after the row is gone.
-        // That race is benign BY CONTRACT: every store write is keyed on the session id and returns false for a
-        // session that no longer exists, and AppendSegmentsAsync checks existence itself so a late append answers false
-        // rather than throwing. Tracking the run task to join on it would buy nothing this relies on.
         _ = await CancelAsync(sessionId, cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -148,15 +145,16 @@ public sealed class TranscriptionService : ITranscriptionService
                           .DeleteAsync(sessionId, cancellationToken);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    ///     A live session ends through the registry's single termination path, never by signalling a batch source it
+    ///     does not own, and delete reaches this method first so the lanes stop before the row is removed.
+    ///     <c>EndAsync</c> is called unconditionally, not only when the session reads as live: <c>IsLive</c> flips
+    ///     false as the FIRST step of ending, so a delete arriving mid-teardown would otherwise remove the row while
+    ///     lanes still ran. It no-ops for an unknown session and returns the in-flight end's own task, joining it.
+    /// </remarks>
     public async Task<bool> CancelAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        // A live session ends through the registry's single termination path, never by signalling a batch source it
-        // does not own. Delete reaches this method first, so the lanes stop before the row is removed rather than
-        // feeding one that is already gone.
-        // Called unconditionally, not only when the session reads as live: IsLive flips false as the FIRST step of
-        // ending, so a delete arriving mid-teardown would otherwise skip this and remove the row while lanes were
-        // still running against it. EndAsync is a no-op for an unknown session and hands back the in-flight end's
-        // own task for one already ending, so awaiting it joins that teardown rather than racing it.
         var wasLive = _live.IsLive(sessionId);
         await _live.EndAsync(sessionId, LiveEndReason.Cancelled, cancellationToken);
 
@@ -187,15 +185,18 @@ public sealed class TranscriptionService : ITranscriptionService
         return Task.FromResult(new TranscriptionUploadSlot(sessionId, directory, NormalizeExtension(extension), _logger));
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    ///     The in-flight guard is taken FIRST, before the session is even read. Reading the status first and
+    ///     registering after leaves a window in which two uploads both see <c>Created</c>: the loser can be
+    ///     descheduled between the read and the registration, and by the time it registers the winner has completed
+    ///     the session, unregistered and left. The loser then restarts a completed session from a stale snapshot,
+    ///     re-allocates sequence 1, and the unique <c>(session_id, seq)</c> index turns the transcript into a failure.
+    /// </remarks>
     public async Task<TranscribeFileResult> TranscribeFileAsync(TranscriptionUploadSlot slot, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(slot);
 
-        // The guard is taken FIRST, before the session is even read. Reading the status first and registering after
-        // leaves a window in which two uploads both see Created: the loser can be descheduled between the read and the
-        // registration, and by the time it registers the winner has completed the session, unregistered, and left.
-        // The loser then restarts a completed session from a stale snapshot, re-allocates sequence 1, and the unique
-        // (session_id, seq) index turns the finished transcript into a Failed one.
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (!_inFlight.TryAdd(slot.SessionId, linked))
         {
@@ -299,10 +300,8 @@ public sealed class TranscriptionService : ITranscriptionService
         }
         catch (LiveSessionAlreadyRegisteredException)
         {
-            // Two starts read Created and both moved the row; this one lost the registration race. Rolling back now
-            // would reset the WINNER's row, so the loser reports the same answer a sequential second call gets and
-            // touches nothing. Deliberately NOT conditioned on IsLive: by the time this runs the winner may already
-            // be ending, and a loser that then rolled back would put a finished session back into Created.
+            // Two starts read Created and both moved the row; this one lost the registration race. Rolling back would reset the WINNER's row, so the loser touches nothing and
+            // answers as a sequential second call would. Deliberately NOT conditioned on IsLive: the winner may already be ending, and a rollback would put a finished session back into Created.
             return new StartLiveResult
             {
                 Outcome = StartLiveOutcome.AlreadyLive,
@@ -312,9 +311,8 @@ public sealed class TranscriptionService : ITranscriptionService
         }
         catch
         {
-            // A row reading Transcribing with no registry entry accepts no audio and never ends, which is worse than
-            // a start the caller can see failed. Compare-and-set again: a false result means the row moved on while
-            // this start was failing, and whoever moved it owns it now.
+            // A row reading Transcribing with no registry entry accepts no audio and never ends — worse than a start the caller can see failed. Compare-and-set
+            // again: a false result means the row moved on while this start was failing, and whoever moved it owns it now.
             if (!await TryTransitionAsync(sessionId, TranscriptionSessionStatus.Transcribing, previousStatus, CancellationToken.None))
             {
                 _logger.LogDebug("Rolling transcription session {SessionId} back to {Status} found the row already moved on.", sessionId, previousStatus);
@@ -490,11 +488,8 @@ public sealed class TranscriptionService : ITranscriptionService
         }
         catch (Exception exception)
         {
-            // The catch-all is the point, not a fallback. The row is already Transcribing by the time anything below
-            // can throw, so an ArgumentException from a non-seekable stream, an IOException opening the audio, a
-            // JsonException, or any store failure would otherwise strand the session in Transcribing for good — a
-            // state nothing ever leaves, because the only writer has already unwound. The same reason
-            // ImageJobCoordinator terminalizes an image job on a bare Exception.
+            // The catch-all is the point, not a fallback: the row is already Transcribing before anything below can throw, so an ArgumentException from a non-seekable
+            // stream, an IOException, a JsonException or a store failure would strand it there for good, the only writer having unwound. ImageJobCoordinator does the same.
             _logger.LogError(exception, "Transcription of session {SessionId} failed unexpectedly.", slot.SessionId);
             return await FailAsync(slot.SessionId, "transcription-failed", "The transcription failed.");
         }
@@ -610,9 +605,8 @@ public sealed class TranscriptionService : ITranscriptionService
         return TranscribeFileResult.UnsupportedContainer(container, supported, needsFfmpeg, message);
     }
 
-    // The operator reads one vocabulary, not two: the supported list prints extensions, so the detected container is
-    // named the same way. "Matroska" and "MP4" are the container names, but nobody uploads one of those — they upload
-    // a .webm and a .m4a. The DetectedContainer field keeps the enum name for the wire.
+    // The operator reads one vocabulary, not two: the supported list prints extensions, so the detected container is named the same way — nobody uploads a
+    // "Matroska" or an "MP4", they upload a .webm and a .m4a. The DetectedContainer field keeps the enum name for the wire.
     private static string DescribeContainer(AudioContainer container) =>
         container switch
         {
@@ -703,9 +697,8 @@ public sealed class TranscriptionService : ITranscriptionService
             return TranscriptionSourceKind.File;
         }
 
-        // Matched against the NAMES, not through Enum.TryParse: that also parses the underlying numbers, so a caller
-        // sending "99" would store an ordinal no member has and read it back on the wire as "99". Same rule, and the
-        // same reason, as DevWorkflowTokenRules.IsNamed on the endpoint side.
+        // Matched against the NAMES, not through Enum.TryParse: that also parses the underlying numbers, so a caller sending "99" would store an ordinal no
+        // member has and read it back on the wire as "99". Same rule, and the same reason, as DevWorkflowTokenRules.IsNamed on the endpoint side.
         var trimmed = sourceKind.Trim();
         return Enum.GetNames<TranscriptionSourceKind>().Contains(trimmed, StringComparer.OrdinalIgnoreCase)
             ? Enum.Parse<TranscriptionSourceKind>(trimmed, ignoreCase: true)
@@ -724,11 +717,8 @@ public sealed class TranscriptionService : ITranscriptionService
         return trimmed.Length > MaxTitleChars ? trimmed[..MaxTitleChars] : trimmed;
     }
 
-    // A file extension and nothing else: a leading dot, then one to fifteen ASCII letters or digits. BeginUploadAsync
-    // is a public entry point, and its argument is derived from a name the client chose, so a separator or a dot
-    // segment reaching Path.Combine would let the upload file be placed outside the engine's temporary directory.
-    // Anything that does not match is dropped entirely rather than repaired; an extension is a convenience for the
-    // operator reading a directory, never something the transcription path depends on.
+    // A leading dot then one to fifteen ASCII letters or digits, and nothing else: BeginUploadAsync is a public entry point whose argument derives from a
+    // client-chosen name, so a separator or dot reaching Path.Combine would escape the engine's temp directory. Non-matches are dropped, not repaired: an extension is only a convenience.
     private static string NormalizeExtension(string? extension)
     {
         if (string.IsNullOrWhiteSpace(extension))

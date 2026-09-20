@@ -8,18 +8,11 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     Owns every path a run touches, and the encrypt/decrypt of the frozen dataset copy.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The frozen copy is the run's own snapshot of the dataset, written once at creation and never re-read from
-///         the live tables again — that is what makes a sample edit after enqueue provably unable to change what a run
-///         trained on. It is encrypted at rest with the same node key and framing as every other on-disk blob
-///         (<c>nonce || ciphertext || tag</c>, AAD bound to the run id and a column name), because it holds the same
-///         plaintext the encrypted <c>content_json</c> column does.
-///     </para>
-///     <para>
-///         The DECRYPTED copy under <c>work/</c> is the one thing here that is plaintext on disk, so it is written
-///         owner-only and deleted on every terminal path including failure — the trainer needs a real file to open and
-///         a Python subprocess cannot be handed a decrypted byte array.
-///     </para>
+///     The frozen copy is the run's own snapshot of the dataset, written once at creation and never re-read from the live tables,
+///     so a sample edit after enqueue provably cannot change what a run trained on. It is encrypted at rest with the node key
+///     and the standard blob framing (<c>nonce || ciphertext || tag</c>, AAD bound to the run id and a column name), because it
+///     holds the plaintext the encrypted <c>content_json</c> column does. The DECRYPTED copy under <c>work/</c> is the one
+///     plaintext on disk — a Python subprocess cannot be handed a byte array — so it is owner-only, deleted on every path.
 /// </remarks>
 public sealed class TrainingRunWorkspace
 {
@@ -53,9 +46,9 @@ public sealed class TrainingRunWorkspace
 
     /// <summary>
     ///     Keyed by the FREEZE id rather than the run id: the store generates the run id inside its own transaction,
-    ///     and the freeze — digest included — has to exist before that transaction can be handed its FreezeJson. The
-    ///     freeze id is recorded in FreezeJson, so a run still names its copy unambiguously.
+    ///     and the freeze — digest included — has to exist before that transaction can be handed its FreezeJson.
     /// </summary>
+    /// <remarks>The freeze id is recorded in FreezeJson, so a run still names its copy unambiguously.</remarks>
     public string FrozenDatasetPath(Guid datasetId, Guid freezeId) =>
         Path.Combine(TrainingRoot, "datasets", datasetId.ToString(), "frozen", $"{freezeId}.jsonl.enc");
 

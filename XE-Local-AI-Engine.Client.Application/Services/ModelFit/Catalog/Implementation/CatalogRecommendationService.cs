@@ -8,14 +8,17 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="ICatalogRecommendationService" />. For each catalog entry surviving the use-case + arch-tag
-///     filter, inspects its GGUF repo (<see cref="IHuggingFaceGgufDiscovery.InspectRepoAsync" />, TTL-cached), walks the
-///     quant ladder with <see cref="MemoryFitEstimator" /> — passing <see cref="MoeFacts" /> built from the entry's
-///     curated <c>activeParamsB</c> (preferred over the header's expert fields, which are not always present on every
-///     quantized file) — and keeps the highest-quality quant at or below the requested ceiling that fits. Bounded
-///     concurrency + per-repo timeout + fault isolation mirror <c>ModelFitRefreshService</c>'s explore-lane inspection
-///     so one slow/broken repo never fails the whole recommendation build.
+///     Default <see cref="ICatalogRecommendationService" />: inspects each surviving entry's GGUF repo
+///     (<see cref="IHuggingFaceGgufDiscovery.InspectRepoAsync" />, TTL-cached) and keeps the highest-quality quant at
+///     or below the requested ceiling that fits.
 /// </summary>
+/// <remarks>
+///     <see cref="MoeFacts" /> is built from the entry's curated <c>activeParamsB</c> in preference to the header's
+///     expert fields, which are not always present on every quantized file. Bounded concurrency, a per-repo timeout
+///     and fault isolation mirror <c>ModelFitRefreshService</c>'s explore-lane inspection, so one slow or broken repo
+///     never fails the whole recommendation build. See docs/wiki/07-model-fit.md ("The curated catalog lane (primary
+///     recommendation source)").
+/// </remarks>
 internal sealed class CatalogRecommendationService : ICatalogRecommendationService
 {
     /// <summary>Max concurrent HF repo inspections — bounded so a refresh stays fast yet polite to Hugging Face.</summary>
@@ -85,9 +88,8 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
                       .OrderBy(candidate => TierRank(candidate.Entry.Tier))
                       .ThenBy(candidate => candidate.Estimate.MoeVerdict == MoeFitVerdict.FitsWithExpertOffload ? 1 : 0)
                       .ThenBy(candidate => QuantLadder.QualityRank(candidate.File.Quant))
-                      // A genuine tiebreak, deliberately BELOW quant quality: it can only separate candidates whose
-                      // tier, expert-offload class and quant quality are already equal, so it never trades answer
-                      // quality for a cheaper cache. A candidate whose header cannot size the KV term sorts last.
+                      // A genuine tiebreak, deliberately BELOW quant quality: it separates only candidates whose tier,
+                      // expert-offload class and quant quality already tie, so it never trades answer quality for a cheaper cache.
                       .ThenBy(candidate => candidate.KvBytesPerTokenAtCtx ?? long.MaxValue)
                       .ThenByDescending(candidate => candidate.Entry.ReleaseDate, StringComparer.Ordinal)
                       .ThenBy(candidate => candidate.Entry.Id, StringComparer.Ordinal)
@@ -186,10 +188,13 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
 
     /// <summary>
     ///     KV-cache bytes per token of context at the request's target, computed at the chat launch's own
-    ///     <see cref="KvCacheQuant.Q8_0" /> element size rather than at the ranking estimate's fp16 — the number answers
-    ///     "what will this cost me on this node". Returns <see langword="null" /> when the header cannot size the KV
-    ///     term, so an unsizeable candidate sorts last on the tiebreak instead of winning it with a zero.
+    ///     <see cref="KvCacheQuant.Q8_0" /> element size rather than the ranking estimate's fp16, so the number
+    ///     answers what this model costs on this node.
     /// </summary>
+    /// <returns>
+    ///     <see langword="null" /> when the header cannot size the KV term, so an unsizeable candidate sorts last on
+    ///     the tiebreak instead of winning it with a zero.
+    /// </returns>
     private static long? BuildKvBytesPerTokenAtCtx(GgufRepoFile file, int ctxTarget, GgufAttentionShape attention)
     {
         if (file.BlockCount is not > 0 || file.AttentionHeadCountKV is not > 0)
@@ -208,13 +213,16 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
     }
 
     /// <summary>
-    ///     Computes the advisory-only <see cref="KvQuantAdvisory" /> for the already-chosen <paramref name="file" />: the
-    ///     same fit estimate re-run with an 8-bit (<see cref="KvCacheQuant.Q8_0" />) KV cache. This never affects
-    ///     membership or ranking — the Recommended/CanRun split is always computed from the fp16 estimate — it only
-    ///     surfaces the headroom a flash-attention runtime could unlock. Returns <see langword="null" /> when any KV-sizing
-    ///     header field is missing/non-positive, because <see cref="MemoryFitEstimator" /> would then compute a zero KV term
-    ///     and the "savings" would be identical to fp16, making the advisory meaningless.
+    ///     Computes the advisory-only <see cref="KvQuantAdvisory" /> for the already-chosen <paramref name="file" />:
+    ///     the same fit estimate re-run with an 8-bit (<see cref="KvCacheQuant.Q8_0" />) KV cache.
     /// </summary>
+    /// <remarks>
+    ///     It never affects membership or ranking — the Recommended/CanRun split is always computed from the fp16
+    ///     estimate; this only surfaces the headroom a flash-attention runtime could unlock. Returns
+    ///     <see langword="null" /> when any KV-sizing header field is missing or non-positive, because
+    ///     <see cref="MemoryFitEstimator" /> would then compute a zero KV term and the savings would equal fp16,
+    ///     making the advisory meaningless.
+    /// </remarks>
     private KvQuantAdvisory? BuildKvQuantAdvisory(ModelCatalogEntry entry, GgufRepoFile file, int ctxTarget, HardwareProfile profile)
     {
         if (file.BlockCount is not > 0
@@ -252,12 +260,14 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
     }
 
     /// <summary>
-    ///     Prefers the catalog's curated <c>activeParamsB</c> over the file header's expert fields (not every quantized
-    ///     file preserves <c>expert_count</c>/<c>expert_used_count</c> metadata) — a positive sentinel expert count is
-    ///     supplied when the header omits it purely to flag MoE-ness for <see cref="MoeFacts.IsMoe" />; the actual
-    ///     expert-weight-share math in <see cref="MemoryFitEstimator" /> is driven by <c>ActiveParamCount</c>, not by
-    ///     the sentinel.
+    ///     Prefers the catalog's curated <c>activeParamsB</c> over the file header's expert fields: not every
+    ///     quantized file preserves <c>expert_count</c>/<c>expert_used_count</c> metadata.
     /// </summary>
+    /// <remarks>
+    ///     A positive sentinel expert count is supplied when the header omits it, purely to flag MoE-ness for
+    ///     <see cref="MoeFacts.IsMoe" />; the expert-weight-share math in <see cref="MemoryFitEstimator" /> is driven
+    ///     by <c>ActiveParamCount</c>, not by the sentinel.
+    /// </remarks>
     private static MoeFacts? BuildMoeFacts(ModelCatalogEntry entry, GgufRepoFile file)
     {
         if (!entry.Moe)
@@ -271,8 +281,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
     }
 
     // Explicit attention geometry from the file header for the estimator: per-head key/value lengths (preferred over the
-    // derived head_dim) and interleaved sliding-window facts (window + global-layer stride). Null fields leave the
-    // estimator on its legacy derived-head_dim, no-SWA path.
+    // derived head_dim) plus interleaved sliding-window facts; null fields keep the legacy derived-head_dim, no-SWA path.
     private static GgufAttentionShape BuildAttentionShape(GgufRepoFile file)
     {
         return new GgufAttentionShape

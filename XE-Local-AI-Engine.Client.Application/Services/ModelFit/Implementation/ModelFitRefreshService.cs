@@ -16,24 +16,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     The local model advisor — the box-aware rewrite of the Docker/llmfit recommendation backend. On each
-///     refresh it profiles the node hardware (via the device-audited effective profile from
-///     <see cref="IRuntimeDeviceAudit" />, so a silent CPU fallback sizes models against system RAM), discovers candidate GGUF repos
-///     and inspects their files (<see cref="IHuggingFaceGgufDiscovery" />), estimates each file's memory fit with
-///     the pure <see cref="MemoryFitEstimator" />, drops the files that do not fit or lack the header metadata to compute
-///     a fit, ranks the survivors by headroom, serializes them to the advisor recommendation JSON, parses them through
-///     the reused <see cref="RecommendationJsonParser" /> scaffold and replaces the cached recommendation snapshot.
-///     <para>
-///         <b>Three seams stay separate.</b> The advisor never spawns processes or downloads files during a refresh —
-///         that is the operator-driven download/start path (<see cref="DownloadAsync" /> / <see cref="StartAsync" />,
-///         consumed by the model-fit endpoints), which delegates to the GGUF model store and the llama-server
-///         process supervisor respectively.
-///     </para>
-///     <para>
-///         It owns NO scheduler state and publishes no SignalR — the dispatcher owns the run row. Logs carry the
-///         snapshot id, operation, use-case and sanitized status only; raw discovery payloads are never logged.
-///     </para>
+///     The local model advisor — the box-aware rewrite of the Docker/llmfit recommendation backend.
 /// </summary>
+/// <remarks>
+///     Each refresh profiles the node hardware via the device-audited effective profile from
+///     <see cref="IRuntimeDeviceAudit" /> — so a silent CPU fallback sizes models against system RAM — then discovers
+///     candidate GGUF repos, estimates each file's memory fit, ranks the survivors and replaces the cached snapshot.
+///     THREE SEAMS STAY SEPARATE: it never spawns or downloads during a refresh (<see cref="DownloadAsync" /> /
+///     <see cref="StartAsync" /> do), owns no scheduler state and publishes no SignalR, and never logs a raw payload.
+/// </remarks>
 public sealed class ModelFitRefreshService : IModelFitRefreshService
 {
     /// <summary>Sentinel written into the plaintext <c>ApprovedImageId</c> column now that approved images are gone.</summary>
@@ -48,11 +39,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// <summary>How many GGUF repos to inspect per refresh (each inspect is an HTTP range read, not a download).</summary>
     private const int DefaultRepoSearchLimit = 12;
 
-    /// <summary>
-    ///     Capability-tier granularity for ranking (~1 GiB). Fitting models are bucketed by estimated footprint ÷ this so a
-    ///     trivially-larger model does not always outrank a much newer / more popular peer; within a tier the download and
-    ///     recency boosts decide.
-    /// </summary>
+    /// <summary>Capability-tier granularity for ranking (~1 GiB).</summary>
+    /// <remarks>
+    ///     Fitting models are bucketed by estimated footprint ÷ this so a trivially-larger model does not always
+    ///     outrank a much newer or more popular peer; within a tier the download and recency boosts decide.
+    /// </remarks>
     private const long CapabilityBucketBytes = 1024L * 1024 * 1024;
 
     /// <summary>
@@ -61,11 +52,12 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// </summary>
     private const int MaxConcurrentRepoInspections = 5;
 
-    /// <summary>
-    ///     Per-HF-call timeout. A single stalled repo inspection (or the initial search) must not block the whole refresh,
-    ///     so each call is wrapped in a linked CTS cancelled after this budget. A repo that times out is skipped (the
-    ///     refresh still succeeds with the other candidates); a search timeout surfaces as a clean Failed run.
-    /// </summary>
+    /// <summary>Per-HF-call timeout.</summary>
+    /// <remarks>
+    ///     A single stalled repo inspection, or the initial search, must not block the whole refresh, so each call is
+    ///     wrapped in a linked CTS cancelled after this budget. A repo that times out is skipped and the refresh still
+    ///     succeeds with the other candidates; a search timeout surfaces as a clean Failed run.
+    /// </remarks>
     private static readonly TimeSpan PerHuggingFaceCallTimeout = TimeSpan.FromSeconds(20);
 
     private readonly ICatalogRecommendationService _catalogRecommendationService;
@@ -208,9 +200,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         }
         catch (OperationCanceledException)
         {
-            // The node token was cancelled mid-refresh: record Cancelled (NOT Failed) then re-throw so the dispatcher
-            // marks the scheduler run cancelled. Terminal write uses CancellationToken.None — the run is ending precisely
-            // because its own token was cancelled.
+            // The node token was cancelled mid-refresh: record Cancelled (NOT Failed), then re-throw so the dispatcher marks the scheduler run cancelled.
+            // The terminal write uses CancellationToken.None, because the run is ending precisely because its own token was cancelled.
             var cancelledAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
             await _snapshotStore.MarkTerminalAsync(snapshotId,
                 ModelFitRunStatus.Cancelled,
@@ -257,11 +248,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         return _modelStore.EnsureModelAsync(request, progress, cancellationToken);
     }
 
-    /// <summary>
-    ///     Operator-driven start of a downloaded model (a model-fit endpoint calls this). Delegates to the
-    ///     llama-server process supervisor's ensure-running for the requested role and returns the local endpoint;
-    ///     the advisor never spawns during a refresh.
-    /// </summary>
+    /// <summary>Operator-driven start of a downloaded model (a model-fit endpoint calls this).</summary>
+    /// <remarks>
+    ///     Delegates to the llama-server process supervisor's ensure-running for the requested role and returns the
+    ///     local endpoint; the advisor never spawns during a refresh.
+    /// </remarks>
     public Task<LlamaServerEndpoint> StartAsync(string modelName, ModelRole role, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -269,11 +260,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Builds the merged recommendation set: the curated catalog lane (PRIMARY — "recommended" / "canRun" sections)
-    ///     followed by the existing live Hugging Face discovery lane, now demoted to a secondary
-    ///     "explore" section. A catalog-lane failure never fails the whole refresh — the explore lane still succeeds on
-    ///     its own (see <see cref="BuildCatalogRecommendationsAsync" />).
+    ///     Builds the merged recommendation set: the curated catalog lane (PRIMARY — "recommended" / "canRun"
+    ///     sections) followed by the live Hugging Face discovery lane, the secondary "explore" section.
     /// </summary>
+    /// <remarks>
+    ///     A catalog-lane failure never fails the whole refresh — the explore lane still succeeds on its own (see
+    ///     <see cref="BuildCatalogRecommendationsAsync" />).
+    /// </remarks>
     private async Task<IReadOnlyList<AdvisorRecommendation>> BuildRecommendationsAsync(ModelFitRefreshRequest request,
         string quant,
         int ctxTarget,
@@ -291,11 +284,12 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
     /// <summary>
     ///     Runs the catalog ranking lane and maps its "Recommended" / "Can run" sections (each already ordered tier →
-    ///     fit class → quant quality → recency → id) to <see cref="AdvisorRecommendation" /> rows,
-    ///     each capped at the request limit. Any failure (catalog
-    ///     provider / discovery / estimator) is caught and logged — the catalog lane degrading to empty must never fail
-    ///     the run, since the explore lane alone is still a useful recommendation set.
+    ///     fit class → quant quality → recency → id) to <see cref="AdvisorRecommendation" /> rows, capped at the limit.
     /// </summary>
+    /// <remarks>
+    ///     Any failure (catalog provider, discovery, estimator) is caught and logged — the catalog lane degrading to
+    ///     empty must never fail the run, since the explore lane alone is still a useful recommendation set.
+    /// </remarks>
     private async Task<IReadOnlyList<AdvisorRecommendation>> BuildCatalogRecommendationsAsync(ModelFitRefreshRequest request,
         string quant,
         int ctxTarget,
@@ -354,11 +348,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Discovers candidate GGUF repos, inspects their files, estimates each file's fit at the chosen quant, drops the
-    ///     non-fitting / insufficient-metadata files, and ranks the survivors by descending headroom (best fit first),
-    ///     capped at the request limit. This is the secondary "explore" section — the catalog lane
-    ///     is now the primary recommendation source.
+    ///     Discovers candidate GGUF repos, inspects their files, estimates each file's fit at the chosen quant, drops
+    ///     the non-fitting and insufficient-metadata files, and ranks the survivors by descending headroom.
     /// </summary>
+    /// <remarks>The secondary "explore" section — the catalog lane is the primary recommendation source.</remarks>
     private async Task<IReadOnlyList<AdvisorRecommendation>> BuildExploreRecommendationsAsync(ModelFitRefreshRequest request,
         string quant,
         int ctxTarget,
@@ -370,10 +363,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         // use-case word under-matches the Hub), merged + de-duped and capped to the inspection budget.
         var repos = await SearchCandidateReposAsync(request.UseCase, cancellationToken);
 
-        // Inspect the repos in parallel with bounded concurrency. Each inspection is independent; a stalled or failing
-        // repo is skipped (null candidate) inside the body so it never reaches the caller's outer catch and never fails
-        // the whole run. The semaphore caps concurrent HF range reads. The tasks are materialized (ToList) and awaited
-        // before the gate is disposed so every inspection completes while the gate is still alive.
+        // Inspect the repos in parallel with bounded concurrency. A stalled or failing repo is skipped (null candidate) inside the body, so it never reaches the caller's outer catch and never fails
+        // the whole run. The semaphore caps concurrent HF range reads; the tasks are materialized and awaited BEFORE the gate is disposed, so every inspection completes while the gate is still alive.
         var inspectionGate = new SemaphoreSlim(MaxConcurrentRepoInspections, MaxConcurrentRepoInspections);
         AdvisorRecommendation?[] candidates;
         try
@@ -388,12 +379,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             inspectionGate.Dispose();
         }
 
-        // Rank the models that FIT, then cap to the limit. Capability-first but BUCKETED to ~1 GiB: leading with the raw
-        // estimated footprint made a trivially-larger model always outrank a much newer / far more popular peer, so we
-        // group similar-capability models into a tier (footprint ÷ 1 GiB) and let the popularity (downloads) and recency
-        // (last-modified) boosts decide WITHIN a tier. The estimate bakes in a 12% safety margin + runtime overhead, so
-        // "fits" is conservative. Trusted-publisher is a soft nudge and repo id the final deterministic tie-break (stable
-        // regardless of inspection completion order).
+        // Rank the models that FIT, then cap. Capability-first but BUCKETED to ~1 GiB, so a trivially-larger model cannot outrank a much newer or far more popular peer; downloads, recency
+        // and trust decide WITHIN a tier, with repo id last so the order never depends on which inspection finished first. See docs/wiki/07-model-fit.md ("The refresh service (the advisor)").
         return candidates
                .Where(candidate => candidate is not null)
                .Select(candidate => candidate!)
@@ -408,20 +395,20 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
     /// <summary>
     ///     Discovers candidate GGUF repos for a use-case by running one trending search per mapped term
-    ///     (<see cref="ModelFitUseCaseSearch" />), then merging the per-term results round-robin (fair representation
-    ///     across terms), de-duped by repo id and capped to <see cref="DefaultRepoSearchLimit" /> so the downstream
-    ///     per-repo header reads stay bounded regardless of the term count. A single term failing/timing out is tolerated;
-    ///     only when EVERY term's search fails is a timeout surfaced (so the run records a clean Failed instead of an empty
-    ///     Succeeded that hides an unreachable Hub).
+    ///     (<see cref="ModelFitUseCaseSearch" />), then merging the per-term results round-robin.
     /// </summary>
+    /// <remarks>
+    ///     Round-robin gives fair representation across terms; the merge is de-duped by repo id and capped to
+    ///     <see cref="DefaultRepoSearchLimit" /> so the downstream per-repo header reads stay bounded regardless of the
+    ///     term count. A single term failing or timing out is tolerated; only when EVERY term's search fails is a
+    ///     timeout surfaced, so the run records a clean Failed instead of an empty Succeeded hiding an unreachable Hub.
+    /// </remarks>
     private async Task<IReadOnlyList<GgufRepoSummary>> SearchCandidateReposAsync(string? useCase, CancellationToken cancellationToken)
     {
         var terms = ModelFitUseCaseSearch.Resolve(useCase);
 
-        // Two discovery passes per term: Trending (current download/like velocity) AND LastModified (most recently
-        // updated). The recency pass surfaces newly-released big models that a trending-only search misses once the pool
-        // is capped, while trending keeps the established popular repos. Both passes are merged round-robin so neither
-        // crowds the other out of the bounded inspection budget.
+        // Two discovery passes per term: Trending (current download/like velocity) AND LastModified (most recently updated). The recency pass surfaces newly-released big models a trending-only
+        // search misses once the pool is capped. Trending keeps the established popular repos, and both passes are merged round-robin so neither crowds the other out of the bounded inspection budget.
         var searches = terms
                        .SelectMany(term => new[]
                        {
@@ -443,21 +430,20 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         return MergeReposRoundRobin(lists, DefaultRepoSearchLimit);
     }
 
-    /// <summary>
-    ///     Runs one GGUF search for a single term under the given <paramref name="sort" /> and a per-call timeout. Returns
-    ///     the results, or <see langword="null" /> when this search timed out or failed (network/IO/parse) — a tolerated
-    ///     outcome merged away by <see cref="SearchCandidateReposAsync" />. Genuine outer-token cancellation (node
-    ///     shutdown) is re-thrown unchanged so the run records Cancelled.
-    /// </summary>
+    /// <summary>Runs one GGUF search for a single term under the given <paramref name="sort" /> and a per-call timeout.</summary>
+    /// <remarks>
+    ///     Returns the results, or <see langword="null" /> when this search timed out or failed (network, IO, parse) —
+    ///     a tolerated outcome merged away by <see cref="SearchCandidateReposAsync" />. Genuine outer-token
+    ///     cancellation (node shutdown) is re-thrown unchanged so the run records Cancelled.
+    /// </remarks>
     private async Task<IReadOnlyList<GgufRepoSummary>?> SearchSingleTermAsync(string term, GgufSearchSort sort, CancellationToken cancellationToken)
     {
         var query = new GgufSearchQuery
         {
             SearchText = term,
             Limit = DefaultRepoSearchLimit,
-            // Sort is supplied by the caller — Trending (HF recency-weighted popularity) for the established-popular pass
-            // and LastModified for the freshness pass. The publisher-trust signal + the fit ranking keep quality up
-            // without excluding any repo from the candidate pool.
+            // Sort is supplied by the caller: Trending (HF recency-weighted popularity) for the established-popular pass, LastModified for the freshness pass.
+            // The publisher-trust signal and the fit ranking keep quality up without excluding any repo from the candidate pool.
             Sort = sort
         };
 
@@ -482,11 +468,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Merges the per-term (already trending-sorted) repo lists round-robin — take each list's 1st, then each list's
+    ///     Merges the per-term (already trending-sorted) repo lists round-robin — each list's 1st, then each list's
     ///     2nd, … — de-duped by repo id (case-insensitive, first occurrence wins) and capped to <paramref name="cap" />.
+    /// </summary>
+    /// <remarks>
     ///     Round-robin keeps every term fairly represented in the bounded candidate pool instead of letting the first
     ///     term's results crowd out the rest.
-    /// </summary>
+    /// </remarks>
     private static IReadOnlyList<GgufRepoSummary> MergeReposRoundRobin(IReadOnlyList<IReadOnlyList<GgufRepoSummary>> lists, int cap)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -518,11 +506,14 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Bounded-concurrency, fault-isolated wrapper around <see cref="EvaluateRepoAsync" />: acquires the inspection
-    ///     gate, applies a per-repo timeout via a linked CTS, and swallows any single-repo failure (network/IO/timeout/
-    ///     parse) into a <see langword="null" /> candidate so one bad repo never fails the whole refresh. Outer-token
-    ///     cancellation (node shutdown) is re-thrown so the run records Cancelled.
+    ///     Bounded-concurrency, fault-isolated wrapper around <see cref="EvaluateRepoAsync" />: acquires the
+    ///     inspection gate and applies a per-repo timeout via a linked CTS.
     /// </summary>
+    /// <remarks>
+    ///     Any single-repo failure (network, IO, timeout, parse) becomes a <see langword="null" /> candidate so one
+    ///     bad repo never fails the whole refresh. Outer-token cancellation (node shutdown) is re-thrown so the run
+    ///     records Cancelled.
+    /// </remarks>
     private async Task<AdvisorRecommendation?> EvaluateRepoWithGuardAsync(GgufRepoSummary summary,
         string quant,
         int ctxTarget,
@@ -560,12 +551,14 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Inspects one repo, walks the quant ladder to pick the highest-quality quant whose memory-fit estimate fits the
-    ///     budget (down to the <see cref="QuantLadder.DefaultFloorQuant" /> quality floor), and returns a ranked candidate
-    ///     — or <see langword="null" /> when the repo has no usable file, no file has the metadata to compute a weights
-    ///     term, or no quant at or above the floor fits the budget. This is what keeps a large new model (whose default
-    ///     <c>Q4_K_M</c> is too big) in the list at the largest quant that actually runs instead of dropping it.
+    ///     Inspects one repo and walks the quant ladder to pick the highest-quality quant whose memory-fit estimate
+    ///     fits the budget, down to the <see cref="QuantLadder.DefaultFloorQuant" /> quality floor.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> when the repo has no usable file, no file has the metadata to compute a weights
+    ///     term, or no quant at or above the floor fits the budget. The ladder walk is what keeps a large new model —
+    ///     whose default <c>Q4_K_M</c> is too big — in the list at the largest quant that actually runs.
+    /// </remarks>
     private async Task<AdvisorRecommendation?> EvaluateRepoAsync(GgufRepoSummary summary,
         string quant,
         int ctxTarget,
@@ -615,16 +608,18 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
     /// <summary>
     ///     Emits the advisor recommendation JSON in the <c>{ models:[…], system:{…} }</c> shape the reused
-    ///     <see cref="RecommendationJsonParser" /> consumes (same field names the parser maps — <c>name</c>,
-    ///     <c>best_quant</c>, <c>memory_required_gb</c>, <c>vram_required_gb</c>, <c>fit_level</c>, <c>run_mode</c>,
-    ///     <c>context_length</c>, <c>installed</c>, <c>score</c>). The <c>vram_required_gb</c>/<c>memory_required_gb</c>
-    ///     fields carry the estimate so the parser fills <c>RequiredVramMb</c>/<c>RequiredRamMb</c> (today null).
+    ///     <see cref="RecommendationJsonParser" /> consumes.
     /// </summary>
+    /// <remarks>
+    ///     Same field names the parser maps: <c>name</c>, <c>best_quant</c>, <c>memory_required_gb</c>,
+    ///     <c>vram_required_gb</c>, <c>fit_level</c>, <c>run_mode</c>, <c>context_length</c>, <c>installed</c>,
+    ///     <c>score</c>. The <c>vram_required_gb</c>/<c>memory_required_gb</c> fields carry the estimate so the parser
+    ///     fills <c>RequiredVramMb</c>/<c>RequiredRamMb</c> (today null).
+    /// </remarks>
     private static string SerializeAdvisorJson(IReadOnlyList<AdvisorRecommendation> recommendations, HardwareProfile profile)
     {
-        // The fit budget the score is normalized against. Read from the estimator rather than re-derived here: this
-        // expression used to be duplicated, and when the GPU budget moved from total VRAM to free VRAM this copy was
-        // missed, so the score below was normalized against a budget the fit verdicts no longer used.
+        // The fit budget the score is normalized against, read from the estimator rather than re-derived here.
+        // A duplicated copy of this expression was missed when the GPU budget moved from total VRAM to free VRAM, so the score below was normalized against a budget the fit verdicts no longer used.
         var budgetBytes = MemoryFitEstimator.ResolveFitBudgetBytes(profile);
 
         using var buffer = new MemoryStream();
@@ -645,18 +640,16 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 writer.WriteString("best_quant", recommendation.Quant);
                 writer.WriteString("fit_level", estimate.Mode == FitMode.Gpu ? "GPU" : "CPU");
                 writer.WriteString("run_mode", estimate.Mode.ToString());
-                // Estimate confidence: "Approximate" when the KV geometry leaned on a derived head_dim or the
-                // weights on the on-disk file size (missing explicit header metadata), so the UI can present the figure
-                // conservatively. native_format flags a non-requantizable quant (MXFP4) priced at its own density.
+                // Estimate confidence is "Approximate" when the KV geometry leaned on a derived head_dim, or the weights on the on-disk file size (missing explicit
+                // header metadata), so the UI can present the figure conservatively. native_format flags a non-requantizable quant (MXFP4) priced at its own density.
                 writer.WriteString("fit_confidence", estimate.Confidence.ToString());
                 if (estimate.NativeQuantFormat)
                 {
                     writer.WriteBoolean("native_format", value: true);
                 }
 
-                // Score = how fully the model uses the fit budget (0–100%). The most-capable model that fits scores
-                // highest, matching the rank order (the old "headroom GB" score ranked the smallest model highest and
-                // read as a non-monotonic column). The parser stores it verbatim.
+                // Score is how fully the model uses the fit budget (0–100%), so the most-capable model that fits scores highest, matching the rank order.
+                // A "headroom GB" score instead ranks the SMALLEST model highest and reads as a non-monotonic column. The parser stores the score verbatim.
                 var score = budgetBytes > 0
                     ? Math.Clamp(Math.Round(estimate.EstimatedBytes / (double)budgetBytes * 100d, digits: 1), min: 0d, max: 100d)
                     : 0d;
@@ -671,11 +664,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 writer.WriteString("file_name", recommendation.FileName);
                 writer.WriteBoolean("installed", recommendation.IsInstalled);
 
-                // Catalog-lane fields: section splits the response into the primary
-                // recommended/canRun catalog rows vs. the secondary explore (live-HF) rows; tier/catalog metadata are
-                // null for an explore row. expert_offload/gpu_gb/cpu_gb surface the MoE expert-offload split so
-                // the UI can label a model honestly ("experts on CPU — slower, higher quality") instead of showing a
-                // bare fit verdict.
+                // Catalog-lane fields: section splits the response into primary recommended/canRun catalog rows and secondary explore (live-HF) ones; tier/catalog metadata are null on an
+                // explore row. expert_offload/gpu_gb/cpu_gb carry the MoE offload split, so the UI labels a model honestly ("experts on CPU — slower, higher quality"), not just a fit verdict.
                 writer.WriteString("section", recommendation.Section);
                 if (recommendation.Tier is not null)
                 {
@@ -704,10 +694,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                     writer.WriteNumber("cpu_gb", Math.Round(estimate.CpuBytes.Value / (double)(1024 * 1024 * 1024), digits: 3));
                 }
 
-                // Advisory-only quantized-KV estimate (catalog lane). NOT part of membership/ranking — those use the
-                // fp16 estimate above because the default chat launch uses an fp16 KV cache. Rides the diagnostics blob
-                // (no separate column/DTO, mirroring the catalog/expert-offload fields) so consumers can show the headroom
-                // a flash-attention runtime could unlock. Absent for explore-lane rows and insufficient-metadata files.
+                // Advisory-only quantized-KV estimate (catalog lane), never membership or ranking — those use the fp16 estimate above, the chat launch using an fp16 KV cache. It rides the
+                // diagnostics blob (no column or DTO, like the catalog and expert-offload fields) so the UI can show the headroom a flash-attention runtime unlocks. Absent on explore-lane rows.
                 if (recommendation.KvQuantAdvisory is { } kvAdvisory)
                 {
                     writer.WriteString("kv_quant", kvAdvisory.Quant.ToString());
@@ -717,10 +705,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                     writer.WriteBoolean("kv_quant_requires_flash_attention", kvAdvisory.RequiresFlashAttention);
                 }
 
-                // KV cost per token of context and the model's attention shape, at the chat launch's own q8_0 element
-                // size (NOT the fp16 ranking estimate above) so the figure answers "what will this cost me on this
-                // node". The quant rides along because an unlabelled KV byte count is ambiguous by a factor of two.
-                // Absent for a row whose header cannot size the KV term; a pre-existing snapshot reads them as null.
+                // KV cost per context token and attention shape, at the chat launch's q8_0 element size (NOT the fp16 ranking estimate), so the figure answers "what will this cost me on this node".
+                // The quant rides along: an unlabelled KV byte count is ambiguous by 2x. Absent when the header cannot size the KV term; null on a pre-existing snapshot.
                 if (recommendation.KvBytesPerTokenAtCtx is { } kvBytesPerToken && recommendation.KvBytesPerTokenQuant is { } kvBytesQuant)
                 {
                     writer.WriteNumber("kv_bytes_per_token", kvBytesPerToken);
@@ -732,10 +718,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                     writer.WriteString("attention_arch", recommendation.AttentionArchTag);
                 }
 
-                // Recency + trust boosts surfaced to the UI. release_date carries the repo's last-modified timestamp (a
-                // "newer model" signal); the parser preserves both in the recommendation diagnostics blob (no new column).
-                // Only emit a date when HF actually supplied one — a default(DateTimeOffset) would surface as a year-0001
-                // "ancient" date and wrongly sink the repo in the recency tie-break.
+                // Recency and trust boosts surfaced to the UI: release_date carries the repo's last-modified timestamp (a "newer model" signal), and the parser preserves both in the recommendation
+                // diagnostics blob. A date is emitted only when HF supplied one — a default(DateTimeOffset) surfaces as a year-0001 "ancient" date and wrongly sinks the repo in the recency tie-break.
                 if (recommendation.LastModified != default)
                 {
                     writer.WriteString("release_date", recommendation.LastModified.ToString("O", CultureInfo.InvariantCulture));
@@ -766,10 +750,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
     /// <summary>
     ///     One ranked advisor candidate: the repo/file/quant identity plus its computed memory-fit estimate, the soft
-    ///     publisher-trust signal, the repo's lifetime download count, and the repo's last-modified timestamp (a
-    ///     "newer model" recency signal). Downloads / trust / recency are ranking boosts carried from the search summary —
-    ///     none excludes a candidate.
+    ///     publisher-trust signal, the repo's lifetime download count and its last-modified timestamp.
     /// </summary>
+    /// <remarks>
+    ///     Downloads, trust and recency are ranking boosts carried from the search summary — none excludes a candidate.
+    /// </remarks>
     private sealed record AdvisorRecommendation
     {
         public required string RepoId { get; init; }

@@ -6,33 +6,23 @@ using Microsoft.Extensions.DataIngestion;
 using Microsoft.Extensions.Options;
 
 /// <summary>
-///     Offline, deterministic header-boundary chunker (no tokenizer or external package). It walks the document's ordered
-///     element stream: each <see cref="IngestionDocumentHeader" /> opens a new section (maintaining an "H1 &gt; H2"
-///     heading trail via a level stack); paragraphs and tables accumulate into their section's body, which is then split
-///     into overlapping chunks. Content appearing before the first header falls into a single implicit section. The same
-///     document always yields the same sections and chunks.
-///     <para>
-///         Chunk sizing is TOKEN-AWARE: a section body is cut at whichever bound — a per-chunk token budget
-///         (<see cref="KnowledgeBaseOptions.MaxChunkTokens" />, optionally tightened to the resolved embedding model's
-///         context window) or the hard character ceiling (<see cref="KnowledgeBaseOptions.MaxChunkChars" />) — is reached
-///         first, always breaking at a whitespace boundary. The per-window token budget is reduced by the section's
-///         heading-trail cost so the embedded heading-prefixed <see cref="KnowledgeChunk.ContextualContent" /> stays within
-///         the window. Token counts are a deterministic, dependency-free approximation (see
-///         <see cref="ChunkTokenApproximation" />): weighted characters ÷ 4, with CJK/emoji weighted heavier so a
-///         token-dense script does not silently produce chunks several times the intended token size. The token budget can
-///         only TIGHTEN the effective size, never enlarge it past the character ceiling, so plain ASCII prose keeps the
-///         character ceiling as its binding bound (identical to the prior character-only-cap behavior — no reindex needed for existing
-///         ASCII corpora), while CJK/token-dense content and smaller embedder windows yield correspondingly smaller chunks.
-///     </para>
+///     Offline, deterministic header-boundary chunker: it walks the document's ordered element stream, opening a new
+///     section on each <see cref="IngestionDocumentHeader" /> and splitting each section body into overlapping chunks.
 /// </summary>
+/// <remarks>
+///     No tokenizer or external package is involved. A section maintains an "H1 &gt; H2" heading trail via a level
+///     stack; paragraphs and tables accumulate into their section body, and content before the first header falls into a
+///     single implicit section. Chunk sizing is TOKEN-AWARE and can only tighten the character ceiling, never enlarge
+///     it. The same document always yields the same sections and chunks. Sizing rules and their rationale:
+///     <c>docs/wiki/15-knowledge-base.md</c> ("Ingestion pipeline").
+/// </remarks>
 public sealed class HeaderBoundaryChunkingService : IChunkingService
 {
     private const int MinHeadingLevel = 1;
     private const int MaxHeadingLevel = 6;
 
-    // Tokens reserved off a resolved embedding window before it becomes the chunk budget: covers the "search_document: "
-    // intent prefix the embedder prepends plus the model's own special tokens (CLS/SEP/etc.), so the embedded text never
-    // reaches the raw window limit.
+    // Tokens reserved off a resolved embedding window before it becomes the chunk budget: the "search_document: " intent
+    // prefix the embedder prepends plus the model's own special tokens, so embedded text never reaches the raw window.
     private const int EmbeddingWindowReserveTokens = 32;
 
     // Floor for the per-chunk token budget when a resolved window is very small, so a tiny/misconfigured window cannot
@@ -110,9 +100,8 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
         return new KnowledgeChunkingResult { Sections = sections, Chunks = chunks };
     }
 
-    // The per-chunk token budget: the configured MaxChunkTokens, tightened to the resolved embedding window (minus a
-    // safety reserve) when one is known. The window can only lower the budget, never raise it, so a large-window model
-    // never enlarges chunks past the configured granularity and existing corpora chunk identically.
+    // The per-chunk token budget: configured MaxChunkTokens, tightened to a known resolved embedding window minus the
+    // safety reserve. A window only lowers it, so a big-window model never enlarges chunks and corpora chunk identically.
     private int ResolveChunkTokenBudget(int? embeddingContextWindowTokens)
     {
         var configuredBudget = Math.Max(1, _options.MaxChunkTokens);
@@ -125,9 +114,8 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
         return Math.Min(configuredBudget, windowBudget);
     }
 
-    // Walks the flat ordered element stream. Headers open sections and drive the heading trail; other elements append
-    // their rendered text to the current section's body. Pre-heading content lands in a single implicit section that is
-    // ordered first when it holds any content.
+    // Walks the flat ordered element stream: headers open sections and drive the heading trail, other elements append
+    // rendered text to the current section body; pre-heading content forms an implicit section, ordered first if non-empty.
     private static List<SectionBuild> BuildSections(IngestionDocument document)
     {
         var headerSections = new List<SectionBuild>();
@@ -181,9 +169,8 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
         return ordered;
     }
 
-    // Splits a section body into windows bounded by BOTH a character ceiling (maxChars) and an estimated token budget
-    // (windowTokenBudget), whichever is reached first, breaking at the last whitespace before the limit so a word is not
-    // cut, and carrying `overlap` trailing characters into the next window. Deterministic; start strictly advances.
+    // Splits a section body into windows bounded by BOTH maxChars and windowTokenBudget, whichever is hit first, breaking
+    // at the last whitespace before the limit so no word is cut and carrying `overlap` chars over; start strictly advances.
     private static IEnumerable<ChunkWindow> SplitIntoWindows(string text, int maxChars, int overlap, int windowTokenBudget)
     {
         var start = 0;
@@ -235,10 +222,8 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
         return -1;
     }
 
-    // The hard end index for a window starting at `start`: the smaller of the character ceiling and the position at which
-    // the estimated token budget is reached. The scan is bounded by the character limit, so the character ceiling always
-    // remains a hard upper bound and the token budget can only shrink the window, never grow it. At least one character is
-    // always consumed (a single heavy character that alone exceeds the budget still advances) so the walk cannot stall.
+    // The hard end index for a window: the smaller of the character ceiling and where the token budget is reached, so the
+    // ceiling stays a hard upper bound; at least one character is always consumed, so a heavy character cannot stall it.
     private static int ResolveWindowEnd(string text, int start, int maxChars, int windowTokenBudget)
     {
         var charLimit = Math.Min(start + maxChars, text.Length);

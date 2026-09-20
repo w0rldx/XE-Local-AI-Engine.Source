@@ -7,24 +7,16 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 
 /// <summary>
-///     Default <see cref="IWhisperModelDownloadCoordinator" />. Runs each download on a detached task, records the
-///     latest sanitized progress in an in-memory registry keyed by catalogue id, and — the point of the type — always
-///     lands the download in an observable terminal phase the operator UI can poll.
+///     Default <see cref="IWhisperModelDownloadCoordinator" />: runs each download on a detached task, records
+///     sanitized progress in an in-memory registry keyed by catalogue id, and always lands it in an observable
+///     terminal phase the operator UI can poll.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Singleton.</b> The registry has to outlive the request that started the download.
-///     </para>
-///     <para>
-///         <b>The VAD file is fetched first.</b> Voice-activity detection is on for every launch, so a weight without
-///         its VAD model is an installation that cannot actually run. Fetching it as part one of two means a node that
-///         downloads any model ends up able to serve it, and the part counters tell the operator which of the two is
-///         moving instead of leaving a restarting progress bar to look like a fault.
-///     </para>
-///     <para>
-///         <b>Honest limit:</b> the registry is RAM-only, so a node restart drops in-flight state. The partial file is
-///         left on disk and the next attempt resumes from it.
-///     </para>
+///     Singleton: the registry has to outlive the request that started the download. The VAD file is fetched first,
+///     because voice-activity detection is on for every launch and a weight without its VAD model cannot run; the
+///     part counters then tell the operator which of the two is moving instead of leaving a restarting progress bar
+///     looking like a fault. Honest limit: the registry is RAM-only, so a node restart drops in-flight state — the
+///     partial file stays on disk and the next attempt resumes from it.
 /// </remarks>
 public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoordinator
 {
@@ -187,9 +179,8 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
     private IProgress<PullProgress> ProgressFor(string modelId, int partIndex) =>
         new Progress<PullProgress>(update => ReportRunningProgress(modelId, update, partIndex));
 
-    // Records byte progress WITHOUT ever resurrecting a finished download. Progress<T> marshals through the captured
-    // context, so a tick queued just before completion can be delivered after the terminal write; publishing it
-    // unguarded would flip a finished download back to Running and hang the UI on something that is over.
+    // Records byte progress WITHOUT ever resurrecting a finished download. Progress<T> marshals through the captured context, so a tick queued just before
+    // completion can be delivered after the terminal write; publishing it unguarded would flip a finished download back to Running and hang the UI on it.
     private void ReportRunningProgress(string modelId, PullProgress update, int partIndex)
     {
         _ = _status.AddOrUpdate(modelId,

@@ -78,10 +78,12 @@ public sealed class DatasetGenerationEventBufferOptions
 }
 
 /// <summary>
-///     Bounded per-dataset replay ring, the <c>BenchmarkEventBuffer</c> pattern at the size this stream needs. Dataset
-///     generation publishes coarse progress rather than token deltas, so there is no reserve/publish split here: an event
-///     is only ever raised after the sample it describes is already durable.
+///     Bounded per-dataset replay ring, the <c>BenchmarkEventBuffer</c> pattern at the size this stream needs.
 /// </summary>
+/// <remarks>
+///     Dataset generation publishes coarse progress rather than token deltas, so there is no reserve/publish split
+///     here: an event is only ever raised after the sample it describes is already durable.
+/// </remarks>
 public sealed class DatasetGenerationEventBuffer : IDatasetGenerationEventBuffer
 {
     private readonly Dictionary<Guid, DatasetBuffer> _datasets = [];

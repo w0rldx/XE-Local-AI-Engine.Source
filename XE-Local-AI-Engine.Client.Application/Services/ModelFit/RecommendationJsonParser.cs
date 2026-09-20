@@ -5,12 +5,15 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Tolerant parser for llmfit <c>recommend --json</c> output (schema captured live, 2026-06-02). It maps the
-///     top-level <c>{ "models": [...], "system": {...} }</c> shape to normalized recommendation rows plus a sanitized
-///     <c>system</c> diagnostics blob. Tolerant by design: unknown fields are ignored, missing/null fields map to null,
-///     and a malformed root (not an object, or <c>models</c> absent / not an array) is a typed failure — never an
-///     exception out of the parser. Empty <c>models: []</c> is a SUCCESS with zero rows.
+///     Tolerant parser for llmfit <c>recommend --json</c> output (schema captured live): maps the top-level
+///     <c>{ "models": [...], "system": {...} }</c> shape to normalized recommendation rows plus a sanitized
+///     <c>system</c> diagnostics blob.
 /// </summary>
+/// <remarks>
+///     Tolerant by design: unknown fields are ignored, missing or null fields map to null, and a malformed root (not
+///     an object, or <c>models</c> absent or not an array) is a typed failure — never an exception out of the parser.
+///     Empty <c>models: []</c> is a SUCCESS with zero rows.
+/// </remarks>
 public static class RecommendationJsonParser
 {
     /// <summary>
@@ -93,9 +96,8 @@ public static class RecommendationJsonParser
             RequiredRamMb = memoryRequiredGb is { } gb ? gb * 1024d : null,
             // The advisor fills vram_required_gb from the memory-fit estimate (null for a CPU-mode fit / legacy payload).
             RequiredVramMb = vramRequiredGb is { } vramGb ? vramGb * 1024d : null,
-            // Context column = the model's advertised maximum window (context_length). effective_context_length is
-            // llmfit's memory-estimation cap (defaults to 8192 when --max-context / OLLAMA_CONTEXT_LENGTH are unset), so
-            // preferring it showed 8192 for every model; fall back to it only when context_length is absent.
+            // The context column is the model's advertised maximum window (context_length); effective_context_length is
+            // llmfit's memory-estimation cap (8192 unless --max-context / OLLAMA_CONTEXT_LENGTH is set), so it is a fallback.
             ContextTokens = GetInt(model, "context_length") ?? GetInt(model, "effective_context_length"),
             IsInstalled = GetBool(model, "installed") ?? false,
             // The advisor's model name IS the GGUF registry pull key ({repo}:{quant}); fall back to the legacy ollama tag.
@@ -132,9 +134,8 @@ public static class RecommendationJsonParser
             wroteAny |= CopyProperty(model, "expert_offload", writer);
             wroteAny |= CopyProperty(model, "gpu_gb", writer);
             wroteAny |= CopyProperty(model, "cpu_gb", writer);
-            // Advisory-only quantized-KV estimate (catalog lane) rides the same additive diagnostics seam. Advisory only:
-            // the default chat launch uses an fp16 KV cache, so these fields never drive fit/ranking — they let the UI hint
-            // at the headroom a flash-attention runtime could unlock. Absent for explore-lane / insufficient-metadata rows.
+            // Advisory-only quantized-KV estimate (catalog lane) on the same additive diagnostics seam: the default chat
+            // launch uses an fp16 KV cache, so these never drive fit/ranking; absent for explore-lane or metadata-poor rows.
             wroteAny |= CopyProperty(model, "kv_quant", writer);
             wroteAny |= CopyProperty(model, "kv_quant_estimated_gb", writer);
             wroteAny |= CopyProperty(model, "kv_quant_headroom_gb", writer);

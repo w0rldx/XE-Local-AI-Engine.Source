@@ -4,10 +4,12 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Caching;
 
 /// <summary>
-///     Bounded, TTL'd chunk-embedding reuse layered over vectors already committed to the local knowledge index. The
-///     durable store makes reuse survive process restarts; the byte-budgeted working set coalesces concurrent misses and
-///     avoids repeated SQLite reads. Failed factories are released without publishing an entry.
+///     Bounded, TTL'd chunk-embedding reuse layered over vectors already committed to the local knowledge index.
 /// </summary>
+/// <remarks>
+///     The durable store makes reuse survive process restarts; the byte-budgeted working set coalesces concurrent misses
+///     and avoids repeated SQLite reads. Failed factories are released without publishing an entry.
+/// </remarks>
 public sealed class KnowledgeChunkEmbeddingCache : IKnowledgeChunkEmbeddingCache
 {
     private const long EntryOverheadBytes = 128;

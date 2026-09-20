@@ -28,9 +28,12 @@ public enum TrainingRunEventKind
 
     /// <summary>
     ///     An export step moved. Carries the pipeline phase (merging, converting, quantizing, inspecting, smoke) and,
-    ///     on a terminal phase, the reason. The run's own status never moves for an export — the artifact row is the
-    ///     durable record — so this stream is how the operator watches one happen.
+    ///     on a terminal phase, the reason.
     /// </summary>
+    /// <remarks>
+    ///     The run's own status never moves for an export — the artifact row is the durable record — so this stream
+    ///     is how the operator watches one happen.
+    /// </remarks>
     Export
 }
 
@@ -113,11 +116,11 @@ public sealed class TrainingRunEventBufferOptions
     public int MaxEventCount { get; init; } = DefaultMaxEventCount;
 }
 
-/// <summary>
-///     Bounded per-run replay ring, the dataset-generation buffer at the size this stream needs. A run publishes
-///     coarse progress rather than token deltas, so there is no reserve/publish split: an event is only raised once the
-///     state it describes is already durable.
-/// </summary>
+/// <summary>Bounded per-run replay ring, the dataset-generation buffer at the size this stream needs.</summary>
+/// <remarks>
+///     A run publishes coarse progress rather than token deltas, so there is no reserve/publish split: an event is
+///     only raised once the state it describes is already durable.
+/// </remarks>
 public sealed class TrainingRunEventBuffer : ITrainingRunEventBuffer
 {
     private readonly Dictionary<Guid, RunBuffer> _runs = [];
@@ -263,14 +266,13 @@ public sealed class TrainingRunQueueOptions
     /// <summary>
     ///     How long a trainer that has already closed its output may take to actually exit before its process group
     ///     is killed.
-    ///     <para>
-    ///         A bound of its own rather than a reuse of <see cref="InactivityTimeout" />: silence <i>during</i> a run
-    ///         can be a wedged CUDA call and is worth minutes, but a closed stream means the process is already tearing
-    ///         down, and the only things left to wait for are the CUDA context releasing and the kernel reaping it and
-    ///         any child that still holds the pipe. Seconds, not minutes. Keeping them separate also means an operator
-    ///         who shortens the silence tolerance for a chatty trainer does not thereby start killing a slow one
-    ///         mid-teardown, and it lets the two be told apart when either fires.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A bound of its own rather than a reuse of <see cref="InactivityTimeout" />: silence <i>during</i> a run can be a
+    ///     wedged CUDA call and is worth minutes, but a closed stream means the process is already tearing down, with only the
+    ///     CUDA context release and the kernel reaping it and any child holding the pipe left to wait for — seconds, not
+    ///     minutes. Keeping them separate also means an operator who shortens the silence tolerance for a chatty trainer does
+    ///     not thereby start killing a slow one mid-teardown, and it lets the two be told apart when either fires.
+    /// </remarks>
     public TimeSpan ExitGracePeriod { get; init; } = TimeSpan.FromSeconds(30);
 }

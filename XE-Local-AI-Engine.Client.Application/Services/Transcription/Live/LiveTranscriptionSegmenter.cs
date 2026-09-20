@@ -69,28 +69,11 @@ public sealed class LiveSegmenterStalledException : Exception
 ///     One live transcription lane: raw PCM in, provisional text and durable segments out.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Everything here is audio time.</b> The clock is <see cref="WavPcm16.BytesPerMillisecond" /> against the
-///         cumulative count of bytes pushed, never a wall clock and never a per-frame sum — sixteen two-byte frames
-///         carry one millisecond, and each <c>2 / 32</c> truncates to nothing, so an accumulated clock would never
-///         advance and the lane would buffer forever. Re-deriving the time from the total makes the frame partition
-///         irrelevant, which is the whole reason the hub may accept any even frame length.
-///     </para>
-///     <para>
-///         <b>Duplicates are dropped by a watermark, never by comparing text.</b> Consecutive windows overlap, so the
-///         model re-transcribes the same words at every boundary. A segment starting before
-///         <see cref="CommittedEndMs" /> has already been said and is discarded; nothing here diffs or fuzzy-matches
-///         strings.
-///     </para>
-///     <para>
-///         <b>Audio is never cropped out of a window.</b> When the uncommitted span reaches the cap the whole span is
-///         submitted and the tail guard is suspended for that submission, so no millisecond can pass the watermark
-///         without having been offered to the transcriber at least once.
-///     </para>
-///     <para>
-///         The lane is not thread-safe: its owner serializes calls per lane, because a second frame arriving during an
-///         inference call must wait rather than race the buffer.
-///     </para>
+///     Everything here is audio time: <see cref="WavPcm16.BytesPerMillisecond" /> against the cumulative pushed byte
+///     count, never a wall clock and never a per-frame sum, which would truncate to nothing and never advance.
+///     Duplicates are dropped by the <see cref="CommittedEndMs" /> watermark, never by comparing text, and no
+///     millisecond passes it unoffered because the cap submits the whole span with the tail guard suspended. Not
+///     thread-safe: a second frame must wait, so its owner serializes calls per lane. See docs/wiki/24-audio-transcription.md ("The segmenter").
 /// </remarks>
 public sealed class LiveTranscriptionSegmenter
 {
@@ -247,9 +230,8 @@ public sealed class LiveTranscriptionSegmenter
         var windowEndMs = _audioEndMs;
         var wav = WavPcm16.Wrap(CollectionsMarshal.AsSpan(_tail)[..(int)(uncommittedMs * WavPcm16.BytesPerMillisecond)]);
 
-        // A MemoryStream over a byte[] is seekable, so the multipart body can report a content length. It is written
-        // read-only because the provider must not mutate it, and disposed here because the provider disposes nothing
-        // it did not create.
+        // A MemoryStream over a byte[] is seekable, so the multipart body can report a content length. It is written read-only because the provider must not
+        // mutate it, and disposed here because the provider disposes nothing it did not create.
         using var audio = new MemoryStream(wav, writable: false);
         var result = await _transcriber.TranscribeAsync(_modelId, new WhisperTranscriptionRequest
         {
@@ -276,6 +258,13 @@ public sealed class LiveTranscriptionSegmenter
     }
 
     /// <summary>Turns one transcription result into commits and moves the watermark. Nothing here awaits.</summary>
+    /// <remarks>
+    ///     The tail guard is suspended when the buffer must be cleared anyway (at the cap and on the final flush),
+    ///     committing the model's answer about audio this lane cut itself, so a word straddling the boundary is a
+    ///     guess from a fragment and durable either way. Suspended means suspended, not "zero milliseconds": a model
+    ///     routinely reports an end past the audio it was given (VAD padding; the fixture answers a 2000 ms window
+    ///     with a segment ending at 2020 ms), which a zero guard rejects before the caller frees the audio for good.
+    /// </remarks>
     private void Apply(WhisperTranscriptionResult result,
         long windowStartMs,
         long windowEndMs,
@@ -283,16 +272,8 @@ public sealed class LiveTranscriptionSegmenter
         bool flush,
         List<LiveCommit> commits)
     {
-        // The guard is suspended when the buffer must be cleared anyway: at the cap and on the final flush. That
-        // commits the model's answer about audio this lane cut itself, so a word straddling the boundary is a guess
-        // from a fragment and is durable either way.
-        // ponytail: one word per forced boundary is the accepted error (base inserts "to" at 5 s, large-v3-turbo
-        // duplicates "you" at 7.1 s); carry keep_ms of the previous window into the next and de-duplicate on tokens,
-        // as whisper.cpp's examples/stream/stream.cpp does, if that word ever costs more than the overlap decode.
-        // Suspended means suspended, not "zero milliseconds of guard". A model routinely reports an end time a little
-        // past the audio it was given — VAD padding does it, and the recorded fixture has a 2000 ms window answered
-        // with a segment ending at 2020 ms — so a guard of zero still rejects those, and the caller then frees the
-        // audio anyway. The text would be lost with nothing left to re-transcribe it from.
+        // ponytail: one word per forced boundary is the accepted error; the upgrade path — carry keep_ms of the previous window into the next and de-duplicate
+        // on tokens, as whisper.cpp's examples/stream/stream.cpp does — and the recorded fixtures are in docs/wiki/24-audio-transcription.md ("The segmenter").
         var committableUntilMs = atCap || flush ? long.MaxValue : windowEndMs - _settings.TailGuardMs;
 
         // The one place seconds become milliseconds. Past this line the slice has no doubles and no "seconds".

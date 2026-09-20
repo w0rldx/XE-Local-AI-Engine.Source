@@ -24,11 +24,14 @@ public enum KvCacheQuant
 }
 
 /// <summary>
-///     How confident the estimate is in its inputs. <see cref="Exact" /> means the weights and KV geometry came from
-///     explicit GGUF metadata (param count + explicit attention key/value lengths). <see cref="Approximate" /> means at
-///     least one input was derived or fell back (weights from the on-disk file size, or head_dim from
-///     <c>embedding_length / n_heads</c>), so the advisor should present the figure conservatively.
+///     How confident the estimate is in its inputs; the advisor presents an <see cref="Approximate" /> figure
+///     conservatively.
 /// </summary>
+/// <remarks>
+///     <see cref="Exact" /> means the weights and KV geometry came from explicit GGUF metadata (param count plus
+///     explicit attention key/value lengths). <see cref="Approximate" /> means at least one input was derived or fell
+///     back: weights from the on-disk file size, or head_dim from <c>embedding_length / n_heads</c>.
+/// </remarks>
 public enum FitConfidence
 {
     /// <summary>Every required input was explicit — the estimate is precise.</summary>
@@ -39,10 +42,13 @@ public enum FitConfidence
 }
 
 /// <summary>
-///     Which fit path an estimate resolved to. <see cref="FitsResident" /> is the historical (dense-model or
-///     entirely-VRAM-resident) outcome; <see cref="FitsWithExpertOffload" /> is only reachable for a Mixture-of-Experts
-///     model on a GPU-accelerated node whose non-expert weights + KV fit VRAM while its expert weights fit available RAM.
+///     Which fit path an estimate resolved to.
 /// </summary>
+/// <remarks>
+///     <see cref="FitsResident" /> is the dense-model or entirely-VRAM-resident outcome;
+///     <see cref="FitsWithExpertOffload" /> is reachable only for a Mixture-of-Experts model on a GPU-accelerated node
+///     whose non-expert weights + KV fit VRAM while its expert weights fit available RAM.
+/// </remarks>
 public enum MoeFitVerdict
 {
     /// <summary>All weights are resident in the scored budget (VRAM or RAM) — today's behavior.</summary>
@@ -61,22 +67,25 @@ public enum MoeFitVerdict
 /// </summary>
 /// <param name="BytesAtContext">Total KV-cache bytes across every layer at the requested context, or <c>0</c> when the header cannot size it.</param>
 /// <param name="BytesPerToken">
-///     <paramref name="BytesAtContext" /> divided by the requested context — the average per-token cost across all
-///     layers, so an interleaved sliding-window model reports what it actually pays rather than a full-attention figure.
+///     <paramref name="BytesAtContext" /> over the requested context: the average across all layers, so an
+///     interleaved sliding-window model reports what it really pays, not a full-attention figure.
 /// </param>
 /// <param name="Quant">
-///     The element size the figures were computed at. REQUIRED on the result: an unlabelled KV byte count is ambiguous
-///     by a factor of two between the fp16 ranking estimate and the <c>q8_0</c> chat launch.
+///     The element size the figures were computed at. REQUIRED: an unlabelled KV byte count is ambiguous by 2x
+///     between fp16 ranking and the <c>q8_0</c> chat launch.
 /// </param>
 /// <param name="HeadDimDerived">Whether head_dim was derived from <c>embedding_length / n_heads</c> rather than read explicitly.</param>
 public readonly record struct KvCacheFootprint(long BytesAtContext, double BytesPerToken, KvCacheQuant Quant, bool HeadDimDerived);
 
 /// <summary>
 ///     Optional explicit attention geometry read from a GGUF header, preferred over the derived
-///     <c>head_dim = embedding_length / n_heads</c> when present. All fields are optional; passing <see langword="null" />
-///     (or an all-null record) to <see cref="MemoryFitEstimator.Estimate" /> preserves the legacy derived-head_dim,
-///     no-sliding-window behavior exactly.
+///     <c>head_dim = embedding_length / n_heads</c> when present.
 /// </summary>
+/// <remarks>
+///     All fields are optional; passing <see langword="null" /> (or an all-null record) to
+///     <see cref="MemoryFitEstimator.Estimate" /> preserves the legacy derived-head_dim, no-sliding-window behavior
+///     exactly.
+/// </remarks>
 public sealed class GgufAttentionShape
 {
     /// <summary>
@@ -96,16 +105,21 @@ public sealed class GgufAttentionShape
 
     /// <summary>
     ///     The global-attention stride: every Nth layer is full attention, the rest window-limited (6 for Gemma3's 5:1
-    ///     local:global pattern, 2 for Gemma2). Resolved from the header or a per-arch default; <see langword="null" /> leaves
-    ///     every layer full-attention (a conservative over-estimate).
+    ///     local:global pattern, 2 for Gemma2).
     /// </summary>
+    /// <value>
+    ///     Resolved from the header or a per-arch default; <see langword="null" /> leaves every layer full-attention,
+    ///     a conservative over-estimate.
+    /// </value>
     public long? SlidingWindowPattern { get; init; }
 
     /// <summary>
-    ///     <c>{arch}.attention.key_length_mla</c> — the latent key dimension of Multi-head Latent Attention. Together with
-    ///     <see cref="ValueLengthMla" /> it is llama.cpp's <c>is_mla()</c> test (both present and positive); under MLA
-    ///     the cache is a single latent K tensor per layer and NO V tensor is allocated at all.
+    ///     <c>{arch}.attention.key_length_mla</c> — the latent key dimension of Multi-head Latent Attention.
     /// </summary>
+    /// <remarks>
+    ///     Together with <see cref="ValueLengthMla" /> it is llama.cpp's <c>is_mla()</c> test (both present and
+    ///     positive); under MLA the cache is a single latent K tensor per layer and NO V tensor is allocated at all.
+    /// </remarks>
     public long? KeyLengthMla { get; init; }
 
     /// <summary>
@@ -145,14 +159,15 @@ public sealed class MoeFacts
 }
 
 /// <summary>
-///     The result of a single memory-fit estimate. <see cref="HeadroomBytes" /> is <c>budget − estimated</c> (negative
-///     when the model does not fit; for <see cref="MoeFitVerdict.FitsWithExpertOffload" /> it is the GPU/VRAM headroom
-///     specifically, the binding constraint of that path), and <see cref="Mode" /> records which budget was used.
-///     <see cref="GpuBytes" />/<see cref="CpuBytes" /> are only populated when <see cref="MoeVerdict" /> is
-///     <see cref="MoeFitVerdict.FitsWithExpertOffload" />; otherwise both are <see langword="null" />.
-///     <see cref="Confidence" /> flags whether the estimate leaned on a derived head_dim or file-size weights, and
-///     <see cref="NativeQuantFormat" /> whether the quant is a native, non-requantizable format (MXFP4).
+///     The result of a single memory-fit estimate.
 /// </summary>
+/// <remarks>
+///     <see cref="HeadroomBytes" /> is <c>budget − estimated</c>, negative when the model does not fit; for
+///     <see cref="MoeFitVerdict.FitsWithExpertOffload" /> it is the GPU/VRAM headroom specifically, that path's binding constraint.
+///     <see cref="Mode" /> records which budget was used, and <see cref="GpuBytes" /> / <see cref="CpuBytes" /> are populated only for
+///     that verdict, else <see langword="null" />. <see cref="Confidence" /> flags a derived head_dim or file-size weights, and
+///     <see cref="NativeQuantFormat" /> a native, non-requantizable quant (MXFP4).
+/// </remarks>
 public sealed record MemoryFitEstimate
 {
     public required bool Fits { get; init; }

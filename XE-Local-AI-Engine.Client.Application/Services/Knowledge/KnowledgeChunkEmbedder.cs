@@ -8,22 +8,21 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
-///     Default <see cref="IKnowledgeChunkEmbedder" />. Reuses the node-local embedding resolution path from
-///     <c>EmbeddingPlaybookRetrievalRanker</c>: resolves the provider named by <see cref="KnowledgeBaseOptions.EmbeddingProviderName" />,
-///     creates a generator for <see cref="KnowledgeBaseOptions.EmbeddingModelName" />, and generates in batches of at most
-///     <see cref="KnowledgeBaseOptions.MaxEmbeddingBatchSize" />. Vectors are compared only within one model/dimension, so a
-///     count or dimension mismatch, or any transport/model error, is surfaced as a content-free
-///     <see cref="KnowledgeIngestionException" /> for the pipeline to record as <c>Failed</c>. No chunk text is ever logged.
+///     Default <see cref="IKnowledgeChunkEmbedder" />: resolves the provider named by
+///     <see cref="KnowledgeBaseOptions.EmbeddingProviderName" /> and creates a generator for
+///     <see cref="KnowledgeBaseOptions.EmbeddingModelName" />.
 /// </summary>
+/// <remarks>
+///     Reuses the node-local embedding resolution path from <c>EmbeddingPlaybookRetrievalRanker</c> and generates in
+///     batches of at most <see cref="KnowledgeBaseOptions.MaxEmbeddingBatchSize" />. Vectors are compared only within one
+///     model and dimension, so a count or dimension mismatch, or any transport/model error, surfaces as a content-free
+///     <see cref="KnowledgeIngestionException" /> for the pipeline to record as <c>Failed</c>. No chunk text is ever
+///     logged.
+/// </remarks>
 public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 {
-    // Fixed, content-free failure reasons (safe to persist + surface).
-    //
-    // The wording is deliberate. It previously said "Pull the configured embedding model (for example nomic-embed-text)",
-    // which was wrong twice over on a default node: "pull" is Ollama vocabulary and Ollama is a disabled secondary
-    // provider, and "nomic-embed-text" is an Ollama-style name that never appears anywhere in this app's UI. A user who
-    // read it had no way to act on it. It now names the in-app affordance that actually
-    // resolves the failure. Keep it content-free — this string is persisted on the document row and surfaced verbatim.
+    // Fixed, content-free failure reasons: each is persisted on the document row and surfaced verbatim, so it names the
+    // in-app affordance that resolves it — never Ollama vocabulary ("pull") or an Ollama-style name the UI never shows.
     private const string EmbeddingUnavailableReason =
         "No embedding model is installed, so documents cannot be indexed. Use \"Download recommended embedding model\" "
         + "in Node Settings, or install an embedding GGUF from Models → Browse Hugging Face, then retry.";
@@ -31,12 +30,8 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
     private const string EmbeddingIncompleteReason =
         "The embedding model returned an incomplete result. Ensure the configured embedding model is loaded and retry.";
 
-    // A REACHABLE embedding server that REJECTED the request is a different failure from "no embedding model is
-    // installed", and reporting it as the latter sends the user to install a model they already have. This was the live
-    // symptom: llama-server rejected every full-size chunk (its physical batch defaulted to 512 tokens, below the chunk
-    // budget) and the user was told to install an embedding GGUF that was installed, loaded, and serving on the GPU.
-    // The provider layer translates a non-2xx into an HttpRequestException carrying the status, which is what separates
-    // the two cases here. Content-free: the server's own diagnostic goes to the log, never into this persisted reason.
+    // A REACHABLE server that REJECTED the request is a different failure from "no embedding model is installed", and
+    // reporting it as the latter sends the user to install a model they have; the non-2xx status separates the two cases.
     private const string EmbeddingRejectedReason =
         "The embedding model is installed but rejected the request. Check the node logs for the server's response, then retry.";
 
@@ -66,19 +61,15 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         ArgumentNullException.ThrowIfNull(chunkContents);
         if (chunkContents.Count == 0)
         {
-            // No provider round-trip for empty input; report the configured name as the resolved identity. The sole
-            // caller (KnowledgeIngestionService) only reaches EmbedAsync with chunking.Chunks, and RunAsync marks a
-            // zero-chunk document Failed before it ever calls EmbedAsync — so a document stamped via this branch can
-            // never reach Indexed, and this placeholder name is never compared as a vector identity.
+            // No provider round-trip for empty input; report the configured name as the resolved identity. RunAsync marks
+            // a zero-chunk document Failed first, so a document stamped here never reaches Indexed or a vector comparison.
             return new KnowledgeEmbeddingResult { Vectors = [], ResolvedModel = _options.EmbeddingModelName, VectorIdentity = KnowledgeEmbeddingVectorPolicy.LegacyIdentity, Dimension = 0 };
         }
 
         var provider = ResolveProvider();
 
-        // Resolve the configured embedding name to a model actually installed on this provider (an Ollama-style default
-        // maps to the installed nomic-embed GGUF on a llama.cpp node). Resolve ONCE and return the resolved name so the
-        // ingestion lane can stamp the exact model that produced these vectors as the document row and chunk-vector scope
-        // key. The search lane resolves the same way, so chunk vectors and query vectors are built by the identical model.
+        // Resolve the configured embedding name ONCE to a model actually installed here, and return it so the ingestion lane
+        // stamps the exact producing model; the search lane resolves identically, keeping chunk and query vectors comparable.
         var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
         var embeddingModelName = resolution.Name;
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
@@ -90,9 +81,8 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         var batchSize = Math.Max(1, _options.MaxEmbeddingBatchSize);
         var blobs = new List<byte[]>(chunkContents.Count);
 
-        // The vector width is derived from the first embedding this run produces (not a static config constant), so any
-        // embedding model's native dimension is honored. Every subsequent vector is checked against that first width: a
-        // well-behaved model is dimension-stable, so a mismatch is a genuinely broken/mixed model and fails the document.
+        // The vector width comes from this run's first embedding, not a static constant, so any model's native dimension is
+        // honored; every later vector is checked against it, and a mismatch is a broken or mixed model that fails the document.
         var dimension = -1;
         string? vectorIdentity = null;
 
@@ -113,9 +103,8 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             }
             catch (HttpRequestException exception) when (exception.StatusCode is not null)
             {
-                // The server ANSWERED, with a non-2xx. It is reachable and the model is loaded, so the "install a model"
-                // remediation is wrong here. Carry the exception so the ingestion service can log the server's own
-                // diagnostic (see KnowledgeIngestionService's failure logging).
+                // The server ANSWERED with a non-2xx: it is reachable and the model is loaded, so "install a model" is the
+                // wrong remediation. Carry the exception so KnowledgeIngestionService can log the server's own diagnostic.
                 throw new KnowledgeIngestionException(EmbeddingRejectedReason, exception);
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)

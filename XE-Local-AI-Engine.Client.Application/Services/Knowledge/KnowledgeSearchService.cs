@@ -16,15 +16,16 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
-///     Default <see cref="IKnowledgeSearchService" />. Embeds the query with the current model (query-intent prefix),
-///     retrieves candidates from the lexical FTS arm and the model-scoped semantic vector arm, fuses their rankings with
-///     Reciprocal Rank Fusion, optionally rescoring the fused candidate pool with a local cross-encoder reranker
-///     (<see cref="KnowledgeBaseOptions.RerankerModelName" />) before the top-<c>limit</c> cut, hydrates the selected
-///     chunks over the raw-SQL path, and optionally expands each hit with its surrounding neighbors. If the embedding
-///     model or the reranker is unavailable the search degrades gracefully (lexical-only / fusion order) rather than
-///     failing. No query or chunk text is ever logged. Scoped: it drives the scoped retrieval collaborators through the
-///     request-scoped <see cref="NodeChatDbContext" />.
+///     Default <see cref="IKnowledgeSearchService" />: embeds the query, retrieves from both arms, fuses, optionally
+///     reranks, hydrates, and optionally expands each hit with its surrounding neighbors.
 /// </summary>
+/// <remarks>
+///     Embedding applies the query-intent prefix; the lexical FTS arm and the model-scoped semantic vector arm are fused
+///     with Reciprocal Rank Fusion, and the fused pool is optionally rescored by a local cross-encoder
+///     (<see cref="KnowledgeBaseOptions.RerankerModelName" />) before the top-<c>limit</c> cut. An unavailable embedding
+///     model or reranker degrades gracefully — lexical-only, or fusion order — rather than failing. No query or chunk
+///     text is ever logged. Scoped: it drives the scoped collaborators through the request-scoped db context.
+/// </remarks>
 public sealed class KnowledgeSearchService : IKnowledgeSearchService
 {
     /// <summary>Provenance tag stamped on every hit from this retrieval surface.</summary>
@@ -96,22 +97,14 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var limit = Math.Max(1, request.Limit);
         var candidatePool = Math.Max(MinimumCandidatePool, limit * CandidatePoolMultiplier);
 
-        // The two retrieval arms are launched together. The lexical FTS arm reads the request-scoped DB connection; the
-        // query-embedding arm calls only the embedding provider process and never touches that connection — so overlapping
-        // them can never run two commands on the non-thread-safe SQLite connection at once. Every DB-bound read that
-        // CONSUMES the embedding (the vector scan, hydration, expansion) runs sequentially after this point, still on the
-        // one shared connection. Overlapping the embedding round trip (typically the dominant latency) with the FTS query
-        // is the win here; truly concurrent execution of BOTH DB arms would need a second connection/scope and is
-        // deliberately not taken. The vector arm is filtered by the SAME resolved model name the query was embedded with,
-        // so query vectors are only ever compared against chunk vectors built by that identical model.
+        // The arms overlap safely: only the lexical arm touches the non-thread-safe request-scoped SQLite connection, the
+        // embed arm only the provider process. Overlap rule: docs/wiki/15-knowledge-base.md ("Hybrid retrieval").
         var ftsArm = RunFtsArmAsync(request.Query, candidatePool, request.DocumentId, collectionId, cancellationToken);
         var embedArm = RunEmbedArmAsync(request.Query, cancellationToken);
         await Task.WhenAll(ftsArm, embedArm);
 
-        // Carry each arm's SCORE into fusion, not just its rank. The two raw scales are incomparable and oriented
-        // differently — FTS5 BM25 is more-NEGATIVE-for-stronger, cosine is higher-for-stronger — so orient both to
-        // "higher = more relevant" here (negate BM25) and leave the per-arm normalization/blend to the fusion service.
-        // Score-agnostic RRF (RankFusionStrategy.Rrf) ignores these scores, so this is a strict superset of the old path.
+        // Carry each arm's SCORE into fusion, not only its rank. The raw scales are incomparable and oppositely oriented
+        // (FTS5 BM25 is more-NEGATIVE-for-stronger), so negate BM25 here and leave per-arm blending to the fusion service.
         var ftsRanked = (await ftsArm)
                         .Select(hit => new RankFusionInput(hit.ChunkId, -hit.Bm25Score))
                         .ToList();
@@ -143,17 +136,13 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
 
-        // Hydrate the fused candidate POOL once (bounded to candidatePool, in one batched query) in fused order, then drop
-        // content duplicates BEFORE any top-`limit` cut so near-identical chunks stored under different ids do not crowd
-        // out distinct results. The higher-RRF-ranked occurrence of a duplicate is kept (the pool is in fused order), so
-        // the dedup is deterministic.
+        // Hydrate the fused candidate POOL once in fused order, then drop content duplicates BEFORE any top-`limit` cut so
+        // near-identical chunks under different ids cannot crowd out distinct results; the higher-ranked one is kept.
         var pool = await HydratePoolAsync(connection, fused, candidatePool, collectionId, cancellationToken);
         var deduped = DeduplicateByContent(pool);
 
-        // Optional rerank stage: when a reranker model is configured, the deduped pool is rescored by a local cross-encoder
-        // and reordered BEFORE the top-`limit` cut, so a strong-but-lexically-weak chunk can be pulled into the results.
-        // When reranking is off — or on ANY rerank failure — the behavior is the exact original: RRF order, Take(limit).
-        // Reranking scores the BASE chunk content (pre-expansion); neighbor expansion is applied only to the final top-k.
+        // Optional rerank: a configured reranker rescores the deduped pool and reorders BEFORE the top-`limit` cut, so a
+        // strong but lexically weak chunk can surface. Off or failed, the order stays RRF; it scores pre-expansion content.
         var rerankDecision = AdaptiveRetrievalPolicy.DecideRerank(_options.AdaptiveRerankingEnabled,
             !string.IsNullOrWhiteSpace(_options.RerankerModelName),
             ftsRanked,
@@ -174,9 +163,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         {
             var selection = selections[index];
 
-            // A hit only exists because the document has queryable chunks. Disclose last-known-good projections both
-            // while a re-index is pending/failed and when an Indexed row still carries an older vector identity (for
-            // example immediately after a vector-policy migration, before the operator-triggered re-index completes).
+            // A hit only exists because the document has queryable chunks, so disclose last-known-good projections while a
+            // re-index is pending or failed, and when an Indexed row still carries an older vector identity.
             var servingLastKnownGood =
                 selection.Row.DocumentStatus != KnowledgeDocumentStatus.Indexed
                 || (!queryVector.IsEmpty
@@ -243,10 +231,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         }
     }
 
-    // Resolves the display content for each selected hit. Without expansion this is the hydrated base content; with
-    // expansion the whole top-k is expanded in one batched call and each hit's neighbors are joined in chunk order (an
-    // empty neighbor set — e.g. the chunk vanished between selection and expansion — falls back to the base content, the
-    // same behavior as expanding a single hit).
+    // Resolves each hit's display content: the hydrated base content without expansion; with expansion the whole top-k is
+    // expanded in one batched call and neighbors join in chunk order, an empty neighbor set keeping the base content.
     private async Task<IReadOnlyList<string>> ResolveContentsAsync(IReadOnlyList<ChunkSelection> selections, bool expandNeighbors, CancellationToken cancellationToken)
     {
         if (!expandNeighbors || selections.Count == 0)
@@ -277,10 +263,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             new KeyValuePair<string, object?>("stage", stage));
     }
 
-    // Hydrates the fused candidate POOL (bounded to candidatePool — NOT the whole fused list) in one batched query, in
-    // fused order, stamping the RRF score. Hydration is one batched query for the whole set (not a round trip per chunk); a
-    // chunk that disappeared between retrieval and hydration (concurrent delete/reindex) is simply absent from the batch
-    // and skipped, and the surviving entries keep their fused order.
+    // Hydrates the fused candidate POOL — bounded to candidatePool, NOT the whole fused list — in one batched query, in
+    // fused order, stamping the RRF score; a chunk deleted or reindexed meanwhile is absent and skipped, order intact.
     private static async Task<List<ChunkSelection>> HydratePoolAsync(DbConnection connection,
         IReadOnlyList<RankFusionEntry> fused,
         int candidatePool,
@@ -305,10 +289,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         return pool;
     }
 
-    // Drops candidates whose normalized content duplicates a higher-ranked candidate. The pool is in fused order, so the
-    // FIRST occurrence of a given content (the highest-RRF-ranked) is kept and later duplicates are dropped — deterministic
-    // given RRF's deterministic order. Content is normalized (whitespace collapsed, lowercased) before hashing so chunks
-    // that differ only in incidental whitespace/case are treated as duplicates.
+    // Drops candidates whose normalized content duplicates a higher-ranked one: the pool is in fused order, so the FIRST
+    // (highest-RRF) occurrence wins. Content is whitespace-collapsed and lowercased before hashing, so casing never splits.
     private static List<ChunkSelection> DeduplicateByContent(IReadOnlyList<ChunkSelection> pool)
     {
         // seen.Add returns false for a content already kept, so the Where keeps only the first (highest-RRF-ranked)
@@ -325,9 +307,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(collapsed)));
     }
 
-    // Enabled-rerank path: send the base chunk contents of the (already hydrated + deduped) pool to the local reranker and
-    // reorder by descending relevance before taking `limit`. On any rerank failure (null / count mismatch) the pool is kept
-    // in its original RRF order with the RRF score, so the result is never worse than the disabled path.
+    // Enabled-rerank path: sends the hydrated, deduped pool's base contents to the local reranker and reorders by descending
+    // relevance before taking `limit`; a failure (null or count mismatch) keeps the original RRF order and score.
     private async Task<IReadOnlyList<ChunkSelection>> RerankAsync(string query,
         IReadOnlyList<ChunkSelection> pool,
         int limit,
@@ -377,9 +358,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         budgetCts.CancelAfter(remaining);
         try
         {
-            // The linked deadline flows through reranker model acquisition and scoring. The provider's larger internal
-            // timeout is only a safety ceiling; this per-search remaining budget wins first. WaitAsync independently
-            // bounds the caller even if a provider violates the cancellation contract.
+            // The linked deadline flows through reranker acquisition and scoring, winning over the provider's larger
+            // internal timeout; WaitAsync bounds the caller even if a provider violates the cancellation contract.
             return await RerankAsync(query, pool, limit, budgetCts.Token)
                          .WaitAsync(remaining, cancellationToken);
         }
@@ -394,9 +374,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         }
     }
 
-    // Returns the query vector plus the resolved model name it was embedded with (the vector-search scope key). On the
-    // degrade path the vector is empty and the resolved name falls back to the configured name (unused, since the vector
-    // arm is skipped when the vector is empty).
+    // Returns the query vector plus the resolved model name it was embedded with, the vector-search scope key. On the
+    // degrade path the vector is empty and the name is the unused configured one, since the vector arm is then skipped.
     private async Task<QueryEmbedding> TryEmbedQueryAsync(string query,
         CancellationToken cancellationToken)
     {
@@ -404,11 +383,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         {
             var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
 
-            // Resolve ONCE. The same resolved name embeds the query AND filters the stored chunk vectors, so query and
-            // chunk vectors are only ever compared when the identical model produced both (the ingestion lane stamps the
-            // same resolved name as the scope key). A later same-dimension model swap changes this name and excludes the
-            // now-incompatible old vectors instead of silently mis-comparing them. The confidence bit is irrelevant here —
-            // search degrades to lexical-only on any embedding failure regardless of why the name is what it is.
+            // Resolve ONCE: the same name embeds the query AND filters the stored chunk vectors, which the ingestion lane
+            // stamped with it. Confidence is irrelevant here — any embedding failure degrades search to lexical-only.
             var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
             var embeddingModelName = resolution.Name;
             var cacheFamilyIdentity = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, _options.EmbeddingVectorMode);
@@ -453,9 +429,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         }
     }
 
-    // Hydrates a set of chunk ids in one query per batch (keyed by chunk id) instead of one round trip per chunk, so a
-    // large candidate pool no longer fans out into N SELECTs. Missing ids (concurrent delete/reindex) are simply absent
-    // from the returned map; the caller re-imposes the fused/rerank order and skips absentees.
+    // Hydrates a set of chunk ids in one query per batch, keyed by chunk id, so a large candidate pool never fans out into
+    // N SELECTs. Ids missing to a concurrent delete or reindex are absent from the map; the caller re-imposes the order.
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification =
             "The IN-clause is a fixed count of $idN placeholders generated from an internal candidate count; every chunk id is bound as a parameter and no value is concatenated into the command text.")]
@@ -542,9 +517,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             : KnowledgeDocumentStatus.Pending;
     }
 
-    // Non-sensitive display title. The original file name is encrypted and must never leak into a search result, so the
-    // title is the root segment of the heading trail when present, else the server-generated storage reference (the
-    // document id plus its extension), which carries no user content.
+    // Non-sensitive display title: the encrypted original file name must never leak into a search result, so this is the
+    // heading trail's root segment, else the server-generated storage reference, which carries no user content.
     private static string DeriveTitle(string? headingPath, string storagePath)
     {
         if (string.IsNullOrWhiteSpace(headingPath))
@@ -600,8 +574,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         public required double Score { get; init; }
     }
 
-    // The embedded query the semantic arm searches with: the vector (empty on the degrade path, which skips the arm),
-    // the resolved model name that scopes which stored chunk vectors it may be compared against, and the vector
-    // identity that pins the embedding policy the vector was produced under.
+    // The embedded query the semantic arm searches with: the vector (empty on the degrade path, which skips the arm), the
+    // resolved model name scoping which stored vectors it may meet, and the identity pinning the policy it was built under.
     private sealed record QueryEmbedding(ReadOnlyMemory<float> Vector, string ResolvedModel, string VectorIdentity);
 }

@@ -9,14 +9,14 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
-/// <summary>
-///     Durable knowledge-base document store. Metadata rows are written/read over the raw-SQL path (matching the node
-///     chat persistence path) with the display name encrypted via the matching <see cref="NodeChatDbContext" /> helper;
-///     the raw bytes are encrypted on disk by <see cref="UploadedFileBlobProtector" /> under
-///     <c>INodeDataDirectory.Root/knowledge-base/documents/</c>. The store is a singleton and opens a fresh scope per
-///     database operation. On-disk paths are always derived from the server-generated <c>documentId</c> plus extension;
-///     the persisted <c>storage_path</c> is display-only and never used to open a file.
-/// </summary>
+/// <summary>Durable knowledge-base document store.</summary>
+/// <remarks>
+///     Metadata rows are written and read over the raw-SQL path, matching the node chat persistence path, with the
+///     display name encrypted via the matching <see cref="NodeChatDbContext" /> helper; the raw bytes are encrypted on
+///     disk by <see cref="UploadedFileBlobProtector" /> under <c>INodeDataDirectory.Root/knowledge-base/documents/</c>.
+///     The store is a singleton and opens a fresh scope per database operation. On-disk paths are always derived from
+///     the server-generated <c>documentId</c> plus extension; the persisted <c>storage_path</c> is display-only.
+/// </remarks>
 public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
 {
     private const string RootFolderName = "knowledge-base";
@@ -157,11 +157,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             {
                 await WriteEncryptedBlobAsync(row.DocumentId, row.Extension, input.Content, cancellationToken);
 
-                // The prior crash left this row marked Failed (ContentMissingReason) once ingestion could not read its
-                // bytes. Now that they are restored, reset it to Pending so UploadKnowledgeDocumentEndpoint re-enqueues it
-                // — it only enqueues freshly-inserted or Pending rows, so without this the repaired bytes would never be
-                // indexed and every identical re-upload would keep returning the stuck Failed document. Only the
-                // missing-blob branch resets; an intact dedupe hit leaves the status untouched.
+                // Ingestion that could not read the bytes left this row Failed (ContentMissingReason); with them restored,
+                // reset to Pending so the upload endpoint re-enqueues it. Only this branch resets, a dedupe hit does not.
                 await ResetDocumentToPendingAsync(connection, row.DocumentId, now, cancellationToken);
             }
 
@@ -183,10 +180,13 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         return new KnowledgeDocumentAddResult { DocumentId = input.DocumentId, WasInserted = true };
     }
 
-    // Encrypts and writes a document blob via a temp sibling + atomic rename, so a crash mid-write never leaves a torn
-    // file that a later read would decrypt-fail on. File.Move(overwrite) is a rename within the same directory — atomic
-    // on Linux (rename(2)) and Windows (MoveFileEx/MOVEFILE_REPLACE_EXISTING). Encryption is keyed by the document id,
-    // so the caller must pass the id that owns the target path (the existing row's id on the dedupe-repair path).
+    /// <summary>Encrypts and writes a document blob via a temp sibling plus an atomic rename.</summary>
+    /// <remarks>
+    ///     The rename means a crash mid-write never leaves a torn file that a later read would decrypt-fail on:
+    ///     <c>File.Move(overwrite)</c> within one directory is atomic on Linux (<c>rename(2)</c>) and on Windows
+    ///     (<c>MoveFileEx</c> with <c>MOVEFILE_REPLACE_EXISTING</c>). Encryption is keyed by the document id, so the
+    ///     caller must pass the id that owns the target path — on the dedupe-repair path, the existing row's id.
+    /// </remarks>
     private async Task WriteEncryptedBlobAsync(Guid documentId, string extension, ReadOnlyMemory<byte> content, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(DocumentsDirectory());
@@ -246,9 +246,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             return [];
         }
 
-        // File leaves are "{documentId:D}{extension}". Ignore any stray file whose leading name is not a valid id: a
-        // foreign file dropped into the directory, and the ".{guid:N}.tmp"/".backup" siblings an interrupted write can
-        // leave behind (those are reclaimed with their document below, never on their own).
+        // File leaves are the document id plus its extension; ignore any stray file whose leading name is not a valid id
+        // — a foreign file, or the temp/backup siblings of an interrupted write, reclaimed with their document below.
         var ids = new HashSet<Guid>();
         foreach (var file in Directory.EnumerateFiles(documentsDirectory))
         {
@@ -271,10 +270,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             return Task.CompletedTask;
         }
 
-        // The extension died with the row, so match every file this store could have written under the id: the blob
-        // itself plus any temp/backup sibling of an interrupted write. The id is server-generated and formatted here, so
-        // the pattern can never carry a caller-supplied wildcard. Materialized before deleting — never enumerate lazily
-        // over a directory being modified.
+        // The extension died with the row, so match every file written under the id: the blob plus any temp/backup sibling
+        // of an interrupted write. The id is server-generated, so no caller wildcard; materialized before deleting.
         foreach (var file in Directory.GetFiles(documentsDirectory, string.Concat(documentId.ToString("D"), "*")))
         {
             DeleteFileIfExists(file);
@@ -467,9 +464,15 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    // Resets a repaired dedupe target back to Pending so the upload endpoint re-enqueues it for indexing, clearing the
-    // stale content-missing failure and any partial chunk count. Called only after the missing
-    // blob has been restored from byte-identical content.
+    /// <summary>
+    ///     Resets a repaired dedupe target back to Pending so the upload endpoint re-enqueues it for indexing, clearing
+    ///     the stale content-missing failure and any partial chunk count.
+    /// </summary>
+    /// <remarks>
+    ///     Called only after the missing blob has been restored from byte-identical content. The endpoint enqueues only
+    ///     freshly-inserted or Pending rows, so without this reset the repaired bytes would never be indexed and every
+    ///     identical re-upload would keep returning the stuck Failed document.
+    /// </remarks>
     private static async Task ResetDocumentToPendingAsync(DbConnection connection, Guid documentId, long updatedAtUtc, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -505,9 +508,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         }
         catch (IOException)
         {
-            // Best-effort cleanup; a transient IO error leaves the file behind. When it was a purged document's blob,
-            // KnowledgeBlobOrphanSweeper reclaims it on the next start — a repeat purge never would, since the row it
-            // keys on is already gone.
+            // Best-effort cleanup; a transient IO error leaves the file behind. For a purged document's blob,
+            // KnowledgeBlobOrphanSweeper reclaims it on the next start — a repeat purge never would, its row being gone.
         }
         catch (UnauthorizedAccessException)
         {

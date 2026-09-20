@@ -5,20 +5,24 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     The catalog recommendation lane: ranks the curated <see cref="ModelCatalogDocument" /> entries against the
-///     node's hardware for a use-case, producing the PRIMARY "Recommended" / "Can run" sections the advisor's existing
-///     live-HF discovery pipeline is demoted alongside as a secondary "Explore" lane.
+///     Ranks the curated <see cref="ModelCatalogDocument" /> entries against the node's hardware for a use-case,
+///     producing the PRIMARY "Recommended" / "Can run" sections. The live-HF discovery pipeline runs alongside it as
+///     the secondary "Explore" lane.
 /// </summary>
 public interface ICatalogRecommendationService
 {
     /// <summary>
-    ///     Filters the current catalog to entries whose <see cref="ModelCatalogEntry.UseCases" /> match
-    ///     <paramref name="useCase" /> (<see langword="null" /> = no use-case filter) and whose
-    ///     <see cref="ModelCatalogEntry.MinLlamaCppTag" /> the node's runtime satisfies, inspects each survivor's GGUF
-    ///     repo, walks the quant ladder with <see cref="MemoryFitEstimator" /> (MoE-aware), and splits the fitting
-    ///     entries into <see cref="CatalogRecommendationResult.Recommended" /> / <see cref="CatalogRecommendationResult.CanRun" />,
-    ///     each ordered tier → fit class → quant quality → recency → id.
+    ///     Filters the catalog to entries whose <see cref="ModelCatalogEntry.UseCases" /> match
+    ///     <paramref name="useCase" /> (<see langword="null" /> = no filter) and whose
+    ///     <see cref="ModelCatalogEntry.MinLlamaCppTag" /> the node's runtime satisfies, then walks each survivor's
+    ///     GGUF repo down the quant ladder with <see cref="MemoryFitEstimator" />.
     /// </summary>
+    /// <remarks>
+    ///     The ladder walk is MoE-aware. Fitting entries split into
+    ///     <see cref="CatalogRecommendationResult.Recommended" /> / <see cref="CatalogRecommendationResult.CanRun" />,
+    ///     each ordered tier -> fit class -> quant quality -> recency -> id. See docs/wiki/07-model-fit.md
+    ///     ("The curated catalog lane (primary recommendation source)").
+    /// </remarks>
     Task<CatalogRecommendationResult> BuildRecommendationsAsync(string? useCase,
         string quantCeiling,
         int ctxTarget,
@@ -29,9 +33,11 @@ public interface ICatalogRecommendationService
 
 /// <summary>
 ///     One catalog entry that fits the node at some quant, with the chosen file and its (fp16-KV) memory-fit estimate.
-///     <see cref="KvQuantAdvisory" /> is a purely advisory second estimate — see its own docs; it never influences
-///     whether this candidate appears (that is always the fp16 <see cref="Estimate" />).
 /// </summary>
+/// <remarks>
+///     <see cref="KvQuantAdvisory" /> is a second, purely advisory estimate: whether this candidate appears at all is
+///     always decided by the fp16 <see cref="Estimate" />.
+/// </remarks>
 public sealed class CatalogRecommendationCandidate
 {
     public required ModelCatalogEntry Entry { get; init; }
@@ -48,10 +54,13 @@ public sealed class CatalogRecommendationCandidate
 
     /// <summary>
     ///     What one token of context costs in KV-cache bytes at the request's context target, computed at
-    ///     <see cref="KvCacheQuant.Q8_0" /> — the chat launch default, so the figure answers "what will this cost me on
-    ///     this node" rather than restating the fp16 ranking estimate. <see langword="null" /> when the header cannot size
-    ///     the KV term; such a candidate sorts LAST on the tiebreak rather than first.
+    ///     <see cref="KvCacheQuant.Q8_0" /> — the chat launch default, so the figure answers what this model costs on
+    ///     this node rather than restating the fp16 ranking estimate.
     /// </summary>
+    /// <value>
+    ///     <see langword="null" /> when the header cannot size the KV term; such a candidate sorts LAST on the
+    ///     tiebreak rather than first.
+    /// </value>
     public long? KvBytesPerTokenAtCtx { get; init; }
 
     /// <summary>
@@ -62,16 +71,17 @@ public sealed class CatalogRecommendationCandidate
 }
 
 /// <summary>
-///     Advisory-only estimate of the memory a candidate would need with an 8-bit (<see cref="KvCacheQuant.Q8_0" />)
-///     KV cache instead of the default fp16 — surfaced so future UI can hint at the headroom a quantized KV cache
-///     could unlock. It is NOT used for membership or ranking: the Recommended/CanRun decision is always computed from
-///     the fp16 <see cref="CatalogRecommendationCandidate.Estimate" />, because the default chat launch path uses an
-///     fp16 KV cache and only the optimizer replay path ever sets a quantized KV type. The savings are an ESTIMATE, not
-///     a guarantee of runtime compatibility: a quantized KV cache requires a flash-attention-capable llama.cpp runtime
-///     and model architecture (<see cref="RequiresFlashAttention" /> is therefore always <see langword="true" />). It is
-///     emitted only when the GGUF header carries every field the KV term needs; with incomplete metadata the KV term is
-///     zero, the "savings" would be nil, and no advisory is produced.
+///     Advisory-only estimate of the memory a candidate would need with an 8-bit
+///     (<see cref="KvCacheQuant.Q8_0" />) KV cache instead of the default fp16, so the UI can hint at the headroom a
+///     quantized KV cache could unlock.
 /// </summary>
+/// <remarks>
+///     It never decides membership or ranking: that is always the fp16 <see cref="CatalogRecommendationCandidate.Estimate" />,
+///     because the chat launch uses an fp16 KV cache and only the optimizer replay path sets a quantized KV type. The
+///     savings are an ESTIMATE, not a compatibility guarantee — a quantized KV cache needs a flash-attention-capable
+///     llama.cpp runtime and architecture, so <see cref="RequiresFlashAttention" /> is always <see langword="true" />.
+///     Emitted only when the header carries every KV-sizing field; incomplete metadata means a zero KV term, nil savings.
+/// </remarks>
 public sealed class KvQuantAdvisory
 {
     /// <summary>The KV-cache quantization the advisory was computed at (always <see cref="KvCacheQuant.Q8_0" />).</summary>

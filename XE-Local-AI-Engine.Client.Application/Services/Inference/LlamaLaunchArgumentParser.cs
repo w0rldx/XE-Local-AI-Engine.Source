@@ -3,39 +3,21 @@ namespace XE_Local_AI_Engine.Client.Services.Inference;
 using System.Text;
 
 /// <summary>
-///     Parses an operator-entered raw <c>llama-server</c> extra-argument string into a token list and enforces the
-///     safety rule the per-model launch-args override carries: the operator may override the bundled sampling/decoding
-///     tuning flags freely (that IS the experiment), but NOT the flags the app manages. Two families are managed and are
-///     rejected on write / stripped on read:
-///     <list type="bullet">
-///         <item>
-///             <b>Reachability</b> — the model path (<c>-m</c>/<c>--model</c>), the loopback bind (<c>--host</c>), and
-///             the allocated port (<c>--port</c>). Overriding any of these breaks the app's ability to reach the process
-///             it launched.
-///         </item>
-///         <item>
-///             <b>Memory-fit placement</b> — the context size, GPU-layer/tensor placement, KV-cache type,
-///             flash-attention, parallel slots, and batch sizes (<c>-c</c>, <c>-ngl</c>, <c>-ts</c>, <c>-ot</c>,
-///             <c>--cpu-moe</c>/<c>--n-cpu-moe</c>, <c>-ctk</c>/<c>-ctv</c>, <c>-fa</c>, <c>--parallel</c>,
-///             <c>-b</c>/<c>-ub</c> and their long aliases). The
-///             capacity/allocation resolver and the launch policy decide these BEFORE admission and record the resulting
-///             footprint in the memory ledger. The override is appended to the spec AFTER that decision, so letting it
-///             change a placement flag would silently invalidate the ledger, defeat the safe-config retry, and
-///             overcommit RAM/VRAM. Re-exploring/re-tuning is the supported way to change placement.
-///         </item>
-///     </list>
-///     Everything else llama.cpp supports (sampling, RoPE, penalties, samplers, grammar, mirostat, …) stays available.
+///     Parses an operator-entered raw <c>llama-server</c> extra-argument string and enforces the override's safety
+///     rule: the operator may freely override the bundled sampling/decoding flags (that IS the experiment), but NOT
+///     the flags the app manages.
 /// </summary>
 /// <remarks>
-///     Tokenizing is a small quote-aware split (single or double quotes group a token; whitespace outside quotes
-///     separates), enough to pass values such as <c>--samplers "top_k;top_p"</c> through as one token. It is deliberately
-///     not a full shell parser — this is a developer experimentation knob, not a command interpreter.
+///     Two managed families are rejected on write and stripped on read — reachability (model path, host, port) and
+///     memory-fit placement — while everything else llama.cpp supports stays available; the full flag lists and the
+///     memory-ledger rationale are in docs/wiki/03-local-runtime-and-providers.md ("2.7 Per-model extra launch
+///     arguments (operator override)"). Tokenizing is a small quote-aware split, enough to pass a value such as
+///     <c>--samplers "top_k;top_p"</c> as one token: a developer experimentation knob, not a shell parser.
 /// </remarks>
 public static class LlamaLaunchArgumentParser
 {
-    // Flags the app manages, so an operator override of any of them is rejected (write) and stripped (read). Two
-    // families (see the class doc): reachability (model path / host / port) and memory-fit placement (context,
-    // GPU-layer/tensor placement, KV type, flash-attention, parallel slots, batch). Ordinal — llama.cpp flags are ASCII.
+    // Flags the app manages: an operator override is rejected on write and stripped on read. Two families (see the class
+    // doc): reachability (model path / host / port) and memory-fit placement. Ordinal — llama.cpp flags are ASCII.
     private static readonly string[] ReservedFlags =
     [
         // Reachability — the app binds these to reach the process it launched.
@@ -48,8 +30,7 @@ public static class LlamaLaunchArgumentParser
         "-ts", "--tensor-split",
         "-ot", "--override-tensor",
         // --cpu-moe/-cmoe and --n-cpu-moe/-ncmoe are -ot by another name: upstream pushes them into the SAME
-        // tensor_buft_overrides list the -ot flag writes (llama.cpp common/arg.cpp), so an override could re-place
-        // every expert tensor after the placement verdict admission already booked a footprint for.
+        // tensor_buft_overrides list -ot writes (llama.cpp common/arg.cpp), so an override could re-place every expert after admission.
         "-cmoe", "--cpu-moe",
         "-ncmoe", "--n-cpu-moe",
         "-ctk", "--cache-type-k",
@@ -59,9 +40,8 @@ public static class LlamaLaunchArgumentParser
         "-b", "--batch-size",
         "-ub", "--ubatch-size",
 
-        // Adapter identity — the registry decides whether a model launches with an adapter and which one, and the
-        // launch-policy fingerprint commits to that choice. An operator-supplied --lora would load weights the
-        // fingerprint, the memory ledger, and the model's registered identity all know nothing about.
+        // Adapter identity — the registry decides whether a model launches with an adapter and which one, and the launch-policy
+        // fingerprint commits to that choice; an operator --lora would load weights the fingerprint, ledger and registry know nothing about.
         "--lora", "--lora-scaled"
     ];
 
@@ -165,9 +145,8 @@ public static class LlamaLaunchArgumentParser
                 continue;
             }
 
-            // Drop a space-separated value that follows a bare reserved flag (e.g. `--host 0.0.0.0`). A `--host=…`
-            // token carries its own value, so nothing extra is consumed. A following token that is itself a flag
-            // (starts with '-') is NOT consumed — the reserved flag had no value.
+            // Drop a space-separated value that follows a bare reserved flag (e.g. `--host 0.0.0.0`); a `--host=…` token
+            // carries its own value. A following token that is itself a flag (starts with '-') is NOT consumed.
             var isBareFlagWithValue = string.Equals(token, reserved, StringComparison.Ordinal)
                                       && index + 1 < tokens.Count
                                       && !tokens[index + 1].StartsWith('-');

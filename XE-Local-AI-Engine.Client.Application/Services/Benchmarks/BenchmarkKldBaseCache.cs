@@ -17,12 +17,12 @@ public sealed class BenchmarkKldCacheOptions
 /// <summary>
 ///     The base-model logit files KL-divergence is measured against: how they are named, how one process avoids
 ///     writing over another's, how a partial write is never mistaken for a finished one, and when the disk says no.
-///     <para>
-///         Every file is named by <see cref="BenchmarkKldCacheKey.Digest" /> rather than by the base model's
-///         fingerprint, because a fingerprint is <c>v1:&lt;hex&gt;</c> and <c>:</c> is not a legal path character on
-///         Windows. A plaintext sidecar carries the key beside it, so the directory stays readable to a human.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Every file is named by <see cref="BenchmarkKldCacheKey.Digest" /> rather than by the base model's fingerprint,
+///     because a fingerprint is <c>v1:&lt;hex&gt;</c> and <c>:</c> is not a legal path character on Windows. A
+///     plaintext sidecar carries the key beside it, so the directory stays readable to a human.
+/// </remarks>
 public sealed class BenchmarkKldBaseCache
 {
     private readonly IFreeSpaceProbe _freeSpace;
@@ -73,13 +73,13 @@ public sealed class BenchmarkKldBaseCache
 
     /// <summary>
     ///     Takes the per-key write lease, or returns <see langword="null" /> when another process holds it.
-    ///     <para>
-    ///         <see cref="FileOptions.DeleteOnClose" /> is what makes this correct across a crash: the OS drops the
-    ///         handle when the process dies, so the next caller's <see cref="FileMode.CreateNew" /> succeeds instead of
-    ///         finding a stale lock nobody will ever release. That crashed-predecessor case is precisely the one a
-    ///         bare "does the file exist" check gets wrong.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <see cref="FileOptions.DeleteOnClose" /> is what makes this correct across a crash: the OS drops the handle
+    ///     when the process dies, so the next caller's <see cref="FileMode.CreateNew" /> succeeds instead of finding a
+    ///     stale lock nobody will ever release. That crashed-predecessor case is precisely the one a bare "does the
+    ///     file exist" check gets wrong.
+    /// </remarks>
     public FileStream? TryAcquireLease(BenchmarkKldCacheKey key)
     {
         ArgumentNullException.ThrowIfNull(key);
@@ -110,11 +110,11 @@ public sealed class BenchmarkKldBaseCache
         return Path.Combine(_root, string.Create(CultureInfo.InvariantCulture, $"{key.FileName}.tmp.{invocationId:N}"));
     }
 
-    /// <summary>
-    ///     Moves a finished temp file into place and writes the plaintext sidecar beside it. The move is
-    ///     same-directory, so it is atomic on every filesystem this app supports: a reader never observes a partial
-    ///     logit file, which is the whole reason the write does not go to the final path directly.
-    /// </summary>
+    /// <summary>Moves a finished temp file into place and writes the plaintext sidecar beside it.</summary>
+    /// <remarks>
+    ///     The move is same-directory, so it is atomic on every filesystem this app supports: a reader never observes
+    ///     a partial logit file, which is the whole reason the write does not go to the final path directly.
+    /// </remarks>
     public void Publish(BenchmarkKldCacheKey key, string tempPath)
     {
         ArgumentNullException.ThrowIfNull(key);
@@ -165,9 +165,8 @@ public sealed class BenchmarkKldBaseCache
                 break;
             }
 
-            // The file is named by the digest's FIRST 32 hex characters, after the "v1:" prefix — so the match is a
-            // slice, not a suffix. A suffix test would never match and eviction would happily delete a file a queued
-            // measurement is on its way to reading.
+            // The file is named by the digest's FIRST 32 hex characters, after the "v1:" prefix, so the match is a slice, not a suffix.
+            // A suffix test would never match and eviction would happily delete a file a queued measurement is on its way to reading.
             var shortDigest = Path.GetFileNameWithoutExtension(file.Name);
             if (inUseDigests.Any(digest => digest.Length >= 35 && digest.AsSpan(3, 32).SequenceEqual(shortDigest))
                 || File.Exists(Path.Combine(_root, string.Concat(file.Name, ".lock"))))

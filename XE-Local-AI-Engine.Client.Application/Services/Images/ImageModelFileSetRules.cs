@@ -3,13 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     Shape rules for an image-model file-set, enforced before a multi-gigabyte download is started. Both rules are
-///     dictated by the launch-argument builder (<c>ImageServerArgumentBuilder</c>): it emits ONE flag per role
-///     (<c>--diffusion-model</c>, <c>--vae</c>, <c>--clip_l</c>, …) and iterates the whole set, so a set with no
-///     diffusion part cannot start and a second file for a role would either pass its flag twice or be downloaded and
-///     then never referenced. Cheap to type by hand and easy to click twice in the repo file picker, so it is rejected
-///     at the boundary rather than surfacing as a model the runtime cannot start.
+///     Shape rules for an image-model file-set, enforced before a multi-gigabyte download is started.
 /// </summary>
+/// <remarks>
+///     Both rules are dictated by the launch-argument builder (<c>ImageServerArgumentBuilder</c>): it emits ONE flag
+///     per role (<c>--diffusion-model</c>, <c>--vae</c>, <c>--clip_l</c>, …) and iterates the whole set, so a set with
+///     no diffusion part cannot start and a second file for a role would either pass its flag twice or be downloaded
+///     and then never referenced. Both are cheap to type by hand and easy to click twice in the repo file picker, so
+///     they are rejected at the boundary rather than surfacing as a model the runtime cannot start.
+/// </remarks>
 public static class ImageModelFileSetRules
 {
     /// <summary>

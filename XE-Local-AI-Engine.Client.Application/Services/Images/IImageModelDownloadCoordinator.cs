@@ -3,24 +3,23 @@ namespace XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     Coordinates operator-driven image-model weight downloads. Mirrors <c>IGgufDownloadCoordinator</c>: the download
-///     runs detached on the application lifetime, and the coordinator keeps the latest sanitized
-///     <see cref="ImageModelDownloadStatus" /> per model name so the operator UI can poll it.
-///     <para>
-///         <b>Why this exists.</b> The start endpoint previously fired
-///         <see cref="IImageModelStore.EnsureModelAsync" /> on a detached task that swallowed every failure into a log
-///         line. A mistyped weight file therefore produced a 202 + "download started" toast and then nothing, forever —
-///         the operator could not distinguish "still fetching 4 GB" from "failed ten minutes ago". Every download now
-///         ends in an observable terminal phase.
-///     </para>
+///     Coordinates operator-driven image-model weight downloads, mirroring <c>IGgufDownloadCoordinator</c>.
 /// </summary>
+/// <remarks>
+///     The download runs detached on the application lifetime, and the coordinator keeps the latest sanitized
+///     <see cref="ImageModelDownloadStatus" /> per model name so the operator UI can poll it. Every download ends in
+///     an observable terminal phase: firing <see cref="IImageModelStore.EnsureModelAsync" /> on a detached task that
+///     swallowed failures into a log line would let a mistyped weight file produce a 202 and then nothing forever,
+///     with the operator unable to tell "still fetching 4 GB" from "failed ten minutes ago".
+/// </remarks>
 public interface IImageModelDownloadCoordinator
 {
-    /// <summary>
-    ///     Begins (or rejoins) a background download of <paramref name="request" />'s file-set. Returns once the download
-    ///     is registered; the transfer itself outlives the call. A download already in flight for the same model name is
-    ///     rejoined (idempotent) rather than duplicated, so a double-submit cannot start two transfers.
-    /// </summary>
+    /// <summary>Begins (or rejoins) a background download of <paramref name="request" />'s file-set.</summary>
+    /// <remarks>
+    ///     Returns once the download is registered; the transfer itself outlives the call. A download already in
+    ///     flight for the same model name is rejoined (idempotent) rather than duplicated, so a double-submit cannot
+    ///     start two transfers.
+    /// </remarks>
     ImageModelDownloadTicket Start(ImageModelRequest request);
 
     /// <summary>Returns the latest sanitized status for <paramref name="modelName" />, or <see langword="null" /> when unknown.</summary>

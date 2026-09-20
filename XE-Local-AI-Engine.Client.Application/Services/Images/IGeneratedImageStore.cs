@@ -1,11 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Images;
 
-/// <summary>
-///     Durable encrypted-at-rest store for generated image blobs. The bytes are encrypted (AES-256-GCM, node key) and
-///     written under <c>{INodeDataDirectory.Root}/generated-images/{jobId}/{imageId}.png</c>; a <c>generated_images</c>
-///     metadata row (mime, dimensions, storage path, size) is persisted alongside. Mirrors the uploaded-file store: no
-///     plaintext image ever lands on disk. Singleton — it opens its own DbContext scope per operation.
-/// </summary>
+/// <summary>Durable encrypted-at-rest store for generated image blobs.</summary>
+/// <remarks>
+///     The bytes are encrypted (AES-256-GCM, node key) and written under
+///     <c>{INodeDataDirectory.Root}/generated-images/{jobId}/{imageId}.png</c>; a <c>generated_images</c> metadata row
+///     (mime, dimensions, storage path, size) is persisted alongside. Mirrors the uploaded-file store: no plaintext
+///     image ever lands on disk. Singleton — it opens its own DbContext scope per operation.
+/// </remarks>
 public interface IGeneratedImageStore
 {
     /// <summary>
@@ -22,14 +23,14 @@ public interface IGeneratedImageStore
 
     /// <summary>
     ///     Best-effort removal of the encrypted blobs a deleted job's rows pointed at, plus that job's now-empty
-    ///     directory. Called AFTER the rows are gone, so a file that cannot be unlinked is logged and left behind
-    ///     rather than failing the delete — nothing here resurrects the job.
-    ///     <para>
-    ///         Every path is proved to resolve under the image blob root first; one that does not is skipped with a
-    ///         warning. The stored paths are server-computed, but this is the deletion boundary and it enforces that
-    ///         invariant itself rather than trusting the column.
-    ///     </para>
+    ///     directory.
     /// </summary>
+    /// <remarks>
+    ///     Called AFTER the rows are gone, so a file that cannot be unlinked is logged and left behind rather than
+    ///     failing the delete — nothing here resurrects the job. Every path is proved to resolve under the image blob
+    ///     root first; one that does not is skipped with a warning. The stored paths are server-computed, but this is
+    ///     the deletion boundary and it enforces that invariant itself rather than trusting the column.
+    /// </remarks>
     void RemoveJobBlobs(Guid jobId, IReadOnlyList<string> storagePaths);
 }
 

@@ -4,25 +4,24 @@ using System.Threading.Channels;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 
 /// <summary>
-///     Default <see cref="IKnowledgeIngestionDispatcher" />. Owns the background ingestion queue as a BOUNDED
-///     single-reader <see cref="Channel{T}" /> of document ids. Singleton: the queue outlives any request scope. The
-///     downstream concurrency bound is enforced by the worker's <c>SemaphoreSlim</c> (see
-///     <see cref="KnowledgeIngestionWorker" />); the queue's own capacity bound is the admission control that keeps a
-///     burst of uploads from accreting unbounded pending ids. Admission is non-blocking: a write that arrives while the
-///     queue is full is rejected (<see cref="KnowledgeIngestionEnqueueResult.QueueFull" />) rather than dropped or awaited,
-///     so the upload/reindex caller can return a retryable busy response instead of holding the request or growing the
-///     backlog. Admission never queues the same document concurrently. If the same id is admitted while already queued or
-///     in flight, one deferred follow-up run is remembered; this is required when a repository update reuses the id while
-///     the old revision is embedding. The worker calls <see cref="MarkCompleted" /> to schedule that deferred run. Accept /
-///     reject counts and the live queue depth are published on the <c>XE.Node</c> meter.
+///     Default <see cref="IKnowledgeIngestionDispatcher" />: owns the background ingestion queue as a BOUNDED
+///     single-reader <see cref="Channel{T}" /> of document ids, as a singleton outliving any request scope.
 /// </summary>
+/// <remarks>
+///     The downstream concurrency bound belongs to <see cref="KnowledgeIngestionWorker" />'s <c>SemaphoreSlim</c>; this
+///     queue's capacity bound is the admission control. Admission is non-blocking — a write arriving while the queue is
+///     full is rejected with <see cref="KnowledgeIngestionEnqueueResult.QueueFull" /> — and never queues one document
+///     twice: an id admitted while queued or in flight remembers ONE deferred run, scheduled by the worker via
+///     <see cref="MarkCompleted" />, as a repository update reusing an id mid-embedding requires.
+/// </remarks>
 public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
 {
-    /// <summary>
-    ///     Maximum number of documents that may be pending admission at once. The ids are tiny (a Guid each), so this
-    ///     bounds pending admissions, not memory; it caps how far the upload endpoint can run ahead of the single-document
-    ///     ingestion worker before uploads are told to retry, keeping a burst from deferring an unbounded amount of work.
-    /// </summary>
+    /// <summary>Maximum number of documents that may be pending admission at once.</summary>
+    /// <remarks>
+    ///     The ids are tiny, a Guid each, so this bounds pending admissions rather than memory: it caps how far the upload
+    ///     endpoint can run ahead of the single-document ingestion worker before uploads are told to retry, keeping a
+    ///     burst from deferring an unbounded amount of work.
+    /// </remarks>
     public const int Capacity = 256;
 
     private readonly Channel<Guid> _queue = Channel.CreateBounded<Guid>(new BoundedChannelOptions(Capacity)

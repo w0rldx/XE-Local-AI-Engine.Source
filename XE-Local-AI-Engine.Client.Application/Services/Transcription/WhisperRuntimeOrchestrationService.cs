@@ -4,15 +4,16 @@ using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
-///     The transcription runtime and source-build Operator endpoints' only door onto the whisper.cpp provider: the
-///     backend selection behind the model recommendation, the prerequisite checklist, the start / cancel / remove /
-///     status verbs of the managed source build, and the activity snapshot a <c>409 runtime-busy</c> envelope carries.
-///     An endpoint is the HTTP edge and may not take a concrete provider's contract itself (the endpoint-dependency
-///     rule), so each call arrives here unchanged — this type adds no policy of its own, decides nothing about
-///     refusals, outcomes or the OS gate, and re-exposes only the members those six endpoints call. The host-start
-///     recovery and shutdown drain of the build service, and the activity gate's leases, stay off this surface
-///     deliberately: no endpoint asks for them.
+///     The transcription runtime and source-build Operator endpoints' only door onto the whisper.cpp provider:
+///     backend selection, the prerequisite checklist, and the managed source build's verbs.
 /// </summary>
+/// <remarks>
+///     It also carries the backend selection behind the model recommendation, the start / cancel / remove / status verbs, and
+///     the activity snapshot a <c>409 runtime-busy</c> envelope carries. An endpoint is the HTTP edge and may not take a
+///     concrete provider's contract itself (the endpoint-dependency rule), so each call arrives here unchanged: this type adds
+///     no policy, decides nothing about refusals, outcomes or the OS gate, and re-exposes only what those six endpoints call.
+///     The build service's host-start recovery and shutdown drain, and the activity gate's leases, stay off deliberately.
+/// </remarks>
 public sealed class WhisperRuntimeOrchestrationService
 {
     private readonly IWhisperRuntimeActivityGate _activityGate;

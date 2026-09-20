@@ -14,13 +14,13 @@ public interface IDatasetExportService
 
 /// <summary>
 ///     Dataset export. The canonical form is template-agnostic on purpose: the base model's chat template is applied
-///     inside the trainer, never here. Rejected samples are excluded — a rejection is an operator's decision that the
-///     sample must not train anything.
-///     <para>
-///         ponytail: the whole export is built in memory. A definition is capped at 2000 samples, so the ceiling is a few
-///         MB; stream it if that cap is ever raised.
-///     </para>
+///     inside the trainer, never here.
 /// </summary>
+/// <remarks>
+///     Rejected samples are excluded — a rejection is an operator's decision that the sample must not train
+///     anything. ponytail: the whole export is built in memory. A definition is capped at 2000 samples, so the
+///     ceiling is a few MB; stream it if that cap is ever raised.
+/// </remarks>
 public sealed class DatasetExportService : IDatasetExportService
 {
     private const string ToolCallOpen = "<tool_call>";

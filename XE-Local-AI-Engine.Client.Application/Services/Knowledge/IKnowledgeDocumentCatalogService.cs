@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Read + light-admin surface over the <c>knowledge_documents</c> catalog for the management endpoints:
-///     lists documents, reads one document's detail with its chunks, and resets a document (or every stale-model document)
-///     to <see cref="KnowledgeDocumentStatus.Pending" /> for a reindex. Scoped: it reads/writes through the request-scoped
-///     <c>NodeChatDbContext</c> connection. Display names are decrypted server-side for the owning operator — that is the
-///     one place the encrypted <c>original_file_name</c> is revealed, and only over this authenticated surface.
+///     Read + light-admin surface over the <c>knowledge_documents</c> catalog for the management endpoints: lists
+///     documents, reads one document's detail with its chunks, and resets documents to
+///     <see cref="KnowledgeDocumentStatus.Pending" /> for a reindex.
 /// </summary>
+/// <remarks>
+///     Scoped: reads and writes through the request-scoped <c>NodeChatDbContext</c> connection. Display names are
+///     decrypted server-side for the owning operator — the one place the encrypted <c>original_file_name</c> is
+///     revealed, and only over this authenticated surface.
+/// </remarks>
 public interface IKnowledgeDocumentCatalogService
 {
     /// <summary>Lists every document (newest first) as a management summary. Never returns chunk content.</summary>
@@ -44,37 +47,44 @@ public interface IKnowledgeDocumentCatalogService
 
     /// <summary>
     ///     Resets every INDEXED document whose stored embedding/vector identity or parser/chunker version differs from
-    ///     the current pipeline to <see cref="KnowledgeDocumentStatus.Pending" /> and returns its id, so the caller can
-    ///     enqueue a corpus-wide reindex that rebuilds only stale documents.
-    ///     Non-indexed rows carry only the upload-time placeholder model name and are never treated as stale.
+    ///     the current pipeline to <see cref="KnowledgeDocumentStatus.Pending" /> and returns its id.
     /// </summary>
+    /// <remarks>
+    ///     The caller enqueues a corpus-wide reindex that rebuilds only stale documents. Non-indexed rows carry only the
+    ///     upload-time placeholder model name and are never treated as stale.
+    /// </remarks>
     Task<IReadOnlyList<Guid>> ResetStaleDocumentsToPendingAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Startup-recovery reset: moves every document left in a NON-terminal status (anything other than
-    ///     <see cref="KnowledgeDocumentStatus.Indexed" /> or <see cref="KnowledgeDocumentStatus.Failed" />) back to
-    ///     <see cref="KnowledgeDocumentStatus.Pending" /> (clearing any partial failure reason) and returns their ids, so
-    ///     the background worker can re-dispatch documents whose in-memory queue entry was lost to a crash or hard stop.
-    ///     Terminal rows are left untouched.
+    ///     Startup-recovery reset: moves every document left in a NON-terminal status back to
+    ///     <see cref="KnowledgeDocumentStatus.Pending" />, clearing any partial failure reason, and returns their ids.
     /// </summary>
+    /// <remarks>
+    ///     Non-terminal means anything other than <see cref="KnowledgeDocumentStatus.Indexed" /> or
+    ///     <see cref="KnowledgeDocumentStatus.Failed" />; terminal rows are left untouched. The background worker then
+    ///     re-dispatches documents whose in-memory queue entry was lost to a crash or hard stop.
+    /// </remarks>
     Task<IReadOnlyList<Guid>> ResetNonTerminalToPendingAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Lists the ids of every document currently in <see cref="KnowledgeDocumentStatus.Pending" /> WITHOUT mutating any
-    ///     row. Because the ingestion pipeline flips a document out of Pending the instant it starts, a Pending row is one
-    ///     that has not begun ingestion — either freshly uploaded or stranded when a full queue rejected its admission. The
-    ///     background worker uses this as its drain-sweep source to re-admit stranded documents as queue capacity frees,
-    ///     without the reset semantics (and in-progress clobbering) of <see cref="ResetNonTerminalToPendingAsync" />.
+    ///     Lists the ids of every document currently in <see cref="KnowledgeDocumentStatus.Pending" /> WITHOUT mutating
+    ///     any row.
     /// </summary>
+    /// <remarks>
+    ///     The pipeline flips a document out of Pending the instant ingestion starts, so a Pending row has not begun
+    ///     ingestion — freshly uploaded, or stranded when a full queue rejected its admission. The background worker uses
+    ///     this as its drain-sweep source to re-admit stranded documents as queue capacity frees, without the reset
+    ///     semantics — and in-progress clobbering — of <see cref="ResetNonTerminalToPendingAsync" />.
+    /// </remarks>
     Task<IReadOnlyList<Guid>> ListPendingDocumentIdsAsync(CancellationToken cancellationToken);
 }
 
-/// <summary>
-///     Management summary of one knowledge-base document. <see cref="DisplayName" /> is the decrypted original file name
-///     (owner-only, over the authenticated management surface). <see cref="StaleModel" /> is <see langword="true" /> when
-///     the document is Indexed but was embedded with a model other than the currently resolved one, so the UI can offer a
-///     reindex.
-/// </summary>
+/// <summary>Management summary of one knowledge-base document.</summary>
+/// <remarks>
+///     <see cref="DisplayName" /> is the decrypted original file name, owner-only over the authenticated management
+///     surface. <see cref="StaleModel" /> is <see langword="true" /> when the document is Indexed but was embedded with
+///     a model other than the currently resolved one, so the UI can offer a reindex.
+/// </remarks>
 public sealed class KnowledgeDocumentSummary
 {
     public required Guid DocumentId { get; init; }

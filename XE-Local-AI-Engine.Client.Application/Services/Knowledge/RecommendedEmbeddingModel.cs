@@ -6,47 +6,21 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     The single, code-grounded recommended embedding model for the knowledge base: Nomic's
-///     <c>nomic-embed-text-v1.5</c>, served from the first-party <c>nomic-ai</c> GGUF packaging at <c>F16</c> (~274&#160;MB).
-///     Without an embedding model installed, the knowledge base cannot index ANYTHING — ingestion fails at
-///     <see cref="KnowledgeChunkEmbedder" /> with a content-free "not available" reason — so this exists to give a fresh
-///     node a one-click way out, exactly as <see cref="RecommendedRerankerModel" /> does for the (strictly optional)
-///     reranker. It resolves through the SAME operator HF download path as any other GGUF
-///     (<see cref="IGgufModelStore.EnsureModelAsync" />), and the resulting name carries an <c>embed</c> fragment so
-///     <c>ModelKindDetector.IsEmbeddingName</c> classifies it as <see cref="ModelKind.Embedding" /> and keeps it out of
-///     the chat picker.
+///     <c>nomic-embed-text-v1.5</c>, from the first-party <c>nomic-ai</c> GGUF packaging at <c>F16</c> (~274&#160;MB).
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Why this exact repository, and not merely "some embedding model".</b>
-///         <c>KnowledgeEmbeddingVectorPolicy</c> applies the versioned Nomic Matryoshka-512 transform only when the
-///         resolved model name contains <c>nomic-embed-text-v1.5</c> (<c>KnowledgeEmbeddingVectorPolicy.cs:146</c>);
-///         every other model stays at its native width. Recommending the v1.5 repo therefore lands the node on the
-///         vector policy the defaults (<see cref="KnowledgeBaseOptions.EmbeddingVectorMode" /> =
-///         <see cref="KnowledgeEmbeddingVectorMode.Matryoshka512" />) were designed around. A v2 or a different
-///         publisher would silently fall through to Native width — still functional, but not what the shipped defaults
-///         assume.
-///     </para>
-///     <para>
-///         <b>Why F16 rather than a small quant.</b> This is a ~137M-parameter model, so F16 is only ~274&#160;MB — the
-///         quantization saving is worth a few hundred megabytes at most, while embedding quality degrades in a way that
-///         is invisible at query time (retrieval silently returns worse chunks rather than failing). For a retrieval
-///         backbone that every KB search depends on, the full-precision file is the right default. Live-verified on
-///         2026-07-31: <c>nomic-ai/nomic-embed-text-v1.5-GGUF:F16</c> downloads, spawns an embedding
-///         <c>llama-server</c>, indexes, and retrieves correctly.
-///     </para>
-///     <para>
-///         The download request leaves <see cref="GgufModelRequest.Role" /> at <see cref="GgufRole.Embedding" /> so the
-///         supervisor spawns it with the embedding-role flags (<c>--embeddings --pooling mean</c>) rather than the chat
-///         ones. This is the one place the embedding recommendation legitimately differs from the reranker, which has no
-///         role of its own and is identified by name.
-///     </para>
+///     Without an embedding model installed the knowledge base cannot index ANYTHING — ingestion fails at
+///     <see cref="KnowledgeChunkEmbedder" /> with a content-free "not available" reason — so this gives a fresh node a
+///     one-click way out through the same operator HF download path as any other GGUF
+///     (<see cref="IGgufModelStore.EnsureModelAsync" />). Why this repository, this quant and this role:
+///     <c>docs/wiki/15-knowledge-base.md</c> ("Recommended embedding and reranker models").
 /// </remarks>
 public static class RecommendedEmbeddingModel
 {
     /// <summary>Hugging Face repository hosting the GGUF-packaged embedding model.</summary>
     public const string RepoId = "nomic-ai/nomic-embed-text-v1.5-GGUF";
 
-    /// <summary>Pinned quant — full precision, because the whole file is only ~274 MB (see the remarks).</summary>
+    /// <summary>Pinned quant — full precision, because the whole file is only ~274 MB.</summary>
     public const string Quant = "F16";
 
     /// <summary>
@@ -68,19 +42,13 @@ public static class RecommendedEmbeddingModel
 
     /// <summary>
     ///     The installed model that already makes this node able to embed, or <see langword="null" /> when none does.
-    ///     Reads the LOCAL registry only — no network resolve.
-    ///     <para>
-    ///         Two steps, and the order is the point. The recommended repo wins when present so the reported identity is
-    ///         stable; failing that, ANY installed embedding-named model counts, because that is exactly what
-    ///         <c>EmbeddingModelResolver</c> would pick, so downloading a second embedder would change nothing but the
-    ///         bandwidth bill. The fallback is ordered by name so a node with several embedders reports the same one on
-    ///         every call rather than whatever the registry happened to list first.
-    ///     </para>
-    ///     <para>
-    ///         Deliberately broader than <see cref="RecommendedRerankerModel.ResolveExistingAsync" />: selecting a
-    ///         reranker is an explicit operator act, whereas the question here is only "can this node embed at all".
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Reads the LOCAL registry only, with no network resolve: the recommended repo wins when present, else any
+    ///     installed embedding-named model, ordered by name. Why that order, and why it is broader than
+    ///     <see cref="RecommendedRerankerModel.ResolveExistingAsync" />: <c>docs/wiki/15-knowledge-base.md</c>
+    ///     ("Recommended embedding and reranker models").
+    /// </remarks>
     public static async Task<LocalModelDescriptor?> ResolveExistingAsync(IGgufModelStore modelStore, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(modelStore);
@@ -95,10 +63,12 @@ public static class RecommendedEmbeddingModel
     }
 
     /// <summary>
-    ///     True when an installed model name IS the recommended embedding model — the canonical <c>{repo}:{quant}</c>
-    ///     identity or any quant of the same repo (<c>{repo}:*</c>). Lets the endpoint report "already installed"
-    ///     against the local registry without a network resolve.
+    ///     True when an installed model name IS the recommended embedding model: the canonical <c>{repo}:{quant}</c>
+    ///     identity, or any quant of the same repo (<c>{repo}:*</c>).
     /// </summary>
+    /// <remarks>
+    ///     Lets the endpoint report "already installed" against the local registry without a network resolve.
+    /// </remarks>
     public static bool Matches(string? modelName)
     {
         if (string.IsNullOrWhiteSpace(modelName))

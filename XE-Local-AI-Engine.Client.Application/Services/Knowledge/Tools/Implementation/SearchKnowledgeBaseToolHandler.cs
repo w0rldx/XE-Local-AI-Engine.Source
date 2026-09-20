@@ -6,13 +6,15 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     <see cref="IClientLocalToolHandler" /> for <c>search_knowledge_base</c> (ClientLocal). Despite the
-///     <c>ClientLocal</c> location label, this executes ENTIRELY on the node inside the agent's function-invocation
-///     pipeline — JSON-in / JSON-out, no client round-trip. It resolves the scoped <see cref="IKnowledgeSearchService" />
-///     from a FRESH DI scope per call (the handler is a Singleton captured by the tool registry, so it cannot hold a
-///     scoped dependency directly). Read-only, so it auto-runs (<c>RequiresApproval => false</c>); gated by
-///     <c>KnowledgeBase:AgentToolsEnabled</c>.
+///     <see cref="IClientLocalToolHandler" /> for <c>search_knowledge_base</c> (ClientLocal), which despite the location
+///     label executes ENTIRELY on the node inside the agent's function-invocation pipeline.
 /// </summary>
+/// <remarks>
+///     JSON-in, JSON-out, with no client round-trip. It resolves the scoped <see cref="IKnowledgeSearchService" /> from a
+///     FRESH DI scope per call, because the handler is a Singleton captured by the tool registry and cannot hold a scoped
+///     dependency directly. Read-only, so it auto-runs without approval; gated by
+///     <c>KnowledgeBase:AgentToolsEnabled</c>.
+/// </remarks>
 internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -22,10 +24,13 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
     private const int MaxLimit = 20;
 
     /// <summary>
-    ///     Upper bound on the total hit-content characters serialized into one response, so a wide search (up to
-    ///     <see cref="MaxLimit" /> neighbor-expanded hits) cannot dump an unbounded payload into the model context.
-    ///     Mirrors <c>ReadDocumentToolHandler.MaxContentChars</c>; truncation is flagged in the payload.
+    ///     Upper bound on the total hit-content characters serialized into one response, so a wide search cannot dump an
+    ///     unbounded payload into the model context.
     /// </summary>
+    /// <remarks>
+    ///     A search may return up to <see cref="MaxLimit" /> neighbor-expanded hits. Mirrors
+    ///     <c>ReadDocumentToolHandler.MaxContentChars</c>; truncation is flagged in the payload.
+    /// </remarks>
     private const int MaxContentChars = 50_000;
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -142,10 +147,8 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
                 collectionId = hit.CollectionId,
                 documentId = hit.DocumentId,
                 chunkId = hit.ChunkId,
-                // The attacker-controlled document metadata (title, section, source) AND the chunk body are DATA, not
-                // instructions: fence them TOGETHER inside one nonce-delimited untrusted region so neither an injection
-                // sentence in the body nor a crafted title/section can read as a system directive or forge the fence.
-                // The budget above still measures raw hit.Content length.
+                // The attacker-controlled metadata (title, section, source) AND the chunk body are DATA, not instructions:
+                // fence them TOGETHER in one nonce-delimited region, so neither can read as a directive or forge the fence.
                 contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
                 content = UntrustedContentFraming.WrapDocument(hit.Content,
                 [

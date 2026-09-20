@@ -1,12 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 
-/// <summary>
-///     Pulls the candidate program out of a free-form answer. The ORDER is the contract, because a model that writes
-///     prose around two fenced blocks may otherwise have the wrong one taken: a <c>```python</c> fence first, then any
-///     fence, then the whole trimmed text. The extracted text is stored in the attempt's verifier evidence, so a wrong
-///     extraction is visible rather than silent — and a rubric that cannot tolerate the ambiguity constrains the answer
-///     format with a <c>constraint</c> criterion, which is the real fix.
-/// </summary>
+/// <summary>Pulls the candidate program out of a free-form answer.</summary>
+/// <remarks>
+///     The ORDER is the contract, because a model that writes prose around two fenced blocks may otherwise have the
+///     wrong one taken: a <c>```python</c> fence first, then any fence, then the whole trimmed text. The extracted
+///     text is stored in the attempt's verifier evidence, so a wrong extraction is visible rather than silent — and a
+///     rubric that cannot tolerate the ambiguity constrains the answer format with a <c>constraint</c> criterion,
+///     which is the real fix.
+/// </remarks>
 internal static class BenchmarkPythonCodeExtraction
 {
     /// <summary>Take the first Python-tagged fence, else the first fence, else the whole answer.</summary>

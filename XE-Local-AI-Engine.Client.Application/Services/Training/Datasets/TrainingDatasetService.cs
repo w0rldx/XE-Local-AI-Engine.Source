@@ -3,11 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     The dataset and sample endpoints' only door onto the training dataset store: the dataset list, the dataset read,
-///     the dataset delete, the sample page and the sample review verb. Each call arrives here unchanged — this type adds
-///     no policy of its own, because the definition service owns definitions and the generation service owns creation
-///     and cancel.
+///     The dataset and sample endpoints' only door onto the training dataset store: the dataset list, the dataset
+///     read, the dataset delete, the sample page and the sample review verb.
 /// </summary>
+/// <remarks>
+///     Each call arrives here unchanged — this type adds no policy of its own, because the definition service owns
+///     definitions and the generation service owns creation and cancel.
+/// </remarks>
 public sealed class TrainingDatasetService
 {
     private readonly ITrainingDatasetStore _store;

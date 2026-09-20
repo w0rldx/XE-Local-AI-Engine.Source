@@ -5,18 +5,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Work one launch REQUEST does once and every cell of it would otherwise repeat: the llama-server capability
-///     probe, the variant it settles on, and the verified installed-model lease per model name. A batch of ten cells
-///     used to run ten probes and ten full re-verifications of the same files, serially, before the endpoint answered.
-///     <para>
-///         Holding the leases for the request's lifetime is deliberate, not just cheaper: a model that changed halfway
-///         through a matrix would give the later cells a different snapshot from the earlier ones, which is exactly the
-///         variable a matrix exists to hold still. One probe for the same reason — asking twice can straddle a runtime
-///         swap and freeze two different answers into one batch.
-///     </para>
-///     <para>
-///         Not thread-safe: one scope belongs to one request, which processes its cells in order.
-///     </para>
+///     probe, the variant it settles on, and the verified installed-model lease per model name.
 /// </summary>
+/// <remarks>
+///     Without it a batch of ten cells runs ten probes and ten full re-verifications of the same files, serially.
+///     Holding the leases for the request's lifetime is deliberate, not just cheaper: a model that changed halfway
+///     through a matrix gives the later cells a different snapshot from the earlier ones, which is exactly the
+///     variable a matrix exists to hold still, and one probe for the same reason. Not thread-safe: one scope belongs
+///     to one request, which processes its cells in order.
+/// </remarks>
 public sealed class BenchmarkFreezeScope : IAsyncDisposable
 {
     private readonly Dictionary<string, IBenchmarkInstalledModelLease> _leases = new(StringComparer.OrdinalIgnoreCase);

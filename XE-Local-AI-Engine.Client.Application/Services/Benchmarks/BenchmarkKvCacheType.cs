@@ -8,16 +8,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 ///     llama-server launch arguments.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The allow-list is <c>f16 | q8_0 | q4_0</c>, symmetric by construction (K == V). "Auto" is the absence of a
-///         request — <see langword="null" /> on the wire — and is resolved to a concrete type at freeze, never here.
-///     </para>
-///     <para>
-///         <see cref="Apply" /> encodes the flag rule: <c>f16</c> emits no <c>-ctk/-ctv</c> and leaves flash attention
-///         at the runtime's own default; a quantized type sets both cache types and requires <c>-fa on</c>. Frozen
-///         placement (<c>-c/-ngl/-ts/-ot</c>) is carried through untouched, so changing the KV type never re-fits the
-///         run.
-///     </para>
+///     The allow-list is <c>f16 | q8_0 | q4_0</c>, symmetric by construction (K == V). "Auto" is the absence of a
+///     request — <see langword="null" /> on the wire — and is resolved to a concrete type at freeze, never here.
+///     <see cref="Apply" /> encodes the flag rule: <c>f16</c> emits no <c>-ctk/-ctv</c> and leaves flash attention at
+///     the runtime's own default, a quantized type sets both cache types and requires <c>-fa on</c>. Frozen placement
+///     (<c>-c/-ngl/-ts/-ot</c>) is carried through untouched, so changing the KV type never re-fits the run.
 /// </remarks>
 public static class BenchmarkKvCacheType
 {
@@ -42,11 +37,13 @@ public static class BenchmarkKvCacheType
 
     /// <summary>
     ///     Canonicalizes a requested type: trimmed and lowercased, against the shared allow-list in
-    ///     <see cref="LlamaServerKvCacheTypes" />. A missing/blank request is Auto (<paramref name="normalized" /> is
-    ///     <see langword="null" />) and is valid — that resolution belongs to THIS caller, not to the shared authority,
-    ///     which answers validity only; an unrecognized value returns <see langword="false" /> so the endpoint can
-    ///     answer 400.
+    ///     <see cref="LlamaServerKvCacheTypes" />.
     /// </summary>
+    /// <remarks>
+    ///     A missing or blank request is Auto (<paramref name="normalized" /> is <see langword="null" />) and is
+    ///     valid — that resolution belongs to THIS caller, not to the shared authority, which answers validity only.
+    ///     An unrecognized value returns <see langword="false" /> so the endpoint can answer 400.
+    /// </remarks>
     public static bool TryNormalize(string? requested, out string? normalized) =>
         LlamaServerKvCacheTypes.TryNormalize(requested, out normalized);
 

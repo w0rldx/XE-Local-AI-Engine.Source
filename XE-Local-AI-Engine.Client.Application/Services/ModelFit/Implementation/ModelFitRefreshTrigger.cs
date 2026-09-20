@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 
 /// <summary>
 ///     Default <see cref="IModelFitRefreshTrigger" />: loads the scheduled job definition, guards that it is a
-///     <c>model-recommendation-check</c> job, then delegates firing to the scheduler management service. It never runs
-///     llmfit — the scheduler dispatcher and the model-fit handler own the run.
+///     <c>model-recommendation-check</c> job, then delegates firing to the scheduler management service.
 /// </summary>
+/// <remarks>It never runs llmfit — the scheduler dispatcher and the model-fit handler own the run.</remarks>
 public sealed class ModelFitRefreshTrigger : IModelFitRefreshTrigger
 {
     /// <summary>The minimum context-window target the advisor's KV-cache fit can be sized against (mirrors the handler schema).</summary>
@@ -40,10 +40,8 @@ public sealed class ModelFitRefreshTrigger : IModelFitRefreshTrigger
             throw new ScheduledJobValidationException("The scheduled job is not a model-recommendation-check job.");
         }
 
-        // Widen the run ONLY by the whitelisted keys, each validated exactly as the run validator would BEFORE anything
-        // fires — never free text into the run. Empty/null overrides fire the definition's baked values unchanged
-        // (back-compat). The overrides ride the per-fire JobDataMap; the dispatcher merges only these whitelisted keys
-        // over the stored parameters.
+        // Widen the run ONLY by the whitelisted keys, each validated exactly as the run validator would BEFORE anything fires:
+        // never free text. Empty overrides fire the baked values; the rest ride the per-fire JobDataMap the dispatcher merges.
         var parameterOverrides = new Dictionary<string, string>(StringComparer.Ordinal);
 
         if (!string.IsNullOrWhiteSpace(useCaseOverride))
@@ -83,9 +81,8 @@ public sealed class ModelFitRefreshTrigger : IModelFitRefreshTrigger
             parameterOverrides[SchedulerJobKeys.ModelFitCtxTargetOverrideKey] = ctx.ToString(CultureInfo.InvariantCulture);
         }
 
-        // Delegate to the scheduler; it performs its own enabled/deleted/forbidden/unscheduled validation and fires the
-        // existing definition. No override supplied → pass null so the dispatcher takes the unchanged cron/back-compat
-        // path. The dispatcher → model-fit handler does the work and owns the run history.
+        // Delegate to the scheduler; it does its own enabled/deleted/forbidden/unscheduled validation and fires the existing
+        // definition. No override supplied → pass null so the dispatcher takes the unchanged cron path and owns the run history.
         await _scheduledJobManagementService.TriggerNowAsync(scheduledJobId,
             parameterOverrides.Count == 0 ? null : parameterOverrides,
             cancellationToken);

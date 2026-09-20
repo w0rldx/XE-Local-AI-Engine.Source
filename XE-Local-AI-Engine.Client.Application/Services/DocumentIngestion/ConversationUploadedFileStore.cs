@@ -7,14 +7,14 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
-/// <summary>
-///     Durable per-conversation uploaded-file store. Metadata rows are written/read over the raw-SQL path (matching the
-///     node chat persistence path) with the display name encrypted via the matching <see cref="NodeChatDbContext" />
-///     helper; the bytes and cached extracted Markdown are encrypted on disk by <see cref="UploadedFileBlobProtector" />
-///     under <c>INodeDataDirectory.Root/uploaded-files/conversations/</c>. The store is a singleton and opens a fresh
-///     scope per database operation (uploaded files have unique ids, so no per-conversation write serialization is
-///     required).
-/// </summary>
+/// <summary>Durable per-conversation uploaded-file store.</summary>
+/// <remarks>
+///     Metadata rows are written and read over the raw-SQL path, matching the node chat persistence path, with the display
+///     name encrypted via the matching <see cref="NodeChatDbContext" /> helper; the bytes and cached extracted Markdown are
+///     encrypted on disk by <see cref="UploadedFileBlobProtector" /> under
+///     <c>INodeDataDirectory.Root/uploaded-files/conversations/</c>. The store is a singleton opening a fresh scope per
+///     database operation: uploaded files have unique ids, so no per-conversation write serialization is required.
+/// </remarks>
 public sealed class ConversationUploadedFileStore : IConversationUploadedFileStore
 {
     private const string RootFolderName = "uploaded-files";
@@ -156,9 +156,8 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
 
     public async Task<ReadOnlyMemory<byte>?> ReadBytesAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken)
     {
-        // The bytes blob is server-named "{fileId:D}{extension}"; the extension is not passed in here, so locate the blob
-        // by its unique file-id prefix (the only sibling sharing it is the ".md" companion, which is excluded). No DB
-        // round-trip on the send hot path.
+        // The bytes blob is server-named from the file id plus its extension, which is not passed in here, so locate it by
+        // the unique file-id prefix, excluding the ".md" companion. No DB round-trip on the send hot path.
         var bytesPath = FindBytesFilePath(ConversationDirectory(conversationId), fileId);
         if (bytesPath is null)
         {
@@ -302,9 +301,8 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         return Path.Combine(conversationDirectory, string.Concat(fileId.ToString("D"), ".md"));
     }
 
-    // Locates the on-disk bytes blob for a file by its unique "{fileId:D}.*" name, excluding the ".md" companion. Returns
-    // null when the directory or blob is absent, or when the blob was persisted with no extension (images always carry
-    // one, so this only skips the degenerate no-extension upload — which has no image bytes to read anyway).
+    // Locates the on-disk bytes blob for a file by its unique file-id name, excluding the ".md" companion; null when the
+    // directory, the blob, or its extension is absent — images always carry one, so only a degenerate upload is skipped.
     private static string? FindBytesFilePath(string conversationDirectory, Guid fileId)
     {
         if (!Directory.Exists(conversationDirectory))

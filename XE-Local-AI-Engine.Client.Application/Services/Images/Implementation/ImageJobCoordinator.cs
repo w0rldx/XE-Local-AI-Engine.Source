@@ -8,39 +8,29 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
-///     Default <see cref="IImageJobCoordinator" />. Mirrors the GGUF download coordinator: a per-job in-flight
-///     <see cref="CancellationTokenSource" /> registry, throttled coarse status push, and detached run tasks. Generation
-///     is serialized through a single-slot <see cref="SemaphoreSlim" /> so at most one job is handed to the runtime at a
-///     time; extra jobs wait in their run task holding <see cref="ImageJobStatus.Queued" /> (never submitted to the
-///     runtime until the slot frees), bounding the blast radius of a kill+restart cancel to one job.
-///     <para>
-///         <b>Singleton.</b> The registry outlives the request that started a job (generation runs detached). Job state is
-///         persisted to <c>image_jobs</c> through a fresh DI scope per operation; on success the image is persisted
-///         encrypted-at-rest BEFORE the job is marked succeeded. Progress carries the coarse status plus the runtime's
-///         generation timeline (phase, step counters, estimate) — never the prompt or a path.
-///     </para>
-///     <para>
-///         <b>Shutdown/restart.</b> <see cref="DisposeAsync" /> cancels every in-flight job and drains the run tasks for
-///         a short bound so terminal states can be persisted; any job that still dies non-terminal (hard crash, drain
-///         timeout) is terminalized by <see cref="ImageJobStartupReconciler" /> on the next boot (no auto-retry).
-///     </para>
+///     Default <see cref="IImageJobCoordinator" />, modelled on the GGUF download coordinator: a per-job in-flight
+///     <see cref="CancellationTokenSource" /> registry, throttled progress push, detached run tasks, and generation
+///     serialized through a single-slot <see cref="SemaphoreSlim" />.
 /// </summary>
+/// <remarks>
+///     At most one job reaches the runtime at a time; extra jobs wait holding <see cref="ImageJobStatus.Queued" />,
+///     never submitted until the slot frees, which bounds a kill+restart cancel to one job. Singleton: the registry
+///     outlives the request, and the image is persisted encrypted-at-rest BEFORE the job is marked succeeded.
+///     Progress carries coarse status plus the generation timeline (phase, steps, estimate), never the prompt or a
+///     path. See docs/wiki/14-image-generation.md ("The job coordinator (serialized, singleton)").
+/// </remarks>
 public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAsyncDisposable
 {
-    // Minimum gap between two pushed step updates for the same job — protects the socket from a high-frequency runtime
-    // callback (a fast GPU samples several steps per second). Milestones — the initial push, every terminal push, and
-    // every generation-phase transition — bypass the throttle, so the operator-visible phase changes are never delayed
-    // and never dropped; only the step counter within a phase is rate-limited.
+    // Minimum gap between two pushed step updates for one job, protecting the socket from a fast GPU sampling several steps per second. Milestones — the initial
+    // push, every terminal push and every generation-phase transition — bypass it and are never delayed or dropped; only the step counter within a phase is limited.
     private static readonly TimeSpan ProgressPushInterval = TimeSpan.FromSeconds(1);
 
     // How long DisposeAsync waits for cancelled run tasks to persist their terminal state before letting go. Anything
     // that outlives the drain is terminalized by ImageJobStartupReconciler on the next boot.
     private static readonly TimeSpan ShutdownDrainTimeout = TimeSpan.FromSeconds(3);
 
-    // Per-job replay buffer cap and how long a terminal job's log lingers for a late subscriber before eviction. Only
-    // MILESTONES are buffered. Buffering step updates too would be self-defeating: at a couple of pushes a second a
-    // minute-long job evicts its own opening events off the front of a 128-entry log, so a late subscriber would replay
-    // a window of stale step counters and no phase transitions at all. Step updates are broadcast live only.
+    // Per-job replay buffer cap and how long a terminal job's log lingers for a late subscriber. Only MILESTONES are buffered: at a couple of pushes a second a
+    // minute-long job would evict its own opening events off a 128-entry log, replaying stale step counters and no phase transitions. Step updates go out live only.
     private const int MaxBufferedEventsPerJob = 128;
     private static readonly TimeSpan ReplayRetention = TimeSpan.FromMinutes(5);
 
@@ -74,9 +64,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     // Per-job ordered replay log for late subscribers; outlives the run and is evicted after ReplayRetention.
     private readonly ConcurrentDictionary<Guid, JobEventLog> _eventLogs = new();
 
-    // Periodic eviction so terminal replay logs are released even when no further job ever starts. Without it the
-    // eviction in EnqueueAsync was the ONLY trigger, so the last jobs' logs lingered on an idle node indefinitely.
-    // A cadence-driven sweep does not depend on another job arriving to reclaim what the previous ones left.
+    // Periodic eviction so terminal replay logs are released even when no further job ever starts: eviction in EnqueueAsync alone leaves the last jobs' logs on an
+    // idle node indefinitely, because a cadence-driven sweep does not depend on another job arriving to reclaim what the previous ones left.
     private readonly ITimer _evictionTimer;
 
     public ImageJobCoordinator(IImageRuntime runtime,
@@ -135,9 +124,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         EvictExpiredEventLogs();
 
-        // Detached run task owns the CTS lifetime: it captures only the token (a struct) and disposes the CTS via the
-        // registry in Cleanup — so no IDisposable instance is passed into an un-awaited task (CA2025), while Cancel can
-        // still signal it via the registry until then.
+        // Detached run task owns the CTS lifetime: it captures only the token (a struct) and disposes the CTS via the registry in Cleanup, so no IDisposable
+        // instance is passed into an un-awaited task (CA2025), while Cancel can still signal it through the registry until then.
         var request = ToRequest(input);
         var runTask = RunJobAsync(jobId, request, cts.Token);
 
@@ -201,9 +189,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             return ImageJobDeleteOutcome.NotFound;
         }
 
-        // Reading the status and then deleting is safe without a lock because terminal is a ONE-WAY door: a job's row
-        // is only ever written by its own run task, which writes a terminal status once and never leaves it. A job
-        // that reads non-terminal here is refused; one that reads terminal cannot become active again.
+        // Reading the status and then deleting needs no lock because terminal is a ONE-WAY door: a job's row is only ever written by its own run task, which
+        // writes a terminal status once and never leaves it. A job that reads non-terminal here is refused; one that reads terminal cannot become active again.
         if (!IsTerminalStatus(view.Status))
         {
             return ImageJobDeleteOutcome.NotTerminal;
@@ -241,9 +228,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
     public async ValueTask DisposeAsync()
     {
-        // Graceful shutdown (the DI container prefers this path): cancel every in-flight job, then drain the run tasks
-        // for a short bound so they can persist their terminal state (Cancelled) before the process exits. Anything that
-        // outlives the drain is terminalized by ImageJobStartupReconciler on the next boot.
+        // Graceful shutdown (the DI container prefers this path): cancel every in-flight job, then drain the run tasks for a short bound so they can persist their
+        // terminal state (Cancelled) before the process exits. Anything that outlives the drain is terminalized by ImageJobStartupReconciler on the next boot, never retried.
         CancelAllInFlight();
 
         try
@@ -331,10 +317,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         {
             token.ThrowIfCancellationRequested();
 
-            // A training run holds the whole GPU (decision #13). The admission sits here, after the slot is held and
-            // before the runtime is called, because that is the only point at which this job is definitely the one
-            // about to allocate VRAM: a run can begin while this job is still waiting behind another. It is HELD
-            // through generation — checking and then releasing would let a run admit while the job allocates.
+            // A training run holds the whole GPU (decision #13). Admission sits here, after the slot is held and before the runtime is called: a run can begin while this job
+            // still waits behind another, so this is the only point at which it is definitely about to allocate VRAM. HELD through generation — checking then releasing would let a run admit.
             gpuAdmission = _gpuWorkGate.TryBeginShared(GpuWorkKind.ImageJob);
             if (gpuAdmission is null)
             {
@@ -348,11 +332,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             await RunStoreAsync(store => store.MarkGeneratingAsync(jobId, startedAt, CancellationToken.None), jobId, "mark generating");
             PushStatus(jobId, ImageJobStatus.Generating, queuePosition: null, elapsedMs: 0, imageId: null, sanitizedError: null, ImageJobProgressDetail.None, isMilestone: true);
 
-            // Deliberately NOT Progress<T>. With no SynchronizationContext, Progress<T> queues each callback to the
-            // thread pool, so the runtime's ordered step reports can be delivered out of order — and because seq is
-            // assigned here, on the delivery side, a reordered pair gets ASCENDING seqs. The client's monotonic dedupe
-            // would then accept a stale step as the newest and the bar would walk backwards. Reporting synchronously
-            // on the runtime's own reporting thread keeps the order the runtime established.
+            // Deliberately NOT Progress<T>: with no SynchronizationContext it queues callbacks to the thread pool, so ordered step reports arrive out of order and, since seq is
+            // assigned here on the delivery side, a reordered pair gets ASCENDING seqs — the client's monotonic dedupe then accepts a stale step and the bar walks backwards.
             var progress = new SynchronousProgress(update => OnRuntimeProgress(jobId, update));
             var result = await _runtime.GenerateAsync(request, progress, token);
 
@@ -430,12 +411,12 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         PushStatus(jobId, status, update.QueuePosition, elapsedMs, imageId: null, sanitizedError: null, detail, isMilestone);
     }
 
-    /// <summary>
-    ///     Projects a runtime observation onto the wire fields. Every value is passed through unchanged, including the
-    ///     absent ones: the estimate is deliberately <see langword="null" /> outside the sampling phase, and turning
-    ///     that into a zero here would put a countdown on screen that reaches "0s left" and then sits there through the
-    ///     whole decode.
-    /// </summary>
+    /// <summary>Projects a runtime observation onto the wire fields, every value passed through unchanged.</summary>
+    /// <remarks>
+    ///     The absent ones included: the estimate is deliberately <see langword="null" /> outside the sampling phase,
+    ///     and turning that into a zero here would put a countdown on screen that reaches "0s left" and then sits
+    ///     there through the whole decode.
+    /// </remarks>
     private static ImageJobProgressDetail ToProgressDetail(ImageGenProgress update)
     {
         return new ImageJobProgressDetail
@@ -494,9 +475,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         }
     }
 
-    // Records the status in the per-job replay log and broadcasts it. A milestone (the initial push, a terminal push,
-    // or a generation-phase transition) always goes out and is always buffered; a step tick inside the current phase is
-    // throttled to at most one per ProgressPushInterval per job and is never buffered.
+    // Records the status in the per-job replay log and broadcasts it. A milestone (the initial push, a terminal push, or a generation-phase transition) always
+    // goes out and is always buffered; a step tick inside the current phase is throttled to one per ProgressPushInterval per job and is never buffered.
     private void PushStatus(Guid jobId,
         ImageJobStatus status,
         int? queuePosition,
@@ -699,11 +679,11 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         public required long Seq { get; init; }
     }
 
-    /// <summary>
-    ///     A per-job ordered, bounded event log for late-subscriber replay. Seq assignment + append are atomic under a lock
-    ///     so concurrent publishes never collide on a seq or append out of order; <see cref="Snapshot" /> copies under the
-    ///     same lock for a consistent ordered view.
-    /// </summary>
+    /// <summary>A per-job ordered, bounded event log for late-subscriber replay.</summary>
+    /// <remarks>
+    ///     Seq assignment and append are atomic under a lock, so concurrent publishes never collide on a seq or append
+    ///     out of order; <see cref="Snapshot" /> copies under the same lock for a consistent ordered view.
+    /// </remarks>
     private sealed class JobEventLog
     {
         private readonly List<BufferedEvent> _events = [];

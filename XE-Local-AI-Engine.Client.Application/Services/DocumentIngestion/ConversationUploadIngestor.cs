@@ -8,11 +8,8 @@ public sealed class ConversationUploadIngestor : IConversationUploadIngestor
 {
     private const string DefaultMimeType = "application/octet-stream";
 
-    // Image types accepted for direct vision (multimodal) input: their bytes are stored as-is with no text extraction.
-    // Whether a given turn's model can actually see them is gated later (ChatTurnResolution.SupportsVision); a non-vision
-    // model silently omits them. This map is the admission allowlist AND the CANONICAL media type: the stored MimeType is
-    // derived from the extension, never the client-supplied multipart Content-Type (which can be blank, generic, or
-    // spoofed) — that value becomes DataContent.MediaType and must start with image/ for the provider + token estimators.
+    // Images admitted for direct vision: bytes stored as-is, visibility gated later by ChatTurnResolution.SupportsVision.
+    // Also the canonical DataContent.MediaType, which must be an image type, so it comes from the extension, never the spoofable client type.
     private static readonly Dictionary<string, string> ImageMediaTypesByExtension = new(StringComparer.OrdinalIgnoreCase)
     {
         [".png"] = "image/png",
@@ -55,12 +52,8 @@ public sealed class ConversationUploadIngestor : IConversationUploadIngestor
 
         var isImage = ImageMediaTypesByExtension.TryGetValue(extension, out var canonicalImageMediaType);
 
-        // Aggregate admission: bound how many uploads buffer + extract + persist concurrently so a burst cannot
-        // aggregate to OOM. By the time this runs ASP.NET has already buffered the multipart body (largely disk-spooled),
-        // so the gate does not bound that framework buffer; it bounds the memory-heavy phase this method owns — the
-        // in-memory byte[] copy of the file, the extraction, and the encrypted persistence write. Holding the lease
-        // through persistence keeps the raw-bytes + encrypted-copy phase inside the admitted count. When the gate is
-        // full, fail fast so the caller can answer busy rather than piling up in-flight byte[] copies.
+        // Aggregate admission bounding the memory-heavy phase this method owns — in-memory copy, extraction, encrypted
+        // write — so a burst cannot reach OOM; the lease is held through persistence and a full gate fails fast as busy.
         if (!_extractionGate.TryAcquire(out var extractionLease))
         {
             return null;
@@ -90,9 +83,8 @@ public sealed class ConversationUploadIngestor : IConversationUploadIngestor
                 extractedChars = extraction.ExtractedChars;
             }
 
-            // An admitted image's media type is the canonical value for its extension — never the client-supplied
-            // Content-Type — so DataContent.MediaType is always a correct image/* type. Non-image files keep the
-            // client type (with the octet-stream fallback) since the extractor path does not depend on it.
+            // An admitted image's media type is the canonical value for its extension, never the client Content-Type, so
+            // DataContent.MediaType is always a correct image type; non-image files keep the client type, unused here.
             string mimeType;
             if (isImage)
             {

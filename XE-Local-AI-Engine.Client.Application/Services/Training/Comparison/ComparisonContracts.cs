@@ -20,11 +20,11 @@ public sealed record ComparisonKindDeltaV1
     public required double AccuracyDelta { get; init; }
 }
 
-/// <summary>
-///     The optional throughput/quality pairing, read straight off two benchmark runs. Read-only: nothing here starts,
-///     re-runs or mutates a benchmark — the pairing exists so one report can carry "it got better at the task" next to
-///     "it got slower", which are different questions with different evidence.
-/// </summary>
+/// <summary>The optional throughput/quality pairing, read straight off two benchmark runs.</summary>
+/// <remarks>
+///     Read-only: nothing here starts, re-runs or mutates a benchmark. The pairing exists so one report can carry
+///     "it got better at the task" next to "it got slower", which are different questions with different evidence.
+/// </remarks>
 public sealed record ComparisonBenchmarkDeltaV1
 {
     public double? BaseTokensPerSecond { get; init; }
@@ -51,10 +51,12 @@ public sealed record ComparisonBenchmarkDeltaV1
 }
 
 /// <summary>
-///     The stored comparison, persisted (encrypted) in <c>training_comparison_reports.deltas_json</c>. Every number
-///     here is REPRODUCIBLE from the two bound evaluations' persisted results plus their frozen memberships — the
-///     document is a cache of a pure computation, not a separate source of truth.
+///     The stored comparison, persisted (encrypted) in <c>training_comparison_reports.deltas_json</c>.
 /// </summary>
+/// <remarks>
+///     Every number here is REPRODUCIBLE from the two bound evaluations' persisted results plus their frozen
+///     memberships — the document is a cache of a pure computation, not a separate source of truth.
+/// </remarks>
 public sealed record TrainingComparisonDeltasV1
 {
     public int SchemaVersion { get; init; } = 1;
@@ -80,10 +82,13 @@ public sealed record TrainingComparisonDeltasV1
     public IReadOnlyList<ComparisonKindDeltaV1> PerKind { get; init; } = [];
 
     /// <summary>
-    ///     False when either side scored nothing — a base model that was never installed, or an evaluation that failed
-    ///     before its first sample. The section is marked unavailable rather than rendered as a 0% score, which would
-    ///     read as "the model got everything wrong".
+    ///     False when either side scored nothing: a base model that was never installed, or an evaluation that failed
+    ///     before its first sample.
     /// </summary>
+    /// <remarks>
+    ///     The section is then marked unavailable rather than rendered as a 0% score, which would read as "the model
+    ///     got everything wrong".
+    /// </remarks>
     public bool AccuracyAvailable { get; init; }
 
     public string? UnavailableReason { get; init; }

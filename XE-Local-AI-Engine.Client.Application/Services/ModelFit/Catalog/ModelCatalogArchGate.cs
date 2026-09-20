@@ -4,13 +4,13 @@ using System.Globalization;
 
 /// <summary>
 ///     Pure numeric comparison of llama.cpp <c>bNNNN</c> release tags, gating a catalog entry's
-///     <see cref="ModelCatalogEntry.MinLlamaCppTag" /> against the node's installed-else-pinned runtime build. An entry
-///     whose architecture support landed in a build newer than the node's runtime is excluded from recommendations —
-///     never surfaced as a broken pick.
+///     <see cref="ModelCatalogEntry.MinLlamaCppTag" /> against the node's installed-else-pinned runtime build.
 /// </summary>
 /// <remarks>
-///     Fails OPEN (treated as supported) whenever either tag cannot be parsed as <c>bNNNN</c> — an unparseable installed
-///     tag must never silently hide every catalog entry, and an entry with no meaningful floor imposes no gate.
+///     An entry whose architecture support landed in a build newer than the node's runtime is excluded from
+///     recommendations, never surfaced as a broken pick. Fails OPEN (treated as supported) whenever either tag cannot
+///     be parsed as <c>bNNNN</c> — an unparseable installed tag must never silently hide every catalog entry, and an
+///     entry with no meaningful floor imposes no gate.
 /// </remarks>
 public static class ModelCatalogArchGate
 {

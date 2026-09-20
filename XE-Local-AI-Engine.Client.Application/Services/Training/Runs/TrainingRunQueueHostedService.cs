@@ -11,33 +11,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     acquisitions a run needs and generation does not.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Everything exclusive is acquired BEFORE the claim, and released the moment the queue turns out to be empty.
-///         Claiming first and then discovering the GPU is busy would leave the work item <c>Running</c> with nothing
-///         running it, and the store pins attempt to 1 — there is no retry to fall back on. Acquiring first means a
-///         refusal simply leaves the item Queued for the next poll.
-///     </para>
-///     <para>
-///         Two gates, in order: an exclusive hold on <see cref="IGpuWorkGate" />, and the llama.cpp runtime-mutation
-///         lease — which refuses while any inference process is running, so a run cannot start behind a warm model. The
-///         gate replaces what used to be a status sweep over the other queues followed by a separate flag: those were
-///         two decisions with a window between them, and another queue could admit inside it.
-///     </para>
-///     <para>
-///         <strong>Only work that HOLDS the gate blocks a run; queued-but-unclaimed work no longer does.</strong> The
-///         old sweep refused while a benchmark or generation work item merely sat Queued in the database. Both are
-///         safe — the loser simply waits — but the gate is now the single authority, and it can only speak for work
-///         that has actually been admitted.
-///     </para>
-///     <para>
-///         <strong>The evaluation branch takes the first gate and NOT the second.</strong> An evaluation's whole job
-///         is to load a model and ask it one question per hold-out sample, and the mutation lease exists to forbid
-///         exactly that — it refuses while a model is loaded, and a model load refuses while it is held. So an
-///         evaluation holds the gate exclusively (nothing else GPU-bound starts beside it, and it does not start beside
-///         anything else) but reaches its model through the ordinary chat path. The queue peeks the head's kind BEFORE
-///         acquiring, because the exclusivity a kind needs has to be held before the claim: attempt is pinned to 1, so
-///         a claim that turned out to need locks the consumer is not holding could not be handed back.
-///     </para>
+///     Everything exclusive is acquired BEFORE the claim and released the moment the queue turns out to be empty: claiming
+///     first and then discovering the GPU is busy would leave the work item <c>Running</c> with nothing running it, and the
+///     store pins attempt to 1, so there is no retry to fall back on — acquiring first simply leaves the item Queued for the
+///     next poll. Only work that HOLDS the gate blocks a run; queued-but-unclaimed work does not, because the gate can only
+///     speak for work already admitted. Gate order, evaluation branch and kind peek: docs/wiki/18-training.md ("4. Training runs").
 /// </remarks>
 public sealed class TrainingRunQueueHostedService : BackgroundService
 {
@@ -79,9 +57,8 @@ public sealed class TrainingRunQueueHostedService : BackgroundService
         var recovered = false;
         while (!stoppingToken.IsCancellationRequested)
         {
-            // Nothing is CLAIMED until recovery has succeeded once — the benchmark queue's rule, for the benchmark
-            // queue's reason: only recovery terminalizes the rows the previous process left Running, and a loop that
-            // claims past a failed recovery orphans them for this process's whole lifetime.
+            // Nothing is CLAIMED until recovery has succeeded once — the benchmark queue's rule, for its reason: only
+            // recovery terminalizes rows the previous process left Running, and claiming past a failed recovery orphans them.
             if (!recovered)
             {
                 recovered = await RecoverAsync(stoppingToken);

@@ -3,45 +3,34 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 using System.Runtime.InteropServices;
 
 /// <summary>
-///     Merges several independently ranked chunk lists (for example the lexical FTS arm and the semantic vector arm) into a
-///     single ranking via Reciprocal Rank Fusion. Pure and deterministic — no database access — so it is unit-testable in
-///     isolation.
+///     Merges several independently ranked chunk lists — the lexical FTS arm and the semantic vector arm — into a single
+///     ranking via Reciprocal Rank Fusion.
 /// </summary>
+/// <remarks>Pure and deterministic, with no database access, so it is unit-testable in isolation.</remarks>
 public interface IRankingFusionService
 {
     /// <summary>
-    ///     Fuses the given ranked lists (each ordered best-first) into one ranking, ordered by descending fused score. The
-    ///     result is the union of every chunk id that appears in any list. This is the classic, score-AGNOSTIC Reciprocal
-    ///     Rank Fusion: only the rank position of each id is used.
+    ///     Fuses the given ranked lists, each ordered best-first, into one ranking ordered by descending fused score.
     /// </summary>
+    /// <remarks>
+    ///     The result is the union of every chunk id that appears in any list. This is the classic, score-AGNOSTIC
+    ///     Reciprocal Rank Fusion: only the rank position of each id is used.
+    /// </remarks>
     IReadOnlyList<RankFusionEntry> Fuse(IReadOnlyList<IReadOnlyList<Guid>> rankedLists);
 
     /// <summary>
-    ///     Fuses the given ranked arms (each ordered best-first) carrying a per-entry relevance score, into one ranking
-    ///     ordered by descending fused score. The result is the union of every chunk id that appears in any arm.
-    ///     <para>
-    ///         With <see cref="RankFusionStrategy.Rrf" /> the per-entry scores are IGNORED and the result is byte-identical
-    ///         to <see cref="Fuse(System.Collections.Generic.IReadOnlyList{System.Collections.Generic.IReadOnlyList{System.Guid}})" />
-    ///         over the same id order — pure RRF, kept as the graceful fallback and comparison baseline.
-    ///     </para>
-    ///     <para>
-    ///         With <see cref="RankFusionStrategy.ScoreAware" /> each arm's scores are min-max normalized WITHIN the arm
-    ///         (so incomparable scales — BM25 magnitude vs cosine — never blend directly) and used to TILT the RRF
-    ///         contribution multiplicatively by up to <paramref name="scoreWeight" />, so a rank whose arm score is far
-    ///         above the arm's floor outranks an equally-ranked but marginal competitor. It degrades to pure RRF for any
-    ///         arm whose scores are empty, single, constant, or non-finite (normalization carries no signal there).
-    ///     </para>
+    ///     Fuses ranked arms carrying a per-entry relevance score into one ranking ordered by descending fused score.
     /// </summary>
-    /// <param name="arms">
-    ///     The ranked arms, each ordered best-first. Each entry's <see cref="RankFusionInput.Score" /> is a relevance value
-    ///     oriented so that HIGHER means more relevant (the caller orients incomparable raw scores — e.g. negating FTS5
-    ///     BM25, which is more-negative-for-stronger). A null arm is skipped.
-    /// </param>
+    /// <remarks>
+    ///     The result is the union of every chunk id in any arm. <see cref="RankFusionStrategy.Rrf" /> IGNORES the scores
+    ///     and reproduces pure RRF over the same id order; <see cref="RankFusionStrategy.ScoreAware" /> tilts each rank's
+    ///     contribution by its arm-normalized score. Strategies: <c>docs/wiki/15-knowledge-base.md</c> ("Hybrid retrieval").
+    /// </remarks>
+    /// <param name="arms">Ranked arms, best-first; each <see cref="RankFusionInput.Score" /> is oriented so HIGHER means more relevant, and a null arm is skipped.</param>
     /// <param name="strategy">Whether to apply the score tilt (<see cref="RankFusionStrategy.ScoreAware" />) or ignore it (<see cref="RankFusionStrategy.Rrf" />).</param>
     /// <param name="scoreWeight">
-    ///     The maximum multiplicative tilt applied to an arm's top-normalized entry under
-    ///     <see cref="RankFusionStrategy.ScoreAware" /> (clamped to be non-negative; <c>0</c> reduces to pure RRF). Ignored
-    ///     under <see cref="RankFusionStrategy.Rrf" />.
+    ///     Maximum multiplicative tilt applied to an arm's top-normalized entry; clamped non-negative, <c>0</c> reduces
+    ///     to pure RRF, ignored under <see cref="RankFusionStrategy.Rrf" />.
     /// </param>
     IReadOnlyList<RankFusionEntry> FuseScored(IReadOnlyList<IReadOnlyList<RankFusionInput>?> arms,
         RankFusionStrategy strategy,

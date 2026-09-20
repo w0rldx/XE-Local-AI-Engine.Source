@@ -24,9 +24,12 @@ internal sealed record KvCacheResolution(string Effective, string Source, string
 
 /// <summary>
 ///     Resolves what one benchmark phase will launch with: the profile replay, the KV-cache type it will run with, and
-///     the launch identity that vector is INTENDED to produce. Shared by the primary freeze and the judge, because both
-///     phases launch the same binary and must agree about what it accepts.
+///     the launch identity that vector is INTENDED to produce.
 /// </summary>
+/// <remarks>
+///     Shared by the primary freeze and the judge, because both phases launch the same binary and must agree about
+///     what it accepts.
+/// </remarks>
 public interface IBenchmarkPhaseLaunchResolver
 {
     /// <summary>
@@ -125,11 +128,8 @@ public sealed class BenchmarkPhaseLaunchResolver : IBenchmarkPhaseLaunchResolver
             throw new BenchmarkEligibilityException("The resolved llama.cpp runtime context is smaller than the benchmark requirement.");
         }
 
-        // Auto is the only decision the fallback store participates in: an explicit pick is answered from the
-        // manifest alone, so an operator can always retry a config a previous host state disabled.
-        // The store is keyed per (backend, KV type) and this class has no type of its own — it is the code CHOOSING
-        // one. It asks about the node's selected type, i.e. the type Auto would otherwise pick, which preserves the
-        // pre-slice meaning exactly: Auto avoids a config this host has proven cannot reach readiness.
+        // Auto is the only decision the fallback store takes part in: an explicit pick is answered from the manifest alone, so an operator can retry a config a previous host state disabled. Keyed
+        // per (backend, KV type), which this class has none of, it asks about the node's SELECTED type — the one Auto would pick — so Auto avoids a config this host proved cannot reach readiness.
         var optimizedDisabled = requestedKvCacheType is null
                                 && variant != GpuVariant.Cpu
                                 && await _launchFallbackStore.IsOptimizedConfigDisabledAsync(variant, _launchPolicyOptions.KvCacheType, cancellationToken);
@@ -235,9 +235,11 @@ public sealed class BenchmarkPhaseLaunchResolver : IBenchmarkPhaseLaunchResolver
 
 /// <summary>
 ///     What the judge will actually launch with, resolved once per attempt at enqueue and frozen onto that attempt.
+/// </summary>
+/// <remarks>
 ///     Deliberately NOT part of the policy hash: a runtime update changes this underneath the operator, and it must
 ///     make attempts <em>unranked together</em> (a new cohort key) rather than invalidate the policy.
-/// </summary>
+/// </remarks>
 public sealed record BenchmarkJudgeRuntimeV1(
     int SchemaVersion,
     BenchmarkInstalledModelSnapshotV1 Model,
@@ -313,11 +315,11 @@ public sealed class BenchmarkJudgeRuntimeResolver : IBenchmarkJudgeRuntimeResolv
     }
 }
 
-/// <summary>
-///     The at-rest form of the judge policy and the per-attempt judge runtime. The policy is stored in its CANONICAL
-///     form, so the stored bytes re-hash to the stored <c>PolicyHash</c> and a revision can be verified without a
-///     second serializer agreeing with the first.
-/// </summary>
+/// <summary>The at-rest form of the judge policy and the per-attempt judge runtime.</summary>
+/// <remarks>
+///     The policy is stored in its CANONICAL form, so the stored bytes re-hash to the stored <c>PolicyHash</c> and a
+///     revision can be verified without a second serializer agreeing with the first.
+/// </remarks>
 public static class BenchmarkJudgeSerialization
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
@@ -329,13 +331,13 @@ public static class BenchmarkJudgeSerialization
     public static byte[] SerializePolicy(BenchmarkJudgePolicyV1 policy) =>
         Encoding.UTF8.GetBytes(BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(policy));
 
-    /// <summary>
-    ///     The stored policy, validated STRUCTURALLY only. A version constant moving must never make an
-    ///     already-stored revision unreadable: when the strict validator ran here, bumping
-    ///     <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> made `GET benchmarks/projects/{id}` and the
-    ///     project export throw, the whole project header disappeared from the UI, and it took the re-save control
+    /// <summary>The stored policy, validated STRUCTURALLY only.</summary>
+    /// <remarks>
+    ///     A version constant moving must never make an already-stored revision unreadable: with the strict validator
+    ///     here, bumping <see cref="BenchmarkJudgePolicyVersions.PromptVersion" /> made `GET benchmarks/projects/{id}`
+    ///     and the project export throw, the project header disappeared from the UI, and it took the re-save control
     ///     that heals the revision with it. Write and execution re-validate with <c>strictVersions: true</c>.
-    /// </summary>
+    /// </remarks>
     public static BenchmarkJudgePolicyV1 DeserializePolicy(ReadOnlySpan<byte> payload)
     {
         try
@@ -357,11 +359,11 @@ public static class BenchmarkJudgeSerialization
     public static byte[] SerializeResult(BenchmarkJudgeResultV2 result) =>
         JsonSerializer.SerializeToUtf8Bytes(result, Options);
 
-    /// <summary>
-    ///     The stored verdict, or <see langword="null" /> when the payload is absent or unreadable. Reads through the
-    ///     WRITER's own options: these are camelCase, so a reader that re-derives default options binds every property
-    ///     to its default and hands the API a zeroed verdict instead of failing.
-    /// </summary>
+    /// <summary>The stored verdict, or <see langword="null" /> when the payload is absent or unreadable.</summary>
+    /// <remarks>
+    ///     Reads through the WRITER's own options: these are camelCase, so a reader that re-derives default options
+    ///     binds every property to its default and hands the API a zeroed verdict instead of failing.
+    /// </remarks>
     public static BenchmarkJudgeResultV2? DeserializeResult(ReadOnlyMemory<byte>? payload)
     {
         if (payload is not { } value || value.IsEmpty)

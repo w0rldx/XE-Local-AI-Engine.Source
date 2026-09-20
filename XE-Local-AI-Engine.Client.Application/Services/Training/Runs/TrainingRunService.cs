@@ -160,9 +160,8 @@ public sealed class TrainingRunService : ITrainingRunService
             // and a seeded shuffle would only add a seed to explain.
             var take = (int)Math.Floor(ordered.Length * holdoutFraction);
             var stride = take > 0 ? ordered.Length / take : 0;
-            // Counted per stratum, not against the shared list: comparing the global count would let the first kind
-            // fill the quota and leave every later kind entirely on the training side — the exact failure stratifying
-            // exists to prevent.
+            // Counted per stratum, not against the shared list: comparing the global count would let the first kind fill the
+            // quota and leave every later kind entirely on the training side — the failure stratifying exists to prevent.
             var taken = 0;
             for (var index = 0; index < ordered.Length; index++)
             {
@@ -241,9 +240,8 @@ public sealed class TrainingRunService : ITrainingRunService
         TrainingRunFreezeV1 freeze,
         CancellationToken cancellationToken)
     {
-        // The installed counterpart is what an adapter is served against and the base side of a comparison; it is
-        // recorded at creation so a later re-install under the same name cannot silently swap the base out from under
-        // the run — the fingerprint travels with the link.
+        // The installed counterpart is what an adapter is served against and the base side of a comparison; it is recorded at
+        // creation so a later re-install under the same name cannot swap the base out — the fingerprint travels with the link.
         var link = await _linker.ResolveAsync(license.RepoId, command.LinkedModelName, cancellationToken);
         var run = await _runStore.CreateAndEnqueueAsync(new TrainingRunEnqueueCommand
         {

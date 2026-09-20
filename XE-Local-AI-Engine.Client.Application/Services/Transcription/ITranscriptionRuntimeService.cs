@@ -53,11 +53,12 @@ public sealed record TranscriptionRuntimeView
     /// <summary>The effective idle time-to-live in minutes.</summary>
     public required int IdleTimeoutMinutes { get; init; }
 
-    /// <summary>
-    ///     Whether the pinned voice-activity-detection weights are on disk. The daemon is launched with voice-activity
-    ///     detection on, so a spawn fails while this is <see langword="false" />; surfacing it here is what lets the
-    ///     operator see an incomplete installation rather than only a failed start.
-    /// </summary>
+    /// <summary>Whether the pinned voice-activity-detection weights are on disk.</summary>
+    /// <remarks>
+    ///     The daemon is launched with voice-activity detection on, so a spawn fails while this is
+    ///     <see langword="false" />; surfacing it here is what lets the operator see an incomplete installation rather
+    ///     than only a failed start.
+    /// </remarks>
     public required bool VadInstalled { get; init; }
 
     public required bool ProcessCaptureSupported { get; init; }

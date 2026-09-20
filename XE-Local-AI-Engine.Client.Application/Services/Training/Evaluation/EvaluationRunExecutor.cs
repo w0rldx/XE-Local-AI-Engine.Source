@@ -20,30 +20,14 @@ public interface IEvaluationRunExecutor
 
 /// <summary>
 ///     Drives one claimed evaluation: score every frozen hold-out sample that does not already carry a verdict, then
-///     terminalize. One durable write per sample, so an interruption keeps the prefix and a resume continues from the
-///     next unscored sample rather than paying for the whole hold-out set again.
+///     terminalize. One durable write per sample, so a resume continues from the next unscored sample.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>Exclusivity:</strong> an evaluation holds <c>ITrainingActivity</c> for the whole run, so no training
-///         run, dataset generation, benchmark or image job can start beside it. The executor does not separately take
-///         runtime-mutation or model-load admission; <c>ITransientLlamaServerEvaluationHarness</c> owns those leases in
-///         launch-safe order. An installed base also keeps its coordinated read snapshot through harness teardown, so
-///         replacement cannot race the path-addressed load.
-///     </para>
-///     <para>
-///         <strong>Scoring reads the run-owned immutable corpus, never live sample rows.</strong> The corpus digest,
-///         freeze id and stable sample ids are checked before the first model call. A live review edit after the
-///         evaluation was queued therefore cannot change the question being scored.
-///     </para>
-///     <para>
-///         Installed-base and staged-tuned evaluations both run through
-///         <c>ITransientLlamaServerEvaluationHarness</c> with the same frozen context and launch policy. Model bytes,
-///         runtime provenance and teardown are bound before the result becomes quality evidence. Neither path uses an agent: an agent would invoke the tools it was
-///         offered. Here the offers are declaration-only
-///         (<see cref="DeclaredOnlyAIFunction" />) and the raw client returns the call unexecuted, which is the whole
-///         question an evaluation asks — "which call would this model make".
-///     </para>
+///     Scoring reads the run-owned immutable corpus, never live sample rows: the corpus digest, freeze id and stable sample ids
+///     are checked before the first model call, so a live review edit after the evaluation was queued cannot change the question
+///     being scored. Neither the installed-base nor the staged-tuned path uses an agent — an agent would invoke the tools it was
+///     offered, whereas here the offers are declaration-only (<see cref="DeclaredOnlyAIFunction" />) and the raw client returns
+///     the call unexecuted. Exclusivity and the harness's lease order: docs/wiki/18-training.md ("6. Evaluation and comparison").
 /// </remarks>
 public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
 {
@@ -598,9 +582,9 @@ public sealed class EvaluationRunExecutor : IEvaluationRunExecutor
 
     /// <summary>
     ///     Evaluation progress rides the run's own hub group rather than a group of its own: an evaluation is created
-    ///     FROM a run, the operator is already subscribed to that run, and the event kind is what tells the two streams
-    ///     apart. An evaluation with no run behind it simply publishes nothing.
+    ///     FROM a run, the operator is already subscribed to that run, and the event kind tells the streams apart.
     /// </summary>
+    /// <remarks>An evaluation with no run behind it simply publishes nothing.</remarks>
     private void Publish(TrainingEvaluationRecord evaluation, TrainingRunEventKind kind, string? message = null)
     {
         if (evaluation.TrainingRunId is not { } runId)

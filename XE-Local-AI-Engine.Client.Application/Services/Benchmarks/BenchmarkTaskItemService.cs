@@ -4,11 +4,12 @@ using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     The operator-facing task-item surface. Everything about identity — the index, the revision, the input hash and
-///     the project's item-set hash — is decided by the store; this layer decodes the wire shape, applies the caps, and
-///     refuses the kinds this build cannot yet execute.
-/// </summary>
+/// <summary>The operator-facing task-item surface.</summary>
+/// <remarks>
+///     Everything about identity — the index, the revision, the input hash and the project's item-set hash — is
+///     decided by the store; this layer decodes the wire shape, applies the caps, and refuses the kinds this build
+///     cannot yet execute.
+/// </remarks>
 public interface IBenchmarkTaskItemService
 {
     Task<IReadOnlyList<BenchmarkTaskItemRecord>> ListAsync(Guid projectId, CancellationToken cancellationToken = default);
@@ -34,11 +35,11 @@ public interface IBenchmarkTaskItemService
 
 public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
 {
-    /// <summary>
-    ///     The cap on LEAF items — the ones a freeze actually fans out over, so a generator's cases each count. Past
-    ///     this a matrix stops being merely slow and becomes unschedulable: 20 items times a few quants times a few
-    ///     repeats is already a night of GPU time.
-    /// </summary>
+    /// <summary>The cap on LEAF items — the ones a freeze actually fans out over, so a generator's cases each count.</summary>
+    /// <remarks>
+    ///     Past this a matrix stops being merely slow and becomes unschedulable: 20 items times a few quants times a
+    ///     few repeats is already a night of GPU time.
+    /// </remarks>
     public const int MaxTaskItems = 20;
 
     private readonly IBenchmarkStore _benchmarkStore;
@@ -126,11 +127,12 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
         }
     }
 
-    /// <summary>
-    ///     Refuses a write to a GENERATED case. Its parameters live on the generator that produced it, and an edit
-    ///     here would survive exactly until the next re-expansion — a case that disagrees with the probe it belongs to
-    ///     is a probe that measures something nobody configured.
-    /// </summary>
+    /// <summary>Refuses a write to a GENERATED case.</summary>
+    /// <remarks>
+    ///     Its parameters live on the generator that produced it, and an edit here would survive exactly until the
+    ///     next re-expansion — a case that disagrees with the probe it belongs to is a probe that measures something
+    ///     nobody configured.
+    /// </remarks>
     private static void EnsureNotGenerated(IReadOnlyList<BenchmarkTaskItemRecord> existing, Guid itemId)
     {
         if (existing.Any(item => item.Id == itemId && string.Equals(item.Kind, BenchmarkTaskItemKinds.NiahCase, StringComparison.Ordinal)))
@@ -149,10 +151,13 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
 
     /// <summary>
     ///     The item to write and — for a generator — the cases it expands into, both decided before the store opens a
-    ///     transaction. Expansion at WRITE time is what gives a probe's cases durable identity: each one is an
-    ///     ordinary item with its own id, revision and input hash, so the caps count them, a freeze stamps them onto
-    ///     runs, and the staleness exclusions reach them without any of those knowing what NIAH is.
+    ///     transaction.
     /// </summary>
+    /// <remarks>
+    ///     Expansion at WRITE time is what gives a probe's cases durable identity: each one is an ordinary item with
+    ///     its own id, revision and input hash, so the caps count them, a freeze stamps them onto runs, and the
+    ///     staleness exclusions reach them without any of those knowing what NIAH is.
+    /// </remarks>
     private async Task<(BenchmarkTaskItemInput Input, IReadOnlyList<BenchmarkTaskItemInput>? Children)> ToInputAsync(Guid projectId,
         Guid itemId,
         BenchmarkTaskItemDraft draft,
@@ -191,8 +196,6 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
 
         // Checked on the WRITTEN bytes rather than on the draft, so a generator's own override — one `exact` criterion
         // per case — is held to the same rule as one an operator typed.
-        // Checked on the WRITTEN bytes rather than on the draft, so a generator's own override — one `exact`
-        // criterion per case — is held to the same rule as one an operator typed.
         await EnsureOverridesFitRubricAsync(projectId,
                 [input, .. children ?? []],
                 cancellationToken);
@@ -201,15 +204,15 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
 
     /// <summary>
     ///     Every verifier override an item carries must name a criterion the project's CURRENT judge rubric has, and
-    ///     must be a configuration that criterion's kind can honour. An override naming a criterion the rubric lacks is
-    ///     not a harmless no-op: the judge would fall back to the POLICY's configuration and grade this item against
-    ///     another item's expected answer, producing a plausible number for the wrong question. Refused here while the
-    ///     operator is still looking at the form, and refused again at judging time — the rubric can move afterwards.
-    ///     <para>
-    ///         A project whose judge is disabled has no rubric to check against and nothing that grades the item;
-    ///         enabling one re-checks every item (see <c>BenchmarkProjectService.UpdateJudgePolicyAsync</c>).
-    ///     </para>
+    ///     must be a configuration that criterion's kind can honour.
     /// </summary>
+    /// <remarks>
+    ///     An override naming a criterion the rubric lacks is not a harmless no-op: the judge falls back to the
+    ///     POLICY's configuration and grades this item against another item's expected answer, producing a plausible
+    ///     number for the wrong question. Refused here while the operator is still looking at the form, and again at
+    ///     judging time, because the rubric can move afterwards. A project whose judge is disabled has no rubric to
+    ///     check against; enabling one re-checks every item (<c>BenchmarkProjectService.UpdateJudgePolicyAsync</c>).
+    /// </remarks>
     private async Task EnsureOverridesFitRubricAsync(Guid projectId,
         IReadOnlyList<BenchmarkTaskItemInput> written,
         CancellationToken cancellationToken)
@@ -273,9 +276,12 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
 
     /// <summary>
     ///     One item's <c>{criterionId: config}</c> overrides, as raw JSON per criterion — the same string shape a
-    ///     policy criterion's own <c>Config</c> carries. Shared with the judge executor so the write-time check and the
-    ///     judging-time check cannot drift about what an override even is.
+    ///     policy criterion's own <c>Config</c> carries.
     /// </summary>
+    /// <remarks>
+    ///     Shared with the judge executor so the write-time check and the judging-time check cannot drift about what
+    ///     an override even is.
+    /// </remarks>
     public static IReadOnlyDictionary<string, string> ReadOverrides(JsonElement element)
     {
         if (element.ValueKind is not JsonValueKind.Object)

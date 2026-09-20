@@ -1,13 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Images;
 
-/// <summary>
-///     Publishes image-job status changes to the connected operator over SignalR. Every event carries the
-///     <c>JobId</c> (scopes delivery to the per-job group) and a per-job monotonic <c>Seq</c> (so a late subscriber can
-///     replay the buffer and dedupe events delivered both via replay and live). The default implementation is a no-op
-///     (<see cref="Implementation.NullImageJobEventPublisher" />); the Client host swaps in a hub-backed publisher
-///     (<c>ImageJobEventPublisher</c> over the <c>ImageJobHub</c>). Payloads carry status and progress counters only —
-///     never a prompt or a path.
-/// </summary>
+/// <summary>Publishes image-job status changes to the connected operator over SignalR.</summary>
+/// <remarks>
+///     Every event carries the <c>JobId</c> (scoping delivery to the per-job group) and a per-job monotonic
+///     <c>Seq</c>, so a late subscriber can replay the buffer and dedupe events delivered both ways. The default
+///     implementation is a no-op (<see cref="Implementation.NullImageJobEventPublisher" />); the Client host swaps in
+///     a hub-backed publisher (<c>ImageJobEventPublisher</c> over the <c>ImageJobHub</c>). Payloads carry status and
+///     progress counters only — never a prompt or a path.
+/// </remarks>
 public interface IImageJobEventPublisher
 {
     /// <summary>Pushes one coarse status transition for a job to the subscribed operator clients.</summary>
@@ -24,17 +24,16 @@ public static class ImageJobHubEvents
 }
 
 /// <summary>
-///     Image-job status push payload. Carries the job id, the phase name (the
-///     <c>ImageJobStatus</c> value: <c>Queued</c>/<c>Generating</c>/<c>Succeeded</c>/<c>Failed</c>/<c>Cancelled</c>), an
-///     optional queue position and elapsed time while generating, the produced image id on success, and a sanitized
-///     error on failure. <see cref="Seq" /> is the per-job monotonic sequence for replay/dedupe. NEVER carries the prompt.
-///     <para>
-///         The generation-timeline fields are init-only additions rather than more positional parameters: this record is
-///         constructed and projected in several places, and a widening positional list moves every one of them for no
-///         gain. They are all nullable because the runtime only observes them for part of a job — an absent value means
-///         "not known here", and the client must render the coarse phase alone rather than substituting a zero.
-///     </para>
+///     Image-job status push payload: the job id, the phase name (the <c>ImageJobStatus</c> value), an optional queue
+///     position and elapsed time while generating, the produced image id on success, and a sanitized error on failure.
 /// </summary>
+/// <remarks>
+///     <see cref="Seq" /> is the per-job monotonic sequence for replay and dedupe. This NEVER carries the prompt. The
+///     generation-timeline fields are init-only additions rather than more positional parameters, because the record
+///     is constructed and projected in several places and a widening positional list moves every one for no gain.
+///     They are all nullable because the runtime only observes them for part of a job: an absent value means "not
+///     known here", and the client renders the coarse phase alone rather than substituting a zero.
+/// </remarks>
 public sealed class ImageJobStatusHubEvent
 {
     public required Guid JobId { get; init; }
@@ -55,10 +54,12 @@ public sealed class ImageJobStatusHubEvent
 
     /// <summary>
     ///     The fine phase within <c>Generating</c> — <c>Loading</c>/<c>Encoding</c>/<c>Sampling</c>/<c>Decoding</c> —
-    ///     or <see langword="null" /> when the runtime cannot see inside the generation. The client keys its
-    ///     "preparing" / step-bar / "finishing" copy on this, which is what keeps a countdown off the screen during the
-    ///     phases that have no measurable rate.
+    ///     or <see langword="null" /> when the runtime cannot see inside the generation.
     /// </summary>
+    /// <remarks>
+    ///     The client keys its "preparing" / step-bar / "finishing" copy on this, which is what keeps a countdown off
+    ///     the screen during the phases that have no measurable rate.
+    /// </remarks>
     public string? GenerationPhase { get; init; }
 
     /// <summary>Completed sampling steps, set only while sampling (and held through decode so the bar can stay full).</summary>

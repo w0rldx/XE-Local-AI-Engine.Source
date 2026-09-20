@@ -12,10 +12,10 @@ using UglyToad.PdfPig.Exceptions;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Extraction;
 
 /// <summary>
-///     Pure-managed document text extractor. Dispatches an uploaded file to the reader for its extension, flattens
-///     the resulting <see cref="IngestionDocument"/> to Markdown/plaintext, and caps the output to bound memory.
-///     Stateless and thread-safe — safe to register as a singleton.
+///     Pure-managed document text extractor: dispatches an uploaded file to the reader for its extension, flattens the
+///     resulting <see cref="IngestionDocument" /> to Markdown or plaintext, and caps the output to bound memory.
 /// </summary>
+/// <remarks>Stateless and thread-safe, so it is safe to register as a singleton.</remarks>
 public sealed class DocumentTextExtractor : IDocumentTextExtractor
 {
     private readonly IReadOnlyDictionary<string, IngestionDocumentReader> _readersByExtension;
@@ -38,9 +38,8 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
     {
     }
 
-    // Caps are overridable so tests can exercise truncation / rejection without allocating multi-megabyte inputs. The
-    // preflight ceilings default to the shared limits and are likewise overridable so a preflight-rejection test can
-    // trip them with a small honest archive instead of writing a real gigabyte-scale bomb.
+    // Caps are overridable so tests exercise truncation and rejection without multi-megabyte inputs; the preflight
+    // ceilings default to the shared limits so a rejection test can trip them with a small honest archive.
     internal DocumentTextExtractor(ILogger<DocumentTextExtractor> logger,
         int maxOutputChars,
         int maxStructuredOutputChars,
@@ -150,9 +149,8 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
 
         try
         {
-            // Return the reader's structured document verbatim (the chunking lane needs the heading structure and
-            // applies its own per-chunk size bound), but first bound its AGGREGATE size: the verbatim path had no
-            // ceiling, so a huge or bomb-expanded document reached chunking/persistence unbounded.
+            // Return the reader's structured document verbatim, since the chunking lane needs the heading structure and
+            // bounds each chunk itself, but bound its AGGREGATE size so no bomb-expanded document reaches persistence.
             var (document, inputBytes) = await ReadStructuredAsync(reader, content, fileName, normalizedExtension, cancellationToken);
 
             var totalChars = SumContentChars(document);
@@ -194,19 +192,13 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         string normalizedExtension,
         CancellationToken cancellationToken)
     {
-        // Buffer to a seekable stream: PdfPig and the Open XML SDK both seek, and an upload stream may be
-        // forward-only. The endpoint caps the upload size; as a second bound the RAW bytes copied here are capped at
-        // MaxBufferedInputBytes, and exceeding it throws (surfaced as a content-free Failed result by the caller) instead
-        // of risking OOM. This bounds only the raw bytes we materialize into the buffer.
+        // Buffer to a seekable stream: PdfPig and the Open XML SDK both seek, and an upload stream may be forward-only.
+        // As a second bound on the endpoint's cap, the RAW bytes copied here stop at MaxBufferedInputBytes and throw.
         using var buffer = new MemoryStream();
         var inputBytes = await CopyWithCeilingAsync(content, buffer, DocumentExtractionLimits.MaxBufferedInputBytes, cancellationToken);
 
-        // Pre-parse preflight: for a compressed container (zip-based .docx, or a PDF), reject up front using ONLY the
-        // container's own cheap metadata — the zip central directory or the PDF page count — BEFORE the reader
-        // decompresses/materializes it. Without this, an admitted small container could expand to exhaust memory inside
-        // the parser and be caught only AFTER materialization. A hostile central directory can LIE about declared sizes,
-        // so this honest-header check is only the first layer: the post-parse output-char cap and expansion-ratio guard
-        // in the callers remain the backstop that measures the ACTUAL expanded output (defense in depth).
+        // Pre-parse preflight: reject a compressed container on its OWN cheap metadata BEFORE the reader materializes it,
+        // so it cannot exhaust parser memory first. A header can LIE, so the post-parse guards remain the backstop.
         buffer.Position = 0;
         var preflightReason = EvaluatePreflight(normalizedExtension, buffer);
         if (preflightReason is not null)
@@ -231,20 +223,20 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         };
     }
 
-    // Two-stage ZIP preflight, both stages reading only the central directory with no decompression. The first stage
-    // reads the declared total-entry count straight from the End Of Central Directory record, WITHOUT constructing a
-    // ZipArchive, and rejects an over-count archive before .NET materializes a ZipArchiveEntry for every member.
-    // Touching ZipArchive.Entries reads the whole central directory and allocates one entry object per member up front,
-    // so a metadata-heavy archive would otherwise allocate hundreds of MB before an in-loop counter could run; the EOCD
-    // check bounds that with zero entry allocations. Only once the declared count is within the ceiling, so
-    // materialization is bounded, does the second stage open ZipArchive and sum the declared sizes with overflow-safe
-    // arithmetic to reject an oversize or oversized-ratio archive. A stream that is not a readable zip is NOT rejected
-    // here: it falls through (return null) so the reader surfaces its own error, rather than duplicating error semantics.
+    /// <summary>
+    ///     Two-stage ZIP preflight, both stages reading only the central directory with no decompression.
+    /// </summary>
+    /// <remarks>
+    ///     Stage one reads the declared total-entry count straight from the End Of Central Directory record WITHOUT
+    ///     constructing a <c>ZipArchive</c>, rejecting an over-count archive before .NET materializes an entry per member:
+    ///     touching <c>ZipArchive.Entries</c> allocates one entry object per member up front, so a metadata-heavy archive
+    ///     would otherwise allocate hundreds of MB. Only once the count is within the ceiling does stage two open the
+    ///     archive and sum declared sizes overflow-safely. An unreadable zip falls through to the reader's own error.
+    /// </remarks>
     private string? EvaluateZipPreflight(MemoryStream buffer)
     {
-        // Stage 1: declared entry count from the EOCD record — zero ZipArchiveEntry allocations. A null result means no
-        // well-formed EOCD was found in the bounded search window (a malformed/non-zip stream): fall through so the
-        // reader surfaces its own error, matching the old InvalidDataException path.
+        // Stage 1: declared entry count from the EOCD record, with zero ZipArchiveEntry allocations. Null means no
+        // well-formed EOCD in the bounded window (a non-zip stream), so fall through and let the reader raise its error.
         var declaredEntryCount = TryReadDeclaredZipEntryCount(buffer);
         if (declaredEntryCount is null)
         {
@@ -258,19 +250,16 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                 $"Compressed document declares more than {_maxCompressedEntries} entries, which exceeds the extraction limit.");
         }
 
-        // Stage 2: size/ratio pass. Entry materialization is now bounded by the count check above (at most ceiling-count
-        // entry metadata objects). Declared before the try / disposed in the finally so the archive is released on every
-        // path (CA2000). A stream that passed the EOCD check but is not otherwise a readable zip throws
-        // InvalidDataException; we swallow it and return null so the reader surfaces its own error.
+        // Stage 2: size/ratio pass, its entry materialization bounded by the count check above. Declared before the try
+        // and disposed in the finally (CA2000); an unreadable zip's InvalidDataException yields null for the reader.
         ZipArchive? archive = null;
         try
         {
             // leaveOpen: the reader re-parses this same buffer afterward. Read mode reads only the central directory.
             archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
 
-            // Length is the declared uncompressed size from the central directory (cheap, and may be a lie — the
-            // post-parse guards are the backstop). CompressedLength is the on-disk size of the same entry. Both are
-            // aggregated overflow-safely in the seam below.
+            // Length is the declared uncompressed size from the central directory, cheap and possibly a lie the post-parse
+            // guards catch; CompressedLength is the entry's on-disk size. The seam below aggregates both overflow-safely.
             return EvaluateDeclaredZipSizes(archive.Entries.Select(static entry => new ZipEntrySize(entry.Length, entry.CompressedLength)),
                 _maxDeclaredUncompressedBytes,
                 _maxCompressionRatio);
@@ -287,10 +276,8 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         }
     }
 
-    // Overflow- and hostile-metadata-safe aggregation of a ZIP's declared central-directory sizes. Kept as a static
-    // seam (internal + InternalsVisibleTo) so the Zip64 overflow/negative-size rejection paths can be exercised without
-    // forging a binary archive that a real ZipArchive would parse. Returns a content-free rejection reason, or null when
-    // the declared totals are within bounds.
+    // Overflow- and hostile-metadata-safe aggregation of a ZIP's declared central-directory sizes, returning a
+    // content-free rejection reason or null. A static seam, so the Zip64 rejection paths need no forged archive.
     internal static string? EvaluateDeclaredZipSizes(IEnumerable<ZipEntrySize> entries,
         long maxDeclaredUncompressedBytes,
         int maxCompressionRatio)
@@ -308,8 +295,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
             }
 
             // Saturating adds: many individually-valid Zip64 sizes can sum past long.MaxValue and wrap to a small or
-            // negative total that would bypass the ceilings below. Clamp at long.MaxValue so an overflowing total
-            // always REJECTS rather than wrapping.
+            // negative total that bypasses the ceilings below, so clamp and let an overflowing total always REJECT.
             declaredUncompressed = SaturatingAdd(declaredUncompressed, length);
             compressed = SaturatingAdd(compressed, compressedLength);
         }
@@ -320,11 +306,8 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                 $"Compressed document declares {declaredUncompressed / (1024 * 1024)} MB uncompressed, which exceeds the {maxDeclaredUncompressedBytes / (1024 * 1024)} MB extraction limit.");
         }
 
-        // Ratio guard, overflow-safe: reject when declared > compressed * ratio, but never evaluate the product when it
-        // would overflow long. When it would overflow, the threshold exceeds any representable declared total, so the
-        // ratio cannot be exceeded — the absolute ceiling above is the operative guard for such extreme compressed sizes
-        // (physically impossible within the bounded input buffer, reachable only via lying metadata that the absolute
-        // ceiling already caught).
+        // Ratio guard, overflow-safe: reject a declared total above compressed times ratio, never evaluating a product
+        // that would overflow long — such a threshold exceeds any representable total, so the absolute ceiling governs.
         if (compressed > 0 && maxCompressionRatio > 0 && compressed <= long.MaxValue / maxCompressionRatio)
         {
             var threshold = compressed * maxCompressionRatio;
@@ -344,12 +327,16 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         return current > long.MaxValue - addend ? long.MaxValue : current + addend;
     }
 
-    // Reads the declared total-entry count from a ZIP's End Of Central Directory record — and, when that classic field
-    // is saturated (0xFFFF), from the Zip64 EOCD locator + record it points to — over the already-buffered bytes and
-    // WITHOUT constructing a ZipArchive (so no ZipArchiveEntry is allocated). Returns the declared count, or null when
-    // no well-formed EOCD is found within the bounded search window (a malformed/non-zip stream), so the caller falls
-    // through to the reader's own error handling. Strictly bounded: never scans outside the trailing window, and any
-    // structural inconsistency yields null rather than a throw.
+    /// <summary>
+    ///     Reads the declared total-entry count from a ZIP's End Of Central Directory record — and, when that classic
+    ///     field is saturated at <c>0xFFFF</c>, from the Zip64 EOCD locator and record it points to.
+    /// </summary>
+    /// <remarks>
+    ///     It works over the already-buffered bytes and WITHOUT constructing a <c>ZipArchive</c>, so no entry is
+    ///     allocated. Returns null when no well-formed EOCD is found within the bounded search window, a malformed or
+    ///     non-zip stream, so the caller falls through to the reader's own error handling. Strictly bounded: it never
+    ///     scans outside the trailing window, and any structural inconsistency yields null rather than a throw.
+    /// </remarks>
     private static long? TryReadDeclaredZipEntryCount(MemoryStream buffer)
     {
         const uint EocdSignature = 0x06054b50;
@@ -428,18 +415,17 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
     // in for the reader's generic failure so a malformed PDF is NOT handed to the reader for a second full parse.
     private const string PdfUnparseableReason = "The document could not be parsed.";
 
-    // Opens the PDF far enough to read its declared page count (PdfPig reads the xref/catalog, not the per-page content
-    // streams) and rejects when it exceeds the page ceiling — before the expensive per-page text extraction runs. The
-    // open runs against a non-owning VIEW over the buffered bytes (no copy) so PdfPig seeking/closing its stream never
-    // disturbs the shared buffer the reader re-parses afterward.
-    //
-    // Honest residual: PdfDocument.Open itself IS parser work (it reads the cross-reference/catalog), so the open cost
-    // precedes the page cap — the cap bounds per-page text EXTRACTION, not the document-open cost. Contract is
-    // "narrow + no-reparse": we catch ONLY PdfPig's own format/document exceptions (a malformed document), never
-    // resource failures such as OutOfMemoryException, which must propagate. On a format failure we do NOT return null
-    // (which would let the reader re-open the same bytes for a wasted second parse); instead we return a content-free
-    // reason so the caller fails the document up front. On success — a healthy, within-cap document — we return null and
-    // the reader performs its own parse; that second parse is the accepted cost of a healthy document.
+    /// <summary>
+    ///     Opens the PDF far enough to read its declared page count and rejects one past the page ceiling, before the
+    ///     expensive per-page text extraction runs.
+    /// </summary>
+    /// <remarks>
+    ///     PdfPig reads the xref and catalog, not the per-page content streams, against a non-owning VIEW over the
+    ///     buffered bytes, so its seeking never disturbs the shared buffer the reader re-parses. <c>PdfDocument.Open</c>
+    ///     is itself parser work, so the cap bounds per-page EXTRACTION, not the open. The contract is narrow and
+    ///     no-reparse: only PdfPig's own format exceptions are caught, never resource failures such as
+    ///     <c>OutOfMemoryException</c>, and a format failure returns a content-free reason rather than null.
+    /// </remarks>
     private string? EvaluatePdfPreflight(MemoryStream buffer)
     {
         int pageCount;
@@ -467,9 +453,8 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         return null;
     }
 
-    // Copies source into destination, failing fast once more than maxBytes have been read so a bomb upload cannot
-    // materialize an unbounded buffer. Returns the total bytes copied. Throws InvalidDataException (content-free) when
-    // the ceiling is exceeded.
+    // Copies source into destination and returns the bytes copied, failing fast past maxBytes with a content-free
+    // InvalidDataException so a bomb upload cannot materialize an unbounded buffer.
     private static async Task<long> CopyWithCeilingAsync(Stream source, Stream destination, long maxBytes, CancellationToken cancellationToken)
     {
         var rented = ArrayPool<byte>.Shared.Rent(81920);
@@ -521,9 +506,8 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         return EvaluateExpansion(inputBytes, outputChars);
     }
 
-    // Expansion-ratio guard: fires only once the output is already large (above the floor) AND it exceeds the allowed
-    // multiple of the input bytes — the signature of a small container that expanded into a huge text body. Returns a
-    // content-free failure reason, or null.
+    // Expansion-ratio guard returning a content-free reason or null: it fires only once the output is above the floor AND
+    // past the allowed multiple of the input bytes — the signature of a small container expanded into a huge text body.
     private string? EvaluateExpansion(long inputBytes, long outputChars)
     {
         if (outputChars < _minCharsForExpansionGuard)

@@ -13,17 +13,11 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     and pushed straight into the live session's <c>Others</c> lane.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Type-level <see cref="SupportedOSPlatformAttribute" /> rather than a CA1416 suppression, matching
-///         <c>WindowsImageJobObjectProcessHandle</c>. <c>AddNodeTranscription</c> registers this only behind
-///         <c>OperatingSystem.IsWindows()</c>, which is what makes the attribute honest.
-///     </para>
-///     <para>
-///         <b>There is one capture scope, and it is not a choice.</b> <see cref="ProcessLoopbackMode" /> has exactly
-///         two members, and <c>ExcludeTargetProcessTree</c> means "everything on the endpoint <i>except</i> the
-///         target" — offering it as "this application only" would record every other application on the box while
-///         the user interface claimed the opposite. It appears nowhere in this product.
-///     </para>
+///     Type-level <see cref="SupportedOSPlatformAttribute" /> rather than a CA1416 suppression, matching
+///     <c>WindowsImageJobObjectProcessHandle</c>; <c>AddNodeTranscription</c> registers this only behind
+///     <c>OperatingSystem.IsWindows()</c>, which is what makes the attribute honest. There is one capture scope and it
+///     is not a choice: <see cref="ProcessLoopbackMode" />'s other member, <c>ExcludeTargetProcessTree</c>, means
+///     everything on the endpoint EXCEPT the target, so it appears nowhere in this product.
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSource
@@ -51,8 +45,8 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
 
     /// <summary>Creates the source.</summary>
     /// <param name="registry">
-    ///     The in-process audio seam. Deliberately not <c>ITranscriptionService</c>: a persist-free live session
-    ///     never touches that service, so hanging audio there would make the persist-free path depend on it.
+    ///     The in-process audio seam, not <c>ITranscriptionService</c> — a persist-free live session never touches it,
+    ///     so audio hung there would make that path depend on it.
     /// </param>
     /// <param name="logger">Enumeration failures are reported here; they never fail the picker.</param>
     public WindowsProcessAudioCaptureSource(ILiveTranscriptionSessionRegistry registry,
@@ -90,21 +84,16 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
                                                                        + TranscriptionProcessCaptureNotSupportedException.DefaultMessage);
         }
 
-        // Two version numbers, two jobs — do not merge them. IsSupported gates the CAPABILITY on Microsoft's
-        // documented build 20348 for AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS; this guard is what satisfies CA1416
-        // against NAudio's [SupportedOSPlatform("windows10.0.19041.0")] annotation on WithProcessLoopback. 20348 is
-        // the higher floor, so this branch is unreachable in practice — the analyzer cannot know that.
+        // Two version numbers, two jobs — do not merge them. IsSupported gates the CAPABILITY on Microsoft's documented build
+        // 20348; this guard satisfies CA1416 against NAudio's 19041 annotation, so the branch is unreachable in practice.
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
         {
             throw new TranscriptionProcessCaptureNotSupportedException($"Transcription session {sessionId} cannot capture process {processId}. "
                                                                        + TranscriptionProcessCaptureNotSupportedException.DefaultMessage);
         }
 
-        // BuildAsync, never Build: the process-loopback activation path is asynchronous and Build() throws for it.
-        // No WithFormat either — the process-loopback virtual device rejects AutoConvertPcm, so a format it does
-        // not accept is an IAudioClient::Initialize failure rather than a silent resample. Taking NAudio's
-        // documented 44.1 kHz stereo float fallback and converting in managed code is one path that always
-        // initialises, at the cost of a resample the target hardware will not notice.
+        // BuildAsync, never Build: the process-loopback activation path is asynchronous and Build() throws for it. No WithFormat
+        // either — the virtual device rejects AutoConvertPcm — so take NAudio's documented 44.1 kHz stereo float and convert here.
         var recorder = await new WasapiRecorderBuilder()
                              .WithProcessLoopback(checked((uint)processId), CaptureMode)
                              .WithBufferLength(CaptureBufferMilliseconds)
@@ -116,9 +105,8 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
             var rented = ArrayPool<byte>.Shared.Rent(DrainChunkBytes);
             try
             {
-                // CaptureAsync initialises and starts the audio client itself and throws "Already recording" if
-                // StartRecording ran first; its own finally stops and resets the client when the enumeration ends
-                // or the token is cancelled, so there is nothing left for this method to stop.
+                // CaptureAsync initialises and starts the audio client itself and throws "Already recording" if StartRecording
+                // ran first; its own finally stops and resets the client, so there is nothing left for this method to stop.
                 await foreach (var buffer in recorder.CaptureAsync(cancellationToken))
                 {
                     converter.Write(buffer.Data.Span);
@@ -131,9 +119,8 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
                             break;
                         }
 
-                        // The registry copies the frame before queueing it, so the rented array is free to be
-                        // reused the moment this returns. It also returns without waiting for inference, which is
-                        // what keeps this loop from dropping audio at the source.
+                        // The registry copies the frame before queueing it, so the rented array is free the moment this
+                        // returns. It also returns without waiting for inference, which keeps this loop from dropping audio.
                         await _registry.PushAudioAsync(sessionId, TranscriptChannel.Others, rented.AsMemory(0, written), cancellationToken);
                     }
                 }
@@ -149,9 +136,8 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
     {
         var sessions = new List<(int ProcessId, bool Active)>();
 
-        // Every one of these wraps a COM object. Leaving one undisposed defers the underlying release to the RCW
-        // finalizer, and the picker is a poll-able route, so an undisposed collection per poll piles audio-engine
-        // releases onto a garbage collection that may not come soon.
+        // Every one of these wraps a COM object; leaving one undisposed defers the release to the RCW finalizer, and the picker
+        // is a poll-able route, so an undisposed collection per poll piles audio-engine releases onto a collection that may lag.
         using var enumerator = new MMDeviceEnumerator();
         using var devices = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
         foreach (var device in devices)
@@ -162,9 +148,8 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
             }
         }
 
-        // One application playing to two endpoints, or holding an idle session beside a playing one, enumerates
-        // more than once. De-duplicating and OR-ing activity is pure, names no WASAPI type, and is therefore the
-        // one part of the picker the Linux gate can run: see ProcessAudioCaptureCandidates.
+        // One application playing to two endpoints, or holding an idle session beside a playing one, enumerates more than once.
+        // De-duplicating and OR-ing activity names no WASAPI type, so ProcessAudioCaptureCandidates is what the Linux gate runs.
         return ProcessAudioCaptureCandidates.Aggregate(sessions, ResolveProcessName);
     }
 
@@ -180,11 +165,8 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
                 continue;
             }
 
-            // AudioSessionManager.Sessions returns Active, Inactive AND Expired alike. An expired session belongs
-            // to a process that has already gone, so listing it offers the operator a target that can only fail;
-            // an inactive one is a real process that simply is not playing right now, which is what HasAudio is
-            // for. This loop cannot be exercised on the Linux gate — it is Windows-only COM — which is why it now
-            // does nothing but collect pairs and hands every decision to a helper that can be.
+            // AudioSessionManager.Sessions returns Active, Inactive AND Expired alike: an expired session's process has already
+            // gone, so listing it offers a target that can only fail, while an inactive one is real — which is what HasAudio is for.
             var state = session.State;
             if (state == AudioSessionState.AudioSessionStateExpired)
             {

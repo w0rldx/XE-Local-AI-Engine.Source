@@ -143,12 +143,8 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
             }
             catch (BenchmarkEligibilityException)
             {
-                // Non-chat or non-llama.cpp entries are not benchmark candidates. A chat model that carries an
-                // optional mmproj projector companion IS a candidate — the benchmark is text-only either way. An
-                // installed model whose registry entry cannot be read arrives here too (see
-                // ReadEligibleModelFactsAsync) so a single broken registry entry costs its own row, not the whole
-                // catalog. Content is NOT verified here: this listing believes the registry, and the run freeze is
-                // where a model that no longer matches its recorded identity is caught.
+                // Non-chat and non-llama.cpp entries are not candidates; a chat model with an mmproj projector IS one — the benchmark is text-only either way. An unreadable entry arrives here
+                // too (ReadEligibleModelFactsAsync), so one broken entry costs only its row. Content is NOT verified: the listing believes the registry, and the freeze catches a mismatch.
             }
             catch (BenchmarkNotFoundException)
             {
@@ -159,12 +155,12 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
         return eligible;
     }
 
-    /// <summary>
-    ///     The catalog's eligibility read: registry-recorded facts, no content hashing. The listing calls this once per
-    ///     installed model, so verifying here re-hashed the entire models directory on every request (measured: 6m34s
-    ///     over 174 GB, page-cache warm). Full verification belongs to <see cref="BenchmarkRunFreezeService" />, which
-    ///     pays it for the one model a run actually freezes.
-    /// </summary>
+    /// <summary>The catalog's eligibility read: registry-recorded facts, no content hashing.</summary>
+    /// <remarks>
+    ///     The listing calls this once per installed model, so verifying here re-hashed the entire models directory on
+    ///     every request (measured: 6m34s over 174 GB, page-cache warm). Full verification belongs to
+    ///     <see cref="BenchmarkRunFreezeService" />, which pays it for the one model a run actually freezes.
+    /// </remarks>
     private async Task<InstalledModelFacts> ReadEligibleModelFactsAsync(string modelName, CancellationToken cancellationToken)
     {
         InstalledModelFacts? facts;
@@ -210,9 +206,8 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
         }
         catch (InstalledGgufSnapshotException exception)
         {
-            // One unverifiable installed model must never fail the whole catalog: the list path already isolates a
-            // BenchmarkEligibilityException per entry, and the single-model path turns this into the typed 422 the
-            // endpoint already declares instead of a bare 500. The store's own reason is logged, never returned.
+            // One unverifiable installed model must never fail the whole catalog: the list path isolates a BenchmarkEligibilityException per entry,
+            // and the single-model path turns this into the typed 422 the endpoint already declares instead of a bare 500. The store's own reason is logged, never returned.
             _logger.LogWarning(exception, "Benchmark catalog: installed model {ModelName} could not be verified and is excluded.", modelName);
             throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.", exception);
         }

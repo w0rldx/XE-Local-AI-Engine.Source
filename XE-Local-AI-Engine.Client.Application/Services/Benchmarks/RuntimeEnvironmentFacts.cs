@@ -8,17 +8,20 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>The host facts a benchmark run was launched on. Aggregates only — no hostnames, serials or paths.</summary>
-/// <param name="DriverVersion">
-///     Always <see langword="null" /> today: the device audit enumerates through the runtime itself, which reports no
-///     driver version. Present so a later probe can fill it without a schema change.
-/// </param>
+/// <remarks>
+///     <paramref name="DriverVersion" /> is always <see langword="null" /> today: the device audit enumerates through
+///     the runtime itself, which reports no driver version. Present so a later probe can fill it without a schema
+///     change.
+/// </remarks>
+/// <param name="DriverVersion">The GPU driver version, when a probe can report one.</param>
 public sealed record BenchmarkGpuFactsV1(string Name, long? TotalBytes, string? DriverVersion);
 
-/// <param name="OsDescription">
-///     The host OS as the runtime describes it ("Linux 6.18.0-example-WSL2 ..."). Deliberately NOT named
-///     <c>os</c>: the receipt already carries a bounded <c>os</c> token, and two same-named fields of different shapes
-///     read as a contradiction in a field-by-field diff.
-/// </param>
+/// <summary>The host hardware facts a benchmark run was launched on.</summary>
+/// <remarks>
+///     <paramref name="OsDescription" /> is deliberately NOT named <c>os</c>: the receipt already carries a bounded
+///     <c>os</c> token, and two same-named fields of different shapes read as a contradiction in a field-by-field diff.
+/// </remarks>
+/// <param name="OsDescription">The host OS as the runtime describes it ("Linux 6.18.0-example-WSL2 ...").</param>
 /// <param name="DeviceAuditBackend">What the selected runtime actually enumerated: <c>cuda|vulkan|cpu|unknown</c>.</param>
 public sealed record BenchmarkHardwareFactsV1(
     string OsDescription,
@@ -37,18 +40,19 @@ public sealed record BenchmarkLlamaRuntimeFactsV1(string Version, string Variant
 
 /// <summary>
 ///     What the node looked like immediately before a benchmark run's llama-server spawn: the selected runtime bundle,
-///     the host hardware, and the installed llama.cpp runtime's provenance. Facts only — this record makes no claim
-///     that two runs carrying the same facts are comparable.
+///     the host hardware, and the installed llama.cpp runtime's provenance.
 /// </summary>
+/// <remarks>
+///     Facts only — this record makes no claim that two runs carrying the same facts are comparable. A capture never
+///     fails the run, so an empty <paramref name="Missing" /> is the only proof that everything was observed, and it
+///     IS part of the hash: a part that could not be read is itself an environmental fact.
+///     <paramref name="CapturedAtUtc" /> is persisted but deliberately NOT part of <c>EnvironmentFactsHash</c> — that
+///     hash answers "is this the same environment?", and a wall clock would make two runs of one node differ.
+/// </remarks>
 /// <param name="Missing">
-///     The parts that could not be captured, by name (<c>runtimeBundle</c>, <c>hardware</c>, <c>llamaRuntime</c>). A
-///     capture never fails the run, so an empty list is the only proof that everything was observed. It IS part of the
-///     hash: a part that could not be read is itself an environmental fact.
+///     The parts that could not be captured, by name (<c>runtimeBundle</c>, <c>hardware</c>, <c>llamaRuntime</c>).
 /// </param>
-/// <param name="CapturedAtUtc">
-///     When this capture was taken. Persisted, but deliberately NOT part of <c>EnvironmentFactsHash</c> — that hash
-///     answers "is this the same environment?", and a wall clock would make two runs of an unchanged node differ.
-/// </param>
+/// <param name="CapturedAtUtc">When this capture was taken.</param>
 public sealed record RuntimeEnvironmentFactsV1(
     int SchemaVersion,
     RuntimeBundleFactsV1? RuntimeBundle,

@@ -5,10 +5,13 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 
 /// <summary>
-///     Shared policy for node-local, non-interactive training model calls. It owns the common deadline, output budget,
-///     low-cardinality telemetry and provider-error translation. It never installs function-invocation middleware;
-///     evaluation callers may attach declaration-only tool metadata, while dataset generation attaches no tools.
+///     Shared policy for node-local, non-interactive training model calls: the common deadline, output budget,
+///     low-cardinality telemetry and provider-error translation.
 /// </summary>
+/// <remarks>
+///     It never installs function-invocation middleware; evaluation callers may attach declaration-only tool
+///     metadata, while dataset generation attaches no tools.
+/// </remarks>
 internal static class TrainingAiClientPolicy
 {
     internal const int MaxOutputTokens = 2048;

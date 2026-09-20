@@ -4,35 +4,17 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     The host's only door onto the <c>Providers.LlamaServer</c> contracts: the prerequisite checklist, the start /
-///     cancel / status / remove verbs of the managed source build, the running-process
-///     count and health snapshot, the eject boundary, the installed-runtime record plus update snapshot a
-///     runtime-status response is built from, and the provision-then-lease pair the inbound model proxy forwards
-///     through. A host type may not take a concrete provider's contract itself (the host-dependency rule), so each call
-///     arrives here unchanged — this type adds no policy of its own, decides nothing about refusals, outcomes, the OS
-///     gate or the keep-model-warm gate, and re-exposes only the members its callers call. The one exception is the
-///     shared remove gate below, which is behaviour the endpoints already delegated to a static helper and which moved
-///     here with it rather than being duplicated per endpoint.
-///     <para>
-///         The supervisor's ensure-running and inference-lease surface IS on this type, because
-///         <c>Services/Proxy/LocalModelProxyForwarder</c> needs both and stays in the host (it owns the
-///         <c>HttpContext</c> an application service may not). The forwarder is the only caller of that pair; the
-///         endpoints do not use it.
-///     </para>
-///     <para>
-///         The first-run provisioning trio — GPU-variant probe, binary ensure, acquisition-status report — is here for
-///         the same reason: <c>BackgroundServices/FirstRunModelProvisioningService</c> needs all three and stays in the
-///         host, because the desktop-launch decision it gates on is a host fact (process args plus the Velopack install
-///         kind) that the application layer cannot resolve. It is the only caller of those three.
-///     </para>
-///     <para>
-///         Deliberately off this surface, because nothing in the host asks for them: the binary manager's install and
-///         adopt verbs, the build service's <c>RecoverAsync</c> / <c>ShutdownAsync</c>, the binary manager's
-///         legacy-only source-build removal, the installed-runtime store's lock / write / delete, the update
-///         state's <c>Store</c>, the activity reservation's <c>TryReserve</c> / <c>TryRelease</c>, and the supervisor's
-///         evict, profiling and benchmark surface.
-///     </para>
+///     The host's only door onto the <c>Providers.LlamaServer</c> contracts: prerequisite checklist, managed
+///     source-build verbs, process count and health, the eject boundary, the installed-runtime and update records, and
+///     the provision-then-lease pair.
 /// </summary>
+/// <remarks>
+///     A host type may not take a concrete provider's contract, so each call arrives here unchanged; this type adds no
+///     policy (no refusal, outcome, OS-gate or keep-model-warm decision) and re-exposes only the members its callers
+///     call. The shared remove gate below is the one exception. Why the ensure-running/inference-lease pair and the
+///     first-run trio are on this surface, and what is deliberately off it, are in
+///     docs/wiki/03-local-runtime-and-providers.md ("In-app source builds (Linux)").
+/// </remarks>
 public sealed class LlamaCppRuntimeOrchestrationService
 {
     private readonly IRuntimeAcquisitionStatusRegistry _acquisitionStatus;
@@ -108,10 +90,13 @@ public sealed class LlamaCppRuntimeOrchestrationService
     }
 
     /// <summary>
-    ///     Provisions the <c>(model, role)</c> process and returns its loopback endpoint, spawning one if none is warm.
+    ///     Provisions the <c>(model, role)</c> process and returns its loopback endpoint, spawning one if none is
+    ///     warm.
+    /// </summary>
+    /// <remarks>
     ///     Verbatim pass-through: every refusal, cap and backoff decision stays in the supervisor, and a failure still
     ///     surfaces as the supervisor's own <c>LlamaRuntimeException</c>.
-    /// </summary>
+    /// </remarks>
     public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         return _supervisor.EnsureRunningAsync(modelName, role, ct);
@@ -119,9 +104,12 @@ public sealed class LlamaCppRuntimeOrchestrationService
 
     /// <summary>
     ///     Takes a reference-counted inference lease against the currently-running <c>(model, role)</c> process so a
-    ///     graceful eject drains the request instead of killing it mid-flight. Verbatim pass-through: the caller reads
-    ///     the three outcomes off the returned acquisition and MUST dispose a granted lease.
+    ///     graceful eject drains the request instead of killing it mid-flight.
     /// </summary>
+    /// <remarks>
+    ///     Verbatim pass-through: the caller reads the three outcomes off the returned acquisition and MUST dispose a
+    ///     granted lease.
+    /// </remarks>
     public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role)
     {
         return _supervisor.TryAcquireInferenceLease(modelName, role);
@@ -194,11 +182,14 @@ public sealed class LlamaCppRuntimeOrchestrationService
     }
 
     /// <summary>
-    ///     Shared remove gate for the managed source-build runtime. Refuses while a source build is
-    ///     active — re-checked AFTER the mutation lease is taken so a build that starts during acquisition still blocks —
-    ///     refuses when the lease cannot be taken or any llama-server process is still running (eject-first), and only
-    ///     then runs <paramref name="removeAsync" /> while holding the lease. The lease is disposed on every path.
+    ///     Shared remove gate for the managed source-build runtime: runs <paramref name="removeAsync" /> while holding
+    ///     the runtime mutation lease, which is disposed on every path.
     /// </summary>
+    /// <remarks>
+    ///     Refuses while a source build is active — re-checked AFTER the lease is taken, so a build that starts during
+    ///     acquisition still blocks — and refuses when the lease cannot be taken or any llama-server process is still
+    ///     running (eject-first).
+    /// </remarks>
     internal static async Task<LlamaCppRuntimeRemovalOutcome> TryRemoveAsync(ILlamaServerProcessSupervisor processSupervisor,
         ILlamaCppSourceBuildActivity sourceBuildActivity,
         Func<CancellationToken, Task> removeAsync,

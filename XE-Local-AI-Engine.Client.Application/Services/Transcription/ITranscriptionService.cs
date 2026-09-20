@@ -8,15 +8,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     file-transcription path.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Registered as a singleton. It owns the in-flight cancellation registry, which must outlive the request that
-///         started a transcription, and it composes the singleton whisper runtime; it opens its own dependency-injection
-///         scope per store operation, the same posture the image job coordinator uses.
-///     </para>
-///     <para>
-///         No member of this contract carries audio. The uploaded bytes live in a temporary file the caller owns for
-///         exactly one transcription and are deleted with the <see cref="TranscriptionUploadSlot" /> that minted it.
-///     </para>
+///     Registered as a singleton: it owns the in-flight cancellation registry, which must outlive the request that started a
+///     transcription, and it composes the singleton whisper runtime, opening its own dependency-injection scope per store
+///     operation — the same posture the image job coordinator uses. No member of this contract carries audio: the uploaded
+///     bytes live in a temporary file the caller owns for exactly one transcription and are deleted with the
+///     <see cref="TranscriptionUploadSlot" /> that minted it.
 /// </remarks>
 public interface ITranscriptionService
 {
@@ -62,24 +58,15 @@ public interface ITranscriptionService
     Task<TranscribeFileResult> TranscribeFileAsync(TranscriptionUploadSlot slot, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Starts live capture for an existing session: reads the row, builds its
-    ///     <see cref="LiveSessionOptions" />, registers the lanes and moves the row to <c>Transcribing</c>.
+    ///     Starts live capture for an existing session: reads the row, builds its <see cref="LiveSessionOptions" />,
+    ///     registers the lanes and moves the row to <c>Transcribing</c>.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         It reads <b>only</b> the row. The model comes from the row, the language, translation and window from
-    ///         its stored config, and the channels from its source kind; nothing here consults a node setting, so a
-    ///         session transcribes under the options it was created with however long it waited.
-    ///     </para>
-    ///     <para>
-    ///         It is idempotent and it rolls back: a session already live returns its current state without
-    ///         registering a second set of lanes, and a registration that throws leaves the row in <c>Created</c>
-    ///         rather than stranding it in <c>Transcribing</c> with nothing behind it.
-    ///     </para>
-    ///     <para>
-    ///         This is one way to build a live session, not the only one. A persist-free dictation session has no row
-    ///         and calls <see cref="ILiveTranscriptionSessionRegistry.StartLiveSessionAsync" /> directly.
-    ///     </para>
+    ///     It reads ONLY the row: model from the row, language, translation and window from its stored
+    ///     config, channels from its source kind. Nothing consults a node setting, so a session transcribes under the
+    ///     options it was created with however long it waited. Idempotent and rolling back — an already-live session
+    ///     returns its state without registering a second set of lanes, and a registration that throws leaves the row
+    ///     in <c>Created</c>, never stranded in <c>Transcribing</c>. A persist-free session has no row and calls <see cref="ILiveTranscriptionSessionRegistry.StartLiveSessionAsync" /> instead.
     /// </remarks>
     /// <exception cref="LiveTranscriptionSourceKindException">The session's source kind has no live capture path.</exception>
     Task<StartLiveResult> StartLiveAsync(Guid sessionId, CancellationToken cancellationToken);

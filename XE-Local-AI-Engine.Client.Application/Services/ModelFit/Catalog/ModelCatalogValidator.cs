@@ -5,11 +5,14 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 
 /// <summary>
-///     Validates a candidate catalog JSON document — the schema-version gate + per-field checks every bundled and
-///     remote-refreshed catalog must pass before it can replace the served snapshot. Tolerant of parse failures (never
-///     throws for malformed input) but strict on content: a document with any invalid entry is rejected wholesale rather
-///     than silently dropping the bad rows, so a corrupt remote payload can never partially poison recommendations.
+///     Validates a candidate catalog JSON document: the schema-version gate plus the per-field checks every bundled
+///     and remote-refreshed catalog must pass before it can replace the served snapshot.
 /// </summary>
+/// <remarks>
+///     Tolerant of parse failures (never throws for malformed input) but strict on content: a document with any
+///     invalid entry is rejected wholesale rather than silently dropping the bad rows, so a corrupt remote payload can
+///     never partially poison recommendations.
+/// </remarks>
 public static class ModelCatalogValidator
 {
     /// <summary>The only <see cref="ModelCatalogDocument.SchemaVersion" /> this build understands.</summary>

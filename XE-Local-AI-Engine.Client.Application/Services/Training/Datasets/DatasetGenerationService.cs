@@ -7,17 +7,20 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 public interface IDatasetGenerationService
 {
     /// <summary>
-    ///     Creates the dataset and enqueues its single generation work item. Refused with a <c>TrainingBusy</c> conflict
-    ///     while something holds <see cref="IGpuWorkGate" /> exclusively (decision #13). That refusal is UX only — the
-    ///     enqueue is harmless while a run is active; the QUEUE is what actually enforces exclusivity, at its claim.
+    ///     Creates the dataset and enqueues its single generation work item. Refused with a <c>TrainingBusy</c>
+    ///     conflict while something holds <see cref="IGpuWorkGate" /> exclusively (decision #13).
     /// </summary>
+    /// <remarks>
+    ///     That refusal is UX only — the enqueue is harmless while a run is active; the QUEUE is what actually
+    ///     enforces exclusivity, at its claim.
+    /// </remarks>
     Task<TrainingDatasetRecord> StartAsync(Guid definitionId, long expectedDefinitionVersion, string name, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Requests cancellation. A queued dataset is terminalized directly; a generating one is signalled through the
-    ///     executor's registry so it can stop cooperatively and still be recorded as cancelled. Returns
-    ///     <see langword="false" /> for an unknown dataset or one whose work item is already terminal.
+    ///     Requests cancellation: a queued dataset is terminalized directly, while a generating one is signalled
+    ///     through the executor's registry so it stops cooperatively and is still recorded as cancelled.
     /// </summary>
+    /// <returns><see langword="false" /> for an unknown dataset or one whose work item is already terminal.</returns>
     Task<bool> CancelAsync(Guid datasetId, CancellationToken cancellationToken = default);
 }
 

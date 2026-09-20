@@ -1,21 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Default <see cref="IRankingFusionService" />. Implements Reciprocal Rank Fusion: for each chunk, the base fused
-///     score is the sum, over every list the chunk appears in, of <c>1 / (k + rank)</c> where <c>rank</c> is the chunk's
-///     1-based position in that list. The rank-smoothing constant <c>k = 60</c> is the value from the original RRF paper
-///     (Cormack et al., 2009); it damps the influence of top ranks so no single arm dominates the fusion.
-///     <para>
-///         <see cref="FuseScored" /> adds an OPTIONAL score-aware tilt on top of that base. Classic RRF discards the arm
-///         scores, so a barely-relevant rank-1 hit fuses identically to a strong one. The tilt fixes that WITHOUT
-///         reintroducing the scale problem RRF exists to solve (BM25 magnitude and cosine similarity live on incomparable
-///         scales): each arm's scores are min-max normalized WITHIN the arm to <c>[0, 1]</c>, then the RRF contribution is
-///         multiplied by <c>1 + weight * normalizedScore</c>. Because the tilt is multiplicative on the RRF term, it stays
-///         on the RRF scale (no additive blow-up), reduces to EXACT pure RRF at <c>weight = 0</c> or when an arm carries no
-///         usable score spread, and only ever re-orders entries whose ranks the arm's own magnitudes disagree about.
-///     </para>
-///     Stateless and deterministic — safe as a singleton.
+///     Default <see cref="IRankingFusionService" />: a chunk's base fused score is the sum, over every list it appears
+///     in, of <c>1 / (k + rank)</c> with <c>rank</c> its 1-based position in that list.
 /// </summary>
+/// <remarks>
+///     The rank-smoothing constant <c>k = 60</c> is the value from the original RRF paper (Cormack et al., 2009); it damps
+///     the influence of top ranks so no single arm dominates. <see cref="FuseScored" /> adds an optional tilt: the RRF
+///     contribution is multiplied by <c>1 + weight * normalizedScore</c>, each arm's scores being min-max normalized WITHIN
+///     the arm. Multiplicative on the RRF term, the tilt stays on the RRF scale, reduces to exact pure RRF at
+///     <c>weight = 0</c> or on an arm with no usable spread, and re-orders only entries the magnitudes disagree about.
+/// </remarks>
 public sealed class ReciprocalRankFusion : IRankingFusionService
 {
     /// <summary>Rank-smoothing constant from the original RRF paper. A larger value flattens the contribution of top ranks.</summary>
@@ -25,9 +20,8 @@ public sealed class ReciprocalRankFusion : IRankingFusionService
     {
         ArgumentNullException.ThrowIfNull(rankedLists);
 
-        // Project the id-only lists onto scored arms with a placeholder score, then run the shared core with the score
-        // tilt disabled (Rrf). This is exactly the classic RRF the score-aware path degrades to, so the two paths cannot
-        // drift apart.
+        // Project the id-only lists onto scored arms with a placeholder score, then run the shared core with the tilt
+        // disabled (Rrf) — exactly the classic RRF the score-aware path degrades to, so the two paths cannot drift apart.
         var arms = new List<IReadOnlyList<RankFusionInput>?>(rankedLists.Count);
         foreach (var list in rankedLists)
         {
@@ -56,8 +50,7 @@ public sealed class ReciprocalRankFusion : IRankingFusionService
             }
 
             // Normalize this arm's scores to [0, 1] ONLY when the tilt is active AND the arm carries a usable spread; a
-            // constant/single/non-finite arm yields the neutral normalizer (every entry maps to 0 → tilt of exactly 1 →
-            // pure RRF for that arm), so a degenerate score column never distorts the rank-based order.
+            // constant, single or non-finite arm gets the neutral normalizer (every entry 0, tilt 1, so pure RRF for it).
             var normalizer = applyTilt ? ArmScoreNormalizer.ForArm(arm) : ArmScoreNormalizer.Neutral;
 
             for (var position = 0; position < arm.Count; position++)
@@ -84,11 +77,14 @@ public sealed class ReciprocalRankFusion : IRankingFusionService
     }
 
     /// <summary>
-    ///     Per-arm min-max score normalizer. <see cref="Normalize" /> maps a raw arm score into <c>[0, 1]</c> where the
-    ///     arm's strongest score is 1 and its weakest is 0. When the arm has no usable spread — fewer than two entries, a
-    ///     constant score column, or any non-finite bound — every score maps to <c>0</c> (the neutral tilt), so
-    ///     normalization can never turn a degenerate score column into a divide-by-zero or an arbitrary re-ordering.
+    ///     Per-arm min-max score normalizer: <see cref="Normalize" /> maps a raw arm score into <c>[0, 1]</c>, the arm's
+    ///     strongest score at 1 and its weakest at 0.
     /// </summary>
+    /// <remarks>
+    ///     With no usable spread — fewer than two entries, a constant score column, or any non-finite bound — every score
+    ///     maps to <c>0</c>, the neutral tilt, so a degenerate score column can never become a divide-by-zero or an
+    ///     arbitrary re-ordering.
+    /// </remarks>
     private readonly struct ArmScoreNormalizer
     {
         private readonly double _min;

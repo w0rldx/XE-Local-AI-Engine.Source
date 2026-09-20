@@ -8,20 +8,17 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
-///     Default <see cref="IKnowledgeDocumentCatalogService" />. Reads and lightly mutates the <c>knowledge_documents</c>
-///     catalog over the raw-SQL path (matching the rest of the knowledge lane), decrypting the display name via the
-///     matching <see cref="NodeChatDbContext" /> helper. The stale-model flag compares each row's stored embedding model
-///     against the RESOLVED embedding model name (from <see cref="IEmbeddingModelResolver" />, computed once per call) —
-///     the same identity the ingestion and search lanes use as the vector scope key — so a same-dimension model swap that
-///     leaves <see cref="KnowledgeBaseOptions.EmbeddingModelName" /> unchanged is still detected as stale. Staleness is
-///     evaluated ONLY when the resolver's outcome is confident (an installed model was actually matched). When resolution
-///     is not confident (the provider could not be reached, or the resolver could not match anything installed and fell
-///     back to the configured name), staleness is skipped entirely rather than compared against that fallback name — on a
-///     llama.cpp node the stored <c>embedding_model</c> is a resolved GGUF name that never equals the plain configured
-///     name, so comparing against a mere fallback during a transient outage would misclassify (and
-///     <see cref="ResetStaleDocumentsToPendingAsync" /> would reset) the ENTIRE indexed corpus instead of leaving it
-///     untouched. Scoped: it uses the request-scoped db context.
+///     Default <see cref="IKnowledgeDocumentCatalogService" />: reads and lightly mutates the <c>knowledge_documents</c>
+///     catalog over the raw-SQL path, decrypting the display name via the matching <see cref="NodeChatDbContext" />
+///     helper.
 /// </summary>
+/// <remarks>
+///     The stale-model flag compares each row's stored embedding model against the RESOLVED name
+///     (<see cref="IEmbeddingModelResolver" />, computed once per call) — the identity the ingestion and search lanes use
+///     as the vector scope key — so a same-dimension model swap that leaves
+///     <see cref="KnowledgeBaseOptions.EmbeddingModelName" /> unchanged is still detected. Staleness is evaluated ONLY on
+///     a confident resolution: <c>docs/wiki/15-knowledge-base.md</c> ("Ingestion pipeline"). Scoped to the db context.
+/// </remarks>
 public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogService
 {
     private readonly NodeChatDbContext _dbContext;
@@ -252,8 +249,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         // Only INDEXED documents can be stale: they carry committed vectors built by a specific model. A non-indexed row
-        // still holds the upload-time placeholder (the configured name written by the blob store), which is not a
-        // vector-identity and must never trigger a reset of an in-flight or pending document.
+        // still holds the upload-time placeholder, which is no vector identity and must never reset an in-flight document.
         var indexedStatus = KnowledgeDocumentStatus.Indexed.ToString();
 
         var staleIds = new List<Guid>();
@@ -306,11 +302,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     public async Task<IReadOnlyList<Guid>> ResetNonTerminalToPendingAsync(CancellationToken cancellationToken)
     {
-        // Startup recovery: a document left in ANY non-terminal status (Pending/Extracting/Chunking/Embedding) by a crash
-        // or hard stop only existed in the lost in-memory ingestion queue. Reset it to Pending (clearing any partial
-        // failure reason) and return its id so the worker re-dispatches it. Terminal rows (Indexed/Failed) are untouched.
-        // Re-running is safe: the state machine restarts from the top and the index writer purges any partial rows before
-        // re-inserting, so a document reset mid-state never duplicates or corrupts its projections.
+        // Startup recovery: a non-terminal document (Pending/Extracting/Chunking/Embedding) existed only in the lost
+        // in-memory queue. Re-running is safe — the state machine restarts and the index writer purges partial rows first.
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
 
@@ -413,11 +406,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         return _dbContext.DecryptKnowledgeFileName(encrypted, documentId);
     }
 
-    // Resolves the embedding model the same way the ingestion/search lanes do (provider → IEmbeddingModelResolver), so
-    // staleness compares each stored name against the model that would actually build vectors now. The resolver already
-    // degrades transport failures to a NOT-confident configured-name fallback; a missing/unregistered provider surfaces
-    // as InvalidOperationException here and is folded into the same not-confident outcome so staleness never throws and
-    // never compares against a name nothing installed actually matched. A genuine caller cancellation propagates.
+    // Resolves the embedding model exactly as the ingestion and search lanes do, so staleness compares each stored name
+    // against the model that would build vectors now; a missing provider folds into the same NOT-confident outcome.
     private async Task<EmbeddingModelResolution> ResolveEmbeddingModelAsync(CancellationToken cancellationToken)
     {
         try
@@ -431,13 +421,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         }
     }
 
-    // A document is stale only when it is INDEXED (its stored embedding_model names the model that actually built its
-    // committed vectors), the current resolution is CONFIDENT (an installed model was actually matched — not a mere
-    // fallback from an unreachable provider or an unmatched configured name), and the stored name differs from the
-    // resolved one. Skipping staleness on a non-confident resolution is the guard against a transient provider outage
-    // making the resolver fall back to the plain configured name — on a llama.cpp node the stored name is a resolved
-    // GGUF name that never equals that fallback, so comparing against it would flag (and reset) the entire indexed
-    // corpus during the outage instead of leaving it untouched.
+    // A document is stale only when it is INDEXED, the current resolution is CONFIDENT (an installed model was actually
+    // matched), and the stored name differs: a mere fallback would flag and reset the whole corpus during an outage.
     private bool IsStaleIndex(KnowledgeDocumentStatus status,
         string embeddingModel,
         string vectorIdentity,

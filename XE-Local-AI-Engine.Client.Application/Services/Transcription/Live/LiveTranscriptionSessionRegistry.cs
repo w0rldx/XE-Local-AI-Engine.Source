@@ -11,22 +11,11 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     session, one way out.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>A lane is a queue, not a call.</b> <see cref="PushAudioAsync" /> appends the frame to that lane's task
-///         chain and returns; the chain is what serializes inference and what keeps frames in arrival order. A capture
-///         callback that waited for the transcriber would drop audio at the source, which is the one place the engine
-///         can never get it back from.
-///     </para>
-///     <para>
-///         <b>Every commit crosses one session-wide lock.</b> Allocating the sequence, persisting the row and
-///         publishing the push are one critical section, because the client's watermark depends on publication order:
-///         with allocation alone serialized, a lane that stalled inside its write would publish sequence two before
-///         sequence one and the client would discard the first segment permanently.
-///     </para>
-///     <para>
-///         <b>Persistence is a subscriber of a commit, never its source.</b> A persist-free session emits the
-///         identical event sequence with no row behind it, so nothing here may make a publish conditional on a write.
-///     </para>
+///     A lane is a queue, not a call: <see cref="PushAudioAsync" /> appends the frame to that lane's task chain and
+///     returns, because a capture callback that waited for the transcriber would drop audio at the source, the one
+///     place the engine can never get it back from. Sequence allocation, persistence and publication are ONE critical
+///     section, because the client's watermark depends on publication order. Persistence is a subscriber of a commit,
+///     never its source. See docs/wiki/24-audio-transcription.md ("The registry").
 /// </remarks>
 public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSessionRegistry, IAsyncDisposable
 {
@@ -65,8 +54,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     /// <param name="transcriber">The runtime every lane submits its windows to.</param>
     /// <param name="publisher">Where commits, partials and the final status go.</param>
     /// <param name="scopeFactory">
-    ///     Resolves <see cref="ITranscriptionService" /> at call time. Injecting it would close a constructor cycle:
-    ///     the service resolves this registry so cancel and delete can route through one termination path.
+    ///     Resolved at call time: injecting <see cref="ITranscriptionService" /> would close a constructor cycle,
+    ///     since it resolves this registry for the one termination path.
     /// </param>
     /// <param name="options">Carries the abandonment grace.</param>
     /// <param name="timeProvider">Every timer in this class comes from here; there is no hosted service.</param>
@@ -160,17 +149,13 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             return Task.CompletedTask;
         }
 
-        // Copied before it is queued, and never referenced again. This method returns while the frame is still in
-        // the lane's queue, so an in-process capture source is free to reuse or return its buffer the moment it
-        // gets control back; holding the caller's memory would put replacement audio in the transcript. The hub
-        // path is already safe (SignalR hands over a fresh array per invocation) — the in-process seam is not.
+        // Copied before it is queued and never referenced again: this method returns while the frame is still queued, so an in-process capture source may reuse its
+        // buffer at once, and holding the caller's memory would put replacement audio in the transcript. The hub path is safe already (SignalR hands a fresh array per invocation); this seam is not.
         var owned = pcm16.ToArray();
         var overloaded = false;
 
-        // Admission, the budget and the queue insertion are ONE critical section, taken on the same gate BeginEnd
-        // closes admission under. Splitting them let a push pass the admission check, pause, and then append to a
-        // lane whose chain termination had already snapshotted — running a second concurrent call into a segmenter
-        // that is single-threaded by contract, after the session had been declared over.
+        // Admission, the budget and the queue insertion are ONE critical section, taken on the same gate BeginEnd closes admission under. Splitting them lets a push pass
+        // admission, pause, and append to a lane whose chain termination had snapshotted — a second concurrent call into a single-threaded segmenter, after the session was declared over.
         lock (session.Gate)
         {
             if (session.AdmissionClosed)
@@ -222,19 +207,15 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
         lock (session.Gate)
         {
-            // A session that has already closed admission may have run its producer-stop step, so a producer
-            // attached now would never be stopped by anything: it would keep capturing against a session that is
-            // gone. Refusing here is what makes "exactly one stop per producer" true.
+            // A session that has already closed admission may have run its producer-stop step, so a producer attached now would never be stopped by anything and
+            // would keep capturing against a session that is gone. Refusing here is what makes "exactly one stop per producer" true.
             if (session.AdmissionClosed)
             {
                 throw new InvalidOperationException($"Transcription session {sessionId} is not live.");
             }
 
-            // Attaching satisfies the producer-attachment deadline; waiting for the first FRAME does not. A native
-            // capture of an application that happens to be silent pushes nothing — WASAPI never yields a silent
-            // packet at all — so a session with a healthy running recorder would be reaped as NeverAttached once
-            // the deadline elapsed. The browser abandonment grace is untouched: a closed tab still ends the
-            // session whatever else is feeding it.
+            // Attaching satisfies the producer-attachment deadline; waiting for the first FRAME does not: a native capture of a silent application pushes nothing (WASAPI never
+            // yields a silent packet), so a healthy running recorder would be reaped as NeverAttached. The browser abandonment grace is untouched: a closed tab ends the session whatever feeds it.
             session.AttachmentTimer?.Dispose();
             session.AttachmentTimer = null;
 
@@ -382,18 +363,16 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
             await StopProducerAsync(session);
 
-            // A graceful end that could not finalize its last window is NOT a completed transcript. Telling the
-            // operator otherwise hands them a success for a recording that is missing its final seconds, and the
-            // retained audio is gone by then.
+            // A graceful end that could not finalize its last window is NOT a completed transcript: telling the operator otherwise hands them a success for a
+            // recording that is missing its final seconds, and the retained audio is gone by then.
             var outcome = await DrainAndFlushAsync(session, reason)
                 ? reason
                 : LiveEndReason.Failed;
             var errorCode = outcome == reason ? null : FlushFailedErrorCode;
             var errorMessage = outcome == reason ? null : FlushFailedErrorMessage;
 
-            // The point of no return, taken THROUGH the commit gate: a commit already inside the pipeline finishes,
-            // and no commit may start after it. An abandoned lane that answers later is dropped rather than
-            // persisted and published for a session the client has been told is over.
+            // The point of no return, taken THROUGH the commit gate: a commit already inside the pipeline finishes and no commit may start after it. An abandoned
+            // lane that answers later is dropped rather than persisted and published for a session the client has been told is over.
             await FinalizeAsync(session);
 
             await CompleteAsync(session, outcome, errorCode, errorMessage);
@@ -470,10 +449,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                 chain = lane.Chain;
             }
 
-            // The bound runs off the injected clock, so a test drives it and production still gets five real
-            // seconds. Timing out means the lane is STILL RUNNING, which is the one case the flush below must not
-            // race: a segmenter is single-threaded by contract, so flushing a lane whose PushAsync has not returned
-            // would corrupt the very buffer the flush is meant to finalize.
+            // The bound runs off the injected clock, so a test drives it and production still gets five real seconds. Timing out means the lane is STILL RUNNING,
+            // which the flush below must not race: a segmenter is single-threaded by contract, so flushing a lane whose PushAsync has not returned would corrupt the buffer it finalizes.
             var drained = true;
             try
             {
@@ -574,9 +551,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
     private async Task ConsumeAsync(LiveSession session, Lane lane, byte[] pcm16, Task previous)
     {
-        // Off the caller's stack before anything runs: the chain is appended under session.Gate, and a body that
-        // began synchronously would hold that gate across a segmenter call. Ordering is unaffected — `previous` was
-        // captured when this frame was admitted.
+        // Off the caller's stack before anything runs: the chain is appended under session.Gate, and a body that began synchronously would hold that gate across a
+        // segmenter call. Ordering is unaffected — `previous` was captured when this frame was admitted.
         await Task.Yield();
 
         try
@@ -766,12 +742,13 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         /// </summary>
         public CancellationTokenSource Abort { get; }
 
-        /// <summary>
-        ///     Every queued frame, linked. A chain rather than a semaphore because ordering is load-bearing here: the
-        ///     lane derives its clock from the cumulative byte count, so two frames swapped rewrite the timeline, and
-        ///     <see cref="SemaphoreSlim" /> does not promise the order its waiters are released in.
-        ///     <para>Read and written only under the owning session's <c>Gate</c>, together with the admission check.</para>
-        /// </summary>
+        /// <summary>Every queued frame, linked.</summary>
+        /// <remarks>
+        ///     A chain rather than a semaphore because ordering is load-bearing here: the lane derives its clock from
+        ///     the cumulative byte count, so two frames swapped rewrite the timeline, and
+        ///     <see cref="SemaphoreSlim" /> does not promise the order its waiters are released in. Read and written
+        ///     only under the owning session's <c>Gate</c>, together with the admission check.
+        /// </remarks>
         public Task Chain { get; set; }
 
         /// <summary>Read and written only from this lane's own chain.</summary>

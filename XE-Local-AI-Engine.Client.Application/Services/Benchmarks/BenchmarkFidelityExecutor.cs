@@ -18,17 +18,15 @@ public interface IBenchmarkFidelityExecutor
 
 /// <summary>
 ///     Measures one run's quant fidelity: perplexity, and — when the project opted in — KL divergence against a base
-///     model's logits. Deliberately parallel to <see cref="BenchmarkJudgeExecutor" />, with two differences that are
-///     not incidental:
-///     <list type="bullet">
-///         <item>there is no llama-server and therefore no readiness probe, so there is no launch receipt to record;
-///             what is stored instead is a REDUCED, explicitly-labelled evidence block, because presenting it as a
-///             full receipt would be exactly the drift a display-only axis must not introduce;</item>
-///         <item>the perplexity window is pinned to 512 while everything else about the run's placement is replayed —
-///             the placement is what differs between the runs being compared, the window is what makes them
-///             comparable at all.</item>
-///     </list>
+///     model's logits.
 /// </summary>
+/// <remarks>
+///     Deliberately parallel to <see cref="BenchmarkJudgeExecutor" />, with two differences that are not incidental.
+///     There is no llama-server and therefore no readiness probe, so no launch receipt: what is stored instead is a
+///     REDUCED, explicitly-labelled evidence block, because presenting it as a full receipt would be exactly the
+///     drift a display-only axis must not introduce. And the perplexity window is pinned to 512 while the run's
+///     placement is replayed — the placement is what differs between compared runs, the window is what makes them comparable.
+/// </remarks>
 public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
 {
     /// <summary>
@@ -46,11 +44,12 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
 
     internal const string MeasurementTimedOutMessage = "The fidelity measurement exceeded its time limit and was stopped.";
 
-    /// <summary>
-    ///     Generous next to the real cost: 200 chunks of a 27B is about a minute of prompt evaluation on a 5090, and
-    ///     a base-logit pass over a large-vocabulary model on a slower box is a multiple of that. The alternative to
-    ///     waiting is killing a measurement that was going to succeed.
-    /// </summary>
+    /// <summary>The measurement watchdog, generous next to the real cost.</summary>
+    /// <remarks>
+    ///     200 chunks of a 27B is about a minute of prompt evaluation on a 5090, and a base-logit pass over a
+    ///     large-vocabulary model on a slower box is a multiple of that. The alternative to waiting is killing a
+    ///     measurement that was going to succeed.
+    /// </remarks>
     private static readonly TimeSpan DefaultMeasurementTimeout = TimeSpan.FromHours(2);
 
     private readonly TimeSpan _measurementTimeout;
@@ -180,18 +179,14 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
             throw new BenchmarkExecutionException(PerplexityUnavailableMessage);
         }
 
-        // The base-logit phase runs the BASE model, which is routinely larger than the quant this run measures, so it
-        // reserves for ITSELF and releases before the quant is admitted. One reservation sized on the quant and held
-        // across both phases admitted the base against the wrong footprint — an over-admission that OOMs on exactly
-        // the box where the base is the big one. The two phases never overlap, so two sequential reservations cost
-        // nothing and describe what is actually resident.
+        // The base-logit phase runs the BASE model, routinely larger than the quant this run measures, so it reserves for ITSELF and releases before the quant is admitted. One reservation sized
+        // on the quant and held across both phases over-admits the base and OOMs on the box where the base is the big one; the phases never overlap, so two sequential reservations cost nothing.
         var kld = string.Equals(attempt.Kind, "kld", StringComparison.Ordinal)
             ? await PrepareKldAsync(work.RunId, project, corpus, chunks, executable, snapshot, token)
             : null;
 
-        // Sized on the PINNED 512 window rather than the project's context: that is what this process will allocate.
-        // No launch admission, and the same retry the judge uses — a fidelity item is dequeued by the same FIFO
-        // consumer that just ran the primary, so it routinely arrives while that llama-server is handing VRAM back.
+        // Sized on the PINNED 512 window rather than the project's context: that is what this process will allocate. No launch admission.
+        // The same retry the judge uses — a fidelity item is dequeued by the same FIFO consumer that just ran the primary, so it routinely arrives while that llama-server is handing VRAM back.
         var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
                                                            new CapacityRequest
                                                            {
@@ -251,9 +246,12 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
 
     /// <summary>
     ///     Makes the base-logit file this run's KL divergence is measured against exist, and returns the key that
-    ///     identifies it. The key — not the base model's fingerprint — is what a stored KLD figure is later gated on,
-    ///     because the corpus, the chunk count and the format version all move without the fingerprint moving.
+    ///     identifies it.
     /// </summary>
+    /// <remarks>
+    ///     The key — not the base model's fingerprint — is what a stored KLD figure is later gated on, because the
+    ///     corpus, the chunk count and the format version all move without the fingerprint moving.
+    /// </remarks>
     private async Task<KldPreparation> PrepareKldAsync(Guid runId,
         BenchmarkProjectRecord project,
         BenchmarkFidelityCorpusFile corpus,
@@ -287,19 +285,15 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         await using var lease = _cache.TryAcquireLease(key);
         if (lease is null)
         {
-            // Another writer holds it, so this process must not write a second multi-gigabyte copy. Wait for theirs on
-            // the SAME cadence a capacity rejection waits on, and if it has still not landed put the item back in the
-            // queue. It used to throw here, which terminalized the measurement as failed — under a message that
-            // promised a retry there was no mechanism for.
+            // Another writer holds it, so this process must not write a second multi-gigabyte copy: wait for theirs on the SAME cadence a capacity rejection waits on.
+            // If it has still not landed the item goes back in the queue — throwing here would terminalize the measurement as failed, under a message promising a retry there is no mechanism for.
             return await WaitForPublishedBaseAsync(key, token) is { } published
                 ? new KldPreparation { Key = key, BaseFilePath = published, BaseModelName = baseModelName, BaseFingerprint = baseFingerprint }
                 : throw new BenchmarkFidelityRequeueException(BaseWaitedTooLongMessage);
         }
 
-        // Reserved for the BASE model, and only once this phase is certainly going to run it: an early return on a
-        // published file, or a lease another process holds, allocates nothing and must reserve nothing. The
-        // reservation is released when this method returns, i.e. after the base file is published, so the quant pass
-        // is admitted against a ledger the base is no longer in.
+        // Reserved for the BASE model, and only once this phase is certainly going to run it: an early return on a published file, or a lease another process holds, allocates nothing and must
+        // reserve nothing. The reservation is released when this method returns, i.e. after the base file is published, so the quant pass is admitted against a ledger the base is no longer in.
         var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
                                                            new CapacityRequest
                                                            {
@@ -347,14 +341,14 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
 
     /// <summary>
     ///     Runs one perplexity pass under the measurement watchdog, and classifies the cancellation it may produce.
-    ///     <para>
-    ///         The classification is derived HERE, at mapping time, in the repo's priority order rather than from a
-    ///         registration callback: if the caller's token is not cancelled, the only thing left that could have
-    ///         cancelled the linked one is this method's own timer. A watchdog firing is a FAILED measurement with a
-    ///         reason — recorded as an operator cancellation with none, it was indistinguishable from someone
-    ///         pressing stop, and a two-hour runaway looked like a deliberate abort.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The classification is derived HERE, at mapping time, in the repo's priority order rather than from a
+    ///     registration callback: if the caller's token is not cancelled, the only thing left that could have
+    ///     cancelled the linked one is this method's own timer. A watchdog firing is a FAILED measurement with a
+    ///     reason — recorded as an operator cancellation with none it is indistinguishable from someone pressing
+    ///     stop, and a two-hour runaway looks like a deliberate abort.
+    /// </remarks>
     private async Task<BenchmarkPerplexityProcessResult> RunUnderWatchdogAsync(string executable,
         IReadOnlyList<string> arguments,
         CancellationToken token)
@@ -371,12 +365,13 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         }
     }
 
-    /// <summary>
-    ///     Polls for the base file the process holding the lease is writing, on the retry cadence
-    ///     <see cref="BenchmarkCapacityAdmission" /> already uses for a capacity rejection — same shape, same reason:
-    ///     the blocker is transient and someone else is actively clearing it. Returns the published path, or
-    ///     <see langword="null" /> once the budget is spent, which is the caller's cue to requeue rather than fail.
-    /// </summary>
+    /// <summary>Polls for the base file the process holding the lease is writing.</summary>
+    /// <remarks>
+    ///     On the retry cadence <see cref="BenchmarkCapacityAdmission" /> already uses for a capacity rejection — same
+    ///     shape, same reason: the blocker is transient and someone else is actively clearing it. Returns the
+    ///     published path, or <see langword="null" /> once the budget is spent, which is the caller's cue to requeue
+    ///     rather than fail.
+    /// </remarks>
     private async Task<string?> WaitForPublishedBaseAsync(BenchmarkKldCacheKey key, CancellationToken token)
     {
         for (var attempt = 0; attempt <= _admissionRetry.MaxRetries; attempt++)
@@ -529,9 +524,12 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
 
 /// <summary>
 ///     A measurement that cannot proceed YET, through no fault of its own — today, a base-logit file another process
-///     is still writing. It is deliberately not a <see cref="BenchmarkExecutionException" />: that path terminalizes
-///     the attempt as failed, and a fidelity work item pins <c>attempt = 1</c>, so there is no retry behind it.
+///     is still writing.
 /// </summary>
+/// <remarks>
+///     Deliberately not a <see cref="BenchmarkExecutionException" />: that path terminalizes the attempt as failed,
+///     and a fidelity work item pins <c>attempt = 1</c>, so there is no retry behind it.
+/// </remarks>
 internal sealed class BenchmarkFidelityRequeueException : InvalidOperationException
 {
     public BenchmarkFidelityRequeueException(string message) : base(message)

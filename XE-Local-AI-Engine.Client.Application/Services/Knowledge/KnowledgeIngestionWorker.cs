@@ -6,21 +6,15 @@ using Microsoft.Extensions.Options;
 /// <summary>
 ///     Background worker that drains the <see cref="KnowledgeIngestionDispatcher" /> queue and runs the ingestion state
 ///     machine per document, bounded to <see cref="KnowledgeBaseOptions.MaxConcurrentIngestions" /> concurrent documents
-///     by a <see cref="SemaphoreSlim" />, so N uploads cannot spin up N unbounded embedding pipelines. Each document
-///     runs in its own <c>CreateAsyncScope()</c>, mirroring the memory extraction dispatcher: a completed document's index
-///     write is never lost to a client-side cancellation.
-///     <para>
-///         Lifecycle safety. (1) STARTUP RECOVERY — the queue is an in-memory channel, so a document left mid-pipeline by
-///         a crash or hard stop would be stuck non-terminal forever; on start the worker resets every non-terminal document
-///         to Pending and re-dispatches it before draining new work. (2) SHUTDOWN AWARENESS — in-flight document tasks are
-///         tracked; <see cref="StopAsync" /> stops reading the queue and then awaits them within a bounded drain window
-///         (<see cref="KnowledgeBaseOptions.ShutdownDrainTimeoutSeconds" />) before disposal proceeds, so the scope factory
-///         and the semaphore are never disposed under a running document. Per-document work runs on
-///         <see cref="_drainDeadline" />, a token cancelled ONLY when that window elapses — so ordinary operation never
-///         cancels a document mid-write, yet a hung document cannot block shutdown forever.
-///     </para>
-///     Failures are handled inside the state machine; the worker's own catch-all logs the exception type only.
+///     by a <see cref="SemaphoreSlim" />.
 /// </summary>
+/// <remarks>
+///     The bound stops N uploads spinning up N unbounded embedding pipelines. Each document runs in its own
+///     <c>CreateAsyncScope()</c>, so a completed document's index write is never lost to a client-side cancellation.
+///     Startup recovery and the bounded shutdown drain (<see cref="KnowledgeBaseOptions.ShutdownDrainTimeoutSeconds" />,
+///     over <see cref="_drainDeadline" />) are described in <c>docs/wiki/15-knowledge-base.md</c> ("Ingestion pipeline").
+///     Failures are handled inside the state machine; the worker's own catch-all logs the exception type only.
+/// </remarks>
 public sealed class KnowledgeIngestionWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -33,9 +27,8 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
     // disposed. Each task removes itself on completion via a synchronous continuation, so the set only holds running work.
     private readonly ConcurrentDictionary<Task, byte> _inFlight = new();
 
-    // Cancelled ONLY when the shutdown drain window elapses. Per-document work runs on this token: during normal operation
-    // it is never cancelled (a completed document's index write is never lost), but a document that outlives the drain
-    // window is cancelled so it stops and disposal can proceed.
+    // Cancelled ONLY when the shutdown drain window elapses. Per-document work runs on this token, uncancelled in normal
+    // operation so a completed index write is never lost; a document outliving the window stops so disposal can proceed.
     private readonly CancellationTokenSource _drainDeadline = new();
 
     // Set once shutdown begins so the drain-sweep stops re-admitting stranded documents that the (now-stopped) queue reader
@@ -108,9 +101,8 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
                 var admission = await _dispatcher.EnqueueAsync(documentId, cancellationToken);
                 if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
                 {
-                    // The bounded queue filled while re-dispatching a large backlog. The remaining documents are already
-                    // reset to Pending, so they recover on a later start once the queue drains — stop pushing rather than
-                    // spin against a full queue. Content-free count only.
+                    // The bounded queue filled while re-dispatching a backlog; the rest are already Pending and recover on
+                    // a later start, so stop pushing rather than spin against a full queue. Content-free count only.
                     _logger.LogInformation("Ingestion queue full during startup recovery after re-queuing {ReQueuedCount} of {InterruptedCount}; the rest recover on a later start.",
                         reQueued,
                         interrupted.Count);
@@ -139,9 +131,8 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
     {
         try
         {
-            // Fresh scope + fresh DbContext per document. The drain-deadline token is uncancelled during normal operation
-            // (so a shutdown/cancel never loses a completed write) and is cancelled only if the shutdown drain window is
-            // exceeded, so a hung document does not block shutdown forever.
+            // Fresh scope and DbContext per document. The drain-deadline token is uncancelled in normal operation, so a
+            // shutdown never loses a completed write, and fires only past the drain window so a hung document cannot block.
             await using var scope = _scopeFactory.CreateAsyncScope();
             var ingestionService = scope.ServiceProvider.GetRequiredService<IKnowledgeIngestionService>();
             await ingestionService.RunAsync(documentId, _drainDeadline.Token);
@@ -168,12 +159,16 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
         }
     }
 
-    // Drain path for stranded Pending documents: once a document completes and the admission queue has drained to empty,
-    // re-admit any documents still Pending (never ingested) — for example ones a full queue rejected at upload or during
-    // startup recovery. Gating on an empty queue makes this run only as capacity frees and prevents a busy loop: a sweep
-    // that finds no stranded work enqueues nothing, so no further completion fires it again. Admission is idempotent, so a
-    // document already queued or in flight is never re-enqueued (no double ingestion), and enqueue stops the moment the
-    // queue fills again so the remainder are swept on a later completion.
+    /// <summary>
+    ///     Drain path for stranded Pending documents: once a document completes and the admission queue has drained to
+    ///     empty, re-admits any document still Pending and never ingested.
+    /// </summary>
+    /// <remarks>
+    ///     Those are documents a full queue rejected at upload or during startup recovery. Gating on an empty queue makes
+    ///     this run only as capacity frees and prevents a busy loop: a sweep that finds no stranded work enqueues nothing,
+    ///     so no further completion fires it again. Admission is idempotent, so a document already queued or in flight is
+    ///     never re-enqueued, and enqueueing stops the moment the queue fills, leaving the rest to a later sweep.
+    /// </remarks>
     private async Task SweepStrandedPendingAsync()
     {
         if (_stopping || _drainDeadline.IsCancellationRequested || _dispatcher.PendingCount > 0)
@@ -217,9 +212,8 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
 
         _logger.LogInformation("Knowledge ingestion worker draining {InFlightCount} in-flight ingestion(s) before shutdown.", pending.Length);
 
-        // Bound the wait. During the window the documents keep running uncancelled so a near-complete index write still
-        // lands; if the window (or the host's own shutdown deadline) elapses first, cancel the shared drain token so the
-        // stragglers stop and are re-queued on the next start — a hung document must never block shutdown forever.
+        // Bound the wait: within the window documents keep running uncancelled, so a near-complete index write still lands.
+        // Once it (or the host's own deadline) elapses, cancel the drain token so stragglers stop and re-queue next start.
         using var window = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         window.CancelAfter(_drainTimeout);
 

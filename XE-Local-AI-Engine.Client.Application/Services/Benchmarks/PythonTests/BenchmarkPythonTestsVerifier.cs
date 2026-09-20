@@ -12,12 +12,13 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 /// </summary>
 public interface IBenchmarkPythonTestsVerifier
 {
-    /// <summary>
-    ///     Runs the criterion. Throws <see cref="BenchmarkExecutionException" /> — prefixed with
+    /// <summary>Runs the criterion.</summary>
+    /// <remarks>
+    ///     Throws <see cref="BenchmarkExecutionException" /> — prefixed with
     ///     <see cref="BenchmarkRunJudgeStates.VerifierUnavailablePrefix" /> — when the SANDBOX could not be trusted to
     ///     run it, which fails the judging rather than scoring 0. A candidate that misbehaves inside a working sandbox
     ///     is a 0, and comes back as a normal failed result.
-    /// </summary>
+    /// </remarks>
     Task<BenchmarkJudgeVerifierResultV1> VerifyAsync(BenchmarkJudgeRubricCriterionV1 criterion,
         string answer,
         CancellationToken cancellationToken = default);
@@ -75,9 +76,8 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
             return Fail(criterion, composed.Refusal ?? "The execution harness could not be composed.", candidate);
         }
 
-        // requireResourceLimits: TRUE. This is operator-authored test code executed unattended, possibly on a Quartz
-        // schedule, so a host that cannot bound CPU, memory and process count is refused rather than run — strictly
-        // tighter than run_python, which a human approves call by call and which deliberately still runs there.
+        // requireResourceLimits is TRUE: this is operator-authored test code executed unattended, possibly on a Quartz schedule, so a host that cannot bound CPU, memory
+        // and process count is refused rather than run. Strictly tighter than run_python, which a human approves call by call and which deliberately still runs there.
         var outcome = await _gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
         {
             Code = composed.Program
@@ -127,11 +127,13 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
     }
 
     /// <summary>
-    ///     The evidence: the counts (best-effort by design — a bare test script has no runner to enumerate, so it is
-    ///     one implicit case), the parent's own record of what failed, and both captured streams. The child's stderr is
-    ///     where a candidate's traceback lands and is labelled candidate-controlled; the parent's raw STDOUT is never
-    ///     included, because that is the channel the verdict is read from.
+    ///     The evidence: the counts, the parent's own record of what failed, and both captured streams.
     /// </summary>
+    /// <remarks>
+    ///     The counts are best-effort by design — a bare test script has no runner to enumerate, so it is one implicit
+    ///     case. The child's stderr is where a candidate's traceback lands and is labelled candidate-controlled; the
+    ///     parent's raw STDOUT is never included, because that is the channel the verdict is read from.
+    /// </remarks>
     private static string Detail(BenchmarkPythonTestsVerdict verdict, SandboxCommandResult result, string candidate)
     {
         var builder = new StringBuilder();

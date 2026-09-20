@@ -3,13 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     Worker-side name / description / parameter-schema constants for the read-only knowledge-base agent tools
-///     (<c>search_knowledge_base</c>, <c>read_document</c>, <c>read_surrounding_chunks</c>). Each handler advertises its
-///     model-visible schema from here and the offer provider merges the same descriptors into the loopback offer, so the
-///     schema the model is offered can never drift from what the handler validates. The schemas are advisory to the
-///     model; the handlers' own validation is authoritative. All three are read-only node-local retrieval surfaces, so
-///     they auto-execute (no per-call approval) and are gated by <c>KnowledgeBase:AgentToolsEnabled</c>.
+///     Worker-side name, description and parameter-schema constants for the read-only knowledge-base agent tools
+///     (<c>search_knowledge_base</c>, <c>read_document</c>, <c>read_surrounding_chunks</c>).
 /// </summary>
+/// <remarks>
+///     Each handler advertises its model-visible schema from here and the offer provider merges the same descriptors
+///     into the loopback offer, so the schema the model is offered can never drift from what the handler validates. The
+///     schemas are advisory to the model; the handlers' own validation is authoritative. All three are read-only
+///     node-local retrieval surfaces, so they auto-execute with no per-call approval, gated by
+///     <c>KnowledgeBase:AgentToolsEnabled</c>.
+/// </remarks>
 internal static class SearchKnowledgeBaseToolDefinition
 {
     public const string ToolName = "search_knowledge_base";

@@ -14,10 +14,13 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
 /// <summary>
-///     Bounded repository importer. The request carries only an opaque registered-folder id; host paths are resolved
-///     internally, revalidated as canonical Git roots, and never persisted. Git supplies the tracked + unignored file
-///     set, while the product's credential/generated-file exclusions and reparse checks are applied again before read.
+///     Bounded repository importer: the request carries only an opaque registered-folder id, and host paths are resolved
+///     internally, revalidated as canonical Git roots, and never persisted.
 /// </summary>
+/// <remarks>
+///     Git supplies the tracked and unignored file set, while the product's credential and generated-file exclusions and
+///     the reparse checks are applied again before the read.
+/// </remarks>
 public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImportService
 {
     private const string SourceKind = "repository";
@@ -157,9 +160,8 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
                 deduplicated++;
             }
 
-            // The "does this stored document have to be (re-)enqueued" rule lives once, in the admission service: a
-            // written document (inserted, or a repository file whose bytes changed) is always queued, an unchanged
-            // dedupe hit only from a retryable status. Enqueue is null when it decided not to queue at all.
+            // The re-enqueue rule lives once, in the admission service: a written document is always queued, an unchanged
+            // dedupe hit only from a retryable status, and Enqueue is null when it decided not to queue at all.
             var admission = await _admission.AdmitStoredDocumentAsync(result.DocumentId,
                                                 result.WasInserted || result.WasUpdated,
                                                 cancellationToken);

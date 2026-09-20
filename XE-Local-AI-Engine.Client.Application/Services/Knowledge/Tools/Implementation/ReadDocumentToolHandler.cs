@@ -5,13 +5,15 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     <see cref="IClientLocalToolHandler" /> for <c>read_document</c> (ClientLocal). JSON-in / JSON-out: reads one
-///     knowledge-base document's detail plus its ordered chunks through the scoped
-///     <see cref="IKnowledgeDocumentCatalogService" /> resolved from a FRESH DI scope per call. The returned content is
-///     bounded (<see cref="MaxContentChars" />) so a huge document cannot be dumped unbounded into the model context;
-///     truncation is flagged in the payload. Read-only, so it auto-runs; gated by
-///     <c>KnowledgeBase:AgentToolsEnabled</c>.
+///     <see cref="IClientLocalToolHandler" /> for <c>read_document</c> (ClientLocal): JSON-in, JSON-out, reading one
+///     document's detail plus its ordered chunks.
 /// </summary>
+/// <remarks>
+///     The scoped <see cref="IKnowledgeDocumentCatalogService" /> is resolved from a FRESH DI scope per call. Returned
+///     content is bounded by <see cref="MaxContentChars" />, so a huge document cannot be dumped unbounded into the
+///     model context, and truncation is flagged in the payload. Read-only, so it auto-runs; gated by
+///     <c>KnowledgeBase:AgentToolsEnabled</c>.
+/// </remarks>
 internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -95,10 +97,8 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
             chunks.Add(new
             {
                 chunkIndex = chunk.ChunkIndex,
-                // The attacker-controlled document title + section heading AND the chunk body are DATA, not
-                // instructions: fence them together inside one nonce-delimited untrusted region (budget still measures
-                // raw chunk length). The title rides inside each chunk's fence so no attacker-controlled string is
-                // emitted outside the boundary.
+                // The attacker-controlled title and section heading AND the chunk body are DATA, not instructions: fence
+                // them in one nonce-delimited untrusted region, so no attacker-controlled string leaves the boundary.
                 contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
                 content = UntrustedContentFraming.WrapDocument(chunk.Content,
                 [

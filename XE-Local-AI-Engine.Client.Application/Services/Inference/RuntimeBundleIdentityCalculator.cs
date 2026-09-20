@@ -10,19 +10,22 @@ public sealed record RuntimeBundleFileFactsV1(string Name, long SizeBytes, long 
 
 /// <summary>
 ///     The identity of the directory the selected <c>llama-server</c> runs out of: the executable plus every sibling
-///     shared library, hashed as one document. Produced by <see cref="RuntimeBundleIdentityCalculator" /> and reused
-///     verbatim by <see cref="LaunchPolicyFingerprintProvider" /> (as a fingerprint member) and by the benchmark
-///     environment facts.
+///     shared library, hashed as one document.
 /// </summary>
+/// <remarks>
+///     Produced by <see cref="RuntimeBundleIdentityCalculator" /> and reused verbatim by
+///     <see cref="LaunchPolicyFingerprintProvider" /> (as a fingerprint member) and by the benchmark environment
+///     facts.
+/// </remarks>
 public sealed record RuntimeBundleFactsV1(string Identity, int FileCount, IReadOnlyList<RuntimeBundleFileFactsV1> Files);
 
-/// <summary>
-///     The one implementation of the runtime-bundle identity hash. Extracted from
-///     <see cref="LaunchPolicyFingerprintProvider" /> so the benchmark environment facts record the same value the
-///     launch-policy fingerprint commits to — the hashed byte stream (name length, name, file length, content
-///     identity, in ordinal name order) is unchanged by the extraction and must stay that way: any edit here
-///     invalidates every persisted fingerprint.
-/// </summary>
+/// <summary>The one implementation of the runtime-bundle identity hash.</summary>
+/// <remarks>
+///     It is shared with <see cref="LaunchPolicyFingerprintProvider" /> so the benchmark environment facts record the
+///     same value the launch-policy fingerprint commits to. The hashed byte stream — name length, name, file length,
+///     content identity, in ordinal name order — must stay exactly as it is: any edit here invalidates every
+///     persisted fingerprint.
+/// </remarks>
 internal static class RuntimeBundleIdentityCalculator
 {
     /// <param name="contentIdentityResolver">

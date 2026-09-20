@@ -130,9 +130,8 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
                 "The selected quantization was not offered by the import preview.");
         }
 
-        // Reject an already-active acquisition for this model BEFORE preflight, which blocks on the composite mutation
-        // lease for the whole copy — otherwise a second import of the same model hangs behind the first instead of
-        // getting an immediate 409 (mirrors GgufDownloadCoordinator.StartAsync's pre-preflight rejoin check).
+        // Reject an already-active acquisition BEFORE preflight (which blocks on the composite mutation lease for the whole
+        // copy), else a second import hangs behind the first instead of getting an immediate 409; mirrors GgufDownloadCoordinator.StartAsync.
         if (IsActive(_operations.GetNewest(AcquisitionKind.Download, requestedIdentity.CanonicalModelName))
             || IsActive(_operations.GetNewest(AcquisitionKind.Import, requestedIdentity.CanonicalModelName)))
         {
@@ -158,10 +157,8 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         }
         catch (InvalidOperationException)
         {
-            // Still broad on purpose: InstalledModelSnapshotCoordinator.AcquireMutationAsync gives up with
-            // InvalidOperationException("InstalledModelSnapshotUnstable") when the model's members keep changing under
-            // it, which is the same operator-visible situation as a conflict. Narrowing this to the typed conflict
-            // alone would turn that concurrency case into a 500.
+            // Broad on purpose: InstalledModelSnapshotCoordinator.AcquireMutationAsync gives up with InvalidOperationException
+            // ("InstalledModelSnapshotUnstable") when members keep changing — a conflict to the operator; narrowing gives a 500.
             throw new GgufImportApplicationException("ModelConflict", "The model name or destination is already in use.");
         }
 

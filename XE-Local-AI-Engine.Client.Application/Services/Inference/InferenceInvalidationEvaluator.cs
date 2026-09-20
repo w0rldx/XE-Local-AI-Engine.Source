@@ -7,12 +7,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="IInferenceInvalidationEvaluator" />. Runs four checks against the freeze baseline — active
-///     build tag, GPU vendor/VRAM delta, live global-free VRAM, and the placement axis that refuses a row whose replay
-///     would contradict today's expert-offload verdict. NVIDIA's refreshed global figure is preferred
-///     because llama.cpp's process budget can ignore external WDDM pressure. Cold validation deliberately does not
-///     launch a process-budget probe; global-free VRAM is the only live invalidation baseline.
+///     Default <see cref="IInferenceInvalidationEvaluator" />: runs four checks against the freeze baseline — active
+///     build tag, GPU vendor/VRAM delta, live global-free VRAM, and the placement axis that refuses a row whose
+///     replay would contradict today's expert-offload verdict.
 /// </summary>
+/// <remarks>
+///     NVIDIA's refreshed global figure is preferred because llama.cpp's process budget can ignore external WDDM
+///     pressure. Cold validation deliberately does not launch a process-budget probe; global-free VRAM is the only
+///     live invalidation baseline.
+/// </remarks>
 public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvaluator
 {
     private const long MaterialFreeVramRegressionBytes = 512L * 1024 * 1024;
@@ -156,10 +159,8 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
                && !string.Equals(activeTag, profile.LlamacppBuild, StringComparison.OrdinalIgnoreCase);
     }
 
-    // Hardware delta. The record carries only its backend token (no stored vendor), so the EXPECTED vendor is derived
-    // from the backend: cuda REQUIRES NVIDIA; vulkan requires SOME usable GPU (AMD/Intel/NVIDIA-on-Linux) and so drifts
-    // only when the box has dropped to no/unknown GPU. The single total-VRAM baseline the record carries is the
-    // free-at-freeze figure, so a current TOTAL VRAM below that is treated as a material shrink (card swap/removal).
+    // Hardware delta: the record carries only a backend token, so the expected vendor is derived from it. cuda REQUIRES NVIDIA
+    // while vulkan needs SOME usable GPU, drifting only at no/unknown GPU. Its one VRAM baseline is free-at-freeze, so a lower current TOTAL is a card swap.
     private static bool HasHardwareDrifted(InferenceProfileRecord profile, HardwareProfile hardware)
     {
         if (string.Equals(profile.Backend, InferenceBackends.Cuda, StringComparison.OrdinalIgnoreCase))

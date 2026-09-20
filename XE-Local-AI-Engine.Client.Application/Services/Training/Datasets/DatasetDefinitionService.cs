@@ -21,11 +21,14 @@ public interface IDatasetDefinitionService
 }
 
 /// <summary>
-///     Dataset definition CRUD. Validates the body, then embeds a tool-schema snapshot taken from the live catalog with
-///     the definition's OWN approval compose — the offer provider never consults <see cref="IToolApprovalPolicy" />, each
-///     caller does (the <c>OrchestrationResolver.ProjectAllowedToolsAsync</c> pattern), so this service performs its own.
-///     An edit bumps <c>DefinitionVersion</c>, which is what a generated dataset pins.
+///     Dataset definition CRUD: validates the body, then embeds a tool-schema snapshot taken from the live catalog
+///     with the definition's OWN approval compose.
 /// </summary>
+/// <remarks>
+///     The offer provider never consults <see cref="IToolApprovalPolicy" /> — each caller does, the
+///     <c>OrchestrationResolver.ProjectAllowedToolsAsync</c> pattern — so this service performs its own. An edit
+///     bumps <c>DefinitionVersion</c>, which is what a generated dataset pins.
+/// </remarks>
 public sealed class DatasetDefinitionService : IDatasetDefinitionService
 {
     private const int MaxTargetSampleCount = 2000;
@@ -71,11 +74,11 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
     public Task DeleteAsync(Guid definitionId, long expectedVersion, CancellationToken cancellationToken = default) =>
         _store.DeleteDefinitionAsync(definitionId, expectedVersion, cancellationToken);
 
-    /// <summary>
-    ///     What a consumer of an unpinned dataset is told. Operator-facing: there is no honest way to generate or
-    ///     evaluate against a body that was never recorded, and reading the LIVE definition instead is exactly the
-    ///     silent re-shaping the pin exists to prevent.
-    /// </summary>
+    /// <summary>What a consumer of an unpinned dataset is told.</summary>
+    /// <remarks>
+    ///     Operator-facing: there is no honest way to generate or evaluate against a body that was never recorded,
+    ///     and reading the LIVE definition instead is exactly the silent re-shaping the pin exists to prevent.
+    /// </remarks>
     public const string UnpinnedDatasetReason =
         "This dataset was created before its definition was pinned, so the definition it was generated from is unknown. Re-create the dataset.";
 

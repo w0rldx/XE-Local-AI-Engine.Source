@@ -2,9 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
 ///     Signals a knowledge-ingestion step failure whose <see cref="Reason" /> is a fixed, content-free message safe to
-///     persist as <c>knowledge_documents.failure_reason</c> and surface to the UI. The reason never contains chunk or
-///     document text; it describes the failure category only (e.g. the embedding model being unavailable).
+///     persist as <c>knowledge_documents.failure_reason</c> and surface to the UI.
 /// </summary>
+/// <remarks>
+///     The reason never contains chunk or document text; it describes the failure category only, such as the embedding
+///     model being unavailable.
+/// </remarks>
 public sealed class KnowledgeIngestionException : Exception
 {
     public KnowledgeIngestionException(string reason)

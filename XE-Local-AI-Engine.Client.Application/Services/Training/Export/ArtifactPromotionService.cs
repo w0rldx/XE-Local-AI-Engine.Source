@@ -11,18 +11,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     Commits a smoke-passed, quality-approved staged artifact into the local model registry, with its lineage attached.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The commit runs through the SAME acquisition preflight and importer every local import uses — name
-///         reservation under the installed-model mutation lease, a strict re-inspection of the bytes, an atomic
-///         sidecar-then-weight move, and the registry insert. Nothing here writes the registry directly: a trained
-///         model that skipped those steps would be a second, weaker path to the exact invariants they exist to hold.
-///     </para>
-///     <para>
-///         The two shapes differ only in what the destination carries. A merged model is a standalone entry. An
-///         adapter entry has no weights of its own — its own bytes ARE the adapter — so it names the installed base
-///         model it will be launched against with <c>--lora</c>, and a run with no linked installed model cannot
-///         produce one at all.
-///     </para>
+///     The commit runs through the SAME acquisition preflight and importer every local import uses — name reservation under the
+///     installed-model mutation lease, a strict re-inspection of the bytes, an atomic sidecar-then-weight move, the registry
+///     insert — and nothing here writes the registry directly: a trained model that skipped those steps would be a second,
+///     weaker path to the invariants they exist to hold. An adapter entry's own bytes ARE the adapter, so it names the
+///     installed base it is launched against with <c>--lora</c>, and a run with no linked installed model cannot produce one.
 /// </remarks>
 public sealed class ArtifactPromotionService : IArtifactPromotionService
 {
@@ -74,10 +67,8 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
             throw new TrainingExportRejectedException("The staged artifact was discarded and is retained only as a quality audit tombstone.");
         }
 
-        // Stricter than the store, deliberately. The store lets an explicitly SKIPPED artifact out because a skip is
-        // an operator decision in general; the only thing that skips a TRAINED artifact is the export's own
-        // architecture rejection, and that file could not be committed by the importer anyway. Refusing here turns a
-        // confusing late inspection failure into an answer the operator can act on.
+        // Stricter than the store, deliberately: a skip is an operator decision in general, but the only thing that skips a
+        // TRAINED artifact is the export's own architecture rejection — the importer would refuse the file later, less legibly.
         if (artifact.SmokeState != TrainingArtifactSmokeState.Passed)
         {
             throw new TrainingExportRejectedException("The artifact has not passed its smoke test.");

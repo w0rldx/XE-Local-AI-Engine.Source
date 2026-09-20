@@ -15,27 +15,14 @@ public interface IComparisonBenchmarkHandoffService
 }
 
 /// <summary>
-///     Closes the one-way gap the old training → benchmark deep link left: it could only SELECT runs that already
-///     existed in a project the operator had already built, so a freshly trained model had nothing to open. This creates
-///     the project and starts both runs in one action.
-///     <para>
-///         <b>Paired by construction.</b> Both models are frozen against the same project (same task, same context, same
-///         agent), with the same KV-cache type and the same repeat count, through one shared
-///         <see cref="BenchmarkFreezeScope" /> — so the two sides differ in the model and nothing else, which is the only
-///         condition under which their scores may be subtracted.
-///     </para>
-///     <para>
-///         <b>Both sides or neither.</b> The pair is frozen — resolved, verified, checked against the project version —
-///         on both sides before a single run is written, and then inserted in ONE all-or-nothing commit. A failure on
-///         the tuned side therefore leaves nothing queued, so a retry cannot duplicate the base group.
-///     </para>
-///     <para>
-///         <b>Installed models only.</b> A comparison's tuned side is usually a STAGED artifact, which the benchmark
-///         harness cannot launch. The tuned model must have been promoted into the local registry first (which stamps it
-///         <see cref="Providers.Abstractions.Contracts.LocalModelOrigin.Trained" /> and gives it the installed name used
-///         here); until then the hand-off is refused with that reason rather than failing later inside the freeze.
-///     </para>
+///     Creates the benchmark project and starts both runs of a training comparison in one action, so a freshly
+///     trained model has a project to open rather than only pre-existing runs to select.
 /// </summary>
+/// <remarks>
+///     The pair is frozen against one shared <see cref="BenchmarkFreezeScope" /> and inserted in ONE all-or-nothing
+///     commit, and the tuned side must already be promoted into the local registry. See docs/wiki/18-training.md
+///     ("6. Evaluation and comparison").
+/// </remarks>
 public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHandoffService
 {
     private readonly IBenchmarkStore _benchmarks;
@@ -89,9 +76,8 @@ public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHand
         var tunedModelName = await ResolveInstalledModelNameAsync(comparison.TunedEvaluationRunId, "tuned", cancellationToken);
         if (string.Equals(baseModelName, tunedModelName, StringComparison.Ordinal))
         {
-            // Both sides resolving to one installed name means the tuned artifact was promoted over the base entry (or
-            // neither side was promoted). Two runs of the same model are not a comparison, so say so here rather than
-            // enqueue an hour of GPU time that answers nothing.
+            // Both sides resolving to one installed name means the tuned artifact was promoted over the base entry, or neither
+            // was. Two runs of the same model are not a comparison, so refuse here rather than queue an hour of GPU time.
             throw new BenchmarkValidationException(
                 "The base and tuned sides of this comparison resolve to the same installed model, so there is nothing to compare. Register the tuned artifact under its own model name first.");
         }
@@ -105,10 +91,8 @@ public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHand
         // and the lease held so the tuned side cannot be frozen against different bytes than the base side was.
         await using var scope = new BenchmarkFreezeScope();
 
-        // BOTH sides are decided — model resolved and verified, eligibility applied, project version checked — before
-        // EITHER is written. Committing the base group first meant a tuned side that failed any of those checks left
-        // an hour of base runs queued while the caller got an error carrying no ids, so the only retry available
-        // queued a SECOND base group. One commit and one compare-and-swap: on any failure nothing is persisted.
+        // BOTH sides are decided — model resolved and verified, eligibility applied, project version checked — before EITHER
+        // is written: one commit and one compare-and-swap, so a failure persists nothing and no retry can queue a second base group.
         var plans = new List<BenchmarkFrozenRunPlan>(2);
         foreach (var modelName in new[]
                  {
@@ -156,16 +140,15 @@ public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHand
     }
 
     /// <summary>
-    ///     A project name is NOT an identity: names are not unique and a project carries no comparison id, so matching
-    ///     on the name alone benchmarked the two models against whatever task the first project of that name happened
-    ///     to hold — silently, and against a context window and an agent the operator never asked for. Reuse therefore
+    ///     A project name is NOT an identity: names are not unique and a project carries no comparison id, so reuse
     ///     requires every field this hand-off freezes against to match as well.
-    ///     <para>
-    ///         The judge is deliberately NOT part of the key. The hand-off never sets one, and turning judging on
-    ///         afterwards does not make the project a different benchmark — it changes how its runs are scored, on both
-    ///         sides equally.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Matching on the name alone would benchmark the two models against whatever task the first project of that
+    ///     name happened to hold — silently, and against a context window and an agent the operator never asked for.
+    ///     The judge is deliberately NOT part of the key: the hand-off never sets one, and turning judging on
+    ///     afterwards changes how a project's runs are scored, on both sides equally, not which benchmark it is.
+    /// </remarks>
     private static bool IsSameBenchmark(BenchmarkProjectRecord project, string name, CreateBenchmarkFromComparisonCommand command) =>
         string.Equals(project.Name, name, StringComparison.Ordinal)
         && project.ContextTokens == command.ContextTokens
@@ -222,12 +205,12 @@ public sealed class ComparisonBenchmarkHandoffService : IComparisonBenchmarkHand
         }
     }
 
-    /// <summary>
-    ///     The INSTALLED model name behind one side of the comparison. An evaluation that targeted an installed model
-    ///     already carries it; one that targeted a staged training artifact carries the artifact's file name, which the
-    ///     benchmark harness cannot launch — that side is resolved through the artifact's committed registry name and
-    ///     refused when the artifact has not been registered yet.
-    /// </summary>
+    /// <summary>The INSTALLED model name behind one side of the comparison.</summary>
+    /// <remarks>
+    ///     An evaluation that targeted an installed model already carries it; one that targeted a staged training
+    ///     artifact carries the artifact's file name, which the benchmark harness cannot launch — that side is
+    ///     resolved through the artifact's committed registry name and refused when it is not registered yet.
+    /// </remarks>
     private async Task<string> ResolveInstalledModelNameAsync(Guid evaluationRunId, string side, CancellationToken cancellationToken)
     {
         var evaluation = await _evaluations.GetAsync(evaluationRunId, cancellationToken)

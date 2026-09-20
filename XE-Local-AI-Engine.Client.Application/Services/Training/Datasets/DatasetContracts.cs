@@ -94,12 +94,14 @@ public sealed record TrainingSampleContentV1
 
 /// <summary>
 ///     Reading a sample trajectory's tool calls. v1 samples are single-call BY CONSTRUCTION —
-///     <see cref="TeacherSampleRecordV1" /> carries one <c>toolName</c> — so a trajectory with more than one tool part
-///     is a sample nothing in the module can grade: the scorer compares ONE expectation against what the model called.
-///     Both ends therefore refuse it rather than silently taking the first call. A kept-as-a-property helper is
-///     deliberately avoided: <see cref="TrainingSampleContentV1" /> is persisted AND reused verbatim as a wire DTO, so
-///     a computed member would change both schemas.
+///     <see cref="TeacherSampleRecordV1" /> carries one <c>toolName</c>.
 /// </summary>
+/// <remarks>
+///     A trajectory with more than one tool part is a sample nothing in the module can grade: the scorer compares
+///     ONE expectation against what the model called, so both ends refuse it rather than silently taking the first
+///     call. A kept-as-a-property helper is deliberately avoided — <see cref="TrainingSampleContentV1" /> is
+///     persisted AND reused verbatim as a wire DTO, so a computed member would change both schemas.
+/// </remarks>
 public static class TrainingSampleParts
 {
     /// <summary>What an operator is told when a sample demonstrates more than one call.</summary>
@@ -188,12 +190,13 @@ public sealed record TeacherSampleRecordV1
     /// <summary>The tool arguments as a JSON object STRING, not a nested object — nesting would blow the grammar budget.</summary>
     public string ToolArgumentsJson { get; init; } = string.Empty;
 
-    /// <summary>
-    ///     Whether this record demonstrates a tool call at all. Live-found (2026-08-15): the MEAI adapter promotes every
-    ///     schema property to <c>required</c>, so under constrained decoding the teacher MUST emit some string for
-    ///     <see cref="ToolName" /> even for a no-tool answer — and small teachers write "None"/"none"/"None required".
-    ///     The no-tool decision therefore lives here, once, instead of every consumer testing for an empty string.
-    /// </summary>
+    /// <summary>Whether this record demonstrates a tool call at all.</summary>
+    /// <remarks>
+    ///     Live-found: the MEAI adapter promotes every schema property to <c>required</c>, so under constrained
+    ///     decoding the teacher MUST emit some string for <see cref="ToolName" /> even for a no-tool answer — and
+    ///     small teachers write "None"/"none"/"None required". The no-tool decision therefore lives here, once,
+    ///     instead of every consumer testing for an empty string.
+    /// </remarks>
     public bool DemonstratesToolCall => !IsNoToolSentinel(ToolName);
 
     /// <summary>The tool name to resolve, or <see langword="null" /> for a no-tool record.</summary>

@@ -1,32 +1,31 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     Deterministic, offline, allocation-light token approximation used to SIZE knowledge-base chunks to an embedding
-///     model's context window without a tokenizer or external package. A byte-pair tokenizer averages ~<see cref="CharsPerToken" />
-///     characters per token for English prose, so the estimate is <c>weighted-character-count / CharsPerToken</c>; the
-///     per-character weighting biases token-dense scripts (CJK/kana/Hangul/emoji) upward so a character-bounded window of
-///     such text is not silently ~4x its true token count. It intentionally over- rather than under-estimates so a chunk
-///     sized against it stays within the embedder's window.
+///     Deterministic, offline token approximation that SIZES knowledge-base chunks to an embedding model's context
+///     window with no tokenizer or external package; it over- not under-estimates, so a chunk sized against it stays
+///     inside the window.
 /// </summary>
 /// <remarks>
-///     This deliberately mirrors the divisor + script weighting of the chat-budgeting
-///     <c>HeuristicTokenEstimator</c> (a separate concern: chat-history budgeting operates on <c>ChatMessage</c> parts,
-///     this operates on a raw chunk string), so the two are kept as small independent equivalents rather than one coupling
-///     the chunker to the invocation layer. Determinism is a hard requirement: the chunker must produce identical chunks
-///     for identical input on every run and machine, so this uses only integer arithmetic and fixed Unicode ranges.
+///     Deliberately mirrors the divisor and script weighting of the chat-budgeting <c>HeuristicTokenEstimator</c>, a
+///     separate concern that budgets chat history over <c>ChatMessage</c> parts while this operates on a raw chunk
+///     string; the two stay small independent equivalents rather than coupling the chunker to the invocation layer.
+///     Determinism is a hard requirement — the chunker must produce identical chunks for identical input on every run
+///     and machine — so this allocates nothing and uses only integer arithmetic and fixed Unicode ranges.
 /// </remarks>
 internal static class ChunkTokenApproximation
 {
-    /// <summary>Characters per token assumed for weighted content — matches the chat-budgeting heuristic's divisor.</summary>
+    /// <summary>
+    ///     Characters per token assumed for weighted content: a byte-pair tokenizer averages about this many characters
+    ///     per token for English prose, and the value matches the chat-budgeting heuristic's divisor.
+    /// </summary>
     internal const int CharsPerToken = 4;
 
     // A non-ASCII Latin-script character (accents, sharp-s, cedilla, ...) tokenizes to modestly more than the chars/4
     // English rate, so it counts as this many weighted characters — a small upward bias without over-counting European prose.
     private const int NonAsciiCharWeight = 2;
 
-    // A CJK ideograph, kana, Hangul syllable, or emoji code unit tokenizes to roughly one-or-more tokens PER CHARACTER,
-    // whereas the chars/4 divisor assumes ~0.25 token/char — a ~4x under-count. Weighting these at CharsPerToken makes the
-    // estimate about 1 token/char (conservative, upper-biased) so a char-bounded window of CJK text is not silently oversized.
+    // A CJK ideograph, kana, Hangul syllable, or emoji code unit tokenizes to ~1+ tokens PER CHARACTER where the divisor
+    // assumes ~0.25 — a ~4x under-count; CharsPerToken weighting lifts the estimate to ~1 token/char, never oversizing CJK.
     private const int CjkCharWeight = CharsPerToken;
 
     /// <summary>Deterministic token estimate for a whole string: weighted character count divided by <see cref="CharsPerToken" />.</summary>
@@ -63,14 +62,18 @@ internal static class ChunkTokenApproximation
         return IsCjkOrEmoji(character) ? CjkCharWeight : NonAsciiCharWeight;
     }
 
-    // Code units that tokenize to ~1+ tokens each: CJK radicals/ideographs (incl. Ext-A) + kana + CJK punctuation
-    // (U+2E80..U+9FFF), Hangul syllables (U+AC00..U+D7A3), CJK compatibility ideographs (U+F900..U+FAFF), half/fullwidth
-    // forms (U+FF00..U+FFEF), and surrogate halves (U+D800..U+DFFF) which stand in for emoji and CJK Ext-B+ code points,
-    // each surrogate counted heavy so a two-unit emoji biases upward. Latin-1/Latin-Extended accents are intentionally
-    // excluded (they fall to the lighter NonAsciiCharWeight).
-    // The bounds are written as explicit hex code points (never as CJK char literals): a CJK literal and its compatibility
-    // clone (e.g. U+8C48 vs U+F900) are visually identical, and exactly that ambiguity once silently diverged the two
-    // mirrored copies of this classification.
+    /// <summary>
+    ///     Whether a code unit tokenizes to roughly one or more tokens on its own: CJK radicals and ideographs including
+    ///     Ext-A, kana and CJK punctuation, Hangul syllables, CJK compatibility ideographs, half- and fullwidth forms,
+    ///     and surrogate halves.
+    /// </summary>
+    /// <remarks>
+    ///     Surrogate halves stand in for emoji and CJK Ext-B+ code points, each counted heavy so a two-unit emoji biases
+    ///     upward. Latin-1 and Latin-Extended accents are intentionally excluded and fall to the lighter
+    ///     <see cref="NonAsciiCharWeight" />. The bounds are written as explicit hex code points, never as CJK char
+    ///     literals: a CJK literal and its compatibility clone (U+8C48 vs U+F900) are visually identical, and exactly
+    ///     that ambiguity silently diverges the two mirrored copies of this classification.
+    /// </remarks>
     private static bool IsCjkOrEmoji(char character)
     {
         return (character >= 0x2E80 && character <= 0x9FFF)

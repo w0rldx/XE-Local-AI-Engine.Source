@@ -9,11 +9,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Orchestrates the Inference Optimizer explore → benchmark → freeze loop over the supervisor's exclusive profiling
-///     entry point and the node-scoped profile/benchmark stores. SCOPED — it composes the scoped stores directly. Every
-///     public method returns an outcome record (it never throws for an expected rejection such as a cloud model, a
-///     missing profile, or a freeze that is not benchmark-justified).
+///     Orchestrates the Inference Optimizer explore → benchmark → freeze loop over the supervisor's exclusive
+///     profiling entry point and the node-scoped profile/benchmark stores.
 /// </summary>
+/// <remarks>
+///     SCOPED — it composes the scoped stores directly. Every public method returns an outcome record: it never
+///     throws for an expected rejection such as a cloud model, a missing profile, or a freeze that is not
+///     benchmark-justified.
+/// </remarks>
 public sealed class InferenceProfileService : IInferenceProfileService
 {
     private const string ProviderName = LlamaServerProviderConstants.ProviderName;
@@ -120,9 +123,8 @@ public sealed class InferenceProfileService : IInferenceProfileService
         var variant = await _variantSelector.SelectVariantAsync(ct);
         var backend = InferenceBackends.FromVariant(variant);
 
-        // GPU-only by construction: SpawnCoreAsync runs llama-fit-params only for a non-CPU variant, so a CPU explore
-        // returns a null draft and BuildExploreInputAsync falls back to the GGUF context length — the requested window
-        // would silently vanish from the profile. Refusing beats recording a number nobody asked for.
+        // GPU-only by construction: SpawnCoreAsync runs llama-fit-params only for a non-CPU variant, so a CPU explore returns
+        // a null draft and BuildExploreInputAsync falls back to the GGUF context length; refusing beats silently dropping the window.
         if (contextTokens is not null && variant == GpuVariant.Cpu)
         {
             return ExploreResult.Fail(
@@ -338,12 +340,8 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return ProfileActionResult.Fail($"Profile {profileId} no longer matches the active launch semantics or model/runtime revision; re-explore before freezing.");
         }
 
-        // The freeze gate binds to the EXACT profile revision: only a successful benchmark taken for THIS profile whose
-        // recorded launch args still match the profile's current args justifies a freeze. Re-exploring a profile
-        // (changing quant/ctx/gpu-layers/kv-types/flash-attn/…) rewrites its args and clears its benchmark
-        // justification, so a benchmark captured before the change must NOT freeze the new configuration — the user is
-        // told to re-benchmark. NOTE: this stricter gate applies to FUTURE freezes only; already-frozen profiles are
-        // deliberately left untouched (no retroactive invalidation).
+        // The freeze gate binds to the EXACT profile revision: only a successful benchmark for THIS profile whose recorded
+        // args still match the profile's current args justifies a freeze (docs/wiki/07-model-fit.md, "Inference Optimizer (operator surface)").
         var benchmark = await _benchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, ct);
         if (benchmark is null)
         {
@@ -355,10 +353,8 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return ProfileActionResult.Fail($"Profile {profileId} was re-explored after its last benchmark (launch arguments changed); re-benchmark before freezing.");
         }
 
-        // Store global-free VRAM as the invalidation baseline wherever NVIDIA/NVML provides it. llama.cpp's
-        // --list-devices figure is a process-local residency budget under WDDM and can ignore external pressure, so it is
-        // recorded independently for diagnostics and must never substitute for missing global-free evidence. CPU profiles
-        // deliberately keep no VRAM baseline; unrelated GPU pressure must never invalidate a CPU placement.
+        // Global-free VRAM (NVIDIA/NVML) is the invalidation baseline; llama.cpp's --list-devices figure is a process-local
+        // WDDM budget, recorded only for diagnostics, never a substitute. CPU profiles keep none, so GPU pressure cannot invalidate them.
         var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct);
         long? globalFreeVramAtFreeze = null;
         long? processBudgetVramAtFreeze = null;
@@ -518,9 +514,8 @@ public sealed class InferenceProfileService : IInferenceProfileService
         };
     }
 
-    // A benchmark justifies a freeze only when every launch-affecting arg it recorded still matches the profile's
-    // current args. The profile-scoped store read already guarantees the row belongs to this ProfileId; this guards the
-    // re-explore case, where the profile kept its id and benchmark row but had its args overwritten in place.
+    // A benchmark justifies a freeze only when every launch-affecting arg it recorded still matches the profile's current
+    // args. The store read already scopes the row to this ProfileId; this guards re-explore, where args are overwritten in place.
     private static bool BenchmarkMatchesProfile(ModelFitBenchmarkRecord benchmark, InferenceProfileRecord profile)
     {
         return benchmark.LlamacppBuild == profile.LlamacppBuild
@@ -538,22 +533,16 @@ public sealed class InferenceProfileService : IInferenceProfileService
                && string.Equals(benchmark.LaunchPolicyFingerprint, profile.LaunchPolicyFingerprint, StringComparison.Ordinal);
     }
 
-    // A GPU profile is replayable only with a concrete -ngl. Expert placement needs no separate check here: a spawn
-    // that kept its experts in system RAM is frozen with the equivalent -ot (the fit parser refuses to draft one
-    // otherwise), so -ot is the placement and it already travels through the fingerprint, BenchmarkMatchesProfile and
-    // BuildReplay. There is no CpuMoe column to consult and no pre-slice row can carry the decision unrecorded --
-    // --cpu-moe was never emitted before this slice.
+    // A GPU profile is replayable only with a concrete -ngl. Expert placement needs no separate check: a spawn that kept its
+    // experts in RAM is frozen with the equivalent -ot (no CpuMoe column exists and the fit parser drafts no other form), travelling through the fingerprint, BenchmarkMatchesProfile and BuildReplay.
     private static bool HasCompletePlacement(InferenceProfileRecord profile)
     {
         return string.Equals(profile.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)
                || profile.NGpuLayers is not null;
     }
 
-    // The single "is this row still replayable under today's semantics" gate, used by BOTH profile-owned replay
-    // decisions (benchmark and freeze). Two axes: the versioned fingerprint identity, and the placement axis — a row
-    // that would launch an expert-offload model as fully resident is not replayable however well its hash matches, and
-    // the serving path reaches the SAME check through IInferenceInvalidationEvaluator.IsStaleAsync. Both callers mark
-    // the profile Stale on false, which is the D13 re-explore.
+    // The single "is this row still replayable under today's semantics" gate, used by BOTH profile-owned replay decisions (benchmark and freeze): versioned fingerprint identity plus placement.
+    // A row failing the placement axis is not replayable however its hash matches; serving reaches the same check via IInferenceInvalidationEvaluator.IsStaleAsync, both marking Stale on false (D13).
     private async Task<bool> IsReplayableUnderCurrentSemanticsAsync(InferenceProfileRecord profile, string modelFilePath, CancellationToken ct)
     {
         if (profile.LaunchPolicyFingerprintVersion is null || string.IsNullOrWhiteSpace(profile.LaunchPolicyFingerprint))

@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 using System.Runtime.InteropServices;
 
 /// <summary>
-///     Expands a single matched chunk into its surrounding context by fetching neighbor chunks with a nearby
-///     <c>chunk_index</c> in the same document, so a fact that straddles a chunk boundary is returned with the parent
-///     passage around it. Scoped: reads through the request-scoped <see cref="Persistence.NodeChatDbContext" /> connection.
+///     Expands a matched chunk into its surrounding context with neighbor chunks at a nearby <c>chunk_index</c> in the
+///     same document, so a fact straddling a chunk boundary is returned with the passage around it.
 /// </summary>
+/// <remarks>Scoped: reads through the request-scoped <see cref="Persistence.NodeChatDbContext" /> connection.</remarks>
 public interface IContextExpansionService
 {
     /// <summary>
@@ -30,13 +30,14 @@ public interface IContextExpansionService
         CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Batched form of <see cref="ExpandAsync" /> for a whole set of matched chunks at once: returns, index-for-index
-    ///     with <paramref name="anchors" />, each anchor's neighbor window (same rows, same ascending order as calling
-    ///     <see cref="ExpandAsync" /> per anchor). Collapses the per-hit round trips to one query per distinct document, so
-    ///     a top-k that shares a document is expanded without an N+1 fan-out. Anchors in the same document with overlapping
-    ///     windows each still receive their own full window (identical to the per-anchor path). An empty anchor list yields
-    ///     an empty result.
+    ///     Batched expansion: returns, index-for-index with <paramref name="anchors" />, each anchor's neighbor window.
     /// </summary>
+    /// <remarks>
+    ///     Same rows and same ascending order as calling the per-anchor overload. Collapses the per-hit round trips to one
+    ///     query per distinct document, so a top-k sharing a document is expanded without an N+1 fan-out. Anchors in the
+    ///     same document with overlapping windows each still receive their own full window. An empty anchor list yields an
+    ///     empty result.
+    /// </remarks>
     Task<IReadOnlyList<IReadOnlyList<KnowledgeNeighborChunk>>> ExpandBatchAsync(IReadOnlyList<KnowledgeNeighborAnchor> anchors,
         int window,
         CancellationToken cancellationToken);

@@ -7,16 +7,11 @@ using System.Buffers.Binary;
 ///     converts byte counts to audio time.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Written by hand rather than taken from a library: the brief rules out NAudio on this path, nothing in the
-///         repository writes a RIFF header today, and the whole format is four little-endian integers around a fixed
-///         preamble. A dependency for forty-four bytes would cost more to license-check than to write.
-///     </para>
-///     <para>
-///         <see cref="BytesPerMillisecond" /> is the single conversion constant between a byte count and audio time
-///         for the live path. Every millisecond the segmenter reasons about is derived from it, never from a wall
-///         clock, which is what makes a live session's timestamps reproducible.
-///     </para>
+///     Written by hand rather than taken from a library: the brief rules out NAudio on this path, nothing in the repository
+///     writes a RIFF header today, and the whole format is four little-endian integers around a fixed preamble — a dependency
+///     for forty-four bytes would cost more to license-check than to write. <see cref="BytesPerMillisecond" /> is the single
+///     conversion constant between a byte count and audio time for the live path, and every millisecond the segmenter reasons
+///     about derives from it, never from a wall clock, which is what makes a live session's timestamps reproducible.
 /// </remarks>
 public static class WavPcm16
 {

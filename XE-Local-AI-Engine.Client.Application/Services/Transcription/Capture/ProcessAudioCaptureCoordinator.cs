@@ -19,28 +19,16 @@ public enum StartProcessCaptureOutcome
 }
 
 /// <summary>
-///     Runs per-application capture for the sessions that asked for it, on tasks that outlive the request which
-///     started them — the same posture <c>IImageJobCoordinator</c> takes, and for the same reason: a cancelled HTTP
-///     request must not kill a capture the operator is still recording into.
+///     Runs per-application capture on tasks that outlive the request which started them — the posture
+///     <c>IImageJobCoordinator</c> takes, for the same reason: a cancelled HTTP request must not kill a capture the
+///     operator is still recording into.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>The coordinator is not itself the producer.</b> <see cref="ILiveAudioProducer.StopAsync" /> carries no
-///         session id, so one singleton attached to several sessions could not tell which one the registry meant.
-///         Each session gets its own <c>SessionCapture</c> handle instead: it owns that session's linked
-///         cancellation source, its capture task and its detach handle, and it is what
-///         <see cref="ILiveTranscriptionSessionRegistry.AttachProducer" /> receives.
-///     </para>
-///     <para>
-///         <b>Cancellation of the registry's <c>ProducerToken</c> is the one stop signal.</b> Every handle links its
-///         source to that token, so ending a session — for any reason, including the pending-audio budget
-///         overflowing — stops the capture at its next iteration. A private token the registry cannot reach is how a
-///         recorder outlives its session.
-///     </para>
-///     <para>
-///         <b>This class never ends a session and never names a session status.</b> Stopping capture and ending a
-///         live session are different acts; the second one belongs to the registry's single <c>EndAsync</c> path.
-///     </para>
+///     The coordinator is not itself the producer: <see cref="ILiveAudioProducer.StopAsync" /> carries no session id, so each
+///     session gets its own <c>SessionCapture</c> handle, owning that session's linked cancellation source, capture task and
+///     detach handle, and that is what <see cref="ILiveTranscriptionSessionRegistry.AttachProducer" /> receives. Cancelling the
+///     registry's <c>ProducerToken</c> is the ONE stop signal, so a private token the registry cannot reach is how a recorder
+///     outlives its session. This class never ends a session: that is the registry's single <c>EndAsync</c> path.
 /// </remarks>
 public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
 {
@@ -75,11 +63,11 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
     public bool IsCapturing(Guid sessionId) =>
         _captures.ContainsKey(sessionId);
 
-    /// <summary>
-    ///     Attaches as this session's producer and starts capturing the process on a detached task. Synchronous
-    ///     because nothing here performs I/O — and a <c>Task</c>-returning signature would suggest it waits for the
-    ///     capture, which is exactly what it must not do.
-    /// </summary>
+    /// <summary>Attaches as this session's producer and starts capturing the process on a detached task.</summary>
+    /// <remarks>
+    ///     Synchronous because nothing here performs I/O — and a <c>Task</c>-returning signature would suggest it
+    ///     waits for the capture, which is exactly what it must not do.
+    /// </remarks>
     public StartProcessCaptureOutcome Start(Guid sessionId, int processId)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
@@ -172,12 +160,8 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
     /// </summary>
     private sealed class SessionCapture : ILiveAudioProducer
     {
-        // One lock, because publishing the registration and tearing it down are the same critical section. Without
-        // it a stop could win while _cancellation was still null, skip the cancel, and then dispose — from its
-        // finally — the source Attach had published in the meantime. Attach's next line read `.Token` on that
-        // disposed source, which throws ObjectDisposedException; ObjectDisposedException derives from
-        // InvalidOperationException, so Start caught it and reported SessionNotLive for a capture that had in fact
-        // started. In the variant where the loop was already running, it ran on a token nothing could cancel.
+        // One lock, because publishing the registration and tearing it down are the same critical section. Without it a stop could
+        // cancel nothing, then dispose the source Attach had just published, and Attach would report SessionNotLive for a live capture.
         private readonly Lock _gate = new();
         private readonly ProcessAudioCaptureCoordinator _owner;
         private readonly Guid _sessionId;
@@ -217,17 +201,8 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
                 // stop the capture loop.
                 _cancellation = CancellationTokenSource.CreateLinkedTokenSource(registration.ProducerToken);
 
-                // The coordinator publishes this handle into its dictionary BEFORE calling Attach, so a stop can
-                // land in between and find nothing to cancel or detach. It records the request; this is where that
-                // request is honoured. Without it the capture would run untracked: absent from the dictionary, so
-                // no later stop, no IsCapturing and no DisposeAsync could reach it, while it kept pushing PCM into
-                // a session whose operator had been told capture stopped.
-                //
-                // The check comes BEFORE the task is scheduled, and returns. Scheduling first and cancelling
-                // afterwards left a window: the worker does not take this lock, so it could clear
-                // ThrowIfCancellationRequested and enter CaptureAsync — building a WASAPI recorder after the stop
-                // had already returned — before cleanup got to cancel. Not scheduling at all is the only ordering
-                // with no window, and it leaves Capture as a completed task, which every caller already tolerates.
+                // The handle is published into the dictionary BEFORE Attach, so a stop can land in between and find nothing to
+                // cancel. Honouring _stopRequested here, and returning BEFORE scheduling, is the only ordering with no window.
                 if (_stopRequested)
                 {
                     CleanUpLocked();
@@ -244,10 +219,8 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
         /// <inheritdoc />
         public ValueTask StopAsync(CancellationToken cancellationToken)
         {
-            // Synchronous by construction, and it deliberately does NOT await the capture task: a PushAudioAsync
-            // blocked behind inference would otherwise hold the registry's bounded producer-stop wait, and the
-            // registry has already closed admission by the time it calls this. It is a ValueTask only because
-            // ILiveAudioProducer declares it that way.
+            // Synchronous by construction, and deliberately NOT awaiting the capture task: a PushAudioAsync blocked behind
+            // inference would hold the registry's bounded producer-stop wait, whose admission is already closed. ValueTask only because ILiveAudioProducer says so.
             StopCore();
             return ValueTask.CompletedTask;
         }
@@ -261,11 +234,11 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
             }
         }
 
-        /// <summary>
-        ///     Cancels, detaches and disposes exactly once, in that order, under <see cref="_gate" />. Cancelling
-        ///     always precedes disposing, and one caller owns both, so no stack can ever see a half-torn-down
-        ///     handle. Called only from a stop, or from <see cref="Attach" /> when a stop already asked.
-        /// </summary>
+        /// <summary>Cancels, detaches and disposes exactly once, in that order, under <see cref="_gate" />.</summary>
+        /// <remarks>
+        ///     Cancelling always precedes disposing, and one caller owns both, so no stack can ever see a
+        ///     half-torn-down handle. Called only from a stop, or from <see cref="Attach" /> when a stop already asked.
+        /// </remarks>
         private void CleanUpLocked()
         {
             if (_cleaned)

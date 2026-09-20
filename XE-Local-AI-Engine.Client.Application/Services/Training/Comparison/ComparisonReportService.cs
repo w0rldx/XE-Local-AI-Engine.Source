@@ -150,9 +150,12 @@ public sealed class ComparisonReportService : IComparisonReportService
 
     /// <summary>
     ///     The precondition a delta rests on: both sides scored the SAME hold-out samples, of the same version of the
-    ///     same dataset. Subtracting two accuracies measured over different sample sets produces a number that looks
-    ///     exactly like a real improvement, so this is refused rather than reported.
+    ///     same dataset.
     /// </summary>
+    /// <remarks>
+    ///     Subtracting two accuracies measured over different sample sets produces a number that looks exactly like a
+    ///     real improvement, so this is refused rather than reported.
+    /// </remarks>
     private static Guid EnsureComparable(TrainingEvaluationRecord baseEvaluation, TrainingEvaluationRecord tunedEvaluation)
     {
         var left = ReadMembership(baseEvaluation, "base");

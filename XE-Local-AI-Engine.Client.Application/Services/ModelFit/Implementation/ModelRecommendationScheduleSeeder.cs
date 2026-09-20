@@ -6,21 +6,16 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 
 /// <summary>
-///     Idempotent startup task that seeds ONE enabled, on-demand <see cref="ModelRecommendationCheckHandler" /> schedule
-///     so the React model-fit "Refresh now" button works without the operator hand-creating a schedule first. The seeded
-///     definition uses <see cref="Persistence.Entities.ScheduleKind.Manual" />: a durable Quartz job with no trigger that
-///     never auto-fires — it is fired only on demand via <c>TriggerNowAsync</c>.
-///     <para>
-///         <b>Idempotent + self-healing.</b> It seeds only when NO non-deleted definition already references the
-///         <c>model-recommendation-check</c> template, so re-runs never duplicate it. If an operator deletes the seeded
-///         definition, the next startup re-seeds it.
-///     </para>
-///     <para>
-///         <b>Best-effort.</b> A node must still start even if seeding fails (e.g. a transient DB error), so the expected
-///         failures are logged and swallowed; the next startup re-attempts once the underlying issue clears. Registered in
-///         the Client host AFTER the Quartz scheduler so the scheduler factory/job store are available when this runs.
-///     </para>
+///     Idempotent startup task that seeds ONE enabled, on-demand <see cref="ModelRecommendationCheckHandler" />
+///     schedule so the React model-fit "Refresh now" button works without the operator hand-creating a schedule.
 /// </summary>
+/// <remarks>
+///     The seeded definition uses <see cref="Persistence.Entities.ScheduleKind.Manual" />: a durable Quartz job with
+///     no trigger that never auto-fires, fired only on demand via <c>TriggerNowAsync</c>. It seeds only when NO
+///     non-deleted definition already references the <c>model-recommendation-check</c> template, so re-runs never
+///     duplicate it and a deleted seed is re-created on the next startup. Seeding is best-effort — expected failures
+///     are logged and swallowed — and it runs after the Quartz scheduler so its factory and job store exist.
+/// </remarks>
 public sealed class ModelRecommendationScheduleSeeder : IHostedService
 {
     private const string SeedDisplayName = "Model recommendation refresh (on demand)";
@@ -34,11 +29,14 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
     private const int SeedMaxRuntimeSeconds = 600;
 
     /// <summary>
-    ///     The default parameter JSON for the seeded schedule: the Recommend operation, the coding use case and the top-5
-    ///     limit. No approved-image or provider-name fields (the advisor runs box-aware GGUF recommendation in-process).
+    ///     The default parameter JSON for the seeded schedule: the Recommend operation, the coding use case and the
+    ///     top-5 limit.
+    /// </summary>
+    /// <remarks>
+    ///     No approved-image or provider-name fields — the advisor runs box-aware GGUF recommendation in-process.
     ///     Mirrors the handler's own <c>DefaultParameters</c> so the seeded job runs the same recommendation as a
     ///     hand-created one.
-    /// </summary>
+    /// </remarks>
     private const string SeedParametersJson = """{"operation":"Recommend","useCase":"coding","limit":5}""";
 
     private readonly ILogger<ModelRecommendationScheduleSeeder> _logger;

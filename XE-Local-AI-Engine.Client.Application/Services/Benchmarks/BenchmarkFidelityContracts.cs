@@ -3,19 +3,20 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 using System.Globalization;
 using System.Security.Cryptography;
 
-/// <summary>
-///     The constants the quant-fidelity axis is measured under. They are constants rather than settings because a
-///     perplexity number is only comparable to another one measured the same way, and the ones that CAN move
-///     (<see cref="DefaultChunks" />) are inside the KLD comparability digest so a change is visible rather than
-///     silent.
-/// </summary>
+/// <summary>The constants the quant-fidelity axis is measured under.</summary>
+/// <remarks>
+///     They are constants rather than settings because a perplexity number is only comparable to another one measured
+///     the same way, and the ones that CAN move (<see cref="DefaultChunks" />) are inside the KLD comparability digest
+///     so a change is visible rather than silent.
+/// </remarks>
 public static class BenchmarkFidelityPolicy
 {
-    /// <summary>
-    ///     The perplexity window, pinned. Perplexity is only comparable at a fixed window, and every published
-    ///     llama.cpp / Unsloth / bartowski number uses 512. The run's frozen placement, KV-cache type and flash-attn
-    ///     setting ARE replayed — those are what differ between the runs being compared; the window is not.
-    /// </summary>
+    /// <summary>The perplexity window, pinned.</summary>
+    /// <remarks>
+    ///     Perplexity is only comparable at a fixed window, and every published llama.cpp / Unsloth / bartowski number
+    ///     uses 512. The run's frozen placement, KV-cache type and flash-attn setting ARE replayed — those are what
+    ///     differ between the runs being compared; the window is not.
+    /// </remarks>
     public const int ContextTokens = 512;
 
     /// <summary>~102k tokens of prompt evaluation: about a minute on a 27B Q4_K_M, and enough to separate two quants.</summary>
@@ -28,20 +29,22 @@ public static class BenchmarkFidelityPolicy
 
     /// <summary>
     ///     Bumped when the meaning of a stored KLD number changes for a reason no operator setting captures — a
-    ///     llama.cpp logit-file format change, or a change to how this code drives the two phases. It is inside the
-    ///     comparability digest, so a bump renders every previously measured figure stale rather than comparing it
-    ///     against numbers it no longer means the same thing as.
+    ///     llama.cpp logit-file format change, or a change to how this code drives the two phases.
     /// </summary>
+    /// <remarks>
+    ///     It is inside the comparability digest, so a bump renders every previously measured figure stale rather than
+    ///     comparing it against numbers it no longer means the same thing as.
+    /// </remarks>
     public const int KldFormatVersion = 1;
 
-    /// <summary>
-    ///     Bytes per logit in llama.cpp's KL-divergence base file. MEASURED, not derived from the format: a real
-    ///     10-chunk base file for Qwen3.8-27B (n_vocab 151 936) on an RTX 5090 came to 1 266 472 900 bytes over
-    ///     777 912 320 logits, i.e. <b>1.628</b> — llama.cpp does not store a bare f16 per logit, so the format's
-    ///     2.0 would have promised an operator 31.1 GB where the file is 25.3 GB. The constant carries ~7 % headroom
-    ///     over the measurement because it is an ESTIMATE shown before a multi-gigabyte write, and the free-space
+    /// <summary>Bytes per logit in llama.cpp's KL-divergence base file. MEASURED, not derived from the format.</summary>
+    /// <remarks>
+    ///     A real 10-chunk base file for Qwen3.8-27B (n_vocab 151 936) on an RTX 5090 came to 1 266 472 900 bytes over
+    ///     777 912 320 logits, i.e. <b>1.628</b> — llama.cpp does not store a bare f16 per logit, so the format's 2.0
+    ///     would have promised an operator 31.1 GB where the file is 25.3 GB. The constant carries ~7 % headroom over
+    ///     the measurement because it is an ESTIMATE shown before a multi-gigabyte write, and the free-space
     ///     reservation below is what actually stops the write.
-    /// </summary>
+    /// </remarks>
     public const double KldBytesPerLogit = 1.75;
 
     /// <summary>The fixed part of the base file — its header and per-chunk bookkeeping.</summary>
@@ -53,16 +56,14 @@ public static class BenchmarkFidelityPolicy
     /// </summary>
     public const long KldFreeSpaceHeadroomBytes = 10L * 1024 * 1024 * 1024;
 
-    /// <summary>
-    ///     The vocabulary the disk estimate assumes. The registry does not record a model's <c>n_vocab</c>, and the
-    ///     estimate exists to REFUSE a write that will not fit, so it assumes the largest vocabulary among the
-    ///     families this app runs (Gemma-3's 262 144) rather than a typical one: an over-estimate costs an operator a
-    ///     refusal they can override by freeing space, an under-estimate costs them a full disk.
-    ///     <para>
-    ///         ponytail: a fixed ceiling instead of reading n_vocab out of the GGUF header. Read the header if the
-    ///         over-estimate ever refuses a write that would in fact have fit.
-    ///     </para>
-    /// </summary>
+    /// <summary>The vocabulary the disk estimate assumes.</summary>
+    /// <remarks>
+    ///     The registry does not record a model's <c>n_vocab</c>, and the estimate exists to REFUSE a write that will
+    ///     not fit, so it assumes the largest vocabulary among the families this app runs (Gemma-3's 262 144) rather
+    ///     than a typical one: an over-estimate costs an operator a refusal they can override by freeing space, an
+    ///     under-estimate costs them a full disk. ponytail: a fixed ceiling instead of reading n_vocab out of the GGUF
+    ///     header — read the header if the over-estimate ever refuses a write that would in fact have fit.
+    /// </remarks>
     public const int DefaultVocabSize = 262_144;
 
     public static int ClampChunks(int? chunks) =>
@@ -80,14 +81,14 @@ public static class BenchmarkFidelityPolicy
 /// <summary>
 ///     The identity of one base-logit cache file, and — through <see cref="Digest" /> — the identity of every KLD
 ///     number measured against it.
-///     <para>
-///         This is the ONLY place the comparability digest is computed. The base phase names its file by it, the
-///         display gate compares a stored number against it, and the disk-estimate endpoint reports it. A second copy
-///         of the expression is the bug this type exists to prevent: four of its five inputs are settable or bumpable
-///         without the base model's fingerprint moving, so gating on the fingerprint alone would present a number
-///         measured over 50 chunks of one corpus as comparable with one measured over 200 chunks of another.
-///     </para>
 /// </summary>
+/// <remarks>
+///     This is the ONLY place the comparability digest is computed: the base phase names its file by it, the display
+///     gate compares a stored number against it, and the disk-estimate endpoint reports it. A second copy of the
+///     expression is the bug this type exists to prevent — four of its five inputs are settable or bumpable without
+///     the base model's fingerprint moving, so gating on the fingerprint alone would present a number measured over
+///     50 chunks of one corpus as comparable with one measured over 200 chunks of another.
+/// </remarks>
 public sealed record BenchmarkKldCacheKey
 {
     private BenchmarkKldCacheKey(string canonicalJson, string digest)
@@ -102,11 +103,12 @@ public sealed record BenchmarkKldCacheKey
     /// <summary><c>v1:</c> + 64 lowercase hex. The comparability gate, and the source of both file names.</summary>
     public string Digest { get; }
 
-    /// <summary>
-    ///     32 hex characters plus an extension. The digest is used rather than the key itself because a content
-    ///     fingerprint is <c>v1:&lt;hex&gt;</c> and <c>:</c> is not a legal path character on Windows — where NTFS
-    ///     would not merely reject it but reinterpret the tail as an alternate data stream.
-    /// </summary>
+    /// <summary>32 hex characters plus an extension.</summary>
+    /// <remarks>
+    ///     The digest is used rather than the key itself because a content fingerprint is <c>v1:&lt;hex&gt;</c> and
+    ///     <c>:</c> is not a legal path character on Windows — where NTFS would not merely reject it but reinterpret
+    ///     the tail as an alternate data stream.
+    /// </remarks>
     public string FileName => string.Concat(ShortDigest, ".logits");
 
     public string SidecarFileName => string.Concat(ShortDigest, ".json");
@@ -132,9 +134,12 @@ public sealed record BenchmarkKldCacheKey
 
     /// <summary>
     ///     Whether a stored KLD figure may be DISPLAYED: only while the digest it was measured under is the one the
-    ///     project's current settings recompute. A mismatch is rendered as a stale badge, never as a number and never
-    ///     as a greyed or parenthesised number — a figure the reader can still see is a figure they will still compare.
+    ///     project's current settings recompute.
     /// </summary>
+    /// <remarks>
+    ///     A mismatch is rendered as a stale badge, never as a number and never as a greyed or parenthesised number —
+    ///     a figure the reader can still see is a figure they will still compare.
+    /// </remarks>
     public static bool IsComparable(string? storedDigest, string? expectedDigest) =>
         !string.IsNullOrEmpty(storedDigest)
         && !string.IsNullOrEmpty(expectedDigest)

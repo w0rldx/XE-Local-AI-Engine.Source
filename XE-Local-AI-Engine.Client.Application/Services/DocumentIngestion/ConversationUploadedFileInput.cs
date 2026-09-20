@@ -2,10 +2,13 @@ namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 
 /// <summary>
 ///     Everything the file store needs to durably persist one uploaded file: the raw bytes plus the already-computed
-///     extraction outcome. Extraction runs at the endpoint (before this is constructed); the store only persists +
-///     encrypts. <see cref="ExtractedMarkdown" /> is non-null only when <see cref="ExtractionStatus" /> is
-///     <see cref="DocumentExtractionStatus.Extracted"/>.
+///     extraction outcome.
 /// </summary>
+/// <remarks>
+///     Extraction runs at the endpoint, before this is constructed; the store only persists and encrypts.
+///     <see cref="ExtractedMarkdown" /> is non-null only when <see cref="ExtractionStatus" /> is
+///     <see cref="DocumentExtractionStatus.Extracted" />.
+/// </remarks>
 public sealed record ConversationUploadedFileInput
 {
     public required Guid ConversationId { get; init; }

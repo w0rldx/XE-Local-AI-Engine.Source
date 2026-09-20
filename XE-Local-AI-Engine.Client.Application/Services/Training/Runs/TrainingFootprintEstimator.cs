@@ -5,29 +5,16 @@ using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 /// <summary>
-///     Sizes one QLoRA run against the box. Mirrors <c>MemoryFitEstimator</c>'s shape — constants up front, one pure
-///     computation — but sizes against parameter count and the activation levers rather than GGUF quant bytes, because
-///     nothing here is a GGUF.
+///     Sizes one QLoRA run against the box: constants up front, one pure computation, mirroring
+///     <c>MemoryFitEstimator</c>'s shape but sizing against parameter count and the activation levers rather than
+///     GGUF quant bytes, because nothing here is a GGUF.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The breakdown, per the pinned-stack research: the 4-bit frozen base dominates at ≈0.6 bytes/param (4 bits
-///         packed plus NF4 double-quant scale overhead); the bf16 LoRA weights and their two 8-bit Adam moment buffers
-///         cost ≈4 bytes per TRAINABLE param, which is small because only the adapter trains; and activations are the
-///         only term that scales with batch and sequence length. Gradient checkpointing keeps activations proportional
-///         to a small constant number of layers' worth rather than all of them, so they are budgeted as a headroom term
-///         with the batch/sequence lever kept linear rather than modelled precisely.
-///     </para>
-///     <para>
-///         Two deliberate fail-safes: a headroom fraction on the fixed cost, and a floor at the frozen 4-bit weights
-///         plus a CUDA context, so a checkpoint whose shape could not be read still cannot produce a tiny answer.
-///     </para>
-///     <para>
-///         The floor is deliberately NOT the fp16 weight size the research brief proposed. That floor would refuse
-///         exactly the runs this feature exists for: the published reference points the same brief cites put an 8B
-///         QLoRA run near 6 GB, well under the 16 GB its own fp16 weights would need, so an fp16 floor makes every
-///         estimate the floor and hides the batch and sequence levers entirely.
-///     </para>
+///     Per the pinned-stack research: the 4-bit frozen base dominates at ≈0.6 bytes/param (packed 4 bits plus NF4 scale
+///     overhead); the bf16 LoRA weights and their two 8-bit Adam moment buffers cost ≈4 bytes per TRAINABLE param; activations
+///     are budgeted as a headroom term with the batch/sequence lever kept linear, because gradient checkpointing keeps them
+///     proportional to a few layers. Fail-safes: a headroom fraction on the fixed cost, and a floor at the frozen 4-bit weights
+///     plus a CUDA context — NOT fp16 weights, which would make every estimate the floor (8B QLoRA sits near 6 GB).
 /// </remarks>
 public static class TrainingFootprintEstimator
 {
@@ -114,12 +101,12 @@ public static class TrainingFootprintEstimator
         return layers * (attention + mlp);
     }
 
-    /// <summary>
-    ///     Total parameter count derived from the checkpoint's own weight bytes. There is no safetensors header reader
-    ///     in this repo and none is needed: the manifest already records every shard's size, and a checkpoint's storage
-    ///     dtype is declared in its config, so bytes ÷ bytes-per-parameter is both simpler and accurate to within the
-    ///     tied-embedding rounding the headroom term already absorbs.
-    /// </summary>
+    /// <summary>Total parameter count derived from the checkpoint's own weight bytes.</summary>
+    /// <remarks>
+    ///     There is no safetensors header reader in this repo and none is needed: the manifest already records every
+    ///     shard's size and a checkpoint's storage dtype is declared in its config, so bytes ÷ bytes-per-parameter is
+    ///     both simpler and accurate to within the tied-embedding rounding the headroom term already absorbs.
+    /// </remarks>
     public static long EstimateParameterCount(IReadOnlyList<BaseArtifactFileView> files, BaseCheckpointConfigV1 config)
     {
         ArgumentNullException.ThrowIfNull(files);
