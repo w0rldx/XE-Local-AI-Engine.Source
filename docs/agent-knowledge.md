@@ -35,6 +35,17 @@ Hard-won rules, invariants, and traps for this repository. `docs/wiki/` explains
 
 **Rule:** docs, comments and test fixtures describe the environment in general terms. No installed-tool patch versions (Docker Engine, git, GPU driver, OS build number), no uid-bearing daemon socket paths or concrete `/etc/subuid` ranges, no host RAM or CPU-count inventory, and no "this box" / "on this machine" phrasing. GPU model, VRAM and driver version stay only where they are benchmark metadata that a measurement depends on (a perf table, a live-round record), never in fixtures or general prose; repo-pinned dependency versions (llama.cpp tag, .NET SDK, package pins) stay everywhere. **Prevents:** a slow re-leak of the maintainer's machine into a public repository. The 2026-09 External Apps status page re-published the daemon version, the uid socket path and the host RAM after the 2026-08-25 cleanup had already removed exactly that class of fact. **Authority:** maintainer decision 2026-09-11, reaffirming the 2026-08-25 cleanup.
 
+### After rebasing over a comment-only refactor, re-read the `<remarks>` that merged cleanly
+
+**Rule:** a comment-shortening commit usually MOVES prose rather than deleting it — out of a `<summary>` and into a
+`<remarks>` block or a `//` run above the type. The `<summary>` is what conflicts and gets your attention; the block
+the text landed in merges silently, carrying the exact statement your branch exists to correct. After resolving,
+re-read every `<remarks>` and comment run in a conflicted file, not only the hunk. **Failure prevented:** a
+resolution that clears the markers and leaves the corrected claim standing in the very file that corrected it —
+`ApiToolCallBridge` and `PendingToolCallRegistry` each kept an auto-merged `<remarks>` naming `InvocationRunner` as a
+holder of the pending tool-call registry after the branch had moved that role to `InvocationLifecycleTracker`.
+**Authority:** the rebase of the feature-audit follow-ups over the comment-budget batches, 2026-09-20.
+
 ---
 
 ## 1. Build, test, CI, packaging
@@ -60,6 +71,7 @@ Hard-won rules, invariants, and traps for this repository. `docs/wiki/` explains
 - Keep the analyzer gate in `Directory.Build.targets`, not `.props`: `Configuration` is not defaulted when `.props` is imported. Verify with `dotnet msbuild <proj> -getProperty:RunAnalyzersDuringBuild -p:Configuration=…`.
 - `RunAnalyzersDuringBuild=false` skips diagnostics, not source generators; do not treat it as a TUnit-discovery switch.
 - **Four analyzer rules are silent in Debug and `error` in Release, and each one rejects a shape a reviewer would call correct.** `S3267` refuses a `foreach` that could be a `Where`, including a character scan written as a loop on purpose; `MA0022`/`S4586` refuse a method returning a bare `null` `Task`; `S1117` refuses a local that shadows a field of the same class. There is no Debug signal for any of them, so a branch that built clean all day fails at the gate. Fix the shape or suppress it in the source with the reason — never "code around it" silently. Authority: the External Apps slices S0–S3, once each.
+- **A deliberate break must leave every symbol still used, or the proof is void.** Deleting the only call to a private member trips the unused-private-member analyzer, the Release build reports errors, and the test run that follows executes the **previous** binary and reports the old green — a red you cannot trust and a green you must not. Break by MOVING the call, changing its argument or inverting a condition, so nothing goes unused and the analyzers stay quiet. Deleting `AgentHomeToolGateway.BuildHeader`'s call site cost a full lock round; moving it instead also proved more, that the header sits at index 0 rather than merely being present. Same rule, other direction: a re-added dependency has to be READ in a method body to count as used.
 
 
 An incremental Release result is evidence only when projects actually compiled. Analyzer diagnostics are not replayed for skipped projects. Keep `TreatWarningsAsErrors` in Debug for compiler warnings, but do not confuse that with the analyzer wall. `XE_FULL_ANALYSIS=1` is the explicit analyzer-sensitive Debug loop. `RunAnalyzersDuringBuild=false` maps to csc `-skipanalyzers`; source generators still execute, so a zero-test run points to build/config/discovery, not this gate.
@@ -213,6 +225,32 @@ is not "never WAL" but "checkpointed, closed, no outstanding sidecar": the build
 test-performance plan, slice S1 (2026-09-13). For the current per-class cost, run the duration script over a TRX
 set rather than quoting a number from here.
 
+### Never infer this node's foreign-key posture from a connection string — measure `PRAGMA foreign_keys`
+
+**Rule:** the node ENFORCES foreign keys. A bare `Data Source={path}` sends no pragma at all —
+`SqliteConnectionStringBuilder.ForeignKeys` defaults to null — and enforcement is still ON, because the bundled
+`e_sqlite3` is compiled with `DEFAULT_FOREIGN_KEYS`. The repo now states the posture in two layers instead of
+inheriting it from a native build: `DesktopBootstrap.EnsureLocalDataConfiguration` builds the string with
+`ForeignKeys = true` (the configuration value is what the Quartz job store sees, and it resolves its connection by
+name without passing through the pragma applier), and `NodeSqlitePragmas` issues `PRAGMA foreign_keys=ON` on every
+node connection (which is what reaches an Aspire- or operator-supplied string this process did not build). Neither
+layer alone covers both. Read the posture with `PRAGMA foreign_keys`; never quote it from a comment, a fixture or
+this file. **Failure prevented:** a whole audit slice scoped on the inverse belief — "the fixtures hide missing
+child deletes" — plus two store bugs that do not exist; and the inverse failure, a fixture pinned to
+`Foreign Keys=False`, which tests a database the node never has. **Authority:** `NodeSqlitePragmasTests`, one test
+per layer plus one through the production path. The per-layer tests exist because a native default masks a deleted
+setting: the string test PARSES and never opens a connection, and the applier test opens both its connections with
+`Foreign Keys=False` so only the pragma can flip them. Fixture rule: `docs/wiki/17-writing-tests.md`.
+
+**An explicit ordered delete is still required, for three reasons that are not "nothing else enforces it".** Where
+the relationship declares `Restrict` — most of the benchmark and training families — the database REJECTS a parent
+delete that still has children, so the order is what makes the delete legal at all. Where no foreign key is declared
+(`integration_executions.session_id`; the conversation → work-session and integration links `ConversationFootprintPurge`
+names; the polymorphic `training_work_items.target_id`) nothing but the explicit delete reaches the rows. And where a
+cascade or SET NULL does fire, it promises no ORDER: knowledge chunks go before sections so the
+`knowledge_document_chunks_ad` trigger keeps the external-content FTS index aligned. A declared cascade otherwise does
+the work, so do not write a delete to substitute for one.
+
 ### Running backend tests
 
 - Tests use TUnit on Microsoft.Testing.Platform. Use `--treenode-filter`, not `--filter`:
@@ -352,6 +390,16 @@ The checker parses canonical definitions, not comments; keep experimental exampl
 
 
 `docs-inventory-check.py --verbose` exits 2 when an inventory cannot run, and each extracted inventory must be non-empty so a moved path/failed regex cannot pass vacuously. Its tests remain `unittest`: `scripts/run-release-contract-tests.sh` executes each `scripts/tests/test_*.py` directly and expects a non-vacuous `Ran N tests`/`OK`; bare pytest functions may pass `python-quality` while doing nothing in release-contracts.
+
+### Deleting a dead service can delete a live control's only tests — grep the test file first
+
+**Rule:** before deleting a test file alongside the service it was written for, grep it for the OTHER production
+symbols it exercises, and re-home whatever is still live. **Failure prevented:** `AgentHomeMemoryProposalServiceTests`
+was the sole coverage of `MemoryProposalSecretScanner`, a security control with two unrelated live callers
+(`MemoryExtractionService`, `DevelopmentArtifactSanitizer`); deleting the file as specified would have removed that
+coverage silently, and no gate would have said so — coverage thresholds are project-wide, not per-file. **Authority:**
+the AgentHome memory-proposal removal, 2026-09-20; the scanner's tests now stand on their own as
+`MemoryProposalSecretScannerTests`.
 
 ### Verify against the whole module, not just the class you touched
 
@@ -1591,7 +1639,7 @@ registration in `AddNodeModelRuntimeExtensions`.
 - **The swap bookkeeping lives in exactly one place.** `BenchmarkPairwiseResultParser.ToCanonicalVerdict`: with `Order = 1` the canonical B was shown first, so a verdict of `a` means B won. Getting it backwards inverts exactly half of every cohort's verdicts, which is precisely the half the swap exists to produce.
 - **`EnsurePairsAsync` is called from exactly three places** — judge-policy activation, a primary's success terminalization, and startup reconciliation — and it is transactional, idempotent and unique-violation-tolerant. A terminal-FAILED slot is free again (that is what the status-filtered live-slot index is for) and its retry is a new row at `attempt_sequence + 1`. The cap is 12 eligible runs, i.e. 132 judge calls; past it nothing new is paired and the excess runs read `pairwise-cap`, because a sampled sub-tournament would be a silently biased one.
 - The work item of a comparison names `RunAId`, because a comparison names TWO runs and "the run's comparison work item" is not a well-formed lookup. Every comparison lifecycle call is keyed by queue sequence for that reason.
-- **A comparison references TWO runs and foreign keys are OFF, so anything that touches one run must ask the comparison rows themselves.** `DeleteRunAsync` guarded and deleted by `BenchmarkWorkItem.RunId` alone, which is the canonical FIRST run: deleting the B side of a live pair walked past the active-work guard entirely, and deleting either participant left comparison rows naming a run that no longer exists plus a published fit ranking it — with no FK to complain. The guard and the delete both go through `BenchmarkComparisons` on `RunAId == id || RunBId == id` now, and the delete bumps each affected revision's `ComparisonSetVersion` (which makes a surviving fit read stale) *and* deactivates the project's active fits (which makes the next planner pass re-fit the cohort that is actually left). Every run-cleanup path must preserve both halves. The same delete had also never removed `benchmark_fidelity_attempts`, which carry an encrypted receipt — with FKs off that is a leak, not untidiness, so the explicit order is now comparisons → work items → judge attempts → fidelity attempts → run.
+- **A comparison references TWO runs and declares no relationship to either, so anything that touches one run must ask the comparison rows themselves.** Foreign keys ARE enforced on the node, and the run's own children (`BenchmarkWorkItem`, `BenchmarkJudgeAttempt`, `BenchmarkFidelityAttempt`) declare `Restrict` — so a run cannot be deleted ahead of them at all. `BenchmarkJudgeComparison` is the opposite case: nothing in the schema reaches it, so a comparison left out of the delete outlives both runs it names. `DeleteRunAsync` guarded and deleted by `BenchmarkWorkItem.RunId` alone, which is the canonical FIRST run: deleting the B side of a live pair walked past the active-work guard entirely, and deleting either participant left comparison rows naming a run that no longer exists plus a published fit ranking it. The guard and the delete both go through `BenchmarkComparisons` on `RunAId == id || RunBId == id` now, and the delete bumps each affected revision's `ComparisonSetVersion` (which makes a surviving fit read stale) *and* deactivates the project's active fits (which makes the next planner pass re-fit the cohort that is actually left). Every run-cleanup path must preserve both halves. The same delete had also never removed `benchmark_fidelity_attempts`, which carry an encrypted receipt, so the explicit order is now comparisons → work items → judge attempts → fidelity attempts → run.
 - **Live on a dev host (RTX 5090, b10201 CUDA, Qwen3-32B Q5_K_M judge at ctx 8192, four quants of Qwen3.8-27B): the pointwise judge scored ALL FOUR 100 and dense-ranked them all rank 1 — a four-way tie and zero discrimination — while the pairwise fit over the same four answers produced UD-Q3_K_XL 69 [56, 90], Q5_K_M 60 [46, 77], Q6_K 51 [23, 70], Q4_K_M 23 [9, 34].** A strict total order where pointwise had none; the ordering differs on every pair, not just one. Q4_K_M won zero of its six comparisons and still scored a finite 23 — that is the alpha = 0.5 prior, observed rather than argued. The fit converged in 42 sweeps; every run appeared in 974-990 of 1000 bootstrap replicates.
 - **The position swap earns its cost on real answers.** Two of the six pairs split 1-1 across the two presentation orders (Q5_K_M vs UD-Q3_K_XL, Q5_K_M vs Q6_K): shown one way the judge preferred one answer, shown the other way it preferred the other. Judging each pair once would have recorded whichever order happened to run.
 - **Measured: 28.1-35.3 s per comparison (mean ~30.7 s), 12 calls, ~369 s of judge time.** The pre-flight estimate said 366.9 s from the project's own median judge attempt before a single comparison ran. Budget accordingly: a 12-run cohort is 132 calls, roughly 68 minutes at this rate.
@@ -1641,7 +1689,7 @@ registration in `AddNodeModelRuntimeExtensions`.
 ### Benchmark long-context probes (2026-08-26)
 
 - **An item's verifier override is validated against the CURRENT judge rubric at write time, and again at judging time.** The override is applied by matching its criterion id against the rubric, so an id the rubric does not have applies NOTHING and the item is graded under the policy's own configuration — against another item's expected answer, producing a plausible score for a question nobody asked. `BenchmarkTaskItemService.EnsureOverridesFitRubric` refuses the write (the id must exist and `BenchmarkJudgeVerifierConfig.Parse` must accept the config for that criterion's KIND, so an `exact` blob on an `llm` criterion is refused too), and `BenchmarkProjectService.UpdateJudgePolicyAsync` re-runs it over every stored item before activating a rubric — refusing the rubric change rather than marking the items revised, because a stranded override is not a stale answer, it is a question with no expected answer, and unranking it quietly hides an edit the operator can still take back. A judging that still meets one (the item predates the rubric edit) fails with the `override-unmatched: ` prefix, which `BenchmarkStore.RankExclusionReason` turns into the `override-unmatched` exclusion — never a score.
-- **`DeleteProjectAsync` deletes task items and pairwise fits explicitly.** Foreign keys are OFF, so the ordered delete IS the referential integrity and a table left out of it does not error — its rows simply outlive the project. The delete refuses a project that still has runs, so every run-scoped child is already gone; task items (encrypted prompts, reference answers and verifier overrides) and pairwise fits (run deletion only DEACTIVATES them) are the two that are scoped to the project itself.
+- **`DeleteProjectAsync` deletes task items and pairwise fits explicitly.** Everything that points at a project declares `Restrict` and the node enforces it, so the ordered delete is what makes the delete legal at all — a child left behind does not orphan quietly, it rejects the parent delete outright. The delete refuses a project that still has runs, so every run-scoped child is already gone; task items (encrypted prompts, reference answers and verifier overrides) and pairwise fits (run deletion only DEACTIVATES them) are the two that are scoped to the project itself.
 - **A NIAH probe expands into child task items when the ITEM is written, not when a freeze runs.** A case generated during a freeze has no durable identity: nothing to stamp in `task_item_id`, nothing to hash into `task_input_hash`, nothing for `MaxTaskItems`/`MaxRunsPerRequest` to count, and no way for the ranking read to know how many probes a cell owed. Written as rows, a case is an ordinary `BenchmarkTaskItem` — so cell completeness, the caps, the staleness exclusions and the export all reach it with no NIAH-specific code anywhere in them. `IBenchmarkStore.CreateTaskItemAsync`/`UpdateTaskItemAsync` take the children and write them in the generator's own transaction.
 - **The generator's id is minted in the SERVICE, not the store.** Every case is derived from `(parentItemId, contextTokens, depth, seed)`, so the id has to exist before the expansion that the store is handed.
 - **`Random` is banned in the generator; it uses a SplitMix64 seeded from a SHA-256 of the case's parameters.** `Random`'s sequence is an implementation detail the runtime has changed before, and a case whose haystack shifted with a .NET upgrade would move its own `InputHash` — reading every answer ever given to it as an answer to a question that no longer exists.
@@ -1669,7 +1717,7 @@ registration in `AddNodeModelRuntimeExtensions`.
 - **An unattended fire must not inherit an interactive request's time budget.** `StartBenchmarkRunBatchEndpoint` stops freezing cells after 45 s because it is holding an HTTP connection open. `RunBenchmarkBatchHandler` copied that number and the live gate caught it: a 2 x 2 matrix on Qwen3.8-27B enqueued 3 of 4 cells, because the freeze verifies each model's GGUF by digest and a cold cell costs ~18 s in that run. The handler's budget is now **45 s per cell**, so it scales with the matrix; the scheduler's own max-runtime is the outer bound. Reusing the endpoint constant in the unattended handler reproduces the same bug.
 - **A scheduled matrix ENQUEUES and returns.** It never awaits the runs — the single-consumer `BenchmarkQueueHostedService` drains them — so the template carries no `DefaultMaxRuntimeSeconds` and a fire that queues eight GPU-hours still finishes in a minute.
 - **A fire that finds queued/running WORK on the project SKIPS, and a skip is a SUCCESS.** A nightly matrix landing on the previous night's leftovers would measure the same project twice. Reporting the skip as a failure would train an operator to ignore a red schedule; `SchedulerMisfirePolicy.SkipMissed` covers the other half (a node that was off when the trigger was due).
-- **The busy guard counts WORK ITEMS, not run statuses.** Judging, fidelity and pairwise comparison work outlives the run it belongs to — it is seeded on primary SUCCESS — so a matrix whose every run reads `Succeeded` can still be holding the single-consumer queue and the GPU for hours. Counting `PrimaryStatus` called that project idle and the next fire enqueued a second matrix on top of it. `IBenchmarkStore.CountActiveWorkAsync(projectId)` returns Queued|Running items per kind (joined to the project through `BenchmarkRun`, because work items carry only a run id and foreign keys are off), and the skip summary names the kinds — "still busy" and "still busy JUDGING" are different operator actions.
+- **The busy guard counts WORK ITEMS, not run statuses.** Judging, fidelity and pairwise comparison work outlives the run it belongs to — it is seeded on primary SUCCESS — so a matrix whose every run reads `Succeeded` can still be holding the single-consumer queue and the GPU for hours. Counting `PrimaryStatus` called that project idle and the next fire enqueued a second matrix on top of it. `IBenchmarkStore.CountActiveWorkAsync(projectId)` returns Queued|Running items per kind (joined to the project through `BenchmarkRun`, because a work item carries only a run id — the run is what knows the project), and the skip summary names the kinds — "still busy" and "still busy JUDGING" are different operator actions.
 - **`AllowAgentCreation: false` on this template, deliberately.** An AI agent may schedule a saved-agent run (`run-agent` opts in); it may not schedule GPU-hours.
 - **The scheduler's template catalog is fully data-driven, so a new template needs NO frontend change.** `GET scheduler/templates` serves the registered descriptors and `ScheduledJobForm` builds the picker, the schedule-kind list, the misfire default, the max-runtime prefill and the parameters textarea from that response — including `defaultParameters`, which is why a template should publish a filled-in parameter skeleton. The only hardcoded template id in `features/scheduler` is `run-agent`, and only for one help sentence about its derived ceiling.
 - **Progress events are not readable over REST; the run row's `summary` is.** `ScheduledJobExecutionContext.ReportProgressAsync` writes `scheduled_job_run_events`, and no endpoint returns them (`GET scheduler/runs/{id}` returns the run row only). A handler that wants its outcome visible sets `ScheduledJobExecutionContext.Summary`, which `SchedulerDispatchExecutor` persists onto the run on success (handlers that set nothing keep the generic `"Completed."`) — without it a real fire and a busy-skip are both `Succeeded` / `Completed.` and only `durationMs` tells them apart. Same content rules as a progress message: the column is plaintext-structural, so counts, ids and operator-supplied names only.
@@ -1692,7 +1740,7 @@ registration in `AddNodeModelRuntimeExtensions`.
 
 ### Knowledge base / RAG
 
-- SQLite foreign keys are not enabled; cascades do not fire. Explicitly delete vectors → chunks (FTS trigger) → sections → document → file. EF graph tests can false-pass.
+- Vectors, chunks and sections cascade from the document and the node DOES enforce it — delete them explicitly anyway, vectors → chunks (FTS trigger) → sections → document → file: the chunk delete is what fires the external-content FTS trigger, and a cascade promises no order. EF graph tests can false-pass.
 - Vector search is managed brute-force cosine by design; sqlite-vec was slower through 100k rows.
 - Ingest/query share one `EmbeddingModelResolver` result. Reset staleness only when `IsConfident`.
 - Vector identity is model + transform + width. Both paths apply `KnowledgeEmbeddingVectorPolicy`; rows, filters, stale checks, and RAM cache use the canonical identity. Rollback: switch to Native, fully reindex, verify no stale docs, then downgrade binary.
@@ -1701,7 +1749,7 @@ registration in `AddNodeModelRuntimeExtensions`.
 - **A pooled (embedding/rerank) forward pass must fit in ONE physical micro-batch.** Emit `-b/-ub = effective context` for Embedding/Reranker only; default 512 is too small for ordinary chunks. llama.cpp clamps to context. The chars/4 estimator remains optimistic for markdown.
 
 
-**Delete/reindex ordering is explicit because SQLite foreign keys are off:** vectors → chunks (so the FTS sync trigger runs) → sections → document → file. A test that deletes an attached EF graph can false-pass without enabling the same pragma behavior as production.
+**Delete/reindex ordering is explicit because the FTS index is external-content, not because of foreign keys:** vectors → chunks (so the FTS sync trigger runs) → sections → document → file. The declared cascades are enforced, but they promise nothing about this order. A test that deletes an attached EF graph can false-pass.
 
 `EmbeddingModelResolution.IsConfident` gates corpus-wide stale/reset decisions. A transient provider failure must never reinterpret a healthy corpus under a fallback model. Canonical vector identity includes model, transform, and width; the RAM query cache also includes identity + query hash and never persists sensitive query vectors. For vector-mode rollback, set Native, fully reindex, verify no stale documents, **then** deploy an older binary; reversing that order lets older code misread transformed rows.
 
@@ -1849,6 +1897,20 @@ Using copy exclusions for reads hides diagnostic files such as `obj/project.asse
 
 
 The accepted trade is intentionally conservative: `.npmrc`, `.env.*` (including `.env.example`), and certificate/key patterns are treated as credentials for read/copy policy, so private-registry restores or certificate fixtures may be unavailable inside copied homes. Do not loosen them as a convenience fix. This does **not** prevent a repository build/test from printing a secret to captured stdout; execution is a separate, explicitly unclosed channel.
+
+### A lexical path-containment check is one shared helper, and the root is not its own descendant
+
+**Rule:** containment goes through `PathContainment.IsUnderRoot`, never a private copy. It normalises BOTH sides,
+compares against `root + separator` **and** requires the candidate to be strictly longer, and fails closed on a
+malformed path. **Failure prevented:** `Path.GetFullPath` PRESERVES a trailing separator, so a root spelled with one
+normalises to a string that starts with `root + separator` and read as its own descendant — `IsUnderRoot("/root/",
+"/root")` answered `true` in all five copies that existed, each of them standing in front of a
+`Directory.Delete(recursive: true)` or a process-tree kill. Five copies also meant five chances to drift: three
+caught only `ArgumentException` while their own doc comments claimed parity with the two that caught
+`NotSupportedException` and `PathTooLongException` as well. **Authority:**
+`Providers.Abstractions/PathContainment.cs` and `PathContainmentTests`. `SandboxJailPathGuard.IsUnderJailRoot` is
+deliberately NOT one of the copies and was left alone: it ADMITS the jail root itself, and it is called per
+component inside the symlink walk above, so it answers a different question.
 
 ### Sub-agent spawn: depth cap is structural first
 
@@ -2045,6 +2107,34 @@ Caller env uses `/work`, `/work/home`, and `/tmp`. Caller variables are emitted 
 Bubblewrap's filesystem capability and non-isolated `unshare` capability are distinct. `run_python` asks for filesystem isolation and relies on bwrap's own `--unshare-net`; refusing because the separate `SupportsNetworkPolicy` probe failed creates a false negative. Conversely, a host lacking filesystem isolation is refused even if it can create a network namespace because the tool promises both host-filesystem absence and no egress.
 
 ---
+
+### The AgentHome patch export STAGES before it diffs, and the apply side refuses a link entry by name
+
+**Rule:** `AgentHomePatchService.ExportPatchAsync` runs `add -A` (never `--force`, so `.gitignore` still decides what
+is offered) and then diffs `--cached … HEAD`. A working-tree diff against the run's baseline commit cannot see a path
+the run CREATED, so an export written that way reports "no file changes" for exactly the runs worth reviewing.
+Because created files do reach the apply side, `NodePatchApplyService` parsing refuses a symlink (`120000`) or
+gitlink (`160000`) entry BY NAME, in both the mode-line and the index-line arm — a symlink block's one-line content
+IS the link target, so applying one plants a real host link pointing wherever the model named, and git answers a
+gitlink with an empty directory. **Failure prevented:** an export that silently drops every new file, and a
+review-and-apply gate that lands a model-authored link on the operator's own folder. It also costs a test round: a
+test whose inner loop writes a BRAND-NEW path and asserts the export reports it fails against a working-tree diff —
+modify a copied file instead if you are exercising the old shape. **Authority:**
+`AgentHomePatchService.ExportPatchAsync` and `AgentHomePatchServiceTests.ExportPatchAsync_StagesTheWorkspaceBeforeItDiffs`;
+`NodePatchApplyService.Parsing`'s `SymlinkMode`/`GitlinkMode` and `NodePatchApplyServiceTests`.
+
+### The `run_in_agent_home` result's first line is node-authored, and it is the ONLY place a run id may be read from
+
+**Rule:** `AgentHomeToolGateway.BuildHeader` writes `[agent-home run=… outcome=… patch=…]` as the result's first
+line, before any model-influenced byte, and every reader parses it START-ANCHORED with no multiline flag. There is
+deliberately no fallback to scanning the body: a result with no header names no run, and guessing is the failure
+itself. **Failure prevented:** the prose after the header echoes the model's own `run_command` executable verbatim,
+and it sits BEFORE the genuine patch path — so a reader recovering the run id by scanning for something
+run-shaped lets the model point the operator's "review and apply" button at another run's patch. The outcome token
+is spelled out per status rather than `ToString()`'d, so a new status throws instead of reporting itself as a
+completed run. **Authority:** `AgentHomeToolGateway.BuildHeader`/`OutcomeToken` and the SPA's
+`agentHomeRunIdWithPatch` in `AgentHomePatchToolResult.ts`, with `AgentHomeToolResultContainmentTests` and
+`AgentHomePatchToolResult.test.ts`.
 
 ### A second copy of the tool-invocation logic drifts, and the drift looks like a product bug
 
@@ -2287,6 +2377,35 @@ localising it breaks the untitled-conversation check across a language switch un
 `isUntitled` flag. **Authority:** the `setupFiles` comment in `vite.config.ts` and `RenderWithProviders.tsx`'s header;
 the measured suite run that turned 7 hidden defects green-to-red, 2026-09-13.
 
+### An MSW request no handler declared FAILS the test that made it — declare the route, never widen the guard
+
+**Rule:** in a file that called `setupMswServer()` (`src/test/UseMswServer.ts`), the lifecycle records every
+unhandled request and its `afterEach` throws naming the method and URL; `beforeEach` clears the record so a failure
+cannot leak into the next test. When it fires, declare the route where the reason for it is visible — a route
+ambient to the whole file goes in `setupMswServer(...)`'s defaults — and never allow-list. A test that MEANS to make
+an undeclared request calls `assertNoUnhandledRequests()` itself, which asserts the failure and drains the record.
+**Failure prevented:** a component test passing over an API call it never stubbed. MSW's own
+`onUnhandledRequest: "error"` does reject the caller's `fetch`, but a component reaching the API through TanStack
+Query catches that rejection into `query.error`, so a test asserting on another part of the DOM stays green while
+the page silently renders an error state — the first full run under the guard turned up 15 such calls across nine
+files that the suite had been green over, 2026-09-20. **Known limit, stated rather than hidden:** a
+request fired during RTL's unmount is recorded and then dropped by the next `beforeEach`, so it is charged to no
+test; attributing it to the following one would be worse. **Authority:** `src/test/UseMswServer.ts`;
+`ValidationProblemProbeApi.test.ts`, the case "still fails an undeclared route through MSW, not through the global
+no-network guard".
+
+### Every `MantineProvider` a test mounts carries `env="test"`
+
+**Rule:** it is Mantine's own test switch, and it does THREE things, not the two the docs name: no transitions,
+portals rendered inline, and a kept-mounted `Tabs.Panel` that would sit hidden renders its children for real — so a
+query in a non-active tab mounts and its route has to be declared. **Failure prevented:** a dropdown's close timer or
+a portal node outliving the tree `afterEach(cleanup)` unmounted, and a test that silently depends on a modal's open
+transition to give an in-flight request time to land (one read a tab's content synchronously and only passed because
+of it — with transitions off the click is immediate and the read has to be a `findBy*`). **Known gap:** the tests
+that render through the product `ThemeProvider` keep portals and transitions on, because the provider is product
+code and takes no `env`. **Authority:** `src/test/RenderWithProviders.tsx` and `MantineTestRender.tsx`; the
+installed `@mantine/core` ESM for `OptionalPortal`, `Transition` and `TabsPanel`.
+
 ### A date goes through `formatTimestamp` or `formatTime`, never through a bare `toLocaleString()`
 
 **Rule:** `formatTimestamp` and its time-only sibling `formatTime` (`core/formatting/TimeFormatting.ts`) format an instant in the ACTIVE i18next language, and every date or clock rendering goes through one of them. Both take `number | string | null | undefined`, because half the wire carries epoch millis and half an ISO string and most generated timestamp fields are optional. **Prevents:** a session switched to German rendering German labels beside US-ordered dates — `toLocaleString()` reads the machine's regional setting and knows nothing about i18next — and the literal "Invalid Date" landing in a table row, which the helper answers as a dash. **Authority:** `formatTimestamp` and `TimeFormatting.test.ts`; it is also why `core` may import i18next directly, the same reason `ApiErrorMessage` and `Toast` do.
@@ -2509,6 +2628,8 @@ These are intentionally terse. Follow the linked/current section for the active 
 | Protected recent turns are immutable. | Late budget passes may strip reasoning; protected tool-result excerpting is opt-in (§6). |
 | Playbook retrieval is lexical by design. | Embedding ranker is default; lexical is fallback (§6). |
 | Node DB is SQLCipher and wrong key fails DB open. | SQLite is plain with per-column AEAD; DataProtection resolver enforces fail-closed key reads. |
+| SQLite foreign keys are OFF on the node connection, so cascades never fire and a store's delete order IS the referential integrity. | The node enforces them — it always did, through the bundled native default, and now says so in the connection string and in a pragma on every open. Declared cascades fire; an ordered delete is still required for `Restrict` parents, for links with no foreign key at all, and where order itself matters (§1). |
+| A test fixture with foreign keys ON diverges from production and can hide a missing child delete. | Inverted: a fixture pinned to `Foreign Keys=False` is the one testing a database the node never has (§1, wiki 17). |
 | Skill names only reject edge hyphens. | MAF validation also rejects consecutive hyphens; use its validator. |
 | Skills are instructions-only. | Resources/assets are persisted with skill-bound AAD; scripts remain refused. |
 | Assigned skills automatically work in children. | Skill read/load approval is waived only for children; script execution remains approval-required (§4). |
