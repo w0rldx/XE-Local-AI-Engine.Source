@@ -1,14 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>
-///     How much of a container's log to read.
-///     <para>
-///         Both ceilings are clamped on the way in rather than checked at the wire. A log read is the one runtime call
-///         whose cost is set by the container rather than by the engine — an application that has been logging for a
-///         week can produce gigabytes — so an unbounded request is a way to run the node out of memory through a
-///         surface that looks like a diagnostic.
-///     </para>
-/// </summary>
+/// <summary>How much of a container's log to read.</summary>
+/// <remarks>
+///     Both ceilings are clamped on the way in rather than checked at the wire. A log read is the one runtime call
+///     whose cost is set by the container rather than the engine — an application logging for a week can produce
+///     gigabytes — so an unbounded request would run the node out of memory through a surface that looks like a
+///     diagnostic.
+/// </remarks>
 public sealed record ContainerLogRequest
 {
     /// <summary>The smallest number of lines a request can ask for.</summary>

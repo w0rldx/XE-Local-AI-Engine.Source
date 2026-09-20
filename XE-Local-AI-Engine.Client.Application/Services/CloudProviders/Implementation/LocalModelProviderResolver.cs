@@ -6,22 +6,24 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Default <see cref="ILocalModelProviderResolver" />. Holds the registered provider set keyed by provider name
-///     and reads the persisted per-model→provider map through a fresh DI scope per lookup (so a singleton router can
-///     consume the scoped <see cref="ICoordinatedModelProviderMapStore" /> safely). Unmapped models route to the configured
-///     default provider.
+///     and reads the persisted per-model→provider map through a fresh DI scope per lookup.
 /// </summary>
 /// <remarks>
-///     The <c>ModelName → ProviderName</c> lookup is memoized in a short-TTL, bounded cache. Provider
-///     resolution runs several times per chat turn (capability gating, model resolution, per-orchestration-participant),
-///     each previously opening a fresh DI scope + coordinated map read; the map is effectively
-///     write-once per model (a GGUF is always <c>llamacpp</c>, an Ollama model always <c>ollama</c>), so caching the name
-///     for a few seconds collapses that to one read per turn. Only non-secret model/provider names are cached. Writers of
-///     the map call <see cref="InvalidateModelProviderMap" /> after an upsert so a new row is visible immediately; the
-///     TTL is the backstop for any unhooked writer.
+///     The fresh scope lets a singleton router consume the scoped <see cref="ICoordinatedModelProviderMapStore" />
+///     safely, and unmapped models route to the configured default provider. The <c>ModelName → ProviderName</c>
+///     lookup is memoized in a short-TTL, bounded cache of non-secret model/provider names; writers of the map call
+///     <see cref="InvalidateModelProviderMap" /> after an upsert so a new row is visible immediately, and the TTL is
+///     the backstop for any unhooked writer.
 /// </remarks>
 public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
 {
     /// <summary>Default lifetime of a cached <c>ModelName → ProviderName</c> entry when the caller does not override it.</summary>
+    /// <remarks>
+    ///     Provider resolution runs several times per chat turn (capability gating, model resolution, per-orchestration
+    ///     participant), and each lookup otherwise opens a fresh DI scope and a coordinated map read. The map is
+    ///     effectively write-once per model — a GGUF is always <c>llamacpp</c>, an Ollama model always <c>ollama</c> —
+    ///     so a few seconds of caching collapses that to one read per turn.
+    /// </remarks>
     private static readonly TimeSpan DefaultMapCacheTtl = TimeSpan.FromSeconds(5);
 
     /// <summary>Defensive upper bound on cached entries; model counts are tiny, so hitting this only happens under an odd flood.</summary>
@@ -36,11 +38,15 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
     private readonly IServiceScopeFactory _scopeFactory;
 
     /// <summary>
-    ///     Builds the resolver over every registered <see cref="ILocalModelProvider" /> (llama-server + the optional
-    ///     Ollama provider), the scope factory used to read the per-model map, the configured default provider for
-    ///     unmapped models, and the loaded-process cap surfaced to the preview cap check. The injected time provider
-    ///     and the optional cache TTL exist for deterministic tests; a non-positive TTL disables the map cache entirely.
+    ///     Builds the resolver over every registered <see cref="ILocalModelProvider" /> (llama-server plus the optional
+    ///     Ollama provider), the scope factory that reads the per-model map, the default provider and the
+    ///     loaded-process cap.
     /// </summary>
+    /// <remarks>
+    ///     The default provider serves unmapped models and the cap is surfaced to the preview cap check. The injected
+    ///     time provider and the optional cache TTL exist for deterministic tests; a non-positive TTL disables the map
+    ///     cache entirely.
+    /// </remarks>
     public LocalModelProviderResolver(IEnumerable<ILocalModelProvider> providers,
         IServiceScopeFactory scopeFactory,
         string defaultProviderName,

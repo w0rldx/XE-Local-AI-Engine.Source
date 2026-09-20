@@ -22,18 +22,16 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </remarks>
 public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFactory
 {
-    // Placeholder key material for the Azure-deployments surface ONLY (AzureOpenAIClient's ctor requires an
-    // ApiKeyCredential even when the real auth is Entra ID). EntraBearerTokenPipelinePolicy is registered at
-    // PipelinePosition.PerCall on that surface and overwrites Authorization on every call, so the SDK's own
-    // Authorization header carrying this placeholder is harmless noise.
-    //
-    // The v1 surface (plain OpenAIClient) does NOT use this placeholder for either auth mode: its SDK-internal
-    // authentication policy runs in a FIXED pipeline slot that sits AFTER every PerCall policy (see
-    // EntraBearerTokenPipelinePolicy's remarks), so a placeholder credential there would silently overwrite whatever
-    // a PerCall policy set — that was the root cause of a live gateway rejecting Entra ID sends with "JWT must have
-    // three segments" (the placeholder string, not a real token, reached the wire). The v1 builders below instead
-    // construct the OpenAIClient with a real AuthenticationPolicy directly (OpenAIClient(AuthenticationPolicy,
-    // OpenAIClientOptions), OPENAI001-experimental) so there is no placeholder in that FIXED slot to begin with.
+    /// <summary>
+    ///     Placeholder key material for the Azure-deployments surface ONLY: <c>AzureOpenAIClient</c>'s ctor requires an
+    ///     <c>ApiKeyCredential</c> even when the real auth is Entra ID.
+    /// </summary>
+    /// <remarks>
+    ///     <see cref="EntraBearerTokenPipelinePolicy" /> is registered at <see cref="PipelinePosition.PerCall" /> there and overwrites
+    ///     <c>Authorization</c> on every call, so this placeholder is harmless noise. The v1 surface must NEVER carry it: its SDK-internal auth policy
+    ///     sits in a FIXED slot after every PerCall policy, and a placeholder there reached a live gateway as the token ("JWT must have three segments").
+    ///     The v1 builders construct the client with a real <c>AuthenticationPolicy</c> instead — docs/wiki/03-local-runtime-and-providers.md, "Azure Foundry: the two wire surfaces".
+    /// </remarks>
     private const string PlaceholderApiKey = "unused-entra-id-auth";
     private const string EntraTokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
 
@@ -41,21 +39,27 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     // query param, trailing slash so the OpenAI SDK's own relative-path joining lands on .../openai/v1/chat/completions).
     private const string OpenAiV1PathSegment = "/openai/v1/";
 
-    // Documented Entra ID scope for the v1 surface under managed-identity auth (Microsoft Learn, 2026-06). The
-    // ApiKey/EntraId auth modes carry their own scope (the API key itself, or the operator-configured
-    // EntraTokenScope) so this constant applies to ManagedIdentity only.
+    /// <summary>Documented Entra ID scope for the v1 surface under managed-identity auth (Microsoft Learn, 2026-06).</summary>
+    /// <remarks>
+    ///     The ApiKey / EntraId auth modes carry their own scope (the API key itself, or the operator-configured
+    ///     <c>EntraTokenScope</c>), so this constant applies to ManagedIdentity only.
+    /// </remarks>
     private const string ManagedIdentityV1Scope = "https://ai.azure.com/.default";
 
-    // Client-credentials (app-only) token requests are rejected by Entra ID (AADSTS1002012) unless the scope ends
-    // in "/.default" — a delegated scope like "api://<app-id-uri>/access_as_user" only works with a user-delegated
-    // flow (device-code / interactive browser). The scope is intentionally never auto-rewritten: there is no safe
-    // general rule for a multi-segment App-ID-URI or a trailing-slash host, so a mismatch fails fast instead.
+    /// <summary>Client-credentials (app-only) token requests are rejected by Entra ID (AADSTS1002012) unless the scope ends in this suffix.</summary>
+    /// <remarks>
+    ///     A delegated scope such as <c>api://&lt;app-id-uri&gt;/access_as_user</c> only works with a user-delegated flow
+    ///     (device-code / interactive browser). The scope is intentionally never auto-rewritten: there is no safe general
+    ///     rule for a multi-segment App-ID-URI or a trailing-slash host, so a mismatch fails fast instead.
+    /// </remarks>
     private const string ClientCredentialsScopeSuffix = "/.default";
 
-    // Upper bound on how long a live interactive-browser sign-in may block the send that triggered it. MSAL's
-    // system-browser flow waits on a localhost redirect that never arrives when the operator closes the browser
-    // window without completing sign-in, so an uncapped Authenticate() blocks that send forever. Five minutes leaves
-    // room for MFA while still guaranteeing the send eventually fails with a typed, retryable error.
+    /// <summary>Upper bound on how long a live interactive-browser sign-in may block the send that triggered it.</summary>
+    /// <remarks>
+    ///     MSAL's system-browser flow waits on a localhost redirect that never arrives when the operator closes the
+    ///     window without completing sign-in, so an uncapped <c>Authenticate()</c> blocks that send forever. Five minutes
+    ///     leaves room for MFA while still guaranteeing the send eventually fails with a typed, retryable error.
+    /// </remarks>
     private static readonly TimeSpan InteractiveBrowserSignInTimeout = TimeSpan.FromMinutes(5);
 
     private readonly IEntraAuthCodeAccountStore? _entraAuthCodeAccountStore;
@@ -115,16 +119,20 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         };
     }
 
-    // The OpenAI-compatible v1 surface (ApiSurface.OpenAiV1): {endpoint}/openai/v1/chat/completions, deployment name
-    // in the request body's "model" field. Built via the plain OpenAI SDK client — see BuildOpenAiV1KeyCredentialClient
-    // / BuildOpenAiV1EntraClient for why the same ResolveEndpoint validation and credential shapes as the Azure
-    // deployments surface still apply, just wired through OpenAIClientOptions instead of AzureOpenAIClientOptions.
-    //
-    // transportHttpClient is a test-only seam (default null in the production Create() path): it lets
-    // CreateOpenAiV1ClientForTesting point the assembled client's transport at a capturing fake HttpClient instead of
-    // the network, so a pipeline-EXECUTION test can assert on the actual outbound request headers/URI rather than
-    // just the wiring code that produced them — the class of bug this factory shipped (see PlaceholderApiKey's
-    // remarks) was invisible to construction-only tests.
+    /// <summary>
+    ///     Builds the OpenAI-compatible v1 surface client (<c>ApiSurface.OpenAiV1</c>):
+    ///     <c>{endpoint}/openai/v1/chat/completions</c>, deployment name in the request body's <c>model</c> field.
+    /// </summary>
+    /// <param name="transportHttpClient">
+    ///     Test-only seam, <see langword="null" /> in the production <c>Create()</c> path: it points the assembled
+    ///     client's transport at a capturing fake instead of the network.
+    /// </param>
+    /// <remarks>
+    ///     The same <see cref="ResolveEndpoint" /> validation and credential shapes as the Azure deployments surface apply,
+    ///     wired through <c>OpenAIClientOptions</c> instead of <c>AzureOpenAIClientOptions</c>. The transport seam exists so a
+    ///     pipeline-EXECUTION test can assert on the real outbound headers and URI rather than on the wiring that produced
+    ///     them: the bug class behind <see cref="PlaceholderApiKey" /> was invisible to construction-only tests.
+    /// </remarks>
     private OpenAIClient BuildOpenAiV1Client(Uri endpoint, StoredAzureFoundryConnection connection, HttpClient? transportHttpClient = null)
     {
         var v1Endpoint = new Uri(endpoint.AbsoluteUri.TrimEnd('/') + OpenAiV1PathSegment);
@@ -148,10 +156,12 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         };
     }
 
-    // Test-only seam (Locked pipeline-order regression coverage, see BuildOpenAiV1Client's transportHttpClient
-    // remarks): assembles the SAME v1 client construction path Create() uses, with an injected transport so a
-    // request can be fired through the real assembled pipeline without live network I/O. Internal +
-    // InternalsVisibleTo("XE-Local-AI-Engine.Tests") — not part of the public contract.
+    /// <summary>Test-only seam: assembles the SAME v1 client construction path <c>Create()</c> uses, with an injected transport.</summary>
+    /// <remarks>
+    ///     A request can then be fired through the real assembled pipeline without live network I/O — the Locked
+    ///     pipeline-order regression coverage; see <see cref="BuildOpenAiV1Client" />'s <c>transportHttpClient</c>.
+    ///     Internal plus <c>InternalsVisibleTo("XE-Local-AI-Engine.Tests")</c>, not part of the public contract.
+    /// </remarks>
     internal OpenAIClient CreateOpenAiV1ClientForTesting(StoredAzureFoundryConnection connection, HttpClient transportHttpClient)
     {
         ArgumentNullException.ThrowIfNull(connection);
@@ -161,12 +171,14 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return BuildOpenAiV1Client(endpoint, connection, transportHttpClient);
     }
 
-    // The v1 surface validates a real "api-key" header, not the SDK's default "Authorization: Bearer <key>".
-    // ApiKeyAuthenticationPolicy.CreateHeaderApiKeyPolicy is a stable (non-experimental) System.ClientModel factory
-    // that can target ANY header name, not just Authorization — passing it directly as the ctor's AuthenticationPolicy
-    // sets the real key on "api-key" with no prefix and writes nothing to Authorization at all, so there is no
-    // placeholder value left for a gateway to reject (mirrors the Entra fix: see PlaceholderApiKey's remarks and
-    // EntraBearerTokenPipelinePolicy's FIXED-slot documentation for why this must be the ctor policy, not a PerCall one).
+    /// <summary>Builds the v1 key-credential client, setting the real key on the <c>api-key</c> header.</summary>
+    /// <remarks>
+    ///     The v1 surface validates a real <c>api-key</c> header, not the SDK's default <c>Authorization: Bearer</c>.
+    ///     <c>ApiKeyAuthenticationPolicy.CreateHeaderApiKeyPolicy</c> is a stable (non-experimental) System.ClientModel factory that can target ANY header
+    ///     name, so passing it as the ctor's <c>AuthenticationPolicy</c> sets the key on <c>api-key</c> with no prefix and writes nothing to
+    ///     <c>Authorization</c>, leaving no placeholder value for a gateway to reject. It must be the ctor policy, never a PerCall one — see
+    ///     <see cref="PlaceholderApiKey" /> and <see cref="EntraBearerTokenPipelinePolicy" />.
+    /// </remarks>
 #pragma warning disable OPENAI001 // OpenAIClient(AuthenticationPolicy, OpenAIClientOptions) is experimental.
     private static OpenAIClient BuildOpenAiV1KeyCredentialClient(string? apiKey, OpenAIClientOptions options)
     {
@@ -180,9 +192,11 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return new OpenAIClient(authenticationPolicy, options);
     }
 
-    // Shared by both v1 Entra shapes (managed identity with a fixed scope, and EntraId with an operator-configured
-    // scope). Passed as the ctor's AuthenticationPolicy (not PipelinePosition.PerCall) — see
-    // EntraBearerTokenPipelinePolicy's remarks for why PerCall registration on this surface is silently overwritten.
+    /// <summary>Builds the v1 Entra client, shared by both v1 Entra shapes: managed identity with a fixed scope, and EntraId with an operator-configured scope.</summary>
+    /// <remarks>
+    ///     Passed as the ctor's <c>AuthenticationPolicy</c>, not at <see cref="PipelinePosition.PerCall" />: a PerCall
+    ///     registration on this surface is silently overwritten (see <see cref="EntraBearerTokenPipelinePolicy" />).
+    /// </remarks>
     private static OpenAIClient BuildOpenAiV1EntraClient(TokenCredential credential, string scope, OpenAIClientOptions options)
     {
         var authenticationPolicy = new EntraBearerTokenPipelinePolicy(credential, scope);
@@ -204,9 +218,11 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return BuildOpenAiV1EntraClient(credential, connection.EntraTokenScope, options);
     }
 
-    // Validates the endpoint is absolute-HTTPS AND ends with a known Azure host suffix before it is ever handed to the
-    // Azure client. The host allowlist matters most for managed identity: a DefaultAzureCredential Entra token must
-    // never be sent to an arbitrary operator-entered host.
+    /// <summary>Validates that the endpoint is absolute-HTTPS AND ends with a known Azure host suffix, before it is ever handed to the Azure client.</summary>
+    /// <remarks>
+    ///     The host allowlist matters most for managed identity: a <c>DefaultAzureCredential</c> Entra token must never
+    ///     be sent to an arbitrary operator-entered host.
+    /// </remarks>
     private static Uri ResolveEndpoint(string? endpoint, IReadOnlyList<string> extraAllowedHostSuffixes)
     {
         if (string.IsNullOrWhiteSpace(endpoint)
@@ -226,9 +242,11 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return uri;
     }
 
-    // Attaches the custom-header policy at PerCall when the connection carries headers. Reserved names are
-    // skipped inside the policy; blank-name rows are dropped here. Diagnostics.IsLoggingContentEnabled is left unset
-    // so secret header values are never logged by the SDK.
+    /// <summary>Attaches the custom-header policy at <see cref="PipelinePosition.PerCall" /> when the connection carries headers.</summary>
+    /// <remarks>
+    ///     Reserved names are skipped inside the policy and blank-name rows are dropped here.
+    ///     <c>Diagnostics.IsLoggingContentEnabled</c> is left unset, so the SDK never logs a secret header value.
+    /// </remarks>
     private static AzureOpenAIClientOptions BuildClientOptions(IReadOnlyList<StoredAzureFoundryHeader> headers)
     {
         var options = new AzureOpenAIClientOptions();
@@ -286,12 +304,13 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return new AzureOpenAIClient(endpoint, new ApiKeyCredential(PlaceholderApiKey), options);
     }
 
-    // Selects the credential shape per the frozen contract:
-    //  - secret + AuthorizationCode sign-in method -> delegated MSAL confidential-client flow (Postman parity): the
-    //    secret authenticates the code redemption, but the resulting token is user-delegated, so the app-only
-    //    /.default fail-fast below does NOT apply to this branch.
-    //  - secret + any other sign-in method -> app-only client-credentials (existing behavior + fail-fast).
-    //  - no secret -> the connection's chosen interactive sign-in method (device-code / browser), unchanged.
+    /// <summary>Selects the credential shape per the frozen contract.</summary>
+    /// <remarks>
+    ///     A secret with the AuthorizationCode sign-in method selects the delegated MSAL confidential-client flow ("Postman parity"): the secret
+    ///     authenticates the code redemption but the resulting token is user-delegated, so the app-only <c>/.default</c> fail-fast does NOT apply to
+    ///     that branch. A secret with any other sign-in method selects app-only client-credentials, with that fail-fast. No secret selects the
+    ///     connection's chosen interactive sign-in method (device-code / browser).
+    /// </remarks>
     private TokenCredential BuildEntraCredential(StoredAzureFoundryConnection connection)
     {
         if (!string.IsNullOrWhiteSpace(connection.EntraClientSecret))
@@ -310,11 +329,14 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             : BuildSilentDeviceCodeCredential(connection);
     }
 
-    // A configured client secret with any sign-in method OTHER than AuthorizationCode selects the app-only
-    // client-credentials flow (see BuildEntraCredential), and Entra ID rejects that flow's token request with
-    // AADSTS1002012 unless the scope ends in "/.default". The scope round-trips to the UI and is not secret, so it
-    // is safe to echo back in the error message. The caller (BuildEntraIdClient) already rejects a null/blank scope
-    // before this runs; the null-conditional here is defense in depth, not the primary guard.
+    /// <summary>Fails fast when the app-only client-credentials scope does not end in <see cref="ClientCredentialsScopeSuffix" />.</summary>
+    /// <remarks>
+    ///     A configured client secret with any sign-in method OTHER than AuthorizationCode selects the app-only
+    ///     client-credentials flow (see <see cref="BuildEntraCredential" />), and Entra ID rejects that flow's token
+    ///     request with AADSTS1002012 unless the scope ends in <c>/.default</c>. The scope round-trips to the UI and is
+    ///     not secret, so echoing it in the error message is safe. <see cref="BuildEntraIdClient" /> already rejects a
+    ///     null/blank scope before this runs; the null-conditional here is defense in depth, not the primary guard.
+    /// </remarks>
     private static void ValidateClientCredentialsScope(string? tokenScope)
     {
         var trimmedScope = tokenScope?.Trim() ?? string.Empty;
@@ -332,10 +354,13 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             "Authorization code sign-in method to use the secret with a delegated scope.");
     }
 
-    // Delegated MSAL confidential-client flow selected by a client secret + AuthorizationCode sign-in method
-    // (Postman parity): the browser sign-in in Cloud Settings produced a delegated token (scp claim) while the
-    // stored secret authenticated the code redemption. Like BuildSilentDeviceCodeCredential, this never prompts
-    // interactively from Create() — a missing persisted account surfaces as a typed AuthRequired error.
+    /// <summary>Builds the delegated MSAL confidential-client credential, selected by a client secret plus the AuthorizationCode sign-in method.</summary>
+    /// <remarks>
+    ///     "Postman parity": the browser sign-in in Cloud Settings produced a delegated token (scp claim) while the
+    ///     stored secret authenticated the code redemption. Like <see cref="BuildSilentDeviceCodeCredential" />, this
+    ///     never prompts interactively from <c>Create()</c> — a missing persisted account surfaces as a typed
+    ///     AuthRequired error.
+    /// </remarks>
     private TokenCredential BuildDelegatedAuthCodeCredential(StoredAzureFoundryConnection connection)
     {
         var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
@@ -345,11 +370,8 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             return liveCredential;
         }
 
-        // Forced synchronous: every credential-building path below is reached from the synchronous
-        // IAzureFoundryChatClientFactory.Create, which RuntimeChatClient.ResolveActiveClient calls from
-        // Microsoft.Extensions.AI IChatClient.GetService — an interface member with no async overload. The same
-        // reason applies to each pragma span in this file. See docs/wiki/16-code-conventions.md
-        // ("Blocking calls and cancellation forwarding").
+        // Forced synchronous: every path below is reached from the synchronous IAzureFoundryChatClientFactory.Create, which RuntimeChatClient.ResolveActiveClient calls
+        // from IChatClient.GetService — no async overload. Same for every pragma span in this file; see docs/wiki/16-code-conventions.md ("Blocking calls and cancellation forwarding").
 #pragma warning disable MA0045, MA0032 // forced sync by IChatClient.GetService (see comment above)
         var homeAccountId = _entraAuthCodeAccountStore?.LoadHomeAccountIdAsync().GetAwaiter().GetResult();
 #pragma warning restore MA0045, MA0032
@@ -393,17 +415,17 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             "Authorization-code sign-in has not completed for this connection. Sign in via Cloud Settings first.");
     }
 
-    // Device-code mode never prompts from inside Create() because a fresh interactive prompt mid-chat-send would
-    // hang headlessly. A persisted AuthenticationRecord from the separate device-code sign-in endpoint flow is
-    // required, and its absence surfaces as a typed AuthRequired error instead of blocking. Silent-refresh failure
-    // on an expired record is converted to the same typed error via a callback that throws instead of falling back
-    // to a live device-code prompt.
+    /// <summary>Builds the device-code credential, which never prompts from inside <c>Create()</c>.</summary>
+    /// <remarks>
+    ///     A fresh interactive prompt mid-chat-send would hang headlessly, so a persisted <c>AuthenticationRecord</c>
+    ///     from the separate device-code sign-in endpoint flow is required and its absence surfaces as a typed
+    ///     AuthRequired error instead of blocking. A silent-refresh failure on an expired record is converted to the
+    ///     same typed error by a callback that throws instead of falling back to a live device-code prompt.
+    /// </remarks>
     private TokenCredential BuildSilentDeviceCodeCredential(StoredAzureFoundryConnection connection)
     {
-        // Reuse the live, already-authenticated credential the sign-in coordinator cached on success: its MSAL
-        // token cache (in-memory always, plus OS-native encrypted disk when available) is what actually holds the
-        // refresh token, whereas a credential rebuilt from only the persisted record has nothing to silently
-        // refresh from when encrypted persistence was unavailable on this platform.
+        // Reuse the live, already-authenticated credential the sign-in coordinator cached on success: its MSAL token cache
+        // (in-memory always, OS-native encrypted disk when available) holds the refresh token, unlike one rebuilt from the persisted record alone.
         var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
         var liveCredential = _entraLiveCredentialCache?.TryGet(cacheKey);
         if (liveCredential is not null)
@@ -433,10 +455,12 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             _logger);
     }
 
-    // Interactive-browser mode is allowed to prompt live from Create() (the browser opens on the node machine, which
-    // is correct for desktop mode). First use for a connection
-    // authenticates eagerly so a bad tenant/client id fails fast rather than deferring to the first chat send, and
-    // persists the resulting record so a future restart resumes silently.
+    /// <summary>Builds the interactive-browser credential, which IS allowed to prompt live from <c>Create()</c>.</summary>
+    /// <remarks>
+    ///     The browser opens on the node machine, which is correct for desktop mode. First use for a connection
+    ///     authenticates eagerly, so a bad tenant/client id fails fast rather than deferring to the first chat send, and
+    ///     persists the resulting record so a future restart resumes silently.
+    /// </remarks>
     private TokenCredential BuildInteractiveBrowserCredential(StoredAzureFoundryConnection connection)
     {
         var record = LoadCachedAuthenticationRecord();
@@ -445,10 +469,8 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             return new InteractiveBrowserCredential(BuildInteractiveBrowserOptions(connection, record, allowPersistence: true));
         }
 
-        // Single-flight gate: only one live browser prompt at a time. Without it, every send arriving while the
-        // operator has an unfinished (or abandoned) sign-in open would miss the client cache, re-enter this path,
-        // and open yet another browser window — each blocking its own send for the full sign-in timeout. Concurrent
-        // callers fail fast with a typed, retryable error instead of queuing behind the prompt.
+        // Single-flight gate: only one live browser prompt at a time. Without it every send arriving during an unfinished sign-in would miss the client cache, re-enter here
+        // and open another browser window, each blocking its own send for the full timeout. Concurrent callers fail fast with a typed, retryable error instead of queuing.
         if (Interlocked.CompareExchange(ref _interactiveBrowserSignInInFlight, 1, 0) != 0)
         {
             throw new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthRequired,
@@ -461,11 +483,8 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             {
                 return AuthenticateInteractiveBrowser(connection, allowPersistence: true);
             }
-            // A persistence failure does not always surface as CredentialUnavailableException — on a platform with no
-            // org.freedesktop.secrets provider (e.g. WSL2 without gnome-keyring/kwallet) it can arrive as
-            // AuthenticationFailedException wrapping MsalCachePersistenceException several levels deep instead (see
-            // EntraCachePersistenceFailure's remarks). Checking both is what makes the retry actually fire instead of
-            // the sign-in failing outright.
+            // A persistence failure does not always surface as CredentialUnavailableException: with no org.freedesktop.secrets provider it can
+            // arrive as AuthenticationFailedException wrapping MsalCachePersistenceException levels deep (see EntraCachePersistenceFailure). Checking both is what makes the retry fire.
             catch (Exception exception) when (exception is CredentialUnavailableException || EntraCachePersistenceFailure.IsPersistenceUnavailable(exception))
             {
                 _logger.LogWarning(exception,
@@ -479,16 +498,18 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         }
     }
 
+    /// <summary>Authenticates a fresh interactive-browser sign-in, bounded by <see cref="InteractiveBrowserSignInTimeout" />.</summary>
+    /// <remarks>
+    ///     <c>Authenticate()</c> without a token waits forever on MSAL's localhost redirect listener when the operator closes the
+    ///     browser without completing sign-in — the redirect never arrives — so the timeout token bounds that wait. Cancellation
+    ///     surfaces either as <see cref="OperationCanceledException" /> directly or wrapped by Azure.Identity's diagnostic scope
+    ///     in <see cref="AuthenticationFailedException" />, so both are translated to the same typed, retryable error. The
+    ///     persistence-unavailable retry in <see cref="BuildInteractiveBrowserCredential" /> is NOT affected: its exception filter matches neither translation.
+    /// </remarks>
     private InteractiveBrowserCredential AuthenticateInteractiveBrowser(StoredAzureFoundryConnection connection, bool allowPersistence)
     {
         var credential = new InteractiveBrowserCredential(BuildInteractiveBrowserOptions(connection, record: null, allowPersistence));
 
-        // Authenticate() without a token waits forever on MSAL's localhost redirect listener when the operator
-        // closes the browser window without completing sign-in — the redirect never arrives. The timeout token
-        // bounds that wait; cancellation can surface either as OperationCanceledException directly or wrapped by
-        // Azure.Identity's diagnostic scope in AuthenticationFailedException, so both are translated to the same
-        // typed, retryable error. The persistence-unavailable retry in BuildInteractiveBrowserCredential is NOT
-        // affected: its exception filter matches neither translation.
         using var timeout = new CancellationTokenSource(InteractiveBrowserSignInTimeout);
         AuthenticationRecord record;
         try
@@ -510,9 +531,12 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return credential;
     }
 
-    // Test-only seam (internal + InternalsVisibleTo, mirrors CreateOpenAiV1ClientForTesting): marks the
-    // interactive-browser single-flight gate as held so the concurrent-caller fail-fast path can be exercised
-    // without a live browser prompt blocking the first caller. Not part of the public contract.
+    /// <summary>Test-only seam that marks the interactive-browser single-flight gate as held.</summary>
+    /// <remarks>
+    ///     The concurrent-caller fail-fast path can then be exercised without a live browser prompt blocking the first
+    ///     caller. Internal plus <c>InternalsVisibleTo</c>, mirroring <see cref="CreateOpenAiV1ClientForTesting" />; not
+    ///     part of the public contract.
+    /// </remarks>
     internal void MarkInteractiveBrowserSignInInFlightForTesting()
     {
         Interlocked.Exchange(ref _interactiveBrowserSignInInFlight, 1);

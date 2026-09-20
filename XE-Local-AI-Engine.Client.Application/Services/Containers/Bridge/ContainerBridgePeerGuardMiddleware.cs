@@ -5,21 +5,14 @@ using System.Net.Mime;
 using System.Net.Sockets;
 using Microsoft.AspNetCore.Http;
 
-/// <summary>
-///     Refuses any connection to the bridge listener whose peer is not this computer, before anything else on that
-///     listener runs.
-///     <para>
-///         The bridge is the engine's one deliberately non-loopback listener, so <c>LocalApiSecurityMiddleware</c>'s
-///         loopback-peer check cannot guard it — that check would reject exactly the traffic the bridge exists to
-///         accept. This is the compensating control: the peer must be one of the host's own addresses, which a
-///         container on an engine-owned network is (it reaches the bridge through the host) and another machine on
-///         the LAN is not.
-///     </para>
-///     <para>
-///         It is inert on any connection that did not arrive on the bridge port, so registering it outside the bridge
-///         branch cannot change what the main listener serves.
-///     </para>
-/// </summary>
+/// <summary>Refuses any connection to the bridge listener whose peer is not this computer, before anything else on that listener runs.</summary>
+/// <remarks>
+///     The bridge is the engine's one deliberately non-loopback listener, so <c>LocalApiSecurityMiddleware</c>'s
+///     loopback-peer check is NOT an alternative here — it would reject exactly the traffic the bridge exists to
+///     accept. This is the compensating control: the peer must be one of the host's own addresses, which a container
+///     on an engine-owned network is and another machine on the LAN is not. It is inert on any connection that did
+///     not arrive on the bridge port, so registering it outside the bridge branch cannot change the main listener.
+/// </remarks>
 public sealed class ContainerBridgePeerGuardMiddleware : IMiddleware
 {
     /// <summary>
@@ -50,10 +43,8 @@ public sealed class ContainerBridgePeerGuardMiddleware : IMiddleware
         if (_endpoints.Current is not { } endpoint
             || !endpoint.Matches(context.Connection.LocalIpAddress, context.Connection.LocalPort))
         {
-            // Not a bridge connection. The main listener's own pipeline owns this request and this guard has no
-            // opinion about it. The whole local endpoint decides, not the port alone: a node whose loopback listener
-            // carries the bridge's port must not have its own requests judged by this guard. (Such a node opens no
-            // bridge at all — this is the second half of that answer, and the reason the two must agree.)
+            // Not a bridge connection, so the main listener's pipeline owns it. The whole local ENDPOINT decides, not the
+            // port alone: a loopback listener carrying the bridge's port must not be judged by this guard.
             await next(context);
             return;
         }
@@ -63,11 +54,8 @@ public sealed class ContainerBridgePeerGuardMiddleware : IMiddleware
         {
             if (IsContainerShapedAddress(remoteAddress))
             {
-                // The diagnosable case. A refused peer in a private range is what an untranslated container source
-                // address looks like, and the one platform that produces it is a rootful Linux daemon: a packet
-                // addressed to one of the host's own addresses is routed PREROUTING to INPUT and never passes
-                // POSTROUTING, so the daemon's masquerade rule does not rewrite the source. Only a rootless daemon
-                // is validated; the recorded remedy is to admit the subnets of networks the engine itself created.
+                // A refused peer in a private range is an untranslated container source address, which a rootful Linux
+                // daemon produces and only rootless is validated against: ADR 0011, "Only a rootless Linux daemon".
                 _logger.LogWarning("The container bridge refused a connection from {RemoteAddress}: it accepts this computer's own addresses only. "
                                    + "That peer is in a private or link-local range, which is how a container's OWN address arrives when the container "
                                    + "daemon did not translate it — the expected symptom on a rootful Linux daemon, where traffic to a local address is "
@@ -88,12 +76,11 @@ public sealed class ContainerBridgePeerGuardMiddleware : IMiddleware
         await next(context);
     }
 
-    /// <summary>
-    ///     Whether a refused peer looks like a container's own untranslated address: an RFC 1918 private range or the
-    ///     169.254/16 link-local range. It changes nothing about the verdict — the connection is refused either way —
-    ///     and exists only so the warning can name the probable cause instead of leaving the next person to capture
-    ///     packets to find it.
-    /// </summary>
+    /// <summary>Whether a refused peer looks like a container's own untranslated address: an RFC 1918 private range or the 169.254/16 link-local range.</summary>
+    /// <remarks>
+    ///     It changes nothing about the verdict — the connection is refused either way — and exists only so the
+    ///     warning can name the probable cause instead of leaving the next person to capture packets to find it.
+    /// </remarks>
     internal static bool IsContainerShapedAddress(IPAddress? address)
     {
         if (address is null || address.AddressFamily != AddressFamily.InterNetwork)

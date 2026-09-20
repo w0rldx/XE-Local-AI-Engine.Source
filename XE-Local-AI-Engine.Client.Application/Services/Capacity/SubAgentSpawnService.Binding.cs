@@ -24,14 +24,8 @@ internal sealed partial class SubAgentSpawnService
             return null;
         }
 
-        // Resolve the FULL runtime for the bound child in ONE pass — the same ResolvedAgentRuntime a direct agent send
-        // consumes — so the child inherits the resolved system prompt (scaffold + persona + injected playbook memory),
-        // reasoning effort, and skills as one unit, not just its curated tool set. Reading only AllowedTools here used to
-        // let a saved sub-agent silently run on raw definition.Instructions with no scaffold, reasoning, or
-        // skills — LESS grounding than the anonymous model-id-only path, which already composes the base scaffold.
-        // Hand the resolver the snapshot ALREADY read above rather than the id: resolving by id would read the row a
-        // second time, and a concurrent edit landing between the two reads would assemble one child out of two
-        // versions — its model from this read, its prompt/tools/reasoning/skills from the other.
+        // Resolve the FULL runtime for the bound child in ONE pass — the same ResolvedAgentRuntime a direct agent send consumes — so it inherits the
+        // resolved prompt, reasoning and skills as one unit. Hand over the snapshot already read, not the id: a second read could assemble one child from two versions.
         var resolved = await _agentDefinitionResolver
                              .ResolveAsync(definition, definition.ModelProfile, cancellationToken: ct);
         if (resolved is null)
@@ -41,18 +35,12 @@ internal sealed partial class SubAgentSpawnService
             return null;
         }
 
-        // The profile's OWN curated tool set: offer ∩ AllowedToolNames (already capability-gated by the resolver),
-        // bridged to executables, then UNCONDITIONALLY strip spawn_subagent so the child can never spawn (the structural
-        // depth cap), regardless of what its AllowedToolNames lists.
+        // The profile's OWN curated tool set: offer ∩ AllowedToolNames (already capability-gated by the resolver), bridged to executables, then
+        // UNCONDITIONALLY strip spawn_subagent so the child can never spawn — the structural depth cap, whatever its AllowedToolNames lists.
         var tools = CurateChildTools(resolved.AllowedTools);
 
-        // The child model's OWN thinking capability gates the reasoning field, exactly as the direct path
-        // (resolution.SupportsThinking) and the orchestration-participant path (participant.SupportsThinking) gate
-        // theirs: a non-thinking Ollama model 400s on think:true/level, so ParticipantReasoningOptions omits the field
-        // for it. Cache-first; no probe on a cache hit.
-        // The child's knowledge-tool locality gate is applied inside AgentDefinitionResolver above (it classifies the
-        // pinned effective model, which for a spawned child IS definition.ModelProfile), so only the thinking bit is
-        // taken here; the locality element is ignored.
+        // The child model's OWN thinking capability gates the reasoning field, as the direct (resolution.SupportsThinking) and orchestration-participant
+        // paths do: a non-thinking Ollama model 400s on think, so ParticipantReasoningOptions omits it. Cache-first. Locality was gated by the resolver above.
         var childCapabilities = await _modelCapabilityResolver
                                       .ResolveAsync(definition.ModelProfile, ct);
         var (supportsThinking, _, _) = childCapabilities;
@@ -88,9 +76,12 @@ internal sealed partial class SubAgentSpawnService
         return match;
     }
 
-    // The child's fully-resolved run inputs. Instructions is the resolved system prompt for a profile-bound child (the
-    // scaffold + persona + injected playbook memory), or the raw request instructions for a model-id-only child.
-    // Reasoning + Skills are populated only for a profile-bound child (null for model-id-only, keeping that path as-is).
+    /// <summary>The child's fully-resolved run inputs.</summary>
+    /// <remarks>
+    ///     <c>Instructions</c> is the resolved system prompt for a profile-bound child — scaffold, persona and injected playbook memory — or
+    ///     the raw request instructions for a model-id-only child. <c>Reasoning</c> and <c>Skills</c> are populated only for a profile-bound
+    ///     child, staying null for model-id-only so that path is unchanged.
+    /// </remarks>
     private sealed record ResolvedBinding
     {
         public required string ModelName { get; init; }

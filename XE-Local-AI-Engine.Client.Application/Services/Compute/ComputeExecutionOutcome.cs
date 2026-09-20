@@ -38,12 +38,12 @@ internal static class ComputeRefusalCodes
 /// <summary>
 ///     The structured outcome of one compute invocation: either the sandbox ran the script and there is a
 ///     <see cref="SandboxCommandResult" /> to read, or it refused and there is a code and an operator-safe message.
-///     <para>
-///         This is the projection a PROGRAMMATIC caller needs. <see cref="IComputeToolGateway.ExecuteAsync" /> renders
-///         the same outcome as the model-facing string, so the two can never disagree about whether a script ran — the
-///         reason the boundary is one method with two projections rather than two entry points.
-///     </para>
 /// </summary>
+/// <remarks>
+///     This is the projection a PROGRAMMATIC caller needs. <see cref="IComputeToolGateway.ExecuteAsync" /> renders the
+///     same outcome as the model-facing string, so the two can never disagree about whether a script ran — the reason
+///     the boundary is one method with two projections rather than two entry points.
+/// </remarks>
 internal sealed class ComputeExecutionOutcome
 {
     public required bool Ran { get; init; }

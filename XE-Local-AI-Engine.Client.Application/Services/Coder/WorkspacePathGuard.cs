@@ -3,21 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
-///     Confines a model-supplied (workspace-relative) path to the in-sandbox coder workspace root
-///     <see cref="AgentHomeGit.WorkspaceSelectedRoot" /> (<c>/agent-home/workspace/selected</c>). It is the sibling of
-///     <see cref="Workspace.Implementation.HostPathSafety" /> for the in-sandbox side: where <c>HostPathSafety</c>
-///     guards the host→sandbox copy, this guard fails closed on any model path that would escape the workspace root
-///     before that path ever reaches <see cref="Sandbox.ISandboxRuntimeProvider.ReadFileAsync" /> or is composed into a
-///     non-chrooted <see cref="Sandbox.ISandboxRuntimeProvider.ExecuteAsync" /> command.
-///     <para>
-///         The guard works on the sandbox path namespace (a Linux-style, forward-slash, jail-relative space), not on
-///         host paths, so it canonicalizes lexically: it rejects control characters, the Windows <c>\\?\</c>/<c>\\.\</c>
-///         extended/device prefixes, any absolute path, and any path that — after collapsing <c>.</c>/<c>..</c>
-///         segments — leaves the workspace root. The provider's own <c>ResolveJailPath</c> +
-///         <c>EnsureNoSymlinkComponentsUnderJail</c> remain the second line of defense for the reads that flow through
-///         <c>ReadFileAsync</c>; this guard closes the <c>ExecuteAsync</c> arg-injection hole the provider does not.
-///     </para>
+///     Confines a model-supplied, workspace-relative path to the in-sandbox coder workspace root
+///     <see cref="AgentHomeGit.WorkspaceSelectedRoot" /> (<c>/agent-home/workspace/selected</c>).
 /// </summary>
+/// <remarks>
+///     The in-sandbox sibling of <see cref="Workspace.Implementation.HostPathSafety" />, which guards the host-to-sandbox copy: this one fails closed
+///     on any model path that would escape the workspace root, before it reaches <c>ReadFileAsync</c> or a non-chrooted <c>ExecuteAsync</c> command.
+///     Canonicalizing lexically in the sandbox path namespace, it rejects control characters, the Windows extended and device prefixes, any absolute
+///     path, and anything leaving the root after collapsing <c>.</c> and <c>..</c> — closing the <c>ExecuteAsync</c> arg-injection hole that
+///     <c>ResolveJailPath</c> and <c>EnsureNoSymlinkComponentsUnderJail</c>, the second line of defence for reads, do not.
+/// </remarks>
 internal static class WorkspacePathGuard
 {
     /// <summary>The sandbox-absolute workspace root every confined path resolves at or beneath.</summary>

@@ -25,13 +25,13 @@ public sealed class ExternalAppCatalogOptions
     /// <summary>Default retry cadence after a failed refresh, when <see cref="FailureRetryInterval" /> is not overridden.</summary>
     public static readonly TimeSpan DefaultFailureRetryInterval = TimeSpan.FromMinutes(minutes: 1);
 
-    /// <summary>
-    ///     Remote catalog URL to refresh from. Ships <strong>empty</strong> — the curated catalog repository
+    /// <summary>Remote catalog URL to refresh from; ships <strong>empty</strong>, so the engine is bundled-only and makes no network call until an operator sets it.</summary>
+    /// <remarks>
+    ///     The curated catalog repository
     ///     (<c>https://raw.githubusercontent.com/w0rldx/xe-external/main/catalog/applications.json</c>) does not exist
-    ///     yet, so the engine is bundled-only and makes no network call until an operator sets this. A configured
-    ///     value is accepted only when it is an absolute <c>https</c> URL, or an <c>http</c> URL whose host is
-    ///     <c>127.0.0.1</c>, <c>::1</c> or <c>localhost</c>; anything else is logged once and ignored.
-    /// </summary>
+    ///     yet. A configured value is accepted only when it is an absolute <c>https</c> URL, or an <c>http</c> URL
+    ///     whose host is <c>127.0.0.1</c>, <c>::1</c> or <c>localhost</c>; anything else is logged once and ignored.
+    /// </remarks>
     public string? RefreshUrl { get; set; }
 
     /// <summary>How often a stale in-memory catalog is re-fetched from <see cref="RefreshUrl" />.</summary>

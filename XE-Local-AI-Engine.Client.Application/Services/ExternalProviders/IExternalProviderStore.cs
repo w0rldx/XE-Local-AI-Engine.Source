@@ -6,17 +6,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 ///     Persistence boundary for the operator's external OpenAI-compatible connections.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The write surface is deliberately per-connection rather than "save the whole config": a whole-config write
-///         from a UI that rendered a stale list would silently delete a connection added in another tab, and it would
-///         force every caller to carry every other connection's API key just to edit one display name.
-///     </para>
-///     <para>
-///         Both writers are compare-and-swap on <see cref="StoredExternalProviderConfig.Revision" />. A caller that
-///         passes <see langword="null" /> is asserting "I do not care what is there" and wins unconditionally; a caller
-///         that passes the revision it read is rejected with <see cref="ExternalProviderWriteResult.Superseded" /> when
-///         the file moved underneath it.
-///     </para>
+///     The write surface is deliberately per-connection rather than "save the whole config": a whole-config write from
+///     a UI that rendered a stale list would silently delete a connection added in another tab. Both writers are
+///     compare-and-swap on <see cref="StoredExternalProviderConfig.Revision" /> — a caller passing
+///     <see langword="null" /> asserts "I do not care what is there" and wins unconditionally, while a caller passing
+///     the revision it read is rejected with <see cref="ExternalProviderWriteResult.Superseded" />.
 /// </remarks>
 public interface IExternalProviderStore
 {
@@ -34,9 +28,12 @@ public interface IExternalProviderStore
 
     /// <summary>
     ///     The stored configuration as a discriminated state, for callers whose next step MUTATES something derived
-    ///     from it — the reconciliation pass being the one that matters, since it removes provider-map rows,
-    ///     allow-list entries and the node default for anything the config does not list.
+    ///     from it.
     /// </summary>
+    /// <remarks>
+    ///     The reconciliation pass is the one that matters, since it removes provider-map rows, allow-list entries and
+    ///     the node default for anything the config does not list.
+    /// </remarks>
     Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -54,10 +51,13 @@ public interface IExternalProviderStore
 }
 
 /// <summary>
-///     What a read of the encrypted store actually found. Four states, not "a config, possibly empty", because the
-///     three empty-looking outcomes call for opposite behaviour: one is a fresh node, one is a node that cannot see its
-///     own configuration, and one is a node that has been downgraded past a payload it must not interpret.
+///     What a read of the encrypted store actually found.
 /// </summary>
+/// <remarks>
+///     Four states, not "a config, possibly empty", because the three empty-looking outcomes call for opposite
+///     behaviour: one is a fresh node, one is a node that cannot see its own configuration, and one is a node that has
+///     been downgraded past a payload it must not interpret.
+/// </remarks>
 public abstract record ExternalProviderLoadResult
 {
     private ExternalProviderLoadResult()
@@ -83,9 +83,11 @@ public abstract record ExternalProviderLoadResult
 
     /// <summary>
     ///     The file exists but could not be read this time — a transient IO failure, an antivirus scanner holding it.
+    /// </summary>
+    /// <remarks>
     ///     NOT authoritative: treating it as "no connections" would let a reconciliation pass delete every route,
     ///     allow-list entry and default the operator configured, on the strength of a locked file handle.
-    /// </summary>
+    /// </remarks>
     public sealed record Unreadable(string Reason) : ExternalProviderLoadResult
     {
         /// <inheritdoc />

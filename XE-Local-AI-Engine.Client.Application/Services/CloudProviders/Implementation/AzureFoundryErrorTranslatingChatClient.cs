@@ -9,34 +9,16 @@ using Azure.Identity;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     Wraps the inner chat client so an Azure <see cref="RequestFailedException" />, the v1 API surface's
-///     <see cref="ClientResultException" />, or an Entra ID <see cref="AuthenticationFailedException" /> is
-///     translated into a typed <see cref="AzureFoundryProviderException" /> with a sanitized message — the chat
-///     surface gets a clean error instead of a raw transport crash or MSAL stack, and no API key / Entra token can
-///     leak into the message.
+///     Wraps the inner chat client so an Azure <see cref="RequestFailedException" />, the v1 surface's
+///     <see cref="ClientResultException" /> or an Entra ID <see cref="AuthenticationFailedException" /> becomes a typed
+///     <see cref="AzureFoundryProviderException" />.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Content-filter blocks arrive as HTTP 400 with error code <c>content_filter</c>; auth failures as HTTP
-///         401/403. Both are mapped to <see cref="AzureFoundryProviderErrorKind" /> values; any other
-///         <see cref="RequestFailedException" /> / <see cref="ClientResultException" /> is reported as
-///         <see cref="AzureFoundryProviderErrorKind.Transport" />, with any JSON <c>error.message</c> found on the
-///         response body appended to the generic HTTP-status message (see <c>ExtractErrorBodyDetail</c>) — e.g. a
-///         gateway policy failure surfaces its own detail instead of a bare status code.
-///     </para>
-///     <para>
-///         An Entra ID token request (raised lazily, per call, by <c>EntraBearerTokenPipelinePolicy</c>) that Azure
-///         AD rejects surfaces as <see cref="AuthenticationFailedException" /> instead — a different exception type
-///         than the Azure OpenAI transport uses, so it needs its own translation path. The AADSTS reason usually
-///         lives on the <em>inner</em> exception (e.g. MSAL's <c>MsalServiceException</c>), not on the outer
-///         <see cref="AuthenticationFailedException.Message" /> itself, so the message keeps the outer exception's
-///         first line (credential-type context) plus the first line containing an AADSTS code found anywhere in
-///         the <see cref="Exception.InnerException" /> chain, both capped — never a stack trace.
-///     </para>
-///     <para>
-///         Disposal is left to the base <see cref="DelegatingChatClient" />: the inner MEAI Azure OpenAI client owns the
-///         underlying pipeline, and this thin wrapper adds nothing disposable of its own.
-///     </para>
+///     The message is sanitized: no API key or Entra token can leak into it, and it never carries a stack trace or the exception's
+///     full content. Content-filter blocks (HTTP 400, <c>content_filter</c>) and 401/403 auth failures map to their own
+///     <see cref="AzureFoundryProviderErrorKind" /> values; anything else is <see cref="AzureFoundryProviderErrorKind.Transport" />.
+///     Disposal is left to the base <see cref="DelegatingChatClient" />: the inner MEAI client owns the pipeline and this wrapper
+///     owns nothing disposable. Mapping table and the AADSTS line-selection rule: docs/wiki/03-local-runtime-and-providers.md, "Azure Foundry error translation".
 /// </remarks>
 internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatClient
 {
@@ -115,9 +97,11 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
         }
     }
 
-    // Maps an Azure RequestFailedException to a typed provider error. The message carries only the status code, the
-    // Azure error code / body detail, and never the exception's full content (which could echo request fields) or
-    // any credential value.
+    /// <summary>Maps an Azure <see cref="RequestFailedException" /> to a typed provider error.</summary>
+    /// <remarks>
+    ///     The message carries only the status code and the Azure error code / body detail — never the exception's full
+    ///     content, which could echo request fields, and never a credential value.
+    /// </remarks>
     private static AzureFoundryProviderException Translate(RequestFailedException exception)
     {
         if (exception.Status == 400
@@ -141,10 +125,12 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
             exception);
     }
 
-    // Maps a plain OpenAI SDK System.ClientModel.ClientResultException — the v1 API surface's transport exception,
-    // thrown in place of the Azure-specific RequestFailedException above — to the same typed provider error shape.
-    // ClientResultException carries no ErrorCode property (unlike RequestFailedException), so content-filter
-    // detection here reads the response body's "error.code" instead.
+    /// <summary>Maps the v1 API surface's <see cref="ClientResultException" /> to the same typed provider error shape.</summary>
+    /// <remarks>
+    ///     The plain OpenAI SDK throws it in place of the Azure-specific <see cref="RequestFailedException" /> above, and
+    ///     it carries no <c>ErrorCode</c> property, so content-filter detection here reads the response body's
+    ///     <c>error.code</c> instead.
+    /// </remarks>
     private static AzureFoundryProviderException Translate(ClientResultException exception)
     {
         var detail = ExtractErrorBodyDetail(exception.GetRawResponse()?.Content);
@@ -174,10 +160,12 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
         return detailMessage is null ? baseMessage : $"{baseMessage} {detailMessage}";
     }
 
-    // The response body's error code and message (e.g. an APIM policy failure detail), when the body is a JSON
-    // object shaped either `{ "error": { "code", "message" } }` or a bare `{ "code", "message" }`. Never throws on a
-    // non-JSON or unshaped body — a gateway can return plain text or HTML on a 5xx, and that must never surface
-    // raw (it could echo request data) nor crash the translation.
+    /// <summary>The response body's error code and message (an APIM policy failure detail, say), when the body is a JSON object.</summary>
+    /// <remarks>
+    ///     The accepted shapes are <c>{ "error": { "code", "message" } }</c> and a bare <c>{ "code", "message" }</c>.
+    ///     Never throws on a non-JSON or unshaped body: a gateway can return plain text or HTML on a 5xx, and that must
+    ///     never surface raw (it could echo request data) nor crash the translation.
+    /// </remarks>
     private static ErrorBodyDetail ExtractErrorBodyDetail(BinaryData? content)
     {
         if (content is null || content.ToMemory().IsEmpty)
@@ -215,9 +203,11 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
             : null;
     }
 
-    // Collapses a (possibly multi-line) body message to one line and caps its length — the same shape as
-    // SanitizeAuthenticationFailureMessage's cap below, reused here so both never let an oversized or newline-bearing
-    // body value distort the surfaced error.
+    /// <summary>Collapses a possibly multi-line body message to one line and caps its length.</summary>
+    /// <remarks>
+    ///     The same cap as <see cref="SanitizeAuthenticationFailureMessage" /> below, reused here so neither lets an
+    ///     oversized or newline-bearing body value distort the surfaced error.
+    /// </remarks>
     private static string? SanitizeSingleLine(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -233,11 +223,13 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
 
     private readonly record struct ErrorBodyDetail(string? Code, string? Message);
 
-    // Maps an Entra ID token-acquisition failure (wrong secret/tenant/client id, a rejected scope, disabled app,
-    // missing consent, etc.) to AuthFailed — the same category as an Azure OpenAI 401/403 — since both mean the
-    // credential the connection is configured with was rejected. See SanitizeAuthenticationFailureMessage for the
-    // line-selection rule; the result never carries a stack trace or any token material — Azure.Identity's own
-    // message never includes the secret/token value.
+    /// <summary>Maps an Entra ID token-acquisition failure to <c>AuthFailed</c>, the same category as an Azure OpenAI 401/403.</summary>
+    /// <remarks>
+    ///     A wrong secret/tenant/client id, a rejected scope, a disabled app or missing consent all mean the credential
+    ///     the connection is configured with was rejected. See <see cref="SanitizeAuthenticationFailureMessage" /> for
+    ///     the line-selection rule; the result never carries a stack trace or any token material, and Azure.Identity's
+    ///     own message never includes the secret/token value.
+    /// </remarks>
     private static AzureFoundryProviderException Translate(AuthenticationFailedException exception)
     {
         return new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthFailed,
@@ -245,14 +237,14 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
             exception);
     }
 
-    // The outer AuthenticationFailedException.Message is typically just a generic preamble — e.g.
-    // "ClientSecretCredential authentication failed: " — with the actionable AADSTS reason living on an INNER
-    // exception's message instead (MSAL's MsalServiceException, reached via InnerException; the " ---> " chain
-    // seen in a logged ToString() is just how .NET renders nested exceptions, not a single multi-line Message).
-    // This walks the InnerException chain collecting every message's lines, keeps the outermost exception's first
-    // line for credential-type context, and appends the first line anywhere in the chain that contains "AADSTS"
-    // (falling back to just the first line when no AADSTS line exists anywhere — e.g. a local/offline failure).
-    // Every other line (stack traces, MSAL correlation ids, anything else) is dropped before the length cap.
+    /// <summary>Selects the actionable line out of an <see cref="AuthenticationFailedException" /> chain and drops everything else.</summary>
+    /// <remarks>
+    ///     The outer <c>Message</c> is a generic preamble ("ClientSecretCredential authentication failed: ") with the actionable AADSTS reason on an INNER
+    ///     exception (MSAL's <c>MsalServiceException</c> via <c>InnerException</c>; the <c> ---&gt; </c> chain in a log is how .NET renders nesting, not one
+    ///     multi-line message). This collects every message's lines, keeps the outermost first line for credential-type context, and appends the first line
+    ///     anywhere in the chain containing "AADSTS", or just the first line when none exists. Every other line — stack traces, MSAL correlation ids — is
+    ///     dropped before the length cap.
+    /// </remarks>
     private static string SanitizeAuthenticationFailureMessage(Exception exception)
     {
         var lines = new List<string>();

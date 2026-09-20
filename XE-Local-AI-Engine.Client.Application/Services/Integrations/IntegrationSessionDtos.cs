@@ -5,15 +5,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     One session as both surfaces render it: the operator's admin list and detail, and the integrator's own
-///     principal-scoped status read. <see cref="TriggerName" /> rides along because it is the name the integrator
-///     addresses — an id would make the external body unusable without a second lookup the caller cannot make.
-///     <para>
-///         <see cref="PrincipalId" /> is the OWNING INTEGRATOR, and it is projected onto the operator surface only.
-///         The external status route renders its own <c>IntegrationSessionStatusResponse</c> and deliberately does not
-///         carry it: a caller already knows which principal it authenticated as, and the masking rules on that route
-///         answer every foreign session identically.
-///     </para>
+///     principal-scoped status read.
 /// </summary>
+/// <remarks>
+///     <see cref="TriggerName" /> rides along because it is the name the integrator addresses — an id would make the
+///     external body unusable without a second lookup the caller cannot make. <see cref="PrincipalId" /> is the OWNING
+///     INTEGRATOR and is projected onto the operator surface only: the external status route renders its own
+///     <c>IntegrationSessionStatusResponse</c> without it, because a caller already knows which principal it
+///     authenticated as and that route's masking answers every foreign session identically.
+/// </remarks>
 public sealed class IntegrationSessionDto
 {
     public required Guid Id { get; init; }
@@ -35,11 +35,11 @@ public sealed class IntegrationSessionDto
     public required int ExecutionCount { get; init; }
 }
 
-/// <summary>
-///     The admin list query. Filtering and paging are SERVER-side: a client-side page over a bounded result would hide
-///     older sessions entirely, and the store's <c>LastActivityUtc DESC, Id DESC</c> order is part of the contract the
-///     UI renders rather than re-sorts.
-/// </summary>
+/// <summary>The admin list query, whose filtering and paging are SERVER-side.</summary>
+/// <remarks>
+///     A client-side page over a bounded result would hide older sessions entirely, and the store's
+///     <c>LastActivityUtc DESC, Id DESC</c> order is part of the contract the UI renders rather than re-sorts.
+/// </remarks>
 public sealed class IntegrationSessionFilter
 {
     public required Guid? TriggerId { get; init; }
@@ -62,13 +62,14 @@ public enum IntegrationSessionDeleteOutcome
 /// <summary>
 ///     What the invocation gate decided about a caller's <c>sessionId</c>, and — on
 ///     <see cref="IntegrationAcceptOutcome.Accepted" /> for a continuation — the session the accept path must write
-///     into. <see cref="Existing" /> is <see langword="null" /> for a fresh session, which is exactly the shape
-///     <c>IntegrationAcceptCommand.NewSession</c> keys on.
-///     <para>
-///         It carries a public <see cref="IntegrationSessionSnapshot" />, never the internal entity: entities stay
-///         inside the persistence assembly and only records cross a store boundary.
-///     </para>
+///     into.
 /// </summary>
+/// <remarks>
+///     <see cref="Existing" /> is <see langword="null" /> for a fresh session, which is exactly the shape
+///     <c>IntegrationAcceptCommand.NewSession</c> keys on. It carries a public
+///     <see cref="IntegrationSessionSnapshot" />, never the internal entity: entities stay inside the persistence
+///     assembly and only records cross a store boundary.
+/// </remarks>
 internal sealed class IntegrationSessionGateResult
 {
     public required IntegrationAcceptOutcome Outcome { get; init; }

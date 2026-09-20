@@ -4,21 +4,14 @@ using System.Net.Mime;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
 
-/// <summary>
-///     Requires a per-instance bearer token on every bridge route, and stashes the caller it identifies for the
-///     routes behind it.
-///     <para>
-///         It runs after the same-host peer guard, not instead of it. The guard answers "is this machine allowed to
-///         talk to the bridge at all"; this answers "which installed application is talking". Neither substitutes for
-///         the other: every container on an engine-owned network passes the guard, so without this any one of them
-///         could use another's bridge.
-///     </para>
-///     <para>
-///         A plain middleware rather than an ASP.NET authentication scheme. A scheme buys principal construction,
-///         claims transformation and policy evaluation, none of which this surface has any use for — the whole
-///         decision is one token against one row.
-///     </para>
-/// </summary>
+/// <summary>Requires a per-instance bearer token on every bridge route, and stashes the caller it identifies for the routes behind it.</summary>
+/// <remarks>
+///     It runs after the same-host peer guard, not instead of it, and neither substitutes for the other: the guard
+///     answers "may this machine talk to the bridge at all", this answers "which installed application is talking",
+///     and every container on an engine-owned network passes the guard. A plain middleware rather than an ASP.NET
+///     authentication scheme, because a scheme buys principal construction, claims transformation and policy
+///     evaluation that this surface has no use for — the whole decision is one token against one row.
+/// </remarks>
 public sealed class ContainerBridgeTokenMiddleware : IMiddleware
 {
     /// <summary>The OpenAI error envelope, so an OpenAI-compatible client inside a container surfaces the reason instead of an empty failure.</summary>

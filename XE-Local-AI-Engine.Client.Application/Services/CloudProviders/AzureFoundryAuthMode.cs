@@ -17,9 +17,11 @@ public enum AzureFoundryAuthMode
 
     /// <summary>
     ///     Authenticate with a self-fetched Entra ID bearer token: app-only client-credentials when a client secret
-    ///     is configured, or interactive user sign-in (device code / interactive browser) otherwise. Intended for an
-    ///     Azure API Management AI gateway that validates the bearer token itself rather than an Azure OpenAI /
-    ///     Foundry resource key or managed-identity RBAC role.
+    ///     is configured, or interactive user sign-in (device code / interactive browser) otherwise.
     /// </summary>
+    /// <remarks>
+    ///     Intended for an Azure API Management AI gateway that validates the bearer token itself, rather than an
+    ///     Azure OpenAI / Foundry resource key or a managed-identity RBAC role.
+    /// </remarks>
     EntraId = 2,
 }

@@ -5,19 +5,15 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
-///     Default <see cref="IGpuModelLoadAdmission" />: a single process-wide <see cref="SemaphoreSlim" />(1,1)
-///     that serializes the spawn-through-readiness window of every GPU-backed model load — llama-server AND
-///     stable-diffusion.cpp — so two <c>--fit</c> loads never read the same free-VRAM snapshot concurrently and
-///     oversubscribe the device. Serialization is the whole mechanism: when the current holder's load becomes resident
-///     and releases, the next waiter's <c>--fit</c> reads fresh free VRAM (that IS the re-evaluation — no byte-level
-///     accounting is invented here). Registered as a singleton; the two supervisors share this one instance.
+///     Default <see cref="IGpuModelLoadAdmission" />: one process-wide <see cref="SemaphoreSlim" />(1,1), shared by the
+///     llama-server and stable-diffusion.cpp supervisors, serializing every GPU-backed load's spawn-through-readiness window.
 /// </summary>
 /// <remarks>
-///     Cancellation-safe: a waiter whose token cancels abandons the wait cleanly (the semaphore is untouched), and the
-///     holder always releases via the returned ticket's <see cref="IDisposable.Dispose" /> (the supervisor wraps it in a
-///     <c>using</c>). The wait is bounded by <see cref="GpuModelLoadAdmissionOptions.MaxWait" />: on expiry a
-///     <see cref="GpuModelLoadAdmissionTimeoutException" /> is surfaced (and counted) rather than hanging. Wait duration,
-///     timeouts, and the live holding/waiting counts are reported on the shared <c>XE.Node</c> meter.
+///     Serialization is the whole mechanism — two <c>--fit</c> loads must never read the same free-VRAM snapshot and oversubscribe the device.
+///     The next waiter's <c>--fit</c> re-reads free VRAM once the holder's load is resident, so no byte-level accounting is invented here.
+///     A cancelled waiter abandons the wait cleanly, leaving the semaphore untouched; the holder always releases via the returned ticket's
+///     <see cref="IDisposable.Dispose" />, and the bounded <see cref="GpuModelLoadAdmissionOptions.MaxWait" /> surfaces a counted
+///     <see cref="GpuModelLoadAdmissionTimeoutException" /> rather than hanging. Waits, timeouts and the live holding/waiting counts report on the <c>XE.Node</c> meter.
 /// </remarks>
 public sealed class GpuModelLoadAdmission : IGpuModelLoadAdmission, IDisposable
 {

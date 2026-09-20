@@ -5,21 +5,13 @@ using System.Net;
 using System.Text;
 using Microsoft.Extensions.Options;
 
-/// <summary>
-///     Default <see cref="IApplicationCatalogProvider" />: bundled at construction, optionally kept fresh from
-///     <see cref="ExternalAppCatalogOptions.RefreshUrl" />. Singleton — an in-memory <see cref="_current" /> snapshot
-///     is served on every read; a refresh (TTL-triggered or forced) is serialized through <see cref="_refreshGate" />
-///     so concurrent readers never trigger a fetch stampede.
-///     <para>
-///         Fallback chain on a failed remote fetch/validation: keep serving an already-effective remote/last-good
-///         snapshot unchanged (a transient failure must never regress a working catalog); otherwise fall back to the
-///         persisted last-good remote catalog; otherwise the bundled seed. A successful fetch replaces the in-memory
-///         snapshot AND persists the raw JSON so a restart with the network down still serves the last-good remote
-///         catalog. Fail-closed throughout: the served snapshot has always passed
-///         <see cref="ExternalAppCatalogValidator.Validate" />, and no failure is surfaced to the caller as an
-///         exception — <see cref="ExternalAppCatalogSnapshot.LastRefreshFailure" /> carries the reason instead.
-///     </para>
-/// </summary>
+/// <summary>Default <see cref="IApplicationCatalogProvider" />: bundled at construction, optionally kept fresh from <see cref="ExternalAppCatalogOptions.RefreshUrl" />.</summary>
+/// <remarks>
+///     Singleton: the in-memory <see cref="_current" /> snapshot is served on every read, and every refresh is
+///     serialized through <see cref="_refreshGate" /> so concurrent readers never stampede the fetch. A failed fetch
+///     or validation never regresses an already-effective snapshot, and no failure reaches the caller as an
+///     exception. The whole chain is stated in <c>docs/wiki/23-external-apps.md</c> ("Architecture").
+/// </remarks>
 internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, IDisposable
 {
     /// <summary>
@@ -48,9 +40,8 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
     private readonly SemaphoreSlim _refreshGate = new(initialCount: 1, maxCount: 1);
     private readonly TimeProvider _timeProvider;
 
-    // Every field below is only ever mutated while holding _refreshGate; GetCatalogAsync's TTL check reads them
-    // without the lock as a fast-path best-effort peek — a torn/stale read there only means an occasional extra
-    // refresh attempt (harmless), never a correctness issue, and RefreshCoreAsync re-checks under the lock.
+    // Every field below is mutated only while holding _refreshGate. GetCatalogAsync's TTL check peeks at them without
+    // the lock: a stale read costs at most one extra refresh attempt, and RefreshCoreAsync re-checks under the lock.
     private bool _cacheProbed;
     private ExternalAppCatalogSnapshot _current;
     private string? _lastETag;
@@ -142,14 +133,14 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
         return null;
     }
 
-    /// <summary>
-    ///     How long the last attempt suppresses the next one. A snapshot that is already remote/last-good is on the
-    ///     ordinary <see cref="ExternalAppCatalogOptions.RefreshTtl" />; a still-bundled one means the last attempt
-    ///     failed, and holding it for a whole TTL would suppress recovery for a day over a single failed fetch — so
-    ///     it waits only <see cref="ExternalAppCatalogOptions.FailureRetryInterval" />, which is what keeps a dead
-    ///     origin from being hit on every catalog read. A non-positive interval means no backoff; one longer than the
-    ///     TTL would make recovery slower than an ordinary refresh, so it is capped there.
-    /// </summary>
+    /// <summary>How long the last attempt suppresses the next one.</summary>
+    /// <remarks>
+    ///     A remote/last-good snapshot is on the ordinary <see cref="ExternalAppCatalogOptions.RefreshTtl" />. A
+    ///     still-bundled one means the last attempt failed, and a whole TTL would suppress recovery for a day over
+    ///     one failed fetch, so it waits only <see cref="ExternalAppCatalogOptions.FailureRetryInterval" /> — which
+    ///     also keeps a dead origin from being hit on every catalog read. A non-positive interval means no backoff;
+    ///     one longer than the TTL is capped there rather than making recovery slower than an ordinary refresh.
+    /// </remarks>
     private static TimeSpan RefreshDebounce(ExternalAppCatalogOptions options, ExternalAppCatalogSource source)
     {
         if (source != ExternalAppCatalogSource.Bundled)
@@ -196,9 +187,8 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
         await _refreshGate.WaitAsync(cancellationToken);
         try
         {
-            // Re-check under the lock: a concurrent (TTL-triggered) caller may already have refreshed while this one
-            // waited. RefreshDebounce is why a failed fetch on a bundled-only start recovers after a short backoff
-            // rather than being suppressed for a whole TTL. The debounce is skipped entirely when force is set.
+            // Re-check under the lock: a concurrent TTL-triggered caller may already have refreshed while this one
+            // waited. RefreshDebounce keeps a bundled-only start on a short backoff; force skips the debounce whole.
             if (!force && attemptAtUtc - _lastAttemptUtc < RefreshDebounce(options, _current.Source))
             {
                 return new ExternalAppCatalogRefreshResult { Snapshot = _current, FailureMessage = null };
@@ -220,9 +210,8 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                         return revalidated;
                     }
 
-                    // The origin confirmed a representation this node cannot serve. Revalidating against a token whose
-                    // body is gone can only ever answer 304 again, so the node would report success and serve bundled
-                    // for the life of the process: drop the token and ask for the document itself.
+                    // The origin confirmed a representation this node cannot serve, and revalidating against a token
+                    // whose body is gone only answers 304 again forever: drop the token and ask for the document.
                     _lastETag = null;
                     outcome = await FetchAsync(refreshUrl, options, cancellationToken);
                     if (outcome.NotModified)
@@ -263,9 +252,8 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
             }
             catch (OperationCanceledException)
             {
-                // The caller cancelled: nothing was attempted, so the stamp must go back. Leaving it advanced would
-                // make GetCatalogAsync's TTL peek short-circuit every read for a whole RefreshTtl over a fetch that
-                // never happened.
+                // The caller cancelled, so nothing was attempted and the stamp goes back: left advanced, it would make
+                // GetCatalogAsync's TTL peek short-circuit every read for a whole RefreshTtl over a fetch never made.
                 _lastAttemptUtc = previousAttemptUtc;
                 throw;
             }
@@ -296,9 +284,8 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
             return;
         }
 
-        // An ETag is a promise that this node already holds the representation it names. Sending one for a cached
-        // body that does not validate turns every later 304 into "keep serving bundled", permanently — so the token
-        // is only adopted once the body behind it is one the node could actually serve.
+        // An ETag promises this node already holds the representation it names, and one sent for a cached body that
+        // does not validate turns every later 304 into "keep serving bundled" permanently. Adopt it only if valid.
         if (ExternalAppCatalogValidator.Validate(stored.RawJson).IsValid)
         {
             _lastETag = stored.ETag;
@@ -331,9 +318,8 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
 
             if (!response.IsSuccessStatusCode)
             {
-                // Redirects are OFF on this client (AddNodeExternalAppsCatalog), so a 3xx arrives here as a plain
-                // non-success status and is never followed: the loopback-http allowance must not be bounceable to a
-                // public plain-http host.
+                // Redirects are OFF on this client (AddNodeExternalAppsCatalog), so a 3xx arrives as a plain non-success
+                // status, never followed: the loopback-http allowance must not be bounceable to a public plain-http host.
                 return FetchOutcome.Failed(string.Create(CultureInfo.InvariantCulture, $"Catalog refresh failed: HTTP {(int)response.StatusCode}."));
             }
 
@@ -370,9 +356,8 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
 
             return new FetchOutcome { Raw = raw, ETag = response.Headers.ETag?.ToString(), NotModified = false, FailureMessage = null };
         }
-        // IOException covers the body: with ResponseHeadersRead the stream is still open here, so a connection that
-        // dies mid-read surfaces as IOException (HttpIOException among them) rather than HttpRequestException, and
-        // must degrade to last-good/bundled like every other transport failure instead of escaping the refresh.
+        // IOException covers the body: under ResponseHeadersRead the stream is still open, so a connection dying
+        // mid-read surfaces as IOException (HttpIOException included) and must degrade like any transport failure.
         catch (Exception exception) when ((exception is HttpRequestException or IOException or TaskCanceledException or OperationCanceledException) && !cancellationToken.IsCancellationRequested)
         {
             _logger.LogWarning(exception, "Remote External Apps catalog fetch failed; falling back to last-good/bundled.");

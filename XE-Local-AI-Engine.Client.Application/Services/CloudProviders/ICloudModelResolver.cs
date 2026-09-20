@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 /// <summary>
-///     Answers "is this model id served by a cloud provider?" from the stored cloud configuration. Every read is
-///     BEST-EFFORT: a failure resolving the encrypted config is swallowed here (logged once, in one place) and reported
-///     as "not cloud" / "no connection", so a caller's local-routing path still runs. Cancellation is never swallowed.
+///     Answers "is this model id served by a cloud provider?" from the stored cloud configuration.
 /// </summary>
+/// <remarks>
+///     Every read is BEST-EFFORT: a failure resolving the encrypted config is swallowed here (logged once, in one
+///     place) and reported as "not cloud" / "no connection", so a caller's local-routing path still runs.
+///     Cancellation is never swallowed.
+/// </remarks>
 public interface ICloudModelResolver
 {
     /// <summary>

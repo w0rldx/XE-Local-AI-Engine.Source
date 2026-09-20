@@ -5,17 +5,11 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalProviders;
 ///     the single source of truth.
 /// </summary>
 /// <remarks>
-///     <para>
-///         A save has to write the encrypted file, then a provider-map row per registered model, then the node's
-///         tool-capable allow-list — three stores with no shared transaction. Rather than pretend that sequence is
-///         atomic, the encrypted file commits FIRST and this idempotent pass repairs whatever the other two are missing
-///         (or still carrying), the way the model-deletion coordinator's journal compensates its own partial failures.
-///     </para>
-///     <para>
-///         It runs at startup and again after every committed save or delete, so a crash between two of the three
-///         writes self-heals on the next boot rather than leaving an <c>ext:</c> id that routes nowhere or a deleted
-///         model still sitting in the node's tool allow-list.
-///     </para>
+///     A save writes the encrypted file, then a provider-map row per registered model, then the node's tool-capable
+///     allow-list — three stores with no shared transaction. The encrypted file commits FIRST and this idempotent pass
+///     repairs whatever the other two are missing or still carrying. It runs at startup and again after every committed
+///     save or delete, so a crash between two of the three writes self-heals on the next boot rather than leaving an
+///     <c>ext:</c> id that routes nowhere. See docs/wiki/03-local-runtime-and-providers.md, "External connections: the store, the registry cache, and the reconciler".
 /// </remarks>
 public interface IExternalProviderReconciler
 {

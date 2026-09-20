@@ -5,19 +5,14 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 
-/// <summary>
-///     Verifies a presented bridge token against the instance it claims.
-///     <para>
-///         This is the direction the layering allows: External Apps knows the bridge's seam, the bridge knows
-///         nothing about External Apps. It lives here because the token is a fact about an installed application —
-///         minted at install, dead when the row is deleted — and the row is this feature's.
-///     </para>
-///     <para>
-///         Every failure returns the same nothing and logs nothing distinguishing. A caller able to tell "no such
-///         instance" from "wrong secret" learns which instance ids exist, which is the one thing the id half of the
-///         token was not meant to reveal.
-///     </para>
-/// </summary>
+/// <summary>Verifies a presented bridge token against the instance it claims.</summary>
+/// <remarks>
+///     This is the direction the layering allows: External Apps knows the bridge's seam, the bridge knows nothing
+///     about External Apps, and the token is a fact about an installed application — minted at install, dead when
+///     the row is deleted. Every failure returns the same nothing and logs nothing distinguishing: a caller that
+///     could tell "no such instance" from "wrong secret" would learn which instance ids exist, the one thing the id
+///     half of the token was not meant to reveal.
+/// </remarks>
 internal sealed class ExternalAppBridgeTokenVerifier : IContainerBridgeTokenVerifier
 {
     private readonly IExternalAppInstanceStore _store;

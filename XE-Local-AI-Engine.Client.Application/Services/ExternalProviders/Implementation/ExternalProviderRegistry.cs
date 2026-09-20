@@ -9,20 +9,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 ///     path need.
 /// </summary>
 /// <remarks>
-///     <para>
-///         WHY a cache at all: the chat path resolves a model's connection on every cold client, every capability
-///         resolution and every policy check, and each miss would otherwise be a file read plus a data-protection
-///         unprotect. WHY the cache is INVALIDATED rather than time-bounded: the registry contract requires a save to
-///         take effect without a restart, and a TTL would leave a window in which the node still sends to a base URL
-///         the operator has already changed.
-///     </para>
-///     <para>
-///         The snapshot is also what makes <see cref="TryClassifyCached" /> possible. Three policy sites that must
-///         classify an external id — the tool offer's synchronous gate, its <c>run_python</c> gate, and
-///         <c>RuntimeChatClient</c>'s egress backstop — have no async boundary to await on, and blocking a chat send on
-///         a file read is not an option. They read the snapshot or fail closed, and the reconciliation pass primes it at
-///         startup so the fail-closed window is the interval before the node has finished booting.
-///     </para>
+///     The cache is INVALIDATED rather than time-bounded: the registry contract requires a save to take effect without
+///     a restart, and a TTL would leave a window in which the node still sends to a base URL the operator has already
+///     changed. The snapshot is also what makes <see cref="TryClassifyCached" /> possible — three policy sites with no
+///     async boundary read it or fail closed. Both, in full:
+///     docs/wiki/03-local-runtime-and-providers.md, "External connections: the store, the registry cache, and the reconciler".
 /// </remarks>
 public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExternalProviderRegistryCache
 {
@@ -75,9 +66,8 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
             return null;
         }
 
-        // ONE snapshot read serves the endpoint, the trust declaration, the generation AND the key. Reading the key
-        // through a second call — the shape this replaced — is what let a concurrent edit bind a new key to an old
-        // base URL: two reads, two generations, one request.
+        // ONE snapshot read serves the endpoint, the trust declaration, the generation AND the key. Reading the key through a
+        // second call lets a concurrent edit bind a new key to an old base URL: two reads, two generations, one request.
         var snapshot = await GetSnapshotAsync(ct);
         if (snapshot.ByModelId.GetValueOrDefault(canonical) is not { } registration)
         {
@@ -129,17 +119,11 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
     ///     Returns the cached generation, rebuilding it when there is none.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         The LOAD is deliberately unsynchronized. A concurrent burst right after an invalidation can read the
-    ///         file more than once, and that is the cheaper failure: the work is one read of a small local file plus a
-    ///         decrypt, and holding a lock across it would serialize every cold chat client behind disk I/O.
-    ///     </para>
-    ///     <para>
-    ///         The PUBLICATION is not. Each load stamps the epoch it observed BEFORE reading, and publishes only if the
-    ///         epoch has not moved since — so a load that overlapped an <see cref="Invalidate" /> is discarded instead
-    ///         of overwriting the newer configuration with the one the operator just replaced. That race is not
-    ///         theoretical on this path: a save invalidates while in-flight sends are resolving.
-    ///     </para>
+    ///     The LOAD is deliberately unsynchronized: a concurrent burst right after an invalidation can read the file
+    ///     more than once, which is cheaper than serializing every cold chat client behind disk I/O. The PUBLICATION is
+    ///     not — each load stamps the epoch it observed BEFORE reading and publishes only if the epoch has not moved,
+    ///     so a load that overlapped an <see cref="Invalidate" /> is discarded instead of overwriting the newer
+    ///     configuration. That race is not theoretical: a save invalidates while in-flight sends are resolving.
     /// </remarks>
     private async Task<ExternalProviderSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
     {
@@ -194,9 +178,8 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
 
         public static ExternalProviderSnapshot Build(long generation, StoredExternalProviderConfig config)
         {
-            // Shared with the reconciler (see ExternalProviderConfigProjection): the pass that DELETES drift derives
-            // its registration set from the configuration it authoritatively loaded, and it must be the same
-            // projection this cache is built from or the two would disagree about what is registered.
+            // Shared with the reconciler (see ExternalProviderConfigProjection): the pass that DELETES drift derives its
+            // registration set from the same projection this cache is built from, or the two would disagree about what is registered.
             var (registrations, keys) = ExternalProviderConfigProjection.Project(config);
 
             // Last write wins on a duplicate id, which the store's per-connection validation already prevents; the

@@ -3,13 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps;
 /// <summary>
 ///     A deployment could not be planned because a value it needs is missing or malformed: an unresolved
 ///     <c>${TOKEN}</c>, or a <c>${</c> that does not close on a valid one.
-///     <para>
-///         A Compose-style default such as <c>${FOO:-bar}</c> is this, not a literal. The engine does not implement
-///         that syntax, and passing it through verbatim would put the text <c>${FOO:-bar}</c> into a container as if
-///         it were a password. An installed snapshot can predate the validator that admitted it, so the planner
-///         refuses rather than trusting that nothing malformed can reach it.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A Compose-style default such as <c>${FOO:-bar}</c> is this, not a literal: the engine does not implement that
+///     syntax, and passing it through verbatim would put that text into a container as if it were a password. An
+///     installed snapshot can predate the validator that admitted it, so the planner refuses rather than trusting
+///     that nothing malformed can reach it.
+/// </remarks>
 public sealed class ExternalAppConfigurationException : Exception
 {
     public ExternalAppConfigurationException(string message) : base(message)
@@ -53,13 +53,13 @@ public sealed class ExternalAppManifestException : Exception
 /// <summary>
 ///     The feature is switched off (<c>ExternalApps:Enabled</c> is <see langword="false" />). Every entry point
 ///     throws it before reading anything.
-///     <para>
-///         It is a guard for a DIRECT service caller, not the API's answer: the surface's 404 comes from the
-///         middleware that removes the endpoints while the feature is off, so no request reaches a service entry
-///         point to raise this. No handler maps it, and a path that let it reach HTTP would be answered as a 500 —
-///         which is the honest answer to a request that should not have been routable.
-///     </para>
 /// </summary>
+/// <remarks>
+///     It guards a DIRECT service caller and is not the API's answer: the surface's 404 comes from the middleware
+///     that removes the endpoints while the feature is off, so no request reaches a service entry point to raise
+///     this. No handler maps it, and a path that let it reach HTTP would be answered as a 500 — the honest answer to
+///     a request that should not have been routable.
+/// </remarks>
 public sealed class ExternalAppsDisabledException : Exception
 {
     public ExternalAppsDisabledException() : base("External applications are not enabled on this node.")
@@ -94,11 +94,11 @@ public sealed class ExternalAppNotFoundException : Exception
     }
 }
 
-/// <summary>
-///     Another operation already holds this instance. Thrown by the gate BEFORE any status is read, so a caller
-///     cannot distinguish it from a status check it would also fail — there is one answer for "busy", and it does not
-///     depend on how far the other operation got.
-/// </summary>
+/// <summary>Another operation already holds this instance.</summary>
+/// <remarks>
+///     Thrown by the gate BEFORE any status is read, so a caller cannot distinguish it from a status check it would
+///     also fail: there is one answer for "busy", and it does not depend on how far the other operation got.
+/// </remarks>
 public sealed class ExternalAppOperationInFlightException : Exception
 {
     public ExternalAppOperationInFlightException(string message) : base(message)
@@ -134,11 +134,11 @@ public sealed class ExternalAppInvalidTransitionException : Exception
     }
 }
 
-/// <summary>
-///     This application already has an instance. V1 allows exactly one per application, enforced by a read inside the
-///     application-level lock rather than by a unique index, because the rule is "one LIVE instance" and a uniqueness
-///     constraint would also outlive an uninstall that could not delete its row.
-/// </summary>
+/// <summary>This application already has an instance; V1 allows exactly one per application.</summary>
+/// <remarks>
+///     Enforced by a read inside the application-level lock rather than by a unique index, because the rule is "one
+///     LIVE instance" and a uniqueness constraint would also outlive an uninstall that could not delete its row.
+/// </remarks>
 public sealed class ExternalAppAlreadyInstalledException : Exception
 {
     public ExternalAppAlreadyInstalledException(string message) : base(message)
@@ -154,14 +154,12 @@ public sealed class ExternalAppAlreadyInstalledException : Exception
     }
 }
 
-/// <summary>
-///     The command did not acknowledge the permissions the application would be granted. Carries the names that
-///     needed acknowledging — the whole effective set on an install, the widening alone on an update — so the caller
-///     re-shows the disclosure instead of guessing what changed.
-/// </summary>
+/// <summary>The command did not acknowledge the permissions the application would be granted.</summary>
 /// <remarks>
-///     Consent is never inferred. A command that carries variables and omits the acknowledgement is refused rather
-///     than read as "they must have seen it".
+///     It carries the names that needed acknowledging — the whole effective set on an install, the widening alone on
+///     an update — so the caller re-shows the disclosure instead of guessing what changed. Consent is never inferred:
+///     a command that carries variables and omits the acknowledgement is refused rather than read as "they must have
+///     seen it".
 /// </remarks>
 public sealed class ExternalAppPermissionChangeRequiresAcknowledgementException : Exception
 {
@@ -247,9 +245,12 @@ public sealed class ExternalAppConcurrencyException : Exception
 
 /// <summary>
 ///     A supplied variable is missing, of the wrong type, or outside its declared constraints — or a log tail is
-///     outside the permitted range. Carries the offending variable NAMES and never their values: the exception is
-///     rendered in a browser and written to a log, and the value is what the user was asked to keep secret.
+///     outside the permitted range.
 /// </summary>
+/// <remarks>
+///     It carries the offending variable NAMES and never their values: the exception is rendered in a browser and
+///     written to a log, and the value is what the user was asked to keep secret.
+/// </remarks>
 public sealed class ExternalAppValidationException : Exception
 {
     public ExternalAppValidationException(string message, IReadOnlyList<string> names) : base(message)

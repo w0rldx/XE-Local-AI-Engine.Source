@@ -3,20 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using System.Net;
 using Microsoft.Extensions.Options;
 
-/// <summary>
-///     Holds the set of addresses that mean "this computer", so the bridge's peer guard can answer in constant time
-///     what would otherwise be an interface enumeration per request.
-///     <para>
-///         It refreshes on a timer rather than caching once, because the answer genuinely changes while the node
-///         runs: a laptop moves between networks, a VPN comes up, and — the case that matters here — a container
-///         daemon creates and destroys bridge interfaces as applications start and stop. A set frozen at boot would
-///         refuse a container that came up on an interface created after it.
-///     </para>
-///     <para>
-///         An <see cref="IHostedService" /> with its own loop driven by an injected <see cref="TimeProvider" />,
-///         mirroring <c>ExternalAppStateObserver</c>, so a test advances the clock instead of sleeping.
-///     </para>
-/// </summary>
+/// <summary>Holds the set of addresses that mean "this computer", so the bridge's peer guard answers in constant time what would otherwise be an interface enumeration per request.</summary>
+/// <remarks>
+///     It refreshes on a timer rather than caching once, because the answer changes while the node runs: a laptop
+///     moves between networks, a VPN comes up, and a container daemon creates and destroys bridge interfaces as
+///     applications start and stop — a set frozen at boot would refuse a container that came up on an interface
+///     created after it. An <see cref="IHostedService" /> with its own loop on an injected
+///     <see cref="TimeProvider" />, mirroring <c>ExternalAppStateObserver</c>, so a test advances the clock.
+/// </remarks>
 public sealed class ContainerBridgeAddressWatcher : IHostedService, IDisposable
 {
     /// <summary>How often the host's own addresses are re-read. Not operator-configurable: nothing about a local interface enumeration needs tuning.</summary>
@@ -53,13 +47,8 @@ public sealed class ContainerBridgeAddressWatcher : IHostedService, IDisposable
     {
         if (!_options.Enabled)
         {
-            // The registration stays so the composition root has one shape whether or not the bridge is on; the
-            // behaviour is what the flag gates.
-            //
-            // The flag is this type's only gate, so a node with the bridge on and External Apps off still runs the
-            // loop although no listener was opened. That is one interface enumeration a minute and is left alone
-            // deliberately: the second flag lives in the composition root, and reaching it from here would make the
-            // containers layer read a feature's configuration to decide its own behaviour.
+            // The registration stays so the composition root has one shape either way, and this flag is the only gate:
+            // the bridge on with External Apps off still enumerates once a minute, rather than read a feature's config.
             return Task.CompletedTask;
         }
 

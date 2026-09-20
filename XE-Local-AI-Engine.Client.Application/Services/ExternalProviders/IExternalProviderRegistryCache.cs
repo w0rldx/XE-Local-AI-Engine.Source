@@ -15,10 +15,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 public interface IExternalProviderRegistryCache
 {
     /// <summary>
-    ///     Drops the cached generation so the next read re-projects the encrypted store. Called by the save/delete path
-    ///     AFTER the file has committed, never before: invalidating first would let a concurrent read re-cache the OLD
-    ///     file and then never see the new one.
+    ///     Drops the cached generation so the next read re-projects the encrypted store.
     /// </summary>
+    /// <remarks>
+    ///     Called by the save/delete path AFTER the file has committed, never before: invalidating first would let a
+    ///     concurrent read re-cache the OLD file and then never see the new one.
+    /// </remarks>
     void Invalidate();
 
     /// <summary>

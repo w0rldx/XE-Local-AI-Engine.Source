@@ -1,15 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 
 /// <summary>
-///     Application-layer orchestration over <see cref="XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore" />:
-///     validates operator-authored custom tools and delegates persistence. The store owns id/version/timestamp stamping
-///     and the content-affecting version-bump rule; this service never re-implements versioning. Validation is the
-///     author-time trust boundary that gates what can ever reach the executors: a MAF-safe <c>custom__</c> name,
-///     no collision with a built-in or MCP tool name, a shell/interpreter-free absolute command executable, a
-///     GBNF-safe compiled parameter schema, every template placeholder declared, the mandatory SSRF allow-list for a
-///     parameterized fetch host, and — server-side, not just in the client checkbox — the danger acknowledgement.
-///     Reads mask secret header/env values so the CRUD path never returns a stored secret.
+///     Application-layer orchestration over <see cref="XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore" />: validates
+///     operator-authored custom tools and delegates persistence.
 /// </summary>
+/// <remarks>
+///     The store owns id, version and timestamp stamping and the version-bump rule; this service never re-implements versioning. Validation is
+///     the author-time trust boundary gating what reaches the executors: a MAF-safe <c>custom__</c> name, no collision with a built-in or MCP
+///     name, a shell- and interpreter-free absolute command executable, a GBNF-safe parameter schema, every placeholder declared, the SSRF
+///     allow-list for a parameterized fetch host, and — server-side, not just in the client checkbox — the danger acknowledgement.
+/// </remarks>
 public interface ICustomToolService
 {
     /// <summary>Validates and persists a new custom tool, returning the stored view (secrets masked).</summary>
@@ -31,19 +31,18 @@ public interface ICustomToolService
     Task<IReadOnlyList<CustomToolView>> ListAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Authoring-time validation of a candidate command executable: runs the same
-    ///     <see cref="HostExecutableGuard" /> checks the executor runs at launch (absolute, non-interpreter, real
-    ///     regular file, no symlink) and reports ok/reason so the ProgramLaunch selector UI can validate a path the
-    ///     operator picks.
+    ///     Authoring-time validation of a candidate command executable: the same <see cref="HostExecutableGuard" /> checks the executor runs at
+    ///     launch — absolute, non-interpreter, real regular file, no symlink.
     /// </summary>
+    /// <remarks>Reports ok plus a reason, so the ProgramLaunch selector UI can validate a path the operator picks.</remarks>
     HostExecutableProbeResult ProbeExecutable(string? path);
 }
 
-/// <summary>
-///     Thrown when a custom-tool create/update fails validation. The message is safe to surface to callers: it names
-///     the rule, the field, or a non-secret value (a tool name or a fetch host) and never echoes a secret header/env
-///     value.
-/// </summary>
+/// <summary>Thrown when a custom-tool create or update fails validation.</summary>
+/// <remarks>
+///     The message is safe to surface to callers: it names the rule, the field, or a non-secret value such as a tool name or a fetch host, and
+///     never echoes a secret header or env value.
+/// </remarks>
 public sealed class CustomToolValidationException : Exception
 {
     public CustomToolValidationException(string message)

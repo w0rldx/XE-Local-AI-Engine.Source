@@ -4,10 +4,13 @@ using Azure.Identity;
 
 /// <summary>
 ///     Persistence boundary for the single Entra ID public-client <see cref="AuthenticationRecord" /> (device-code /
-///     interactive-browser silent-auth resume). Distinct from the OS-native MSAL token cache Azure.Identity manages
-///     itself via <see cref="TokenCachePersistenceOptions" /> — this store persists only the account descriptor
-///     needed to attempt silent auth, never a token value.
+///     interactive-browser silent-auth resume).
 /// </summary>
+/// <remarks>
+///     Distinct from the OS-native MSAL token cache Azure.Identity manages itself via
+///     <see cref="TokenCachePersistenceOptions" />: this store persists only the account descriptor needed to attempt
+///     silent auth, never a token value.
+/// </remarks>
 public interface IEntraTokenCacheStore
 {
     /// <summary>Loads the stored record, or <see langword="null" /> if none / undecryptable.</summary>

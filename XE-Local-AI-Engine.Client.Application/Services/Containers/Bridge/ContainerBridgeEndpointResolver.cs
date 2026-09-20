@@ -5,20 +5,14 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
-/// <summary>
-///     Decides where the container bridge listens and what a container is told to call.
-///     <para>
-///         A container on an engine-owned bridge network cannot reach the host's loopback — that is the entire reason
-///         this type exists — so the bridge binds a LAN-facing host address instead. The detection is the
-///         default-route heuristic: the first interface that is up, is not loopback, is not a tunnel, has a gateway
-///         and carries an IPv4 address. An explicit <see cref="ContainerBridgeOptions.BindAddress" /> short-circuits
-///         all of it, mirroring how <c>ExternalApps:ContainerIdentity</c> outranks the daemon-derived identity.
-///     </para>
-///     <para>
-///         Nothing here probes the network or opens a socket: the interface list is the one input, taken through
-///         <see cref="SnapshotInterfaces" /> so every rule below can be tested against machines this one is not.
-///     </para>
-/// </summary>
+/// <summary>Decides where the container bridge listens and what a container is told to call.</summary>
+/// <remarks>
+///     A container on an engine-owned bridge network cannot reach the host's loopback — the entire reason this type
+///     exists — so the bridge binds a LAN-facing host address instead. The detection is the default-route heuristic:
+///     the first interface that is up, is not loopback, is not a tunnel, has a gateway and carries an IPv4 address.
+///     An explicit <see cref="ContainerBridgeOptions.BindAddress" /> short-circuits all of it. Nothing here probes
+///     the network: the interface list from <see cref="SnapshotInterfaces" /> is the one input.
+/// </remarks>
 public static class ContainerBridgeEndpointResolver
 {
     /// <summary>
@@ -63,18 +57,14 @@ public static class ContainerBridgeEndpointResolver
             BuildContainerFacingEndpoint(hostRunsDockerDesktop, bindAddress, options.Port));
     }
 
-    /// <summary>
-    ///     The address the listener binds, or <see langword="null" /> when nothing qualifies. An explicit option wins
-    ///     on every host and never falls back to detection: falling back would bind an interface the operator did not
-    ///     name. A wildcard is refused there for the same reason the bind guard exists — the guard is handed one
-    ///     address, and a wildcard bind is not one address. IPv4 only, in both the configured and the detected path.
-    ///     <para>
-    ///         A configured address this host does not own resolves to nothing rather than to itself. Kestrel cannot
-    ///         bind an address no interface carries, and it fails the whole host when it tries, so a typo in
-    ///         <c>ContainerBridge:BindAddress</c> would otherwise cost the node its entire boot. The posture every
-    ///         other path here holds is that a node with no usable bridge still boots without one.
-    ///     </para>
-    /// </summary>
+    /// <summary>The address the listener binds, or <see langword="null" /> when nothing qualifies; IPv4 only on both the configured and the detected path.</summary>
+    /// <remarks>
+    ///     An explicit option wins on every host and never falls back to detection, which would bind an interface
+    ///     the operator did not name, and a wildcard is refused there because the bind guard is handed ONE address.
+    ///     A configured address this host does not own resolves to nothing rather than to itself: Kestrel fails the
+    ///     whole host when it cannot bind, so a typo in <c>ContainerBridge:BindAddress</c> would otherwise cost the
+    ///     node its boot, against the posture that a node with no usable bridge still boots without one.
+    /// </remarks>
     internal static IPAddress? SelectBindAddress(string? bindAddressOption, IReadOnlyList<HostInterfaceSnapshot> interfaces)
     {
         ArgumentNullException.ThrowIfNull(interfaces);
@@ -94,21 +84,17 @@ public static class ContainerBridgeEndpointResolver
         }
 
         // Gateway-bearing first: an interface that routes off this machine is the one the container network reaches
-        // back through. Only if this host has no default route at all does a gateway-less interface (a container
-        // bridge of the daemon's own, a virtual adapter) become the answer — hence two passes rather than one.
+        // back through. A gateway-less one answers only when this host has no default route at all — hence two passes.
         return FirstIPv4Address(interfaces, gatewayBearingOnly: true) ?? FirstIPv4Address(interfaces, gatewayBearingOnly: false);
     }
 
-    /// <summary>
-    ///     The <c>host:port</c> an application container is given. On a Linux daemon that is the bound host address
-    ///     itself; on Docker Desktop it is the alias, because the daemon is in a VM whose idea of the host's address
-    ///     is not this machine's.
-    ///     <para>
-    ///         This is a claim about the ADDRESS a container dials, and about nothing else. Whether the connection is
-    ///         then admitted depends on the source address the daemon gives it, which differs between rootless and
-    ///         rootful: only rootless is validated. ADR 0011 records that, and the peer guard names it in its warning.
-    ///     </para>
-    /// </summary>
+    /// <summary>The <c>host:port</c> an application container is given: the bound host address on a Linux daemon, the alias on Docker Desktop.</summary>
+    /// <remarks>
+    ///     Docker Desktop runs the daemon in a VM whose idea of the host's address is not this machine's. This is a
+    ///     claim about the ADDRESS a container dials and nothing else: whether the connection is then admitted
+    ///     depends on the source address the daemon gives it, which differs between rootless and rootful. Only
+    ///     rootless is validated — ADR 0011 records that, and the peer guard names it in its warning.
+    /// </remarks>
     internal static string BuildContainerFacingEndpoint(bool hostRunsDockerDesktop, IPAddress bindAddress, int port)
     {
         ArgumentNullException.ThrowIfNull(bindAddress);

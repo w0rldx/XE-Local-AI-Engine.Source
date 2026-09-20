@@ -5,17 +5,11 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalProviders;
 ///     <c>GET {normalized-base}/models</c>, reported as a verdict rather than an exception.
 /// </summary>
 /// <remarks>
-///     <para>
-///         It runs on the NODE, never in the browser: an operator endpoint on a LAN address serves no CORS headers, so
-///         a fetch from the settings page would fail for a reason that has nothing to do with whether the endpoint
-///         works. The node is also the only side that can read the stored API key.
-///     </para>
-///     <para>
-///         The probe is advisory. <c>GET /v1/models</c> is near-universal but not required — a gateway that serves only
-///         <c>POST /v1/chat/completions</c> is a perfectly usable connection — so a 404 or an unparseable body is
-///         reported as "answered, no listing", never as a failure that blocks the save. Only a transport-level failure
-///         means the endpoint could not be reached at all.
-///     </para>
+///     It runs on the NODE, never in the browser: an operator endpoint on a LAN address serves no CORS headers, and the
+///     node is the only side that can read the stored API key. The probe is advisory — a 404 or an unparseable body is
+///     "answered, no listing", never a failure that blocks the save, and only a transport-level failure means the
+///     endpoint could not be reached at all. Why, and the three load-bearing properties:
+///     docs/wiki/03-local-runtime-and-providers.md, "The connect-time probe".
 /// </remarks>
 public interface IExternalProviderProbeService
 {
@@ -24,19 +18,16 @@ public interface IExternalProviderProbeService
 }
 
 /// <summary>
-///     What to probe. Either a stored connection (<paramref name="ConnectionId" />), an unsaved draft
-///     (<paramref name="BaseUrl" />), or both — a draft base URL under an existing connection id, which is what the
-///     editor sends while the operator is retyping the address of a connection whose key they have not re-entered.
+///     What to probe: a stored connection (<paramref name="ConnectionId" />), an unsaved draft
+///     (<paramref name="BaseUrl" />), or both.
 /// </summary>
-/// <param name="ConnectionId">
-///     The stored connection to resolve the base URL and — when <paramref name="ApiKey" /> is absent — the API key
-///     from. The masked editor sends no key back, so falling back to the stored one is what makes "Test connection"
-///     work on an existing connection without re-typing the secret.
-/// </param>
-/// <param name="BaseUrl">
-///     A raw, operator-entered endpoint that has not been saved yet. Takes precedence over the stored connection's
-///     address, and is normalized here with the same normalizer the save path uses.
-/// </param>
+/// <remarks>
+///     Both together is a draft base URL under an existing connection id, which is what the editor sends while the operator
+///     retypes the address of a connection whose key they have not re-entered. The masked editor sends no key back, so falling
+///     back to the stored one is what makes "Test connection" work on an existing connection without re-typing the secret.
+/// </remarks>
+/// <param name="ConnectionId">The stored connection to resolve the base URL and, when <paramref name="ApiKey" /> is absent, the API key from.</param>
+/// <param name="BaseUrl">A raw, operator-entered endpoint, not yet saved. Takes precedence over the stored address and is normalized here by the save path's normalizer.</param>
 /// <param name="ApiKey">An explicitly supplied key. Takes precedence over the stored one; blank means "use the stored key, if any".</param>
 public readonly record struct ExternalProviderProbeQuery(string? ConnectionId, string? BaseUrl, string? ApiKey);
 
@@ -77,7 +68,7 @@ public sealed record ExternalProviderProbeResult
 /// </summary>
 /// <param name="Id">The backing model id, exactly as the server spells it — this is what goes on the wire.</param>
 /// <param name="ContextLength">
-///     The declared window from <c>max_model_len</c> (vLLM) or <c>context_length</c>, or <see langword="null" />.
-///     Most servers report neither; the field pre-fills the registration form and is never assumed.
+///     The declared window from <c>max_model_len</c> (vLLM) or <c>context_length</c>, or <see langword="null" />. Most
+///     servers report neither; it pre-fills the registration form and is never assumed.
 /// </param>
 public readonly record struct ExternalProviderProbeModel(string Id, int? ContextLength);

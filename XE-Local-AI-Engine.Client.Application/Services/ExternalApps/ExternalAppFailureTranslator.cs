@@ -52,11 +52,11 @@ public sealed class ExternalAppFailure
     public required string Summary { get; init; }
 }
 
-/// <summary>
-///     Turns the exception a pipeline phase threw into a failure category. It keys on the PHASE, because daemon
-///     prose changes between Docker releases and a translator matching on message text silently degrades to
+/// <summary>Turns the exception a pipeline phase threw into a failure category, keying on the PHASE.</summary>
+/// <remarks>
+///     Daemon prose changes between Docker releases, and a translator matching on message text silently degrades to
 ///     <see cref="ExternalAppFailureCategory.Unknown" /> after an upgrade nobody connected to it.
-/// </summary>
+/// </remarks>
 public static class ExternalAppFailureTranslator
 {
     /// <summary>

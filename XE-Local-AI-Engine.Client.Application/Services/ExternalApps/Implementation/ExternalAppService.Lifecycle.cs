@@ -155,13 +155,8 @@ internal sealed partial class ExternalAppService
             var admitted = AdmittedStatusFor(kind, row.Status)
                            ?? throw new ExternalAppInvalidTransitionException($"{kind} is not available while the application is {row.Status}.");
 
-            // After the transition table, so a Start of something already Running still reads as the invalid
-            // transition it is; before the compare-and-swap, so the row never enters Starting for a plan this node
-            // cannot build. A bridge that closed after the install — a configuration change, a port collision at
-            // boot — would otherwise fail inside the pipeline on the unresolvable built-in and settle the row Failed,
-            // where install and update refuse the same state with the same 400. Stop, Reset, Uninstall, Cancel and
-            // Configure stay ungated on purpose: an operator must be able to shut down and clear an application on a
-            // node that has lost its bridge.
+            // After the transition table and before the compare-and-swap: a bridge closed since install refuses with install's own 400 rather than settling the row Failed inside the pipeline.
+            // Stop, Reset, Uninstall, Cancel and Configure stay ungated, so an operator can still stop or clear an application on a node that lost its bridge.
             if (kind is ExternalAppOperationKind.Start or ExternalAppOperationKind.Restart && BridgeUnavailableFor(row))
             {
                 throw Refuse(ExternalAppBlockedReason.BridgeUnavailable, BridgeUnavailableDetail);
@@ -382,9 +377,8 @@ internal sealed partial class ExternalAppService
             // line is about to delete, and the rebuild below would then create its replacement beside it.
             await RequireTeardownAsync(runtime, context.InstanceId, cancellationToken);
 
-            // The contents go from INSIDE a container and the empty tree goes from here. An application that ran as
-            // its own non-root user left directories this process can neither traverse nor unlink, and a host-side
-            // recursive delete on them fails with the storage error this reset used to report.
+            // The contents go from INSIDE a container, the empty tree from here: an application running as its own
+            // non-root user leaves directories this process can neither traverse nor unlink.
             await WipeVolumeContentsAsync(runtime, context.InstanceId, cancellationToken);
             WipeVolumes(context.InstanceId);
 
@@ -446,17 +440,14 @@ internal sealed partial class ExternalAppService
             // would leave it running with no row to act on it, and the next boot pass would only see an orphan.
             await RequireTeardownAsync(runtime, context.InstanceId, cancellationToken);
 
-            // The data goes BEFORE the row, and the order is binding: an uninstall that removed the row while an
-            // application's own 0700 directories were still on disk answered a confirmation promising deletion with
-            // silence, and left nothing behind that could finish the job. A wipe that fails throws from here, so the
-            // row stays and settles Failed with a retry that reaches this same line again.
+            // The data goes BEFORE the row, and the order is binding: removing the row first would answer a
+            // confirmation promising deletion with silence. A failing wipe throws, so the row stays and can retry.
             await WipeVolumeContentsAsync(runtime, context.InstanceId, cancellationToken);
 
             if (!DeleteStorage(context.InstanceId))
             {
                 // Still best-effort, and the row still goes: an empty directory tree left by a full disk or a
-                // permission the operator changed by hand is recoverable with one command, a row the UI is stuck on
-                // is not.
+                // hand-changed permission is recoverable with one command, a row the UI is stuck on is not.
                 _logger.LogWarning("External application instance {InstanceId} was uninstalled but its data directory '{StoragePath}' could not be removed; it can be deleted by hand.",
                     context.InstanceId,
                     context.Row.StoragePath);
@@ -641,11 +632,8 @@ internal sealed partial class ExternalAppService
         }
         catch (Exception exception) when (exception is ExternalAppConfigurationException or ExternalAppManifestException or ContainerPolicyException)
         {
-            // The stored snapshot cannot be planned as it stands. A rebuild re-plans it from scratch and fails
-            // loudly there, where the phase is recorded, rather than silently reusing containers nobody verified.
-            // The policy refusal belongs here too: a snapshot whose image lost its digest pin, or that names a
-            // capability the allow-list no longer grants, is unplannable rather than a reason to abandon the
-            // caller's whole pass — and on the boot pass every later row would have lost its verdict with it.
+            // A snapshot that cannot be planned is re-planned by the rebuild, which fails loudly where the phase is
+            // recorded. A policy refusal (lost digest pin, ungranted capability) is one row, never the whole pass.
             _logger.LogWarning(exception,
                 "The stored snapshot of external application instance {InstanceId} could not be planned for verification; rebuilding.",
                 row.Id);
@@ -658,12 +646,12 @@ internal sealed partial class ExternalAppService
         return StopInstanceAsync(runtime, row.Id, DeserializeManifest(row.ManifestSnapshotJson), cancellationToken);
     }
 
-    /// <summary>
-    ///     The same stop against a NAMED manifest, for the one caller whose containers are no longer the row's:
-    ///     after an update has rebuilt the instance, the target manifest is what says which services exist and in
+    /// <summary>The same stop against a NAMED manifest, for the one caller whose containers are no longer the row's.</summary>
+    /// <remarks>
+    ///     After an update has rebuilt the instance, the target manifest is what says which services exist and in
     ///     what order they come down. Stopping by the installed snapshot would leave a service the target added
     ///     running under its restart policy while the row says the application is stopped.
-    /// </summary>
+    /// </remarks>
     private async Task StopInstanceAsync(IContainerRuntime runtime,
         Guid instanceId,
         ApplicationManifest manifest,

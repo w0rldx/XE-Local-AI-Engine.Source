@@ -4,16 +4,11 @@ namespace XE_Local_AI_Engine.Client.Services.Compute;
 ///     Worker-side compute-tool configuration (section <c>Compute</c>).
 /// </summary>
 /// <remarks>
-///     <para>
-///         <see cref="Enabled" /> is the node kill-switch and defaults to <see langword="false" />, which is what makes
-///         the feature fail closed everywhere including Production: a stripped or defaulted configuration never grants
-///         a model the ability to execute code on the node. It mirrors <c>AgentHome:Enabled</c> and is read the same way.
-///     </para>
-///     <para>
-///         The ceilings are deliberately tighter than AgentHome's. A research loop calls this tool many times for a
-///         second or two each, not once for ten minutes, so a short wall clock is a feature: it turns an accidental
-///         infinite loop into a fast, reported failure the model can correct instead of a stalled turn.
-///     </para>
+///     <see cref="Enabled" /> is the node kill-switch and defaults to <see langword="false" />, which is what makes the
+///     feature fail closed everywhere including Production: a stripped or defaulted configuration never grants a model
+///     the ability to execute code on the node. It mirrors <c>AgentHome:Enabled</c>. The ceilings are deliberately
+///     tighter than AgentHome's — a research loop calls this tool many times for a second or two each, so a short wall
+///     clock turns an accidental infinite loop into a fast, reported failure the model can correct.
 /// </remarks>
 public sealed class ComputeOptions
 {
@@ -40,32 +35,26 @@ public sealed class ComputeOptions
     /// <summary>
     ///     What every numeric-library thread-count variable (<c>OMP_NUM_THREADS</c> and its siblings) is pinned to
     ///     inside the sandbox. Defaults to <c>min(4, processor count)</c>.
-    ///     <para>
-    ///         It is pinned rather than left to the libraries because they size their pools from the HOST's core
-    ///         count, read out of <c>/proc</c>, which is not what <see cref="CpuCount" /> allows: an unpinned BLAS
-    ///         starts a thread per host core and then thrashes inside a fraction of one. The cap at four is the
-    ///         other half — a linear-algebra call on the array sizes this tool sees stops scaling long before a
-    ///         many-core box's core count, and the threads it would start still cost against
-    ///         <see cref="PidsLimit" />.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Pinned rather than left to the libraries, which size their pools from the HOST's core count read out of
+    ///     <c>/proc</c> — not what <see cref="CpuCount" /> allows, so an unpinned BLAS starts a thread per host core and
+    ///     then thrashes inside a fraction of one. The cap at four is the other half: a linear-algebra call on the array
+    ///     sizes this tool sees stops scaling long before a many-core box's core count, and the threads it would start
+    ///     still cost against <see cref="PidsLimit" />.
+    /// </remarks>
     public int ThreadLimit { get; set; } = Math.Min(val1: 4, Environment.ProcessorCount);
 
     /// <summary>
     ///     How many bytes a single script may write into its own jail before the process tree is terminated. Defaults
-    ///     to 256 MiB — far tighter than the node-wide sandbox ceiling, because arithmetic and symbolic algebra write
-    ///     almost nothing, so a script filling hundreds of megabytes is a runaway rather than a workload.
-    ///     <para>
-    ///         It can only TIGHTEN: the gateway passes it as
-    ///         <c>SandboxCreateRequest.MaxJailDiskBytes</c>, and the provider applies the smaller of this and the
-    ///         node-wide <c>LocalContainer:MaxJailDiskBytes</c>. Raising it past the node-wide ceiling therefore has no
-    ///         effect — that number is the operator's, and this one is the tool's opinion about its own workload.
-    ///     </para>
-    ///     <para>
-    ///         It covers EVERYTHING the script can write, because the script's <c>HOME</c> and <c>TMPDIR</c> are
-    ///         directories inside that same jail. A scratch directory elsewhere would be space this ceiling does not
-    ///         measure, which is worse than no ceiling: it reads as a bound and is not one.
-    ///     </para>
+    ///     to 256 MiB.
     /// </summary>
+    /// <remarks>
+    ///     Far tighter than the node-wide sandbox ceiling, because arithmetic and symbolic algebra write almost
+    ///     nothing, so a script filling hundreds of megabytes is a runaway rather than a workload. It can only TIGHTEN:
+    ///     the provider applies the smaller of this and the node-wide <c>LocalContainer:MaxJailDiskBytes</c>. It covers
+    ///     EVERYTHING the script can write, because <c>HOME</c> and <c>TMPDIR</c> are directories inside that same jail
+    ///     — a scratch elsewhere would read as a bound and not be one. See docs/wiki/19-compute-tools.md, "2.1 Execution flow".
+    /// </remarks>
     public long MaxJailDiskBytes { get; set; } = 256L * 1024 * 1024;
 }

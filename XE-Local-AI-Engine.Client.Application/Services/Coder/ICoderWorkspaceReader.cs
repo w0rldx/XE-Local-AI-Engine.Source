@@ -2,14 +2,13 @@ namespace XE_Local_AI_Engine.Client.Services.Coder;
 
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 
-/// <summary>
-///     The single read-only gateway the three coder tool handlers delegate to — analogous to
-///     <c>IAgentHomeToolGateway</c> but read-only. It attaches to the live AgentHome sandbox via
-///     <c>ISandboxRuntimeProvider.ConnectAsync</c> (which does NOT take the AgentHome run lock, so a coder read never
-///     throws <c>AgentHomeBusyException</c> during an in-flight run), confines every model path through
-///     <see cref="WorkspacePathGuard" />, excludes secrets, and returns model-facing strings carrying workspace-relative
-///     paths only — never a host-absolute path. No write, patch, mutating, or caller-supplied-executable path exists.
-/// </summary>
+/// <summary>The single read-only gateway the three coder tool handlers delegate to, analogous to <c>IAgentHomeToolGateway</c>.</summary>
+/// <remarks>
+///     It attaches to the live AgentHome sandbox through <c>ISandboxRuntimeProvider.ConnectAsync</c>, which does NOT take the AgentHome run
+///     lock, so a coder read never throws <c>AgentHomeBusyException</c> during an in-flight run. Every model path is confined through
+///     <see cref="WorkspacePathGuard" />, secrets are excluded, and model-facing strings carry workspace-relative paths only, never a
+///     host-absolute one. No write, patch, mutating or caller-supplied-executable path exists.
+/// </remarks>
 internal interface ICoderWorkspaceReader
 {
     /// <summary>Lists workspace entries under the (confined) request path, secrets excluded and count-capped.</summary>

@@ -7,15 +7,14 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>
-///     Executes a <c>Command</c> custom tool on the host. Ports the sandbox provider's proven host-exec posture minus
-///     the jail/launcher: <see cref="ProcessStartInfo.ArgumentList" /> (never a shell string, so a substituted value is
-///     always one argv element), <c>UseShellExecute=false</c>, a scrubbed environment (cleared, repopulated from the
-///     system allow-list, then the tool's own env overlaid — secrets via env, never argv), a linked-CTS wall-clock
-///     timeout with tree-kill, and a per-stream output byte cap. The executable is validated at execution time
-///     (absolute, non-interpreter, real regular file via <c>O_NOFOLLOW</c>), and the whole run is admitted through the
-///     global concurrency limiter. Secret env values are scrubbed from stdout/stderr before the model sees them.
-/// </summary>
+/// <summary>Executes a <c>Command</c> custom tool on the host, porting the sandbox provider's host-exec posture minus the jail.</summary>
+/// <remarks>
+///     <see cref="ProcessStartInfo.ArgumentList" /> is used, never a shell string, so a substituted value is always one argv element; shell
+///     execution is off; the environment is cleared, repopulated from the system allow-list and overlaid with the tool's own env, so secrets
+///     travel by env and never argv; a linked-CTS wall-clock timeout tree-kills; each stream has an output byte cap. The executable is
+///     validated at execution time (absolute, non-interpreter, real regular file, no symlink follow), the run is admitted through the global
+///     concurrency limiter, and secret env values are scrubbed from stdout and stderr.
+/// </remarks>
 internal sealed class HostProcessExecutor : ICustomToolExecutor
 {
     // The system and toolchain variables a host command may inherit, mirroring the sandbox provider's allow-list. No
@@ -103,10 +102,8 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
             startInfo.ArgumentList.Add(argument);
         }
 
-        // Start the child from a scrubbed environment: ProcessStartInfo pre-seeds the FULL worker environment (which
-        // holds secrets), so clear it and repopulate only the allow-listed system/toolchain variables, then overlay the
-        // tool's own env (secrets travel here, in the environment, never on argv where /proc/<pid>/cmdline would leak
-        // them).
+        // Start the child from a scrubbed environment: ProcessStartInfo pre-seeds the FULL worker environment, which holds secrets, so clear it and
+        // repopulate only allow-listed system and toolchain variables, then overlay the tool's own env — never argv, where /proc/<pid>/cmdline leaks.
         startInfo.Environment.Clear();
         foreach (var name in InheritableEnvironmentAllowlist)
         {
@@ -135,12 +132,8 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         var arguments = new List<string>(argsTemplate.Count);
         foreach (var template in argsTemplate)
         {
-            // Each template element expands into exactly ONE argv element (no encoding — argv is not a URL, and
-            // BindAndEnforce + Substitute never split a value across argv). That single-argv guarantee is the injection
-            // control. We deliberately do NOT inject a synthetic "--" end-of-options marker: it corrupts the common
-            // ["--flag", "{value}"] shape (the value is not a positional, so "--flag -- value" makes the parser read
-            // "--" as the flag's value), and it is not needed for the security property. An operator who wants
-            // end-of-options handling authors it in the template itself.
+            // Each template element expands into exactly ONE argv element, with no encoding, and that single-argv guarantee IS the injection control.
+            // No synthetic end-of-options marker is injected: it corrupts the common flag-then-value shape and the security property does not need it.
             arguments.Add(CustomToolTemplate.Substitute(template, bound, declaredNames));
         }
 
@@ -254,10 +247,10 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
     }
 
     /// <summary>
-    ///     A thread-safe accumulator with a hard UTF-8 byte ceiling, so a runaway command cannot exhaust memory while the
-    ///     event pump keeps draining the pipe. A compact analogue of the sandbox provider's private capped builder
-    ///     (which is not reachable from here).
+    ///     A thread-safe accumulator with a hard UTF-8 byte ceiling, so a runaway command cannot exhaust memory while the event pump keeps
+    ///     draining the pipe.
     /// </summary>
+    /// <remarks>A compact analogue of the sandbox provider's private capped builder, which is not reachable from here.</remarks>
     private sealed class CappedOutput
     {
         private readonly StringBuilder _builder = new();

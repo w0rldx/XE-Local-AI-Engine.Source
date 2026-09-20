@@ -9,10 +9,12 @@ public interface IAzureFoundryChatClientFactory
 {
     /// <summary>
     ///     Builds a provider-neutral <see cref="IChatClient" /> for the given Azure Foundry connection (endpoint +
-    ///     auth mode + optional key) targeting a specific deployment. Throws
-    ///     <see cref="AzureFoundryProviderException" /> (kind <see cref="AzureFoundryProviderErrorKind.Configuration" />)
-    ///     when the connection cannot build a client (blank deployment, non-HTTPS or disallowed-host endpoint, or an
-    ///     API-key auth mode with no key).
+    ///     auth mode + optional key) targeting a specific deployment.
     /// </summary>
+    /// <remarks>
+    ///     Throws <see cref="AzureFoundryProviderException" />
+    ///     (kind <see cref="AzureFoundryProviderErrorKind.Configuration" />) when the connection cannot build a client:
+    ///     a blank deployment, a non-HTTPS or disallowed-host endpoint, or an API-key auth mode with no key.
+    /// </remarks>
     IChatClient Create(StoredAzureFoundryConnection connection, string deploymentName);
 }

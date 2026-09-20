@@ -6,25 +6,24 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 
 /// <summary>
 ///     The node's registered <see cref="IChatClient" />: a stable wrapper that re-selects cloud-vs-local on
-///     <b>every</b> call. Singleton consumers (the agent factories) capture this wrapper once,
-///     but each send re-evaluates the active provider via <see cref="IActiveCloudChatClientFactory" />, so signing
-///     in or out at runtime takes effect on the next send without restarting the node.
-///     <para>
-///         The local model client is stable, so it is resolved once and reused. The active cloud client is resolved per
-///         call but <see cref="IActiveCloudChatClientFactory" /> caches it on a selection fingerprint, so it is rebuilt
-///         only when the selection changes (sign-in / sign-out / refresh) — not on every send. When a cloud provider is
-///         selected but unusable (e.g. no Codex session), the cloud factory throws a typed re-auth error, which propagates
-///         to the caller as a re-authenticate prompt rather than silently routing local.
-///     </para>
+///     <b>every</b> call.
 /// </summary>
+/// <remarks>
+///     Singleton consumers (the agent factories) capture this wrapper once, but each send re-evaluates the active provider
+///     via <see cref="IActiveCloudChatClientFactory" />, so a runtime sign-in or sign-out takes effect on the next send with
+///     no node restart. The local model client is stable and is resolved once and reused; the cloud client is resolved per
+///     call but cached on a selection fingerprint, so it is rebuilt only when the selection changes. A cloud provider that
+///     is selected but unusable (no Codex session) throws a typed re-auth error rather than silently routing local.
+/// </remarks>
 public sealed class RuntimeChatClient : IChatClient
 {
-    // The active client returned per call is either the cached local client (owned by this wrapper, disposed in
-    // Dispose) or the active cloud client, which is owned and lifecycle-managed by IActiveCloudChatClientFactory
-    // (it caches the cloud client and does NOT dispose swapped-out wrappers — concurrency-safety, so an in-flight
-    // request is never torn down). Disposing the resolved client at this boundary would be incorrect for both —
-    // the local client is reused across calls, and the cloud client is owned by the cloud factory — so it is never
-    // disposed here.
+    /// <summary>Why the resolved client is never disposed at this boundary.</summary>
+    /// <remarks>
+    ///     The client returned per call is either the cached local client (owned by this wrapper, disposed in
+    ///     <see cref="Dispose" />) or the active cloud client, owned and lifecycle-managed by
+    ///     <see cref="IActiveCloudChatClientFactory" />, which caches it and does NOT dispose swapped-out wrappers, so an
+    ///     in-flight request is never torn down. Disposing here would be incorrect for both.
+    /// </remarks>
     private const string ActiveClientOwnershipNote =
         "The resolved client is either the cached local client (disposed in Dispose) or the active cloud client "
         + "owned and lifecycle-managed by IActiveCloudChatClientFactory; disposing it here is incorrect.";
@@ -110,18 +109,10 @@ public sealed class RuntimeChatClient : IChatClient
     ///     boundary through an external endpoint.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         Every existing per-send egress authorization lives on the cloud branch, because before external
-    ///         providers the local branch could not egress. An <c>ext:</c> id breaks that assumption while staying on
-    ///         the local branch by design (the orphan guard routes it there), so without this check a Development
-    ///         attempt could reach a hosted endpoint with no authorization step having run at all.
-    ///     </para>
-    ///     <para>
-    ///         This is a backstop, not the gate — <c>DevelopmentManagementService</c> and the coder/reviewer models
-    ///         refuse the same models earlier and with better messages. It exists because this is the last point before
-    ///         bytes go on the wire, and the classification it uses (the registry's cached generation) reports
-    ///         UNRESOLVED rather than "fine" when it cannot answer.
-    ///     </para>
+    ///     Per-send egress authorization otherwise lives on the cloud branch: before external providers the local branch could not egress. An <c>ext:</c> id
+    ///     stays on the local branch by design (the orphan guard routes it there), so without this check a Development attempt could reach a hosted endpoint
+    ///     with no authorization step run at all. A backstop, not the gate: <c>DevelopmentManagementService</c> and the coder/reviewer models refuse the same
+    ///     models earlier. This is the last point before bytes go on the wire, and its classification reports UNRESOLVED, never "fine", when it cannot answer.
     /// </remarks>
     private void AuthorizeDevelopmentLocalRequest(ChatOptions? options, string? requestedModelId)
     {

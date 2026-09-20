@@ -4,9 +4,12 @@ using System.ClientModel.Primitives;
 
 /// <summary>
 ///     A System.ClientModel pipeline policy that appends a fixed, already-resolved custom header set to every outbound
-///     Azure Foundry / Azure OpenAI request. Registered at <see cref="PipelinePosition.PerCall" /> (before retries) so
-///     each static header is set once per call. No I/O and no logging — the resolved values may include secrets.
+///     Azure Foundry / Azure OpenAI request.
 /// </summary>
+/// <remarks>
+///     Registered at <see cref="PipelinePosition.PerCall" /> (before retries) so each static header is set once per
+///     call. No I/O and no logging — the resolved values may include secrets.
+/// </remarks>
 internal sealed class CustomHeaderPipelinePolicy : PipelinePolicy
 {
     private readonly IReadOnlyList<ResolvedCustomHeader> _headers;

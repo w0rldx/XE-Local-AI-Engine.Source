@@ -10,18 +10,13 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// <summary>
 ///     The on-disk shape of one installed application instance, and the only code that creates, materialises or
 ///     deletes anything under it.
-///     <para>
-///         Both halves are namespaced BY SERVICE. <c>storage[].name</c> is unique only within a service — an
-///         application can declare <c>data</c> on two of them — so a flat layout would bind one host directory into
-///         two containers holding different data.
-///     </para>
 /// </summary>
 /// <remarks>
-///     Lexical confinement is not confinement: nothing in a path string resolves a symlink, so a reparse point on any
-///     component redirects a valid-looking path out of the instance directory. Every component from
-///     <c>external-apps</c> down is therefore checked for a link before it is created, written or handed out as a
-///     bind source, and every write goes through a temp file opened <see cref="FileMode.CreateNew" /> rather than an
-///     in-place overwrite.
+///     Both halves are namespaced BY SERVICE, and lexical confinement is not confinement: nothing in a path string
+///     resolves a symlink, so every component from <c>external-apps</c> down is checked for a link before it is
+///     created, written or handed out as a bind source, and every write goes through a temp file opened
+///     <see cref="FileMode.CreateNew" /> rather than an in-place overwrite. See docs/wiki/23-external-apps.md
+///     ("Storage, and the helper container").
 /// </remarks>
 internal sealed class ExternalAppStorageLayout
 {
@@ -70,13 +65,13 @@ internal sealed class ExternalAppStorageLayout
     /// <summary>
     ///     Creates every directory the manifest's services need and materialises their <c>files[]</c>, then returns
     ///     the paths a deployment plan binds.
-    ///     <para>
-    ///         Idempotent by contract: install, start after a configure, update and reset all re-enter it, so a
-    ///         pre-existing file is a case to verify rather than a violation to refuse. A file whose content already
-    ///         hashes to the manifest's <c>sha256</c> is reused untouched; one that does not is replaced through a
-    ///         temp file and an atomic rename. It must run only while no container of the instance exists.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Idempotent by contract — install, start after a configure, update and reset all re-enter it — so a
+    ///     pre-existing file is verified rather than refused: one whose content already hashes to the manifest's
+    ///     <c>sha256</c> is reused untouched, one that does not is replaced through a temp file and an atomic rename.
+    ///     It must run only while no container of the instance exists.
+    /// </remarks>
     public async Task<ExternalAppStoragePaths> PrepareAsync(Guid instanceId, ApplicationManifest manifest, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(manifest);
@@ -124,13 +119,13 @@ internal sealed class ExternalAppStorageLayout
         }
     }
 
-    /// <summary>
-    ///     Deletes the whole instance directory. Best-effort about I/O by contract: an uninstall that cannot remove a
-    ///     directory still removes the rows, so the caller is told what happened rather than left with an instance it
-    ///     cannot get rid of. A LINK on the path is not an I/O failure and is not reported as one — it is refused with
-    ///     an <see cref="ExternalAppStorageException" />, because a recursive delete that followed it would remove a
-    ///     tree this feature does not own.
-    /// </summary>
+    /// <summary>Deletes the whole instance directory. Best-effort about I/O by contract.</summary>
+    /// <remarks>
+    ///     An uninstall that cannot remove a directory still removes the rows, so the caller is told what happened
+    ///     rather than left with an instance it cannot get rid of. A LINK on the path is not an I/O failure and is not
+    ///     reported as one: it is refused with an <see cref="ExternalAppStorageException" />, because a recursive
+    ///     delete that followed it would remove a tree this feature does not own.
+    /// </remarks>
     public bool Delete(Guid instanceId)
     {
         var paths = Describe(instanceId);
@@ -139,9 +134,8 @@ internal sealed class ExternalAppStorageLayout
             return true;
         }
 
-        // The same per-component check DeleteVolumes makes, and for the same reason: a directory link planted at any
-        // ancestor inside the feature root — at 'external-apps/instances', say — redirects this recursive delete out
-        // of the instance directory entirely.
+        // The same per-component check DeleteVolumes makes, and for the same reason: a directory link planted at any ancestor inside the feature root — at
+        // 'external-apps/instances', say — redirects this recursive delete out of the instance directory entirely.
         EnsureNoLinksOnPath(paths.InstanceRoot);
 
         try
@@ -158,18 +152,14 @@ internal sealed class ExternalAppStorageLayout
     /// <summary>
     ///     Re-validates the instance's volumes directory and answers whether anything is still in it: the path when
     ///     entries remain, <see langword="null" /> when the directory is absent or already empty.
-    ///     <para>
-    ///         The same per-component no-follow walk <see cref="DeleteVolumes" /> makes, and for the same reason —
-    ///         the answer becomes the bind source of a container that runs as root over it, so a link on any
-    ///         component would hand that container a tree this feature does not own.
-    ///     </para>
-    ///     <para>
-    ///         One method and two uses: called before the helper runs it says whether a helper is needed at all, and
-    ///         called after it the same non-null answer means the wipe did not finish. Only the TOP level is read,
-    ///         which is exactly what the engine can always read — <c>volumes/</c> is engine-created and engine-owned,
-    ///         and a subdirectory an application made unreadable is precisely what the helper exists for.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The same per-component no-follow walk <see cref="DeleteVolumes" /> makes, because the answer becomes the
+    ///     bind source of a container that runs as root over it. One method, two uses: before the helper runs it says
+    ///     whether a helper is needed at all, after it a non-null answer means the wipe did not finish. Only the TOP
+    ///     level is read, which is what the engine can always read — <c>volumes/</c> is engine-owned, and a
+    ///     subdirectory an application made unreadable is precisely what the helper exists for.
+    /// </remarks>
     internal string? FindVolumeContents(Guid instanceId)
     {
         var paths = Describe(instanceId);
@@ -193,12 +183,12 @@ internal sealed class ExternalAppStorageLayout
     /// <summary>
     ///     Re-validates every bind source of a plan, immediately before the daemon is asked to create the container
     ///     that binds them.
-    ///     <para>
-    ///         <see cref="PrepareAsync" /> already checked these components, but a plan crosses asynchronous daemon calls
-    ///         and a path string resolves nothing: a component replaced by a link in between would hand the daemon a
-    ///         bind source outside the instance directory, and nothing downstream would notice.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <see cref="PrepareAsync" /> already checked these components, but a plan crosses asynchronous daemon calls
+    ///     and a path string resolves nothing: a component replaced by a link in between would hand the daemon a bind
+    ///     source outside the instance directory, and nothing downstream would notice.
+    /// </remarks>
     internal void VerifyBindSources(DeploymentPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -214,9 +204,12 @@ internal sealed class ExternalAppStorageLayout
 
     /// <summary>
     ///     Validates one <c>storage[].name</c> or <c>files[].source</c> as a relative, single-rooted, traversal-free
-    ///     path and returns it with this platform's separators. The catalog validator states the same rule; this one
-    ///     is the control, because an installed snapshot can predate the validator that admitted it.
+    ///     path and returns it with this platform's separators.
     /// </summary>
+    /// <remarks>
+    ///     The catalog validator states the same rule; this one is the control, because an installed snapshot can
+    ///     predate the validator that admitted it.
+    /// </remarks>
     internal static string ValidateRelativeName(string? value, string what)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -269,9 +262,8 @@ internal sealed class ExternalAppStorageLayout
 
         if (File.Exists(target))
         {
-            // The LEAF, before its hash is read. EnsureDirectory cleared every parent component, but a symlink at
-            // the target itself hashes to whatever it points at — so a link planted here would hash correctly and
-            // then be handed to the daemon as a read-only bind source pointing outside the instance directory.
+            // The LEAF, before its hash is read: EnsureDirectory cleared every parent component, but a symlink at the target itself hashes to whatever it
+            // points at, so a link planted here would hash correctly and then be handed to the daemon as a bind source pointing outside the instance.
             EnsureNotALink(target);
 
             if (string.Equals(await HashFileAsync(target, cancellationToken), expected, StringComparison.Ordinal))
@@ -452,11 +444,11 @@ internal sealed class ExternalAppStoragePaths
     }
 }
 
-/// <summary>
-///     An application's storage could not be created, verified or removed as the engine requires. An
-///     <see cref="IOException" /> because that is what it is; a named subtype because the pipelines have to tell a
+/// <summary>An application's storage could not be created, verified or removed as the engine requires.</summary>
+/// <remarks>
+///     An <see cref="IOException" /> because that is what it is; a named subtype because the pipelines have to tell a
 ///     refusal of theirs apart from a disk that filled up, and both become the same failure category to the user.
-/// </summary>
+/// </remarks>
 public sealed class ExternalAppStorageException : IOException
 {
     public ExternalAppStorageException(string message) : base(message)

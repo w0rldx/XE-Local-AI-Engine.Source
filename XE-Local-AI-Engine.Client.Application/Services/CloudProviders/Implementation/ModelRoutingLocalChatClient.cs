@@ -7,28 +7,15 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     The single local-branch <see cref="IChatClient" /> that replaces the
-///     fixed-model local client. Per request it reads <see cref="ChatOptions.ModelId" />, resolves that model to its
-///     provider through <see cref="ILocalModelProviderResolver" /> (persisted map + default), asks the provider for a
-///     model-specific chat client, and delegates. For llama-server the provider hands back a <em>deferred</em> client
-///     that ensure-runs the right per-model process on first use; for Ollama it hands back the single-daemon client
-///     with ModelId hot-swap. Switching model mid-session therefore reaches a different process/client without a node
-///     restart.
+///     The single local-branch <see cref="IChatClient" />: per request it reads <see cref="ChatOptions.ModelId" />,
+///     resolves that model to its provider, asks the provider for a model-specific chat client, and delegates.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Singleton — matches <see cref="RuntimeChatClient" />'s lifetime and sits behind its local branch. The
-///         per-(provider, model) chat clients are cached so repeated sends to the same model reuse one deferred client
-///         (which owns the single-flight cold-start). The router builds the request's effective ModelId once and keys
-///         the cache on (provider, model).
-///     </para>
-///     <para>
-///         <strong>Dispose ownership:</strong> the resolved/cached chat clients are owned by the provider stack (the
-///         llama-server supervisor owns the underlying processes; the deferred client owns only its inner adapter) and
-///         are NOT disposed at this boundary — mirror <see cref="RuntimeChatClient" />'s ownership note. This router is
-///         disposed by the node host on shutdown; it disposes the deferred clients it cached then (their inner adapters,
-///         not the supervisor processes).
-///     </para>
+///     Resolution runs through <see cref="ILocalModelProviderResolver" /> (persisted map plus default), so switching model
+///     mid-session reaches a different process or client without a node restart. Singleton, matching
+///     <see cref="RuntimeChatClient" />'s lifetime and sitting behind its local branch; per-(provider, model) clients are
+///     cached. <strong>Dispose ownership:</strong> the cached clients are disposed only when the node host disposes this
+///     router — their inner adapters, never the supervisor's processes. Routing shape: docs/wiki/03-local-runtime-and-providers.md, "The local routing client".
 /// </remarks>
 public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientCacheInvalidator
 {
@@ -108,11 +95,8 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
     /// <inheritdoc />
     public void ClearClientCache()
     {
-        // Atomically swap out the cached deferred clients and dispose them. A cleared deferred client holds an inner
-        // adapter pointed at an endpoint that may no longer exist (e.g. after the operator switched/updated the
-        // llama.cpp runtime variant), so it is disposed here; the next send re-resolves a fresh client, which
-        // ensure-runs the backing process against the current binary. The supervisor owns the processes themselves and
-        // is unaffected by this cache reset.
+        // Atomically swap out the cached deferred clients and dispose them: a cleared one holds an inner adapter pointed at
+        // an endpoint that may be gone (the operator switched the llama.cpp runtime variant). The next send re-resolves against the current binary; the supervisor's processes are unaffected.
         foreach (var key in _clientsByProviderAndModel.Keys)
         {
             if (_clientsByProviderAndModel.TryRemove(key, out var removed))
@@ -140,9 +124,8 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
             ProviderName = providerName
         });
 
-        // GetOrAdd may race with a concurrent first send for the same (provider, model); keep the first winner and
-        // dispose the loser so we never leak a deferred client. The deferred client's own single-flight ensures the
-        // backing process is started at most once regardless.
+        // GetOrAdd may race with a concurrent first send for the same (provider, model): keep the first winner and dispose
+        // the loser so no deferred client leaks. The deferred client's own single-flight starts the backing process at most once regardless.
         var stored = _clientsByProviderAndModel.GetOrAdd(cacheKey, created);
         if (!ReferenceEquals(stored, created))
         {

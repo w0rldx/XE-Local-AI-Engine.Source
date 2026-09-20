@@ -16,11 +16,13 @@ public sealed class RuntimeAuditDevice
 }
 
 /// <summary>
-///     The node-level runtime device audit: whether the SELECTED inference runtime is actually using the GPU
-///     the host advertises, or has silently fallen back to the CPU. Surfaced over REST for the operator UI and consumed
-///     by the capacity gate + model advisor (via the audited effective hardware profile) so model sizing matches the
-///     runtime that will actually run.
+///     The node-level runtime device audit: whether the SELECTED inference runtime is actually using the GPU the host advertises, or has
+///     silently fallen back to the CPU.
 /// </summary>
+/// <remarks>
+///     Surfaced over REST for the operator UI and consumed by the capacity gate and the model advisor, through the audited effective hardware
+///     profile, so model sizing matches the runtime that will actually run.
+/// </remarks>
 public sealed record RuntimeDeviceAuditState
 {
     /// <summary>The backend inference actually uses: <c>cuda</c> | <c>vulkan</c> | <c>cpu</c> | <c>unknown</c>.</summary>
@@ -45,22 +47,24 @@ public sealed record RuntimeDeviceAuditState
     public IReadOnlyList<RuntimeAuditDevice> Devices { get; init; } = [];
 
     /// <summary>
-    ///     Operator-facing explanation for an INDETERMINATE audit (<see cref="InferenceBackend" /> is <c>unknown</c>
-    ///     because the device probe timed out or could not spawn), or <see langword="null" /> when the backend is
-    ///     known. Deliberately separate from <see cref="Reason" />: "we could not tell" is not a CPU fallback, and
-    ///     folding it into <see cref="CpuFallback" /> would raise a false alarm about a machine that may be perfectly
-    ///     healthy. Without this, a wedged driver is indistinguishable from health — the UI shows nothing at all.
+    ///     Operator-facing explanation for an INDETERMINATE audit — <see cref="InferenceBackend" /> is <c>unknown</c> because the device probe
+    ///     timed out or could not spawn — or <see langword="null" /> when the backend is known.
     /// </summary>
+    /// <remarks>
+    ///     Deliberately separate from <see cref="Reason" />: "we could not tell" is not a CPU fallback, and folding it into
+    ///     <see cref="CpuFallback" /> would raise a false alarm about a machine that may be perfectly healthy. Without this field a wedged
+    ///     driver is indistinguishable from health and the UI shows nothing at all.
+    /// </remarks>
     public string? BackendUndeterminedReason { get; init; }
 
     /// <summary>
-    ///     What the most recent observed model load actually did with that model's layers, or <see langword="null" />
-    ///     when no load has been observed. Distinct from <see cref="CpuFallback" />: a partial offload means the GPU IS
-    ///     in use, just not for the whole model, so conflating the two would make the fallback banner lie.
+    ///     What the most recent observed model load actually did with that model's layers, or <see langword="null" /> when no load has been
+    ///     observed.
     /// </summary>
     /// <remarks>
-    ///     Unlike the rest of this record — which is memoized per binary — this field is re-stamped from the live
-    ///     placement report on every read, because it changes as models load rather than when the binary changes.
+    ///     Distinct from <see cref="CpuFallback" />: a partial offload means the GPU IS in use, just not for the whole model, so conflating
+    ///     the two would make the fallback banner lie. Unlike the rest of this record — memoized per binary — this field is re-stamped from
+    ///     the live placement report on every read, because it changes as models load rather than when the binary changes.
     /// </remarks>
     public LlamaLayerPlacement? LayerPlacement { get; init; }
 }

@@ -14,11 +14,11 @@ using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
-/// <summary>
-///     Produces the repeatable, keyed execution binding used exclusively by inbound MCP execution. Delegate saved
-///     agents and bare models are model-visible tool-less; only the forge-proof seeded Coder may receive its exact
-///     three workspace-read tools. Agentic saved-agent bindings retain the complete resolved allowed-tool snapshot.
-/// </summary>
+/// <summary>Produces the repeatable, keyed execution binding used exclusively by inbound MCP execution.</summary>
+/// <remarks>
+///     Delegate saved agents and bare models are model-visible tool-less; only the forge-proof seeded Coder may receive its exact three
+///     workspace-read tools. Agentic saved-agent bindings retain the complete resolved allowed-tool snapshot.
+/// </remarks>
 internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 {
     private const int AgenticFingerprintVersion = 2;
@@ -160,9 +160,8 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
     private static bool TryProjectExactCoderTools(IReadOnlyList<AllowedToolDto> resolvedTools, out IReadOnlyList<AllowedToolDto> projectedTools)
     {
-        // The shared resolver may append capabilities such as ask_user after applying the saved definition's allowed
-        // names. They are irrelevant to inbound Coder execution and never enter its binding. The three expected names
-        // themselves remain fail-closed: each must occur exactly once with the required read-only metadata.
+        // The shared resolver may append capabilities such as ask_user after applying the saved definition's allowed names; they are irrelevant to
+        // inbound Coder execution and never enter its binding. The three expected names stay fail-closed: each occurs exactly once, read-only.
         var coderTools = resolvedTools.Where(static tool => CoderToolNames.Contains(tool.Name)).ToArray();
         if (coderTools.Length != CoderToolNames.Count
             || coderTools.Select(static tool => tool.Name).Distinct(StringComparer.Ordinal).Count() != CoderToolNames.Count

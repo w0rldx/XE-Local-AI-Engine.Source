@@ -13,16 +13,13 @@ public enum ContainerRuntimeSelection
     Docker = 1
 }
 
-/// <summary>
-///     The single place the stored, wire and engine representations of <see cref="ContainerRuntimeSelection" /> meet.
-///     <para>
-///         Stored as a string in the node settings file and carried as a string on the API, because the settings store
-///         serializes with web defaults and no enum converter: an enum would persist as <c>0</c>/<c>1</c> in a file an
-///         operator hand-edits, and would change meaning silently if a value were ever inserted. Every conversion in
-///         both directions goes through these two methods, so a caller cannot hand-roll a third spelling of the same
-///         mapping.
-///     </para>
-/// </summary>
+/// <summary>The single place the stored, wire and engine representations of <see cref="ContainerRuntimeSelection" /> meet.</summary>
+/// <remarks>
+///     Stored in the node settings file and carried on the API as a STRING, because the settings store serializes
+///     with web defaults and no enum converter: an enum would persist as <c>0</c>/<c>1</c> in a file an operator
+///     hand-edits, and would change meaning silently if a value were ever inserted. Every conversion in both
+///     directions goes through these two methods, so a caller cannot hand-roll a third spelling of the mapping.
+/// </remarks>
 public static class ContainerRuntimeSelectionParser
 {
     /// <summary>The stored and wire spelling of <see cref="ContainerRuntimeSelection.Auto" />, and the default.</summary>
@@ -31,15 +28,12 @@ public static class ContainerRuntimeSelectionParser
     /// <summary>The stored and wire spelling of <see cref="ContainerRuntimeSelection.Docker" />.</summary>
     public const string Docker = "docker";
 
-    /// <summary>
-    ///     Parse a stored or incoming value, ordinal-ignore-case.
-    ///     <para>
-    ///         Returns <see langword="false" /> for null, blank and anything unrecognised, and still sets
-    ///         <paramref name="selection" /> to <see cref="ContainerRuntimeSelection.Auto" /> — so a caller that
-    ///         ignores the result gets the default rather than an uninitialised value, and a caller that reads it can
-    ///         reject the input.
-    ///     </para>
-    /// </summary>
+    /// <summary>Parse a stored or incoming value, ordinal-ignore-case.</summary>
+    /// <remarks>
+    ///     <see langword="false" /> for null, blank and anything unrecognised, and <paramref name="selection" /> is
+    ///     still set to <see cref="ContainerRuntimeSelection.Auto" />: a caller that ignores the result gets the
+    ///     default rather than an uninitialised value, and one that reads it can reject the input.
+    /// </remarks>
     public static bool TryParse(string? value, out ContainerRuntimeSelection selection)
     {
         selection = ContainerRuntimeSelection.Auto;

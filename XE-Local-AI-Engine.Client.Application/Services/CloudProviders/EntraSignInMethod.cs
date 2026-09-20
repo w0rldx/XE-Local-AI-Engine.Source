@@ -17,9 +17,12 @@ public enum EntraSignInMethod
 
     /// <summary>
     ///     Confidential-client authorization-code sign-in ("Postman parity"): browser sign-in yields a DELEGATED
-    ///     token (scp claim) while the stored client secret authenticates the code redemption via MSAL
-    ///     <c>ConfidentialClientApplication</c>. Unlike <see cref="ClientSecret" />, this mode requires a client
-    ///     secret AND uses a delegated token scope — the app-only <c>/.default</c> fail-fast does not apply.
+    ///     token (scp claim) while the stored client secret authenticates the code redemption.
     /// </summary>
+    /// <remarks>
+    ///     MSAL's <c>ConfidentialClientApplication</c> performs the redemption. Unlike <see cref="ClientSecret" /> this
+    ///     mode requires a client secret AND uses a delegated token scope, so the app-only <c>/.default</c> fail-fast
+    ///     does not apply.
+    /// </remarks>
     AuthorizationCode = 3,
 }

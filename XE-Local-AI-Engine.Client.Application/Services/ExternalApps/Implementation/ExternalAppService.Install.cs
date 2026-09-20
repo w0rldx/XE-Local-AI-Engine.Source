@@ -7,22 +7,22 @@ using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
-/// <summary>
-///     Install: the seven admission steps that run on the caller's thread and the seven pipeline steps that run on
-///     the operation runner. The split is the contract — a caller holds the instance id and its version before the
-///     first image layer is pulled, and a browser that disconnects does not abort the install it started.
-/// </summary>
+/// <summary>Install: the seven admission steps that run on the caller's thread, and the seven pipeline steps that run on the operation runner.</summary>
+/// <remarks>
+///     The split is the contract: a caller holds the instance id and its version before the first image layer is
+///     pulled, and a browser that disconnects does not abort the install it started.
+/// </remarks>
 internal sealed partial class ExternalAppService
 {
     private const string GpuRequired = "required";
     private const int MaxDisplayNameLength = 128;
 
-    /// <summary>
-    ///     Admission's own wording for a bridge this node did not open, naming the same setting the planner's refusal
-    ///     names — the planner can add which service and which token failed, which admission has not looked at and must
-    ///     not invent. One copy, because install, update, the Start/Restart admission and the boot reconciler hand it
-    ///     to the same operator: a second copy would drift from this one without a gate noticing.
-    /// </summary>
+    /// <summary>Admission's own wording for a bridge this node did not open, naming the same setting the planner's refusal names.</summary>
+    /// <remarks>
+    ///     The planner can add which service and which token failed, which admission has not looked at and must not
+    ///     invent. One copy, because install, update, the Start/Restart admission and the boot reconciler hand it to
+    ///     the same operator: a second copy would drift from this one without a gate noticing.
+    /// </remarks>
     internal const string BridgeUnavailableDetail =
         "This application reads the node's container bridge, and this node did not open one. Turn it on with "
         + $"'{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' and an IPv4 host interface it can bind.";
@@ -68,9 +68,8 @@ internal sealed partial class ExternalAppService
         var admission = await EvaluateInstallAsync(services, manifest, cancellationToken);
         if (admission.BlockedReason is { } blocked && blocked != ExternalAppBlockedReason.AlreadyInstalled)
         {
-            // AlreadyInstalled is deliberately NOT refused here: the authoritative check is the one inside the
-            // application lock below, and answering from this unsynchronised read would be a race with a nicer
-            // message.
+            // AlreadyInstalled is deliberately NOT refused here: the authoritative check is inside the application
+            // lock below, and answering from this unsynchronised read would be a race with a nicer message.
             throw Refuse(blocked, admission);
         }
 
@@ -142,9 +141,8 @@ internal sealed partial class ExternalAppService
         {
             if (lease is not null)
             {
-                // The lease is still ours, so admission was REFUSED: the runner never took it. The gate minted a map
-                // entry for this freshly generated id, and no instance will ever carry it, so the entry is dropped
-                // from inside the critical section rather than left behind on every rejected install.
+                // The lease is still ours, so admission was REFUSED and the runner never took it. No instance will
+                // carry this freshly generated id, so its gate entry is dropped from inside the critical section.
                 _gate.Forget(ExternalAppInstanceGate.InstanceKey(instanceId));
             }
 
@@ -188,9 +186,8 @@ internal sealed partial class ExternalAppService
             {
                 permissions = granted
             }, ExternalAppJson.Options),
-            // The instance's container-bridge credential, minted here and only here. It is sealed at rest by the same
-            // interceptor that seals the variables, and its revocation is the row's deletion — there is no separate
-            // revoke step, because a token whose instance no longer exists names nothing the verifier can find.
+            // The instance's container-bridge credential, minted here and only here, sealed at rest by the same
+            // interceptor that seals the variables. Revocation IS the row's deletion: there is no separate step.
             ContainerBridgeToken.Mint(instanceId));
 
         var written = await store.CreateAsync(create, cancellationToken);
@@ -313,9 +310,8 @@ internal sealed partial class ExternalAppService
         IReadOnlyList<string> missingCapabilities,
         ExternalAppResourceVerdict resources)
     {
-        // Already-installed comes first because it is the one reason no change to the machine can clear: the page
-        // offers "Open", not "Install", and reporting a memory shortage beside it would be advice about a button
-        // that is not there.
+        // Already-installed comes first as the one reason no change to the machine can clear: the page offers
+        // "Open", not "Install", so a memory shortage beside it would be advice about a button that is not there.
         if (alreadyInstalled)
         {
             return ExternalAppBlockedReason.AlreadyInstalled;
@@ -336,9 +332,8 @@ internal sealed partial class ExternalAppService
             return ExternalAppBlockedReason.RuntimeIncompatible;
         }
 
-        // Ahead of the resource verdict, and for the same reason already-installed leads: no amount of free memory
-        // clears it. A manifest that reads a bridge built-in cannot be planned on a node that opened no bridge, so
-        // reporting a shortage beside it would be advice about the wrong thing.
+        // Ahead of the resource verdict, for the same reason already-installed leads: no amount of free memory clears
+        // it, since a manifest reading a bridge built-in cannot be planned on a node that opened no bridge.
         if (bridgeUnavailable)
         {
             return ExternalAppBlockedReason.BridgeUnavailable;
@@ -371,11 +366,11 @@ internal sealed partial class ExternalAppService
         return Refuse(reason, detail);
     }
 
-    /// <summary>
-    ///     The one composition of a refusal, shared with the lifecycle admission, which holds a detail but no install
-    ///     admission to report from. The reason NAME leads the message: the 400 body carries prose only, so the
-    ///     operator reads the category there rather than from a typed member no layer surfaces.
-    /// </summary>
+    /// <summary>The one composition of a refusal, shared with the lifecycle admission, which holds a detail but no install admission to report from.</summary>
+    /// <remarks>
+    ///     The reason NAME leads the message: the 400 body carries prose only, so the operator reads the category
+    ///     there rather than from a typed member no layer surfaces.
+    /// </remarks>
     private static ExternalAppValidationException Refuse(ExternalAppBlockedReason reason, string detail)
     {
         return new ExternalAppValidationException($"{reason}: {detail}");

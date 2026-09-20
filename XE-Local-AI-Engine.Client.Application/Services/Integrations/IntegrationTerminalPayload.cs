@@ -7,12 +7,12 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 /// <summary>
 ///     The terminal events' payloads: <c>execution.completed</c> is <c>{tokens?, durationMs}</c> and
 ///     <c>execution.failed</c> is <c>{category, summary}</c>, per the brief's envelope.
-///     <para>
-///         Built ONCE per terminal and used twice — the bytes persisted as the terminal row's detail and the element
-///         published on the stream event are the same JSON. A caller that misses the frame and replays from the poll
-///         route must not be handed a different envelope from the one the stream would have given it.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Built ONCE per terminal and used twice: the bytes persisted as the terminal row's detail and the element
+///     published on the stream event are the same JSON, because a caller that misses the frame and replays from the
+///     poll route must not be handed a different envelope from the one the stream would have given it.
+/// </remarks>
 internal static class IntegrationTerminalPayload
 {
     /// <summary>

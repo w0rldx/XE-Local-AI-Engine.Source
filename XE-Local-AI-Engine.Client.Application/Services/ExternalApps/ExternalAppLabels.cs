@@ -5,13 +5,13 @@ using System.Globalization;
 /// <summary>
 ///     The four labels every container and network this feature creates carries, and the only way anything is found
 ///     again.
-///     <para>
-///         Ownership is never inferred from the name <c>xe-app-&lt;instanceId:N&gt;</c>: a second installation
-///         pointed at the same daemon would generate the same names, and a teardown matching on one would remove
-///         another installation's containers. The owner label alone is not enough either — its value is a constant,
-///         so every installation carries it — which is why the install id is a label of its own.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Ownership is never inferred from the name <c>xe-app-&lt;instanceId:N&gt;</c>: a second installation pointed at
+///     the same daemon would generate the same names, and a teardown matching on one would remove another
+///     installation's containers. The owner label alone is not enough either — its value is a constant, so every
+///     installation carries it — which is why the install id is a label of its own.
+/// </remarks>
 internal static class ExternalAppLabels
 {
     /// <summary>Marks a container or network as belonging to this feature rather than to Development Mode.</summary>
@@ -31,13 +31,13 @@ internal static class ExternalAppLabels
 
     /// <summary>
     ///     Marks the short-lived engine-owned container that deletes an instance's volume contents.
-    ///     <para>
-    ///         It carries the instance's own three labels so a teardown, the boot pass's orphan sweep and an
-    ///         operator's own <c>docker ps</c> filter all account for it, and it carries no <see cref="Service" />
-    ///         label, so nothing that keys containers by service — reuse, the state observer, the reconciler — can
-    ///         ever mistake it for one of the application's own.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     It carries the instance's own three labels, so a teardown, the boot pass's orphan sweep and an operator's
+    ///     <c>docker ps</c> filter all account for it, and it carries no <see cref="Service" /> label, so nothing that
+    ///     keys containers by service — reuse, the state observer, the reconciler — can mistake it for one of the
+    ///     application's own.
+    /// </remarks>
     internal const string Helper = "com.xe-local-ai-engine.external-app.helper";
 
     /// <summary>The value <see cref="Helper" /> carries. One helper role exists.</summary>

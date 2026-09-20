@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
-/// <summary>
-///     The parsed arguments of a <c>spawn_subagent</c> tool call. Exactly one of <see cref="SubAgentKey" /> or
-///     <see cref="ModelId" /> identifies the sub-agent's model binding; <see cref="Task" /> seeds the inner agent's
-///     run; <see cref="Instructions" /> optionally overrides the inner agent's system prompt (when binding by
-///     <see cref="ModelId" /> directly rather than reusing a persisted definition's prompt).
-/// </summary>
+/// <summary>The parsed arguments of a <c>spawn_subagent</c> tool call.</summary>
+/// <remarks>
+///     Exactly one of <see cref="SubAgentKey" /> or <see cref="ModelId" /> identifies the sub-agent's model binding, <see cref="Task" /> seeds
+///     the inner agent's run, and <see cref="Instructions" /> optionally overrides its system prompt — which applies when binding by
+///     <see cref="ModelId" /> directly rather than reusing a persisted definition's prompt.
+/// </remarks>
 public sealed record SubAgentSpawnRequest
 {
     /// <summary>The persisted agent definition to spawn (its <c>Id</c> as a GUID string, or its <c>Name</c>); mutually exclusive with <see cref="ModelId" />.</summary>

@@ -25,11 +25,13 @@ internal enum LoopbackCallbackOutcome
 
 /// <summary>
 ///     One-shot result of <see cref="LoopbackAuthorizationCodeListener.WaitForCallbackAsync" />. Never carries a raw
-///     query string — only the specific fields the caller needs, and AAD's error text is truncated to a single line
-///     before it is ever logged (RFC 6749 §4.1.2.1 error/error_description are operator-facing diagnostics, not
-///     attacker-controlled HTML, but the callback page itself never reflects them regardless — see
-///     <see cref="LoopbackAuthorizationCodeListener" /> remarks).
+///     query string, only the specific fields the caller needs.
 /// </summary>
+/// <remarks>
+///     AAD's error text (RFC 6749 §4.1.2.1 <c>error</c> / <c>error_description</c>) is truncated to a single line
+///     before it is ever logged; those are operator-facing diagnostics, not attacker-controlled HTML, and the
+///     callback page never reflects them regardless — see <see cref="LoopbackAuthorizationCodeListener" />.
+/// </remarks>
 internal sealed class LoopbackCallbackResult
 {
     public required LoopbackCallbackOutcome Outcome { get; init; }
@@ -57,12 +59,14 @@ internal sealed class LoopbackCallbackResult
 
 /// <summary>
 ///     A one-shot loopback-only HTTP listener for the AAD authorization-code redirect callback (RFC 8252 §7.3: a
-///     native app's redirect URI must be a loopback interface). Bound only when a sign-in starts and stopped
-///     immediately after the single callback or a timeout — never left listening between sign-ins. The response page
-///     is a FIXED static string; it never reflects any query-parameter content back into the response (an attacker
-///     who can make the operator's browser hit this loopback port with a crafted query string must not be able to
-///     inject markup/script into the page it returns).
+///     native app's redirect URI must be a loopback interface).
 /// </summary>
+/// <remarks>
+///     Bound only when a sign-in starts and stopped immediately after the single callback or a timeout — never left
+///     listening between sign-ins. The response page is a FIXED static string and never reflects any query-parameter
+///     content back: an attacker who can make the operator's browser hit this loopback port with a crafted query
+///     string must not be able to inject markup or script into the page it returns.
+/// </remarks>
 internal sealed class LoopbackAuthorizationCodeListener : IDisposable
 {
     private const string CallbackPageHtml =
@@ -97,9 +101,8 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
         return new LoopbackAuthorizationCodeListener(listener);
     }
 
-    // HttpListener requires a root-path ("/") prefix ending in "/" — that trailing slash is the listener's URI
-    // shape requirement, not a filesystem path, so the analyzer's hardcoded-path-delimiter flag (S1075) is a false
-    // positive here (mirrors FakeOllamaServer's loopback-bind suppression).
+    // HttpListener requires a root-path prefix ending in "/" — the listener's URI shape requirement, not a filesystem
+    // path, so S1075's hardcoded-path-delimiter flag is a false positive (mirrors FakeOllamaServer's loopback-bind suppression).
     [SuppressMessage("Major Code Smell", "S1075:URIs should not be hardcoded",
         Justification = "The trailing '/' is HttpListener's required prefix shape, not a filesystem or network path.")]
     private static string BuildListenerPrefix(Uri redirectUri)
@@ -109,9 +112,12 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
 
     /// <summary>
     ///     Waits for the single redirect callback, validates <paramref name="expectedState" />, and always writes the
-    ///     fixed static response page before returning (so the operator's browser tab shows completion regardless of
-    ///     outcome). Never throws on a malformed/missing/mismatched callback — those map to a non-success outcome.
+    ///     fixed static response page before returning.
     /// </summary>
+    /// <remarks>
+    ///     The page is written whatever the outcome, so the operator's browser tab shows completion. Never throws on a
+    ///     malformed, missing or mismatched callback — those map to a non-success outcome.
+    /// </remarks>
     public async Task<LoopbackCallbackResult> WaitForCallbackAsync(string expectedState, TimeSpan timeout, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedState);
@@ -119,10 +125,8 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(timeout);
 
-        // HttpListener.GetContextAsync() has no cancellation overload, so a timeout/cancellation abandons the
-        // pending task rather than cancelling it — it completes later (with a context, or faults once Stop()/
-        // Dispose() runs) with nobody left awaiting it. The continuation below observes that eventual outcome so it
-        // never surfaces as an unobserved-task-exception, without blocking this method's own return.
+        // HttpListener.GetContextAsync has no cancellation overload, so a timeout abandons the pending task rather than
+        // cancelling it; the continuation observes its eventual outcome (context, or a fault once Stop/Dispose runs) so it is never unobserved, and does not block this return.
         var pendingContext = _listener.GetContextAsync();
         _ = pendingContext.ContinueWith(static task => _ = task.Exception,
             CancellationToken.None,
@@ -175,9 +179,8 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
         }
     }
 
-    // Truncates and strips line breaks from an AAD-supplied error/error_description query value before it is ever
-    // logged, so a crafted redirect (an operator pasting a malicious authorize URL, or a compromised gateway) cannot
-    // inject multi-line or oversized content into the server log.
+    // Truncates and strips line breaks from an AAD-supplied error value before it is ever logged, so a crafted redirect
+    // (an operator pasting a malicious authorize URL, or a compromised gateway) cannot inject multi-line or oversized content into the server log.
     private static string? SanitizeSingleLine(string? value)
     {
         if (string.IsNullOrEmpty(value))

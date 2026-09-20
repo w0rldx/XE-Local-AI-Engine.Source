@@ -304,10 +304,8 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         ValidateHeaders(connection, nameof(config));
     }
 
-    // Entra ID requires a tenant, client id, and token scope regardless of sign-in shape — the client secret is
-    // optional, and its absence selects
-    // interactive user sign-in. Defense-in-depth against an
-    // out-of-range sign-in-method value slipping in via a partial or hand-edited JSON blob.
+    // Entra ID requires a tenant, client id and token scope regardless of sign-in shape; the client secret is optional and
+    // its absence selects interactive user sign-in. Defense-in-depth against an out-of-range sign-in-method value slipping in via a hand-edited JSON blob.
     private static void ValidateEntraId(StoredAzureFoundryConnection connection, string paramName)
     {
         if (string.IsNullOrWhiteSpace(connection.EntraTenantId)
@@ -328,9 +326,8 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         }
     }
 
-    // Authorization-code sign-in redeems the code with the stored client secret (confidential client), so a secret
-    // is required — unlike the other interactive sign-in methods. The redirect URI, when the operator overrides the
-    // default, must stay a loopback URI: the one-shot callback listener only ever binds to localhost/127.0.0.1.
+    // Authorization-code sign-in redeems the code with the stored client secret (confidential client), so a secret is
+    // required, unlike the other interactive methods. An operator-overridden redirect URI must stay loopback: the one-shot callback listener only binds localhost/127.0.0.1.
     private static void ValidateAuthorizationCode(StoredAzureFoundryConnection connection, string paramName)
     {
         if (string.IsNullOrWhiteSpace(connection.EntraClientSecret))
@@ -405,19 +402,14 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
 
     /// <summary>
     ///     Writes the protected blob, creating the file 0600 on *nix in the same syscall that creates it.
-    ///     <para>
-    ///         <c>File.WriteAllBytesAsync</c> creates at the process umask — 0644 on a default Linux/macOS box — and
-    ///         <see cref="SecureFilePermissions.Apply" /> then narrows it, leaving a window in which any other local user
-    ///         can read the file. Passing <see cref="FileStreamOptions.UnixCreateMode" /> closes the window by making
-    ///         the mode part of the create. This mirrors <c>DesktopBootstrap.TryCreateNewSecretFile</c>, which already
-    ///         does exactly this for <c>node.key</c>.
-    ///     </para>
-    ///     <para>
-    ///         <c>UnixCreateMode</c> applies only when the file is created, so <see cref="SecureFilePermissions.Apply" />
-    ///         still runs afterwards: it narrows a file left behind at 0644 by an older build, and it is the only thing
-    ///         that applies the Windows ACL.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <c>File.WriteAllBytesAsync</c> creates at the process umask — 0644 on a default Linux/macOS box — and <see cref="SecureFilePermissions.Apply" />
+    ///     then narrows it, leaving a window where another local user can read it; <see cref="FileStreamOptions.UnixCreateMode" /> closes that window by
+    ///     making the mode part of the create, as <c>DesktopBootstrap.TryCreateNewSecretFile</c> already does for <c>node.key</c>.
+    ///     <c>UnixCreateMode</c> applies only on create, so <see cref="SecureFilePermissions.Apply" /> still runs afterwards: it narrows a file left at 0644
+    ///     by an older build, and is the only thing that applies the Windows ACL.
+    /// </remarks>
     private async Task WriteProtectedPayloadAsync(byte[] protectedPayload, CancellationToken cancellationToken)
     {
         var options = new FileStreamOptions

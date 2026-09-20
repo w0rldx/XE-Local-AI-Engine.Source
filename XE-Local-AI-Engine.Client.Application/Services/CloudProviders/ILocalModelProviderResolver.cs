@@ -4,15 +4,14 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Routes a model to the local runtime that serves it. Two lookups compose the route:
-///     <c>ModelName → ProviderName</c> over the persisted per-model→provider map (with a configured default for
-///     unmapped models), then <c>ProviderName → <see cref="ILocalModelProvider" /></c> over the registered
-///     provider set (llama-server + the optional Ollama provider).
+///     Routes a model to the local runtime that serves it.
 /// </summary>
 /// <remarks>
-///     Singleton-safe: the provider set is captured once, and the per-model map is read through a fresh scope on each
-///     call so the singleton model-routing client / preview resolver can consume this without a scope-lifetime
-///     mismatch. Provider keys are matched case-insensitively.
+///     Two lookups compose the route: <c>ModelName → ProviderName</c> over the persisted per-model→provider map (with
+///     a configured default for unmapped models), then <c>ProviderName → <see cref="ILocalModelProvider" /></c> over
+///     the registered provider set (llama-server plus the optional Ollama provider). Singleton-safe: the provider set
+///     is captured once and the per-model map is read through a fresh scope on each call, so the singleton
+///     model-routing client / preview resolver hits no scope-lifetime mismatch. Provider keys match case-insensitively.
 /// </remarks>
 public interface ILocalModelProviderResolver
 {
@@ -23,11 +22,13 @@ public interface ILocalModelProviderResolver
     int MaxLoadedProcesses { get; }
 
     /// <summary>
-    ///     The provider that unmapped models route to (the configured default — <c>ollama</c> by configuration). Consumers that
-    ///     operate provider-wide rather than per-model (for example a node health/inventory snapshot) resolve through
-    ///     this so they keep a single, deterministic default provider under the multi-provider registration instead of
-    ///     binding to whichever <see cref="ILocalModelProvider" /> happened to be registered last.
+    ///     The provider that unmapped models route to (the configured default — <c>ollama</c> by configuration).
     /// </summary>
+    /// <remarks>
+    ///     Consumers that operate provider-wide rather than per-model (a node health/inventory snapshot) resolve
+    ///     through this, so they keep a single deterministic default provider under the multi-provider registration
+    ///     instead of binding to whichever <see cref="ILocalModelProvider" /> happened to be registered last.
+    /// </remarks>
     ILocalModelProvider DefaultProvider { get; }
 
     /// <summary>
@@ -59,10 +60,13 @@ public interface ILocalModelProviderResolver
     Task<ILocalModelProvider> ResolveProviderForModelAsync(string modelName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Drops the short-TTL <c>ModelName → ProviderName</c> cache the resolver keeps. Callers that mutate the
-    ///     persisted per-model→provider map (a GGUF download mapping to <c>llamacpp</c>, the Ollama backfill mapping to
-    ///     <c>ollama</c>) invoke this after a successful write so a subsequent lookup observes the new row immediately
-    ///     rather than after the TTL. Cheap and idempotent; a no-op when nothing is cached.
+    ///     Drops the short-TTL <c>ModelName → ProviderName</c> cache the resolver keeps.
     /// </summary>
+    /// <remarks>
+    ///     Callers that mutate the persisted per-model→provider map (a GGUF download mapping to <c>llamacpp</c>, the
+    ///     Ollama backfill mapping to <c>ollama</c>) invoke this after a successful write, so a subsequent lookup
+    ///     observes the new row immediately rather than after the TTL. Cheap and idempotent; a no-op when nothing is
+    ///     cached.
+    /// </remarks>
     void InvalidateModelProviderMap();
 }

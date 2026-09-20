@@ -96,6 +96,15 @@ resolves it until the External Apps service does.
 or the `Bundled` seed embedded in the application assembly. `ExternalAppCatalogValidator` runs on every one of them;
 a document that fails any rule is rejected whole and the previous snapshot stands.
 
+The provider is a singleton serving one in-memory snapshot, and every refresh — TTL-triggered or forced — is
+serialized through one gate, so concurrent readers never stampede the fetch. A failed fetch or validation **keeps an
+already-effective remote or last-good snapshot unchanged**: a transient failure must never regress a working catalog.
+Only when there is no such snapshot does it fall back to the persisted last-good copy, and then to the bundled seed.
+A successful fetch replaces the in-memory snapshot **and** persists the raw JSON, so a restart with the network down
+still serves the last-good remote catalog rather than regressing to a possibly much older seed. The whole path is
+fail-closed: the served snapshot has always passed the validator, and no failure surfaces to the caller as an
+exception — `ExternalAppCatalogSnapshot.LastRefreshFailure` carries the reason instead.
+
 **`Services/ExternalApps/` — the application runtime.** `IExternalAppService` is the contract the endpoints call.
 `ExternalAppOperationRunner` runs every mutating operation in its own DI scope, linked to `ApplicationStopping`, one
 operation per instance at a time (`ExternalAppInstanceGate`). `DeploymentPlanner` turns a manifest plus stored
@@ -135,7 +144,10 @@ environment, `CapAdd`, `ReadOnlyRootFilesystem`, `Ports`, `Storage`, `Files`, `H
 - **The fingerprint binds acceptance.** `ExternalAppManifestFingerprint.Compute` is the lowercase-hex SHA-256 of the
   manifest's canonical JSON form — web naming, compact, nulls written, `manifestSha256` removed, every object's
   properties sorted ordinal at every level, arrays in order, UTF-8 without BOM or trailing newline. The canonical
-  form is fixed because two languages compute it: this type and the Python converter. Install and update echo the
+  form is fixed because two languages compute it: this type and the Python converter. On the C# side that is
+  `JsonSerializerDefaults.Web` with `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`; the converter produces the same
+  bytes with `json.dumps(manifest_without_hash, sort_keys=True, separators=(",", ":"), ensure_ascii=False)`. Install
+  and update echo the
   `(manifestVersion, manifestSha256)` pair the operator was shown, so a catalog that changed underneath is a 409
   rather than an install of something nobody read.
 
@@ -279,10 +291,25 @@ verdict per row:
 Two things it deliberately does not do: it never touches an instance a live operation holds, and it writes nothing
 at all when no runtime is ready — rewriting every row to `Failed` would destroy the evidence the next pass needs.
 
+**The gate does not queue.** `ExternalAppInstanceGate` holds one mutual-exclusion gate per instance from the moment
+an operation is admitted until its background work has settled the row. Entering it never queues: a second command
+on a busy instance is answered "an operation is already in flight" rather than held open, because a browser waiting
+thirty minutes on a blocked pull learns nothing it could act on, and the status the first operation is writing is the
+answer it wanted. Two key shapes share one map — the **instance** key, which every lifecycle operation takes and
+which the reconciler and the observer probe before touching a row, and the **application** key, which install holds
+around the one-per-application read and the insert. Install takes **both**: the application key alone would guard an
+installing instance with a key nothing else reads. An uninstalled instance's entry is dropped from inside the
+critical section, and dropped rather than disposed, so a caller still holding the old semaphore finds no row on its
+own checks and answers 404.
+
 **The observer.** `ExternalAppStateObserver` polls every `ExternalApps:ObserverIntervalSeconds` (default 15), one
 scope and one detailed list call per tick, and moves a running instance whose container is missing or listed
-non-running to `StoppedUnexpectedly`. It starts, creates and removes nothing, and skips any instance with a live
-operation. The detailed listing is load-bearing: `docker stop` leaves the container *listed*, so an id-only poll
+non-running to `StoppedUnexpectedly`. It exists because reconciliation runs at boot and on an explicit refresh only
+while every instance read is served from the database, so without it a `docker stop`, an out-of-memory kill or a
+crash would leave the interface reporting the application as running indefinitely. It starts, creates and removes
+nothing — that is what keeps it a cheap observer rather than a second, unsupervised reconciler — and it skips any
+instance with a live operation **or a held gate**, so a lifecycle operation finishing in the same instant is never
+overwritten. The detailed listing is load-bearing: `docker stop` leaves the container *listed*, so an id-only poll
 would see no change.
 
 **Applications keep serving while XE is not running.** Stopping the engine does not stop the containers; they are
@@ -388,7 +415,9 @@ overwrite.
 
 **Why an engine-owned helper container deletes the contents.** An application's in-container user is not the engine.
 Under a rootless daemon a service that creates `0700` directories as, say, uid 977 leaves them owned by a host uid
-inside the operator's subuid range — a uid the engine can neither traverse nor unlink. Reset and uninstall therefore
+inside the operator's subuid range, and by that uid outright under a rootful one — a uid the engine can neither
+traverse nor unlink. The install-time write probe never catches this, because it writes as the container's *initial*
+user, which is root. Reset and uninstall therefore
 run a short-lived helper: the digest-pinned `ExternalApps:StorageHelperImage` (BusyBox by default, and the validator
 refuses anything not pinned with `@sha256:`), named `xe-app-<instanceId:N>-storage-helper`, carrying the instance's
 three labels plus `…external-app.helper=storage-wipe` and **no service label**, so nothing that keys containers by

@@ -1,12 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Coder;
 
-/// <summary>
-///     Worker-side caps for the read-only coder tools (section <c>Coder</c>). These bound every coder read so a single
-///     tool call can never exhaust memory, hang, or flood the model context: the per-command timeout and output caps
-///     mirror the AgentHome command posture, and the byte/line caps enforce the read-safety controls. The
-///     coder tools are themselves gated by <c>AgentHome:Enabled</c> (they share the AgentHome sandbox), so this section
-///     carries no enable flag of its own.
-/// </summary>
+/// <summary>Worker-side caps for the read-only coder tools (configuration section <c>Coder</c>).</summary>
+/// <remarks>
+///     They bound every coder read so a single tool call can never exhaust memory, hang or flood the model context: the per-command timeout
+///     and output caps mirror the AgentHome command posture, and the byte and line caps enforce the read-safety controls. The coder tools are
+///     themselves gated by <c>AgentHome:Enabled</c>, because they share the AgentHome sandbox, so this section carries no enable flag.
+/// </remarks>
 public sealed class CoderOptions
 {
     public const string SectionName = "Coder";
@@ -30,10 +29,13 @@ public sealed class CoderOptions
     public int DefaultReadLineCap { get; set; } = 2000;
 
     /// <summary>
-    ///     Hard byte cap on what a single <c>search_text</c> call returns, on top of
-    ///     <see cref="MaxSearchMatches" />. Both are needed: a match count alone does not bound the output of a file
-    ///     whose lines are enormous, and a generated or minified file routinely is. Defaults to 262144 (256 KiB).
+    ///     Hard byte cap on what a single <c>search_text</c> call returns, on top of <see cref="MaxSearchMatches" />. Defaults to 262144
+    ///     (256 KiB).
     /// </summary>
+    /// <remarks>
+    ///     Both are needed: a match count alone does not bound the output of a file whose lines are enormous, and a generated or minified file
+    ///     routinely is.
+    /// </remarks>
     public int MaxSearchOutputBytes { get; set; } = 256 * 1024;
 
     /// <summary>Per-call timeout for the list/search workspace surveys. Defaults to 30 seconds.</summary>

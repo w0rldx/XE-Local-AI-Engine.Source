@@ -4,28 +4,27 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-/// <summary>
-///     Binds the model-supplied arguments to a tool's declared parameters and substitutes them into templates.
-///     <para>
-///         Two invariants make substitution injection-proof: a placeholder always expands into exactly ONE value (one
-///         argv element, or one URL path-segment/query-value — never a shell string, never whitespace-split), and every
-///         <c>{token}</c> in a template must name a declared parameter that the model actually supplied. An undeclared
-///         placeholder, a missing value, or a value whose JSON kind does not match the declared type is a fail-closed
-///         rejection, not a best-effort substitution.
-///     </para>
-/// </summary>
+/// <summary>Binds the model-supplied arguments to a tool's declared parameters and substitutes them into templates.</summary>
+/// <remarks>
+///     Two invariants make substitution injection-proof. A placeholder always expands into exactly ONE value — one argv element, or one URL
+///     path segment or query value, never a shell string and never whitespace-split. And every <c>{token}</c> in a template must name a
+///     declared parameter the model actually supplied: an undeclared placeholder, a missing value, or a value whose JSON kind does not match
+///     the declared type is a fail-closed rejection, not a best-effort substitution.
+/// </remarks>
 internal static partial class CustomToolTemplate
 {
     [GeneratedRegex(@"\{(?<name>[A-Za-z0-9_]+)\}", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
     private static partial Regex PlaceholderRegex();
 
     /// <summary>
-    ///     Parses <paramref name="jsonArguments" /> and, for every declared parameter it carries, enforces the declared
-    ///     <c>type</c> (a <c>number</c>/<c>integer</c> must be a JSON number, a <c>boolean</c> a JSON bool) and yields
-    ///     its culture-invariant string form. A required parameter that is absent is a rejection; an optional absent one
-    ///     is simply omitted (a template that references it will then fail closed). Arguments not matching any declared
-    ///     parameter are ignored (the arg-repair wrapper already rejects unknown keys upstream).
+    ///     Parses <paramref name="jsonArguments" /> and, for every declared parameter it carries, enforces the declared <c>type</c> and yields
+    ///     its culture-invariant string form.
     /// </summary>
+    /// <remarks>
+    ///     A <c>number</c> or <c>integer</c> must arrive as a JSON number and a <c>boolean</c> as a JSON bool. An absent required parameter is
+    ///     a rejection; an absent optional one is simply omitted, and a template referencing it then fails closed. Arguments matching no
+    ///     declared parameter are ignored, because the arg-repair wrapper already rejects unknown keys upstream.
+    /// </remarks>
     public static IReadOnlyDictionary<string, string> BindAndEnforce(string jsonArguments, IReadOnlyList<CustomToolParameter> declared)
     {
         ArgumentNullException.ThrowIfNull(declared);
@@ -72,11 +71,13 @@ internal static partial class CustomToolTemplate
     }
 
     /// <summary>
-    ///     Substitutes <paramref name="boundValues" /> into <paramref name="template" />, treating the whole result as a
-    ///     single value. <paramref name="encode" /> is applied to each substituted value (URL-encoding for URL positions
-    ///     so a value can never break out of a path segment or query value; identity for argv/body positions). Every
-    ///     <c>{token}</c> must name a member of <paramref name="declaredNames" /> that has a bound value.
+    ///     Substitutes <paramref name="boundValues" /> into <paramref name="template" />, treating the whole result as a single value.
     /// </summary>
+    /// <remarks>
+    ///     <paramref name="encode" /> is applied to each substituted value: URL-encoding for URL positions, so a value can never break out of a
+    ///     path segment or query value, and identity for argv and body positions. Every <c>{token}</c> must name a member of
+    ///     <paramref name="declaredNames" /> that has a bound value.
+    /// </remarks>
     public static string Substitute(string template,
         IReadOnlyDictionary<string, string> boundValues,
         IReadOnlySet<string> declaredNames,

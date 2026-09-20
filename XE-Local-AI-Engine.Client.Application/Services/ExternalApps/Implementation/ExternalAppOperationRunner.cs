@@ -15,23 +15,14 @@ public enum ExternalAppOperationKind
     Uninstall = 6
 }
 
-/// <summary>
-///     Owns the background half of every mutating operation: one entry per instance, each with its own cancellation
-///     source and its own dependency-injection scope.
-///     <para>
-///         The scope is the point. This is a singleton and the instance store holds a scoped database context, so a
-///         pipeline that used the admitting request's services would be writing through a context the browser can
-///         dispose by navigating away. Each operation therefore opens <c>CreateAsyncScope</c> and resolves everything
-///         it needs from there; nothing from the request crosses the boundary, the request's own cancellation token
-///         included.
-///     </para>
-///     <para>
-///         Each source is linked to <see cref="IHostApplicationLifetime.ApplicationStopping" />, so a graceful
-///         shutdown cancels every in-flight pipeline. It does NOT touch containers: applications keep serving while
-///         the engine is down, and the row is deliberately left in its transient status because that row is the only
-///         durable record the boot reconciler has of what was interrupted.
-///     </para>
-/// </summary>
+/// <summary>Owns the background half of every mutating operation: one entry per instance, each with its own cancellation source and its own dependency-injection scope.</summary>
+/// <remarks>
+///     The scope is the point: this is a singleton and the instance store holds a scoped database context, so a
+///     pipeline using the admitting request's services would write through a context the browser can dispose by
+///     navigating away. Each operation opens <c>CreateAsyncScope</c> and resolves from there; nothing from the
+///     request crosses the boundary, its cancellation token included. Each source is linked to
+///     <see cref="IHostApplicationLifetime.ApplicationStopping" />, so a graceful shutdown cancels every pipeline.
+/// </remarks>
 internal sealed class ExternalAppOperationRunner
 {
     private readonly ConcurrentDictionary<Guid, RunningOperation> _entries = new();
@@ -48,11 +39,12 @@ internal sealed class ExternalAppOperationRunner
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>
-    ///     Whether the host is shutting down. A pipeline cancelled by THAT must leave its row transient and touch no
-    ///     container — applications keep serving while the engine is down, and the transient row is the only durable
-    ///     record the boot reconciler has of what was interrupted. A user's cancel is the opposite decision.
-    /// </summary>
+    /// <summary>Whether the host is shutting down; a user's cancel is the opposite decision.</summary>
+    /// <remarks>
+    ///     A pipeline cancelled by THIS must leave its row transient and touch no container: applications keep
+    ///     serving while the engine is down, and the transient row is the only durable record the boot reconciler
+    ///     has of what was interrupted.
+    /// </remarks>
     public bool IsShuttingDown => _lifetime.ApplicationStopping.IsCancellationRequested;
 
     /// <summary>Whether an operation currently holds this instance. Read by the reconciler and the observer.</summary>
@@ -61,16 +53,12 @@ internal sealed class ExternalAppOperationRunner
         return _entries.ContainsKey(instanceId);
     }
 
-    /// <summary>
-    ///     Starts <paramref name="pipeline" /> on its own scope, reporting the task it runs on. Returns
-    ///     <see langword="false" /> when this instance already has an entry.
-    ///     <para>
-    ///         Ownership of <paramref name="gateLease" /> transfers on a successful start: it is released in the
-    ///         pipeline's <c>finally</c>, which is what keeps a second command answering "in flight" for exactly as
-    ///         long as the work runs. A losing call disposes neither the lease nor anything else — its caller still
-    ///         owns both.
-    ///     </para>
-    /// </summary>
+    /// <summary>Starts <paramref name="pipeline" /> on its own scope, reporting the task it runs on; <see langword="false" /> when this instance already has an entry.</summary>
+    /// <remarks>
+    ///     Ownership of <paramref name="gateLease" /> transfers on a successful start: it is released in the
+    ///     pipeline's <c>finally</c>, which is what keeps a second command answering "in flight" for exactly as long
+    ///     as the work runs. A losing call disposes neither the lease nor anything else — its caller still owns both.
+    /// </remarks>
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "A successful start transfers the CancellationTokenSource to the pipeline's finally; a losing one disposes it here.")]
     public bool TryStart(Guid instanceId,
@@ -110,9 +98,8 @@ internal sealed class ExternalAppOperationRunner
 
         try
         {
-            // Forced sync: CancellationTokenSource.CancelAsync runs registered callbacks on the thread pool and
-            // surfaces a failing callback as the first inner exception rather than the AggregateException the
-            // catch below is written against, so switching would change this path's error and ordering contract.
+            // Forced sync: CancellationTokenSource.CancelAsync runs callbacks on the thread pool and surfaces a failing
+            // one as the first inner exception, not the AggregateException the catch below is written against.
 #pragma warning disable MA0045 // forced sync: synchronous cancellation contract (see comment above)
             entry.Source.Cancel();
 #pragma warning restore MA0045

@@ -4,20 +4,14 @@ using System.Buffers.Text;
 using System.Globalization;
 using System.Security.Cryptography;
 
-/// <summary>
-///     The shape of a bridge token: <c>&lt;instance id, "N" format&gt;.&lt;base64url of 32 CSPRNG bytes&gt;</c>.
-///     <para>
-///         The instance id travels in the clear, in front, so verification is a keyed row read rather than a scan of
-///         every installed application's secret. That is not a weakening: the id is not the credential, the 256 bits
-///         behind the separator are, and a scan would make verification cost grow with the number of installs while
-///         comparing the presented secret against rows it was never meant for.
-///     </para>
-///     <para>
-///         Base64url: no padding and no <c>+</c>, <c>/</c> or <c>=</c>, so the token survives an environment variable,
-///         a container's own config file and an HTTP header untouched — all three are on the path between this node
-///         and the application it is issued to.
-///     </para>
-/// </summary>
+/// <summary>The shape of a bridge token: <c>&lt;instance id, "N" format&gt;.&lt;base64url of 32 CSPRNG bytes&gt;</c>.</summary>
+/// <remarks>
+///     The instance id travels in the clear, in front, so verification is a keyed row read rather than a scan of
+///     every installed application's secret. That is not a weakening: the id is not the credential, the 256 bits
+///     behind the separator are, and a scan would compare the presented secret against rows it was never meant for.
+///     Base64url — no padding, no <c>+</c>, <c>/</c> or <c>=</c> — so the token survives an environment variable, a
+///     container's own config file and an HTTP header untouched; all three are on the path to the application.
+/// </remarks>
 public static class ContainerBridgeToken
 {
     /// <summary>Splits the instance id from the secret. A character base64url never produces, so the split is unambiguous.</summary>

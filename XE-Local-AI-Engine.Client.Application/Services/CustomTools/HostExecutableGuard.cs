@@ -4,21 +4,14 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 
-/// <summary>
-///     Execution-time validation of a command tool's executable, run every time the tool fires — not just at
-///     author time — because a path that was a regular file when the operator saved it can be swapped for a symlink
-///     later. The executable must be an absolute path (never a PATH/CWD lookup — Windows searches the CWD), must not be
-///     a shell/interpreter, and must be a real regular file. On Linux the regular-file check uses <c>statx</c> with
-///     <c>AT_SYMLINK_NOFOLLOW</c> so a symlinked executable is rejected rather than followed — the same libc-import
-///     posture as the sandbox provider's no-follow guards (a raw <c>FileOptions</c> cast for the flag throws).
-///     <para>
-///         This statx check and the later <see cref="Process.Start()" /> re-resolve the same path string as two
-///         separate syscalls, so a small TOCTOU window remains: a leaf swapped for a symlink after this check but before
-///         <c>execve</c> would still be followed. Eliminating the window requires
-///         <c>open(O_NOFOLLOW|O_PATH)+fstat+fexecve</c> so validation and execution use the same open file description.
-///         The operator authors a fixed absolute path, which keeps the residual risk low but non-zero.
-///     </para>
-/// </summary>
+/// <summary>Execution-time validation of a command tool's executable, re-run every time the tool fires, not only at author time.</summary>
+/// <remarks>
+///     A saved path can be swapped for a symlink later, so the executable must be an absolute path (never a PATH or CWD lookup — Windows
+///     searches the CWD), must not be a shell or interpreter, and must be a real regular file; on Linux that last check uses <c>statx</c> with
+///     <c>AT_SYMLINK_NOFOLLOW</c>, the same libc-import posture as the sandbox provider's no-follow guards, because a raw <c>FileOptions</c>
+///     cast for the flag throws. The residual check-to-<c>execve</c> TOCTOU window is in
+///     <c>docs/wiki/12-security-and-privacy.md</c> ("Custom Tools: operator-authored execution boundary").
+/// </remarks>
 internal static class HostExecutableGuard
 {
     // statx(2). AT_FDCWD resolves an absolute path; AT_SYMLINK_NOFOLLOW makes the stat describe the leaf link itself

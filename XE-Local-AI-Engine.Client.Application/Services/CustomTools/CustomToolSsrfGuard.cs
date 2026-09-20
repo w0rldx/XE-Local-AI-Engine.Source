@@ -3,31 +3,20 @@ namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 using System.Net;
 using System.Net.Sockets;
 
-/// <summary>
-///     The SSRF containment for <c>HttpFetch</c> tools has two layers:
-///     <list type="bullet">
-///         <item>
-///             <see cref="ValidateRequestUrl" /> runs on the FINAL assembled URL before the request is built: scheme
-///             allow-list, no userinfo, no numeric/encoded host literal, and — when the template host is parameterized —
-///             a mandatory <c>allowedHosts</c> membership check. It rejects a literal IP that falls in any private,
-///             loopback, link-local, CGNAT, metadata, or reserved range.
-///         </item>
-///         <item>
-///             <see cref="CreatePinnedConnectCallback" /> is installed on the fetch handler's
-///             <see cref="SocketsHttpHandler" />: it resolves the host, validates EVERY resolved address, and connects
-///             the socket to a validated address itself. Because the address it validates is the address it dials, there
-///             is no re-resolve gap a DNS-rebind could exploit, so the TOCTOU window is closed. The original
-///             host stays the connection's Host header + TLS SNI (the handler layers TLS over the returned stream).
-///         </item>
-///     </list>
-/// </summary>
+/// <summary>The SSRF containment for <c>HttpFetch</c> tools, in two layers: URL validation and a pinned connect callback.</summary>
+/// <remarks>
+///     <see cref="ValidateRequestUrl" /> runs on the FINAL assembled URL: scheme allow-list, no userinfo, no numeric or encoded host literal,
+///     a mandatory <c>allowedHosts</c> check when the template host is parameterized, and rejection of a literal IP in any denied range.
+///     <see cref="CreatePinnedConnectCallback" />, on the fetch handler's <see cref="SocketsHttpHandler" />, validates EVERY resolved address
+///     and dials a validated one itself, so a DNS rebind has no re-resolve gap; the original host stays Host header and TLS SNI.
+/// </remarks>
 internal static class CustomToolSsrfGuard
 {
-    /// <summary>
-    ///     Validates the final assembled request URL. Throws <see cref="CustomToolExecutionException" /> on any violation.
-    ///     DNS resolution is deliberately NOT done here — it happens in the pinned connect callback so the validated
-    ///     address is the dialed address; this method covers everything decidable from the URL alone.
-    /// </summary>
+    /// <summary>Validates the final assembled request URL, throwing <see cref="CustomToolExecutionException" /> on any violation.</summary>
+    /// <remarks>
+    ///     DNS resolution is deliberately NOT done here — it happens in the pinned connect callback, so the validated address is the dialed
+    ///     address; this method covers everything decidable from the URL alone.
+    /// </remarks>
     public static void ValidateRequestUrl(Uri url, IReadOnlyList<string> allowedHosts, bool hostIsParameterized)
     {
         ArgumentNullException.ThrowIfNull(url);
@@ -136,14 +125,13 @@ internal static class CustomToolSsrfGuard
         };
     }
 
-    /// <summary>
-    ///     True when <paramref name="address" /> falls in any range a custom-tool fetch must never reach: loopback,
-    ///     RFC 1918 private, link-local (incl. the 169.254.169.254 cloud-metadata address), CGNAT, IETF-reserved,
-    ///     broadcast/multicast, and the IPv6 equivalents (ULA, link-local, site-local, multicast, NAT64, unspecified).
-    ///     IPv4-mapped IPv6 addresses are unwrapped and re-tested as IPv4, and so is the deprecated IPv4-compatible form
-    ///     (<c>::a.b.c.d</c>, e.g. <c>::169.254.169.254</c>) — otherwise it would sail past every IPv4 check below and
-    ///     reach the metadata/loopback range it embeds.
-    /// </summary>
+    /// <summary>True when <paramref name="address" /> falls in any range a custom-tool fetch must never reach.</summary>
+    /// <remarks>
+    ///     Loopback, RFC 1918 private, link-local (including the 169.254.169.254 cloud-metadata address), CGNAT, IETF-reserved, broadcast and
+    ///     multicast, plus the IPv6 equivalents (ULA, link-local, site-local, multicast, NAT64, unspecified). IPv4-mapped IPv6 addresses are
+    ///     unwrapped and re-tested as IPv4, and so is the deprecated IPv4-compatible form (<c>::a.b.c.d</c>, e.g. <c>::169.254.169.254</c>),
+    ///     which would otherwise sail past every IPv4 check below and reach the metadata or loopback range it embeds.
+    /// </remarks>
     public static bool IsDeniedAddress(IPAddress address)
     {
         ArgumentNullException.ThrowIfNull(address);
@@ -234,9 +222,8 @@ internal static class CustomToolSsrfGuard
 
     private static bool LooksLikeNumericHostLiteral(string host)
     {
-        // A canonical IPv6 literal contains ':' and is handled by IPAddress.TryParse; flag the IPv4-style encodings a
-        // rebind uses to smuggle a private address past a dotted-quad check: an all-digit host, a hex host, or a dotted
-        // host with a leading-zero (octal) or 0x (hex) label.
+        // A canonical IPv6 literal contains ':' and is handled by IPAddress.TryParse; flag the IPv4-style encodings a rebind uses to smuggle a
+        // private address past a dotted-quad check: an all-digit host, a hex host, or a dotted host with a leading-zero (octal) or 0x (hex) label.
         if (host.Contains(':', StringComparison.Ordinal))
         {
             return false;

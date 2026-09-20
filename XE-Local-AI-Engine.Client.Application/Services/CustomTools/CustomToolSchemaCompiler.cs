@@ -4,18 +4,14 @@ using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 
-/// <summary>
-///     Compiles a custom tool's declared parameters into the JSON schema the model is offered.
-///     <para>
-///         GBNF-safe by construction: the emitted schema carries ONLY <c>type</c>, <c>description</c>, <c>properties</c>,
-///         <c>required</c> and <c>additionalProperties</c> — never <c>maxLength</c>/<c>minLength</c>/<c>maximum</c>/
-///         <c>minimum</c>/<c>pattern</c>/<c>enum</c>/<c>format</c> or any other length/range/format bound. llama.cpp
-///         compiles the offered schema into a GBNF grammar and length/range bounds break its sampler initialization
-///         (see the <c>llamacpp-gbnf-tool-schema-bound</c> memory), so those keywords must never reach the wire. The
-///         schema is also flat — parameters are scalars — so nesting depth is a constant 2 and cannot inflate the grammar.
-///     </para>
-///     <para>A Fixed tool takes no model input, so it compiles to a closed empty-object schema.</para>
-/// </summary>
+/// <summary>Compiles a custom tool's declared parameters into the JSON schema the model is offered.</summary>
+/// <remarks>
+///     GBNF-safe by construction: the emitted schema carries ONLY <c>type</c>, <c>description</c>, <c>properties</c>, <c>required</c> and
+///     <c>additionalProperties</c> — never <c>maxLength</c>, <c>minLength</c>, <c>maximum</c>, <c>minimum</c>, <c>pattern</c>, <c>enum</c> or
+///     <c>format</c>, nor any other length, range or format bound, because llama.cpp compiles the offered schema into a GBNF grammar whose
+///     sampler initialization such bounds break (measured by <c>LlamaGrammarToolSchemaCompatibilityTests</c>). The schema is also flat —
+///     parameters are scalars — so nesting depth is a constant 2, and a Fixed tool takes no model input and compiles to a closed empty object.
+/// </remarks>
 internal static class CustomToolSchemaCompiler
 {
     /// <summary>The banned JSON-schema keywords, exposed so a test can assert the compiler never emits one.</summary>

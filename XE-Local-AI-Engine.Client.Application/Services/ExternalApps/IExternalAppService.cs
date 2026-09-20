@@ -3,33 +3,25 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>
-///     Everything the node can do with an installed external application. One service rather than one per verb:
-///     admission, the state machine and the per-instance gate are one decision each, and splitting them would put
-///     two objects in the position of both believing they hold the instance.
-///     <para>
-///         Every mutating member is TWO-PHASE. It admits synchronously — take the gate, read the row, apply the
-///         transition table, check the version and the manifest fingerprint, write the transient status and its
-///         <c>*Requested</c> event — and returns the admitted summary; the container work then runs on a background
-///         operation that owns the gate lease. A caller therefore holds the instance's id and its new version before
-///         the first image layer is pulled, and a disconnecting browser cannot abort an install halfway.
-///     </para>
-///     <para>
-///         Every mutating member also takes the <c>expectedVersion</c> the caller last saw. V1 has no durable
-///         idempotency keys, and this is what stops a retried reset from wiping data the first one created.
-///     </para>
-/// </summary>
+/// <summary>Everything the node can do with an installed external application.</summary>
+/// <remarks>
+///     One service rather than one per verb: admission, the state machine and the per-instance gate are one decision
+///     each, and splitting them would leave two objects both believing they hold the instance. Every mutating member is
+///     TWO-PHASE — it admits synchronously (gate, row, transition table, version and manifest fingerprint, transient
+///     status and its <c>*Requested</c> event), then the container work runs on a background operation owning the gate
+///     lease — and each takes the <c>expectedVersion</c> the caller saw, so a retried reset cannot wipe new data.
+/// </remarks>
 public interface IExternalAppService
 {
     /// <summary>Every installed instance, with its catalog-derived update availability.</summary>
     Task<IReadOnlyList<ExternalAppInstanceSummary>> ListAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Every installed instance IN FULL, for the page that renders a card per instance. The store reads whole rows
-    ///     either way, so this costs one manifest deserialization per row over <see cref="ListAsync" /> and saves the
-    ///     caller a <see cref="GetAsync" /> per card. Callers that need only the identity and the status — the catalog
-    ///     join, for one — use <see cref="ListAsync" /> and deserialize nothing.
-    /// </summary>
+    /// <summary>Every installed instance IN FULL, for the page that renders a card per instance.</summary>
+    /// <remarks>
+    ///     The store reads whole rows either way, so this costs one manifest deserialization per row over
+    ///     <see cref="ListAsync" /> and saves the caller a <see cref="GetAsync" /> per card. Callers that need only
+    ///     the identity and the status — the catalog join, for one — use <see cref="ListAsync" /> instead.
+    /// </remarks>
     Task<IReadOnlyList<ExternalAppInstanceDetail>> ListDetailsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>One instance in full. Throws <see cref="ExternalAppNotFoundException" /> when there is no such row.</summary>
@@ -71,21 +63,22 @@ public interface IExternalAppService
     /// <summary>Removes the containers, the network, the rows and — best effort — the instance directory.</summary>
     Task<ExternalAppInstanceSummary> UninstallAsync(Guid instanceId, long expectedVersion, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Rebuilds the instance against the catalog's current manifest. Admission runs every install precondition
-    ///     against the TARGET manifest before anything is stopped, so an installed application cannot update into a
-    ///     manifest this version would refuse to install.
-    /// </summary>
+    /// <summary>Rebuilds the instance against the catalog's current manifest.</summary>
+    /// <remarks>
+    ///     Admission runs every install precondition against the TARGET manifest before anything is stopped, so an
+    ///     installed application cannot update into a manifest this version would refuse to install.
+    /// </remarks>
     Task<ExternalAppInstanceSummary> UpdateAsync(Guid instanceId,
         long expectedVersion,
         UpdateCommand command,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Rewrites the stored variables. Stopped-only and fully synchronous: a created container's environment is
-    ///     immutable, so the values take effect on the next start, which rebuilds because of the flag this sets.
-    ///     A value equal to <see cref="ExternalAppVariableMask.Value" /> means "keep what is stored".
-    /// </summary>
+    /// <summary>Rewrites the stored variables. Stopped-only and fully synchronous.</summary>
+    /// <remarks>
+    ///     A created container's environment is immutable, so the values take effect on the next start, which rebuilds
+    ///     because of the flag this sets. A value equal to <see cref="ExternalAppVariableMask.Value" /> means "keep
+    ///     what is stored".
+    /// </remarks>
     Task<ExternalAppInstanceDetail> ConfigureAsync(Guid instanceId,
         long expectedVersion,
         IReadOnlyDictionary<string, string> variables,
@@ -105,9 +98,12 @@ public interface IExternalAppService
 
     /// <summary>
     ///     A bounded tail of one service's log. <paramref name="service" /> null selects the first service with a
-    ///     published <c>ui</c> port, else the first in the manifest. Returned UNMASKED: a log is a diagnostic, and an
-    ///     application that prints its own secrets is telling its operator something they need to see.
+    ///     published <c>ui</c> port, else the first in the manifest.
     /// </summary>
+    /// <remarks>
+    ///     Returned UNMASKED: a log is a diagnostic, and an application that prints its own secrets is telling its
+    ///     operator something they need to see.
+    /// </remarks>
     Task<ContainerLogSnapshot> ReadLogsAsync(Guid instanceId,
         string? service,
         int tail,

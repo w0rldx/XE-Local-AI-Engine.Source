@@ -6,30 +6,14 @@ using System.Text;
 /// <summary>
 ///     The dedup fingerprint: <c>SHA-256(UTF8(principalId) ‖ 0x1E ‖ UTF8(triggerName) ‖ 0x1E ‖
 ///     UTF8(sessionId-or-empty) ‖ 0x1E ‖ rawBodyBytes)</c>.
-///     <para>
-///         Three things about it are contract, not implementation:
-///     </para>
-///     <list type="bullet">
-///         <item>
-///             The <c>0x1E</c> separators. Without them <c>("ab","c")</c> and <c>("a","bc")</c> hash identically, which
-///             would let one caller's request collide with another's.
-///         </item>
-///         <item>
-///             The first span is the PRINCIPAL, not the key prefix, so a rotated or second credential for the same
-///             integrator retries its own request successfully instead of colliding with itself.
-///         </item>
-///         <item>
-///             The body is hashed RAW. Property order, whitespace and duplicate keys are all part of the identity, so
-///             a retry must resend byte-identical bytes; anything else is a 409. There is no canonicalisation code
-///             anywhere in this feature, deliberately.
-///         </item>
-///     </list>
-///     <para>
-///         The request id is the LOOKUP key and never an input to the hash, and the composed seed is never hashed
-///         either — <c>UntrustedContentFraming</c> mints a fresh nonce per call, so identical inputs produce a
-///         different seed every time.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Three things are contract. The <c>0x1E</c> separators: without them <c>("ab","c")</c> and <c>("a","bc")</c> hash
+///     identically, letting one caller's request collide with another's. The first span is the PRINCIPAL, not the key
+///     prefix, so a rotated credential retries its own request instead of colliding with itself. The body is hashed RAW —
+///     order, whitespace and duplicate keys are identity, so a retry must resend byte-identical bytes and nothing
+///     canonicalises. The request id is the LOOKUP key, never an input; nor is the seed, whose fence nonce differs per call.
+/// </remarks>
 public static class IntegrationRequestFingerprint
 {
     /// <summary>ASCII record separator. Part of the wire contract, not a formatting choice.</summary>

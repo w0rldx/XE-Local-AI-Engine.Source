@@ -5,12 +5,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Estimates the resident memory footprint (bytes) of an INSTALLED local GGUF model against a hardware profile,
-///     wrapping the pure <c>MemoryFitEstimator</c>. The quant label and on-disk size come from the GGUF registry; the
-///     weight/KV header inputs from a single tolerant header read (both via <c>IGgufModelStore</c>). The result
-///     distinguishes a Known byte estimate from Unknown (the model is not installed, or no header AND no file size) so
-///     the capacity gate can reject conservatively on uncertainty.
+///     Estimates the resident memory footprint (bytes) of an INSTALLED local GGUF model against a hardware profile, wrapping the pure
+///     <c>MemoryFitEstimator</c>.
 /// </summary>
+/// <remarks>
+///     The quant label and on-disk size come from the GGUF registry, the weight and KV header inputs from a single tolerant header read, both
+///     via <c>IGgufModelStore</c>. The result distinguishes a Known byte estimate from Unknown — the model is not installed, or there is no
+///     header AND no file size — so the capacity gate can reject conservatively on uncertainty.
+/// </remarks>
 public interface IModelFootprintProvider
 {
     /// <summary>
@@ -22,11 +24,13 @@ public interface IModelFootprintProvider
     Task<ModelFootprint> ResolveFootprintAsync(string modelName, ModelRole role, HardwareProfile profile, CancellationToken ct);
 
     /// <summary>
-    ///     Resolves a footprint that can satisfy <paramref name="requiredContextTokens" />, with the KV-cache term sized
-    ///     for <paramref name="kvCacheType" /> (<see langword="null" />/f16/unrecognized ⇒ the conservative fp16 sizing
-    ///     every other caller gets). The default preserves source compatibility for providers that do not need a
-    ///     context-specific path.
+    ///     Resolves a footprint that can satisfy <paramref name="requiredContextTokens" />, with the KV-cache term sized for
+    ///     <paramref name="kvCacheType" />.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" />, f16 or an unrecognized value takes the conservative fp16 sizing every other caller gets. The default
+    ///     implementation preserves source compatibility for providers that do not need a context-specific path.
+    /// </remarks>
     Task<ModelFootprint> ResolveFootprintAsync(string modelName,
         ModelRole role,
         HardwareProfile profile,
@@ -49,10 +53,13 @@ public interface IModelFootprintProvider
 }
 
 /// <summary>
-///     The footprint of an installed model: <see cref="IsKnown" /> with <see cref="Resources" /> when the estimator
-///     produced a figure, or Unknown (the model is not installed, or no header metadata and no file size were available).
-///     The capacity gate treats Unknown as a reject (invariant: conservative on uncertainty).
+///     The footprint of an installed model: <see cref="IsKnown" /> with <see cref="Resources" /> when the estimator produced a figure, or
+///     Unknown.
 /// </summary>
+/// <remarks>
+///     Unknown means the model is not installed, or that neither header metadata nor a file size was available. The capacity gate treats
+///     Unknown as a reject — the invariant is conservative on uncertainty.
+/// </remarks>
 public sealed record ModelFootprint
 {
     private ModelFootprint(bool isKnown, ResourceFootprint resources, ProcessLaunchAdmission? admission)

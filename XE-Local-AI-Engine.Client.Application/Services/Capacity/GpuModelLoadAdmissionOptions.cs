@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
-/// <summary>
-///     Options for the process-wide GPU-load admission gate. The only knob is the bounded max-wait: how long a
-///     GPU-backed load will wait for the gate before surfacing a typed timeout rather than hanging a chat turn forever.
-///     It is a backstop — the size-aware readiness timeouts that bound the current holder already make an indefinite hold
+/// <summary>Options for the process-wide GPU-load admission gate; the only knob is the bounded max-wait.</summary>
+/// <remarks>
+///     <see cref="MaxWait" /> is how long a GPU-backed load waits for the gate before surfacing a typed timeout rather than hanging a chat
+///     turn forever. It is a backstop — the size-aware readiness timeouts that bound the current holder already make an indefinite hold
 ///     impossible — so the default is generous enough to cover a legitimately slow big-model load.
-/// </summary>
+/// </remarks>
 public sealed record GpuModelLoadAdmissionOptions
 {
     /// <summary>The bounded wait before a queued GPU load surfaces a typed admission-timeout. Must be positive.</summary>

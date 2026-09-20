@@ -4,16 +4,12 @@ using System.Globalization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
-/// <summary>
-///     Fail-closed startup validation for <see cref="ContainerRuntimeOptions" />, registered with
-///     <c>ValidateOnStart</c> so a mistyped value stops the node rather than surfacing as a container operation that
-///     times out weeks later.
-///     <para>
-///         Every failure names the full configuration key, not the property. An operator reading a start-up failure is
-///         looking for the line to edit in a settings file, and <c>'MinimumApiVersion' is invalid</c> does not tell
-///         them which of several sections holds it.
-///     </para>
-/// </summary>
+/// <summary>Fail-closed startup validation for <see cref="ContainerRuntimeOptions" />, registered with <c>ValidateOnStart</c> so a mistyped value stops the node.</summary>
+/// <remarks>
+///     The alternative is a container operation that times out weeks later. Every failure names the full
+///     configuration key, not the property: an operator reading a start-up failure wants the line to edit, and
+///     <c>'MinimumApiVersion' is invalid</c> does not say which of several sections holds it.
+/// </remarks>
 internal sealed class ContainerRuntimeOptionsValidator : IValidateOptions<ContainerRuntimeOptions>
 {
     /// <summary>The accepted range for <see cref="ContainerRuntimeOptions.DaemonProbeTimeoutSeconds" />.</summary>
@@ -69,9 +65,8 @@ internal sealed class ContainerRuntimeOptionsValidator : IValidateOptions<Contai
             MaximumWindowSeconds,
             failures);
 
-        // Blank means "discover one", which is the shipped default and not a failure. A value that is neither a URI
-        // nor an absolute path is one, because discovery would silently ignore it and reach a daemon the operator did
-        // not name — the failure mode the whole daemon attestation exists to make visible.
+        // Blank means "discover one", the shipped default. A value that is neither a URI nor an absolute path fails,
+        // because discovery would ignore it and reach a daemon the operator did not name.
         if (!string.IsNullOrWhiteSpace(options.DaemonEndpoint)
             && !Uri.IsWellFormedUriString(options.DaemonEndpoint, UriKind.Absolute)
             && !Path.IsPathRooted(options.DaemonEndpoint))

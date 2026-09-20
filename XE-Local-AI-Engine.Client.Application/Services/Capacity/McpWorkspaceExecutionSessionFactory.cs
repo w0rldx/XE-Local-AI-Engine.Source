@@ -8,10 +8,13 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     Acquires the owner-node single-flight lease, creates or attaches the established AgentHome sandbox, and replaces
-///     its selected root with exactly one workspace resolved from an opaque id under that lease. No host path is retained
-///     by the returned session, and every post-lease failure is recovered or poisons the owner-node key before release.
+///     Acquires the owner-node single-flight lease, creates or attaches the established AgentHome sandbox, and replaces its selected root
+///     with exactly one workspace resolved from an opaque id under that lease.
 /// </summary>
+/// <remarks>
+///     No host path is retained by the returned session, and every post-lease failure is recovered or poisons the owner-node key before
+///     release.
+/// </remarks>
 internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecutionSessionFactory
 {
     private readonly ComputeOptions _ceilingDefaults;
@@ -88,10 +91,8 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
                 {
                     AttachKey = attachKey,
                     RuntimeProfile = _options.DefaultRuntimeProfile,
-                    // The same two decisions AgentHome's own create site makes, through the same two helpers rather
-                    // than re-derived here: this jail is AgentHome's substrate under a different lease holder, and a
-                    // work session that quietly resolved a different posture would be the drift those helpers exist to
-                    // stop. It is constrained by the AgentHome section, so it reads that section's switch.
+                    // The same two decisions AgentHome's own create site makes, through the same two helpers rather than re-derived here: this jail is
+                    // AgentHome's substrate under another lease holder, so it reads the AgentHome section's switch and never resolves its own posture.
                     NetworkPolicy = SandboxEgressPolicy.Resolve(_provider.Capabilities,
                         _sandboxOptions.RequireEgressDenial,
                         SandboxEgressPolicy.AgentOptionKey,

@@ -7,17 +7,10 @@ using Microsoft.Identity.Client.Extensions.Msal;
 ///     exception's <see cref="Exception.InnerException" /> chain, not just at the top level.
 /// </summary>
 /// <remarks>
-///     On a Linux box with no <c>org.freedesktop.secrets</c> provider (e.g. WSL2 without gnome-keyring/kwallet),
-///     Azure.Identity's <c>DeviceCodeCredential</c> / <c>InteractiveBrowserCredential</c> do not reliably surface
-///     this as their own <see cref="Azure.Identity.CredentialUnavailableException" /> — it can arrive instead as
-///     <c>AuthenticationFailedException</c> wrapping <see cref="MsalCachePersistenceException" /> several levels
-///     deep (live-confirmed on WSL2, 2026-07: POST cloud-settings/entra/device-code/start returned an unhandled
-///     500 because the existing fallback only caught <see cref="Azure.Identity.CredentialUnavailableException" />).
-///     Every no-persistence-retry fallback in this codebase checks BOTH this method AND
-///     <see cref="Azure.Identity.CredentialUnavailableException" /> — see
-///     <see cref="Auth.EntraDeviceCodeSignInCoordinator" />, <see cref="Implementation.AzureFoundryChatClientFactory" />,
-///     and <see cref="Auth.EntraAuthCodeConfidentialClientFactory" />. Always a type check on the chain, never a
-///     message/string match — a string match would be fragile across locales and MSAL versions.
+///     On a Linux box with no <c>org.freedesktop.secrets</c> provider (WSL2 without gnome-keyring/kwallet) this arrives as <c>AuthenticationFailedException</c>
+///     wrapping <see cref="MsalCachePersistenceException" /> several levels deep instead of <see cref="Azure.Identity.CredentialUnavailableException" />, so every
+///     no-persistence-retry fallback here checks BOTH. Always a type check on the chain, never a message match: a string match is fragile across locales and MSAL versions.
+///     The fallbacks, and the unhandled 500 that proved it: docs/wiki/03-local-runtime-and-providers.md "Entra ID sign-in and the token cache".
 /// </remarks>
 public static class EntraCachePersistenceFailure
 {

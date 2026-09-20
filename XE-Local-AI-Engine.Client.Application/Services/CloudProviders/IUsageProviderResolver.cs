@@ -4,11 +4,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Resolves the fine-grained runtime provider (<see cref="AgentUsageProviders" />) that served a turn, for the
-///     token-usage ledger. Consulted at terminalization from the run's resolved model id. It is a best-effort attribution
-///     that must NEVER throw or stall terminalization: any failure, timeout, ambiguity, or a null/blank model degrades to
-///     <see cref="AgentUsageProviders.Unknown" />. Because it resolves at terminalize-time it reflects the selection then;
-///     a mid-turn sign-in/out is the accepted trade for keeping the resolution off the streaming hot path.
+///     token-usage ledger.
 /// </summary>
+/// <remarks>
+///     Consulted at terminalization from the run's resolved model id. A best-effort attribution that must NEVER throw
+///     or stall terminalization: any failure, timeout, ambiguity, or a null/blank model degrades to
+///     <see cref="AgentUsageProviders.Unknown" />. Because it resolves at terminalize-time it reflects the selection
+///     then; a mid-turn sign-in/out is the accepted trade for keeping the resolution off the streaming hot path.
+/// </remarks>
 public interface IUsageProviderResolver
 {
     /// <summary>

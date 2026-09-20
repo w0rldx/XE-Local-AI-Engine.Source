@@ -16,15 +16,16 @@ public enum CapacityVerdict
 }
 
 /// <summary>
-///     The frozen capacity-gate contract. <see cref="Verdict" /> drives the spawn dispatch; <see cref="Reason" /> is a
-///     sanitized, user-safe constant (no paths/secrets/tokens) handed back to the calling agent on a reject;
-///     <see cref="OllamaEvictionWarning" /> flags that admitting/serializing this spawn on the best-effort Ollama
-///     provider may evict a different running model. On an <see cref="CapacityVerdict.Allow" /> for a LOCAL model the
-///     decision also carries a <see cref="Reservation" /> that owns both the exact llama.cpp launch admission and this
-///     model's pending-footprint ledger reservation — the caller MUST dispose it when the spawned child exits.
-///     For cloud Allow, QueueSameModel and every reject, <see cref="Reservation" /> is <see langword="null" /> (nothing
-///     to release).
+///     The frozen capacity-gate contract: the verdict that drives the spawn dispatch, its user-safe reason, and the
+///     reservation a local <see cref="CapacityVerdict.Allow" /> hands back.
 /// </summary>
+/// <remarks>
+///     <see cref="Reason" /> is a sanitized constant — never a path, secret or token — handed to the calling agent on a
+///     reject; <see cref="OllamaEvictionWarning" /> flags that admitting or serializing this spawn on the best-effort
+///     Ollama provider may evict a different running model. A LOCAL Allow carries a <see cref="Reservation" /> owning
+///     both the exact llama.cpp launch admission and this model's pending-footprint ledger booking, which the caller
+///     MUST dispose on child exit; it is null for cloud Allow, QueueSameModel and every reject.
+/// </remarks>
 public sealed class CapacityDecision
 {
     /// <summary>The admission verdict.</summary>

@@ -45,9 +45,8 @@ public sealed class ModelFootprintProvider : IModelFootprintProvider
         var variant = await _variantSelector.SelectVariantAsync(ct);
         var resolved = await _profileResolver.ResolveAsync(modelName, role, variant, ct);
         var allocation = await _allocationResolver.ResolveAsync(modelName, role, variant, resolved, kvCacheType, ct);
-        // The free-VRAM reading rides along on the admission purely as a receipt: the capacity gate force-refreshed
-        // the profile under its decision gate immediately before this call, so this is "free VRAM as of just before
-        // the load" at zero extra cost. Nothing downstream may branch on it — the fit arithmetic stays in the gate.
+        // The free-VRAM reading rides along on the admission purely as a receipt: the gate force-refreshed the profile immediately before this call,
+        // so it is "free VRAM as of just before the load" at zero extra cost. Nothing downstream may branch on it — the fit arithmetic stays in the gate.
         return allocation is null || requiredContextTokens is <= 0 || requiredContextTokens > allocation.ProcessContextTokens
             ? ModelFootprint.Unknown
             : ModelFootprint.Known(new ProcessLaunchAdmission

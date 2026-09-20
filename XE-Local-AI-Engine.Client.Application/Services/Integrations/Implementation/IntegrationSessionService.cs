@@ -5,21 +5,16 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Everything about an integration session that is not a write to its execution rows: the invocation gate that
-///     decides whether a caller's <c>sessionId</c> may host the next execution, the operator's read and delete
-///     surfaces, and the integrator's own principal-scoped status read.
-///     <para>
-///         <b>It persists no conversation and no seed.</b> The gate returns a DECISION; the accept path performs every
-///         write, in ruling R4-1's order — the admission transaction commits first, and only then are the conversation
-///         (new session only) and the seed written. There is no create path here, no compensating delete anywhere, and
-///         no orphan sweep: because nothing exists before a durable execution row, an orphan conversation cannot.
-///     </para>
-///     <para>
-///         A <c>public sealed class</c> with no interface, registered and injected as itself: one implementation, and
-///         the endpoints that consume it live in another assembly that this one friends only for tests. Only the
-///         invocation gate stays <c>internal</c>, because its single caller is the accept path in this assembly.
-///     </para>
+///     Everything about an integration session that is not a write to its execution rows: the invocation gate, the
+///     operator's read and delete surfaces, and the integrator's own principal-scoped status read.
 /// </summary>
+/// <remarks>
+///     It persists NO conversation and no seed: the gate returns a DECISION, and the accept path performs every write in
+///     ruling R4-1's order. There is no create path here, no compensating delete and no orphan sweep — nothing exists
+///     before a durable execution row, so an orphan conversation cannot. A <c>public sealed class</c> with no interface,
+///     registered and injected as itself, because the endpoints that consume it live in another assembly; only the
+///     invocation gate stays <c>internal</c>, its single caller being the accept path in this assembly.
+/// </remarks>
 public sealed class IntegrationSessionService
 {
     /// <summary>The one message every masked case answers with, so no branch can make itself distinguishable.</summary>
@@ -41,10 +36,13 @@ public sealed class IntegrationSessionService
     private readonly IIntegrationTriggerStore _triggers;
 
     /// <summary>
-    ///     INTERNAL, because the class is public (its endpoints live in another assembly) but takes the internal
-    ///     per-session gate, which a public constructor cannot express. The DI module constructs it — it lives in this
-    ///     assembly and can — rather than widening a collaborator that nothing outside this assembly should reach.
+    ///     INTERNAL, because this public class takes the internal per-session gate, which a public constructor cannot
+    ///     express.
     /// </summary>
+    /// <remarks>
+    ///     The DI module constructs it — it lives in this assembly and can — rather than widening a collaborator that
+    ///     nothing outside this assembly should reach.
+    /// </remarks>
     internal IntegrationSessionService(IIntegrationSessionStore sessions,
         IIntegrationExecutionStore executions,
         IIntegrationTriggerStore triggers,
@@ -66,18 +64,14 @@ public sealed class IntegrationSessionService
 
     /// <summary>
     ///     Decides whether this invocation may proceed and, for a continuation, which session it joins. Never writes.
-    ///     <para>
-    ///         The caller holds the per-session gate around this call AND the accept transaction that follows it, so
-    ///         the busy read below is inside the same critical section as the write it authorises.
-    ///     </para>
-    ///     <list type="table">
-    ///         <item><c>PerInvocation</c> + no session id — a new session per invocation, unchanged.</item>
-    ///         <item><c>PerInvocation</c> + a session id — 404: such a trigger has no addressable sessions, and
-    ///         "unknown" is the same answer an unknown id gets.</item>
-    ///         <item><c>CallerManaged</c> + no session id — a new session that stays Active after the run.</item>
-    ///         <item><c>CallerManaged</c> + a session id — the gate below.</item>
-    ///     </list>
     /// </summary>
+    /// <remarks>
+    ///     The caller holds the per-session gate around this call AND the accept transaction that follows it, so the busy
+    ///     read below is inside the same critical section as the write it authorises. <c>PerInvocation</c> takes a new
+    ///     session per invocation and answers a named one with the masked 404 — such a trigger has no addressable
+    ///     sessions, and "unknown" is the answer an unknown id gets; <c>CallerManaged</c> takes a new session that stays
+    ///     Active after the run, or joins the named one through the gate below.
+    /// </remarks>
     internal async Task<IntegrationSessionGateResult> ResolveForInvocationAsync(Guid? sessionId,
         IntegrationTriggerSnapshot trigger,
         IntegrationCallerIdentity caller,
@@ -100,10 +94,8 @@ public sealed class IntegrationSessionService
             return Accepted(existing: null);
         }
 
-        // The first three masked cases are ONE call to the shared helper — principal ownership AND the current key's
-        // trigger allowlist — because two routes composing the same rule separately is exactly how the execution
-        // family lost its per-key allowlist. The helper re-reads the key row per request, so narrowing a key takes
-        // effect on its next call.
+        // The first three masked cases are ONE call to the shared helper — principal ownership AND the current key's trigger allowlist — because two routes
+        // composing the same rule separately is how the execution family lost its per-key allowlist. The helper re-reads the key row on every request.
         var access = await _access.ResolveSessionAsync(id, caller, cancellationToken);
         if (access.Outcome != IntegrationAccessOutcome.Allowed || access.Session is not { } session)
         {
@@ -163,12 +155,14 @@ public sealed class IntegrationSessionService
     }
 
     /// <summary>
-    ///     The integrator's own read, and its ENTIRE authorisation decision is the shared helper: principal ownership
-    ///     AND the current key's trigger allowlist. Returns <see langword="null" /> for every masked case — unknown,
-    ///     foreign principal, allowlist-excluded — which the route maps to ONE 404. There is no unscoped read on this
-    ///     path and no masking assembled endpoint-side, because separate <c>if</c>s in an endpoint are separate chances
-    ///     to return a distinguishable body.
+    ///     The integrator's own read, whose ENTIRE authorisation decision is the shared helper: principal ownership AND
+    ///     the current key's trigger allowlist.
     /// </summary>
+    /// <remarks>
+    ///     Returns <see langword="null" /> for every masked case — unknown, foreign principal, allowlist-excluded —
+    ///     which the route maps to ONE 404. There is no unscoped read on this path and no masking assembled
+    ///     endpoint-side: separate <c>if</c>s in an endpoint are separate chances to return a distinguishable body.
+    /// </remarks>
     public async Task<IntegrationSessionDto?> GetForExternalCallerAsync(Guid sessionId,
         IntegrationCallerIdentity caller,
         CancellationToken cancellationToken = default)
@@ -182,11 +176,13 @@ public sealed class IntegrationSessionService
     }
 
     /// <summary>
-    ///     Closes a session so nothing further may join it. Idempotent, and deliberately WITHOUT a busy refusal: its
-    ///     only callers close a <c>PerInvocation</c> session whose execution has just terminalized, and the startup
-    ///     sweep which closes sessions for rows it has already failed. Refusing there would leave such a session Active
-    ///     forever. There is no operator close route — an operator deletes.
+    ///     Closes a session so nothing further may join it. Idempotent, and deliberately WITHOUT a busy refusal.
     /// </summary>
+    /// <remarks>
+    ///     Its only callers close a <c>PerInvocation</c> session whose execution has just terminalized, and the startup
+    ///     sweep closing sessions for rows it has already failed; refusing there would leave such a session Active
+    ///     forever. There is no operator close route — an operator deletes.
+    /// </remarks>
     public async Task<bool> CloseAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
         using var lease = await _gate.EnterAsync(sessionId, cancellationToken);
@@ -196,16 +192,16 @@ public sealed class IntegrationSessionService
     }
 
     /// <summary>
-    ///     Deletes a session by purging its OWNED CONVERSATION, which is the whole delete: the conversation footprint
-    ///     purge takes the session row, its executions and their events with it, because a session's executions carry
-    ///     conversation-derived content and that purge is the node's privacy single source of truth. Only the
-    ///     content-free audit rows survive, and they do so because their <c>ConversationId</c> is null.
-    ///     <para>
-    ///         The busy check and the mutation are inside ONE critical section. Checking outside it would let a delete
-    ///         that read "not busy" purge the conversation out from under an accept sitting between its own read and
-    ///         the admission transaction.
-    ///     </para>
+    ///     Deletes a session by purging its OWNED CONVERSATION, which is the whole delete: that purge takes the session
+    ///     row, its executions and their events with it.
     /// </summary>
+    /// <remarks>
+    ///     A session's executions carry conversation-derived content, and the conversation footprint purge is the node's
+    ///     privacy single source of truth; only the content-free audit rows survive, because their
+    ///     <c>ConversationId</c> is null. The busy check and the mutation sit inside ONE critical section: checking
+    ///     outside it would let a delete that read "not busy" purge the conversation out from under an accept sitting
+    ///     between its own read and the admission transaction.
+    /// </remarks>
     public async Task<IntegrationSessionDeleteOutcome> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
         using var lease = await _gate.EnterAsync(sessionId, cancellationToken);
@@ -226,9 +222,8 @@ public sealed class IntegrationSessionService
 
         await DeleteConversationAsync(session.ConversationId);
 
-        // The backstop, not the mechanism: the purge above already cascaded this row away, so this ordinarily deletes
-        // nothing. It matters only when the purge could not run — an operator must not be left with a session whose
-        // conversation is gone.
+        // The backstop, not the mechanism: the purge above already cascaded this row away, so this ordinarily deletes nothing. It matters only when the
+        // purge could not run — an operator must not be left with a session whose conversation is gone.
         _ = await _sessions.DeleteAsync(sessionId, CancellationToken.None);
         _gate.Forget(sessionId);
         return IntegrationSessionDeleteOutcome.Deleted;
@@ -244,16 +239,15 @@ public sealed class IntegrationSessionService
     private static IntegrationSessionGateResult Masked => new() { Outcome = IntegrationAcceptOutcome.SessionNotFound, Existing = null, Message = SessionNotFoundMessage };
 
     /// <summary>
-    ///     The masked answer, and the gate entry the accept path minted for an id with NO row behind it. Without this an
-    ///     authenticated integrator looping invoke with random GUIDs adds one <c>SemaphoreSlim</c> per call, permanently
-    ///     — the per-principal limiter bounds the rate, not the total.
-    ///     <para>
-    ///         ONLY when the row is absent, and the read that proves it runs inside the caller's own critical section.
-    ///         Dropping the entry of a session that merely belongs to someone ELSE would let its owner's next accept
-    ///         mint a second semaphore and enter while a first accept is still inside — which is the cross-request
-    ///         contamination the gate exists to prevent.
-    ///     </para>
+    ///     The masked answer, plus the removal of a gate entry the accept path minted for an id with NO row behind it.
     /// </summary>
+    /// <remarks>
+    ///     Without it an authenticated integrator looping invoke with random GUIDs adds one <c>SemaphoreSlim</c> per
+    ///     call, permanently — the per-principal limiter bounds the rate, not the total. ONLY when the row is absent,
+    ///     proven by a read inside the caller's own critical section: dropping the entry of a session that belongs to
+    ///     someone ELSE would let its owner's next accept mint a second semaphore and enter while a first accept is
+    ///     still inside, which is the cross-request contamination the gate exists to prevent.
+    /// </remarks>
     private async Task<IntegrationSessionGateResult> MaskAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         if (await _sessions.GetByIdAsync(sessionId, cancellationToken) is null)

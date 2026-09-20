@@ -38,11 +38,13 @@ internal sealed record SearchTextToolRequest
 }
 
 /// <summary>
-///     Validates the three coder tool requests against their constraints before any sandbox call (reject-before-side-
-///     effect, like <c>AgentHomeRunToolRequestValidator</c>). The advertised JSON schema is advisory; this validation
-///     is authoritative. Path confinement itself is the reader's job (<see cref="WorkspacePathGuard" />); these
-///     validators only enforce required/shape constraints the schema declares.
+///     Validates the three coder tool requests against their constraints before any sandbox call — reject before side effect, like
+///     <c>AgentHomeRunToolRequestValidator</c>.
 /// </summary>
+/// <remarks>
+///     The advertised JSON schema is advisory; this validation is authoritative. Path confinement itself is the reader's job
+///     (<see cref="WorkspacePathGuard" />), so these validators only enforce the required and shape constraints the schema declares.
+/// </remarks>
 internal static class CoderToolRequestValidator
 {
     private const int MaxPathLength = 4096;

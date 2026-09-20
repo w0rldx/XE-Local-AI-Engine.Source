@@ -6,13 +6,13 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-/// <summary>
-///     Author-time CRUD + validation for the custom-tool library. Validation is the trust boundary that decides what
-///     can ever reach the executors; it reuses the exact same helpers those executors run at execution time
-///     (<see cref="CustomToolValidation" />, <see cref="CustomToolTemplate" />, <see cref="CustomToolSchemaCompiler" />,
-///     <see cref="CustomToolSsrfGuard" />, <see cref="HostExecutableGuard" />) so author-time acceptance and run-time
-///     safety can never disagree. The store owns id/version/timestamp stamping; this service never touches versioning.
-/// </summary>
+/// <summary>Author-time CRUD and validation for the custom-tool library.</summary>
+/// <remarks>
+///     Validation is the trust boundary deciding what can ever reach the executors, and it reuses the exact same helpers those executors run
+///     at execution time (<see cref="CustomToolValidation" />, <see cref="CustomToolTemplate" />, <see cref="CustomToolSchemaCompiler" />,
+///     <see cref="CustomToolSsrfGuard" />, <see cref="HostExecutableGuard" />), so author-time acceptance and run-time safety can never
+///     disagree. The store owns id, version and timestamp stamping; this service never touches versioning.
+/// </remarks>
 internal sealed partial class CustomToolService : ICustomToolService
 {
     private const int MaxDescriptionLength = 1024;
@@ -295,9 +295,8 @@ internal sealed partial class CustomToolService : ICustomToolService
             throw new CustomToolValidationException("A tool whose URL host is parameterized must declare at least one allowedHost.");
         }
 
-        // Fixed host: pre-validate the assembled URL now so an author cannot save a tool that targets a private,
-        // loopback, or metadata address. A parameterized host cannot be resolved to a concrete literal here, so it is
-        // left to the run-time pinned-connect SSRF guard.
+        // Fixed host: pre-validate the assembled URL now, so an author cannot save a tool targeting a private, loopback or metadata address. A
+        // parameterized host cannot be resolved to a concrete literal here, so it is left to the run-time pinned-connect SSRF guard.
         if (!hostIsParameterized)
         {
             var assembled = CustomToolTemplate.Substitute(urlTemplate, dummy, declaredNames, Uri.EscapeDataString);
@@ -443,10 +442,8 @@ internal sealed partial class CustomToolService : ICustomToolService
 
     private async Task EnsureNameIsAvailableAsync(string name, Guid? existingId, CancellationToken cancellationToken)
     {
-        // Collision with a built-in or MCP tool name would let a custom tool shadow a trusted one at resolution time. This
-        // uses the SYNC (built-in + MCP) known-names view deliberately: it is a pure in-memory read (no store I/O), and the
-        // async view additionally lists existing custom tools, which would make an unchanged-name UPDATE collide with
-        // itself. Custom-vs-custom uniqueness (with self-exclusion) is the store check immediately below.
+        // Collision with a built-in or MCP name would let a custom tool shadow a trusted one at resolution time. The SYNC known-names view is deliberate:
+        // a pure in-memory read, while the async view also lists custom tools and would make an unchanged-name UPDATE collide with itself.
 #pragma warning disable CA1849, S6966, MA0042 // GetKnownToolNames() does no I/O; the async twin would introduce a self-collision on update. See comment above.
         if (_offerProvider.GetKnownToolNames().Any(known => string.Equals(known, name, StringComparison.OrdinalIgnoreCase)))
 #pragma warning restore CA1849, S6966, MA0042
@@ -463,9 +460,8 @@ internal sealed partial class CustomToolService : ICustomToolService
         }
     }
 
-    // The read path masks secret header/env values to the sentinel; when a client edits a tool it round-trips that
-    // sentinel back. Resolve it here against the stored record so an unrelated edit never overwrites a secret with the
-    // placeholder. On create (no prior record) the sentinel is reserved and rejected.
+    // The read path masks secret header and env values to the sentinel, and a client editing a tool round-trips that sentinel back. Resolve it here
+    // against the stored record so an unrelated edit never overwrites a secret with the placeholder; on create, with no prior record, it is rejected.
     private static CustomToolDefinition ResolveMaskedSecrets(CustomToolDefinition definition, CustomToolRecord? existing)
     {
         var hasExisting = existing is not null;

@@ -7,13 +7,14 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Executes an <c>HttpFetch</c> custom tool: substitutes the model's arguments into the URL/body, runs the SSRF
-///     guard on the final URL, sends the request through the SSRF-pinned named client (auto-redirects OFF), and returns
-///     a secret-scrubbed, size-bounded summary of the response. Secret header values and the URL/userinfo are scrubbed
-///     from both the model-facing result and anything logged. The send + body read is bounded by a fixed wall-clock
-///     timeout and admitted through the same <see cref="CustomToolConcurrencyLimiter" /> the command path uses, so a
-///     fan-out of concurrent fetches is capped the same way a fan-out of concurrent host commands is.
+///     Executes an <c>HttpFetch</c> custom tool: substitutes the model's arguments into the URL and body, runs the SSRF guard on the final
+///     URL, sends through the SSRF-pinned named client with auto-redirects OFF, and returns a bounded summary.
 /// </summary>
+/// <remarks>
+///     Secret header values and URL userinfo are scrubbed from both the model-facing result and anything logged. The send plus body read is
+///     bounded by a fixed wall-clock timeout and admitted through the same <see cref="CustomToolConcurrencyLimiter" /> the command path uses,
+///     so a fan-out of concurrent fetches is capped the same way a fan-out of concurrent host commands is.
+/// </remarks>
 internal sealed class HttpFetchExecutor : ICustomToolExecutor
 {
     /// <summary>The named <see cref="HttpClient" /> whose handler carries the SSRF connect-pin and has redirects disabled.</summary>
@@ -21,9 +22,8 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
 
     private const int MaxResponseBodyBytes = 64 * 1024;
 
-    // Wall-clock ceiling for the send + body read, mirroring the command path's default timeout (HostProcessExecutor's
-    // DefaultTimeoutSeconds, itself clamped to a 1-300s bound). A fetch tool has no per-call timeout config to clamp,
-    // so this is a fixed default rather than a derived clamp.
+    // Wall-clock ceiling for the send plus body read, mirroring the command path's default timeout (HostProcessExecutor.DefaultTimeoutSeconds,
+    // itself clamped to 1-300s). A fetch tool has no per-call timeout config to clamp, so this is a fixed default rather than a derived clamp.
     private const int FetchTimeoutSeconds = 30;
 
     // Response headers that carry credentials/session material must never be surfaced to the model.
@@ -137,9 +137,8 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
 
             foreach (var header in config.Headers)
             {
-                // Header values support {param} placeholders (accepted at author-time validation) — substitute them
-                // verbatim (a header is not a URL, so no URL-encoding), failing closed on any undeclared placeholder,
-                // exactly like the body. Without this a template such as "Bearer {token}" would be sent literally.
+                // Header values support {param} placeholders, accepted at author-time validation: substitute them verbatim (a header is not a URL, so
+                // no URL-encoding), failing closed on any undeclared placeholder exactly like the body, or "Bearer {token}" would be sent literally.
                 var value = CustomToolTemplate.Substitute(header.Value, bound, declaredNames);
                 AddHeader(request, header.Name, value);
             }

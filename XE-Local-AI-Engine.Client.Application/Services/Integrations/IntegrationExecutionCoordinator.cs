@@ -24,23 +24,16 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     The single consumer of the accept path's queue, and the only component that runs an integration execution.
-///     <para>
-///         It drives the SAME seam the scheduler's <c>run-agent</c> template uses —
-///         <see cref="IAgentDefinitionResolver" /> + <see cref="ILocalChatRuntimePackageBuilder" /> +
-///         <see cref="InvocationExecutionContext.CreatePlain" /> + <see cref="IInvocationRunner" /> — with
-///         <c>IsUnattended: true</c>, serialised behind the node's single invocation lease. It introduces no second
-///         runtime path, and it is the ONLY producer of a terminal event for an execution.
-///     </para>
-///     <para>
-///         <b>Three deliberate divergences from the scheduler.</b> (1) The invocation lease is taken BEFORE the
-///         capacity reservation, so a queued run does not hold a GPU footprint across the whole wait and fail a
-///         concurrent interactive turn's capacity decision. (2) Approval-required tools are NOT stripped from the
-///         offer: an external caller cannot see a silently degraded agent, so the run fails loudly and audited
-///         instead. (3) The wait for the lease runs under a queue-age deadline, so an advertised maximum queue age
-///         bounds something a caller can observe.
-///     </para>
+///     The single consumer of the accept path's queue, the only component that runs an integration execution, and the
+///     only producer of an execution's terminal event.
 /// </summary>
+/// <remarks>
+///     It drives the SAME seam the scheduler's <c>run-agent</c> template uses — <see cref="IAgentDefinitionResolver" />
+///     + <see cref="ILocalChatRuntimePackageBuilder" /> + <see cref="InvocationExecutionContext.CreatePlain" /> +
+///     <see cref="IInvocationRunner" /> — with <c>IsUnattended: true</c>, serialised behind the node's single
+///     invocation lease, and introduces no second runtime path. It diverges from the scheduler in three ways, each
+///     with its reason: see docs/adr/0008-external-integrations.md ("Invariants the coordinator enforces").
+/// </remarks>
 internal sealed partial class IntegrationExecutionCoordinator : BackgroundService
 {
     /// <summary>
@@ -51,20 +44,19 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     private const int RecoveryEventPageSize = 200;
 
     /// <summary>
-    ///     How many times a dispatch fault, or the whole startup sweep, is retried before it is given up on. Small on
-    ///     purpose: these retries exist for a transient store failure, and a fault that survives three attempts is not
-    ///     one.
+    ///     How many times a dispatch fault, or the whole startup sweep, is retried: these retries exist for a transient
+    ///     store failure, and a fault that survives three attempts is not one.
     /// </summary>
     private const int MaxRecoveryAttempts = 3;
 
     /// <summary>The pause between those attempts. Short, because an admitted execution's caller is waiting on it.</summary>
     private static readonly TimeSpan RecoveryRetryDelay = TimeSpan.FromMilliseconds(250);
 
-    /// <summary>
-    ///     How many times a terminal transition may reload the row and try again. Bounded rather than open-ended: each
-    ///     loss costs a reserved sequence, and a writer that drifts the version three times running is a caller
-    ///     hammering cancel, not a race that one more read would settle.
-    /// </summary>
+    /// <summary>How many times a terminal transition may reload the row and try again.</summary>
+    /// <remarks>
+    ///     Bounded rather than open-ended: each loss costs a reserved sequence, and a writer that drifts the version
+    ///     three times running is a caller hammering cancel, not a race that one more read would settle.
+    /// </remarks>
     private const int MaxTerminalAttempts = 4;
 
     /// <summary>The statuses a terminal transition may leave. Nothing else is a legal source for one.</summary>
@@ -101,10 +93,13 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
     /// <summary>
     ///     When this instance was built, which is during host construction and therefore before ANY hosted service —
-    ///     Kestrel's included — has started. The startup sweep uses it instead of assuming a registration order it does
-    ///     not control: the listener may already be accepting requests while the sweep pages, and a row admitted in
-    ///     that window holds a 202 the caller has been given.
+    ///     Kestrel's included — has started.
     /// </summary>
+    /// <remarks>
+    ///     The startup sweep compares against it instead of assuming a registration order it does not control: the
+    ///     listener may already be accepting requests while the sweep pages, and a row admitted in that window holds a
+    ///     202 its caller has been given.
+    /// </remarks>
     private readonly long _constructedAtUtc;
 
     public IntegrationExecutionCoordinator(IServiceScopeFactory scopeFactory,
@@ -127,17 +122,17 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     }
 
     /// <summary>
-    ///     Reconciles every row this process cannot resume BEFORE the consumer loop starts, so the loop can never read
-    ///     an id the sweep has not visited yet. There is exactly ONE sweep: because admission commits before the owned
-    ///     conversation is created, no orphan conversation can exist and there is nothing else to reclaim.
+    ///     Reconciles every row this process cannot resume before the consumer loop starts, so the loop never reads an
+    ///     id the sweep has not visited yet.
     /// </summary>
+    /// <remarks>
+    ///     There is exactly ONE sweep: admission commits before the owned conversation is created, so no orphan
+    ///     conversation can exist and there is nothing else to reclaim.
+    /// </remarks>
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        // The sweep used to swallow a whole-sweep failure and start anyway. That left every interrupted row
-        // non-terminal AND still counted against its principal's admission cap, so the node came up serving 503s to
-        // an integrator with no in-flight work and no way to clear it short of another restart. A bounded retry
-        // covers the transient case; past it the host refuses to start, exactly as McpAgentRunRecoveryService does,
-        // so the supervisor restarts rather than serving wedged.
+        // A bounded retry covers a transient store failure; past it the host refuses to start, as McpAgentRunRecoveryService does. A swallowed sweep failure
+        // leaves every interrupted row non-terminal and still counted against its principal's admission cap: a node serving 503s with no in-flight work.
         for (var attempt = 1; attempt <= MaxRecoveryAttempts; attempt++)
         {
             try
@@ -205,12 +200,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             }
             catch (Exception exception)
             {
-                // Every stage is wrapped so a throw still terminalizes: a row stuck Running is worse than a wrong one,
-                // because the admission count holds a slot against it forever.
-                //
-                // A cancel is classified BEFORE shutdown: the run's own token is the one the cancel primitive signals,
-                // and a caller that asked for a cancel and got `Failed / internal-failure` was told its request broke
-                // when in fact it did exactly what was asked.
+                // Every stage is wrapped so a throw still terminalizes: a row stuck Running holds its principal's admission slot forever. A cancel is
+                // classified BEFORE shutdown — the run's own token is what the cancel signals, and a cancelled caller must not be told internal-failure.
                 if (exception is OperationCanceledException && cancelToken.IsCancellationRequested)
                 {
                     _logger.LogInformation("Integration execution {ExecutionId} was cancelled while in flight.", executionId);
@@ -227,9 +218,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 }
             }
 
-            // Placed AFTER every terminal path rather than inside one of them: an execution can end at a dozen points,
-            // including the fault handler above, and a per-invocation session left Active by any of them would stay
-            // that way forever.
+            // After every terminal path rather than inside one of them: an execution ends at a dozen points, the fault handler above included, and a
+            // per-invocation session left Active by any of them stays Active forever.
             await ClosePerInvocationSessionAsync(scope.ServiceProvider, execution);
         }
         finally
@@ -239,18 +229,16 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     }
 
     /// <summary>
-    ///     ONE channel reader, but processing is NOT serialised on it. Awaiting <see cref="ProcessOneAsync" /> here kept
-    ///     the next id in the channel for the whole of the current run, and every deadline control — the queue-age
-    ///     pre-check, the <c>CancelAfter</c> on the lease wait, the post-acquisition re-check — plus the sole writer of
-    ///     <c>Queued</c> live inside that method. A second execution therefore never reached <c>Queued</c>, never
-    ///     started measuring its queue age, and only timed out once the run ahead of it finished: R5-2's bound
-    ///     measured the wrong thing.
-    ///     <para>
-    ///         Dispatching instead lets every admitted execution wait on the node's invocation lease itself, which is
-    ///         what serialises the runs — a <see cref="SemaphoreSlim" /> granting in wait order. The number of live
-    ///         tasks is bounded by the admission cap, because each one holds a non-terminal row against it.
-    ///     </para>
+    ///     ONE channel reader, but processing is NOT serialised on it: each id is dispatched, and the node's invocation
+    ///     lease — a <see cref="SemaphoreSlim" /> granting in wait order — is what serialises the runs.
     /// </summary>
+    /// <remarks>
+    ///     Awaiting <see cref="ProcessOneAsync" /> here would hold the next id in the channel for the whole of the
+    ///     current run, and every deadline control plus the sole writer of <c>Queued</c> lives inside that method, so
+    ///     R5-2's queue-age bound would measure the run ahead instead of the wait. The live-task count is bounded by
+    ///     the admission cap, because each task holds a non-terminal row against it. See
+    ///     docs/adr/0008-external-integrations.md ("Invariants the coordinator enforces").
+    /// </remarks>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Touched only by this loop, so no lock: pruning on every dispatch keeps it at the live-task count.
@@ -279,10 +267,13 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     }
 
     /// <summary>
-    ///     Runs one dispatched execution to completion. <see cref="ProcessOneAsync" /> terminalizes its own faults;
-    ///     anything that still escapes it — a store read that throws before the run's own handler is in scope — must
-    ///     not take the reader loop, and with it every later execution on this node, down with it.
+    ///     Runs one dispatched execution to completion, absorbing anything that escapes
+    ///     <see cref="ProcessOneAsync" />'s own fault handling.
     /// </summary>
+    /// <remarks>
+    ///     A fault outside that handler — a store read that throws before it is in scope — must not take the reader
+    ///     loop, and with it every later execution on this node, down with it.
+    /// </remarks>
     private async Task RunDispatchedAsync(Guid executionId, CancellationToken stoppingToken)
     {
         for (var attempt = 1; attempt <= MaxRecoveryAttempts; attempt++)
@@ -294,9 +285,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             }
             catch (Exception exception)
             {
-                // Leaving the row for the next restart sweep was the old behaviour, and it cost the principal an
-                // admission slot until the process was restarted: the id is already out of the channel, so nothing
-                // else will ever pick this execution up.
+                // The id is already out of the channel, so nothing else ever picks this execution up: leaving the row for the next restart sweep would cost
+                // its principal an admission slot until the process is restarted.
                 _logger.LogError(exception,
                     "Integration execution {ExecutionId} faulted outside its own handler on attempt {Attempt} of {MaxAttempts}.",
                     executionId,
@@ -323,28 +313,20 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     }
 
     /// <summary>
-    ///     Fails every row this process cannot resume. V1 does not resume in-flight generations, so an interrupted row
-    ///     becomes <c>Failed</c> / <c>restart</c> with its terminal event minted through the buffer at
-    ///     <c>LastSequence + 1</c> — the number the retired hand-computed carve-out produced, now from the one authority.
+    ///     Fails every row this process cannot resume: V1 does not resume an in-flight generation, so an interrupted
+    ///     row becomes <c>Failed</c> / <c>restart</c>.
     /// </summary>
+    /// <remarks>
+    ///     Its terminal event is minted through the buffer at <c>LastSequence + 1</c>, so the sequence comes from the
+    ///     one authority rather than from a hand-computed carve-out.
+    /// </remarks>
     private async Task ReconcileInterruptedAsync(CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IIntegrationExecutionStore>();
 
-        // ONE read of the whole non-terminal set, unpaged, and ONE pass over that snapshot. One read rather than one
-        // per status because the filter takes a status set; unpaged because an offset over THIS set cannot be made
-        // safe. It shrinks (every row this sweep closes leaves the filter, as does one the already-listening external
-        // cancel path closes mid-sweep) and it grows (that same listener can admit while the sweep runs), so an
-        // advancing offset steps past an unseen row that shifted down behind the cursor, and an offset that restarts
-        // at the top on every change never terminates under sustained admission churn.
-        //
-        // Loading it all is affordable by construction: IntegrationExecutionStore.AcceptAsync counts the node-wide
-        // non-terminal rows inside its admission transaction and refuses past IntegrationOptions.MaxQueuedExecutions
-        // (default 8, hard ceiling 1024), so the large backlog the old page size guarded against cannot exist.
-        //
-        // A stale snapshot is harmless: TerminalizeAsync is a status/version CAS over NonTerminalStatuses, so a row
-        // that went terminal between the read and its turn loses the CAS and this sweep writes nothing for it.
+        // ONE unpaged read of the whole non-terminal set, then ONE pass over that snapshot: the set both shrinks and grows under live admission, so no offset
+        // over it is safe. Why that is affordable, and why a stale snapshot is harmless: ADR 0008 ("Invariants the coordinator enforces").
         var interrupted = await store.ListAsync(new IntegrationExecutionFilter { TriggerId = null, SessionId = null, Status = NonTerminalStatuses, Limit = int.MaxValue, Offset = 0 }, cancellationToken);
 
         var recovered = 0;
@@ -357,11 +339,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 continue;
             }
 
-            // R3-1: seed the ring from the persisted watermark so the sweep's terminal event continues the
-            // execution's OWN numbering instead of restarting at 1 and colliding with rows already written.
-            // The watermark alone is not enough: a writer that lost the watermark race before the crash left a
-            // row whose highest EVENT sequence is above it, and seeding below that mints a terminal sequence that
-            // collides with an existing (execution_id, sequence) row on every restart forever.
+            // R3-1: seed the ring from the highest sequence this execution can PROVE — its watermark, or a persisted event above it — so the sweep's terminal
+            // event continues its OWN numbering; seeding below a lost-race event collides with an existing (execution_id, sequence) row on every restart.
             var seedSequence = await HighestPersistedSequenceAsync(store, row, cancellationToken);
             if (!_buffer.TryCreate(row.Id, seedSequence))
             {
@@ -378,9 +357,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             {
                 recovered++;
 
-                // The sweep is a DIFFERENT terminal path from the run's own, and it has to close per-invocation
-                // sessions too — otherwise a session interrupted by a restart stays Active with no execution that
-                // could ever close it. The busy guard is bypassed by construction: the row is already terminal.
+                // The sweep is a DIFFERENT terminal path from the run's own and closes per-invocation sessions too, or a session interrupted by a restart
+                // stays Active with no execution that could ever close it. The busy guard is bypassed by construction: the row is already terminal.
                 await ClosePerInvocationSessionAsync(scope.ServiceProvider, row);
             }
         }
@@ -391,11 +369,11 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         }
     }
 
-    /// <summary>
-    ///     The highest sequence this execution can prove: its row watermark, or a persisted event above it. Pages
-    ///     forward from the watermark rather than reading the whole feed, so the ordinary case — a watermark that is
-    ///     already current — costs one empty page.
-    /// </summary>
+    /// <summary>The highest sequence this execution can prove: its row watermark, or a persisted event above it.</summary>
+    /// <remarks>
+    ///     Pages forward from the watermark rather than reading the whole feed, so the ordinary case — a watermark that
+    ///     is already current — costs one empty page.
+    /// </remarks>
     private static async Task<long> HighestPersistedSequenceAsync(IIntegrationExecutionStore store,
         IntegrationExecutionSnapshot row,
         CancellationToken cancellationToken)
@@ -426,10 +404,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     {
         var executionId = execution.Id;
 
-        // 1. Everything the run needs. A missing conversation or seed is the ONE shape R4-1's forward-running failure
-        //    leaves behind: the execution row committed before they were written, so the row is real and has nothing
-        //    to run. Do not repair it — the seed text is not recoverable from the row, and a run against an empty seed
-        //    is a worse outcome than a clean failure.
+        // 1. Everything the run needs. A missing conversation or seed is the ONE shape R4-1's forward-running failure leaves behind — the execution row
+        //    commits before they are written — and it is failed, never repaired: the seed text is not recoverable, and a run against an empty seed is worse.
         var sessions = services.GetRequiredService<IIntegrationSessionStore>();
         var session = await sessions.GetByIdAsync(execution.SessionId, runToken);
         if (session is null)
@@ -454,12 +430,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        // V1 is scoped to a saved SINGLE agent. This package carries no OrchestrationSpec — the scheduler's
-        // run-agent shape it is modelled on carries none either — so InvocationRunner would take RunSingleAgentAsync
-        // and an orchestrator would report Completed having run none of its participants, none of its routing and none
-        // of its handoffs. Rejected rather than orchestrated: the offer emit_output is unioned into is the ROOT's, and
-        // that would have to be pushed across every participant before an orchestrated integration run could be
-        // honest. Checked here as well as at save because a definition's Kind can change after the trigger was written.
+        // V1 runs a saved SINGLE agent: this package carries no OrchestrationSpec, so an orchestrator would report Completed having run no participant, no
+        // routing and no handoff. Checked here as well as at save — a Kind can change. Refused, not emulated: ADR 0008 ("Invariants the coordinator enforces").
         if (definition.Kind != AgentDefinitionKind.Single)
         {
             await TerminalizeBeforeRunAsync(context,
@@ -483,9 +455,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        // 3. The effective model, and the locality gate. A cloud model is rejected UP FRONT, before the lease and
-        //    before the capacity decision, so unattended external work never egresses. The capacity decision itself
-        //    moves to step 7, after the lease.
+        // 3. The effective model, and the locality gate. A cloud model is rejected UP FRONT, before the lease and before the capacity decision, so
+        //    unattended external work never egresses. The capacity decision itself is step 7b2, after the lease.
         var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(runToken);
         var localDefaultModel = await services.GetRequiredService<ILocalDefaultChatModelResolver>()
                                               .ResolveAsync(nodeSettings.DefaultModelName, runToken);
@@ -505,19 +476,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        // 3b. The compaction bound, BEFORE the conversation is read so the read sees the folded transcript. It projects
-        //     what the next turn would replay and folds only when that is over budget; every no-op outcome (no local
-        //     model, nothing foldable) is non-fatal by design.
-        //
-        //     The keep window is the CHAT window, not the work-session floor of two: a work-session step rebuilds its
-        //     state block from the database every step, so its transcript beyond the previous step is expendable. An
-        //     integration session has no state block — its transcript IS the session state — so folding to two would
-        //     delete the continuation a caller-managed session exists to deliver. It is read from the chat compaction
-        //     options rather than written as a literal, so an operator who retunes chat retunes this too.
-        //
-        //     A caller-managed session additionally replays its completed tool exchanges, so the projection has to count
-        //     them or the bound would measure a transcript smaller than the one the turn sends — the exact failure it
-        //     exists to prevent. The excerpt cap is the same one the builder applies below, read from the same options.
+        // 3b. The compaction bound, BEFORE the conversation read so the read sees the folded transcript; every no-op outcome is non-fatal by design. The keep
+        //     window and the excerpt cap come from the CHAT options, and the projection counts replayed tool exchanges: ADR 0008 ("Invariants the coordinator enforces").
         var replaysToolHistory = trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged;
         var toolResultExcerptChars = services.GetRequiredService<IOptions<ConversationContextBudgetOptions>>().Value.HistoricalToolResultExcerptChars;
         await services.GetRequiredService<ConversationStepContextBound>()
@@ -529,14 +489,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                           replaysToolHistory,
                           toolResultExcerptChars);
 
-        // 3c. The turn read, and the ONE shape R4-1's forward-running failure leaves behind: the execution row commits
-        //     before the conversation and the seed are written, so a row can be real and have nothing to run. Do not
-        //     repair it — the seed text is not recoverable from the row, and a run against an empty seed is a worse
-        //     outcome than a clean failure.
-        //     A caller-managed continuation takes the FULL read, not the capped turn read: its persisted tool parts live
-        //     in the same metadata_json blob the turn read omits for every non-user row the synopsis already covers, so
-        //     under a compacted session the capped read would hand the builder survivor rows with no parts and the
-        //     replay would silently be empty. Every other policy keeps the cap — it has no tool history to replay.
+        // 3c. The turn read. A caller-managed continuation takes the FULL read, not the capped turn read: its persisted tool parts live in the same
+        //     metadata_json blob the capped read omits for non-user rows, so under a compacted session its replay would silently be empty.
         var conversation = replaysToolHistory
             ? await persistence.GetConversationAsync(session.ConversationId, runToken)
             : await persistence.GetConversationForTurnAsync(session.ConversationId, runToken);
@@ -562,10 +516,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        // The SECOND read of the definition's Kind, and the one this package is actually built from: the resolver
-        // re-reads the definition through its own fresh query, so an operator who switched it to an orchestrator
-        // between the step-1 guard above and this resolve would otherwise get a Completed result from a run that
-        // executed no participant, no routing and no handoff. Judged here rather than trusted from the earlier read.
+        // The SECOND read of the definition's Kind, and the one this package is actually built from: the resolver re-reads the definition through its own
+        // fresh query, so a switch to an orchestrator between the step-1 guard and this resolve is judged here rather than trusted from the earlier read.
         if (resolved.Kind != AgentDefinitionKind.Single)
         {
             await TerminalizeBeforeRunAsync(context,
@@ -574,29 +526,20 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        // 4c. The turn's context, assembled by the SAME builder the chat send path uses, so a continued session replays
-        //     exactly as a conversation does. The seed is LIFTED OUT of the history it is already in: the accept path
-        //     persisted it before this coordinator ran, unlike the chat path where the read precedes the write, so
-        //     concatenating it again would send the caller's input twice.
-        //
-        //     selectedPath is always null — integration conversations never regenerate, so there are no variant groups.
-        //     imageContext and knowledgeContext take their defaults: an integration execution has neither.
+        // 4c. The turn's context, from the SAME builder the chat send path uses. The seed is LIFTED OUT of the history it is already in — the accept path
+        //     persisted it before this coordinator ran — or the caller's input goes twice. selectedPath is null: integration conversations never regenerate.
         var history = conversation with
         {
             Messages = [.. conversation.Messages.Where(message => message.MessageId != executionId)]
         };
-        //     A CALLER-MANAGED continuation additionally carries one framed document replaying the session's committed
-        //     external.output payloads, in the builder's existing attachmentContext slot — so it lands at slot 0, ahead
-        //     of the synopsis and the verbatim turns, which is the same placement and the same reason an uploaded
-        //     attachment gets: it is reference material to read BEFORE the recent turns, not a turn of its own.
+        //     A CALLER-MANAGED continuation adds one framed document of the session's committed external.output payloads, in the builder's existing
+        //     attachmentContext slot: it lands at slot 0, ahead of the synopsis and the verbatim turns, because it is reference material, not a turn.
         var priorOutputs = replaysToolHistory
             ? await BuildPriorOutputsAsync(services, session, executionId, runToken)
             : null;
 
-        //     And the session's own tool history: a caller-managed continuation replays each completed call and its
-        //     result as real function content, so the model can tell an action it PERFORMED from prose describing one.
-        //     Only this policy asks for it — chat's behaviour is unchanged, and a per-invocation run has no history to
-        //     replay.
+        //     And the session's own tool history: a caller-managed continuation replays each completed call and its result as real function content, so the
+        //     model can tell an action it PERFORMED from prose describing one. Only this policy asks for it; chat is unchanged (R6-1).
         var conversationContext = ConversationContextBuilder.Build(history,
             seed,
             selectedPath: null,
@@ -606,25 +549,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             replaysToolHistory,
             toolResultExcerptChars);
 
-        // 5. The headless package. Three things differ from the scheduler's: the conversation id is the OWNED one (a
-        //    throwaway Guid would break every by-conversation resolution downstream), the context is the session's
-        //    history through the same compaction splice chat uses, and AllowedTools is passed THROUGH UNCHANGED.
-        //
-        //    Approval-required tools are deliberately not stripped. For a scheduled run the scheduler's strip logs a
-        //    warning an operator eventually reads; for an external integration it is silent degradation — the caller
-        //    gets a plausible Completed from an agent that quietly lost a capability its configuration says it has, and
-        //    neither the caller nor the response can tell. Left in the offer, ToolApprovalCoordinator sees IsUnattended,
-        //    writes its unattended-unavailable audit row and fails the run by name.
-        // 4d. emit_output, unioned in AFTER the definition's offer ∩ AllowedToolNames intersection and BEFORE the agent
-        //     is constructed — the exact seam ask_user uses, and for the same reason: delivering a result to the caller
-        //     that started this run is a property of running an integration execution, not a per-agent permission.
-        //
-        //     The approval flag is recomposed through the node policy HERE, because this is the only place it can be:
-        //     the offer provider hands out the raw declared flag and consults no policy, and InvocationToolResolver
-        //     reads the flag the offer carries rather than asking the policy itself. So a node that requires approval
-        //     for ReadLocal tightens this tool too, and the run then fails CLOSED at the first call — an operator who
-        //     declares that ReadLocal needs a human cannot be handed a silent exception on the one surface reachable
-        //     from outside the node.
+        // 5. The headless package, and emit_output unioned in AFTER the definition's offer ∩ AllowedToolNames and BEFORE the agent is constructed — the seam
+        //    ask_user uses. Approval-required tools are NOT stripped, and the approval flag is recomposed through the node policy here (R4-5): ADR 0008.
         var approvalPolicy = services.GetRequiredService<IToolApprovalPolicy>();
         var offerProvider = services.GetRequiredService<ILocalToolOfferProvider>();
         AllowedToolDto[] offeredTools =
@@ -660,9 +586,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                   IsUnattended = true
                               });
 
-        // 6. Subscribe BEFORE the lease. This is the ONE subscription lifetime for the whole run: it cannot miss a
-        //    terminal report, and it closes in step 10's finally after the drain and after the terminal append, so no
-        //    event raised during the drain is dropped.
+        // 6. Subscribe BEFORE the lease, and keep ONE subscription lifetime for the whole run: it cannot miss a terminal report, and it closes after the
+        //    drain and after the terminal append, so no event raised during the drain is dropped.
         var dispatcher = services.GetRequiredService<IWorkerEventDispatcher>();
         var terminalState = new StrongBox<InvocationState?>(null);
 
@@ -688,13 +613,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             // The coordinator's own logger: the mapper rides this run's subscription and has no lifetime of its own.
             _logger);
 
-        // 6b. The turn's persisted tool parts, accumulated through the SAME primitive chat feeds — the two paths observe
-        //     the same event on the same invocation filter, so a second accumulation would only be a place to diverge.
-        //     Only the tool half is fed: an integration run streams no reasoning deltas to a persistence pump.
-        //
-        //     Subscribed AFTER the mapper's handler on purpose. A multicast delegate stops at the first handler that
-        //     throws, and the mapper is the one that owns the caller's stream; accumulating parts must never be able to
-        //     cost the caller an event.
+        // 6b. The turn's tool parts accumulate through the SAME primitive chat feeds, and only the tool half is fed: an integration run streams no reasoning
+        //     deltas to a pump. Subscribed AFTER the mapper's handler — a multicast delegate stops at the first throwing handler, and the mapper owns the caller's stream.
         var parts = new NodeChatPartAccumulator();
         var partSequence = 0L;
 
@@ -708,9 +628,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
             if (string.IsNullOrEmpty(payload.ToolCallId))
             {
-                // The accumulator keys parts by call id and throws on an empty one, and InvocationRunner's card-id
-                // resolution can yield one. A payload that cannot be correlated into a call/result pair is dropped
-                // rather than allowed to fault the run.
+                // The accumulator keys parts by call id and throws on an empty one, which InvocationRunner's card-id resolution can yield: a payload that
+                // cannot be correlated into a call/result pair is dropped rather than allowed to fault the run.
                 _logger.LogDebug("Integration execution {ExecutionId} saw a {Phase} lifecycle event for tool {ToolName} with no tool-call id; it is not persisted as a part.",
                     context.ExecutionId,
                     payload.Phase,
@@ -779,10 +698,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        // R5-2: the wait itself runs under the remaining budget. The dispatcher's first act is to await its
-        // SemaphoreSlim on the token it was handed, so the expiry surfaces as an OperationCanceledException with no
-        // lease held. This token goes to the lease request and NOWHERE else — the run must not inherit a token that
-        // expires mid-generation.
+        // R5-2: the lease wait runs under the remaining budget — the dispatcher's first act is to await its SemaphoreSlim on this token, so the expiry
+        // surfaces as an OperationCanceledException with no lease held. The token goes to the lease request and NOWHERE else: the run must not inherit it.
         using var queueDeadline = CancellationTokenSource.CreateLinkedTokenSource(runToken);
         queueDeadline.CancelAfter(TimeSpan.FromMilliseconds(remaining));
 
@@ -790,9 +707,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
         try
         {
-            // 7a. A free slot completes the task synchronously, so an incomplete task is an exact, allocation-free
-            //     "this one had to wait". Accepted -> Running directly is legal; Queued exists only for a real wait,
-            //     and this is its only producer.
+            // 7a. A free slot completes the task synchronously, so an incomplete task is an exact, allocation-free "this one had to wait". Accepted straight
+            //     to Running is legal; Queued exists only for a real wait, and this is its only producer.
             if (!leaseTask.IsCompleted
                 && await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate { ExecutionId = executionId, ExpectedVersion = context.Version, ExpectedStatuses = AcceptedOnly, NewStatus = IntegrationExecutionStatus.Queued }, runToken))
             {
@@ -805,15 +721,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         }
         catch
         {
-            // The lease request is still in flight and this frame is about to unwind past the only await that would
-            // have taken ownership of it. Disposing `queueDeadline` does NOT cancel a pending SemaphoreSlim wait, so
-            // the permit would be granted to nobody and held forever — and that semaphore is the node's ONE invocation
-            // slot, shared with chat, regeneration, the scheduler and the benchmark executors.
-            //
-            // Cancelling first is what keeps this bounded: the wait unwinds at once with no permit held, and in the
-            // race where it was granted a moment earlier the lease comes back here and is disposed. Never a detached
-            // task — the settle has to happen before the fault handler runs, or the row terminalizes while the slot is
-            // still held.
+            // Cancel BEFORE awaiting the in-flight lease: disposing `queueDeadline` does NOT cancel a pending SemaphoreSlim wait, so the permit would be
+            // granted to nobody and hold the node's ONE invocation slot forever. Never a detached task: ADR 0008 ("Invariants the coordinator enforces").
             await queueDeadline.CancelAsync();
             try
             {
@@ -857,19 +766,16 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         IDisposable? reservation = null;
         try
         {
-            // 7b1. A lease acquired at or past the deadline is still a stale run: the caller has been told, or has
-            //      given up, and the node's only invocation slot is about to be spent on a result nobody reads. Checked
-            //      before capacity, before the Running CAS, before any side effect at all.
+            // 7b1. A lease acquired at or past the deadline is still a stale run: the caller has been told, or has given up, and the node's only invocation
+            //      slot is about to be spent on a result nobody reads. Checked before capacity, before the Running CAS, before any side effect at all.
             if (NowUnixMilliseconds() >= deadlineUtc)
             {
                 await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.QueueTimeout, "The execution waited longer than this node's maximum queue age.");
                 return;
             }
 
-            // 7b2. Capacity, with the lease already held. The scheduler decides capacity first and holds the footprint
-            //      reservation across the whole lease wait; reversing the pair is deliberate, so a queued integration
-            //      run cannot fail a concurrent interactive turn's capacity decision while it waits. Disposed in
-            //      reverse acquisition order below.
+            // 7b2. Capacity with the lease already HELD, the reverse of the scheduler's order: a queued integration run must not hold a footprint across the
+            //      lease wait and fail a concurrent interactive turn's capacity decision. Disposed in reverse acquisition order below.
             var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, runToken);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
@@ -921,10 +827,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
                 context.Version = reloaded.Version;
 
-                // The overwhelmingly likely reason this CAS lost: the cancel path stamped its durable stop marker as a
-                // NON-terminal status update, which bumps the version without terminalizing. Reading the marker and
-                // ignoring it raced the cancel to a `Failed / internal-failure` terminal, so a caller that got its 202
-                // from the cancel endpoint was then shown a failure it never caused.
+                // The likely reason this CAS lost: the cancel path stamps its durable stop marker as a NON-terminal status update, which bumps the version
+                // without terminalizing. The marker is honoured rather than ignored, or a caller holding a cancel 202 is shown a failure it never caused.
                 if (reloaded.StopRequestedAtUtc is not null)
                 {
                     await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null);
@@ -941,9 +845,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             context.Version++;
             context.InvocationId = package.InvocationId;
 
-            // 7e. execution.started, then the assistant placeholder. Terminalization correlates on
-            //     (ConversationId, MessageId, RequestId) against an EXISTING placeholder row, so creating it after the
-            //     run would leave the assistant turn unpersisted.
+            // 7e. execution.started, then the assistant placeholder: terminalization correlates on (ConversationId, MessageId, RequestId) against an EXISTING
+            //     placeholder row, so creating it after the run would leave the assistant turn unpersisted.
             var started = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionStarted, contentType: null, payload: null);
             await store.AppendEventAsync(new IntegrationEventAppend { EventId = Guid.NewGuid(), ExecutionId = executionId, Sequence = started.Sequence, EventType = started.Type, DetailJson = null, OccurredAtUtc = started.OccurredAtUtc }, runToken);
 
@@ -968,9 +871,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             {
                 var runner = services.GetRequiredService<IInvocationRunner>();
 
-                // B5 asks for BOTH. The linked run token stops the generation, but only Cancel() cancels the run's
-                // pending tool calls and attributes the turn to CancellationOrigin.User rather than to a bare abort.
-                // Registered for the CURRENT run only, and unregistered with it.
+                // BOTH are needed: the linked run token stops the generation, but only Cancel() cancels the run's pending tool calls and attributes the turn
+                // to CancellationOrigin.User rather than to a bare abort. Registered for the CURRENT run only, and unregistered with it.
                 await using var cancelBridge = cancelToken.Register(() => runner.Cancel(package.InvocationId));
                 var executionContext = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
                 await runner.RunAsync(executionContext, runToken);
@@ -987,9 +889,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         }
         finally
         {
-            // Reverse acquisition order: a leaked reservation wrongly rejects later spawns, and disposing a null one
-            // (QueueSameModel) is a no-op. The inner try is not decoration: a throw from the reservation would
-            // otherwise skip the lease and starve every later run on the node.
+            // Reverse acquisition order: a leaked reservation wrongly rejects later spawns, and a null one (QueueSameModel) disposes as a no-op. The inner
+            // try is not decoration — a throw from the reservation would otherwise skip the lease and starve every later run on the node.
             try
             {
                 reservation?.Dispose();
@@ -1013,9 +914,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     {
         var status = IntegrationExecutionStatus.Failed;
 
-        // 9. The assistant turn, from the terminal state, with whatever tool parts the run accumulated. A turn that
-        //    produced none passes null rather than an empty list, which is the persistence contract's "leave the
-        //    existing parts untouched" and not a claim that the turn ran no tools.
+        // 9. The assistant turn, from the terminal state, with whatever tool parts the run accumulated. A turn that produced none passes null rather than an
+        //    empty list: null is the persistence contract's "leave the existing parts untouched", not a claim that the turn ran no tools.
         if (state is null)
         {
             // The runner returned without reporting. Do not dereference; the row's reason names the case.
@@ -1050,9 +950,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
             if (status == IntegrationExecutionStatus.Failed)
             {
-                // The runner classifies an unattended approval refusal as AgentRuntime and surfaces its own fixed-shape
-                // reason verbatim, so the prefix is what distinguishes "this agent needs a capability it cannot have
-                // unattended" from "something broke" — the whole reason the tools are not stripped.
+                // The runner classifies an unattended approval refusal as AgentRuntime and surfaces its own fixed-shape reason verbatim, so the prefix is what
+                // separates "this agent needs a capability it cannot have unattended" from "something broke" — the whole reason the tools are not stripped.
                 if (failureCategory is null
                     && state.Error is { } error
                     && error.StartsWith(ApprovalUnavailableException.UnattendedReasonPrefix, StringComparison.Ordinal))
@@ -1073,12 +972,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             var provider = await services.GetRequiredService<IUsageProviderResolver>()
                                          .ResolveAsync(state.ModelUsed ?? effectiveModel, CancellationToken.None);
 
-            // The envelope is not optional: SummarizeTokenUsageAsync reads only kind-1 rows, so omitting it would make
-            // an external surface the one path that can silently burn tokens invisibly. The kind-3 audit row does not
-            // fill that gap — it carries a terminal status and a latency, not the token columns.
-            // The trailing telemetry members mirror NodeChatInvocationPump.TerminalizeAsync: an integration run is the
-            // same turn measured the same way, so leaving them unset made this surface the one path whose rows carry no
-            // warm time, no tool-schema estimate and the LAST round's tokens where every other row carries the turn's.
+            // The envelope is not optional: SummarizeTokenUsageAsync reads only kind-1 rows, and the kind-3 audit row carries a status and a latency, not the
+            // token columns. The trailing members mirror NodeChatInvocationPump.TerminalizeAsync, so this surface is measured like every other turn.
             var envelope = new AgentRunEnvelopeMetadata
             {
                 InvocationId = state.InvocationId,
@@ -1127,11 +1022,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                                   CancellationToken.None);
         }
 
-        // 9b. THE DRAIN SEAM. The mapper persists tool.* rows off a channel, and without an awaited drain here one of
-        //     them can land AFTER the terminal event — which a reader that stops on the terminal would never see. The
-        //     drain latches the handlers shut too, so the terminal appended below is provably the highest sequence for
-        //     the execution. CancellationToken.None: past the run, these rows carry sequences the ring has already
-        //     published, so abandoning the write would leave a visible event with no durable row behind it.
+        // 9b. THE DRAIN SEAM: an undrained tool.* row can land AFTER the terminal event, which a reader that stops on the terminal would never see. It also
+        //     latches the handlers shut, so the terminal below is provably the highest sequence; CancellationToken.None, because the ring already published them.
         try
         {
             await mapper.DrainAsync(CancellationToken.None);
@@ -1146,33 +1038,27 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             failureSummary = "The execution's tool events could not be persisted.";
         }
 
-        // 10. One transaction: the status CAS, the terminal event at the reserved sequence, and both watermarks. Never
-        //     Append for a terminal event (that publishes before the row exists), and never a status CAS followed by a
-        //     separate event insert (a crash between them leaves a terminal row whose terminal event never arrives, and
-        //     startup recovery scans only NON-terminal rows, so the inconsistency would be permanent).
+        // 10. ONE transaction (ruling R5-4): the status CAS, the terminal event at the reserved sequence, and both watermarks. Never Append for a terminal
+        //     event — it publishes before the row exists — and never a CAS plus a separate insert: startup recovery scans only NON-terminal rows.
         if (!await TerminalizeAsync(context, RunningOnly, status, failureCategory, failureSummary))
         {
-            // A Running row that lost every bounded attempt is stranded: nothing else will pick it up, and its
-            // admission slot is held until the process restarts. The fault path re-reads over EVERY non-terminal
-            // status, honours the marker it finds and returns at once if some other writer closed the row first.
+            // A Running row that lost every bounded attempt is stranded: nothing else picks it up, and its admission slot is held until the process restarts.
+            // The fault path re-reads over EVERY non-terminal status, honours the stop marker it finds, and returns at once if another writer closed the row.
             await TerminalizeFromFaultAsync(context, status, failureCategory, failureSummary);
         }
     }
 
     /// <summary>
     ///     Replays the session's committed <c>external.output</c> payloads back to the model as DATA, so a continued run
-    ///     can tell a result it already delivered from prose it merely wrote — the property a caller-managed session
-    ///     cannot otherwise have while tool parts are not persisted.
-    ///     <para>
-    ///         Two reads, no new store method: the session's most recent executions newest-first, then each one's
-    ///         persisted events. The CURRENT execution is skipped (it has committed nothing yet) and so is any row whose
-    ///         <c>OutputCount</c> is zero, so a session of pure-prose turns costs one indexed query and no more.
-    ///     </para>
-    ///     <para>
-    ///         Only COMMITTED rows are read, which is what makes the replay match what the caller actually received: a
-    ///         reserved-but-abandoned sequence never became a row, so it leaves no trace here.
-    ///     </para>
+    ///     can tell a result it already delivered from prose it merely wrote.
     /// </summary>
+    /// <remarks>
+    ///     Two reads and no new store method: the session's most recent executions newest-first, then each one's
+    ///     persisted events. The CURRENT execution is skipped (it has committed nothing yet), as is any row whose
+    ///     <c>OutputCount</c> is zero, so a session of pure-prose turns costs one indexed query and no more. Only
+    ///     COMMITTED rows are read: a reserved-but-abandoned sequence never became a row, so the replay matches what
+    ///     the caller actually received.
+    /// </remarks>
     private async Task<ConversationMessageDto?> BuildPriorOutputsAsync(IServiceProvider services,
         IntegrationSessionSnapshot session,
         Guid currentExecutionId,
@@ -1199,9 +1085,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 continue;
             }
 
-            // ponytail: a single page rather than a paging loop — an execution's persisted rows are bounded by the
-            // 40-iteration tool cap (a handful of phase events, at most 80 tool.* and at most 40 external.output). If
-            // MaximumToolIterationsPerRequest is ever raised, raise this with it.
+            // ponytail: one page, not a paging loop — an execution's persisted rows are bounded by the 40-iteration tool cap (a handful of phase events, at
+            // most 80 tool.* and at most 40 external.output). Raise this limit with MaximumToolIterationsPerRequest if that cap is ever raised.
             var events = await store.ListEventsAsync(execution.Id, sinceSequence: 0, limit: 200, cancellationToken);
             for (var index = events.Count - 1; index >= 0; index--)
             {
@@ -1236,14 +1121,14 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     }
 
     /// <summary>
-    ///     Closes the session of a terminalized <c>PerInvocation</c> execution. A per-invocation session exists for one
-    ///     run, so leaving it <c>Active</c> would show an operator a session nothing will ever join. A
-    ///     <c>CallerManaged</c> session is closed only by the operator's delete, which is the whole point of the policy.
-    ///     <para>
-    ///         Best effort and never fatal: the execution is already terminal and its caller has already been answered,
-    ///         so a failure here is a log line rather than a reason to reopen a committed terminal.
-    ///     </para>
+    ///     Closes the session of a terminalized <c>PerInvocation</c> execution, which exists for one run and would
+    ///     otherwise show an operator a session nothing will ever join.
     /// </summary>
+    /// <remarks>
+    ///     A <c>CallerManaged</c> session is closed only by the operator's delete, which is the whole point of the
+    ///     policy. Best effort and never fatal: the execution is already terminal and its caller already answered, so a
+    ///     failure here is a log line rather than a reason to reopen a committed terminal.
+    /// </remarks>
     private async Task ClosePerInvocationSessionAsync(IServiceProvider services, IntegrationExecutionSnapshot execution)
     {
         try

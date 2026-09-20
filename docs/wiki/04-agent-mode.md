@@ -568,6 +568,63 @@ The child is built like an orchestration participant (`ChatClientAgent`) with th
 binding-resolved tool set (spawn already filtered out) and run as an `AIFunction` inside a `Depth+1`
 `SpawnContext` scope. Spawn is restricted to explicit profiles, never the mode-off chat path.
 
+#### What the capacity gate admits without probing
+
+`CapacityService.DecideAsync` short-circuits twice before it reads any byte budget.
+
+A **cloud-routed model** is admitted unprobed: its sends cost this node no bytes and no process. The check is keyed
+on the request's `modelName` rather than on the node-default selection, because `RuntimeChatClient` re-selects the
+provider per send from the same per-request model id — so an active Codex session must not exempt a spawn that
+explicitly names a local model, and a local model must still be admitted on its own footprint while Codex is
+signed in.
+
+An **operator-registered external OpenAI-compatible model** is admitted unprobed for the same reason: it runs
+entirely on someone else's hardware, the node starts no process and loads no weights, and the footprint provider
+has no GGUF to size — so *not* admitting it would be actively wrong, rejecting every such send as "footprint could
+not be determined". Two conditions are checked on purpose. The provider-map row written by the save path is the
+normal route; the model id's `ext:` scheme is the backstop for the window where that row is missing — a crash
+between the encrypted-store commit and the map sync, or a row the reconciliation pass has not repaired yet — in
+which the model would otherwise default-route to `llamacpp` and be rejected on a footprint it can never have.
+Neither branch grants anything: capacity admission is about local resources only, and an external model's trust and
+egress decision is made elsewhere, from its operator-declared locality.
+
+The rest of the decision runs under `IPendingFootprintLedger.EnterDecisionAsync`. The device audit is warmed
+**before** that gate, because its bounded, cached `--list-devices` probe would otherwise serialize every capacity
+decision behind a one-time probe. The hardware profile is then force-refreshed **under** the gate: an admission
+decision runs per model-load — rare, and already serialized — so it reads a live VRAM/RAM snapshot rather than the
+profiler's boot-time cache, and the gate bounds it to one probe in flight. `GetEffectiveProfileAsync` degrades that
+profile to CPU-mode when the audit reports a silent CPU fallback (see
+[03-local-runtime-and-providers.md](03-local-runtime-and-providers.md) §2.5), so a GPU box whose runtime enumerates
+no devices sizes against system RAM instead of pretending VRAM exists.
+
+#### What a profile-bound child inherits
+
+A profile-bound child consumes the SAME complete `ResolvedAgentRuntime` a direct agent send does — resolved once,
+from the definition snapshot already read rather than by id, so a concurrent edit cannot assemble one child out of
+two versions. It therefore inherits the resolved system prompt (scaffold + persona + injected playbook memory),
+reasoning effort (gated on the child model's own thinking capability, mirroring `ParticipantReasoningOptions`),
+skills (MAF progressive disclosure), AND its curated tools — not just the tool set. This is structurally the
+orchestration-participant path: an agent-as-tool never receives the outer runner's per-run `RunOptions`, so
+reasoning and skills must be baked into the agent at construction.
+
+A profile-bound child's curated tools are `offer ∩ AllowedToolNames`, minus `spawn_subagent` AND any approval-gated
+tool — a child has no HITL route to answer an approval request (§4.4). A model-id-only child (no profile, no
+`AllowedToolNames`) stays as it was: raw request instructions, tool-less, no reasoning and no skills. Post-run
+adaptive-memory **extraction** stays disabled for a child, an intentional restriction.
+
+**The child pins its own external binding.** `SubAgentSpawnService.RunSubAgentAsync` resolves the child's pin through
+`ExternalProviderInvocationPin` and opens `ExternalProviderBindingPinScope` for it, exactly as `InvocationRunner` does
+for the parent turn. The parent's pin is keyed by the *parent* model, so without this an external child's sends find no
+pin and fall through to the transport's weaker unpinned check — **while the child is running with a tool set that was
+authorized against the declaration read here**. That is the reason the mismatch matters: a turn decides once, before
+its first send, which tools the model may be offered from the connection's declared locality, and the pin is what makes
+every later send in the tool loop verifiable against that same declaration.
+
+The scope is opened **synchronously, in this frame**, and not inside the async helper: an `AsyncLocal<T>` written
+inside an `async` method is invisible to its caller, so a pin seeded there would not survive the helper's return. The
+child run happens inside this frame's flow, so the scope reaches it; pins stack, so the parent's pin lives on
+underneath and is restored on dispose.
+
 ### 2.4 Usage and estimated cost
 
 Completed agent run envelopes retain metadata-only usage: model, provider, UTC timestamp, and
@@ -627,6 +684,29 @@ reference values, so one place documents the whole turn's bounds.
 `WithEffectiveContext` folds the window a local model actually launched with back into the policy.
 `RequestedContextTokens` is what makes that safe: a user-requested `num_ctx` is a ceiling to keep, while the
 untrusted configured default must be **replaced** by the real launched window.
+
+### 2.6 The coder reader
+
+`CoderWorkspaceReader` (`Services/Coder/Implementation/CoderWorkspaceReader.cs`) is the single read-only gateway behind
+`list_files`, `read_file` and `search_text`. All three are **provider** operations — `ISandboxRuntimeProvider.ListFilesAsync`,
+`ReadFileAsync` and `SearchTextAsync` — not argument vectors handed to `ExecuteAsync`.
+
+That matters twice. A `find`/`grep` argument vector is POSIX-only: on a stock Windows 11 install `grep` does not exist and
+`find` resolves to the DOS tool, which rejects the vector. And it puts the confinement in an argument list this class would
+have to keep correct, rather than in the component that owns the jail. A typed search request carries the pattern as **data**,
+so a value beginning with `-` cannot be read as a flag, and a model-supplied expression runs under a per-line timeout the
+shell-out never had.
+
+The **secret exclusions stay with the reader as caller policy**, deliberately. They are supplied to the provider so excluded
+trees are pruned *before* the result budgets — a large `.git` baseline sorts ahead of project aliases and would otherwise
+consume the whole cap — and then re-applied to the returned paths as defence in depth. The policy is broader than Development
+Mode's: Coder drops its whole copy-filter set, not just credentials. The `read_file` post-filter gates on `IsSecret` only,
+because a preserved workspace legitimately contains build output and refusing `bin`/`obj`/`node_modules` would cost an agent
+real capability while protecting nothing.
+
+Every result the model sees is fenced through `UntrustedContentFraming` with a per-call **random** nonce: workspace file
+names, match lines and file content are all attacker-influenced, and a tool result is query-dynamic rather than a
+prompt-cache-stable prefix. Node-authored lead lines and truncation notices stay outside the fence.
 
 ---
 

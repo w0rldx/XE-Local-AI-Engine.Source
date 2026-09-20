@@ -7,13 +7,12 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 ///     <see cref="IClientLocalToolHandler" /> for <c>run_python</c> (ClientLocal). The bridge is JSON-in / JSON-out, so
 ///     this handler deserializes the model arguments, honors cancellation, and delegates to
 ///     <see cref="IComputeToolGateway" />.
-///     <para>
-///         It deliberately holds NO copy of the node kill-switch and NO copy of the request validation: both live in
-///         <see cref="IComputeToolGateway.ExecuteDetailedAsync" />, which every caller goes through. While they lived
-///         here they were properties of this handler rather than of the sandbox, so a second caller of the gateway got
-///         neither. The model-facing sentences are unchanged — they moved with the checks.
-///     </para>
 /// </summary>
+/// <remarks>
+///     It deliberately holds NO copy of the node kill-switch and NO copy of the request validation: both live in
+///     <see cref="IComputeToolGateway.ExecuteDetailedAsync" />, which every caller goes through. A copy here would be a
+///     property of this handler rather than of the sandbox, so a second caller of the gateway would get neither.
+/// </remarks>
 internal sealed class RunPythonToolHandler : IClientLocalToolHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -31,9 +30,8 @@ internal sealed class RunPythonToolHandler : IClientLocalToolHandler
 
     public string ParameterSchema => ComputeToolDefinition.ParameterSchema;
 
-    // Executing model-authored code is the most consequential thing a local tool can do, so it takes the same
-    // out-of-stream approval round-trip as run_in_agent_home. An operator who wants it unattended loosens it through
-    // the existing per-node effective-approval policy rather than through a second mechanism here.
+    // Executing model-authored code is the most consequential thing a local tool can do, so it takes the same out-of-stream
+    // approval round-trip as run_in_agent_home. Unattended use is loosened through the per-node effective-approval policy, never a second mechanism here.
     public bool RequiresApproval => true;
 
     public async Task<string> ExecuteAsync(string jsonArguments, CancellationToken cancellationToken = default)

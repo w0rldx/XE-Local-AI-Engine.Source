@@ -21,14 +21,14 @@ public sealed class IntegrationInputDto
 
 /// <summary>
 ///     Everything the accept path needs. <see cref="RawBody" /> is the exact bytes the handler read off the wire,
-///     carried through because the dedup fingerprint is over them: a retry that does not resend a byte-identical body
-///     is a 409, deliberately, and there is no JSON canonicalisation anywhere in this feature.
-///     <para>
-///         <see cref="PrincipalId" /> is the IDENTITY — ownership, request uniqueness and the fingerprint all key on
-///         it. <see cref="KeyPrefix" /> rides along only so the execution row and the audit row can name which
-///         credential was used.
-///     </para>
+///     carried through because the dedup fingerprint is over them.
 /// </summary>
+/// <remarks>
+///     A retry that does not resend a byte-identical body is a 409, deliberately, and there is no JSON canonicalisation
+///     anywhere in this feature. <see cref="PrincipalId" /> is the IDENTITY — ownership, request uniqueness and the
+///     fingerprint all key on it — while <see cref="KeyPrefix" /> rides along only so the execution row and the audit
+///     row can name which credential was used.
+/// </remarks>
 public sealed class IntegrationAcceptRequest
 {
     public required string TriggerName { get; init; }
@@ -73,9 +73,9 @@ public enum IntegrationAcceptOutcome
 
     /// <summary>
     ///     The named session does not exist, belongs to another integrator, belongs to a trigger this key's allowlist
-    ///     excludes, or belongs to a DIFFERENT trigger — one 404 for all four, byte-identical, so the surface cannot be
-    ///     used to enumerate session ids.
+    ///     excludes, or belongs to a DIFFERENT trigger.
     /// </summary>
+    /// <remarks>One 404 for all four, byte-identical, so the surface cannot be used to enumerate session ids.</remarks>
     SessionNotFound,
 
     /// <summary>The named session is closed and accepts no further execution. 409.</summary>
@@ -107,10 +107,12 @@ public sealed class IntegrationAcceptResult
 }
 
 /// <summary>
-///     The CLOSED failure vocabulary. Ten values and no more — an eleventh is a bug, not an extension point — and every
-///     one is content-free by contract, so a category can be rendered in a UI and written to an audit row without
-///     leaking any part of a caller's request.
+///     The CLOSED failure vocabulary: ten values and no more — an eleventh is a bug, not an extension point.
 /// </summary>
+/// <remarks>
+///     Every one is content-free by contract, so a category can be rendered in a UI and written to an audit row
+///     without leaking any part of a caller's request.
+/// </remarks>
 public static class IntegrationFailureCategories
 {
     /// <summary>The trigger or its target agent was gone or unusable by the time the run started.</summary>
@@ -199,14 +201,11 @@ public sealed class IntegrationAcceptResponse
     public required IntegrationExecutionLinks Links { get; init; }
 }
 
-/// <summary>
-///     The status GET body.
-///     <para>
-///         <see cref="OutputCount" /> is the execution row's transactional counter, never a buffer read and never a row
-///         count: the buffer is evictable and a restarted node would report zero for a run that did emit. It reads
-///         <c>0</c> until the built-in output tool ships, which is the true answer rather than a placeholder.
-///     </para>
-/// </summary>
+/// <summary>The status GET body.</summary>
+/// <remarks>
+///     <see cref="OutputCount" /> is the execution row's transactional counter, never a buffer read and never a row
+///     count: the buffer is evictable, and a restarted node would report zero for a run that did emit.
+/// </remarks>
 public sealed class IntegrationExecutionStatusResponse
 {
     public required Guid ExecutionId { get; init; }
@@ -231,10 +230,13 @@ public sealed class IntegrationExecutionStatusResponse
 }
 
 /// <summary>
-///     The external session GET body. Deliberately thin: a session id, the trigger NAME an integrator addresses, the
-///     status, and the two activity counters. It carries no principal, no key prefix and no conversation id — an
-///     integrator needs none of them, and each would be a fact about the node it should not learn.
+///     The external session GET body: a session id, the trigger NAME an integrator addresses, the status, and the two
+///     activity counters.
 /// </summary>
+/// <remarks>
+///     Deliberately thin — it carries no principal, no key prefix and no conversation id: an integrator needs none of
+///     them, and each would be a fact about the node it should not learn.
+/// </remarks>
 public sealed class IntegrationSessionStatusResponse
 {
     public required Guid SessionId { get; init; }

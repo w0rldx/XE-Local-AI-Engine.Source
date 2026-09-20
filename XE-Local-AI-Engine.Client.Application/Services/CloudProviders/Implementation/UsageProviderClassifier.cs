@@ -7,13 +7,15 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
 ///     Pure mapping from the runtime's own provider names to the canonical usage-ledger provider labels
-///     (<see cref="AgentUsageProviders" />). A resolved cloud selection wins (a turn that reached a cloud provider is
-///     attributed there even if a local model of the same name exists); an external OpenAI-compatible model is
-///     attributed to its own connection; otherwise the local runtime that serves the model decides <c>local</c>
-///     (llama.cpp) vs <c>ollama</c>. Anything unrecognized — including a cloud name this build does not know and the
-///     "no provider resolved" case — degrades to <see cref="AgentUsageProviders.Unknown" />. No I/O and no throwing, so
-///     it is trivially unit-testable; the async resolution around it lives in <see cref="UsageProviderResolver" />.
+///     (<see cref="AgentUsageProviders" />).
 /// </summary>
+/// <remarks>
+///     A resolved cloud selection wins: a turn that reached a cloud provider is attributed there even if a local model of the
+///     same name exists. An external OpenAI-compatible model is attributed to its own connection; otherwise the local runtime
+///     serving the model decides <c>local</c> (llama.cpp) vs <c>ollama</c>. Anything unrecognized, including a cloud name this
+///     build does not know and the "no provider resolved" case, degrades to <see cref="AgentUsageProviders.Unknown" />. No I/O
+///     and no throwing; the async resolution around it lives in <see cref="UsageProviderResolver" />.
+/// </remarks>
 internal static class UsageProviderClassifier
 {
     /// <summary>The usage-provider label prefix for an external connection: <c>external:{connectionId}</c>.</summary>

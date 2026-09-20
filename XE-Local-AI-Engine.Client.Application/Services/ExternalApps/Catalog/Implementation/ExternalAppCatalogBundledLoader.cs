@@ -2,13 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog.Implementation
 
 using System.Reflection;
 
-/// <summary>
-///     Loads the embedded <c>external-apps-catalog.seed.json</c> resource — the always-available catalog the provider
-///     serves when no remote refresh is configured, a remote fetch fails, and no last-good persisted copy exists.
-///     Validated through the same <see cref="ExternalAppCatalogValidator" /> gate as a remote fetch: a bundled-content
+/// <summary>Loads the embedded <c>external-apps-catalog.seed.json</c> resource: the always-available catalog served when no remote or last-good copy is usable.</summary>
+/// <remarks>
+///     Validated through the same <see cref="ExternalAppCatalogValidator" /> gate as a remote fetch. A bundled-content
 ///     bug must never crash the node, so a failed validation degrades to an empty (but schema-valid) catalog with a
 ///     loud error log rather than throwing out of the DI graph. Mirrors <c>ModelCatalogBundledLoader</c>.
-/// </summary>
+/// </remarks>
 internal static class ExternalAppCatalogBundledLoader
 {
     private const string ResourceNameSuffix = "external-apps-catalog.seed.json";
@@ -21,11 +20,11 @@ internal static class ExternalAppCatalogBundledLoader
         return Load(logger, typeof(ExternalAppCatalogBundledLoader).Assembly);
     }
 
-    /// <summary>
-    ///     Overload naming the assembly to read the seed from. Production always passes this one's own assembly; the
-    ///     seam exists so the degrade-to-empty path — unreachable while the resource is embedded — is provable by a
-    ///     test that passes an assembly carrying no such resource.
-    /// </summary>
+    /// <summary>Overload naming the assembly to read the seed from; production always passes this one's own assembly.</summary>
+    /// <remarks>
+    ///     The seam exists so the degrade-to-empty path — unreachable while the resource is embedded — is provable by
+    ///     a test that passes an assembly carrying no such resource.
+    /// </remarks>
     public static ExternalAppCatalogDocument Load(ILogger logger, Assembly assembly)
     {
         ArgumentNullException.ThrowIfNull(logger);
@@ -40,10 +39,8 @@ internal static class ExternalAppCatalogBundledLoader
             return EmptyDocument();
         }
 
-        // Forced sync: the only production caller is the ApplicationCatalogProvider constructor, which publishes
-        // the loaded document through synchronous reads, so there is no async initialisation seam to move this to;
-        // the tests add a static field initializer (ShippedCatalogSeedTests.Seed), which cannot await either. The
-        // resource is embedded in this assembly, so the read never touches the filesystem.
+        // Forced sync: the only production caller is the ApplicationCatalogProvider constructor and the tests read it
+        // from a static field initializer (ShippedCatalogSeedTests.Seed) — neither can await, and the read is in-memory.
 #pragma warning disable MA0045 // forced sync: constructor-time embedded-resource read (see comment above)
         using var stream = assembly.GetManifestResourceStream(resourceName);
         if (stream is null)

@@ -3,11 +3,12 @@ namespace XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using System.Globalization;
 using System.Net;
 
-/// <summary>
-///     One host network interface, reduced to the four facts the bridge decides on. It exists so the decision is a
-///     pure function of its inputs: <c>System.Net.NetworkInformation</c> describes only the interfaces THIS machine
-///     has, and the rules for the machines it is not have to be testable rather than reasoned about.
-/// </summary>
+/// <summary>One host network interface, reduced to the four facts the bridge decides on.</summary>
+/// <remarks>
+///     It exists so the decision is a pure function of its inputs: <c>System.Net.NetworkInformation</c> describes
+///     only the interfaces THIS machine has, and the rules for the machines it is not have to be testable rather
+///     than reasoned about.
+/// </remarks>
 public sealed class HostInterfaceSnapshot
 {
     /// <summary>Whether the interface is operationally up.</summary>
@@ -43,24 +44,14 @@ public sealed record ResolvedContainerBridgeEndpoint(IPAddress BindAddress, int 
     public string ListenerUrl { get; } = string.Create(CultureInfo.InvariantCulture, $"http://{BindAddress}:{Port}");
 #pragma warning restore S5332
 
-    /// <summary>
-    ///     Whether a connection arrived on THIS listener, judged by the local end of its socket — the one fact a
-    ///     caller cannot forge, since it is the address and port the connection was accepted on rather than anything
-    ///     it sent.
-    ///     <para>
-    ///         The address half is load-bearing, not belt-and-braces. A port alone is ambiguous on a node whose
-    ///         loopback listener was given the bridge's port (a desktop launch with <c>--port 18790</c>), and every
-    ///         ordinary SPA and API request would then be routed into the bridge branch. The node refuses to open a
-    ///         bridge in that situation, and this is the second half of the same answer.
-    ///     </para>
-    ///     <para>
-    ///         An IPv4-mapped IPv6 local address is folded back to IPv4 before comparing, because a dual-stack
-    ///         socket reports the bound IPv4 address in its mapped form and <see cref="IPAddress.Equals(IPAddress)" />
-    ///         does not treat the two spellings as equal.
-    ///     </para>
-    /// </summary>
-    /// <param name="localAddress">The local address the connection was accepted on.</param>
-    /// <param name="localPort">The local port the connection was accepted on.</param>
+    /// <summary>Whether a connection arrived on THIS listener, judged by the local end of its socket — the one fact a caller cannot forge.</summary>
+    /// <remarks>
+    ///     The address half is load-bearing, not belt-and-braces: a port alone is ambiguous on a node whose loopback
+    ///     listener was given the bridge's port (a desktop launch with <c>--port 18790</c>), and every ordinary SPA
+    ///     and API request would then route into the bridge branch. An IPv4-mapped IPv6 local address is folded back
+    ///     to IPv4 first, because a dual-stack socket reports the bound IPv4 address in its mapped form and
+    ///     <see cref="IPAddress.Equals(IPAddress)" /> does not treat the two spellings as equal.
+    /// </remarks>
     public bool Matches(IPAddress? localAddress, int localPort)
     {
         if (localPort != Port || localAddress is null)
@@ -73,15 +64,12 @@ public sealed record ResolvedContainerBridgeEndpoint(IPAddress BindAddress, int 
     }
 }
 
-/// <summary>
-///     Where the bridge listener actually ended up, published from the composition root into the services that need
-///     to tell a container about it.
-///     <para>
-///         It exists because the bind address is resolved during host construction — before any service is built —
-///         and is <see langword="null" /> whenever the bridge did not open. Reading it through one object rather than
-///         re-resolving it per caller is what keeps every container on a node pointed at the same address.
-///     </para>
-/// </summary>
+/// <summary>Where the bridge listener actually ended up, published from the composition root into the services that must tell a container about it.</summary>
+/// <remarks>
+///     The bind address is resolved during host construction, before any service is built, and is
+///     <see langword="null" /> whenever the bridge did not open. Reading it through one object rather than
+///     re-resolving it per caller is what keeps every container on a node pointed at the same address.
+/// </remarks>
 public sealed class ContainerBridgeEndpointSource
 {
     public ContainerBridgeEndpointSource(ResolvedContainerBridgeEndpoint? endpoint)

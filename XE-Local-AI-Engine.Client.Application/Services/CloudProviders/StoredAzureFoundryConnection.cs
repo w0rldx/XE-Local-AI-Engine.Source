@@ -79,9 +79,11 @@ public sealed record StoredAzureFoundryConnection
     /// </summary>
     public string? EntraAuthCodeRedirectUri { get; init; }
 
-    // The sealed-record PrintMembers signature is private. It redacts the API key and Entra client secret and
-    // delegates per-header secret redaction (each header's own ToString redacts) so no secret value or key ever
-    // leaks via ToString.
+    /// <summary>Redacts the API key and the Entra client secret, and delegates per-header secret redaction.</summary>
+    /// <remarks>
+    ///     The sealed-record <c>PrintMembers</c> signature is private. Each header's own <c>ToString</c> redacts, so no
+    ///     secret value or key ever leaks via <c>ToString</c>.
+    /// </remarks>
     private bool PrintMembers(StringBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

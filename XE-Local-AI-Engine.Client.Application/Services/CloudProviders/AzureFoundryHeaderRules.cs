@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 /// <summary>
-///     Shared validation rules for custom Azure Foundry request headers. Enforced both endpoint-side (name-only
-///     <c>ValidationProblem</c> messages) and in <c>CloudCredentialStore.ValidateConfig</c> as defense-in-depth, and
-///     the reserved set is reused by the outbound pipeline policy as a defense-in-depth skip.
+///     Shared validation rules for custom Azure Foundry request headers.
 /// </summary>
+/// <remarks>
+///     Enforced both endpoint-side (name-only <c>ValidationProblem</c> messages) and in
+///     <c>CloudCredentialStore.ValidateConfig</c> as defense-in-depth; the reserved set is reused by the outbound
+///     pipeline policy as a defense-in-depth skip.
+/// </remarks>
 public static class AzureFoundryHeaderRules
 {
     /// <summary>Maximum number of custom headers per connection.</summary>
@@ -59,10 +62,12 @@ public static class AzureFoundryHeaderRules
     }
 
     /// <summary>
-    ///     Returns true when the value contains only RFC 7230 field-value characters: rejects CR, LF, NUL,
-    ///     all control chars <c>0x00–0x1F</c> except HTAB (<c>0x09</c>), and DEL (<c>0x7F</c>). Null / empty is allowed
-    ///     (a blank value is a distinct case handled by merge + secret-resolvable validation).
+    ///     Returns true when the value contains only RFC 7230 field-value characters.
     /// </summary>
+    /// <remarks>
+    ///     Rejects CR, LF, NUL, all control chars <c>0x00–0x1F</c> except HTAB (<c>0x09</c>), and DEL (<c>0x7F</c>).
+    ///     Null / empty is allowed: a blank value is a distinct case handled by merge + secret-resolvable validation.
+    /// </remarks>
     public static bool IsValidHeaderValue(string? value)
     {
         if (string.IsNullOrEmpty(value))

@@ -8,28 +8,25 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 /// <summary>
 ///     Chooses the loopback host port every published <c>ui</c> port of one deployment attempt is bound to, and holds
 ///     it until the container that publishes it is created.
-///     <para>
-///         The engine always passes an explicit host port rather than letting the daemon assign one, because
-///         <c>XE_UI_HOST_PORT_&lt;service&gt;</c> may appear in ANOTHER service's environment — a service can carry a
-///         browser-visible URL pointing at a sibling's published port — so a daemon-assigned port would not be known
-///         in time to build the environment of the container that references it.
-///     </para>
 /// </summary>
 /// <remarks>
-///     The bind probe is the one Development Mode and the llama-server supervisor already use, with the difference
-///     that decides the feature: the listener is KEPT OPEN. Probing and closing leaves a window per port that widens
-///     with every image pulled between the probe and the create, and the window is exactly where another process on
-///     the box takes the port.
+///     The engine always passes an explicit host port rather than letting the daemon assign one, because
+///     <c>XE_UI_HOST_PORT_&lt;service&gt;</c> may appear in ANOTHER service's environment, so a daemon-assigned port
+///     would not be known in time to build that container's environment. The bind probe is the one Development Mode
+///     and the llama-server supervisor use, with the difference that decides the feature: the listener is KEPT OPEN,
+///     because probing and closing leaves a window per port in which another process takes it.
 /// </remarks>
 internal static class ExternalAppPortAllocator
 {
     private const string UiRole = "ui";
 
     /// <summary>
-    ///     Probes and holds one host port for every <c>ui</c> port the manifest declares, in manifest order. The
-    ///     caller releases each one immediately before creating the container that publishes it, and disposes the
-    ///     hold to release whatever is left when the attempt ends either way.
+    ///     Probes and holds one host port for every <c>ui</c> port the manifest declares, in manifest order.
     /// </summary>
+    /// <remarks>
+    ///     The caller releases each one immediately before creating the container that publishes it, and disposes the
+    ///     hold to release whatever is left when the attempt ends either way.
+    /// </remarks>
     public static ExternalAppPortHold Hold(ApplicationManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(manifest);
@@ -160,9 +157,8 @@ internal sealed class ExternalAppPortHold : IDisposable
         {
             socket.Bind(new IPEndPoint(IPAddress.Loopback, hostPort));
 
-            // Listening, not merely bound. Linux lets two SO_REUSEADDR sockets bind one address as long as neither is
-            // in the LISTEN state, so a bound-only "hold" holds nothing: the daemon would take the port anyway and
-            // the reservation this whole type exists for would be a no-op.
+            // Listening, not merely bound: Linux lets two SO_REUSEADDR sockets bind one address as long as neither is in the LISTEN state, so a bound-only
+            // "hold" holds nothing — the daemon would take the port anyway and the reservation this whole type exists for would be a no-op.
             socket.Listen(backlog: 1);
             return socket;
         }

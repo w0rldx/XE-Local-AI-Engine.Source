@@ -178,6 +178,197 @@ run end. The narrowing that buys it: `UpdateStatusAsync` no longer moves an exec
 `FailNonTerminalAsync` — a bulk `UPDATE` that by construction writes no events — is gone, so there is exactly **one**
 way for a run to end.
 
+## Invariants the coordinator enforces
+
+`IntegrationExecutionCoordinator` is the single consumer of the accept path's queue, the only component that runs an
+execution and the only producer of an execution's terminal event. It drives the scheduler's `run-agent` seam —
+`IAgentDefinitionResolver` → `ILocalChatRuntimePackageBuilder` → `InvocationExecutionContext.CreatePlain` →
+`IInvocationRunner` — with `IsUnattended: true`, and diverges from it in three ways.
+
+**The invocation lease is taken BEFORE the capacity reservation.** The scheduler decides capacity first and holds the
+footprint reservation across the whole lease wait; reversing the pair keeps a queued integration run from failing a
+concurrent interactive turn's capacity decision while it waits. The two are disposed in reverse acquisition order: a
+leaked reservation wrongly rejects later spawns, and a throw from the reservation must not skip the lease and starve
+every later run on the node.
+
+**Approval-required tools are offered, never stripped.** The scheduler's strip logs a warning an operator eventually
+reads; on an external surface it is silent degradation — the caller gets a plausible `Completed` from an agent that
+quietly lost a capability its configuration says it has, and neither the caller nor the response can tell. Left in the
+offer, `ToolApprovalCoordinator` sees `IsUnattended`, writes its unattended-unavailable audit row and fails the run by
+name (decision 4, ruling R4-5). The runner classifies that refusal as `AgentRuntime` and surfaces its own fixed-shape
+reason verbatim, so `ApprovalUnavailableException.UnattendedReasonPrefix` is what separates "this agent needs a
+capability it cannot have unattended" from "something broke".
+
+**The lease wait runs under the queue-age deadline**, so `MaxQueueAgeSeconds` bounds something a caller can observe. It
+is checked three times: a cheap pre-check before the wait, the `CancelAfter` on the wait itself (ruling R5-2), and a
+re-check after the lease is acquired — a lease granted at or past the deadline is a stale run, and the node's only
+invocation slot must not be spent on a result nobody reads. The deadline token goes to the lease request and nowhere
+else: the run must not inherit a token that expires mid-generation.
+
+### The channel reader dispatches, it does not serialise
+
+Awaiting the run inside the reader loop would hold the next id in the channel for the whole of the current run, and
+every deadline control — the queue-age pre-check, the `CancelAfter`, the post-acquisition re-check — plus the sole
+writer of `Queued` lives inside that method: a second execution would never reach `Queued`, never start measuring its
+queue age, and only time out once the run ahead of it finished, so R5-2's bound would measure the wrong thing.
+Dispatching instead lets every admitted execution wait on the invocation lease itself — a `SemaphoreSlim` granting in
+wait order — which is what serialises the runs. The live-task count is bounded by the admission cap, because each task
+holds a non-terminal row against it.
+
+### An in-flight lease request is always settled
+
+The lease semaphore is the node's ONE invocation slot, shared with chat, regeneration, the scheduler and the benchmark
+executors. Disposing the deadline source does not cancel a pending `SemaphoreSlim` wait, so a frame unwinding past the
+only `await` that would have taken ownership of the request cancels first, then awaits and disposes it: the wait unwinds
+at once with no permit held, and in the race where the permit was granted a moment earlier the lease comes back and is
+disposed. Never a detached task — the settle happens before the fault handler runs, or the row terminalises while the
+slot is still held.
+
+### The startup sweep reads the whole non-terminal set once
+
+One unpaged read, and one pass over that snapshot. The filter takes a status set, so one read covers every non-terminal
+status; an offset over that set cannot be made safe, because the set shrinks (rows this sweep closes, and rows the
+already-listening cancel path closes mid-sweep) and grows (that same listener admits while the sweep runs), so an
+advancing offset steps past an unseen row that shifted down behind the cursor and an offset that restarts at the top
+never terminates under sustained admission churn. Loading it all is affordable by construction:
+`IntegrationExecutionStore.AcceptAsync` counts the node-wide non-terminal rows inside its admission transaction and
+refuses past `IntegrationOptions.MaxQueuedExecutions` (default 8, hard ceiling 1024). A stale snapshot is harmless: the
+terminal transition is a status/version CAS over the non-terminal statuses, so a row that went terminal between the read
+and its turn loses the CAS and the sweep writes nothing for it.
+
+### The turn is built from the chat path's own parts
+
+The compaction bound runs before the conversation is read, so the read sees the folded transcript; it projects what the
+next turn would replay and folds only when that is over budget, and every no-op outcome (no local model, nothing
+foldable) is non-fatal by design. The keep window is the CHAT window, not the work-session floor of two: a work-session
+step rebuilds its state block from the database every step, so its transcript beyond the previous step is expendable,
+while an integration session has no state block — its transcript IS the session state — so folding to two would delete
+the continuation a caller-managed session exists to deliver. It is read from the chat compaction options rather than
+written as a literal, so an operator who retunes chat retunes this too. A `CallerManaged` session additionally replays
+its completed tool exchanges, so the projection counts them or the bound would measure a transcript smaller than the one
+the turn sends; its excerpt cap is the same one the context builder applies, read from the same options.
+
+The context comes from the SAME builder the chat send path uses, so a continued session replays exactly as a
+conversation does. Its `selectedPath` is always null, because an integration conversation never regenerates and so has
+no variant groups, and `imageContext` and `knowledgeContext` take their defaults: an execution has neither. The turn's
+tool parts accumulate through the same primitive chat feeds — both paths observe the same event on the same invocation
+filter, so a second accumulation would only be a place to diverge — and only the tool half is fed, because an
+integration run streams no reasoning deltas to a persistence pump.
+
+The runtime package differs from the scheduler's in three places: the conversation id is the session's OWNED one (a
+throwaway `Guid` would break every by-conversation resolution downstream), the context is the session's history through
+the same compaction splice chat uses, and `AllowedTools` is passed through unchanged.
+
+### `emit_output` is unioned in at the `ask_user` seam
+
+It is unioned into the offer AFTER the definition's offer ∩ `AllowedToolNames` intersection and BEFORE the agent is
+constructed, the exact seam `ask_user` uses and for the same reason: delivering a result to the caller that started the
+run is a property of running an integration execution, not a per-agent permission. Its approval flag is recomposed
+through the node policy there, because that is the only place it can be — the offer provider hands out the raw declared
+flag and consults no policy, and `InvocationToolResolver` reads the flag the offer carries rather than asking the policy
+itself. A node that requires approval for `ReadLocal` therefore tightens this tool too and the run fails CLOSED at the
+first call: an operator who declares that `ReadLocal` needs a human is not handed a silent exception on the one surface
+reachable from outside the node.
+
+### Orchestrators are refused, twice
+
+V1 runs a saved SINGLE agent. The package carries no `OrchestrationSpec` — the scheduler's `run-agent` shape carries
+none either — so `IInvocationRunner` would take its single-agent path and an orchestrator would report `Completed`
+having run none of its participants, none of its routing and none of its handoffs. Orchestration is refused rather than
+emulated: the offer `emit_output` is unioned into is the ROOT's, and it would have to be pushed across every participant
+before an orchestrated integration run could be honest. The `Kind` is judged at save, again before the resolve, and
+again on the resolver's own fresh read of the definition, because a definition's `Kind` can change under a trigger
+between any two of them.
+
+### The event drain precedes the terminal append
+
+The stream mapper persists `tool.*` rows off a channel. Without an awaited drain one of them can land after the terminal
+event, which a reader that stops on the terminal would never see; the drain also latches the handlers shut, so the
+terminal append is provably the highest sequence for the execution. It runs under `CancellationToken.None`: past the
+run, those rows carry sequences the ring has already published, so abandoning the write would leave a visible event with
+no durable row behind it. An incomplete transcript is not a completed run, whatever the model did — the terminal is
+still written, but it says `internal-failure` rather than the run's own status.
+
+### The cancel primitive's fixed order
+
+1. **Stamp the durable stop marker, so a restart cannot resurrect the run.** Written ONCE: a row that already carries
+   one is answered without a second write, because every marker write bumps the version and a repeated cancel would
+   drift it out from under the coordinator's bounded terminal retries until they were exhausted and the row stranded
+   non-terminal. The marker write uses `NewStatus` equal to the current status, which makes it a pure marker write
+   under the same compare-and-swap, so it cannot resurrect a row that terminalised a moment ago.
+2. **Terminalise a row that has not started, in ONE transaction.** Whoever's CAS wins owns the terminal event and the
+   one audit row; a loser appends nothing, because the coordinator won the `Queued → Running` race and will produce
+   them itself. A CAS lost to an already-TERMINAL row is answered 409 rather than a 202 the caller would poll for a
+   cancel that will never arrive.
+3. **Signal the registered token on EVERY path**, whether step 2 won or lost and whatever the row reads. Signalling
+   only for a running row leaves a queued execution in its lease wait until `MaxQueueAgeSeconds`, because the durable
+   marker is only honoured at the post-lease re-check — which is not a cancel a caller can observe.
+
+From the marker write down the cancel uses `CancellationToken.None`, for the same reason the coordinator does: a cancel
+that has decided to stop a run must finish stamping and closing it even if the client that asked walks away.
+
+### The prior-outputs block
+
+A caller-managed continuation replays the session's committed `external.output` payloads back to the model as data.
+Everything in the block is model-authored text, so all of it — the per-payload labels included — sits inside ONE
+untrusted fence, and only the fixed preamble is outside it. The fence uses the SEEDED overload: the block is a stable
+prefix of a multi-turn prompt, so a turn that adds no new output composes byte-identically and llama.cpp prompt/KV-cache
+prefix reuse survives, while the server-secret seed keeps the closing marker unforgeable from inside a payload.
+
+### `emit_output` is durable before visible
+
+The order inside the handler is: read the execution's counter fresh, refuse over the cap, `Reserve` a sequence, commit
+the row with it, and only then `Publish`. An `external.output` frame is an instruction a robot may act on, so a frame
+published before its row commits could name a result absent from durable history, from the execution's counters, from
+audit inspection and from restart recovery — and terminalising the run afterwards does not un-actuate anything the
+caller already did.
+
+Exactly one `Publish` or `Abandon` follows every successful `Reserve`. A reservation holds every reader of that
+execution at its sequence, so an unresolved one is not a hole readers tolerate but a stall for the life of the entry.
+An ABANDONED hole is legal: `Last-Event-ID` is a watermark, not a dense index.
+
+Its `ToolCategory.ReadLocal` is a documented stretch. The category means "read-only, node-local, side-effect-free",
+and the tool does write two rows — its own event and the execution's output counters — and hands bytes to the caller
+that started the run. It touches no file, process or network and reaches nothing the caller did not already reach, but
+it is not literally side-effect-free. A fifth `IntegrationEgress` category is declined for V1: it would change the
+enum, every policy path that switches on it and the node-policy configuration surface, for one tool whose approval flag
+the coordinator already recomposes through that same policy.
+
+The security posture: the payload is opaque to the node — never parsed for meaning and never executed — and is bounded
+per call and per execution. Its media type is validated at the trust boundary because it is echoed back in a
+header-shaped field, not because the node interprets it. Every delivered call increments the audited execution row's
+counters, and the acknowledgement handed back to the model never echoes the payload. The one path that flows a payload
+back to a model is the later-turn replay of a caller-managed session, and that goes inside an untrusted-content fence.
+
+### The accept path's ordering
+
+Deduplication on `(principal_id, request_id)` runs BEFORE session resolution and before the input checks, inside the
+per-session gate, which is still entered first and held through admission. That order is the whole point of
+`requestId`: a retry happens exactly when the original 202 was lost, which is exactly when the original execution is
+still running on the session it named. Resolving the session first answers such a retry with `SessionBusy` 409, and a
+session closed since answers `SessionClosed` — both hiding the execution id the caller was retrying to learn. Nothing
+in the dedup needs the session: the fingerprint covers the principal, the trigger name, the requested session id and
+the raw body.
+
+### The stream mapper's two halves
+
+`IntegrationStreamEventMapper` is split on purpose. Its PURE half is the static methods: dispatcher arguments plus the
+caller's cursor in, a draft or `null` out — no field, no buffer, no database, and therefore testable without a host.
+Its PER-RUN half is an instance the coordinator builds inside its run scope and hangs on the one subscription lifetime
+it already opens before the lease; that half owns the emit cursor, the debounce clock and the closed latch behind a
+single lock, appends to the ring, and pumps `tool.*` rows to the store off a channel. The channel is unbounded and must
+never drop: the chat sink may drop, because chat repairs a drop with a reconcile frame, and the ten integration event
+types carry no such repair.
+
+### Token usage is recorded like any other turn
+
+The `AgentRunEnvelopeMetadata` is not optional: `SummarizeTokenUsageAsync` reads only kind-1 rows, so omitting it would
+make an external surface the one path that can silently burn tokens invisibly, and the kind-3 audit row does not fill
+that gap — it carries a terminal status and a latency, not the token columns. The envelope's trailing telemetry members
+mirror `NodeChatInvocationPump.TerminalizeAsync`, because an integration run is the same turn measured the same way:
+leaving them unset makes this the one surface whose rows carry no warm time, no tool-schema estimate and the LAST
+round's tokens where every other row carries the turn's.
+
 ## Ruling record
 
 All rounds are reproduced here, because a slice landing months from now needs to know why the accept path, the

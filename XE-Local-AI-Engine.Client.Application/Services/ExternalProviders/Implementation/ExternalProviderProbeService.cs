@@ -11,29 +11,22 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 ///     draft.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Three properties are load-bearing and each has a test. The address is normalized by
-///         <see cref="OpenAICompatibleBaseAddress" /> — the SAME normalizer the save path and the outbound chat guard
-///         use, so a probe can never validate an address the transport would then spell differently. Redirects are
-///         refused rather than followed, because a <c>302</c> would move the probe to a host the operator never
-///         reviewed and report IT as reachable. And the API key never leaves this class: it goes into one
-///         <c>Authorization</c> header and appears in no result, message, or log.
-///     </para>
-///     <para>
-///         The verdict is deliberately generous. "Reachable" here means the endpoint ANSWERED — a 404 from a gateway
-///         with no model listing, a 401 from one that wants a different key, and a clean 200 are all answers, and only
-///         the first two carry an explanatory error. A connection whose server implements nothing but
-///         <c>POST /v1/chat/completions</c> is fully usable, so the probe must never be the thing that stops the
-///         operator saving it.
-///     </para>
+///     Three properties are load-bearing and each has a test: the address is normalized by <see cref="OpenAICompatibleBaseAddress" />,
+///     the SAME normalizer the save path and the outbound chat guard use; redirects are refused rather than followed; and the API key
+///     never leaves this class, going into one <c>Authorization</c> header and appearing in no result, message or log. "Reachable"
+///     means the endpoint ANSWERED, so the probe never stops an operator saving a usable connection. Why each:
+///     docs/wiki/03-local-runtime-and-providers.md, "The connect-time probe".
 /// </remarks>
 internal sealed class ExternalProviderProbeService : IExternalProviderProbeService
 {
     /// <summary>
-    ///     Caps the whole probe. Short by design: this backs a "Test connection" button an operator is watching, and an
-    ///     endpoint that has not answered a model listing in ten seconds is not one a chat turn would survive either.
-    ///     Deliberately independent of the connection's own generation timeout, which bounds a long completion.
+    ///     Caps the whole probe.
     /// </summary>
+    /// <remarks>
+    ///     Short by design: this backs a "Test connection" button an operator is watching, and an endpoint that has not
+    ///     answered a model listing in ten seconds is not one a chat turn would survive either. Deliberately
+    ///     independent of the connection's own generation timeout, which bounds a long completion.
+    /// </remarks>
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>
@@ -74,9 +67,8 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             };
         }
 
-        // A typed draft address wins over the stored one: the operator is testing what they just entered. Absent that,
-        // the stored value is re-normalized rather than trusted blindly — it is a fixed point of the normalizer, so
-        // this is free for a well-formed store and catches a hand-edited file.
+        // A typed draft address wins over the stored one: the operator is testing what they just entered. Absent that, the
+        // stored value is re-normalized rather than trusted blindly — free for a well-formed store, and it catches a hand-edited file.
         var candidateBaseUrl = !string.IsNullOrWhiteSpace(query.BaseUrl) ? query.BaseUrl : stored?.BaseUrl;
         if (!OpenAICompatibleBaseAddress.TryNormalize(candidateBaseUrl, out var baseAddress))
         {
@@ -87,11 +79,8 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             };
         }
 
-        // Blank means "use what is stored" — but ONLY for the origin the stored key belongs to. The masked editor sends
-        // no key back, so requiring one outright would make testing an existing connection impossible without re-typing
-        // the secret; forwarding it to whatever address the caller typed would turn "Test connection" into a key
-        // exfiltration primitive for any operator-API caller who cannot read the key itself. Testing a moved endpoint
-        // therefore probes with only what the caller supplied, which is keyless unless they typed a key.
+        // Blank means "use what is stored" (see ExternalProviderProbeQuery), but ONLY for the origin the stored key belongs to: forwarding it
+        // to whatever address the caller typed would make "Test connection" a key-exfiltration primitive. A moved endpoint probes keyless.
         var carriedStoredKey = ExternalProviderStore.IsSameOrigin(stored?.BaseUrl, baseAddress.AbsoluteUri) ? stored?.ApiKey : null;
         var apiKey = string.IsNullOrWhiteSpace(query.ApiKey) ? carriedStoredKey : query.ApiKey;
 
@@ -152,9 +141,8 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         }
         catch (Exception exception)
         {
-            // Covers the probe deadline (a cancellation that is NOT the caller's) and every transport failure. The
-            // exception text is deliberately dropped from the RESULT — it embeds the address and can embed header
-            // material — but kept in the node's own log, where the operator can see it.
+            // Covers the probe deadline (a cancellation that is NOT the caller's) and every transport failure. The exception
+            // text is deliberately dropped from the RESULT — it embeds the address and can embed header material — but kept in the node's own log.
             _logger.LogDebug(exception, "External provider probe could not reach the configured endpoint.");
             return new ExternalProviderProbeResult
             {
@@ -264,10 +252,12 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
     }
 
     /// <summary>
-    ///     The declared window, from vLLM's <c>max_model_len</c> or the <c>context_length</c> some gateways use. Both
-    ///     are optional and neither is standard, so a missing, non-numeric or non-positive value is simply "not
-    ///     declared" — the registration form then asks the operator.
+    ///     The declared window, from vLLM's <c>max_model_len</c> or the <c>context_length</c> some gateways use.
     /// </summary>
+    /// <remarks>
+    ///     Both are optional and neither is standard, so a missing, non-numeric or non-positive value is simply "not
+    ///     declared" — the registration form then asks the operator.
+    /// </remarks>
     private static int? ReadContextLength(JsonElement entry)
     {
         foreach (var propertyName in (ReadOnlySpan<string>)["max_model_len", "context_length"])

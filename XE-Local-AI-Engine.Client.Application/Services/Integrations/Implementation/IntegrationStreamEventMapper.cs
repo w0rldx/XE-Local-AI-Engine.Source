@@ -17,29 +17,15 @@ internal sealed class IntegrationStreamEventDraft
 }
 
 /// <summary>
-///     Turns the worker dispatcher's signals into integration stream events, in two halves that are deliberately not
-///     the same thing.
-///     <para>
-///         <b>The pure half</b> is the static methods: dispatcher args plus the caller's cursor in, a draft or
-///         <see langword="null" /> out. No field, no buffer, no database, and therefore testable without a host.
-///     </para>
-///     <para>
-///         <b>The per-run half</b> is an instance the coordinator builds inside its run scope and hangs on the ONE
-///         subscription lifetime the coordinator already opens before the lease. It owns the emit cursor, the debounce
-///         clock and the closed latch behind a single lock, appends to the ring, and pumps <c>tool.*</c> rows to the
-///         store off a channel.
-///     </para>
-///     <para>
-///         <b>It maps no terminal event.</b> <c>execution.completed</c>, <c>.failed</c> and <c>.cancelled</c> have
-///         exactly one producer — the coordinator's terminal transaction, which runs after
-///         <see cref="DrainAsync" />. That ordering is what makes the terminal provably the highest sequence in the
-///         ring, which is in turn what lets a reader stop on it.
-///     </para>
+///     Turns the worker dispatcher's signals into integration stream events, in a pure static half and a per-run
+///     instance half.
 /// </summary>
 /// <remarks>
-///     ponytail: one Lock around cursor + timestamp + hasEmitted + closed latch, not the chat pump's
-///     channel-plus-consumer split. Four fields and an Append do not need a task lifetime. Move to the channel shape if
-///     the mapper ever grows work that must not run on the dispatcher's thread.
+///     It maps NO terminal event: <c>execution.completed</c>, <c>.failed</c> and <c>.cancelled</c> have exactly one producer,
+///     the coordinator's terminal transaction, which runs after <see cref="DrainAsync" /> — so the terminal is provably the
+///     highest sequence in the ring, which is what lets a reader stop on it. What each half owns: ADR 0008 ("The stream mapper's two halves").
+///     ponytail: one Lock around the cursor, the timestamp, hasEmitted and the closed latch, not the chat pump's
+///     channel-plus-consumer split; move to that shape only if work arrives that must leave the dispatcher's thread.
 /// </remarks>
 internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
 {
@@ -52,9 +38,8 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     private readonly Guid _invocationId;
     private readonly int _maxOutputBytes;
 
-    // Unbounded on purpose: the durable subset from this path is tool.started/tool.completed and nothing else, so it is
-    // bounded in practice by the run's tool-iteration cap. It must not DROP — the chat sink can, because chat repairs a
-    // drop with a reconcile frame, and the ten integration event types carry no such repair.
+    // Unbounded on purpose: the durable subset from this path is tool.started/tool.completed and nothing else, so the run's tool-iteration cap bounds it in
+    // practice. It must not DROP — the chat sink may, because chat repairs a drop with a reconcile frame, and the ten integration event types carry no repair.
     private readonly Channel<IntegrationStreamEvent> _persist =
         Channel.CreateUnbounded<IntegrationStreamEvent>(new UnboundedChannelOptions
         {
@@ -94,10 +79,13 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Everything the assistant channel emits for one snapshot, or <see langword="null" /> when the snapshot carries
-    ///     no growth. The stale-snapshot guard is the whole subtlety: publication happens outside the dispatcher's own
-    ///     lock, so a SHORTER snapshot can arrive after a longer one and an unguarded slice would throw.
+    ///     Everything the assistant channel emits for one snapshot, or <see langword="null" /> when the snapshot
+    ///     carries no growth.
     /// </summary>
+    /// <remarks>
+    ///     The stale-snapshot guard is the whole subtlety: publication happens outside the dispatcher's own lock, so a
+    ///     SHORTER snapshot can arrive after a longer one and an unguarded slice would throw.
+    /// </remarks>
     public static IntegrationStreamEventDraft? Delta(string? streamedContent, int contentOffset)
     {
         var content = streamedContent ?? string.Empty;
@@ -146,25 +134,26 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     }
 
     /// <summary>
-    ///     <see cref="ToolCallLifecyclePayload.IsError" /> is set from the function-invocation pipeline's EXCEPTION and
-    ///     nothing else, so a tool that refuses by returning a sentence reports a successful call. <c>emit_output</c>
-    ///     refuses that way on every policy path on purpose — a throw would end the model's turn and would replace the
-    ///     sentence it reads with the pipeline's own — which left an external caller with no machine-readable signal at
-    ///     all: a refused emit looked exactly like a delivered one except for the missing <c>external.output</c> frame.
-    ///     <para>
-    ///         So this one tool is graded on its RESULT as well. Scoped to <c>emit_output</c> by name: every other tool
-    ///         keeps the exception-only meaning of <c>ok</c>, and no tool-result text is put on the wire either way.
-    ///     </para>
+    ///     <c>ok</c> means "the call raised no exception" for every tool except <c>emit_output</c>, which is graded on
+    ///     its RESULT as well.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="ToolCallLifecyclePayload.IsError" /> is set from the function-invocation pipeline's EXCEPTION and nothing
+    ///     else, and <c>emit_output</c> refuses by RETURNING a sentence on every policy path — a throw would end the model's turn
+    ///     and replace that sentence with the pipeline's own — so without this grading a refused emit would look exactly like a
+    ///     delivered one, bar the missing <c>external.output</c> frame. Scoped to that tool by name: every other tool keeps the
+    ///     exception-only meaning of <c>ok</c>, and no tool-result text goes on the wire either way.
+    /// </remarks>
     private static bool IsToolOutcomeOk(ToolCallLifecyclePayload payload) =>
         !string.Equals(payload.ToolName, EmitOutputToolDefinition.ToolName, StringComparison.Ordinal)
         || EmitOutputToolDefinition.IsDelivered(payload.Result);
 
-    /// <summary>
-    ///     Cuts at a whole-rune boundary against a UTF-8 BYTE budget. A surrogate-only guard bounds nothing: a 3-byte
-    ///     CJK glyph is a single <see cref="char" />, so it would overshoot by up to two bytes per character. Copied
-    ///     from <c>HostProcessExecutor</c>, which solved the same problem for tool output.
-    /// </summary>
+    /// <summary>Cuts at a whole-rune boundary against a UTF-8 BYTE budget.</summary>
+    /// <remarks>
+    ///     A surrogate-only guard bounds nothing: a 3-byte CJK glyph is a single <see cref="char" />, so it would
+    ///     overshoot by up to two bytes per character. Copied from <c>HostProcessExecutor</c>, which solved the same
+    ///     problem for tool output.
+    /// </remarks>
     public static string TruncateToUtf8ByteBudget(string value, int budget)
     {
         ArgumentNullException.ThrowIfNull(value);
@@ -192,11 +181,11 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
         return value[..lastCharIndex];
     }
 
-    /// <summary>
-    ///     The handler the coordinator's existing subscription calls. It maps, appends and returns: the dispatcher
-    ///     raises synchronously on the producing thread, so awaiting a SQLite write here would stall the runner's
-    ///     streaming loop for the length of that write.
-    /// </summary>
+    /// <summary>The handler the coordinator's existing subscription calls: it maps, appends and returns.</summary>
+    /// <remarks>
+    ///     The dispatcher raises synchronously on the producing thread, so awaiting a SQLite write here would stall the
+    ///     runner's streaming loop for the length of that write.
+    /// </remarks>
     public void OnInvocationStateChanged(object? sender, InvocationStateChangedEventArgs args)
     {
         ArgumentNullException.ThrowIfNull(args);
@@ -207,9 +196,8 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            // The dispatcher raises with a bare ?.Invoke on the runner's own thread, so a throw here would escape onto
-            // that thread and skip every later subscriber. An event this mapper cannot record costs a frame, never the
-            // run: the terminal row and the persisted transcript are written elsewhere.
+            // The dispatcher raises with a bare ?.Invoke on the runner's own thread, so a throw here would escape onto that thread and skip every later
+            // subscriber. An event this mapper cannot record costs a frame, never the run: the terminal row and the persisted transcript live elsewhere.
             _logger.LogError(exception,
                 "Mapping an invocation state change for integration execution {ExecutionId} failed; the stream loses this event.",
                 _executionId);
@@ -254,9 +242,8 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
                 _ = AppendLocked(Completed(content, _maxOutputBytes));
             }
 
-            // Latched here so a late non-terminal snapshot cannot append an assistant.delta ABOVE the terminal the
-            // coordinator is about to write — an event no reader would ever yield, and a LastSequence out of step with
-            // the row.
+            // Latched here so a late non-terminal snapshot cannot append an assistant.delta ABOVE the terminal the coordinator is about to write — an event
+            // no reader would ever yield, and a LastSequence out of step with the row.
             _closed = true;
         }
     }
@@ -299,14 +286,14 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     }
 
     /// <summary>
-    ///     The coordinator's one hook, awaited immediately before its terminal transaction. It latches the handlers
-    ///     shut, closes the channel and awaits the pump, so every <c>tool.*</c> row is committed and every
-    ///     <c>assistant.*</c> event is in the ring before the terminal takes the last sequence.
-    ///     <para>
-    ///         A failure here is a RUN failure and is rethrown: a lost <c>tool.*</c> row means the persisted transcript
-    ///         is incomplete, so the run cannot honestly be reported as completed.
-    ///     </para>
+    ///     The coordinator's one hook, awaited immediately before its terminal transaction: it latches the handlers
+    ///     shut, closes the channel and awaits the pump.
     /// </summary>
+    /// <remarks>
+    ///     Every <c>tool.*</c> row is therefore committed and every <c>assistant.*</c> event is in the ring before the
+    ///     terminal takes the last sequence. A failure here is a RUN failure and is rethrown: a lost <c>tool.*</c> row
+    ///     means the persisted transcript is incomplete, so the run cannot honestly be reported as completed.
+    /// </remarks>
     public Task DrainAsync(CancellationToken cancellationToken)
     {
         lock (_gate)
@@ -320,9 +307,12 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
 
     /// <summary>
     ///     Releases the pump on the paths that never reach the drain — a run rejected before it started, or a fault on
-    ///     the way there. The failure is not re-surfaced here: whoever awaited <see cref="DrainAsync" /> already saw it,
-    ///     and a run that never streamed has nothing to report.
+    ///     the way there.
     /// </summary>
+    /// <remarks>
+    ///     The failure is not re-surfaced here: whoever awaited <see cref="DrainAsync" /> already saw it, and a run
+    ///     that never streamed has nothing to report.
+    /// </remarks>
     public async ValueTask DisposeAsync()
     {
         lock (_gate)

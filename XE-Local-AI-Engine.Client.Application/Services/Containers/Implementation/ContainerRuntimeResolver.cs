@@ -5,15 +5,12 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
-/// <summary>
-///     The one door application containers reach a Docker daemon through: read the operator's selection, resolve an
-///     endpoint, refuse a remote one outright, probe, and turn the evidence into a status an operator can act on.
-///     <para>
-///         It writes its own prose. The shared probe deliberately produces none, because ADR 0004 makes Development
-///         Mode's preflight messages the entire experience of a missing daemon for that feature, and a user whose
-///         installed application will not start needs different words for the identical status.
-///     </para>
-/// </summary>
+/// <summary>The one door application containers reach a Docker daemon through: read the selection, resolve an endpoint, refuse a remote one, probe, and state a status.</summary>
+/// <remarks>
+///     It writes its own prose. The shared probe deliberately produces none, because ADR 0004 makes Development
+///     Mode's preflight messages the entire experience of a missing daemon for that feature, and a user whose
+///     installed application will not start needs different words for the identical status.
+/// </remarks>
 internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDisposable
 {
     /// <summary>The only provider in V1. Both <see cref="ContainerRuntimeSelection" /> values resolve to it.</summary>
@@ -43,11 +40,12 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
     {
     }
 
-    /// <summary>
-    ///     Test seam. <paramref name="endpointResolver" /> replaces discovery so that the endpoint order — and in
-    ///     particular a <c>DOCKER_HOST</c> naming a remote daemon — can be exercised without mutating the test
-    ///     process's environment, which every other test in the run shares. Null means production discovery.
-    /// </summary>
+    /// <summary>Test seam; <paramref name="endpointResolver" /> null means production discovery.</summary>
+    /// <remarks>
+    ///     It replaces discovery so the endpoint order — a <c>DOCKER_HOST</c> naming a remote daemon in particular —
+    ///     can be exercised without mutating the test process's environment, which every other test in the run
+    ///     shares.
+    /// </remarks>
     internal ContainerRuntimeResolver(INodeSettingsStore settingsStore,
         IOptionsMonitor<ContainerRuntimeOptions> options,
         IContainerRuntimeFactory factory,
@@ -111,15 +109,13 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         return _factory.CreateRuntime(endpoint);
     }
 
-    /// <summary>
-    ///     The preflight-to-runtime status mapping, exhaustive by construction.
-    ///     <para>
-    ///         The catch-all only throws: C# demands one for an out-of-range cast (CS8524) and would reject the switch
-    ///         outright if a named status were missing, so a status added to the preflight enum cannot silently
-    ///         inherit another's meaning here. <c>ContainerRuntimeResolverTests.EveryPreflightStatus_MapsToItsRuntimeStatus</c>
-    ///         enumerates the enum, so an added status is a red test rather than a throw an operator meets first.
-    ///     </para>
-    /// </summary>
+    /// <summary>The preflight-to-runtime status mapping, exhaustive by construction.</summary>
+    /// <remarks>
+    ///     The catch-all only throws: C# demands one for an out-of-range cast (CS8524) and rejects the switch
+    ///     outright if a named status is missing, so a status added to the preflight enum cannot silently inherit
+    ///     another's meaning. <c>ContainerRuntimeResolverTests.EveryPreflightStatus_MapsToItsRuntimeStatus</c>
+    ///     enumerates the enum, so an added status is a red test rather than a throw an operator meets first.
+    /// </remarks>
     internal static ContainerRuntimeStatus ToRuntimeStatus(DockerDaemonPreflightStatus status)
     {
         return status switch
@@ -171,15 +167,13 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         }
     }
 
-    /// <summary>
-    ///     The effective selection: an instance's override, else the stored node setting, else <c>Auto</c>.
-    ///     <para>
-    ///         An override skips the settings read entirely rather than reading and discarding it — outranking a value
-    ///         and then loading it anyway is how a resolver acquires a persistence dependency on a path that has no
-    ///         reason to have one. An unparsable stored value falls back to <c>Auto</c> rather than failing: a
-    ///         hand-edited settings file must not be able to take the runtime layer down.
-    ///     </para>
-    /// </summary>
+    /// <summary>The effective selection: an instance's override, else the stored node setting, else <c>Auto</c>.</summary>
+    /// <remarks>
+    ///     An override skips the settings read entirely rather than reading and discarding it — outranking a value
+    ///     and then loading it anyway is how a resolver acquires a persistence dependency it has no reason to have.
+    ///     An unparsable stored value falls back to <c>Auto</c> rather than failing: a hand-edited settings file must
+    ///     not be able to take the runtime layer down.
+    /// </remarks>
     private async Task<ContainerRuntimeSelection> ResolveSelectionAsync(ContainerRuntimeSelection? instanceOverride,
         CancellationToken cancellationToken)
     {
@@ -205,11 +199,8 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
     {
         var endpoint = _endpointResolver(options.DaemonEndpoint);
 
-        // First of all, and without repeating the value back. User information, a query string and a fragment are all
-        // operator-supplied, none of them addresses a Docker daemon, and any of the three is somewhere a token fits —
-        // a DOCKER_HOST of tcp://host:2375/?token=… is a value an operator can set. The refusal below would otherwise
-        // print it into a log line, a resolution record, an exception message and the 503 body those become, so it
-        // names only which component is at fault. The endpoint itself renders redacted (DockerDaemonEndpoint.Display).
+        // First of all, and WITHOUT repeating the value back: user information, a query and a fragment address no Docker
+        // daemon and each fit a token, so the refusal names only the faulty component (DockerDaemonEndpoint.Display).
         if (endpoint.DisclosingComponent is { } disclosing)
         {
             return (Reported(Refused(endpoint,
@@ -233,10 +224,8 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
 
         var outcome = await DockerDaemonProbe.RunAsync(new DockerDaemonProbeRequest
             {
-                // The endpoint this resolver already settled on, handed over as itself rather than restated as a
-                // string: the probe's own discovery cannot land somewhere else between the transport check above and
-                // the wire call below, AND the source that named it survives into the pin the probe writes. Restating
-                // it would make every resolution look like engine configuration to whoever reads that pin next.
+                // The settled endpoint handed over as ITSELF, never restated as a string: the probe's own discovery
+                // cannot land elsewhere, and the source that named it survives into the pin the probe writes.
                 ResolvedEndpoint = endpoint,
                 ConfiguredEndpoint = options.DaemonEndpoint,
                 MinimumApiVersion = options.MinimumApiVersion,
@@ -255,16 +244,13 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         return (Reported(Describe(outcome, endpoint, options)), endpoint);
     }
 
-    /// <summary>
-    ///     One line per unavailable resolution, mirroring Development Mode's transport-failure line.
-    ///     <para>
-    ///         Without it a node whose installed applications will not start says nothing at all in its log until
-    ///         somebody opens the UI, and the operator prose this class writes so carefully reaches only a caller that
-    ///         asked. Information rather than warning: no daemon is the ordinary, correct state of a node that does
-    ///         not run application containers. It logs the endpoint and the status only — the same two facts the
-    ///         preflight logs, and nothing the resolution's own message would not already say.
-    ///     </para>
-    /// </summary>
+    /// <summary>One line per unavailable resolution, mirroring Development Mode's transport-failure line.</summary>
+    /// <remarks>
+    ///     Without it a node whose installed applications will not start says nothing in its log until somebody
+    ///     opens the UI. Information rather than warning, because no daemon is the ordinary, correct state of a node
+    ///     that does not run application containers. It logs the endpoint and the status only — the same two facts
+    ///     the preflight logs, and nothing the resolution's own message would not already say.
+    /// </remarks>
     private ContainerRuntimeResolution Reported(ContainerRuntimeResolution resolution)
     {
         if (!resolution.Ready)
@@ -284,9 +270,8 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         var status = ToRuntimeStatus(outcome.Status);
         var daemon = Summarize(outcome, endpoint);
 
-        // A Windows-container daemon answers every question this probe asks and then means something different by
-        // every answer: a bind mount, a loopback published port and a Linux image reference are not the same objects
-        // there. Refused after the probe rather than before it, because only the daemon can say which it is.
+        // A Windows-container daemon answers every question and means something else by every answer: a bind mount, a
+        // loopback port and a Linux image are other objects there. Refused AFTER the probe, which alone can tell.
         if (status == ContainerRuntimeStatus.Ready
             && !string.Equals(outcome.ObservedDaemon?.OperatingSystem, "linux", StringComparison.OrdinalIgnoreCase))
         {

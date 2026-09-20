@@ -1,15 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 /// <summary>
-///     Invalidates the local-branch chat-client cache held by the model-routing local chat client. The router caches a
-///     deferred chat client per <c>(provider, model)</c>; each cached llama-server client resolves its localhost
-///     endpoint once and reuses it. When the operator switches/updates the llama.cpp runtime variant the previously
-///     resolved endpoint is gone, so the cache must be cleared to force re-resolution (which ensure-runs the backing
-///     process against the freshly installed binary) on the next send.
+///     Invalidates the local-branch chat-client cache held by the model-routing local chat client.
 /// </summary>
 /// <remarks>
-///     Implemented by the singleton local chat-client router and exposed as its own service so scoped consumers (e.g. the
-///     runtime-update endpoint) can trigger invalidation without taking a captive dependency on the router itself.
+///     The router caches a deferred chat client per <c>(provider, model)</c>, and each cached llama-server client
+///     resolves its localhost endpoint once. When the operator switches or updates the llama.cpp runtime variant that
+///     endpoint is gone, so the cache is cleared to force re-resolution, which ensure-runs the backing process against
+///     the freshly installed binary on the next send. Implemented by the singleton router and exposed as its own
+///     service so scoped consumers (the runtime-update endpoint) need no captive dependency on the router.
 /// </remarks>
 public interface ILocalChatClientCacheInvalidator
 {

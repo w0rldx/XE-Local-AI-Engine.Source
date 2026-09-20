@@ -6,25 +6,25 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-/// <summary>
-///     The curated External Apps catalog document (schema v1): the single JSON document the engine reads to know
-///     which containerised applications a user can install. Bundled as an embedded resource and optionally replaced
-///     by a remote refresh (<see cref="ExternalAppCatalogOptions.RefreshUrl" />). The engine never parses Compose —
-///     this document is produced offline by the catalog converter and is the only input the runtime understands.
-/// </summary>
+/// <summary>The curated External Apps catalog document (schema v1): the one JSON document listing the installable containerised applications.</summary>
+/// <remarks>
+///     Bundled as an embedded resource and optionally replaced by a remote refresh
+///     (<see cref="ExternalAppCatalogOptions.RefreshUrl" />). The engine never parses Compose: the catalog converter
+///     produces this document offline and it is the only input the runtime understands.
+/// </remarks>
 public sealed record ExternalAppCatalogDocument(
     int SchemaVersion,
     string GeneratedAtUtc,
     IReadOnlyList<ApplicationManifest> Applications);
 
-/// <summary>
-///     One installable application. <see cref="ManifestVersion" /> is the per-application definition version the
-///     update flow compares; <see cref="ManifestSha256" /> fingerprints the manifest as served so an install/update
-///     command can be rejected when the catalog moved under the user (see <see cref="ExternalAppManifestFingerprint" />).
-///     There is deliberately no <c>user</c> member at either level: application containers start as the image's
-///     default user and the engine never passes <c>--user</c>; the boundary is the container, its dropped
-///     capabilities, seccomp, <c>no-new-privileges</c> and the loopback-only network.
-/// </summary>
+/// <summary>One installable application: identity, metadata, declared permissions and resources, its services and its variables.</summary>
+/// <remarks>
+///     <see cref="ManifestVersion" /> is the version the update flow compares; <see cref="ManifestSha256" />
+///     (<see cref="ExternalAppManifestFingerprint" />) fingerprints the manifest as served, so an install or update
+///     is rejected once the catalog moved under the user. There is deliberately no <c>user</c> member at either
+///     level: a container starts as the image's default user and the engine never passes <c>--user</c>; the boundary
+///     is the container, its dropped capabilities, seccomp, <c>no-new-privileges</c> and the loopback-only network.
+/// </remarks>
 public sealed record ApplicationManifest(
     string Id,
     int ManifestVersion,
@@ -42,18 +42,14 @@ public sealed record ApplicationManifest(
     IReadOnlyList<ApplicationService> Services,
     IReadOnlyList<ApplicationVariable> Variables)
 {
-    // The generated ToString() prints every property, and a manifest carries the whole authored catalog — variable
-    // defaults, inlined file bodies, the raw fetched document. One LogDebug("{Snapshot}", snapshot) downstream would
-    // therefore write the catalog into the node log. Suppressing the printer makes that impossible rather than merely
-    // forbidden, and ExternalAppCatalogRecordPrintingTests asserts no manifest content can appear.
-    //
-    // `private bool PrintMembers(StringBuilder)` and never `protected override`: on a sealed record whose base is
-    // object the compiler expects exactly this signature, and the override form does not compile here.
-    //
-    // The compiler's shape is also why four analyzers have to be silenced rather than obeyed: the printer is unused,
-    // instance-free and unimplemented BY DESIGN, and every fix they suggest — making it static, dropping the
-    // parameter — changes the signature into one the compiler no longer recognises as the record's printer, which
-    // silently restores the ToString() that prints the catalog.
+    /// <summary>Suppresses the record's generated <c>ToString()</c>, which would print the whole authored catalog.</summary>
+    /// <remarks>
+    ///     Variable defaults, inlined file bodies and the raw fetched document would reach the node log through one
+    ///     downstream structured log of a snapshot; <c>ExternalAppCatalogRecordPrintingTests</c> asserts no manifest
+    ///     content can appear. On a sealed record whose base is <c>object</c> the compiler recognises only
+    ///     <c>private bool PrintMembers(StringBuilder)</c>, never <c>protected override</c>, which is why CA1822,
+    ///     S2325, S1172 and IDE0060 are suppressed: every fix they offer restores the printing <c>ToString()</c>.
+    /// </remarks>
 #pragma warning disable CA1822, S2325, S1172, IDE0060
     private bool PrintMembers(StringBuilder builder)
     {
@@ -83,12 +79,12 @@ public sealed record ApplicationService(
     IReadOnlyList<string> ExtraHosts,
     bool ReadOnlyRootFilesystem);
 
-/// <summary>
-///     A container port published to the host. Only role <c>ui</c> exists in V1 and every publication is bound to
-///     127.0.0.1. <see cref="OpenPath" /> is non-<see langword="null" /> for exactly one port per application — the
-///     one the "Open" action targets; a published port with a <see langword="null" /> path is reachable by the
-///     browser but is not offered as an open target.
-/// </summary>
+/// <summary>A container port published to the host; only role <c>ui</c> exists in V1 and every publication is bound to 127.0.0.1.</summary>
+/// <remarks>
+///     <see cref="OpenPath" /> is non-<see langword="null" /> for exactly one port per application — the one the
+///     "Open" action targets. A published port with a <see langword="null" /> path stays reachable by the browser
+///     but is not offered as an open target.
+/// </remarks>
 public sealed record ApplicationPort(int ContainerPort, string Role, int? PreferredHostPort, string? OpenPath);
 
 /// <summary>A writable per-instance directory bind-mounted into the container. No Docker named volumes exist in the model.</summary>
@@ -209,18 +205,14 @@ public sealed record ExternalAppCatalogSnapshot(
     string? SourceUrl,
     string? LastRefreshFailure)
 {
-    // The generated ToString() prints every property, and a manifest carries the whole authored catalog — variable
-    // defaults, inlined file bodies, the raw fetched document. One LogDebug("{Snapshot}", snapshot) downstream would
-    // therefore write the catalog into the node log. Suppressing the printer makes that impossible rather than merely
-    // forbidden, and ExternalAppCatalogRecordPrintingTests asserts no manifest content can appear.
-    //
-    // `private bool PrintMembers(StringBuilder)` and never `protected override`: on a sealed record whose base is
-    // object the compiler expects exactly this signature, and the override form does not compile here.
-    //
-    // The compiler's shape is also why four analyzers have to be silenced rather than obeyed: the printer is unused,
-    // instance-free and unimplemented BY DESIGN, and every fix they suggest — making it static, dropping the
-    // parameter — changes the signature into one the compiler no longer recognises as the record's printer, which
-    // silently restores the ToString() that prints the catalog.
+    /// <summary>Suppresses the record's generated <c>ToString()</c>, which would print the whole authored catalog.</summary>
+    /// <remarks>
+    ///     Variable defaults, inlined file bodies and the raw fetched document would reach the node log through one
+    ///     downstream structured log of a snapshot; <c>ExternalAppCatalogRecordPrintingTests</c> asserts no manifest
+    ///     content can appear. On a sealed record whose base is <c>object</c> the compiler recognises only
+    ///     <c>private bool PrintMembers(StringBuilder)</c>, never <c>protected override</c>, which is why CA1822,
+    ///     S2325, S1172 and IDE0060 are suppressed: every fix they offer restores the printing <c>ToString()</c>.
+    /// </remarks>
 #pragma warning disable CA1822, S2325, S1172, IDE0060
     private bool PrintMembers(StringBuilder builder)
     {
@@ -246,14 +238,11 @@ public sealed class ExternalAppCatalogRefreshResult
 ///     <see cref="ApplicationManifest.ManifestSha256" /> and echoed back by install/update commands.
 /// </summary>
 /// <remarks>
-///     The canonical form has to hold across two languages (this validator and the Python catalog converter), so it
-///     is fixed: the single manifest object serialized with web naming, compact, with
-///     <see cref="JavaScriptEncoder.UnsafeRelaxedJsonEscaping" />, every property written including
-///     <see langword="null" /> values, the <c>manifestSha256</c> property removed (a document cannot contain its own
-///     hash), every object's properties sorted ordinal by name at every level, arrays keeping their order, UTF-8
-///     without BOM and without a trailing newline. Sorting is what makes the record's declaration order and the
-///     converter's dict order irrelevant. The converter produces the same bytes with
-///     <c>json.dumps(manifest_without_hash, sort_keys=True, separators=(",", ":"), ensure_ascii=False)</c>.
+///     The canonical form is fixed because two languages compute it — this type and the Python catalog converter —
+///     and is written down rather than inferred: see <c>docs/wiki/23-external-apps.md</c> ("The manifest"). Sorting
+///     every object's properties ordinal by name at every level is what makes this record's declaration order and
+///     the converter's dict order irrelevant; <c>manifestSha256</c> is removed because a document cannot contain its
+///     own hash.
 /// </remarks>
 public static class ExternalAppManifestFingerprint
 {

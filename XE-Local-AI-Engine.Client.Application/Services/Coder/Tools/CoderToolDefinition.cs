@@ -3,12 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     Worker-side name / description / parameter-schema constants for the three read-only coder tools
-///     (<c>list_files</c>, <c>read_file</c>, <c>search_text</c>). Each handler advertises its model-visible schema from
-///     here and the offer provider merges the same descriptors into the loopback offer, so the schema the model is
-///     offered can never drift from what the handler validates. The schemas are advisory to the model; the handlers'
-///     own validation is authoritative.
+///     Worker-side name, description and parameter-schema constants for the three read-only coder tools (<c>list_files</c>, <c>read_file</c>,
+///     <c>search_text</c>).
 /// </summary>
+/// <remarks>
+///     Each handler advertises its model-visible schema from here and the offer provider merges the same descriptors into the loopback offer,
+///     so the schema the model is offered can never drift from what the handler validates. The schemas are advisory to the model; the
+///     handlers' own validation is authoritative.
+/// </remarks>
 internal static class CoderToolDefinition
 {
     public const string ListFilesToolName = "list_files";
@@ -17,12 +19,8 @@ internal static class CoderToolDefinition
         "List files and folders in the read-only project workspace. Returns workspace-relative paths only; secrets and "
         + "heavy generated directories are excluded.";
 
-    // `path.maxLength` (4096) is deliberately NOT clamped, even though llama.cpp's GBNF converter cannot compile a
-    // repetition bound that large. Do not "fix" it by lowering the value: the bound is advisory to the model and the
-    // handler's own path validation is authoritative, so clamping would narrow the contract for every provider to work
-    // around one provider's limit — and 4096 is the real filesystem path ceiling this tool accepts. The llama.cpp wire
-    // representation is sanitized instead, in LlamaGrammarToolSchemaCompatibility
-    // (XE-Local-AI-Engine.Providers.LlamaServer). The same applies to `path` in the two schemas below.
+    // `path.maxLength` (4096, the real filesystem path ceiling this tool accepts) is deliberately NOT clamped, even though llama.cpp's GBNF converter
+    // cannot compile a bound that large: LlamaGrammarToolSchemaCompatibility (Providers.LlamaServer) sanitizes the wire form. Same for `path` below.
     public const string ListFilesParameterSchema = """
                                                    {
                                                      "type": "object",
@@ -76,12 +74,12 @@ internal static class CoderToolDefinition
                                                     }
                                                     """;
 
-    /// <summary>
-    ///     The model-visible descriptors for the three coder tools — name + schema + approval flag. The offer provider
-    ///     consumes these to merge the coder tools into the capability-gated loopback offer. All three are
-    ///     auto-execute (<c>RequiresApproval = false</c>): they are read-only, workspace-confined,
-    ///     secret-filtered, and capped, so the confinement controls are the safety boundary, not a per-call prompt.
-    /// </summary>
+    /// <summary>The model-visible descriptors for the three coder tools: name, schema and approval flag.</summary>
+    /// <remarks>
+    ///     The offer provider consumes these to merge the coder tools into the capability-gated loopback offer. All three auto-execute
+    ///     (<c>RequiresApproval = false</c>) because they are read-only, workspace-confined, secret-filtered and capped, so the confinement
+    ///     controls are the safety boundary rather than a per-call prompt.
+    /// </remarks>
     public static IReadOnlyList<CoderToolDescriptor> Descriptors { get; } =
     [
         new CoderToolDescriptor { Name = ListFilesToolName, Description = ListFilesDescription, ParameterSchema = ListFilesParameterSchema },

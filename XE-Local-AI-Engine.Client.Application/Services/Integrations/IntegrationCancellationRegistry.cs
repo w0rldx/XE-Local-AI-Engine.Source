@@ -3,15 +3,12 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 
-/// <summary>
-///     Process-local cancellation handles keyed by execution id.
-///     <para>
-///         It exists because <c>IInvocationRunner.Cancel</c> is not enough on its own: the lifecycle tracker only
-///         cancels the run it is CURRENTLY driving, so a row still waiting on the node's invocation lease would ignore
-///         it. The coordinator registers a token here before it waits, and every cancel path signals this registry as
-///         well as the runner.
-///     </para>
-/// </summary>
+/// <summary>Process-local cancellation handles keyed by execution id.</summary>
+/// <remarks>
+///     <c>IInvocationRunner.Cancel</c> is not enough on its own: the lifecycle tracker only cancels the run it is
+///     CURRENTLY driving, so a row still waiting on the node's invocation lease would ignore it. The coordinator
+///     registers a token here before it waits, and every cancel path signals this registry as well as the runner.
+/// </remarks>
 internal sealed class IntegrationCancellationRegistry
 {
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _entries = new();
@@ -45,9 +42,8 @@ internal sealed class IntegrationCancellationRegistry
 
         try
         {
-            // Forced sync: CancellationTokenSource.CancelAsync runs registered callbacks on the thread pool and
-            // surfaces a failing callback as the first inner exception rather than the AggregateException the
-            // catch below is written against, so switching would change this path's error and ordering contract.
+            // Forced sync: CancellationTokenSource.CancelAsync runs registered callbacks on the thread pool and surfaces a failing callback as the first inner
+            // exception rather than the AggregateException the catch below is written against, so switching changes this path's error and ordering contract.
 #pragma warning disable MA0045 // forced sync: synchronous cancellation contract (see comment above)
             source.Cancel();
 #pragma warning restore MA0045

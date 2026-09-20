@@ -12,16 +12,13 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
-/// <summary>
-///     The node's one door to installed external applications: admission, the state machine, the shared rebuild
-///     block every pipeline re-enters, and the projections the API renders.
-///     <para>
-///         A SINGLETON holding an <see cref="IServiceScopeFactory" /> rather than a scoped service holding a store.
-///         Admission and execution both open their own scope, so there is no path by which a request-scoped database
-///         context reaches a pipeline that outlives the request — the browser cannot dispose the context an install
-///         is about to compare-and-swap with by navigating away.
-///     </para>
-/// </summary>
+/// <summary>The node's one door to installed external applications: admission, the state machine, the shared rebuild block every pipeline re-enters, and the API's projections.</summary>
+/// <remarks>
+///     A SINGLETON holding an <see cref="IServiceScopeFactory" />, never a scoped service holding a store.
+///     Admission and execution each open their own scope, so no request-scoped database context reaches a pipeline
+///     that outlives the request — the browser cannot dispose the context an install is about to compare-and-swap
+///     with by navigating away.
+/// </remarks>
 internal sealed partial class ExternalAppService
 {
     private const string SecretVariableType = "secret";
@@ -36,11 +33,11 @@ internal sealed partial class ExternalAppService
 
     private static readonly TimeSpan ReadyPollInterval = TimeSpan.FromMilliseconds(500);
 
-    /// <summary>
-    ///     The baseline an install's acknowledgement payload is diffed against: an application that grants nothing.
+    /// <summary>The baseline an install's acknowledgement payload is diffed against: an application that grants nothing.</summary>
+    /// <remarks>
     ///     Diffing the manifest against it yields every name it DOES grant, which is what "the whole effective
     ///     permission set" means without a second derivation that could disagree with <c>Diff</c>.
-    /// </summary>
+    /// </remarks>
     private static readonly ExternalAppEffectivePermissions NoPermissions = new()
     {
         Internet = false,
@@ -88,18 +85,17 @@ internal sealed partial class ExternalAppService
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        // The same per-installation id Development Mode labels its containers with, derived from the same directory.
-        // Two installations pointed at one daemon must never remove each other's containers, and the owner label
-        // alone cannot tell them apart because its value is a constant.
+        // The same per-installation id Development Mode labels its containers with, from the same directory: two
+        // installations on one daemon must not remove each other's containers, and the owner label is a constant.
         _installId = DockerSandboxRuntimeProvider.BuildInstallId(dataDirectory.Root);
     }
 
-    /// <summary>
-    ///     The bridge grant for one instance, or <see langword="null" /> when this node has no open bridge or the
-    ///     instance carries no token (one installed before the bridge existed). Both halves come from different
+    /// <summary>The bridge grant for one instance, or <see langword="null" /> when this node has no open bridge or the instance carries no token.</summary>
+    /// <remarks>
+    ///     A token-less instance is one installed before the bridge existed. The two halves come from different
     ///     places — the endpoint from the composition root, the token from the encrypted row — and a grant is only
     ///     ever built from both.
-    /// </summary>
+    /// </remarks>
     private async Task<ContainerBridgeGrant?> ResolveBridgeGrantAsync(Guid instanceId, CancellationToken cancellationToken)
     {
         if (_bridgeEndpoints.Current is null)
@@ -115,26 +111,24 @@ internal sealed partial class ExternalAppService
         return BridgeGrantFor(row?.BridgeToken);
     }
 
-    /// <summary>
-    ///     Whether <paramref name="manifest" /> needs the container bridge and this node did not open one — the
-    ///     state <c>DeploymentPlanner.Plan</c> would later report as an unresolvable token. Asked at admission by
-    ///     the install and the update path alike, so a preview can render it and a command can refuse it before a
-    ///     row is written or a running version is stopped.
-    /// </summary>
+    /// <summary>Whether <paramref name="manifest" /> needs the container bridge and this node did not open one.</summary>
+    /// <remarks>
+    ///     That is the state <c>DeploymentPlanner.Plan</c> would later report as an unresolvable token. Asked at
+    ///     admission by the install and the update path alike, so a preview can render it and a command can refuse
+    ///     it before a row is written or a running version is stopped.
+    /// </remarks>
     private bool BridgeUnavailableFor(ApplicationManifest manifest)
     {
         return _bridgeEndpoints.Current is null && DeploymentPlanner.RequiresBridge(manifest);
     }
 
-    /// <summary>
-    ///     The same question for a stored row. The bridge check comes first so a node that opened one never pays
-    ///     the snapshot deserialize — nor inherits its failure mode — for an answer that is already "no".
-    ///     <para>
-    ///         Internal rather than private because the boot reconciler asks it too: a row whose plan cannot be
-    ///         rebuilt because this node opened no bridge must be told that, not told to start it again — the very
-    ///         command the Start/Restart admission below refuses.
-    ///     </para>
-    /// </summary>
+    /// <summary>The same question for a stored row.</summary>
+    /// <remarks>
+    ///     The bridge check comes first, so a node that opened one never pays the snapshot deserialize — nor
+    ///     inherits its failure mode — for an answer that is already "no". Internal rather than private because the
+    ///     boot reconciler asks it too: a row whose plan cannot be rebuilt for want of a bridge must be told that,
+    ///     not told to start it again, which is the very command the Start/Restart admission below refuses.
+    /// </remarks>
     internal bool BridgeUnavailableFor(ExternalAppInstanceSnapshot row)
     {
         if (_bridgeEndpoints.Current is not null)
@@ -148,10 +142,8 @@ internal sealed partial class ExternalAppService
         }
         catch (Exception exception) when (exception is JsonException or ExternalAppManifestException)
         {
-            // Admission cannot say whether a manifest it cannot read needs the bridge, so it does not say so: the
-            // command is admitted and the pipeline fails on the same unreadable snapshot exactly as it did before
-            // this check existed — a failure recorded on the row, not a 500 from the command, and not a bridge
-            // refusal invented for a row whose real problem is elsewhere.
+            // Admission cannot say whether an unreadable manifest needs the bridge, so it does not: the command is
+            // admitted and the pipeline records the failure on the row, never a bridge refusal it cannot justify.
             return false;
         }
     }
@@ -167,11 +159,11 @@ internal sealed partial class ExternalAppService
             : null;
     }
 
-    /// <summary>
-    ///     This installation's label value, so the boot reconciler and the state observer filter on the same id the
-    ///     pipelines label with. Derived once, in one place: two derivations that drifted would make one of them
-    ///     unable to find what the other created.
-    /// </summary>
+    /// <summary>This installation's label value, so the boot reconciler and the state observer filter on the same id the pipelines label with.</summary>
+    /// <remarks>
+    ///     Derived once, in one place: two derivations that drifted would make one of them unable to find what the
+    ///     other created.
+    /// </remarks>
     internal string InstallId => _installId;
 
     public async Task<IReadOnlyList<ExternalAppInstanceSummary>> ListAsync(CancellationToken cancellationToken = default)
@@ -378,20 +370,14 @@ internal sealed partial class ExternalAppService
         };
     }
 
-    /// <summary>
-    ///     One row whose stored manifest snapshot cannot be read, projected instead of thrown out of.
-    ///     <para>
-    ///         The list projects every row through <see cref="ToDetail" />, so a single corrupt snapshot thrown from
-    ///         here would take the whole list with it — every healthy instance, and the uninstall that is the only way
-    ///         to be rid of the bad row. It degrades the way <c>CatalogMissing</c> does: the row still renders, its
-    ///         lifecycle controls are still reachable, and the projection claims nothing it cannot read.
-    ///     </para>
-    ///     <para>
-    ///         The manifest is EMPTY apart from the three members the row itself carries, and the variables are empty
-    ///         rather than masked: which variables are secret is a manifest fact, and a map that could not be
-    ///         classified must not be rendered on the guess that none of it is.
-    ///     </para>
-    /// </summary>
+    /// <summary>One row whose stored manifest snapshot cannot be read, projected instead of thrown out of.</summary>
+    /// <remarks>
+    ///     The list projects every row through <see cref="ToDetail" />, so one corrupt snapshot thrown from here
+    ///     would take the whole list with it — every healthy instance, and the uninstall that is the only way to be
+    ///     rid of the bad row. It degrades the way <c>CatalogMissing</c> does: the row still renders and its
+    ///     lifecycle controls stay reachable. The manifest is EMPTY apart from the three members the row itself
+    ///     carries, and the variables are empty rather than masked, because "which are secret" is a manifest fact.
+    /// </remarks>
     private static ExternalAppInstanceDetail Unreadable(ExternalAppInstanceSnapshot row, ExternalAppInstanceSummary summary)
     {
         var manifest = new ApplicationManifest(row.ApplicationId,
@@ -434,11 +420,12 @@ internal sealed partial class ExternalAppService
         };
     }
 
-    /// <summary>
-    ///     The installed snapshot as it may leave the node: asset bodies stripped (they are catalog content, not
-    ///     instance state, and one of them is a several-kilobyte base64 blob on every render) and secret defaults
-    ///     nulled, so a manifest that ships a placeholder password does not hand it back as a rendered default.
-    /// </summary>
+    /// <summary>The installed snapshot as it may leave the node: asset bodies stripped and secret defaults nulled.</summary>
+    /// <remarks>
+    ///     Asset bodies are catalog content rather than instance state, and one of them is a several-kilobyte base64
+    ///     blob on every render. Nulling secret defaults is what stops a manifest that ships a placeholder password
+    ///     from handing it back as a rendered default.
+    /// </remarks>
     private static ApplicationManifest Sanitize(ApplicationManifest manifest)
     {
         return manifest with
@@ -480,16 +467,13 @@ internal sealed partial class ExternalAppService
         return masked;
     }
 
-    /// <summary>
-    ///     Whether a container the daemon reports was built from the image this instance installed.
-    ///     <para>
-    ///         Exact, because the runtime client maps the inspection's <c>Config.Image</c> — the digest-pinned
-    ///         reference the container was created from — rather than the resolved image id. Anything else is a
-    ///         container whose provenance this instance cannot establish: an id, another reference, or an empty
-    ///         string from a daemon that told us nothing. All three fail, and the recovery is the rebuild a Start
-    ///         performs, which is cheaper than serving a container nobody verified.
-    ///     </para>
-    /// </summary>
+    /// <summary>Whether a container the daemon reports was built from the image this instance installed.</summary>
+    /// <remarks>
+    ///     Exact, because the runtime client maps the inspection's <c>Config.Image</c> — the digest-pinned reference
+    ///     the container was created from — rather than the resolved image id. An id, another reference or an empty
+    ///     string from a daemon that told us nothing is a container whose provenance this instance cannot establish;
+    ///     all three fail, and the recovery is the rebuild a Start performs.
+    /// </remarks>
     internal static bool ImageMatches(string observed, string requested)
     {
         return string.Equals(observed, requested, StringComparison.Ordinal);

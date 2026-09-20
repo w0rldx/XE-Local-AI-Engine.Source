@@ -3,14 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations;
 using System.ComponentModel.DataAnnotations;
 
 /// <summary>
-///     Every knob the external-integration surface has. The compiled defaults are the shipped posture, so there is no
-///     <c>appsettings.json</c> entry and an empty section binds cleanly. Bound from <see cref="Section" /> and validated
-///     on startup with <c>ValidateDataAnnotations().ValidateOnStart()</c>, which also runs the
-///     <see cref="IValidatableObject" /> member below.
+///     Every knob the external-integration surface has; the compiled defaults are the shipped posture.
 /// </summary>
 /// <remarks>
-///     Several members are owned here and consumed elsewhere — this class is where each number has one home and one
-///     bound, and each doc comment says who reads it.
+///     There is no <c>appsettings.json</c> entry and an empty section binds cleanly. Bound from <see cref="Section" />
+///     and validated on startup with <c>ValidateDataAnnotations().ValidateOnStart()</c>, which also runs the
+///     <see cref="IValidatableObject" /> member below. Several members are owned here and consumed elsewhere: this is
+///     where each number has one home and one bound, and each doc comment says who reads it.
 /// </remarks>
 public sealed class IntegrationOptions : IValidatableObject
 {
@@ -19,16 +18,15 @@ public sealed class IntegrationOptions : IValidatableObject
     /// <summary>
     ///     The worst-case bytes a serialized <see cref="IntegrationStreamEvent" /> adds around an
     ///     <c>external.output</c> payload envelope: the <c>type</c>, <c>sequence</c>, two GUIDs, <c>occurredAtUtc</c>
-    ///     and their property names. <see cref="MaxOutputBytes" /> bounds only the persisted
-    ///     <c>{"contentType": …, "payload": …}</c> envelope, but the replay ring measures the whole stream event, so
-    ///     comparing the two directly accepted an output that could never fit in the ring: it landed, the ring trimmed
-    ///     it away immediately, and a caller already streaming a 200 got the close without its committed output.
-    ///     <para>
-    ///         Pinned rather than computed, so a bound is a constant an operator can reason about.
-    ///         <c>IntegrationOptionsEnvelopeOverheadTests</c> measures a maximal event and fails if the real overhead
-    ///         ever grows past this; the headroom over the measured ~200 bytes is the margin for a longer event type.
-    ///     </para>
+    ///     and their property names.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="MaxOutputBytes" /> bounds only the persisted envelope while the replay ring measures the whole
+    ///     stream event, so comparing the two directly accepts an output that can never fit in the ring: it lands, the
+    ///     ring trims it away at once, and a caller already streaming a 200 gets the close without its committed
+    ///     output. Pinned rather than computed, so a bound is a constant an operator can reason about, and
+    ///     <c>IntegrationOptionsEnvelopeOverheadTests</c> fails if the real overhead (measured ~200 bytes) grows past it.
+    /// </remarks>
     public const int MaxStreamEventEnvelopeBytes = 512;
 
     /// <summary>The narrowest replay window allowed: below this a caller could not realistically re-attach after a drop.</summary>
@@ -45,28 +43,32 @@ public sealed class IntegrationOptions : IValidatableObject
     public int MaxQueuedExecutions { get; init; } = 8;
 
     /// <summary>
-    ///     The per-principal companion to <see cref="MaxQueuedExecutions" />, enforced in the same transaction. The
-    ///     default of 2 is deliberately far below the node-wide 8: it is a fairness floor, not a throughput setting, and
-    ///     its whole purpose is that one noisy integrator cannot fill the node's queue and starve every other principal
-    ///     and the interactive user.
+    ///     The per-principal companion to <see cref="MaxQueuedExecutions" />, enforced in the same transaction.
     /// </summary>
+    /// <remarks>
+    ///     The default of 2 is deliberately far below the node-wide 8: it is a fairness floor, not a throughput
+    ///     setting, so one noisy integrator cannot fill the node's queue and starve every other principal and the
+    ///     interactive user.
+    /// </remarks>
     [Range(1, 1024)]
     public int MaxQueuedExecutionsPerPrincipal { get; init; } = 2;
 
     /// <summary>
     ///     How long a still-queued execution may wait for the invocation lease before it is failed with
-    ///     <c>queue-timeout</c>. Consumed by the execution coordinator. A caller learns its request will not run instead
-    ///     of waiting behind a long generation forever.
+    ///     <c>queue-timeout</c>. Consumed by the execution coordinator.
     /// </summary>
+    /// <remarks>A caller learns its request will not run instead of waiting behind a long generation forever.</remarks>
     [Range(1, 86_400)]
     public int MaxQueueAgeSeconds { get; init; } = 120;
 
     /// <summary>
-    ///     The invoke body ceiling in bytes. <b>This property is where the number lives, not where it is enforced:</b>
-    ///     the limit is applied while the route is being built, before any <c>IOptions&lt;T&gt;</c> can be resolved, so
-    ///     the endpoint composition reads it from configuration the way the rate-limit constants do. Keep it here so the
-    ///     value has one home and one bound.
+    ///     The invoke body ceiling in bytes. This property is where the number LIVES, not where it is enforced.
     /// </summary>
+    /// <remarks>
+    ///     The limit is applied while the route is being built, before any <c>IOptions&lt;T&gt;</c> can be resolved, so
+    ///     the endpoint composition reads it from configuration the way the rate-limit constants do. It stays here so
+    ///     the value has one home and one bound.
+    /// </remarks>
     [Range(1024, 16 * 1024 * 1024)]
     public int MaxRequestBodyBytes { get; init; } = 1_048_576;
 
@@ -128,15 +130,15 @@ public sealed class IntegrationOptions : IValidatableObject
     public int ContextBudgetTokens { get; init; } = 12_000;
 
     /// <summary>
-    ///     The byte budget for the framed "prior outputs" document a caller-managed continuation carries, so the model
-    ///     can see what it already emitted. A byte budget rather than a token budget, which is why it does not fold into
-    ///     <see cref="ContextBudgetTokens" />. Consumed by the session context builder.
-    ///     <para>
-    ///         It bounds the WHOLE composed message, not the replayed payloads alone: the preamble, the untrusted-content
-    ///         fence and the truncation notice are spent out of it first, and what is left is what the entries may fill.
-    ///         Values near the 1 KiB floor therefore replay nothing, because the wrapper alone is worth ~500 bytes.
-    ///     </para>
+    ///     The byte budget for the framed "prior outputs" document a caller-managed continuation carries, consumed by
+    ///     the session context builder.
     /// </summary>
+    /// <remarks>
+    ///     A byte budget rather than a token budget, which is why it does not fold into
+    ///     <see cref="ContextBudgetTokens" />. It bounds the WHOLE composed message, not the replayed payloads alone:
+    ///     the preamble, the untrusted-content fence and the truncation notice are spent out of it first, so values
+    ///     near the 1 KiB floor replay nothing, because the wrapper alone is worth ~500 bytes.
+    /// </remarks>
     [Range(1024, 1024 * 1024)]
     public int PriorOutputsContextBytes { get; init; } = 32_768;
 
@@ -156,9 +158,8 @@ public sealed class IntegrationOptions : IValidatableObject
                 [nameof(MaxQueuedExecutionsPerPrincipal), nameof(MaxQueuedExecutions)]);
         }
 
-        // One output event larger than the whole ring's byte cap trims the ring to empty the moment it lands, which
-        // costs every event before it and hands the reader a gap for a run that is still producing. The comparison is
-        // against the payload envelope PLUS the stream event around it, because that is what the ring measures.
+        // One output event larger than the whole ring's byte cap trims the ring to empty the moment it lands, costing every event before it and handing the
+        // reader a gap for a run that is still producing. The comparison is against the payload envelope PLUS the stream event, because that is what it measures.
         if (EventBufferMaxBytes < (long)MaxOutputBytes + MaxStreamEventEnvelopeBytes)
         {
             yield return new ValidationResult($"{Section}:{nameof(EventBufferMaxBytes)} must be at least {nameof(MaxOutputBytes)} plus {MaxStreamEventEnvelopeBytes} bytes of stream-event envelope.",

@@ -4,17 +4,14 @@ using System.Text.Json;
 
 /// <summary>
 ///     One event on an integration execution's stream, as an external caller sees it.
-///     <para>
-///         <see cref="Sequence" /> is monotonic per execution and starts at 1 with <c>execution.accepted</c>. Holes are
-///         legal: a sequence reserved for a durable-before-visible event whose commit failed is abandoned, and a caller
-///         treats <c>Last-Event-ID</c> as a watermark rather than a counter.
-///     </para>
-///     <para>
-///         <see cref="ContentType" /> and <see cref="Payload" /> are populated only where the type defines them — the
-///         tool's declared content type and its verbatim payload on an <c>external.output</c> event, a small structured
-///         object on the others.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="Sequence" /> is monotonic per execution and starts at 1 with <c>execution.accepted</c>. Holes are
+///     legal: a sequence reserved for a durable-before-visible event whose commit failed is abandoned, and a caller
+///     treats <c>Last-Event-ID</c> as a watermark rather than a counter. <see cref="ContentType" /> and
+///     <see cref="Payload" /> are populated only where the type defines them — the tool's declared content type and its
+///     verbatim payload on an <c>external.output</c> event, a small structured object on the others.
+/// </remarks>
 public sealed record IntegrationStreamEvent
 {
     public required string Type { get; init; }
@@ -69,13 +66,15 @@ public static class IntegrationStreamEventTypes
     public const string ExecutionCancelled = "execution.cancelled";
 
     /// <summary>
-    ///     The subset written to <c>integration_execution_events</c>. Written as a literal allowlist of nine, never as
-    ///     "all except": a twelfth type added later must not become persisted by default. Both assistant types are
-    ///     deliberately out — <see cref="AssistantDelta" /> is per-token noise, and <see cref="AssistantCompleted" />
-    ///     would duplicate the final text that already lands in the owned conversation as an assistant message. A wrong
-    ///     entry here copies transcript content into the event table, which is the leak that table was designed to
-    ///     avoid.
+    ///     The subset written to <c>integration_execution_events</c>, as a literal allowlist of nine and never as "all
+    ///     except", so a type added later is not persisted by default.
     /// </summary>
+    /// <remarks>
+    ///     Both assistant types are deliberately out — <see cref="AssistantDelta" /> is per-token noise, and
+    ///     <see cref="AssistantCompleted" /> would duplicate the final text that already lands in the owned
+    ///     conversation as an assistant message. A wrong entry here copies transcript content into the event table,
+    ///     which is the leak that table was designed to avoid.
+    /// </remarks>
     public static readonly IReadOnlySet<string> Persisted = new HashSet<string>(StringComparer.Ordinal)
     {
         ExecutionAccepted,

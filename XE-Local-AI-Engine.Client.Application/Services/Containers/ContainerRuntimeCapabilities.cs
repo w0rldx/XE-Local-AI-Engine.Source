@@ -1,13 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>
-///     What a container runtime can do, in the exact vocabulary a catalog manifest's <c>requires[]</c> uses.
-///     <para>
-///         The names and the check live together, in this layer, rather than the names living in the catalog and the
-///         check in the application layer: two statements of one vocabulary disagree the first time one of them is
-///         edited, and the failure mode is an application declaring a requirement nothing evaluates.
-///     </para>
-/// </summary>
+/// <summary>What a container runtime can do, in the exact vocabulary a catalog manifest's <c>requires[]</c> uses.</summary>
+/// <remarks>
+///     The names and the check live together in this layer, rather than the names in the catalog and the check in
+///     the application layer: two statements of one vocabulary disagree the first time one is edited, and the
+///     failure mode is an application declaring a requirement nothing evaluates.
+/// </remarks>
 public sealed record ContainerRuntimeCapabilities
 {
     /// <summary>The runtime can create, start, stop, inspect and remove containers.</summary>
@@ -86,14 +84,12 @@ public sealed record ContainerRuntimeCapabilities
         "gpuDevices"
     ];
 
-    /// <summary>
-    ///     The requested capability names this runtime does not offer, in the order they were asked for.
-    ///     <para>
-    ///         A name this vocabulary does not define counts as missing rather than as satisfied. A runtime cannot
-    ///         honour a requirement it does not understand, and treating the unknown as met is how a manifest written
-    ///         against a later schema installs silently and fails at run time.
-    ///     </para>
-    /// </summary>
+    /// <summary>The requested capability names this runtime does not offer, in the order they were asked for.</summary>
+    /// <remarks>
+    ///     A name this vocabulary does not define counts as MISSING rather than as satisfied: a runtime cannot
+    ///     honour a requirement it does not understand, and treating the unknown as met is how a manifest written
+    ///     against a later schema installs silently and fails at run time.
+    /// </remarks>
     public IReadOnlyList<string> FindMissing(IEnumerable<string> required)
     {
         ArgumentNullException.ThrowIfNull(required);

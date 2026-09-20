@@ -6,21 +6,21 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
-/// <summary>
-///     Operator-configurable settings for the External Apps runtime (ADR 0010). The catalog has its own section
-///     (<c>ExternalApps:Catalog</c>) bound by the catalog module, so there is deliberately no catalog member here: two
-///     bound copies of one section disagree the first time one of them is read.
-/// </summary>
+/// <summary>Operator-configurable settings for the External Apps runtime (ADR 0010).</summary>
+/// <remarks>
+///     The catalog has its own section (<c>ExternalApps:Catalog</c>) bound by the catalog module, so there is
+///     deliberately no catalog member here: two bound copies of one section disagree the first time one is read.
+/// </remarks>
 public sealed record ExternalAppsOptions
 {
     /// <summary>The configuration section these options bind to.</summary>
     public const string SectionName = "ExternalApps";
 
-    /// <summary>
-    ///     Whether the feature does anything. Default <see langword="false" />: the module still registers so the
-    ///     composition root has one shape, but the reconciler and the observer return immediately and every service
-    ///     entry point refuses. Registration is not the gate; behaviour is.
-    /// </summary>
+    /// <summary>Whether the feature does anything. Default <see langword="false" />.</summary>
+    /// <remarks>
+    ///     The module still registers so the composition root has one shape, but the reconciler and the observer
+    ///     return immediately and every service entry point refuses: registration is not the gate, behaviour is.
+    /// </remarks>
     public bool Enabled { get; init; }
 
     /// <summary>
@@ -54,28 +54,23 @@ public sealed record ExternalAppsOptions
 
     /// <summary>
     ///     The digest-pinned image the short-lived helper container that deletes an instance's volume CONTENTS runs.
-    ///     <para>
-    ///         An application's own in-container user is not the engine: under a rootless daemon a service that
-    ///         creates <c>0700</c> directories as, say, uid 977 leaves them owned by a host uid inside the operator's
-    ///         subuid range, which the engine can neither traverse nor unlink. The helper runs as in-container root
-    ///         over one bind mount of that instance's volumes directory and deletes the contents from inside, after
-    ///         which the engine removes the empty tree host-side.
-    ///     </para>
-    ///     <para>
-    ///         The default is the same BusyBox digest the container suites pin, so a box that has run them already
-    ///         holds it. Overriding it is for an air-gapped daemon that mirrors a different registry; the validator
-    ///         refuses anything that is not digest-pinned, because a tag would let a different image answer to the
-    ///         same name and this one runs as root over application data.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The default is the same BusyBox digest the container suites pin, so a box that has run them already holds
+    ///     it; overriding it is for an air-gapped daemon mirroring a different registry. The validator refuses
+    ///     anything not digest-pinned, because a tag would let a different image answer to the same name and this one
+    ///     runs as in-container root over application data. Why a helper exists at all:
+    ///     docs/wiki/23-external-apps.md ("Storage, and the helper container").
+    /// </remarks>
     public string StorageHelperImage { get; init; } = "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0";
 }
 
-/// <summary>
-///     Fail-closed startup validation for the two free-form members. The ranges are data annotations; these two are
-///     not expressible as one, and a misspelt path or identity that only surfaced at the first install would surface
-///     as a storage failure on the instance rather than as the configuration error it is.
-/// </summary>
+/// <summary>Fail-closed startup validation for the two free-form members.</summary>
+/// <remarks>
+///     The ranges are data annotations; these two are not expressible as one, and a misspelt path or identity that
+///     only surfaced at the first install would present as a storage failure on that instance rather than as the
+///     configuration error it is.
+/// </remarks>
 internal sealed partial class ExternalAppsOptionsValidator : IValidateOptions<ExternalAppsOptions>
 {
     private const string SectionName = ExternalAppsOptions.SectionName;
@@ -99,10 +94,8 @@ internal sealed partial class ExternalAppsOptionsValidator : IValidateOptions<Ex
                 $"'{SectionName}:{nameof(ExternalAppsOptions.ContainerIdentity)}' must be 'uid:gid' with both parts non-negative integers, not '{identity}'."));
         }
 
-        // Checked at startup rather than at the first uninstall: the helper runs as in-container root over an
-        // instance's data, so a mistyped or merely tagged reference must fail as the configuration error it is and
-        // not as a storage failure on the one instance that happened to be removed first. The catalog's own rule
-        // rather than a substring test: '@sha256:' also matches a truncated digest and an empty reference.
+        // Checked at startup rather than at the first uninstall: the helper runs as in-container root over an instance's data, so a mistyped or merely tagged
+        // reference must fail as a configuration error. The catalog's own rule, not a substring test: '@sha256:' also matches a truncated or empty digest.
         if (!ExternalAppCatalogValidator.IsDigestPinnedImage(options.StorageHelperImage))
         {
             failures.Add(string.Create(CultureInfo.InvariantCulture,

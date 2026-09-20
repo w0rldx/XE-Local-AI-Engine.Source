@@ -5,36 +5,15 @@ using Azure.Core;
 
 /// <summary>
 ///     A System.ClientModel pipeline policy that attaches a fresh Entra ID bearer token to every outbound Azure
-///     Foundry / APIM gateway request. The underlying <see cref="TokenCredential" /> (client-secret / device-code /
-///     interactive-browser) owns its own in-memory expiry cache, so this policy performs no caching of its own —
-///     every call is a cheap cache-hit unless the token is near expiry. Never logs the token.
-///     <para>
-///         Derives from <see cref="AuthenticationPolicy" /> (not just <see cref="PipelinePolicy" />) so it can serve
-///         two different roles depending on the wire surface:
-///     </para>
-///     <list type="bullet">
-///         <item>
-///             Azure deployments surface (<see cref="AzureOpenAIClient" />): registered at
-///             <see cref="PipelinePosition.PerCall" /> (before retries) so a transient 401 retry re-fetches rather
-///             than replaying a stale token. Composes with <see cref="CustomHeaderPipelinePolicy" />: both may be
-///             registered at <see cref="PipelinePosition.PerCall" /> on the same client and each sets only its own
-///             header name (<c>Authorization</c> is reserved and skipped by the custom-header policy, so the two
-///             never race for the same header).
-///         </item>
-///         <item>
-///             OpenAI-compatible v1 surface (plain <see cref="OpenAIClient" />): passed directly as the SDK's own
-///             <see cref="AuthenticationPolicy" /> via the <c>OpenAIClient(AuthenticationPolicy, OpenAIClientOptions)</c>
-///             constructor instead of being added at <see cref="PipelinePosition.PerCall" />. That constructor puts
-///             the supplied policy in <see cref="ClientPipeline" />'s FIXED per-try policy slot — which the SDK's
-///             internal pipeline-assembly code places AFTER every PerCall policy (including a PerCall-registered
-///             instance of this same class). A PerCall registration on this surface would therefore be silently
-///             overwritten by the SDK's own placeholder-credential auth policy before the request left the process;
-///             passing this policy as the ctor's <c>authenticationPolicy</c> argument instead makes IT the
-///             last-writer, since there is nothing left in the fixed slot to overwrite it. See
-///             <see cref="AzureFoundryChatClientFactory" />'s v1 builders for the call sites.
-///         </item>
-///     </list>
+///     Foundry / APIM gateway request. Never logs the token.
 /// </summary>
+/// <remarks>
+///     The underlying <see cref="TokenCredential" /> owns its own expiry cache, so this policy caches nothing. It derives from
+///     <see cref="AuthenticationPolicy" />, not <see cref="PipelinePolicy" />, because the two wire surfaces install it differently: the Azure
+///     deployments surface registers it at <see cref="PipelinePosition.PerCall" />, while the OpenAI-compatible v1 surface MUST pass it as the
+///     <c>OpenAIClient(AuthenticationPolicy, OpenAIClientOptions)</c> ctor argument — a PerCall registration there is silently overwritten.
+///     Why, and the call sites: docs/wiki/03-local-runtime-and-providers.md "Azure Foundry: the two wire surfaces".
+/// </remarks>
 internal sealed class EntraBearerTokenPipelinePolicy : AuthenticationPolicy
 {
     private const string AuthorizationHeaderName = "Authorization";

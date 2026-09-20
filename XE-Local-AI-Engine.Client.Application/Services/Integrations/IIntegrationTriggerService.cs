@@ -98,10 +98,12 @@ public interface IIntegrationTriggerService
     Task<bool> DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Normalises an external trigger name the one way the whole feature agrees on: trimmed and lowercased. Both
-    ///     the admin writes and the invoke lookup call it, so a name saved from the UI and a name typed into a curl
-    ///     command resolve to the same row.
+    ///     Normalises an external trigger name the one way the whole feature agrees on: trimmed and lowercased.
     /// </summary>
+    /// <remarks>
+    ///     Both the admin writes and the invoke lookup call it, so a name saved from the UI and a name typed into a
+    ///     curl command resolve to the same row.
+    /// </remarks>
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "The trigger name is lowercase BY CONTRACT (^[a-z0-9][a-z0-9-]{1,63}$) and is the external route segment a caller types, not a security identifier that must round-trip.")]
     static string NormalizeName(string? name) =>

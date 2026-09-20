@@ -5,16 +5,14 @@ using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
-/// <summary>
-///     What an application container is allowed to be, stated once as the specification the engine asks for and
-///     verified again against what the daemon says it created.
-///     <para>
-///         A sibling of Development Mode's hardening in STYLE — build one specification, create, inspect, collect
-///         every violation rather than the first, fail closed — and in nothing else. That verifier reads a different
-///         record as the complete statement of what must be true about a Development Mode container, and calling it
-///         from here would mean checking a contract written for another consumer.
-///     </para>
-/// </summary>
+/// <summary>What an application container is allowed to be, stated once as the specification the engine asks for and verified against what the daemon says it created.</summary>
+/// <remarks>
+///     A sibling of Development Mode's hardening in STYLE only — build one specification, create, inspect, collect
+///     every violation rather than the first, fail closed. Dev Mode's verifier is NOT an alternative to this one: it
+///     reads a different record as the complete statement of what must be true about a Development Mode container,
+///     so calling it from here would check a contract written for another consumer. The rules it enforces are in
+///     <c>docs/adr/0010-external-apps-container-execution.md</c> ("Invariants the read-back verifier enforces").
+/// </remarks>
 internal static class ApplicationContainerPolicy
 {
     /// <summary>Machine token for a service asking for a capability outside Docker's own default set.</summary>
@@ -41,11 +39,12 @@ internal static class ApplicationContainerPolicy
 
     private const string HostMode = "host";
 
-    /// <summary>
-    ///     Builds the specification for one service. Every field the policy cares about is set explicitly, including
-    ///     the ones whose default would be correct: a field the engine never passes is a field the read-back verifier
-    ///     cannot meaningfully assert, and "we did not set it" is not evidence that the daemon did not.
-    /// </summary>
+    /// <summary>Builds the specification for one service, setting every field the policy cares about explicitly.</summary>
+    /// <remarks>
+    ///     Including the ones whose default would be correct: a field the engine never passes is a field the
+    ///     read-back verifier cannot meaningfully assert, and "we did not set it" is not evidence that the daemon
+    ///     did not.
+    /// </remarks>
     internal static ContainerSpecification BuildSpecification(ApplicationService service,
         ApplicationManifest manifest,
         Guid instanceId,
@@ -71,9 +70,8 @@ internal static class ApplicationContainerPolicy
             Image = service.Image,
             Name = ExternalAppLabels.ContainerName(instanceId, service.Name),
 
-            // The engine passes no user. The curated images start as in-container root and drop privileges through
-            // their own entrypoints; forcing a uid breaks that and breaks a port-80 bind. The boundary is the
-            // container, its dropped capabilities, seccomp and the loopback-only network — not the uid.
+            // No user is passed: the curated images start as in-container root and drop privileges in their own
+            // entrypoints, so a forced uid breaks that and a port-80 bind. The boundary is the container, not the uid.
             User = null,
             Labels = ExternalAppLabels.For(installId, instanceId, service.Name),
             Environment = environment,
@@ -164,26 +162,17 @@ internal static class ApplicationContainerPolicy
             $"{publication.HostIp}:{publication.HostPort?.ToString(CultureInfo.InvariantCulture) ?? "auto"}->{publication.ContainerPort}");
     }
 
-    /// <summary>
-    ///     Every way the container the daemon actually created differs from the one that was asked for. Returns them
-    ///     ALL rather than the first: a caller that fixes one violation and re-runs learns about the next one a
-    ///     container-create later, and the point of a fail-closed verifier is to describe the whole gap at once.
-    ///     <para>
-    ///         Run twice per container, because the two inspects see different things.
-    ///         <paramref name="afterStart" /> false reads what the daemon was ASKED to bind, which is populated at
-    ///         create; true reads what it actually bound. A pre-start-only check is how a widened binding gets
-    ///         through: the request can say loopback and the applied binding can still be <c>0.0.0.0</c>.
-    ///     </para>
-    /// </summary>
-    /// <param name="daemonIsRootless">
-    ///     Only shapes the operator prose. No rule below reads differently on a rootless daemon, but a path or a
-    ///     binding that looks wrong under one is diagnosed completely differently, so the mode is named in the
-    ///     violation rather than left for the reader to guess.
-    /// </param>
+    /// <summary>Every way the container the daemon actually created differs from the one that was asked for, returned ALL at once rather than one at a time.</summary>
+    /// <remarks>
+    ///     Run twice per container, because the two inspects see different things: <paramref name="afterStart" />
+    ///     false reads what the daemon was ASKED to bind, true reads what it actually bound. Why that, and every
+    ///     other rule enforced below, is in <c>docs/adr/0010-external-apps-container-execution.md</c> ("Invariants
+    ///     the read-back verifier enforces").
+    /// </remarks>
+    /// <param name="daemonIsRootless">Shapes the operator prose only; every rule below reads the same on a rootless daemon.</param>
     /// <param name="instanceRoot">
     ///     The instance directory every bind source must physically live under, or <see langword="null" /> to compare
-    ///     the mounts without confining them. Every caller that verifies a real instance passes it: a path string
-    ///     resolves nothing, so "under the instance directory" is a question only the resolved location can answer.
+    ///     the mounts without confining them.
     /// </param>
     internal static IReadOnlyList<string> FindViolations(ContainerSpecification requested,
         ContainerInspection observed,
@@ -224,18 +213,14 @@ internal static class ApplicationContainerPolicy
         }
     }
 
-    /// <summary>
-    ///     The two security options are verified by their VALUE, not by the presence of their name. A container that
-    ///     reads back <c>no-new-privileges:false</c> or <c>seccomp=unconfined</c> names both options and has neither
-    ///     protection, and a presence check would hand reuse and boot adoption a container with its confinement
-    ///     switched off.
-    ///     <para>
-    ///         The rules are the sibling of Development Mode's hardening in style and nothing else: the option name is
-    ///         matched by prefix because the daemon has rendered it as <c>no-new-privileges</c>,
-    ///         <c>no-new-privileges:true</c> and <c>no-new-privileges=true</c> across versions, and only the explicit
-    ///         false rendering means the protection is off.
-    ///     </para>
-    /// </summary>
+    /// <summary>The two security options are verified by their VALUE, not by the presence of their name.</summary>
+    /// <remarks>
+    ///     A container reading back <c>no-new-privileges:false</c> or <c>seccomp=unconfined</c> names both options
+    ///     and has neither protection, so a presence check would hand reuse and boot adoption a container with its
+    ///     confinement switched off. The name is matched by prefix because daemons render it as
+    ///     <c>no-new-privileges</c>, <c>no-new-privileges:true</c> and <c>no-new-privileges=true</c> across versions;
+    ///     only the explicit false rendering means the protection is off.
+    /// </remarks>
     private static void VerifySecurityOptions(ContainerInspection observed, List<string> violations)
     {
         if (!observed.SecurityOptions.Any(static option =>
@@ -245,12 +230,8 @@ internal static class ApplicationContainerPolicy
             violations.Add("no-new-privileges is not applied");
         }
 
-        // No seccomp option at all reads back the same way as a daemon with seccomp disabled, which is why the
-        // profile is passed explicitly; `seccomp=unconfined` is the other rendering that must be refused.
-        // Matched on "names a profile" rather than on equality with the profile that was sent, the same deliberate
-        // limit Dev Mode's verifier takes: the daemon echoes the profile back as ~9 KB of compacted JSON and pinning
-        // a byte-for-byte echo would turn a daemon-side normalisation into a spurious rejection. The cost is that an
-        // adopted container carrying a foreign but non-unconfined profile passes this check.
+        // No seccomp option reads back like a daemon with seccomp disabled, so the profile is passed explicitly and
+        // `seccomp=unconfined` is refused. Matched on "names a profile", not equality — ADR 0010, same section.
         if (!observed.SecurityOptions.Any(DockerSeccompProfile.NamesAProfile))
         {
             violations.Add("the engine seccomp profile is not applied");
@@ -303,11 +284,12 @@ internal static class ApplicationContainerPolicy
         }
     }
 
-    /// <summary>
-    ///     The EFFECTIVE mount set must equal the planned one exactly. That is what catches an anonymous volume an
-    ///     image's own <c>VOLUME</c> instruction created: it appears in the inspect and in no request, and it would
-    ///     put application data outside the instance directory where a reset and an uninstall cannot reach it.
-    /// </summary>
+    /// <summary>The EFFECTIVE mount set must equal the planned one exactly.</summary>
+    /// <remarks>
+    ///     That is what catches an anonymous volume created by an image's own <c>VOLUME</c> instruction: it appears
+    ///     in the inspect and in no request, and it would put application data outside the instance directory, where
+    ///     a reset and an uninstall cannot reach it.
+    /// </remarks>
     private static void VerifyMounts(ContainerSpecification requested,
         ContainerInspection observed,
         string daemonMode,
@@ -327,10 +309,8 @@ internal static class ApplicationContainerPolicy
                 continue;
             }
 
-            // Both sides through their links before they are compared, and the planned side confined to the instance
-            // directory by its REAL location. Comparing the two strings is what a component replaced by a link
-            // between the plan and the create defeats: the path still reads as the instance's own, and the daemon
-            // bound something else entirely.
+            // Both sides go through their links before they are compared, and the planned side is confined by its REAL
+            // location: a component swapped for a link between plan and create defeats a string comparison.
             var plannedReal = ResolveThroughLinks(Path.GetFullPath(expected.HostPath));
             if (confinement is not null && !IsInside(plannedReal, confinement))
             {
@@ -364,11 +344,11 @@ internal static class ApplicationContainerPolicy
                    StringComparison.Ordinal);
     }
 
-    /// <summary>
-    ///     One absolute path with every component resolved through its links, which is what a path string cannot do
-    ///     for itself. A component that does not exist, or that cannot be read, resolves to itself: this is a
-    ///     verification of what the daemon reported, never a reason to fail a container over a race with a deletion.
-    /// </summary>
+    /// <summary>One absolute path with every component resolved through its links, which is what a path string cannot do for itself.</summary>
+    /// <remarks>
+    ///     A component that does not exist, or that cannot be read, resolves to itself: this verifies what the daemon
+    ///     reported, and is never a reason to fail a container over a race with a deletion.
+    /// </remarks>
     private static string ResolveThroughLinks(string path)
     {
         var current = Path.TrimEndingDirectorySeparator(path);

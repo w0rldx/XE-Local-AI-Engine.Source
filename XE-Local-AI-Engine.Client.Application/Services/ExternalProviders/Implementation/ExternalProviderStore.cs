@@ -13,17 +13,11 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 ///     next to the node's other secrets, written 0600, guarded by a process-wide lock and a compare-and-swap revision.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Modelled on <c>CloudCredentialStore</c> — same protector-per-purpose, same "decryption failed ⇒ quarantine
-///         and report empty" posture, same create-at-0600 write — because both files hold API keys and a second,
-///         subtly different secret-file discipline is how one of them ends up world-readable.
-///     </para>
-///     <para>
-///         The base URL is normalized HERE and nowhere else. The outbound guard pins every request to the stored value,
-///         so a descriptor carrying an un-normalized address would widen the guard to whatever the operator typed. The
-///         same reasoning applies to the connection slug: it is canonicalized once at write time, which is what keeps
-///         the case-INSENSITIVE provider map and the ORDINAL tool-capable allow-list agreeing about one model.
-///     </para>
+///     Modelled on <c>CloudCredentialStore</c> — same protector-per-purpose, same "decryption failed ⇒ quarantine and
+///     report empty" posture, same create-at-0600 write — because both files hold API keys and a second, subtly
+///     different secret-file discipline is how one of them ends up world-readable. The base URL and the connection slug
+///     are normalized HERE and nowhere else. Why:
+///     docs/wiki/03-local-runtime-and-providers.md, "External connections: the store, the registry cache, and the reconciler".
 /// </remarks>
 public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
 {
@@ -202,19 +196,11 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     ///     the last of which is allowed ONLY while the connection stays on the same origin.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         The carry-forward case is why this method exists. The editor masks the key and sends nothing back, so
-    ///         treating a blank key as "clear it" would silently de-authenticate a working connection the first time an
-    ///         operator renamed it — a chat failure, later, with no visible cause.
-    ///     </para>
-    ///     <para>
-    ///         But a key is a credential for ONE origin, and carrying it forward across an origin change is how an
-    ///         operator-API caller who cannot read the encrypted key extracts it anyway: point the connection at a
-    ///         listener they control, save without a key, and the node presents the stored secret as a bearer token on
-    ///         the next request. So an origin change requires the key to be re-entered or explicitly cleared — an
-    ///         explicit decision by whoever is moving the endpoint, which is exactly the decision being stolen here.
-    ///         A path change on the same origin is not a re-authorization: the credential's audience has not moved.
-    ///     </para>
+    ///     The editor masks the key and sends nothing back, so treating a blank key as "clear it" would silently de-authenticate a
+    ///     working connection the first time an operator renamed it. But a key is a credential for ONE origin: carrying it forward
+    ///     across an origin change is how a caller who cannot read the encrypted key extracts it anyway — repoint the connection at
+    ///     a listener they control, save without a key, and the node presents the secret as a bearer token. An origin change
+    ///     therefore requires the key re-entered or cleared; a path change on the same origin is not a re-authorization.
     /// </remarks>
     private static string? MergeApiKey(ExternalProviderConnectionSaveRequest request,
         StoredExternalProviderConnection? existing,
@@ -245,10 +231,12 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     }
 
     /// <summary>
-    ///     Whether two NORMALIZED base URLs address the same origin — scheme, host and port. The unit of credential
-    ///     trust, and compared here rather than by string equality so a path-only edit (<c>/v1</c> to <c>/openai/v1</c>)
-    ///     does not force a needless key re-entry.
+    ///     Whether two NORMALIZED base URLs address the same origin — scheme, host and port.
     /// </summary>
+    /// <remarks>
+    ///     The unit of credential trust, compared here rather than by string equality so a path-only edit
+    ///     (<c>/v1</c> to <c>/openai/v1</c>) does not force a needless key re-entry.
+    /// </remarks>
     internal static bool IsSameOrigin(string? left, string? right)
     {
         return Uri.TryCreate(left, UriKind.Absolute, out var leftUri)
@@ -376,20 +364,15 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
                 throw new ExternalProviderValidationException($"'{model.DefaultReasoningEffort}' is not a recognized reasoning effort.");
             }
 
-            // Refused even though the vocabulary accepts it: `auto` is resolved PER TURN by this node's dispatcher into
-            // a concrete tier, and the dispatcher's FAST tier is a node-local model swap this node cannot perform for a
-            // remote endpoint. A registered model's DEFAULT effort is a wire value, so `auto` would either leak to the
-            // endpoint or be silently dropped — neither is a defensible reading of the operator's input.
+            // Refused even though the vocabulary accepts it: `auto` is resolved PER TURN by this node's dispatcher, whose FAST tier is a
+            // node-local model swap no remote endpoint can do. A DEFAULT effort is a wire value, so `auto` would leak to the endpoint or be silently dropped.
             if (string.Equals(ReasoningEffortNormalizer.Normalize(model.DefaultReasoningEffort), "auto", StringComparison.Ordinal))
             {
                 throw new ExternalProviderValidationException("A registered model's default reasoning effort cannot be 'auto'; auto is resolved per turn by this node.");
             }
 
-            // Refused, not silently canonicalized. Every capability here is an operator ASSERTION about a remote server
-            // no probe can interrogate, and "it does not reason, but here is its default reasoning effort" is not a
-            // claim with a defensible reading — accepting it would put reasoning_effort on the wire for a model the
-            // catalog simultaneously reports as non-reasoning, and quietly dropping it would hide a form the operator
-            // filled in wrong. The effort switch is only meaningful alongside a reasoning channel.
+            // Refused, not silently canonicalized. Every capability here is an operator ASSERTION about a remote server no probe can interrogate:
+            // accepting this would put reasoning_effort on the wire for a model the catalog reports as non-reasoning, and dropping it would hide a form filled in wrong.
             if (!model.SupportsReasoning && (model.SupportsReasoningEffort || !string.IsNullOrWhiteSpace(model.DefaultReasoningEffort)))
             {
                 throw new ExternalProviderValidationException($"The external model '{wireId}' declares a reasoning effort but not reasoning support. Enable reasoning, or remove the effort settings.");
@@ -438,19 +421,16 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         }
         catch (CryptographicException exception)
         {
-            // The key ring rotated out from under the file (a node re-key, a restored profile). The payload can never
-            // be recovered, and leaving it in place would make every subsequent save fail its read-modify-write, so it
-            // is quarantined exactly as the cloud credential store quarantines its own. Quarantined means GONE, which
-            // is why this reports Missing rather than Unreadable: after the delete there genuinely is no config.
+            // The key ring rotated out from under the file (a node re-key, a restored profile): the payload can never be recovered and leaving it
+            // would fail every later save's read-modify-write, so it is quarantined as the cloud credential store does. Quarantined means GONE, hence Missing, not Unreadable.
             _logger.LogWarning(exception, "External provider store decryption failed. Clearing the stored external connections.");
             ClearStoreFileBestEffort();
             return new ExternalProviderLoadResult.Missing();
         }
         catch (IOException exception)
         {
-            // Transient, and NOT recoverable information: the file is probably fine and a concurrent reader or AV
-            // scanner is holding it. Reported as unreadable so a writer refuses rather than reconciling the operator's
-            // configuration away on the strength of a locked handle.
+            // Transient, and NOT recoverable information: the file is probably fine and a concurrent reader or AV scanner is holding it.
+            // Reported as unreadable so a writer refuses rather than reconciling the operator's configuration away on the strength of a locked handle.
             _logger.LogWarning(exception, "External provider store could not be read from disk.");
             return new ExternalProviderLoadResult.Unreadable("The external provider store could not be read from disk.");
         }

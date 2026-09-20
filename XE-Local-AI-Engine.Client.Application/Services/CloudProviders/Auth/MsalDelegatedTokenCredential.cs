@@ -7,12 +7,15 @@ using Microsoft.Identity.Client;
 /// <summary>
 ///     Adapts a delegated MSAL confidential-client silent token acquisition
 ///     (<see cref="IClientApplicationBase.AcquireTokenSilent(IEnumerable{string}, IAccount)" />) to the Azure SDK's
-///     <see cref="TokenCredential" /> contract so it plugs into <see cref="Implementation.EntraBearerTokenPipelinePolicy" />
-///     unchanged — the same policy the device-code / interactive-browser / client-secret credentials use. Never
-///     prompts interactively: a silent-refresh failure (<see cref="MsalUiRequiredException" />, e.g. the refresh
-///     token expired or consent was revoked) surfaces as <see cref="CredentialUnavailableException" /> so the
-///     caller's <c>AuthRequired</c> translation applies uniformly with the other Entra ID credential shapes.
+///     <see cref="TokenCredential" /> contract.
 /// </summary>
+/// <remarks>
+///     It plugs into <see cref="Implementation.EntraBearerTokenPipelinePolicy" /> unchanged — the same policy the
+///     device-code / interactive-browser / client-secret credentials use. Never prompts interactively: a
+///     silent-refresh failure (<see cref="MsalUiRequiredException" />, an expired refresh token or revoked consent)
+///     surfaces as <see cref="CredentialUnavailableException" />, so the caller's <c>AuthRequired</c> translation
+///     applies uniformly across the Entra ID credential shapes.
+/// </remarks>
 internal sealed class MsalDelegatedTokenCredential : TokenCredential
 {
     private readonly IAccount _account;

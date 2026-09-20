@@ -12,20 +12,11 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 ///     repairs each difference.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Only <c>ext:</c>-scheme keys are ever touched. That is what makes the pass safe to run unconditionally at
-///         startup: a GGUF's map row, an Ollama backfill row, and an operator's hand-curated allow-list entry for a
-///         local model are all invisible to it.
-///     </para>
-///     <para>
-///         Two comparison rules are load-bearing and deliberately different, and each is applied CONSISTENTLY on both
-///         halves of its own diff. The provider map is case-INSENSITIVE, so both "is this model already covered by a
-///         row?" and "is this row an orphan?" compare case-insensitively — one row legitimately serves every case
-///         variant of a model id, and mixing the two rules is how a surviving variant loses its row. The tool-capable
-///         allow-list is matched ORDINALLY, because <c>LocalToolOfferProvider.IsToolCapable</c> compares ordinally and
-///         an entry differing only in case is not capable. Both sides are fed the ONE canonical spelling the store
-///         minted, which is what lets the two rules coexist without a model being routable but not tool-capable.
-///     </para>
+///     Only <c>ext:</c>-scheme keys are ever touched, which is what makes the pass safe to run unconditionally at
+///     startup. Two comparison rules are load-bearing and deliberately different, each applied CONSISTENTLY on both
+///     halves of its own diff: the provider map is case-INSENSITIVE, the tool-capable allow-list is matched ORDINALLY
+///     (<c>LocalToolOfferProvider.IsToolCapable</c> compares ordinally). Both sides are fed the ONE canonical spelling
+///     the store minted. Why each: docs/wiki/03-local-runtime-and-providers.md, "External connections: the store, the registry cache, and the reconciler".
 /// </remarks>
 public sealed class ExternalProviderReconciler : IExternalProviderReconciler
 {
@@ -57,22 +48,16 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
     /// <inheritdoc />
     public async Task<ExternalProviderReconciliationReport> ReconcileAsync(CancellationToken cancellationToken = default)
     {
-        // Read the STORE's state, not just its contents. This pass DELETES: every ext: map row, allow-list entry and
-        // node default the configuration does not list is removed. Run against a config that merely looks empty because
-        // the file could not be read — or because a newer build wrote it — it would erase the operator's whole external
-        // setup and report success. So a non-authoritative read repairs nothing.
+        // Read the STORE's state, not just its contents. This pass DELETES every ext: map row, allow-list entry and node default the
+        // configuration does not list, so a non-authoritative read repairs nothing: a config that merely looks empty would erase the operator's whole setup.
         if (await _store.ReadForWriteAsync(cancellationToken) is not ExternalProviderLoadResult.Loaded loaded)
         {
             _logger.LogWarning("Skipping external provider reconciliation: the connection store is not readable. Nothing was changed.");
             return new ExternalProviderReconciliationReport(0, 0, 0, 0, DefaultModelCleared: false);
         }
 
-        // Project the configuration THIS pass loaded, rather than asking the registry again. Both halves of every diff
-        // below — what must exist AND what must be deleted — are derived from this one list, so the authoritative read
-        // above governs the deletions too. Reading the registry here instead was the hole: it re-reads the store
-        // through LoadAsync, which collapses an Unreadable or unsupported-schema file to an EMPTY configuration, and an
-        // empty registration set is a mandate to erase the operator's whole external setup. A store that turned
-        // unreadable between the two reads would have done exactly that, and reported success.
+        // Project the configuration THIS pass loaded, never the registry: the registry re-reads the store through LoadAsync, which collapses an
+        // Unreadable or unsupported-schema file to an EMPTY configuration — and an empty registration set is a mandate to erase everything.
         var registrations = ExternalProviderConfigProjection.Project(loaded.Config).Registrations;
 
         // Ordinal: these ids came out of the registry, which is keyed by the canonical spelling the store minted.
@@ -85,9 +70,8 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         var report = new ExternalProviderReconciliationReport(written, removed, added, dropped, defaultCleared);
         if (report.Changed)
         {
-            // The resolver memoizes model→provider for a few seconds and the router caches a chat client per
-            // (provider, model); a repaired row that neither of them sees is a repair that has not taken effect until
-            // both caches expire.
+            // The resolver memoizes model→provider for a few seconds and the router caches a chat client per (provider, model),
+            // so a repaired row neither of them sees is a repair that has not taken effect until both caches expire.
             _providerResolver.InvalidateModelProviderMap();
             _chatClientCacheInvalidator.ClearClientCache();
             _logger.LogInformation(
@@ -128,13 +112,8 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
             }
         }
 
-        // Orphan detection asks the SAME question the coverage loop above asks, spelled the same way. The map key is
-        // NOCASE, so one row serves every case variant of a model id — which means a row is an orphan only when NO
-        // registered id matches it case-insensitively. Asking ordinally here (with an OrdinalIgnoreCase coverage test
-        // above) is what let `ext:conn/Foo` be skipped as already-covered and then deleted as an orphan of
-        // `ext:conn/foo`, taking the shared SQLite row — and both models' routing — with it. The registry index and the
-        // tool-capable allow-list stay ORDINAL: those are identities, not row keys, and the wire ids they carry are
-        // genuinely case-sensitive.
+        // Orphan detection asks the SAME question the coverage loop above asks, spelled the same way: the map key is NOCASE, so a row is an
+        // orphan only when NO registered id matches it case-insensitively. Asking ordinally here is what deleted `ext:conn/Foo`'s shared SQLite row.
         var registeredRowKeys = new HashSet<string>(registeredIds, StringComparer.OrdinalIgnoreCase);
         var orphans = externalRows.Select(row => row.ModelName)
                                   .Where(modelName => ExternalModelId.Canonicalize(modelName) is not { } canonical
@@ -170,9 +149,8 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
 
             if (current is not null)
             {
-                // A non-external provider already owns this exact name. Refuse rather than steal it: the name grammar
-                // makes this practically impossible (no GGUF or Ollama model can be called "ext:…"), so reaching here
-                // means something is genuinely wrong and silently re-pointing the row would hide it.
+                // A non-external provider already owns this exact name. Refuse rather than steal it: the name grammar makes this
+                // practically impossible (no GGUF or Ollama model is called "ext:…"), so reaching here means something is genuinely wrong.
                 _logger.LogWarning("The provider-map row for external model '{ModelId}' is owned by provider '{ProviderName}'; leaving it untouched.",
                     modelId,
                     current.ProviderName);
@@ -240,10 +218,8 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
                                    .Distinct(StringComparer.Ordinal)
                                    .ToArray();
 
-        // The cheap pre-check reads through the settings cache and exists ONLY to skip the write on the common no-drift
-        // pass (this runs on every boot and every save, and a needless save churns the cache and the file). The
-        // authoritative decision is re-made inside the coordinated update below against the settings as they are under
-        // the lock, so a stale read here can cost a redundant write but can never produce a wrong one.
+        // The cheap pre-check reads through the settings cache ONLY to skip the write on the common no-drift pass. The authoritative
+        // decision is re-made under the lock below, so a stale read here can cost a redundant write but never a wrong one.
         var preview = await _settingsStore.LoadAsync(cancellationToken);
         if (Diff(preview, desired, registeredSet) is (0, 0, false))
         {
@@ -255,9 +231,8 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         var defaultCleared = false;
         string? clearedDefault = null;
 
-        // Coordinated: load and save under ONE lock. The previous shape read the whole record, computed, and saved it
-        // back — and node-settings is written WHOLE, so an operator saving an unrelated field in that window had their
-        // edit silently reverted by this pass. The mutation is pure and allocation-only, as the contract requires.
+        // Coordinated: load and save under ONE lock, because node-settings is written WHOLE — a read-compute-save-back shape
+        // silently reverts an operator's unrelated edit that lands in the window. The mutation is pure and allocation-only, as the contract requires.
         _ = await _settingsStore.UpdateAsync(stored =>
         {
             (added, removed, defaultCleared) = Diff(stored, desired, registeredSet);

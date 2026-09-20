@@ -17,10 +17,13 @@ public sealed record StoredExternalProviderConfig
     public int SchemaVersion { get; init; } = ExternalProviderStoreSchema.CurrentVersion;
 
     /// <summary>
-    ///     Opaque revision of the whole file, regenerated on every successful write. A caller that read the config,
-    ///     built an edit from it, and saves with a stale revision is rejected rather than silently overwriting the
-    ///     concurrent edit — the same compare-and-swap discipline the provider map uses for its rows.
+    ///     Opaque revision of the whole file, regenerated on every successful write.
     /// </summary>
+    /// <remarks>
+    ///     A caller that read the config, built an edit from it and saves with a stale revision is rejected rather than
+    ///     silently overwriting the concurrent edit — the same compare-and-swap discipline the provider map uses for
+    ///     its rows.
+    /// </remarks>
     public string Revision { get; init; } = string.Empty;
 
     /// <summary>The configured connections, in the order the operator's edits produced.</summary>
@@ -41,10 +44,12 @@ public sealed record StoredExternalProviderConnection
     public required string DisplayName { get; init; }
 
     /// <summary>
-    ///     The base address, ALREADY normalized by <c>OpenAICompatibleBaseAddress</c> at save time. Stored as a string
-    ///     because a <see cref="Uri" /> round-trips through JSON less predictably than the canonical spelling the
-    ///     normalizer produced; readers parse it back without re-normalizing.
+    ///     The base address, ALREADY normalized by <c>OpenAICompatibleBaseAddress</c> at save time.
     /// </summary>
+    /// <remarks>
+    ///     Stored as a string because a <see cref="Uri" /> round-trips through JSON less predictably than the canonical
+    ///     spelling the normalizer produced; readers parse it back without re-normalizing.
+    /// </remarks>
     public required string BaseUrl { get; init; }
 
     /// <summary>The decrypted API key, or <see langword="null" /> for a keyless connection. Never leaves this type.</summary>
@@ -61,10 +66,13 @@ public sealed record StoredExternalProviderConnection
 }
 
 /// <summary>
-///     One persisted model registration. Deliberately FLAT rather than grouping the capability and reasoning flags into
-///     nested objects: it maps one-to-one onto <see cref="ExternalProviderModelDescriptor" />, so the store's projection
-///     onto the registry read model is a field copy with nowhere for a group to be half-populated.
+///     One persisted model registration.
 /// </summary>
+/// <remarks>
+///     Deliberately FLAT rather than grouping the capability and reasoning flags into nested objects: it maps
+///     one-to-one onto <see cref="ExternalProviderModelDescriptor" />, so the store's projection onto the registry read
+///     model is a field copy with nowhere for a group to be half-populated.
+/// </remarks>
 public sealed record StoredExternalProviderModel
 {
     /// <summary>The backing model id sent on the wire verbatim.</summary>
@@ -110,9 +118,11 @@ public static class ExternalProviderStoreSchema
     public const int MinTimeoutSeconds = 5;
 
     /// <summary>
-    ///     Upper bound on a per-connection timeout, in seconds. Generous by design: a self-hosted runtime paying a cold
-    ///     model load legitimately takes minutes before its first token, so this is an outer floor against a wedged
-    ///     socket, never a generation deadline.
+    ///     Upper bound on a per-connection timeout, in seconds.
     /// </summary>
+    /// <remarks>
+    ///     Generous by design: a self-hosted runtime paying a cold model load legitimately takes minutes before its
+    ///     first token, so this is an outer floor against a wedged socket, never a generation deadline.
+    /// </remarks>
     public const int MaxTimeoutSeconds = 3600;
 }

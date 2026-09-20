@@ -6,15 +6,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="IRuntimeDeviceAudit" />. Composes the host hardware profile (<see cref="IHardwareProfiler" />),
-///     the selected acceleration variant (<see cref="IGpuVariantSelector" />), and the devices that variant's binary
-///     actually enumerates (<see cref="ILlamaDeviceInventoryProbe" />) into a node-level audit that flags a silent CPU
-///     fallback. The expensive part — the <c>--list-devices</c> probe — is cached in the probe per binary, and the audit
-///     memoizes its computed state, so a warm inference path never pays for it. Only a DETERMINATE audit is memoized:
-///     an indeterminate device probe (timeout / spawn failure) is returned uncached so the next call re-probes instead
-///     of pinning "unknown" — and its phantom-VRAM trust — until restart or a forced refresh. The device-fallback
-///     warning + counter fire once per state change (i.e. once per binary), not per call.
+///     Default <see cref="IRuntimeDeviceAudit" />: composes the host profile (<see cref="IHardwareProfiler" />), the selected variant
+///     (<see cref="IGpuVariantSelector" />) and the devices it enumerates (<see cref="ILlamaDeviceInventoryProbe" />) into a node-level audit.
 /// </summary>
+/// <remarks>
+///     The expensive <c>--list-devices</c> probe is cached in the probe per binary and the audit memoizes its computed state, so a warm
+///     inference path never pays for it. Only a DETERMINATE audit is memoized: an indeterminate probe (timeout or spawn failure) is returned
+///     uncached, so the next call re-probes instead of pinning "unknown" — and its phantom-VRAM trust — until restart or a forced refresh.
+///     The device-fallback warning and counter fire once per state change, which is once per binary, never per call.
+/// </remarks>
 public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
 {
     private readonly ILlamaDeviceInventoryProbe _deviceProbe;
@@ -28,9 +28,8 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     private readonly SemaphoreSlim _computeGate = new(initialCount: 1, maxCount: 1);
     private volatile RuntimeDeviceAuditState? _cached;
 
-    // The managed-CUDA signal stamp the cached audit was computed against. A CUDA adopt/remove bumps the signal version
-    // and can flip the selected variant (Vulkan↔Cuda on a Linux NVIDIA box), so a memo computed against the old stamp is
-    // stale — the fast path only trusts the cache while the current stamp matches.
+    // The managed-CUDA signal stamp the cached audit was computed against: a CUDA adopt/remove bumps the version and can flip the selected variant
+    // (Vulkan↔Cuda on a Linux NVIDIA box), so a memo built against the old stamp is stale and the fast path trusts it only while the stamps match.
     private long _cachedSignalVersion;
     private string? _lastEmittedSignature;
 
@@ -80,12 +79,8 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
 
             var (state, fallbackReasonCode, determinate, signalVersion) = await ComputeAsync(ct);
 
-            // Latch only a determinate audit (the device probe ran, or a CPU variant that needs no probe). An
-            // indeterminate probe yields backend "unknown" with CpuFallback:false — memoizing that would keep
-            // capacity/advisor trusting the raw profile's VRAM until restart or a forced refresh. The probe layer
-            // deliberately does not cache failed probes, so returning this uncached makes the next call a real re-probe.
-            // The stamp is captured inside ComputeAsync just before the variant is selected, so a signal flip during the
-            // compute leaves the cached stamp behind the current one and the next call re-computes.
+            // Latch only a determinate audit: an indeterminate probe yields backend "unknown" with CpuFallback false, and memoizing it would keep capacity
+            // and the advisor trusting the raw profile's VRAM until restart — the probe layer caches no failed probe, so leaving it uncached re-probes.
             if (determinate)
             {
                 _cached = state;
@@ -101,11 +96,11 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         }
     }
 
-    /// <summary>
-    ///     Stamps the CURRENT measured layer placement onto an audit. The device audit is memoized per binary, but
-    ///     placement changes every time a different model loads, so it must never be frozen into the memo — the memo
-    ///     stores the device decision alone and this re-reads the live report on the way out.
-    /// </summary>
+    /// <summary>Stamps the CURRENT measured layer placement onto an audit.</summary>
+    /// <remarks>
+    ///     The device audit is memoized per binary, but placement changes every time a different model loads, so it must never be frozen into
+    ///     the memo: the memo stores the device decision alone and this re-reads the live report on the way out.
+    /// </remarks>
     private RuntimeDeviceAuditState WithLivePlacement(RuntimeDeviceAuditState state)
     {
         var placement = _layerPlacementReport?.Current;
@@ -149,9 +144,8 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         // figure); the free figures are re-probed by GetEffectiveProfileAsync when a caller needs them live.
         var raw = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct);
 
-        // Capture the managed-CUDA signal stamp immediately BEFORE selecting the variant (the selector reads the signal):
-        // this is the stamp the resulting audit is valid for. If the signal flips after this read, the cached stamp lags
-        // the current one and the next GetAuditAsync re-computes rather than trusting a memo built against the old state.
+        // Capture the managed-CUDA signal stamp immediately BEFORE selecting the variant (the selector reads the signal): that is the stamp this audit
+        // is valid for, so a flip after this read leaves the cached stamp lagging and the next GetAuditAsync re-computes instead of trusting the memo.
         var signalVersion = CurrentSignalVersion();
         var variant = await _variantSelector.SelectVariantAsync(ct);
         var inventory = await _deviceProbe.GetDeviceInventoryAsync(variant, ct);
@@ -196,22 +190,14 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         };
     }
 
-    // The device probe neither succeeded nor proved a fallback. Everything downstream — the capacity gate, the model
-    // advisor's VRAM budget — is sized against a GPU nobody confirmed is reachable, so the operator has to be told
-    // that this is an unanswered question rather than a clean bill of health.
-    //
-    // State the possible causes; do NOT assert one. This text used to claim "the probe timed out or the binary could
-    // not be started" and blame "a wedged or busy GPU driver". Measured on Windows 11 2026-08-03, the most reachable
-    // way to land here is neither: with XE_LLAMACPP_SERVER_PATH pointing at a GPU-variant binary that enumerates no
-    // devices, LlamaCppBinaryManager REFUSES the override on purpose (its no-silent-CPU invariant) and that deliberate
-    // refusal arrives here as an exception the probe cannot tell apart from a glitch. The old text then sent the
-    // operator to diagnose a driver that was working perfectly, while the real fix was their own override. Naming the
-    // override case first is what makes this actionable; a truthful list beats a confident wrong guess.
-    //
-    // The runtimeMissing branch is the one case where the cause IS known: no llama.cpp runtime is installed yet, and the
-    // device probe deliberately does not acquire one (a page-load diagnostic must not download hundreds of megabytes,
-    // least of all on an Offline / Manual node). Sending that operator to check a driver or an override would be a wrong
-    // diagnosis for the ordinary state of a brand-new node, so it gets its own honest, actionable sentence.
+    /// <summary>The operator-facing text for an undetermined backend — the probe neither succeeded nor proved a fallback.</summary>
+    /// <remarks>
+    ///     Sizing downstream assumes a GPU nobody confirmed is reachable, so the text lists possible causes and asserts none. The
+    ///     <c>XE_LLAMACPP_SERVER_PATH</c> override is named first because it is the most reachable (measured on Windows 11): pointed at a
+    ///     GPU-variant binary that enumerates no devices, it is refused by <c>LlamaCppBinaryManager</c>'s no-silent-CPU invariant, and that
+    ///     deliberate refusal arrives here as an exception no probe can tell from a glitch. <paramref name="runtimeMissing" /> is the one
+    ///     known cause: no runtime is installed, and a page-load diagnostic must not download hundreds of megabytes to find out.
+    /// </remarks>
     private static string BuildUndeterminedText(GpuVariant variant, bool runtimeMissing)
     {
         if (runtimeMissing)

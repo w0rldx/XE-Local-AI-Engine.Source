@@ -6,14 +6,13 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>
-///     Validates a candidate External Apps catalog document — the schema-version gate plus every content rule a
-///     bundled or remotely refreshed catalog must pass before it can replace the served snapshot. Tolerant of parse
-///     failures (never throws for malformed input) and strict on content: a document with any invalid application is
-///     rejected wholesale rather than silently dropping the bad rows, so a corrupt payload can never partially
-///     install. Everything a later slice would otherwise re-check — digest pinning, token resolution, capability
-///     allow-listing, acyclic start ordering, file integrity — is decided here, once, at catalog load.
-/// </summary>
+/// <summary>Validates a candidate External Apps catalog document: the schema-version gate plus every content rule a catalog must pass before it can replace the served snapshot.</summary>
+/// <remarks>
+///     Tolerant of parse failures (never throws for malformed input) and strict on content: a document with any
+///     invalid application is rejected wholesale rather than silently dropping the bad rows, so a corrupt payload can
+///     never partially install. Digest pinning, token resolution, capability allow-listing, acyclic start ordering
+///     and file integrity are decided here, once, at catalog load, rather than re-checked downstream.
+/// </remarks>
 public static partial class ExternalAppCatalogValidator
 {
     /// <summary>The only <see cref="ExternalAppCatalogDocument.SchemaVersion" /> this build understands.</summary>
@@ -31,22 +30,22 @@ public static partial class ExternalAppCatalogValidator
     /// <summary>Longest accepted <see cref="ApplicationPort.OpenPath" />; the value only ever names a local route.</summary>
     public const int MaxOpenPathLength = 256;
 
-    /// <summary>
-    ///     The container-runtime capability names a manifest's <c>requires[]</c> may name, camelCase on the wire.
-    ///     S2 asserts these equal the runtime layer's own capability names, so a drift is a red test rather than a
-    ///     runtime "incompatible" answer to a valid manifest.
-    /// </summary>
+    /// <summary>The container-runtime capability names a manifest's <c>requires[]</c> may name, camelCase on the wire.</summary>
+    /// <remarks>
+    ///     A test asserts these are ordinally equal to <c>ContainerRuntimeCapabilities.Names</c>, so a drift is a red
+    ///     test rather than a runtime "incompatible" answer to a valid manifest.
+    /// </remarks>
     public static readonly IReadOnlyList<string> CapabilityNames =
     [
         "containers", "networks", "bindStorage", "loopbackPortPublishing", "healthChecks", "restartPolicies",
         "logs", "imagePull", "gpuDevices"
     ];
 
-    /// <summary>
-    ///     Docker's own default capability set — the 14 that plain <c>docker run</c> grants. The container policy
-    ///     still applies <c>cap_drop ALL</c> and adds back only what a manifest lists, so a service can never exceed
-    ///     an unhardened <c>docker run</c>; anything outside this table is a validation error.
-    /// </summary>
+    /// <summary>Docker's own default capability set — the 14 that plain <c>docker run</c> grants; anything outside this table is a validation error.</summary>
+    /// <remarks>
+    ///     The container policy still applies <c>cap_drop ALL</c> and adds back only what a manifest lists, so a
+    ///     service can never exceed an unhardened <c>docker run</c>.
+    /// </remarks>
     public static readonly IReadOnlyList<string> AllowedCapAdd =
     [
         "AUDIT_WRITE", "CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "MKNOD", "NET_BIND_SERVICE", "NET_RAW",
@@ -99,16 +98,14 @@ public static partial class ExternalAppCatalogValidator
     private static readonly IReadOnlySet<string> ExtraHostValueSet = ToOrdinalSet(ExtraHostValues);
     private static readonly IReadOnlySet<string> ReservedServiceNameSet = ToOrdinalSet(ReservedServiceNames);
 
-    /// <summary>
-    ///     Whether an image reference is pinned as <c>&lt;reference&gt;@sha256:&lt;64 lowercase hex digits&gt;</c>.
+    /// <summary>Whether an image reference is pinned as <c>&lt;reference&gt;@sha256:&lt;64 lowercase hex digits&gt;</c>.</summary>
+    /// <remarks>
     ///     Public because the rule has a second enforcement point — the operator-configured storage helper image —
-    ///     and two copies of this pattern would be two rules that could drift apart.
-    ///     <para>
-    ///         The pattern itself lives in <c>ContainerImageReference.IsDigestPinned</c>, which the container
-    ///         runtimes' own guard reads, so the catalog rule and the runtime guard are one rule. It lives THERE
-    ///         rather than here because the container layer must not depend on External Apps.
-    ///     </para>
-    /// </summary>
+    ///     and two copies of the pattern would be two rules that could drift apart. The pattern itself lives in
+    ///     <c>ContainerImageReference.IsDigestPinned</c>, which the container runtimes' own guard reads, so the
+    ///     catalog rule and the runtime guard are one rule; it lives THERE rather than here because the container
+    ///     layer must not depend on External Apps.
+    /// </remarks>
     public static bool IsDigestPinnedImage(string? image)
     {
         return ContainerImageReference.IsDigestPinned(image);
@@ -297,9 +294,8 @@ public static partial class ExternalAppCatalogValidator
             return;
         }
 
-        // The set is built up front, never with a `distinct.Add(...)` side effect inside Enumerable.All: All
-        // short-circuits on the first false, so the set would be incomplete and the duplicate check would depend on
-        // where the first other failure happened to sit. A short count catches both a null entry and a duplicate.
+        // Built up front, never as a `distinct.Add(...)` side effect inside Enumerable.All, which short-circuits on the
+        // first false and would leave the set incomplete. A short count catches both a null entry and a duplicate.
         var distinct = new HashSet<string>(manifest.Requires.OfType<string>(), StringComparer.Ordinal);
         var valid = manifest.Requires.Count > 0
                     && distinct.Count == manifest.Requires.Count
@@ -737,10 +733,8 @@ public static partial class ExternalAppCatalogValidator
             }
             else
             {
-                // The installer materialises every entry at {instanceDir}/files/{service}/{source}, so two entries
-                // sharing a source collide on one host file: the later body wins and the earlier containerPath is
-                // silently fed the wrong content. Nesting is the same collision with a directory in the way — every
-                // entry is a regular file, so 'config' and 'config/child' cannot both be materialised.
+                // Every entry materialises at {instanceDir}/files/{service}/{source} as a regular file, so two entries
+                // sharing a source — or nesting under one — collide: the later body silently wins over the earlier.
                 var clash = acceptedSources.Find(other => IsSameOrNested(file.Source, other));
                 if (clash is null)
                 {
@@ -765,10 +759,8 @@ public static partial class ExternalAppCatalogValidator
                 }
                 else
                 {
-                    // Two entries writing the same path: whichever materialises last silently wins, so the installed
-                    // file would depend on array order rather than on anything the author declared. A target nesting
-                    // inside another is the same defect: both entries are regular files, so the container cannot
-                    // bind '/etc/config' and '/etc/config/child' at once.
+                    // Two entries on the same containerPath, or one nesting inside the other, collide: both are regular
+                    // files, so the installed content would depend on array order rather than on what was declared.
                     var clash = acceptedContainerPaths.Find(other => IsSameOrNested(file.ContainerPath, other));
                     if (clash is null)
                     {
@@ -794,9 +786,8 @@ public static partial class ExternalAppCatalogValidator
 
         if (file.ContentBase64 is null)
         {
-            // The contract types the body as a non-nullable string, so a missing or null member survives
-            // deserialization as a null the rest of the engine will dereference at materialisation. Coercing it to
-            // the empty string here would instead let a body-less entry validate against the sha256 of zero bytes.
+            // The contract types the body non-nullable, so a missing member survives deserialization as a null the
+            // engine dereferences at materialisation; coercing to "" would validate it against the sha256 of no bytes.
             errors.Add($"{path}.contentBase64 is required (use \"\" for an empty file).");
             return;
         }
@@ -1002,11 +993,11 @@ public static partial class ExternalAppCatalogValidator
         }
     }
 
-    /// <summary>
-    ///     Depth-first walk that marks exactly the services sitting on a <c>dependsOn</c> cycle. A back edge to a node
-    ///     already on the current path closes a cycle, so every node from that node to the end of the path is a member;
-    ///     nodes that merely lead into a cycle are not.
-    /// </summary>
+    /// <summary>Depth-first walk that marks exactly the services sitting on a <c>dependsOn</c> cycle.</summary>
+    /// <remarks>
+    ///     A back edge to a node already on the current path closes a cycle, so every node from that node to the end
+    ///     of the path is a member; nodes that merely lead into a cycle are not.
+    /// </remarks>
     private static void CollectCycleMembers(string node,
         Dictionary<string, List<string>> edges,
         HashSet<string> explored,
@@ -1140,9 +1131,8 @@ public static partial class ExternalAppCatalogValidator
             return;
         }
 
-        // The type predicate and the declared validation both bind, in every branch: an integer, a boolean or an
-        // allowed enum member is still rejected when it violates the minLength/maxLength/pattern the same variable
-        // declares, which is the constraint the install form will enforce against the operator's own value.
+        // The type predicate and the declared validation both bind in every branch: an integer, a boolean or an allowed
+        // enum member is still rejected by minLength/maxLength/pattern, the constraint the install form also enforces.
         var matchesType = variable.Type switch
         {
             "integer" => long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
@@ -1192,13 +1182,13 @@ public static partial class ExternalAppCatalogValidator
         }
     }
 
-    /// <summary>
-    ///     Whether <paramref name="pattern" /> compiles as a non-backtracking regular expression. A catalog pattern is
-    ///     evaluated against user input at install time, so the engine removes catastrophic backtracking as a class:
-    ///     a malformed pattern raises <see cref="ArgumentException" /> and one using a construct the non-backtracking
-    ///     engine cannot express (a backreference, a lookaround) raises <see cref="NotSupportedException" />. Both fail
-    ///     the catalog at load rather than at install.
-    /// </summary>
+    /// <summary>Whether <paramref name="pattern" /> compiles as a non-backtracking regular expression.</summary>
+    /// <remarks>
+    ///     A catalog pattern is evaluated against user input at install time, so the engine removes catastrophic
+    ///     backtracking as a class: a malformed pattern raises <see cref="ArgumentException" /> and one using a
+    ///     construct the non-backtracking engine cannot express (a backreference, a lookaround) raises
+    ///     <see cref="NotSupportedException" />. Both fail the catalog at load rather than at install.
+    /// </remarks>
     private static bool CanCompile(string pattern)
     {
         try
@@ -1216,12 +1206,13 @@ public static partial class ExternalAppCatalogValidator
         }
     }
 
-    /// <summary>
-    ///     A local route the "Open" action appends to <c>http://127.0.0.1:{port}</c>. A leading <c>//</c> would make
-    ///     the browser read it as protocol-relative and navigate off the loopback origin entirely; a backslash is a
-    ///     Windows separator no container route uses and a second way to spell an escape; a control character (or
-    ///     <c>DEL</c>) has no meaning in a URL and only exists to smuggle something past a log or a UI.
-    /// </summary>
+    /// <summary>Whether <paramref name="openPath" /> is a local route the "Open" action may append to <c>http://127.0.0.1:{port}</c>.</summary>
+    /// <remarks>
+    ///     A leading <c>//</c> would make the browser read it as protocol-relative and navigate off the loopback
+    ///     origin entirely; a backslash is a Windows separator no container route uses and a second way to spell an
+    ///     escape; a control character (or <c>DEL</c>) has no meaning in a URL and only exists to smuggle something
+    ///     past a log or a UI.
+    /// </remarks>
     private static bool IsAcceptableOpenPath(string openPath)
     {
         if (openPath.Length is 0 or > MaxOpenPathLength
@@ -1234,11 +1225,11 @@ public static partial class ExternalAppCatalogValidator
         return !openPath.Any(character => character is '\\' or < '\u0021' or '\u007F');
     }
 
-    /// <summary>
-    ///     Whether <paramref name="source" /> names exactly one file below the service's authored directory. The
-    ///     installer joins it onto a host directory, so it must be relative, canonical and free of any segment that
-    ///     resolves elsewhere or to the same file under a second spelling.
-    /// </summary>
+    /// <summary>Whether <paramref name="source" /> names exactly one file below the service's authored directory.</summary>
+    /// <remarks>
+    ///     The installer joins it onto a host directory, so it must be relative, canonical and free of any segment
+    ///     that resolves elsewhere or to the same file under a second spelling.
+    /// </remarks>
     private static bool IsAcceptableFileSource(string? source)
     {
         return !string.IsNullOrWhiteSpace(source)
@@ -1258,12 +1249,13 @@ public static partial class ExternalAppCatalogValidator
                && HasOnlyOrdinarySegments(path);
     }
 
-    /// <summary>
-    ///     Whether every segment of <paramref name="path" /> names something. An empty segment (<c>//</c>, a trailing
-    ///     <c>/</c>) or a <c>.</c> segment spells a path the container resolves to one the manifest already declared,
-    ///     so the duplicate and nesting rules would compare two spellings of the same mount and pass both.
-    ///     <c>..</c> is rejected here too — it is the same aliasing defect with an escape attached.
-    /// </summary>
+    /// <summary>Whether every segment of <paramref name="path" /> names something.</summary>
+    /// <remarks>
+    ///     An empty segment (<c>//</c>, a trailing <c>/</c>) or a <c>.</c> segment spells a path the container
+    ///     resolves to one the manifest already declared, so the duplicate and nesting rules would compare two
+    ///     spellings of the same mount and pass both. <c>..</c> is rejected here too — it is the same aliasing defect
+    ///     with an escape attached.
+    /// </remarks>
     private static bool HasOnlyOrdinarySegments(string path)
     {
         // The first element is the empty string in front of the leading '/', which is the one empty segment a
@@ -1278,11 +1270,11 @@ public static partial class ExternalAppCatalogValidator
                || other.StartsWith(candidate + "/", StringComparison.Ordinal);
     }
 
-    /// <summary>
-    ///     The message for a path that <see cref="IsSameOrNested" /> rejected against an already-accepted one. The
-    ///     three wordings exist because the relation is not symmetric to an author: the earlier entry can be the same
-    ///     path, the parent directory, or the child that the new entry would have to become a directory to hold.
-    /// </summary>
+    /// <summary>The message for a path that <see cref="IsSameOrNested" /> rejected against an already-accepted one.</summary>
+    /// <remarks>
+    ///     The three wordings exist because the relation is not symmetric to an author: the earlier entry can be the
+    ///     same path, the parent directory, or the child that the new entry would have to become a directory to hold.
+    /// </remarks>
     private static string OverlapError(string path, string property, string value, string existing)
     {
         if (string.Equals(value, existing, StringComparison.Ordinal))
@@ -1310,11 +1302,12 @@ public static partial class ExternalAppCatalogValidator
         return new HashSet<string>(values, StringComparer.Ordinal);
     }
 
-    /// <summary>
-    ///     The application-wide facts the per-service and per-variable rules read: which service names exist, which
-    ///     publish a UI port, which declare a healthcheck, which variables are declared, and the running tallies the
-    ///     cross-application rules (A17–A19) and the per-application port-uniqueness rule need.
-    /// </summary>
+    /// <summary>The application-wide facts the per-service and per-variable rules read.</summary>
+    /// <remarks>
+    ///     Which service names exist, which publish a UI port, which declare a healthcheck, which variables are
+    ///     declared, plus the running tallies the cross-application rules A17–A19 and the per-application
+    ///     port-uniqueness rule need.
+    /// </remarks>
     private sealed class ApplicationValidationContext
     {
         private ApplicationValidationContext(IReadOnlySet<string> serviceNames,

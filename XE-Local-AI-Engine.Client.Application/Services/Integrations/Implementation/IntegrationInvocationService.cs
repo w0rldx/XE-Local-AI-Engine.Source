@@ -65,9 +65,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // 1. The credential and the trigger, in that order. A key row that is gone or revoked answers the SAME generic
-        //    401 the authentication handler writes; anything trigger-shaped — unknown, disabled, or outside this key's
-        //    allowlist — answers one 404, because a distinct code for "exists but not yours" would confirm the name.
+        // 1. The credential and the trigger, in that order. A key row that is gone or revoked answers the SAME generic 401 the authentication handler writes;
+        //    anything trigger-shaped — unknown, disabled, or outside this key's allowlist — answers one 404: "exists but not yours" would confirm the name.
         var key = await _keyStore.GetByPrefixAsync(request.KeyPrefix, cancellationToken);
         if (key is null || key.RevokedAtUtc is not null)
         {
@@ -77,40 +76,24 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         var triggerName = IIntegrationTriggerService.NormalizeName(request.TriggerName);
         var trigger = await _triggers.GetByNameAsync(triggerName, cancellationToken);
 
-        // The allowlist is parsed and scanned BEFORE the combined decision, never short-circuited behind the trigger
-        // lookup. A `trigger is null || !Allows(...)` reads identically and behaves identically, but it does strictly
-        // less work for a name that does not exist than for one that exists and is not allowlisted — which is a timing
-        // signal for trigger-name existence behind two byte-identical 404s.
+        // The allowlist is parsed and scanned BEFORE the combined decision, never short-circuited behind the trigger lookup: short-circuiting does strictly
+        // less work for a name that does not exist, which is a timing signal for trigger-name existence behind two byte-identical 404s.
         var allowed = Allows(key, trigger?.Id ?? Guid.Empty);
         if (trigger is null || !trigger.Enabled || !allowed)
         {
             return Rejected(IntegrationAcceptOutcome.TriggerNotFound, TriggerNotFoundMessage);
         }
 
-        // 2. The session gate, and the per-session mutual exclusion around EVERYTHING that follows. A continuation
-        //    holds its session's gate from resolution through the accept transaction's return and the seed write: the
-        //    admission transaction bounds the node and the principal but counts nothing per session, so two accepts
-        //    that both read "not busy" would both write a seed into the SAME conversation and the first execution
-        //    would read the second caller's input as history.
-        //
-        //    A PerInvocation accept and a NEW caller-managed session name no session, so they take no gate — nothing
-        //    else can name a session that does not exist yet.
+        // 2. The session gate, held from resolution through the accept transaction and the seed write; an accept naming no session takes none. Admission bounds
+        //    the node and the principal but nothing per session, so two accepts reading "not busy" would seed one conversation and run on each other's input.
         var caller = new IntegrationCallerIdentity { PrincipalId = key.PrincipalId, KeyPrefix = request.KeyPrefix };
         var gateLease = request.SessionId is { } gatedSessionId
             ? await _sessionGate.EnterAsync(gatedSessionId, cancellationToken)
             : null;
         try
         {
-            // 3. Dedup, scoped to (principal, request id) — the pair the unique index covers. A FOREIGN request id is
-            //    simply not found, so one integrator can never preclaim another's and force it a permanent 409.
-            //
-            //    It runs BEFORE session RESOLUTION and before the input checks — inside the per-session gate, which is
-            //    still entered first and held through admission — and that order is the whole point of
-            //    `requestId`: a retry happens exactly when the original 202 was lost, which is exactly when the
-            //    original execution is still running on the session it named. Resolving the session first answered
-            //    such a retry with SessionBusy 409, and a session closed since answered SessionClosed — in both cases
-            //    hiding the execution id the caller was retrying to learn. Nothing here needs the session: the
-            //    fingerprint covers the principal, the trigger name, the requested session id and the raw body.
+            // 3. Dedup, scoped to (principal, request id) — the pair the unique index covers, so a FOREIGN request id is simply not found and no integrator
+            //    can preclaim another's. It runs BEFORE session resolution and the input checks, inside the gate: ADR 0008 ("The accept path's ordering").
             var fingerprint = IntegrationRequestFingerprint.Compute(key.PrincipalId, triggerName, request.SessionId, request.RawBody.Span);
             var duplicate = await ResolveDuplicateAsync(key.PrincipalId, request.RequestId, fingerprint, cancellationToken);
             if (duplicate is not null)
@@ -153,10 +136,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         byte[] fingerprint,
         CancellationToken cancellationToken)
     {
-        // 5. Mint the ids and the buffer entry. For a NEW session the conversation id is minted HERE and recorded
-        //    inside the admission transaction; step 7 creates the conversation at exactly that id, which is what makes
-        //    an orphan conversation impossible rather than merely unlikely. A CONTINUATION mints neither: it joins the
-        //    existing session and writes its seed into that session's existing conversation.
+        // 5. Mint the ids and the buffer entry. A NEW session's conversation id is minted HERE and recorded inside the admission transaction, and step 7
+        //    creates the conversation at exactly that id, which is what makes an orphan conversation impossible rather than merely unlikely.
         var executionId = Guid.NewGuid();
         var sessionId = existingSession?.Id ?? Guid.NewGuid();
         var conversationId = existingSession?.ConversationId ?? Guid.NewGuid();
@@ -183,12 +164,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                 OccurredAtUtc = accepted.OccurredAtUtc
             };
 
-            // 6. One raw-connection transaction under BEGIN IMMEDIATE: the write lock is taken before the counts are
-            //    read, which is what makes the advertised bound the enforced bound.
-            // A null NewSession is what tells the store this is a continuation: it bumps the existing row's
-            // ExecutionCount and LastActivityUtc inside the same commit, scoped to the caller's own Active session, and
-            // throws IntegrationSessionUnavailableException if that scoped update matches nothing — the race-free
-            // backstop behind the gate's own pre-checks.
+            // 6. One raw-connection transaction under BEGIN IMMEDIATE, so the write lock is taken before the counts are read and the advertised bound is the
+            //    enforced one. A null NewSession tells the store this is a continuation: it bumps that row in the same commit, scoped to the caller's own Active session.
             var command = new IntegrationAcceptCommand
             {
                 NewSession = existingSession is null
@@ -216,20 +193,14 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             }
             catch (IntegrationSessionUnavailableException)
             {
-                // The store's scoped session update matched no row: the session went missing, changed hands or closed
-                // between the gate's pre-check and this transaction. The gate answers the precise 404/409 on every
-                // path a caller can actually reach; this is the race-free backstop, and it answers the masked 404
-                // rather than confirming which of the three it was.
+                // The store's scoped session update matched no row: the session went missing, changed hands or closed between the gate's pre-check and this
+                // transaction. The gate answers the precise 404/409 on every reachable path; this backstop answers the masked 404, never which of the three.
                 return Rejected(IntegrationAcceptOutcome.SessionNotFound, "No such session.");
             }
             catch (Exception exception) when (exception is DbUpdateException or SqliteException { SqliteErrorCode: SqliteConstraintErrorCode })
             {
-                // A concurrent accept from the same principal won the (PrincipalId, RequestId) race. Re-read the
-                // winner and answer it as a duplicate or a conflict rather than surfacing a 500.
-                //
-                // AcceptAsync is raw ADO under BEGIN IMMEDIATE with no SaveChanges anywhere, so the unique index
-                // surfaces as SqliteException, NOT as the EF-only DbUpdateException. Both are caught: the EF type
-                // stays for a future store that does go through a DbContext.
+                // A concurrent accept from the same principal won the (PrincipalId, RequestId) race: re-read the winner and answer duplicate or conflict
+                // rather than a 500. Raw ADO surfaces the unique index as SqliteException, not DbUpdateException; the EF type stays for a future DbContext store.
                 var raced = await ResolveDuplicateAsync(principalId, request.RequestId, fingerprint, cancellationToken);
                 return raced ?? Rejected(IntegrationAcceptOutcome.RequestConflict, "That request id was used with a different body.");
             }
@@ -257,9 +228,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         //    service that opens its own scope, so they cannot join the transaction above and must not try to.
         try
         {
-            // CancellationToken.None on both: past the commit the work is no longer the caller's to cancel. A client
-            // that disconnects here would otherwise leave an Accepted row that was never enqueued, and the admission
-            // cap counts it against its principal until the next restart sweep.
+            // CancellationToken.None on both: past the commit the work is no longer the caller's to cancel. A client that disconnects here would otherwise
+            // leave an Accepted row that was never enqueued, counted against its principal's admission cap until the next restart sweep.
             if (existingSession is null)
             {
                 _ = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
@@ -281,9 +251,8 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         }
         catch (Exception exception)
         {
-            // Runs FORWARD, never backward. The row is committed and Accepted; it is not compensated and not deleted.
-            // Enqueue it anyway so the coordinator picks it up, finds no conversation, and terminalises it with a real
-            // reason instead of leaving it to the next restart sweep.
+            // Runs FORWARD, never backward: the row is committed and Accepted, and is neither compensated nor deleted. Enqueue it anyway so the coordinator
+            // picks it up, finds no conversation and terminalises it with a real reason instead of leaving it to the next restart sweep.
             _logger.LogError(exception,
                 "Integration execution {ExecutionId} was admitted but its owned conversation or seed could not be written; the coordinator will terminalize it.",
                 executionId);
@@ -312,12 +281,12 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         return new IntegrationAcceptResult { Outcome = IntegrationAcceptOutcome.Accepted, ExecutionId = executionId, SessionId = sessionId, Status = IntegrationExecutionStatus.Accepted, Message = "Accepted." };
     }
 
-    /// <summary>
-    ///     The one place an accept terminalises its own row: the queue refused an admitted execution. Reserve the
-    ///     sequence, commit the terminal status and its event in one transaction, then publish — and abandon the
-    ///     reservation if that transaction did not happen, so no reader is left parked at a barrier that never
-    ///     resolves.
-    /// </summary>
+    /// <summary>The one place an accept terminalises its own row: the queue refused an admitted execution.</summary>
+    /// <remarks>
+    ///     Reserve the sequence, commit the terminal status and its event in one transaction, then publish — and
+    ///     abandon the reservation if that transaction did not happen, so no reader is left parked at a barrier that
+    ///     never resolves.
+    /// </remarks>
     private async Task TerminalizeQueueFullAsync(Guid executionId, Guid sessionId)
     {
         var sequence = _buffer.Reserve(executionId);

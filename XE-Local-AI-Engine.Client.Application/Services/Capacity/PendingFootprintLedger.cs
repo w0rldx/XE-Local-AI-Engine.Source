@@ -3,11 +3,13 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="IPendingFootprintLedger" />. A single <see cref="SemaphoreSlim" />(1,1) serializes every local
-///     decide-commit, and an <see cref="Interlocked" />-maintained byte total tracks in-flight reservations. The gate is
-///     held only for the short read-decide-reserve sequence (no inference runs under it), so it never blocks the actual
-///     model run. Singleton.
+///     Default <see cref="IPendingFootprintLedger" />: one singleton <see cref="SemaphoreSlim" />(1,1) serializing every local decide-commit,
+///     with an <see cref="Interlocked" />-maintained byte total for the in-flight reservations.
 /// </summary>
+/// <remarks>
+///     The gate is held only for the short read-decide-reserve sequence — no inference runs under it — so it never blocks the model run
+///     itself.
+/// </remarks>
 public sealed class PendingFootprintLedger : IPendingFootprintLedger, IDisposable
 {
     private readonly SemaphoreSlim _decisionGate = new(initialCount: 1, maxCount: 1);

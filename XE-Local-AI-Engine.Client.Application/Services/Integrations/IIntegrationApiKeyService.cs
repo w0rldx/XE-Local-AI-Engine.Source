@@ -52,23 +52,24 @@ public sealed class IntegrationApiKeyValidation
 
 /// <summary>
 ///     Owns the lifecycle of the <c>xeint_</c> bearer credentials that authenticate an external integrator against the
-///     hand-mapped integration API: generation, listing, soft revocation, and the constant-time comparison the
-///     authentication handler performs.
-///     <para>
-///         Unlike the inbound-MCP and model-proxy credentials this node holds MANY of these, and several may share one
-///         <c>PrincipalId</c> — that is how a credential is rotated or a second one is issued for the same integrator
-///         without stranding the sessions and in-flight executions the first one owns.
-///     </para>
+///     hand-mapped integration API: generation, listing, soft revocation, and the constant-time comparison.
 /// </summary>
+/// <remarks>
+///     Unlike the inbound-MCP and model-proxy credentials this node holds MANY of these, and several may share one
+///     <c>PrincipalId</c> — that is how a credential is rotated, or a second one issued for the same integrator,
+///     without stranding the sessions and in-flight executions the first one owns.
+/// </remarks>
 public interface IIntegrationApiKeyService
 {
     /// <summary>
-    ///     Mints a fresh key and returns it in full. This is the ONLY time the plaintext exists outside the caller that
-    ///     presents it: only its SHA-256 digest is persisted, so a key not captured here is gone.
-    ///     <paramref name="allowedTriggerIds" /> <see langword="null" /> means "every trigger";
-    ///     <paramref name="principalId" /> <see langword="null" /> mints a NEW integrator identity, and a supplied
-    ///     value adds or rotates a credential for an existing one.
+    ///     Mints a fresh key and returns it in full: the ONLY time the plaintext exists outside the caller that
+    ///     presents it, because only its SHA-256 digest is persisted.
     /// </summary>
+    /// <remarks>
+    ///     A key not captured here is gone. <paramref name="allowedTriggerIds" /> <see langword="null" /> means "every
+    ///     trigger"; <paramref name="principalId" /> <see langword="null" /> mints a NEW integrator identity, and a
+    ///     supplied value adds or rotates a credential for an existing one.
+    /// </remarks>
     Task<GeneratedIntegrationApiKey> GenerateAsync(string label,
         IReadOnlyList<Guid>? allowedTriggerIds,
         Guid? principalId,

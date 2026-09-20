@@ -4,10 +4,15 @@ using Azure.Identity;
 
 /// <summary>
 ///     Owns the pending Entra ID device-code sign-in lifecycle so the Operator endpoints can start a device-code
-///     flow, return the user code + verification URL immediately, and poll status until it completes. A second
-///     <see cref="StartAsync" /> <em>supersedes</em> any in-flight attempt. Mirrors <c>CodexLoginCoordinator</c>'s
-///     pending-login shape. Never logs token material.
+///     flow, return the user code and verification URL immediately, and poll status until it completes.
 /// </summary>
+/// <remarks>
+///     A second <see cref="StartAsync" /> <em>supersedes</em> any in-flight attempt, and token material is never
+///     logged. The authenticated credential is kept alive for the process lifetime because its MSAL token cache is
+///     what holds the refresh token: a credential rebuilt later from only the persisted record has nothing to
+///     silently refresh from when OS-native encrypted persistence is unavailable. Mirrors
+///     <c>CodexLoginCoordinator</c>'s pending-login shape.
+/// </remarks>
 public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoordinator, IDisposable
 {
     private const string TokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
@@ -25,14 +30,13 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     /// <param name="credentialStore">Reads the stored Azure Foundry connection's tenant / client / scope.</param>
     /// <param name="tokenCacheStore">Persists the authentication record on success.</param>
     /// <param name="liveCredentialCache">
-    ///     Keeps the successfully-authenticated credential instance alive for the process lifetime so the chat-client
-    ///     factory reuses it — its MSAL token cache is what actually holds the refresh token, which a credential
-    ///     rebuilt later from only the persisted record has no access to when OS-native persistence is unavailable.
+    ///     Keeps the authenticated credential alive for the process lifetime so the chat-client factory reuses it; the
+    ///     reason is in this type's remarks.
     /// </param>
     /// <param name="logger">Never receives token material.</param>
     /// <param name="onSignInSucceeded">
-    ///     Optional callback invoked once a sign-in completes and a record is persisted. The host wires this to
-    ///     invalidate the active-cloud selection snapshot so a sign-in takes effect on the very next send.
+    ///     Optional; runs once a record is persisted. The host wires it to invalidate the active-cloud snapshot, so a
+    ///     sign-in takes effect on the next send.
     /// </param>
     public EntraDeviceCodeSignInCoordinator(ICloudCredentialStore credentialStore,
         IEntraTokenCacheStore tokenCacheStore,
@@ -112,10 +116,13 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         }
     }
 
-    // Requests the initial device code and races it against the background AuthenticateAsync task: if the platform's
-    // encrypted token-cache persistence is unavailable, that surfaces as CredentialUnavailableException before (or
-    // instead of) the device-code callback firing, in which case a single retry rebuilds the credential without
-    // persistence (in-memory only, logged) — never unencrypted-on-disk.
+    /// <summary>Requests the initial device code, racing it against the background <c>AuthenticateAsync</c> task.</summary>
+    /// <remarks>
+    ///     When the platform's encrypted token-cache persistence is unavailable that surfaces as
+    ///     <see cref="CredentialUnavailableException" /> before (or instead of) the device-code callback firing; a
+    ///     single retry then rebuilds the credential without persistence — in-memory only and logged, never
+    ///     unencrypted on disk.
+    /// </remarks>
     private async Task<DeviceCodeFlowHandle> BeginDeviceCodeFlowAsync(StoredAzureFoundryConnection connection,
         bool allowPersistence,
         CancellationToken cancellationToken)
@@ -153,11 +160,8 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             var info = await deviceCodeReady.Task;
             return new DeviceCodeFlowHandle(info, credential, authenticateTask);
         }
-        // A persistence failure does not always surface as CredentialUnavailableException — on a platform with no
-        // org.freedesktop.secrets provider (e.g. WSL2 without gnome-keyring/kwallet) it can arrive as
-        // AuthenticationFailedException wrapping MsalCachePersistenceException several levels deep instead (live-
-        // confirmed on WSL2; see EntraCachePersistenceFailure's remarks). Checking both is what makes the retry
-        // actually fire instead of the failure escaping as an unhandled error from the sign-in endpoint.
+        // A persistence failure does not always surface as CredentialUnavailableException: with no org.freedesktop.secrets provider it can arrive as
+        // AuthenticationFailedException wrapping MsalCachePersistenceException several levels deep (see EntraCachePersistenceFailure). Checking both is what makes this retry fire at all.
         catch (Exception exception) when (allowPersistence && (exception is CredentialUnavailableException || EntraCachePersistenceFailure.IsPersistenceUnavailable(exception)))
         {
             _logger.LogWarning(exception, "Encrypted Entra ID token-cache persistence is unavailable on this platform; retrying device-code sign-in with an in-memory (non-persisted) token cache.");
@@ -171,10 +175,8 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         {
             var record = await completion;
 
-            // Keep the live, already-authenticated credential alive for the chat-client factory to reuse: its MSAL
-            // token cache (in-memory always, plus OS-native encrypted disk when available) is what actually holds
-            // the refresh token — a credential rebuilt later from only the persisted record has nothing to silently
-            // refresh from when encrypted persistence is unavailable on this platform.
+            // Keep the live, already-authenticated credential alive for the chat-client factory to reuse: its MSAL token
+            // cache (in-memory always, OS-native encrypted disk when available) is what holds the refresh token.
             _liveCredentialCache.Store(cacheKey, credential);
 
             // Persist with a fresh token: a superseded/cancelled attempt must not abort this save mid-flight.

@@ -4,12 +4,15 @@ using System.Net;
 using Microsoft.Identity.Client;
 
 /// <summary>
-///     Owns the pending Entra ID confidential-client authorization-code sign-in lifecycle so the Operator endpoints
-///     can start a browser sign-in, return the authorize URL immediately, and poll status until the loopback
-///     callback + code redemption complete. A second <see cref="StartAsync" /> <em>supersedes</em> any in-flight
-///     attempt (cancelling it and releasing its loopback listener before binding a new one on the same port).
-///     Mirrors <see cref="EntraDeviceCodeSignInCoordinator" />. Never logs token material or raw callback content.
+///     Owns the pending Entra ID authorization-code sign-in lifecycle so the Operator endpoints can start a browser
+///     sign-in, return the authorize URL immediately, and poll status until the redemption completes.
 /// </summary>
+/// <remarks>
+///     The sign-in runs against a confidential client. A second <see cref="StartAsync" /> <em>supersedes</em> any
+///     in-flight attempt, cancelling it and releasing its
+///     loopback listener before binding a new one on the same port. Never logs token material or raw callback
+///     content. Mirrors <see cref="EntraDeviceCodeSignInCoordinator" />.
+/// </remarks>
 public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordinator, IDisposable
 {
     private readonly IEntraAuthCodeAccountStore _accountStore;
@@ -28,16 +31,15 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
     /// <param name="credentialStore">Reads the stored Azure Foundry connection's tenant / client / secret / redirect URI.</param>
     /// <param name="accountStore">Persists the MSAL home-account-id on success.</param>
     /// <param name="liveCredentialCache">
-    ///     Keeps the successfully-authenticated delegated credential instance alive for the process lifetime so the
-    ///     chat-client factory reuses it — mirrors the device-code flow's rationale (see
-    ///     <see cref="EntraDeviceCodeSignInCoordinator" />'s remarks).
+    ///     Keeps the authenticated delegated credential alive for the process lifetime so the chat-client factory
+    ///     reuses it; the rationale is on <see cref="EntraDeviceCodeSignInCoordinator" />.
     /// </param>
     /// <param name="redeemer">The (fakeable) MSAL authorization-code redemption seam. See <see cref="IEntraAuthCodeRedeemer" />.</param>
     /// <param name="logger">Never receives token material.</param>
     /// <param name="timeProvider">Clock used to stamp the pending sign-in's callback deadline.</param>
     /// <param name="onSignInSucceeded">
-    ///     Optional callback invoked once a sign-in completes and a credential is persisted. The host wires this to
-    ///     invalidate the active-cloud selection snapshot so a sign-in takes effect on the very next send.
+    ///     Optional; runs once a credential is persisted. The host wires it to invalidate the active-cloud snapshot,
+    ///     so a sign-in takes effect on the next send.
     /// </param>
     public EntraAuthCodeSignInCoordinator(ICloudCredentialStore credentialStore,
         IEntraAuthCodeAccountStore accountStore,
@@ -193,11 +195,8 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
         }
         catch (Exception exception)
         {
-            // This method runs fire-and-forget (StartAsync never awaits it) — an exception type outside the
-            // specific catches above (e.g. CryptographicException from the account store's protector) would
-            // otherwise escape as an unobserved task exception AND leave the status stuck at Pending forever, since
-            // nothing else ever transitions it. Never log token material; the exception here describes the failure,
-            // not a token.
+            // StartAsync never awaits this, so an exception outside the specific catches above (a CryptographicException
+            // from the account store's protector) would go unobserved AND strand the status at Pending; no token is logged.
             _logger.LogWarning(exception, "Entra ID authorization-code sign-in did not complete successfully.");
             UpdateStatusIfCurrent(cts, EntraAuthCodeSignInStatus.Failed);
         }
@@ -245,11 +244,14 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
         }
     }
 
-    // HttpListener.Start() can throw HttpListenerException when the redirect URI's port is already bound (e.g. a
-    // leftover process from a previous attempt, or another app on the same loopback port) — a condition the caller
-    // (StartAsync) has already claimed the pending slot for. Left uncaught, that slot would dangle forever: no
-    // TrackCallbackAsync ever runs to clear _pendingCts, and the caller's exception wouldn't match the endpoint's
-    // existing InvalidOperationException catch, so it would escape as an unhandled 500 instead of a clean 400.
+    /// <summary>Starts the loopback listener, translating a bound-port failure into the caller's exception shape.</summary>
+    /// <remarks>
+    ///     <c>HttpListener.Start()</c> throws when the redirect URI's port is already bound (a leftover attempt, or
+    ///     another app on that loopback port), and <see cref="StartAsync" /> has already claimed the pending slot.
+    ///     Uncaught, that slot dangles forever: no <c>TrackCallbackAsync</c> runs to clear <c>_pendingCts</c>, and the
+    ///     exception misses the endpoint's <see cref="InvalidOperationException" /> catch, escaping as an unhandled 500
+    ///     instead of a clean 400.
+    /// </remarks>
     private LoopbackAuthorizationCodeListener StartListenerOrThrow(Uri redirectUri, CancellationTokenSource newCts)
     {
         try

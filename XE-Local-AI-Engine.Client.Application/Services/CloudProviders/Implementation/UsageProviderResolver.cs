@@ -3,13 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Default <see cref="IUsageProviderResolver" />: a cloud-first, local-fallback classification composed from the two
-///     existing routing seams — <see cref="IActiveCloudChatClientFactory.ResolveActiveCloudProviderName" /> (codex/azure)
-///     and <see cref="ILocalModelProviderResolver.ResolveProviderNameForModelAsync" /> (llamacpp/ollama) — folded through
-///     <see cref="UsageProviderClassifier" />. Correctness of terminalization outranks attribution accuracy, so every
-///     failure path swallows to <see cref="AgentUsageProviders.Unknown" /> and the local lookup is bounded by a short
-///     timeout so a dead runtime probe can never stall the write.
+///     Default <see cref="IUsageProviderResolver" />: a cloud-first, local-fallback classification composed from the
+///     two routing seams and folded through <see cref="UsageProviderClassifier" />.
 /// </summary>
+/// <remarks>
+///     The seams are <see cref="IActiveCloudChatClientFactory.ResolveActiveCloudProviderName" /> (codex/azure) and
+///     <see cref="ILocalModelProviderResolver.ResolveProviderNameForModelAsync" /> (llamacpp/ollama). Correctness of
+///     terminalization outranks attribution accuracy, so every failure path swallows to
+///     <see cref="AgentUsageProviders.Unknown" /> and the local lookup is bounded by a short timeout: a dead runtime
+///     probe can never stall the write.
+/// </remarks>
 internal sealed class UsageProviderResolver : IUsageProviderResolver
 {
     // Bounds the local per-model→provider lookup (a scoped SQLite read) so a stalled probe can never block terminalization.
@@ -40,10 +43,8 @@ internal sealed class UsageProviderResolver : IUsageProviderResolver
             return AgentUsageProviders.Unknown;
         }
 
-        // An external model is attributed to its own connection, checked FIRST: an ext: id falls through cloud
-        // selection by design, and the local lookup below would then label the turn "unknown" — losing the one piece of
-        // attribution an operator running several endpoints actually needs. Pure string parsing, so it costs nothing
-        // and cannot throw out of terminalization.
+        // An external model is attributed to its own connection, checked FIRST: an ext: id falls through cloud selection by design, and the
+        // local lookup below would then label the turn "unknown", losing the attribution a multi-endpoint operator needs. Pure string parsing, so it cannot throw here.
         if (UsageProviderClassifier.ClassifyExternal(modelName) is { } externalProvider)
         {
             return externalProvider;

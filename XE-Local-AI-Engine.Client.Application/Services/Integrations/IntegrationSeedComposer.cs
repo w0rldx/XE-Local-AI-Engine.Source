@@ -6,16 +6,13 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Turns an invoke body's inputs into the single seed user turn the run starts from, in caller order.
-///     <para>
-///         A JSON input is ALWAYS fenced with <see cref="UntrustedContentFraming.WrapDocument(string?, IReadOnlyList{KeyValuePair{string, string?}})" />,
-///         never concatenated raw: it is attacker-controlled data arriving over an API, and its label is
-///         attacker-controlled too, so both go inside one fence whose per-call nonce the author cannot predict.
-///     </para>
-///     <para>
-///         It does NOT truncate. The caller enforces the seed ceiling and answers 422, because silently trimming an
-///         external payload changes the meaning of the request without telling anyone.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A JSON input is ALWAYS fenced with <c>UntrustedContentFraming.WrapDocument</c>, never concatenated raw: it is
+///     attacker-controlled data arriving over an API, and its label is attacker-controlled too, so both go inside one
+///     fence whose per-call nonce the author cannot predict. It does NOT truncate — the caller enforces the seed
+///     ceiling and answers 422, because silently trimming an external payload changes the meaning of the request.
+/// </remarks>
 public static class IntegrationSeedComposer
 {
     private const string BlockSeparator = "\n\n";

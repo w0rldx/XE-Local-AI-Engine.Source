@@ -12,27 +12,14 @@ using XE_Local_AI_Engine.Client.Services.AgentHome;
 /// <summary>
 ///     The one built-in tool an integration execution is additionally offered: it hands a typed payload to the external
 ///     caller that started the run.
-///     <para>
-///         <b>Durable before visible.</b> The order is read the counter fresh, refuse over-cap, <c>Reserve</c> a
-///         sequence, commit the row with it, and only then <c>Publish</c>. An <c>external.output</c> frame is an
-///         instruction a robot may act on: published before its row commits it could name a result absent from durable
-///         history, from the execution's counters, from audit inspection and from restart recovery — and terminalizing
-///         the run afterwards does not un-actuate anything the caller already did.
-///     </para>
-///     <para>
-///         <b>Exactly one of Publish or Abandon follows every successful Reserve.</b> A reservation holds every reader
-///         of that execution at its sequence, so an unresolved one is not a hole readers tolerate — it is a stall for
-///         the life of the entry. An ABANDONED hole is legal: <c>Last-Event-ID</c> is a watermark, not a dense index.
-///     </para>
-///     <para>
-///         <b>Security posture.</b> The payload is opaque to this node: never parsed for meaning and never executed.
-///         It is bounded per call and per execution, its media type is validated at the trust boundary because it is
-///         echoed back in a header-shaped field, every delivered call increments the audited execution row's counters,
-///         and the acknowledgement handed back to the model never echoes the payload. The one path that flows a payload
-///         back to a model is the later-turn replay of a caller-managed session, and that goes inside an
-///         untrusted-content fence.
-///     </para>
 /// </summary>
+/// <remarks>
+///     DURABLE BEFORE VISIBLE: read the counter fresh, refuse over-cap, <c>Reserve</c> a sequence, commit the row with it,
+///     and only then <c>Publish</c> — an <c>external.output</c> frame is an instruction a robot may act on, and
+///     terminalizing the run afterwards un-actuates nothing. Exactly one <c>Publish</c> or <c>Abandon</c> follows every
+///     successful <c>Reserve</c>. The payload is opaque to this node: never parsed for meaning, never executed, bounded per
+///     call and per execution. The rest of the posture: ADR 0008 ("emit_output is durable before visible").
+/// </remarks>
 internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
 {
     private const string NotInIntegrationExecution = "This tool only works inside an integration execution.";
@@ -77,22 +64,15 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
     public bool RequiresApproval => false;
 
     /// <summary>
-    ///     Every POLICY refusal returns a sentence the model can act on, because a throw inside the function-invocation
-    ///     pipeline DESTROYS that sentence: MEAI's <c>FunctionInvokingChatClient</c> catches the exception and hands the
-    ///     model its own fixed <c>Error: Function failed.</c> instead, with no detail at all under the pipeline's
-    ///     <c>IncludeDetailedErrors=false</c> default. (Measured on MEAI 10.9.0: the throw does NOT end the turn — the
-    ///     loop runs a further provider round — so the model would simply retry the same call, blind to why it failed.)
-    ///     The ONE deliberate exception is a persistence FAILURE, which throws on purpose: that is what makes an
-    ///     unbacked frame unrepeatable — the run terminalizes <c>Failed</c> / <c>internal-failure</c> and there is no
-    ///     next call that could publish a second one.
-    ///     <para>
-    ///         Because a refusal is a normal RETURN, the pipeline reports the call as successful and
-    ///         <c>IntegrationStreamEventMapper</c> would put <c>ok:true</c> on the caller's
-    ///         <c>tool.completed</c> frame. That is why the acknowledgement below opens with
-    ///         <see cref="EmitOutputToolDefinition.DeliveredPrefix" />: it is the only outcome signal that survives the
-    ///         pipeline, and the mapper grades this one tool on it.
-    ///     </para>
+    ///     Every POLICY refusal RETURNS a sentence the model can act on; only a persistence failure throws.
     /// </summary>
+    /// <remarks>
+    ///     A throw would destroy that sentence: MEAI 10.9.0's <c>FunctionInvokingChatClient</c> catches it and hands the
+    ///     model its own fixed <c>Error: Function failed.</c> under the <c>IncludeDetailedErrors=false</c> default, and it
+    ///     does NOT end the turn (measured), so the model retries the same call blind. A persistence failure throws on
+    ///     purpose: that is what makes an unbacked frame unrepeatable. Because a refusal is a normal return the pipeline
+    ///     reports success, so the acknowledgement opens with <see cref="EmitOutputToolDefinition.DeliveredPrefix" />.
+    /// </remarks>
     public async Task<string> ExecuteAsync(string jsonArguments, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(jsonArguments);
@@ -102,9 +82,8 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
             return $"{ToolName} arguments exceeded the maximum length of {EmitOutputToolDefinition.MaxJsonArgumentsLength} characters.";
         }
 
-        // The ambient conversation id the invocation runner seeds once per root tool loop — never an argument, which
-        // would be model-forgeable. Every non-integration caller fails here or at the next step: the scheduler and the
-        // benchmark executors pass a throwaway conversation id, and an MCP run seeds no ambient at all.
+        // The ambient conversation id the invocation runner seeds once per root tool loop — never an argument, which would be model-forgeable. Every
+        // non-integration caller fails here or at the next step: the scheduler and benchmark executors pass a throwaway id, and an MCP run seeds no ambient.
         if (AgentRunConversationContext.Current is not { } conversationId)
         {
             return NotInIntegrationExecution;
@@ -132,10 +111,8 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         }
         catch (JsonException)
         {
-            // The exception is deliberately NOT attached. Under UnmappedMemberHandling.Disallow the parser's message
-            // quotes the unexpected PROPERTY NAME, which the model produced and which can therefore carry response
-            // content — logging it would break the no prompt/request/response content rule. A fixed sentence plus the
-            // ids is everything an operator can act on anyway; the model gets a shape it can copy.
+            // The exception is deliberately NOT attached: under UnmappedMemberHandling.Disallow the parser's message quotes the unexpected PROPERTY NAME, which
+            // the model produced and which can carry response content, so logging it would break the no prompt/request/response content rule.
             _logger.LogDebug("{ToolName} could not read its arguments for integration execution {ExecutionId}.", ToolName, execution.Id);
             return $"{ToolName} arguments were not valid JSON for this tool. Send exactly this shape and no other keys: "
                    + """{"contentType": "application/json", "payload": {"ok": true}}""";
@@ -157,9 +134,8 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
             return $"'{contentType}' is not a media type. Send something like 'application/json' or omit contentType.";
         }
 
-        // Compose the DURABLE payload first, then measure IT — not the raw payload. The event's column is capped and
-        // encrypted, so a payload just under the limit plus its wrapper plus a nonce and auth tag would overrun a bound
-        // this handler claims to respect.
+        // Compose the DURABLE payload first, then measure IT, never the raw payload: the event's column is capped and encrypted, so a payload just under the
+        // limit plus its wrapper plus a nonce and auth tag would overrun a bound this handler claims to respect.
         var detailJson = JsonSerializer.Serialize(new EmitOutputEnvelope { ContentType = contentType, Payload = payload }, SerializerOptions);
         var plaintextBytes = (long)Encoding.UTF8.GetByteCount(detailJson);
         if (plaintextBytes > _options.MaxOutputBytes)
@@ -168,11 +144,8 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
                    + $"the limit is {_options.MaxOutputBytes}. Nothing was delivered — send a smaller payload.";
         }
 
-        // The aggregate pre-check, read FRESH from the execution row on every call. That column is the only authority:
-        // a call commits before it publishes, so by the time a second call can begin the first call's bytes are already
-        // in it, and an in-memory tally on top would double-count every committed call. Race-free per execution because
-        // tool calls within one invocation are sequential (concurrent invocation is never enabled), and the store's own
-        // in-transaction reserve is the backstop if that ever changes.
+        // The aggregate pre-check, read FRESH from the execution row on every call: that column is the only authority, because a call commits before it
+        // publishes and an in-memory tally would double-count. Tool calls within one invocation are sequential, and the store's in-transaction reserve backs it.
         var delivered = execution.OutputBytes;
         if (delivered + plaintextBytes > _options.MaxOutputBytesPerExecution)
         {
@@ -191,13 +164,8 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         long plaintextBytes,
         CancellationToken cancellationToken)
     {
-        // Reserve mints a sequence and publishes NOTHING. A throw here took no reservation, so there is nothing to
-        // abandon — calling Abandon with a sequence Reserve never returned would be a defect, not defensive coding.
-        //
-        // It throws for an UNTRACKED id, which a post-terminal removal race can produce between the Running read above
-        // and this line. The run is ending either way, so it answers with the same sentence every other refusal on
-        // this path uses rather than escaping onto the runner thread. The persistence failure below still throws on
-        // purpose — that is what makes an unbacked frame unrepeatable — and this case wrote nothing to be unbacked.
+        // Reserve mints a sequence and publishes NOTHING, so a throw here took no reservation and calling Abandon with a sequence it never returned would be a
+        // defect. It throws for an UNTRACKED id — a post-terminal removal race — which refuses in the usual sentence: the run is ending and nothing was written.
         long sequence;
         try
         {
@@ -238,9 +206,8 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         }
         catch (Exception exception)
         {
-            // Abandon BEFORE the rethrow, never after: the reservation holds every reader of this execution at this
-            // sequence, so cleaning up later in the coordinator's terminalization would block the caller's stream for
-            // as long as it stands.
+            // Abandon BEFORE the rethrow, never after: the reservation holds every reader of this execution at this sequence, so cleaning up later in the
+            // coordinator's terminalization would block the caller's stream for as long as it stands.
             _buffer.Abandon(execution.Id, sequence);
             _logger.LogError(exception, "The external output of integration execution {ExecutionId} could not be persisted.", execution.Id);
             throw;

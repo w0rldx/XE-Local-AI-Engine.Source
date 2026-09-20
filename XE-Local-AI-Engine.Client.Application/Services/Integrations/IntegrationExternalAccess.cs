@@ -5,11 +5,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
-/// <summary>
-///     The authenticated integrator behind one external request. <see cref="PrincipalId" /> is the identity every
-///     ownership question keys on; <see cref="KeyPrefix" /> names WHICH of that integrator's credentials made the call,
-///     which is what lets the allowlist on that one credential still bind after the invocation.
-/// </summary>
+/// <summary>The authenticated integrator behind one external request.</summary>
+/// <remarks>
+///     <see cref="PrincipalId" /> is the identity every ownership question keys on; <see cref="KeyPrefix" /> names
+///     WHICH of that integrator's credentials made the call, which is what lets the allowlist on that one credential
+///     still bind after the invocation.
+/// </remarks>
 public sealed class IntegrationCallerIdentity
 {
     public required Guid PrincipalId { get; init; }
@@ -18,9 +19,12 @@ public sealed class IntegrationCallerIdentity
 
     /// <summary>
     ///     Reads the identity off an authenticated principal, failing CLOSED on a missing or duplicated claim rather
-    ///     than taking the first of several. A duplicated claim is not a shape this node's own handler can produce, so
-    ///     seeing one means something else built the identity.
+    ///     than taking the first of several.
     /// </summary>
+    /// <remarks>
+    ///     A duplicated claim is not a shape this node's own handler can produce, so seeing one means something else
+    ///     built the identity.
+    /// </remarks>
     public static IntegrationCallerIdentity? FromPrincipal(ClaimsPrincipal? principal)
     {
         if (principal?.Identity?.IsAuthenticated != true)
@@ -60,21 +64,16 @@ public sealed class IntegrationAccessResult
 }
 
 /// <summary>
-///     The ONE authorisation rule for every external route that addresses an execution or a session, written once so
-///     no slice re-derives half of it.
-///     <para>
-///         The rule: the row exists, AND its <c>PrincipalId</c> is the caller's, AND the caller's CURRENT key
-///         allowlists the row's <c>TriggerId</c>. A principal match alone is not sufficient — two credentials can share
-///         an integrator and carry different allowlists, and under principal-only masking a key deliberately scoped to
-///         one trigger could read and cancel its principal's executions under every other trigger. That is an
-///         authorisation bypass by the very mechanism an operator used to scope the key.
-///     </para>
-///     <para>
-///         The key row is re-read PER REQUEST, deliberately: the allowlist is not a claim, so narrowing or revoking a
-///         key takes effect on the next call rather than at the next key mint. It is one indexed read on a
-///         loopback-only, rate-limited surface.
-///     </para>
+///     The ONE authorisation rule for every external route that addresses an execution or a session, written once so no
+///     slice re-derives half of it.
 /// </summary>
+/// <remarks>
+///     The rule: the row exists, AND its <c>PrincipalId</c> is the caller's, AND the caller's CURRENT key allowlists the
+///     row's <c>TriggerId</c>. A principal match alone is not sufficient — two credentials can share an integrator and
+///     carry different allowlists, so principal-only masking would let a key scoped to one trigger read and cancel that
+///     principal's executions under every other trigger, a bypass by the mechanism that scoped it. The key row is re-read
+///     PER REQUEST, so narrowing or revoking one takes effect on the next call; it is one indexed read.
+/// </remarks>
 public sealed class IntegrationExternalAccess
 {
     private readonly IIntegrationApiKeyStore _keys;
@@ -94,10 +93,8 @@ public sealed class IntegrationExternalAccess
     {
         ArgumentNullException.ThrowIfNull(caller);
 
-        // The resource read and the key/allowlist read BOTH happen, then ONE combined decision. Short-circuiting on a
-        // missing or foreign row skipped the key query and the allowlist scan, so an execution id that exists and is
-        // merely out of allowlist did measurably more work than one that does not exist — a timing signal for id
-        // existence behind two byte-identical 404s.
+        // The resource read and the key/allowlist read BOTH happen, then ONE combined decision: short-circuiting on a missing or foreign row skips the key
+        // query, so an id that exists but is out of allowlist does measurably more work — a timing signal for id existence behind two identical 404s.
         var execution = await _executions.GetByIdAsync(executionId, cancellationToken);
         var allowed = await AllowsAsync(caller, execution?.TriggerId ?? Guid.Empty, cancellationToken);
 
@@ -112,9 +109,8 @@ public sealed class IntegrationExternalAccess
     {
         ArgumentNullException.ThrowIfNull(caller);
 
-        // The store's two-column predicate IS the ownership limb — a missing row and a foreign one come back as the
-        // same non-result, so there is no loaded row here for a later edit to start reading. The allowlist is the
-        // second limb and stays here, because it is an authorisation rule rather than a persistence one.
+        // The store's two-column predicate IS the ownership limb — a missing row and a foreign one come back as the same non-result, so no loaded row is
+        // here for a later edit to start reading. The allowlist is the second limb and stays here: it is an authorisation rule, not a persistence one.
         var session = await _sessions.GetForPrincipalAsync(sessionId, caller.PrincipalId, cancellationToken);
 
         // Same constant shape as the execution path above: the key read and the allowlist scan run whether or not the

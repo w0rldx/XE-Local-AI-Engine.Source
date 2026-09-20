@@ -38,12 +38,12 @@ public enum ExternalAppBlockedReason
     /// <summary>
     ///     The manifest reads the container bridge — <c>${XE_BRIDGE_ENDPOINT}</c> or <c>${XE_BRIDGE_TOKEN}</c> — and
     ///     this node did not open one, so the deployment cannot be planned at all.
-    ///     <para>
-    ///         Both previews report it, and both commands refuse on it. The planner raises the same refusal, but it
-    ///         raises it inside the pipeline: on an install that is after the row exists, and on an update it would
-    ///         be after a version that was working had been stopped.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Both previews report it and both commands refuse on it. The planner raises the same refusal, but from
+    ///     inside the pipeline: on an install that is after the row exists, and on an update after a version that was
+    ///     working had been stopped.
+    /// </remarks>
     BridgeUnavailable = 7
 }
 
@@ -132,11 +132,11 @@ public static class ExternalAppPublishedPorts
     }
 }
 
-/// <summary>
-///     The one serializer configuration every External Apps JSON column is written and read with. One object rather
-///     than a literal at each call site: a snapshot written with one set of options and read with another is a
-///     manifest that round-trips differently on the way back in.
-/// </summary>
+/// <summary>The one serializer configuration every External Apps JSON column is written and read with.</summary>
+/// <remarks>
+///     One object rather than a literal at each call site: a snapshot written with one set of options and read with
+///     another is a manifest that round-trips differently on the way back in.
+/// </remarks>
 public static class ExternalAppJson
 {
     /// <summary>Web defaults — camelCase property names, case-insensitive reads — matching the catalog document's own.</summary>
@@ -177,14 +177,12 @@ public sealed record ExternalAppInstanceSummary
     public required long Version { get; init; }
 }
 
-/// <summary>
-///     Everything the detail page and the settings tab render. <see cref="Manifest" /> is the SANITISED installed
-///     snapshot — asset bodies stripped, secret defaults nulled — never the catalog's current manifest, so the page
-///     describes the application that is installed rather than the one that could be.
-/// </summary>
+/// <summary>Everything the detail page and the settings tab render.</summary>
 /// <remarks>
-///     <see cref="MaskedVariables" /> carries the stored values with every <c>secret</c> replaced by
-///     <see cref="ExternalAppVariableMask.Value" />, which is why this record may print: nothing on it is a secret.
+///     <see cref="Manifest" /> is the SANITISED installed snapshot — asset bodies stripped, secret defaults nulled —
+///     never the catalog's current manifest, so the page describes the application that is installed rather than the
+///     one that could be. <see cref="MaskedVariables" /> carries the stored values with every <c>secret</c> replaced
+///     by <see cref="ExternalAppVariableMask.Value" />, which is why this record may print: nothing on it is a secret.
 /// </remarks>
 public sealed record ExternalAppInstanceDetail
 {
@@ -295,10 +293,8 @@ public sealed record InstallCommand(
     IReadOnlyDictionary<string, string> Variables,
     bool AcceptPermissions)
 {
-    // Variables carry the application's admin password and its API keys, so the generated printer would put them
-    // into any log line that formats a command. Same shape and same suppressions as the persistence layer's
-    // carriers: on a sealed record whose base is object the compiler expects exactly this signature, and every fix
-    // the four analyzers suggest changes it into one the compiler no longer recognises as the record's printer.
+    // Variables carry the application's admin password and its API keys, so the generated printer would put them into any log line that formats a command.
+    // Same shape and suppressions as the persistence carriers: on a sealed record the compiler expects exactly this signature, and every analyzer fix breaks it.
 #pragma warning disable CA1822, S2325, S1172, IDE0060
     private bool PrintMembers(StringBuilder builder)
     {

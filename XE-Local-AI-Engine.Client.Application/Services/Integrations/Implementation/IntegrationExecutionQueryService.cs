@@ -8,17 +8,14 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 /// <summary>
 ///     The admin reads over integration executions, and the ONE cancel primitive both the operator surface and the
 ///     external route call.
-///     <para>
-///         <b>No interface.</b> A one-implementation interface neither the brief nor a ruling asked for is
-///         scaffolding: the endpoints are as testable against this class, whose own collaborators are all interfaces.
-///         It is <c>public</c> rather than <c>internal</c> because the Client endpoints live in another assembly.
-///     </para>
-///     <para>
-///         <b>The cancel is not key-scoped.</b> An operator cancelling from the admin UI is not acting as an
-///         integrator and must be able to reach every row, so this method deliberately does NOT go through
-///         <see cref="IntegrationExternalAccess" />. The external route applies that rule itself, before it calls here.
-///     </para>
 /// </summary>
+/// <remarks>
+///     No interface: a one-implementation interface is scaffolding, and the endpoints are as testable against this class,
+///     whose own collaborators are all interfaces. It is <c>public</c> rather than <c>internal</c> because the Client
+///     endpoints live in another assembly. The cancel is NOT key-scoped — an operator cancelling from the admin UI is not
+///     acting as an integrator and must reach every row, so it deliberately does not go through
+///     <see cref="IntegrationExternalAccess" />; the external route applies that rule itself before it calls here.
+/// </remarks>
 public sealed class IntegrationExecutionQueryService
 {
     private readonly IIntegrationExecutionEventBuffer _buffer;
@@ -67,28 +64,13 @@ public sealed class IntegrationExecutionQueryService
         CancellationToken cancellationToken = default) =>
         _executions.ListEventsAsync(executionId, sinceSequence, limit, cancellationToken);
 
-    /// <summary>
-    ///     Requests cancellation, in the fixed order the transition table needs.
-    ///     <list type="number">
-    ///         <item>
-    ///             Stamp the durable stop marker, so a restart cannot resurrect the run. Written ONCE: a row that
-    ///             already carries one is answered without a second write, because every marker write bumps the
-    ///             version and a repeated cancel would drift it out from under the coordinator's terminal retries.
-    ///         </item>
-    ///         <item>
-    ///             Terminalize a row that has not started, in ONE transaction. Whoever's CAS wins owns the terminal
-    ///             event and the one audit row; a loser appends nothing, because the coordinator won the
-    ///             <c>Queued -&gt; Running</c> race and will produce them itself.
-    ///         </item>
-    ///         <item>
-    ///             Signal the registered token on EVERY path, whether step 2 won or lost and whatever the row reads.
-    ///             Signalling only for a running row leaves the coordinator blocked in its lease wait until the lease
-    ///             comes free on its own, which is not a cancel a caller can observe.
-    ///         </item>
-    ///     </list>
-    ///     A step-2 CAS lost to the coordinator is not a dropped cancel: the marker is already durable, the signal has
-    ///     already fired, and the coordinator's pre-run re-read plus its cancellable run token both catch it.
-    /// </summary>
+    /// <summary>Requests cancellation, in the fixed order the transition table needs.</summary>
+    /// <remarks>
+    ///     Stamp the durable stop marker ONCE, terminalize a row that has not started in ONE transaction, then signal the
+    ///     registered token on EVERY path. A step-2 CAS lost to the coordinator is not a dropped cancel: the marker is
+    ///     already durable, the signal has already fired, and the coordinator's pre-run re-read plus its cancellable run
+    ///     token both catch it. Why each step is shaped that way: ADR 0008 ("The cancel primitive's fixed order").
+    /// </remarks>
     public async Task<IntegrationCancelOutcome> RequestCancelAsync(Guid executionId, CancellationToken cancellationToken = default)
     {
         var execution = await _executions.GetByIdAsync(executionId, cancellationToken);
@@ -106,20 +88,15 @@ public sealed class IntegrationExecutionQueryService
 
         try
         {
-            // Idempotent: a row whose marker is already durable needs no second write. Re-stamping it bumps the
-            // version for nothing, and a caller hammering cancel would drift the version out from under the
-            // coordinator's bounded terminal retries until they were exhausted and the row stranded non-terminal.
-            // The signal in the finally below still fires, which is what actually stops a run in flight.
+            // Idempotent: a row whose marker is already durable needs no second write, because re-stamping bumps the version out from under the
+            // coordinator's bounded terminal retries. The signal in the finally below still fires, which is what actually stops a run in flight.
             if (execution.StopRequestedAtUtc is not null)
             {
                 return IntegrationCancelOutcome.Requested;
             }
 
-            // CancellationToken.None from here down, for the same reason the coordinator uses it: a cancel that has
-            // decided to stop a run must finish stamping and closing it even if the client that asked walks away.
-            //
-            // NewStatus equal to the current status makes this a pure marker write under the same compare-and-swap, so
-            // it cannot resurrect a row that terminalized a moment ago.
+            // CancellationToken.None from here down: a cancel that has decided to stop a run must finish stamping and closing it even if the client walks
+            // away. NewStatus equal to the current status makes this a pure marker write under the same CAS, so it cannot resurrect a just-terminalized row.
             var marked = await _executions.UpdateStatusAsync(new IntegrationExecutionStatusUpdate
             {
                 ExecutionId = executionId,
@@ -154,9 +131,8 @@ public sealed class IntegrationExecutionQueryService
             else if (execution.Status is IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued
                      && !await TryTerminalizeCancelledAsync(execution, execution.Version + 1, nowUnixMs, CancellationToken.None))
             {
-                // The terminal CAS lost. If it lost to a TERMINAL row — a pre-run rejection that beat this cancel to
-                // it — the run is over and the honest answer is a 409, not a 202 the caller will poll for a cancel
-                // that will never arrive. A still-live row is the ordinary case and stays a 202.
+                // The terminal CAS lost. Lost to a TERMINAL row — a pre-run rejection that beat this cancel to it — the run is over and the honest answer is
+                // a 409, not a 202 the caller will poll for a cancel that never arrives. A still-live row is the ordinary case and stays a 202.
                 var fresh = await _executions.GetByIdAsync(executionId, CancellationToken.None);
                 if (fresh is not null
                     && fresh.Status is not (IntegrationExecutionStatus.Accepted or IntegrationExecutionStatus.Queued or IntegrationExecutionStatus.Running))
@@ -185,9 +161,8 @@ public sealed class IntegrationExecutionQueryService
         long nowUnixMs,
         CancellationToken cancellationToken)
     {
-        // An entry that a previous process created, or one the ring already evicted, cannot carry an event. Seeding it
-        // from the persisted watermark is idempotent and keeps the buffer the sole minter; if the ring refuses, the
-        // marker and the signal still stand and the coordinator terminalizes the row on its pre-run re-read.
+        // An entry a previous process created, or one the ring already evicted, cannot carry an event. Seeding it from the persisted watermark is idempotent
+        // and keeps the buffer the sole minter; if the ring refuses, the marker and the signal stand and the coordinator terminalizes on its pre-run re-read.
         if (!_buffer.TryCreate(execution.Id, execution.LastSequence))
         {
             _logger.LogWarning("The event buffer refused an entry for integration execution {ExecutionId}; the cancel marker stands and the coordinator will terminalize it.", execution.Id);

@@ -4,11 +4,13 @@ using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     <see cref="IClientLocalToolHandler" /> for <c>list_files</c> (ClientLocal). JSON-in / JSON-out: deserializes the
-///     model arguments, validates them, and delegates to <see cref="ICoderWorkspaceReader" />. Read-only and
-///     workspace-confined, so it auto-runs (<c>RequiresApproval => false</c>). Gated by
-///     <c>AgentHome:Enabled</c> — the coder tools share the AgentHome sandbox.
+///     <see cref="IClientLocalToolHandler" /> for <c>list_files</c> (ClientLocal), JSON-in and JSON-out: deserializes the model arguments,
+///     validates them, and delegates to <see cref="ICoderWorkspaceReader" />.
 /// </summary>
+/// <remarks>
+///     Read-only and workspace-confined, so it auto-runs (<c>RequiresApproval</c> is false), and it is gated by <c>AgentHome:Enabled</c>
+///     because the coder tools share the AgentHome sandbox.
+/// </remarks>
 internal sealed class ListFilesToolHandler : IClientLocalToolHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);

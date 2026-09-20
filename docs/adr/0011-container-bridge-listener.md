@@ -143,7 +143,14 @@ writing secrets — but an update backfills: `ExternalAppService.UpdateAsync` mi
 none, and `IExternalAppInstanceStore.CommitUpdateAsync` writes it in the same transaction as the manifest and the
 variables. That transaction is the update's recovery boundary and the containers being created are created from
 the same grant, so the token the row holds and the token the application was given become true together. The
-token then persists for every later Start.
+token then persists for every later Start. It is minted whether or not this node currently has an open bridge,
+exactly as install mints it: the token is the instance's, and whether it can be *used* is the endpoint's question.
+
+**The matching refusal is at admission, not in the pipeline.** A target manifest that reads a bridge built-in
+cannot be planned on a node that opened none, and a pipeline failure settles the row by removing this instance's
+containers — so refusing there would cost a working application the version it was running, while the row would
+still describe that version and the retry would refuse again. Admission answers 400 instead, carrying the
+planner's own message: which feature is missing and which setting turns it on.
 
 Start does **not** mint, and that is not an oversight. Start may REUSE the containers it finds: a token minted
 there would be one no running container was ever given, so the row would claim bridge access the application

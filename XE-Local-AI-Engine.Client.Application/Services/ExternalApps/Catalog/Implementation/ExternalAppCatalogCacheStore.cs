@@ -3,12 +3,11 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog.Implementation
 using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
-/// <summary>
-///     File-backed <see cref="IExternalAppCatalogCacheStore" />: a single small JSON file under the node data
-///     directory, guarded by a lock and written owner-only on non-Windows. Copied from <c>ModelCatalogCacheStore</c>
-///     in shape and intent; the catalog cache is a raw fetched document, not node state, so it stays a file rather
-///     than a database row.
-/// </summary>
+/// <summary>File-backed <see cref="IExternalAppCatalogCacheStore" />: one small JSON file under the node data directory, guarded by a lock and written owner-only on non-Windows.</summary>
+/// <remarks>
+///     Copied from <c>ModelCatalogCacheStore</c> in shape and intent; the catalog cache is a raw fetched document,
+///     not node state, so it stays a file rather than a database row.
+/// </remarks>
 internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheStore, IDisposable
 {
     private const string CacheDirectoryName = "external-apps";

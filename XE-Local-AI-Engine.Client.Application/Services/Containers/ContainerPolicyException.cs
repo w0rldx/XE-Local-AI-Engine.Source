@@ -1,21 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>
-///     A container operation is impermissible because of the state the daemon is in, not because of the argument it
-///     was given.
-///     <para>
-///         The distinction is the reason this type exists. A caller bug — a non-loopback host IP, a tag instead of a
-///         digest, a blank user — is refused with an <see cref="ArgumentException" /> before anything reaches the
-///         wire. This is the other kind: the request was well formed, and what the daemon already holds makes it
-///         unsafe to proceed. Reusing a network whose name matches but whose labels do not prove it is ours is the
-///         first instance, and there will be others.
-///     </para>
-///     <para>
-///         Deliberately not a <c>DockerRuntimeException</c>: that type carries a Development Mode preflight status,
-///         which has no member for a policy refusal, and widening Development Mode's preflight vocabulary for a
-///         refusal in this layer would put the two consumers back in one enum.
-///     </para>
-/// </summary>
+/// <summary>A container operation is impermissible because of the state the daemon is in, not because of the argument it was given.</summary>
+/// <remarks>
+///     A caller bug — a non-loopback host IP, a tag instead of a digest, a blank user — is refused with an
+///     <see cref="ArgumentException" /> before anything reaches the wire; this is a well-formed request that what
+///     the daemon already holds makes unsafe (reusing a network whose name matches but whose labels do not prove it
+///     is ours). Deliberately NOT a <c>DockerRuntimeException</c>: that carries a Development Mode preflight status
+///     with no member for a policy refusal, and widening it would put the two consumers back in one enum.
+/// </remarks>
 public sealed class ContainerPolicyException : Exception
 {
     /// <summary>The stable machine token for a network name held by something this instance does not own.</summary>

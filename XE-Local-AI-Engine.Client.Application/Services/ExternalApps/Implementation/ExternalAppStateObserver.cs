@@ -6,28 +6,14 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>
-///     Notices that a container the engine believes is running has stopped, and says so.
-///     <para>
-///         It exists because reconciliation runs at boot and on an explicit refresh only, and every instance read is
-///         served from the database — so without this a <c>docker stop</c>, an out-of-memory kill or a crash leaves
-///         the interface reporting the application as running indefinitely. The detailed listing is what makes it
-///         work: <c>docker stop</c> leaves the container LISTED, so a poll built on an id-only list would see no
-///         change at all.
-///     </para>
-///     <para>
-///         It never starts, creates or removes anything. That is what keeps it a cheap observer rather than a second,
-///         unsupervised reconciler, and what makes it safe to run while the operation runner is working: an instance
-///         with a live operation or a held gate is skipped, so a lifecycle operation finishing in the same instant is
-///         never overwritten.
-///     </para>
-///     <para>
-///         An <see cref="IHostedService" /> with its own loop rather than a <c>BackgroundService</c>, because the
-///         base class's entry point carries a name the External Apps layer is not allowed to write: an architecture
-///         test greps this directory's raw text for Development Mode's container members, and one of them shares that
-///         name.
-///     </para>
-/// </summary>
+/// <summary>Notices that a container the engine believes is running has stopped, and says so.</summary>
+/// <remarks>
+///     What it polls, why the DETAILED listing is load-bearing and why it starts, creates and removes nothing is in
+///     <c>docs/wiki/23-external-apps.md</c> ("Lifecycle and restore semantics"). It is an
+///     <see cref="IHostedService" /> with its own loop rather than a <c>BackgroundService</c>, because the base
+///     class's entry point carries a name this layer may not write: an architecture test greps this directory's raw
+///     text for Development Mode's container members, and one of them shares that name.
+/// </remarks>
 internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
 {
     private readonly ExternalAppInstanceGate _gate;

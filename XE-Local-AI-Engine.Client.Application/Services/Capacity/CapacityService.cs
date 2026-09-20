@@ -11,10 +11,10 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 /// <summary>
-///     Default <see cref="ICapacityService" />. The single admission gate: cloud bypass, local-same-as-running queue,
-///     and the byte-budget + process-count decision with a TOCTOU-safe decide-commit under the pending-footprint
-///     ledger. Reason strings are sanitized constants — no paths, model identities, or secrets leak to the caller.
+///     Default <see cref="ICapacityService" />: cloud bypass, local-same-as-running queue, and the byte-budget plus
+///     process-count decision, committed TOCTOU-safe under the pending-footprint ledger's decision gate.
 /// </summary>
+/// <remarks>See <c>docs/wiki/04-agent-mode.md</c> ("Capacity gate &amp; sub-agent spawn") for the four admission passes.</remarks>
 public sealed class CapacityService : ICapacityService
 {
     // Sanitized, user-safe constants — never interpolate a model name, path, or budget figure into a caller-facing
@@ -83,11 +83,8 @@ public sealed class CapacityService : ICapacityService
             throw new ArgumentException("Required context tokens must be positive when supplied.", nameof(request));
         }
 
-        // Cloud short-circuit: when THIS model routes to cloud (the RuntimeChatClient re-selects per send by the same
-        // per-request model id), the child's sends have no local byte/process cost — admit without any probe. Passing
-        // modelName (rather than checking only the node-default selection) matters when the two diverge: an active
-        // Codex session must not exempt a spawn that explicitly names a local model from the local capacity check,
-        // and a local model must still be admitted on its own footprint even while Codex is signed in.
+        // Cloud short-circuit: a cloud-routed model costs this node no bytes and no process, so it is admitted unprobed. Keyed on modelName, not the
+        // node-default selection, because RuntimeChatClient re-selects per send: an active Codex session must not exempt a spawn naming a local model.
         if (_cloudFactory.IsCloudProviderSelected(modelName))
         {
             return new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = ReasonAllowCloud, OllamaEvictionWarning = false };
@@ -101,29 +98,16 @@ public sealed class CapacityService : ICapacityService
             return new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = ReasonAllowExternal, OllamaEvictionWarning = false };
         }
 
-        // An operator-registered external OpenAI-compatible model runs entirely on someone else's hardware: the node
-        // starts no process, loads no weights, and consumes neither RAM nor VRAM for it. Admitting it without a probe is
-        // therefore correct, and NOT admitting it would be actively wrong — the footprint provider has no GGUF to size,
-        // so the byte-budget path below would reject every such send as "footprint could not be determined".
-        //
-        // Both conditions are checked on purpose. The provider name is the normal route (the save path writes a
-        // provider-map row per registered model). The id's ext: scheme is the backstop for the window where a row is
-        // missing — a crash between the encrypted-store commit and the map sync, or a row the reconciliation pass has
-        // not repaired yet — where the model would otherwise default-route to "llamacpp" and be rejected on a footprint
-        // it can never have. Neither branch grants anything: capacity admission is about local resources only, and the
-        // trust/egress decision for an external model is made elsewhere, from its operator-declared locality.
+        // An operator-registered external model runs on someone else's hardware: no process, no weights, no RAM or VRAM here, and the byte-budget path
+        // below would reject it as "footprint could not be determined". Both conditions are deliberate and neither grants trust: see docs/wiki/04-agent-mode.md ("Capacity gate & sub-agent spawn").
         if (string.Equals(providerName, ExternalProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
             || ExternalModelId.HasExternalScheme(modelName))
         {
             return new CapacityDecision { Verdict = CapacityVerdict.Allow, Reason = ReasonAllowExternal, OllamaEvictionWarning = false };
         }
 
-        // Warm the runtime device audit OUTSIDE the decision gate. Its --list-devices probe is bounded and
-        // cached, but running it under the ledger gate would serialize every capacity decision behind a one-time probe.
-        // The effective profile read under the gate below then consults the cached audit (only the raw hardware profile
-        // re-probes live). This is also the documented lock ordering for the GPU-load admission gate: the capacity
-        // decision never holds the ledger gate while that gate is acquired — it is taken later, inside the supervisor
-        // spawn, only after DecideAsync has fully returned and released this ledger gate.
+        // Warm the device audit OUTSIDE the ledger gate: its bounded, cached --list-devices probe would otherwise serialize every capacity decision behind a
+        // one-time probe. The gated read below reuses that cache, and the GPU-load admission gate is taken later, inside the spawn, never under this gate.
         await _runtimeAudit.GetAuditAsync(forceRefresh: false, ct);
 
         // The decide-commit gate serializes the read-decide-reserve so two concurrent different-model spawns cannot both
@@ -148,21 +132,8 @@ public sealed class CapacityService : ICapacityService
             return new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = ReasonRejectByteBudget, OllamaEvictionWarning = ollamaWarning };
         }
 
-        // forceRefresh: an admission decision runs per model-load (rare, and already serialized under this gate), so it
-        // must read a live VRAM/RAM snapshot rather than the profiler's boot-time cache — a stale free-VRAM figure would
-        // defeat the resident-model accounting below. Bounded: at most one probe in flight because of the gate.
-        //
-        // Invariant — the forced refresh MUST run UNDER the gate, NOT before it. The free-VRAM baseline nets out every
-        // resident model, so a decision has to observe the load committed by every admission that won the gate before it;
-        // reading the profile before entering would let two racing decisions share a pre-load snapshot and over-admit.
-        // Holding the gate across this probe is safe because the probe is now wall-clock bounded: a wedged
-        // nvidia-smi is killed and the profiler degrades to the cached/CPU-safe profile, so the gate hold is capped by the
-        // probe timeout and can never wedge the admission path indefinitely.
-        //
-        // This is the EFFECTIVE profile — the live raw profile force-refreshed for a fresh free-VRAM snapshot,
-        // degraded to CPU-mode (VRAM unknown) when the device audit reports a silent CPU fallback. So on a GPU box whose
-        // Vulkan runtime enumerates no devices, admission sizes against system RAM instead of pretending 16 GB of VRAM
-        // exists. The audit was warmed above, so this call only re-probes the raw hardware profile under the gate.
+        // INVARIANT: the forced refresh runs UNDER the gate, never before it. The free-VRAM baseline nets out every resident model, so two racing decisions
+        // sharing a pre-load snapshot would over-admit; the probe is wall-clock bounded, so holding the gate across it can never wedge the admission path.
         var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, ct);
         var footprint = await _footprintProvider
                               .ResolveFootprintAsync(modelName, role, profile, request.RequiredContextTokens, request.KvCacheType, ct);
@@ -192,11 +163,8 @@ public sealed class CapacityService : ICapacityService
                 return new CapacityDecision { Verdict = CapacityVerdict.RejectInsufficient, Reason = ReasonRejectByteBudget, OllamaEvictionWarning = ollamaWarning };
             }
 
-            // A caller that NAMED a required window launches AT that window (a benchmark replays its frozen -c), so a
-            // tier below it must never be admitted: the reservation would under-book the bytes the process really takes,
-            // and committing it pins the model's shared allocation under the required window for the whole process
-            // lifetime — every later admission naming that window then fails the required-context check and surfaces as
-            // "the model's memory footprint could not be determined" until the app restarts.
+            // A caller that NAMED a required window launches AT it (a benchmark replays its frozen -c), so a lower tier must never be admitted: the reservation
+            // would under-book, and it pins the model's shared allocation below that window for the process lifetime — later admissions reject until restart.
             if (request.RequiredContextTokens is { } required
                 && downTiered.Admission?.Allocation.ProcessContextTokens < required)
             {
@@ -228,9 +196,11 @@ public sealed class CapacityService : ICapacityService
         return reservation.TransferToDecision(ollamaWarning);
     }
 
-    // Each non-zero resource axis is checked against its live free baseline, which already nets out resident loaded
-    // models, then reduced only by in-flight ledger reservations. A zero axis needs no measurement: fully GPU-resident
-    // llama.cpp allocations memory-map the GGUF and therefore carry no committed-RAM reservation.
+    /// <summary>Whether the footprint fits every non-zero resource axis of the live free baseline, less the in-flight ledger reservations.</summary>
+    /// <remarks>
+    ///     The free baseline already nets out resident loaded models, so only the ledger's reservations are subtracted. A zero axis needs no
+    ///     measurement: a fully GPU-resident llama.cpp allocation memory-maps the GGUF and therefore carries no committed-RAM reservation.
+    /// </remarks>
     private bool FitsResourceBudget(HardwareProfile profile, ResourceFootprint footprint, bool hasUnmeasuredGpuLoad)
     {
         var reserved = _ledger.Reserved;
@@ -253,11 +223,8 @@ public sealed class CapacityService : ICapacityService
                 return footprint.GpuBytes <= freeVram - reserved.GpuBytes;
             }
 
-            // NVIDIA has an authoritative global-free reader. If that measurement is absent, fail closed: total VRAM
-            // cannot reveal residents outside the ledger and would over-admit. Other vendors currently expose only total
-            // VRAM. Their degraded fallback is safe only for a first, non-external-draft launch: a known resident process
-            // or a second draft GGUF lives outside the ledger, and without a free-VRAM reading there is no byte-accurate
-            // value to subtract. Reject those cases rather than treating the process-count cap as memory accounting.
+            // NVIDIA has an authoritative global-free reader, so a missing measurement fails closed: total VRAM cannot reveal residents outside the ledger and would over-admit.
+            // Other vendors expose only total VRAM, which hides a resident process or a second draft GGUF: safe only for a first, non-external-draft launch, and the process cap is not accounting.
             if (profile.GpuVendor == GpuVendor.Nvidia)
             {
                 return false;
@@ -274,11 +241,13 @@ public sealed class CapacityService : ICapacityService
         return footprint.GpuBytes == 0;
     }
 
-    // The running (model, role) keys for the relevant local provider. llama.cpp: the supervisor's per-process health
-    // rows. Ollama: the running-models snapshot (role is not modeled by Ollama → treat every running model as a Chat
-    // process, which is the only role a sub-agent chat spawn competes with). Probe failure returns an explicit unknown
-    // state: CPU/free-VRAM decisions still have authoritative byte baselines, while the non-NVIDIA total-VRAM fallback
-    // must reject because it cannot establish whether unledgered residents already consume that total.
+    /// <summary>The running <c>(model, role)</c> keys for the relevant local provider, or an explicit unknown state when the probe fails.</summary>
+    /// <remarks>
+    ///     llama.cpp reads the supervisor's per-process health rows; Ollama reads its running-models snapshot, where role is not modelled, so every
+    ///     running model counts as a Chat process — the only role a sub-agent chat spawn competes with. A probe failure preserves the uncertainty:
+    ///     CPU and free-VRAM decisions still have authoritative byte baselines, while the non-NVIDIA total-VRAM fallback must reject, because it
+    ///     cannot establish whether unledgered residents already consume that total.
+    /// </remarks>
     private async Task<RunningSnapshot> SnapshotRunningKeysAsync(bool isOllama, CancellationToken ct)
     {
         try
@@ -294,13 +263,8 @@ public sealed class CapacityService : ICapacityService
 
             var health = await _supervisor.CheckHealthAsync(ct);
 
-            // EXITED entries are not running. The supervisor's table keeps a crashed process until the idle reaper
-            // collects it (up to a quarter of the idle TTL), and counting a corpse as resident is wrong in both
-            // directions: it burns a loaded-process slot in the headroom check below, and it short-circuits this
-            // decision to QueueSameModel — telling the caller to serialize on a process that can never grant a lease.
-            // That is what stranded the adaptive-effort fast-model swap after its llama-server died: every later turn
-            // was refused instead of relaunching through the ordinary ensure-running path. A process that is alive but
-            // merely unresponsive still holds its VRAM and its slot, so only HasExited is filtered, never IsResponsive.
+            // EXITED entries are not running: the supervisor keeps a corpse until the idle reaper collects it (up to a quarter of the idle TTL), and counting one burns
+            // a slot and serializes the caller on a process that can never grant a lease. An unresponsive process still holds VRAM and a slot, so only HasExited is filtered.
             return new RunningSnapshot(health
                                        .Where(static process => !process.HasExited)
                                        .Select(process => new RunningKey(process.ModelName, process.Role))

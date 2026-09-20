@@ -87,15 +87,11 @@ internal sealed class ExternalAppResourceGate
         };
     }
 
-    /// <summary>
-    ///     Free space where the instance directory will live, because the hardware profile measures the models
-    ///     volume and the two are routinely different disks. The probe resolves the filesystem — the instance
-    ///     directory does not exist yet on the admission path, so it measures the closest existing ancestor.
-    /// </summary>
+    /// <summary>Free space where the instance directory will live, because the hardware profile measures the models volume and the two are routinely different disks.</summary>
     /// <remarks>
-    ///     A zero falls back as hard as an exception does. On a UNC path or inside a container bind the measurement
-    ///     returns nonsense rather than throwing, and "could not measure" must never be shown to a user as "your
-    ///     disk is full".
+    ///     The probe resolves the filesystem: the instance directory does not exist yet on the admission path, so it measures the closest
+    ///     existing ancestor. A zero falls back as hard as an exception does — on a UNC path or inside a container bind the measurement
+    ///     returns nonsense rather than throwing, and "could not measure" must never be shown to a user as "your disk is full".
     /// </remarks>
     private long MeasureFreeDisk(string instanceRoot, long profileFallback)
     {

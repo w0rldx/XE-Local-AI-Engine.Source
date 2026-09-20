@@ -154,3 +154,44 @@ Stated honestly, including the ones that are costs.
 
 - **Revisiting is expected.** An egress allow-list, a second runtime provider, per-service uid pinning and catalog
   signing are each a new operator decision, not an edit to this record.
+
+## Invariants the read-back verifier enforces
+
+Present tense, and written here because they are the record of what "verified against the daemon" means; the code
+states each one crisply next to what it protects.
+
+**The verifier runs twice per container, because the two inspects see different things.** Before start it reads what
+the daemon was *asked* to bind, which is populated at create; after start it reads what the daemon *actually* bound.
+A pre-start-only check is how a widened binding gets through: the request can say loopback and the applied binding
+still be `0.0.0.0`.
+
+**It returns every violation, never the first.** A caller that fixes one and re-runs learns about the next one a
+container-create later, and the point of a fail-closed verifier is to describe the whole gap at once.
+
+**The effective mount set must equal the planned one exactly.** That is what catches an anonymous volume created by an
+image's own `VOLUME` instruction: it appears in the inspect and in no request, and it would put application data
+outside the instance directory, where reset and uninstall cannot reach it.
+
+**Both sides are resolved through their links before they are compared**, and the planned side is confined to the
+instance directory by its *real* location. Comparing the two path strings is what a component replaced by a link
+between plan and create defeats: the path still reads as the instance's own while the daemon bound something else. A
+component that does not exist, or cannot be read, resolves to itself — this verifies what the daemon reported and is
+never a reason to fail a container over a race with a deletion. For the same reason `instanceRoot` is passed by every
+caller that verifies a real instance: a path string resolves nothing, so "under the instance directory" is a question
+only the resolved location can answer.
+
+**The two security options are verified by their VALUE, not by the presence of their name.** A container that reads
+back `no-new-privileges:false` or `seccomp=unconfined` names both options and has neither protection, and a presence
+check would hand reuse and boot adoption a container with its confinement switched off. The option name is matched by
+prefix, because daemons have rendered it as `no-new-privileges`, `no-new-privileges:true` and `no-new-privileges=true`
+across versions, and only the explicit false rendering means the protection is off. No seccomp option at all reads
+back the same way as a daemon with seccomp disabled, which is why the profile is always passed explicitly.
+
+**Seccomp is matched on "names a profile", not on equality with the profile that was sent.** The daemon echoes the
+profile back as roughly 9 KB of compacted JSON, so pinning a byte-for-byte echo would turn a daemon-side normalisation
+into a spurious rejection. The cost, stated rather than hidden: an adopted container carrying a foreign but
+non-unconfined profile passes this check.
+
+**`daemonIsRootless` shapes the operator prose only.** No rule reads differently on a rootless daemon, but a path or a
+binding that looks wrong under one is diagnosed completely differently, so the mode is named in the violation rather
+than left for the reader to guess.

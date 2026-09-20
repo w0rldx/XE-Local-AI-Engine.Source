@@ -18,44 +18,26 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     Default <see cref="ISubAgentSpawnService" />. Resolves the sub-agent's model binding + curated tool set, enforces
-///     the depth/fan-out/cloud-spawn caps, calls the capacity gate, and dispatches per verdict. An admitted spawn runs a
-///     <see cref="ChatClientAgent" /> as an <see cref="AIFunction" /> over the SAME production-decorated
-///     <see cref="IChatClient" /> (cloud/local routed per send by the runtime client).
-///     <para>
-///         A profile-bound child consumes the SAME complete <see cref="ResolvedAgentRuntime" /> a direct agent send does
-///         — resolved once — so it inherits the resolved system prompt (scaffold + persona + injected playbook memory),
-///         reasoning effort (gated on the child model's own thinking capability, mirroring
-///         <see cref="ParticipantReasoningOptions" />), skills (MAF progressive disclosure), AND its curated tools, not
-///         just the tool set. This is structurally the orchestration-participant path: an agent-as-tool never receives
-///         the outer runner's per-run <c>RunOptions</c>, so reasoning + skills must be baked into the agent at
-///         construction. A model-id-only child (no profile) stays as-is: raw request instructions, tool-less, no
-///         reasoning/skills. Post-run adaptive-memory EXTRACTION stays disabled for a child — an intentional restriction
-///         (see <c>docs/agent-knowledge.md</c>).
-///     </para>
-///     <para>
-///         Depth cap (≤ 2) is enforced two ways: (1) PRIMARY, STRUCTURAL — the child's tool set has
-///         <c>spawn_subagent</c> filtered out UNCONDITIONALLY, so a child can never spawn; (2) defense-in-depth —
-///         <see cref="SpawnContext.Depth" /> ≥ 1 short-circuits to a sanitized reject. A profile-bound child inherits its
-///         own definition's curated tools (offer ∩ AllowedToolNames, minus <c>spawn_subagent</c> AND any approval-gated
-///         tool — a child has no HITL route to answer an approval request); a model-id-only child (no profile, no
-///         AllowedToolNames) is tool-less. Every expected rejection is a sanitized string, not an exception.
-///     </para>
+///     Default <see cref="ISubAgentSpawnService" />: resolves the sub-agent's model binding and curated tool set, enforces the depth, fan-out
+///     and cloud-spawn caps, calls the capacity gate, and dispatches per verdict.
 /// </summary>
+/// <remarks>
+///     An admitted spawn runs a <see cref="ChatClientAgent" /> as an <see cref="AIFunction" /> over the SAME production-decorated
+///     <see cref="IChatClient" />, routed cloud or local per send by the runtime client. The depth cap (≤ 2) is enforced two ways: PRIMARY
+///     and STRUCTURAL, the child's tool set has <c>spawn_subagent</c> filtered out UNCONDITIONALLY; plus defence-in-depth, a
+///     <see cref="SpawnContext.Depth" /> of 1 or more short-circuits to a sanitized reject. Every expected rejection is a sanitized string,
+///     never an exception. What a profile-bound child inherits: <c>docs/wiki/04-agent-mode.md</c> ("Capacity gate &amp; sub-agent spawn").
+/// </remarks>
 internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExecutionService
 {
-    // The inner agent-as-tool exposes a single "query" input parameter (re-verified at the pinned MAF version,
-    // see Directory.Packages.props, against AIAgentExtensions.AsAIFunction); the spawn task is passed under
-    // that key. AsAIFunction forwards the outer CancellationToken into the inner run (verified by
-    // Spawn_PropagatesCancellationToInnerRun), so no linked CTS is needed — the parent ct flows straight through
-    // InvokeAsync.
+    // The inner agent-as-tool exposes a single "query" input parameter, re-verified at the pinned MAF version (Directory.Packages.props) against
+    // AIAgentExtensions.AsAIFunction; the spawn task is passed under that key.
     private const string InnerAgentInputKey = "query";
     private const string SubAgentName = "sub-agent";
     private const string SubAgentDescription = "A spawned sub-agent that answers a delegated task.";
 
-    // The persona half only; BaseInstructionComposer prepends the same versioned scaffold every other resolved
-    // agent gets, so a model-id-only child (no persisted definition to opt out) gets the same grounding/tool/output
-    // discipline as a bound one.
+    // The persona half only: BaseInstructionComposer prepends the same versioned scaffold every other resolved agent gets, so a model-id-only child
+    // (no persisted definition to opt out) gets the same grounding, tool and output discipline as a bound one.
     private const string DefaultSubAgentPersonaInstructions =
         "You are a focused sub-agent. Complete the delegated task and return a concise result.";
 
@@ -144,21 +126,16 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             return ReasonInvalidArguments;
         }
 
-        // Runtime depth guard (defense-in-depth behind the structural cap): a spawned child runs at Depth ≥ 1 and its
-        // tool set already omits spawn_subagent, so it can never reach here — but if a misconfiguration ever offered it
-        // the tool, this rejects rather than recursing. A missing context defaults SAFE (rejected below as no fan-out).
+        // Runtime depth guard, defence-in-depth behind the structural cap: a spawned child runs at Depth ≥ 1 and its tool set already omits
+        // spawn_subagent, so it can never reach here — but a misconfiguration that offered it the tool rejects here rather than recursing.
         var context = SpawnContext.Current;
         if (context is { Depth: >= 1 })
         {
             return ReasonDepthExceeded;
         }
 
-        // Trust guard at the SERVICE seam, behind the offer gate that already withholds spawn_subagent from a parent
-        // outside the trust boundary. Both exist because the two seams fail differently: an agent profile's
-        // AllowedToolNames, a saved definition pinned to another model, or a future caller reaching this service
-        // directly would all bypass the offer. Delegation is an egress decision — the child can be bound to a
-        // node-local model that reads the workspace and knowledge base, and its answer returns into the parent's
-        // transcript — so a parent that may not read that data itself may not obtain it through a child.
+        // Trust guard at the SERVICE seam, behind the offer gate: an AllowedToolNames list, a definition pinned to another model, or a direct caller would all bypass it.
+        // Delegation is egress — a child reads the workspace and knowledge base into the parent's transcript, so a parent that may not read that data may not obtain it via a child.
         if (await IsOutsideTrustBoundaryAsync(context?.RootModelId, ct))
         {
             return ReasonParentOutsideTrustBoundary;
@@ -220,9 +197,8 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            // Only OUR deadline fired (both halves are required: an unrelated inner token must not be reported as this
-            // node's timeout, and the caller's own cancellation must escape). A typed outcome instead of an escaping
-            // cancellation is what lets get_agent_run report a distinguishable failure_code the caller can act on.
+            // Only OUR deadline fired; both halves are required, so an unrelated inner token is never reported as this node's timeout and the caller's
+            // own cancellation still escapes. A typed outcome is what lets get_agent_run report a distinguishable failure_code the caller can act on.
             return SpawnOutcome.Failed(McpExecutionFailureCodes.TimedOut,
                 "The run exceeded the node's maximum message request timeout.");
         }
@@ -481,16 +457,14 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         return (true, adapted);
     }
 
-    // Allow: a cloud spawn consumes a cloud-budget unit (DoS-of-wallet cap); a local Allow carries a ledger reservation
-    // that must be released when the child exits. The reservation is null for a cloud Allow, so disposal is a no-op there.
     /// <summary>
-    ///     Whether prompts for <paramref name="modelId" /> leave the node — the same formula
-    ///     <c>LocalToolOfferProvider.IsOutsideTrustBoundary</c> applies, spelled asynchronously because this seam has an
-    ///     async boundary and can therefore resolve the registry rather than settle for its cached generation.
+    ///     Whether prompts for <paramref name="modelId" /> leave the node, by the same formula
+    ///     <c>LocalToolOfferProvider.IsOutsideTrustBoundary</c> applies.
     /// </summary>
     /// <remarks>
-    ///     A <see langword="null" /> id means the seeding caller named no model (an inbound MCP run resolves its own
-    ///     binding downstream), which is not a claim that the parent is remote — so it does not refuse.
+    ///     Spelled asynchronously because this seam has an async boundary and can therefore resolve the registry rather than settle for its
+    ///     cached generation. A <see langword="null" /> id means the seeding caller named no model — an inbound MCP run resolves its own
+    ///     binding downstream — which is not a claim that the parent is remote, so it does not refuse.
     /// </remarks>
     private async Task<bool> IsOutsideTrustBoundaryAsync(string? modelId, CancellationToken ct)
     {
@@ -503,6 +477,8 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
                || await _modelTrustResolver.ResolveAsync(modelId, ct) != ModelTrustLocality.Local;
     }
 
+    // Allow: a cloud spawn consumes a cloud-budget unit (DoS-of-wallet cap); a local Allow carries a ledger reservation
+    // that must be released when the child exits. The reservation is null for a cloud Allow, so disposal is a no-op there.
     private async Task<string> RunAllowAsync(ResolvedBinding binding,
         CapacityDecision decision,
         SpawnContext context,
@@ -537,25 +513,17 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             ct);
     }
 
-    // Builds the bound sub-agent (mirrors OrchestrationAgentFactory.BuildAgent's ChatClientAgent ctor) with the curated
-    // tool set the binding resolved (spawn_subagent already filtered out), then runs it as an AIFunction inside a child
-    // SpawnContext scope (Depth+1) so the runtime depth guard holds for any nested call. The outer ct flows into the
-    // inner run (verified spike).
+    // Builds the bound sub-agent (mirroring OrchestrationAgentFactory.BuildAgent's ChatClientAgent ctor) with the curated tool set the binding
+    // resolved — spawn_subagent already filtered out — then runs it as an AIFunction inside a child SpawnContext scope at Depth+1.
     private async Task<string> RunSubAgentAsync(ResolvedBinding binding, SpawnContext context, string task, CancellationToken ct)
     {
-        // Pin the child's OWN binding, exactly as InvocationRunner pins the parent turn's. The parent's pin is keyed by
-        // the parent model, so without this an external child's sends found no pin and fell through to the transport's
-        // weaker unpinned check — while the child is running with a tool set authorized against the declaration read
-        // here. Resolved first and scoped HERE: an AsyncLocal seeded inside the async helper would not survive its
-        // return. The child runs inside this frame's flow, so the scope reaches it; pins stack, so the parent's lives.
+        // Pin the child's OWN binding, as InvocationRunner pins the parent turn's, and scope it HERE, synchronously: an AsyncLocal seeded inside the async
+        // helper would not survive its return, and pins stack. Why an unpinned child is wrong: docs/wiki/04-agent-mode.md ("What a profile-bound child inherits").
         var childPins = await ExternalProviderInvocationPin.ResolveAsync(_externalProviderRegistry, binding.ModelName, ct);
         using var childBindingPin = ExternalProviderBindingPinScope.Begin(childPins);
 
-        // The child MUST run on its bound model: RuntimeChatClient routes the shared IChatClient to a provider PER SEND
-        // off ChatOptions.ModelId (mirrors InvocationAgentFactory). Without it the inner run falls back to the node
-        // default provider/model — e.g. a llama.cpp GGUF sub-agent would be sent to Ollama and fail. Instructions + the
-        // curated tools also ride ChatOptions (the ChatClientAgentOptions ctor path; MAF lands the positional args there
-        // too). AsAIFunction invokes the agent with no per-run options, so these construction-time defaults apply.
+        // The child MUST run on its bound model: RuntimeChatClient routes the shared IChatClient per send off ChatOptions.ModelId (mirroring InvocationAgentFactory),
+        // so without it a GGUF sub-agent falls back to the node default and fails. Instructions and the curated tools ride ChatOptions too, and AsAIFunction passes no per-run options.
         var chatOptions = new ChatOptions
         {
             ModelId = binding.ModelName,
@@ -563,11 +531,8 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             Tools = binding.Tools
         };
 
-        // Profile-bound child: bake the resolved reasoning effort into the construction-time ChatOptions, gated on the
-        // child model's own thinking capability — the SAME contract the orchestration-participant path uses
-        // (ParticipantReasoningOptions), because an agent-as-tool never receives per-run RunOptions (AsAIFunction invokes
-        // with no options), so RunOptions.ChatOptions — the single-agent path's reasoning channel — never reaches it.
-        // Null for a model-id-only spawn, which stays as-is (no reasoning field on the wire).
+        // Profile-bound child: bake the resolved reasoning effort into the construction-time ChatOptions, gated on the child model's own thinking capability — the SAME
+        // ParticipantReasoningOptions contract the orchestration path uses, since an agent-as-tool never receives RunOptions.ChatOptions. Null for a model-id-only spawn.
         if (binding.Reasoning is { } reasoning)
         {
             chatOptions.AdditionalProperties = ParticipantReasoningOptions.Build(reasoning.ReasoningEffort,
@@ -584,18 +549,16 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             ChatOptions = chatOptions
         };
 
-        // Attach the resolved skills as a MAF progressive-disclosure provider, mirroring InvocationAgentFactory's skills
-        // path so a saved sub-agent offers its own skills on demand. Empty/null leaves the construction byte-identical to
-        // a no-skills child (no context provider attached).
+        // Attach the resolved skills as a MAF progressive-disclosure provider, mirroring InvocationAgentFactory's skills path so a saved sub-agent offers
+        // its own skills on demand. Empty or null leaves the construction byte-identical to a no-skills child, with no context provider attached.
         AttachSkillsProvider(agentOptions, binding.Skills, _logger);
 
         var agent = new ChatClientAgent(_chatClient, agentOptions, _loggerFactory);
 
         var function = agent.AsAIFunction();
 
-        // AsAIFunction forwards the outer ct into the inner run, so a cancelled parent cancels the child and an OCE
-        // propagates up to the caller's loop (no swallow, no linked CTS needed — verified by the ct-propagation spike).
-        // BeginChildScope pushes Depth+1 for the inner run WITHOUT re-seeding a root, then restores the parent context.
+        // AsAIFunction forwards the outer ct into the inner run, so a cancelled parent cancels the child and an OCE propagates to the caller's loop: no
+        // swallow, no linked CTS (Spawn_PropagatesCancellationToInnerRun). BeginChildScope pushes Depth+1 WITHOUT re-seeding a root, then restores the parent.
         var arguments = new AIFunctionArguments(StringComparer.Ordinal)
         {
             [InnerAgentInputKey] = task

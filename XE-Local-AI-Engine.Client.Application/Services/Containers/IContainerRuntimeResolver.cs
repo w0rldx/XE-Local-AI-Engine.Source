@@ -1,13 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>
-///     Answers "which container runtime, is it ready, and give me one" — the single door every application-container
-///     operation goes through.
-///     <para>
-///         It touches no persistence beyond the node settings it reads its selection from, which is what keeps it
-///         usable from the operator-facing runtime endpoint, where no application instance exists to ask about.
-///     </para>
-/// </summary>
+/// <summary>Answers "which container runtime, is it ready, and give me one" — the single door every application-container operation goes through.</summary>
+/// <remarks>
+///     It touches no persistence beyond the node settings it reads its selection from, which is what keeps it
+///     usable from the operator-facing runtime endpoint, where no application instance exists to ask about.
+/// </remarks>
 public interface IContainerRuntimeResolver
 {
     /// <summary>

@@ -1,17 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 
 /// <summary>
-///     A global ceiling on how many custom-tool runs — host commands AND HTTP fetches — may be in flight at once. The
-///     host runner deliberately drops the agent sandbox's cgroup/netns wrapper (a custom Command reaches the host by
-///     design), so this cap plus the per-run wall-clock timeout and output/body byte-cap are the affordable containment
-///     against a fan-out of concurrent runs exhausting the box or its outbound connections. Registered as a singleton
-///     so the limit is process-wide, not per-request.
-///     <para>
-///         This is a concurrency-only ceiling. A stronger per-process resource ceiling (Linux <c>rlimit</c>
-///         AS/NPROC/CPU or a Windows Job Object) would require a fork+setrlimit+exec or Job Object wrapper like the
-///         sandbox launcher. Host network stays reachable from a Command tool — stated honestly, not eliminated.
-///     </para>
+///     A process-wide singleton ceiling on how many custom-tool runs — host commands AND HTTP fetches — may be in flight at once, not a
+///     per-request one.
 /// </summary>
+/// <remarks>
+///     The host runner drops the agent sandbox's cgroup and netns wrapper, because a custom Command reaches the host by design, so this cap,
+///     the per-run wall-clock timeout and the output/body byte cap are the affordable containment against a fan-out exhausting the box.
+///     It is a concurrency-only ceiling: a stronger per-process resource ceiling (Linux <c>rlimit</c> AS/NPROC/CPU or a Windows Job Object)
+///     would need a fork+setrlimit+exec or Job Object wrapper like the sandbox launcher's. Host network stays reachable from a Command tool —
+///     stated honestly, not eliminated.
+/// </remarks>
 internal sealed class CustomToolConcurrencyLimiter : IDisposable
 {
     /// <summary>Default simultaneous host-command ceiling. Small on purpose: custom tools are an operator convenience, not a workload.</summary>

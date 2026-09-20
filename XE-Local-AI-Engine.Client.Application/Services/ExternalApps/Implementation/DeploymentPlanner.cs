@@ -8,15 +8,12 @@ using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
-/// <summary>
-///     Turns a stored manifest, the instance's decrypted variables and the host ports already held into the exact
-///     set of containers to create, in the order to create them.
-///     <para>
-///         It is the only place decrypted values exist outside the store call that read them. Nothing on this path
-///         logs a specification, a variable map or an environment dictionary, and both plan records suppress their
-///         printers for the same reason.
-///     </para>
-/// </summary>
+/// <summary>Turns a stored manifest, the instance's decrypted variables and the host ports already held into the exact set of containers to create, in the order to create them.</summary>
+/// <remarks>
+///     It is the only place decrypted values exist outside the store call that read them. Nothing on this path logs
+///     a specification, a variable map or an environment dictionary, and both plan records suppress their printers
+///     for the same reason.
+/// </remarks>
 internal static partial class DeploymentPlanner
 {
     /// <summary>The prefix of the per-service built-in carrying a service's own published host port.</summary>
@@ -36,11 +33,11 @@ internal static partial class DeploymentPlanner
 
     private const string HealthyCondition = "healthy";
 
-    /// <summary>
-    ///     Plans one deployment attempt. <paramref name="variables" /> is decrypted and <paramref name="uiHostPorts" />
-    ///     is what the port allocator is still holding, so every value a container will see is known before the first
-    ///     create — which is the whole reason the host port is chosen by the engine rather than by the daemon.
-    /// </summary>
+    /// <summary>Plans one deployment attempt from the decrypted variables and the host ports the allocator is still holding.</summary>
+    /// <remarks>
+    ///     Every value a container will see is therefore known before the first create — which is the whole reason
+    ///     the host port is chosen by the engine rather than by the daemon.
+    /// </remarks>
     /// <exception cref="ExternalAppManifestException">A dependency cycle, an unknown dependency or a mount collision.</exception>
     /// <exception cref="ExternalAppConfigurationException">An unresolved or malformed <c>${…}</c> token.</exception>
     internal static DeploymentPlan Plan(ApplicationManifest manifest,
@@ -98,9 +95,8 @@ internal static partial class DeploymentPlanner
             [InstanceIdVariable] = instanceId.ToString("N", CultureInfo.InvariantCulture)
         };
 
-        // Both bridge built-ins or neither, and only when this node actually opened a bridge. A manifest that
-        // references either token on a node without one fails plan-time validation as an undeclared token, which is
-        // the honest answer: injecting an endpoint the container cannot reach would fail later and less clearly.
+        // Both bridge built-ins or neither, and only when this node actually opened a bridge: a manifest referencing
+        // either token without one fails plan-time validation, rather than being handed an unreachable endpoint.
         if (bridgeGrant is not null)
         {
             builtIns[BridgeEndpointVariable] = bridgeGrant.Endpoint;
@@ -117,18 +113,14 @@ internal static partial class DeploymentPlanner
         return builtIns;
     }
 
-    /// <summary>
-    ///     Whether this manifest can be planned only on a node that opened the container bridge: some environment
-    ///     value substitutes <c>${XE_BRIDGE_ENDPOINT}</c> or <c>${XE_BRIDGE_TOKEN}</c>, and
-    ///     <see cref="BuildBuiltIns" /> supplies neither without a grant, so <see cref="Plan" /> would refuse it.
-    ///     <para>
-    ///         It reads the surface <see cref="Plan" /> substitutes — service environment values — through the same
-    ///         token regex, so admission and the planner cannot answer differently about one manifest. Admission
-    ///         asks it rather than calling <see cref="Plan" />: a preview holds only the variables carried forward,
-    ///         so a target that adds a newly required variable would fail a trial plan for a reason the dialog
-    ///         exists to let the operator fix.
-    ///     </para>
-    /// </summary>
+    /// <summary>Whether this manifest can be planned only on a node that opened the container bridge.</summary>
+    /// <remarks>
+    ///     Some environment value substitutes <c>${XE_BRIDGE_ENDPOINT}</c> or <c>${XE_BRIDGE_TOKEN}</c>, which
+    ///     <see cref="BuildBuiltIns" /> supplies only under a grant, so <see cref="Plan" /> would refuse it. It reads
+    ///     the surface <see cref="Plan" /> substitutes through the same token regex, so admission and the planner
+    ///     cannot answer differently. Admission asks it rather than calling <see cref="Plan" />: a preview holds only
+    ///     the variables carried forward, so a trial plan would fail over the variable the dialog exists to collect.
+    /// </remarks>
     internal static bool RequiresBridge(ApplicationManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(manifest);
@@ -139,22 +131,22 @@ internal static partial class DeploymentPlanner
                        .Any(static match => match.Groups["name"].Value is BridgeEndpointVariable or BridgeTokenVariable);
     }
 
-    /// <summary>
-    ///     The deployment order by name alone, for a caller that needs the order and nothing else a plan carries —
-    ///     a stop, which reverses it. Exposed so that caller does not have to build a whole plan, and with it a
-    ///     container identity it has no daemon to resolve against, to read one list back out.
-    /// </summary>
+    /// <summary>The deployment order by name alone, for a caller that needs the order and nothing else a plan carries — a stop, which reverses it.</summary>
+    /// <remarks>
+    ///     Exposed so that caller does not have to build a whole plan, and with it a container identity it has no
+    ///     daemon to resolve against, just to read one list back out.
+    /// </remarks>
     /// <exception cref="ExternalAppManifestException">The manifest names a duplicate, a missing or a cyclic dependency.</exception>
     internal static IReadOnlyList<string> ServiceOrder(ApplicationManifest manifest)
     {
         return [.. TopologicalOrder(manifest).Select(static service => service.Name)];
     }
 
-    /// <summary>
-    ///     Orders the services so every dependency is created before its dependants. The catalog validator rejects a
-    ///     cycle too; this is the authority for what is actually deployed, because the snapshot being deployed may
-    ///     have been admitted by an older validator.
-    /// </summary>
+    /// <summary>Orders the services so every dependency is created before its dependants.</summary>
+    /// <remarks>
+    ///     The catalog validator rejects a cycle too, but this is the authority for what is actually deployed,
+    ///     because the snapshot being deployed may have been admitted by an older validator.
+    /// </remarks>
     private static List<ApplicationService> TopologicalOrder(ApplicationManifest manifest)
     {
         if (manifest.Services.GroupBy(static service => service.Name, StringComparer.Ordinal).FirstOrDefault(static group => group.Count() > 1) is { } duplicate)
@@ -219,11 +211,12 @@ internal static partial class DeploymentPlanner
         return resolved;
     }
 
-    /// <summary>
-    ///     Resolves every <c>${NAME}</c> in one value. The three rules are asymmetric on purpose: a bare <c>$</c> is a
-    ///     literal, a <c>${</c> that does not close on a valid token is an error rather than a literal, and a
-    ///     well-formed token resolves declared value, then declared default, then built-in, then fails by name.
-    /// </summary>
+    /// <summary>Resolves every <c>${NAME}</c> in one value.</summary>
+    /// <remarks>
+    ///     The three rules are asymmetric on purpose: a bare <c>$</c> is a literal, a <c>${</c> that does not close
+    ///     on a valid token is an error rather than a literal, and a well-formed token resolves declared value, then
+    ///     declared default, then built-in, then fails by name.
+    /// </remarks>
     private static string Substitute(string value,
         string serviceName,
         Dictionary<string, ApplicationVariable> declared,
@@ -286,9 +279,8 @@ internal static partial class DeploymentPlanner
                 return fallback;
             }
 
-            // An optional variable with neither a value nor a default substitutes to the empty string, and the
-            // environment KEY is still emitted: an image that branches on "is the variable present" must see the
-            // same shape whether or not the user filled the field in.
+            // An optional variable with neither value nor default substitutes to the empty string and the environment
+            // KEY is still emitted: an image branching on "is it present" must see one shape either way.
             if (!definition.Required)
             {
                 return string.Empty;
@@ -302,11 +294,8 @@ internal static partial class DeploymentPlanner
             return builtIn;
         }
 
-        // The bridge names first, because this is the failure an operator will actually meet: a manifest that needs
-        // the bridge, installed on a node that opened none (the feature switched off, no IPv4 address, no qualifying
-        // interface, or a bind address this host does not own). Still a validation error and still refused — an
-        // endpoint the container cannot reach would fail later and less clearly — but named for the cause rather
-        // than reported as a token the user has never heard of.
+        // The bridge names first: a manifest needing the bridge on a node that opened none (feature off, no IPv4, no
+        // qualifying interface, or a bind address this host does not own) is named for the cause, not for the token.
         if (string.Equals(name, BridgeEndpointVariable, StringComparison.Ordinal)
             || string.Equals(name, BridgeTokenVariable, StringComparison.Ordinal))
         {
@@ -314,18 +303,16 @@ internal static partial class DeploymentPlanner
                                                         + $"The bridge requires '{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' and an IPv4 host interface it can bind.");
         }
 
-        // A XE_UI_HOST_PORT_<service> naming a service that publishes nothing lands here, and so does a token the
-        // manifest never declared. Both are errors rather than empty strings: a URL built from an empty port is a
-        // container that starts and then cannot be reached.
+        // A XE_UI_HOST_PORT_<service> naming a service that publishes nothing lands here, as does an undeclared token.
+        // Both are errors, never empty strings: a URL built from an empty port starts a container nothing can reach.
         throw new ExternalAppConfigurationException($"Service '{serviceName}' references '${{{name}}}', which is neither a declared variable nor a built-in.");
     }
 
-    /// <summary>
-    ///     Builds one service's mounts and proves no two of them, across the whole application, share a host
-    ///     directory. Container targets are checked within the service: two containers mounting the same path is
-    ///     ordinary, two containers backed by the same host directory is the bug the per-service layout exists to
-    ///     prevent.
-    /// </summary>
+    /// <summary>Builds one service's mounts and proves no two of them, across the whole application, share a host directory.</summary>
+    /// <remarks>
+    ///     Container targets are checked within the service: two containers mounting the same path is ordinary, two
+    ///     containers backed by the same host directory is the bug the per-service layout exists to prevent.
+    /// </remarks>
     private static IReadOnlyList<ContainerMount> BuildMounts(ApplicationService service,
         ExternalAppStoragePaths storage,
         Dictionary<string, string> hostSources)
@@ -393,11 +380,8 @@ internal static partial class DeploymentPlanner
 /// <summary>Everything one deployment attempt will create, in the order to create it.</summary>
 internal sealed record DeploymentPlan(string NetworkName, IReadOnlyList<ServiceDeployment> Services)
 {
-    // Suppressed for the same reason S0 suppresses the specification's printer: the services carry environments
-    // holding values decrypted from the instance's variables, and one LogDebug("{Plan}", plan) would write an
-    // application's admin password to the node log. See ContainerSpecification.PrintMembers for why the four
-    // analyzers are silenced rather than obeyed — every fix they suggest changes the signature into one the
-    // compiler no longer recognises as the record's printer.
+    // The services carry environments holding values decrypted from the instance's variables, so a structured log of
+    // a plan would write an admin password to the node log. Why these four analyzers: ContainerSpecification.PrintMembers.
 #pragma warning disable CA1822, S2325, S1172, IDE0060
     private bool PrintMembers(StringBuilder builder)
     {

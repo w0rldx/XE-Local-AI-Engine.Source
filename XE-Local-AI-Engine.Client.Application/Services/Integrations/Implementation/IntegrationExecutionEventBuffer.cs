@@ -51,9 +51,8 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
         _maxTracked = value.MaxTrackedExecutions;
         _ttl = value.EventBufferTtlAfterTerminal;
 
-        // The sweep lives HERE rather than in a hosted service: it needs this lock and nothing else, and a hosted
-        // service would add a registration and a lifetime to reason about for no gain. Sweeping at most once a minute,
-        // and never slower than the TTL itself, keeps a short configured TTL honest.
+        // The sweep lives HERE rather than in a hosted service: it needs this lock and nothing else, and a hosted service would add a registration and a
+        // lifetime to reason about for no gain. Sweeping at most once a minute, and never slower than the TTL itself, keeps a short configured TTL honest.
         _sweepTimer = new PeriodicTimer(_ttl < TimeSpan.FromMinutes(1) ? _ttl : TimeSpan.FromMinutes(1), _timeProvider);
         _sweepLoop = RunSweepLoopAsync();
     }
@@ -121,9 +120,8 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
             {
                 entry.Queued = false;
                 DropFromEvictionQueue(executionId);
-                // A parked reader waits on this entry's source and nothing else. Dropping the entry without completing
-                // it would leave that reader waiting on a source no writer can ever reach: it must wake, find the entry
-                // gone and answer the gap.
+                // A parked reader waits on this entry's source and nothing else, so dropping the entry without completing it would leave that reader waiting
+                // on a source no writer can reach: it must wake, find the entry gone and answer the gap.
                 Wake(entry);
             }
         }
@@ -133,9 +131,8 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(type);
 
-        // Clone OUTSIDE the lock. A caller may hand over an element whose parent JsonDocument is disposed the moment
-        // its request ends, after which reading it throws from inside the stream writer — a failure that surfaces in a
-        // different thread, slices later, in someone else's code.
+        // Clone OUTSIDE the lock: a caller may hand over an element whose parent JsonDocument is disposed the moment its request ends, after which reading it
+        // throws from inside the stream writer — a failure that surfaces on a different thread, in someone else's code.
         var owned = payload?.Clone();
 
         lock (_gate)
@@ -239,9 +236,8 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
                 return 0;
             }
 
-            // The DROPPED watermark, never just the surviving head: a single event larger than the byte cap empties the
-            // list outright, and reading the floor off an empty list reports 0 — which a reader's
-            // `sinceSequence + 1 < Floor` precheck takes for "no gap" and then silently misses every dropped event.
+            // The DROPPED watermark, never just the surviving head: a single event larger than the byte cap empties the list outright, and reading the floor
+            // off an empty list reports 0 — which a reader's floor precheck takes for "no gap" and then silently misses every dropped event.
             return entry.Events.First is { } head ? Math.Max(entry.Floor, head.Value.Event.Sequence) : entry.Floor;
         }
     }
@@ -277,10 +273,8 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
                     throw new IntegrationEventGapException(executionId, cursor);
                 }
 
-                // The R5-3 barrier. A reserved-but-unresolved sequence is about to be committed, and yielding anything
-                // above it would advance the cursor PAST it — the late publish would then fall below the cursor and be
-                // lost to this reader forever, with no gap to report it. The snapshot therefore stops short of it, and
-                // both Publish and Abandon complete the very source captured below.
+                // The R5-3 barrier: yielding above a reserved-but-unresolved sequence would advance the cursor PAST it, and the late publish would then fall
+                // below the cursor and be lost to this reader forever with no gap to report it. Both Publish and Abandon complete the source captured below.
                 var barrier = entry.Pending.Count > 0 ? entry.Pending.Min : long.MaxValue;
                 // The list is kept in sequence order, so skip-then-take is the whole selection: no index arithmetic, no
                 // contiguity assertion, and a hole simply is not there to take.
@@ -290,9 +284,8 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
                                     .ToList();
                 batch = selected.Count > 0 ? selected : null;
 
-                // Captured in the SAME acquisition as the snapshot: reading it after releasing the lock would let an
-                // append swap the source in between, leaving the reader waiting on the successor and missing what is
-                // already in the ring.
+                // Captured in the SAME acquisition as the snapshot: reading it after releasing the lock would let an append swap the source in between,
+                // leaving the reader waiting on the successor and missing what is already in the ring.
                 appended = entry.Appended.Task;
             }
 
@@ -306,9 +299,8 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
 
                     if (TerminalTypes.Contains(streamEvent.Type))
                     {
-                        // Completion is decided by the TYPE yielded, never by cursor == LastSequence: the head may name
-                        // a reservation that is still pending, and a terminal whose commit failed is followed by
-                        // another one.
+                        // Completion is decided by the TYPE yielded, never by comparing the cursor with LastSequence: the head may name a reservation that
+                        // is still pending, and a terminal whose commit failed is followed by another one.
                         yield break;
                     }
                 }
@@ -337,10 +329,8 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
 
         _sweepCancellation.Dispose();
 
-        // Host shutdown. A parked reader waits on its entry's source and nothing else, so dropping the entries without
-        // completing those sources would leave every reader waiting on one no writer can reach — waiting out its own
-        // request token instead of ending here. Wake first, then clear: the reader finds the entry gone and answers the
-        // gap, exactly as it does for Remove.
+        // Host shutdown. Dropping the entries without completing their sources would leave every parked reader waiting on one no writer can reach, waiting
+        // out its own request token instead of ending here. Wake first, then clear: the reader finds the entry gone and answers the gap, as it does for Remove.
         lock (_gate)
         {
             foreach (var entry in _entries.Values)
@@ -354,11 +344,12 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
         }
     }
 
-    /// <summary>
-    ///     Drops terminal entries whose last append is older than the TTL. ONLY terminal ones, and never one holding a
-    ///     pending reservation: a live execution that is queued, slow or loading a cold model must not be evicted out
-    ///     from under a reader. Internal so a test can drive it without waiting on the timer.
-    /// </summary>
+    /// <summary>Drops terminal entries whose last append is older than the TTL.</summary>
+    /// <remarks>
+    ///     ONLY terminal ones, and never one holding a pending reservation: a live execution that is queued, slow or
+    ///     loading a cold model must not be evicted out from under a reader. Internal so a test can drive it without
+    ///     waiting on the timer.
+    /// </remarks>
     internal int Sweep()
     {
         var cutoff = NowUnixMilliseconds() - (long)_ttl.TotalMilliseconds;

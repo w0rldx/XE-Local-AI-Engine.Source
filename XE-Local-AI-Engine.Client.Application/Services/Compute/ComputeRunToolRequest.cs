@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Compute;
 
 /// <summary>
-///     Typed projection of the <c>run_python</c> JSON arguments. The tool bridge stays JSON-in / JSON-out, so the
-///     handler deserializes into this record and validates it before anything is executed — the schema advertised to the
-///     model is advisory; this validation is authoritative.
+///     Typed projection of the <c>run_python</c> JSON arguments.
 /// </summary>
+/// <remarks>
+///     The tool bridge stays JSON-in / JSON-out, so the handler deserializes into this record and validates it before
+///     anything is executed. The schema advertised to the model is advisory; this validation is authoritative.
+/// </remarks>
 internal sealed record ComputeRunToolRequest
 {
     public string? Code { get; init; }

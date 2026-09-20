@@ -2,13 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 
 using System.Text.RegularExpressions;
 
-/// <summary>
-///     Value-based secret redaction for custom tools. The stock <c>AccessTokenQueryRedactor</c> only strips a named
-///     <c>access_token</c> query parameter; a custom tool's secrets are arbitrary operator-supplied values (secret
-///     header values, secret env values, secrets a user substitutes into a URL or body), so redaction must key off the
-///     VALUES, not names. Every known secret value is replaced with <c>[REDACTED]</c> before any string is logged or
-///     returned to the model, and URL userinfo is stripped as well.
-/// </summary>
+/// <summary>Value-based secret redaction for custom tools: every known secret VALUE, not name, is redacted.</summary>
+/// <remarks>
+///     The stock <c>AccessTokenQueryRedactor</c> only strips a named <c>access_token</c> query parameter, while a custom tool's secrets are
+///     arbitrary operator-supplied values — secret header values, secret env values, secrets substituted into a URL or body. Every known
+///     secret value is replaced with <c>[REDACTED]</c> before any string is logged or returned to the model, and URL userinfo is stripped too.
+/// </remarks>
 internal sealed partial class SecretValueRedactor
 {
     private const string Placeholder = "[REDACTED]";

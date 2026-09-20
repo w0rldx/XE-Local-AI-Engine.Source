@@ -19,38 +19,32 @@ public enum ContainerRestartMode
     UnlessStopped = 1
 }
 
-/// <summary>
-///     Everything the engine asks an application container to be.
-///     <para>
-///         A new record rather than new fields on <c>DockerContainerSpecification</c>. Every property there is
-///         <c>required</c>, and <c>DockerSandboxHardening.FindViolations</c> reads that record as the complete
-///         statement of what must be true about a Development Mode container; optional properties added for a second
-///         consumer would be fields its verifier does not check, which is how a hardening contract quietly stops
-///         covering the thing it names.
-///     </para>
-/// </summary>
+/// <summary>Everything the engine asks an application container to be.</summary>
+/// <remarks>
+///     A new record rather than new fields on <c>DockerContainerSpecification</c>: every property there is
+///     <c>required</c>, and <c>DockerSandboxHardening.FindViolations</c> reads that record as the complete statement
+///     of what must be true about a Development Mode container. Optional properties added for a second consumer
+///     would be fields its verifier does not check, which is how a hardening contract stops covering what it names.
+/// </remarks>
 public sealed record ContainerSpecification
 {
-    /// <summary>
-    ///     Content-addressed image reference: either <c>name@sha256:&lt;digest&gt;</c>, which is what the catalog
-    ///     ships, or a bare image id <c>sha256:&lt;64 lowercase hex&gt;</c>, which is what a daemon reports for an
-    ///     image built locally on a store that records no <c>RepoDigests</c>. The runtime refuses anything else —
-    ///     a tag above all — before any wire call. <c>ContainerImageReference.IsContentAddressed</c> is the rule.
-    /// </summary>
+    /// <summary>Content-addressed image reference, per <c>ContainerImageReference.IsContentAddressed</c>.</summary>
+    /// <remarks>
+    ///     Either <c>name@sha256:&lt;digest&gt;</c>, what the catalog ships, or a bare image id
+    ///     <c>sha256:&lt;64 lowercase hex&gt;</c>, what a daemon reports for an image built locally on a store
+    ///     recording no <c>RepoDigests</c>. The runtime refuses anything else — a tag above all — before any wire call.
+    /// </remarks>
     public required string Image { get; init; }
 
     /// <summary>Engine-generated container name.</summary>
     public required string Name { get; init; }
 
-    /// <summary>
-    ///     The <c>uid:gid</c> to run as, or <see langword="null" /> for the image's own default user.
-    ///     <para>
-    ///         Null in production (ADR 0010 §6): the curated images start as in-container root and drop privileges
-    ///         through their own entrypoints, and forcing a uid breaks them. A blank string is refused rather than
-    ///         read as null, because "" and null would otherwise be the same instruction written two ways and only one
-    ///         of them says what it means.
-    ///     </para>
-    /// </summary>
+    /// <summary>The <c>uid:gid</c> to run as, or <see langword="null" /> for the image's own default user.</summary>
+    /// <remarks>
+    ///     Null in production (ADR 0010 decision §6): the curated images start as in-container root and drop
+    ///     privileges through their own entrypoints, and forcing a uid breaks them. A blank string is REFUSED rather
+    ///     than read as null, because "" and null would otherwise be one instruction written two ways.
+    /// </remarks>
     public string? User { get; init; }
 
     /// <summary>Engine-owned labels identifying the owner, install, instance and service.</summary>
@@ -86,11 +80,11 @@ public sealed record ContainerSpecification
     /// <summary>The restart policy, applied once at creation.</summary>
     public required ContainerRestartMode RestartMode { get; init; }
 
-    /// <summary>
-    ///     Memory ceiling in bytes; <c>0</c> means unlimited, and V1 always passes <c>0</c>. The manifest's memory
-    ///     figures are admission-gate inputs, not per-container limits. The field stays so a later ruling needs no
-    ///     contract change and so the read-back verifier can assert the zero.
-    /// </summary>
+    /// <summary>Memory ceiling in bytes; <c>0</c> means unlimited, and V1 always passes <c>0</c>.</summary>
+    /// <remarks>
+    ///     The manifest's memory figures are admission-gate inputs, not per-container limits. The field stays so a
+    ///     later ruling needs no contract change and so the read-back verifier can assert the zero.
+    /// </remarks>
     public required long MemoryBytes { get; init; }
 
     /// <summary>CPU ceiling in nano-CPUs; <c>0</c> means unlimited, and V1 always passes <c>0</c>.</summary>
@@ -114,18 +108,14 @@ public sealed record ContainerSpecification
     /// <summary>The container's healthcheck, or null when the service declares none.</summary>
     public ContainerHealthcheck? Healthcheck { get; init; }
 
-    // The generated ToString() prints every property, and Environment holds values decrypted from the instance's
-    // stored variables — an application's admin password among them. One LogDebug("{Spec}", spec) downstream would
-    // therefore write that password to the node log. Suppressing the printer makes that impossible rather than merely
-    // forbidden, and ContainerRuntimeRecordPrintingTests asserts a known secret cannot appear.
-    //
-    // `private bool PrintMembers(StringBuilder)` and never `protected override`: on a sealed record whose base is
-    // object the compiler expects exactly this signature, and the override form does not compile here.
-    //
-    // The compiler's shape is also why four analyzers have to be silenced rather than obeyed: the printer is unused,
-    // instance-free and unimplemented BY DESIGN, and every fix they suggest — making it static, dropping the
-    // parameter — changes the signature into one the compiler no longer recognises as the record's printer, which
-    // silently restores the ToString() that prints the secrets.
+    /// <summary>Suppresses the record's generated <c>ToString()</c>, which would print an application's own secrets.</summary>
+    /// <remarks>
+    ///     <c>Environment</c> holds values decrypted from the instance's variables, an admin password among them, and
+    ///     one structured log of a specification would write it to the node log;
+    ///     <c>ContainerRuntimeRecordPrintingTests</c> asserts a known secret cannot appear. On a sealed record based on
+    ///     <c>object</c> the compiler recognises only <c>private bool PrintMembers(StringBuilder)</c>, never
+    ///     <c>protected override</c> — hence CA1822, S2325, S1172 and IDE0060: every fix restores that printer.
+    /// </remarks>
 #pragma warning disable CA1822, S2325, S1172, IDE0060
     private bool PrintMembers(StringBuilder builder)
     {
@@ -140,11 +130,11 @@ public sealed record ContainerPortPublication
     /// <summary>The port inside the container.</summary>
     public required int ContainerPort { get; init; }
 
-    /// <summary>
-    ///     The host interface to bind. Only <c>127.0.0.1</c> is accepted — not <c>::1</c>, which is a socket this
-    ///     node's own callers never connect to — and the check happens before the parameters are built:
-    ///     <c>required</c> means "assigned", not "non-empty", and an empty host IP makes Docker bind <c>0.0.0.0</c>.
-    /// </summary>
+    /// <summary>The host interface to bind; only <c>127.0.0.1</c> is accepted, not <c>::1</c>, which is a socket this node's own callers never connect to.</summary>
+    /// <remarks>
+    ///     The check happens before the wire parameters are built, because <c>required</c> means "assigned", not
+    ///     "non-empty", and an empty host IP makes Docker bind <c>0.0.0.0</c>.
+    /// </remarks>
     public required string HostIp { get; init; }
 
     /// <summary>The host port, or null to let the daemon assign one. Null is legal before start and a violation after it.</summary>

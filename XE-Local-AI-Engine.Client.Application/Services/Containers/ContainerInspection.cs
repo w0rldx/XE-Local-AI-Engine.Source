@@ -1,13 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>
-///     The daemon's health verdict for one container, in the engine's own vocabulary.
-///     <para>
-///         An unrecognised health string from the daemon maps to <see cref="None" /> and is logged once. That is not
-///         the same as "no healthcheck": a service that declared one waits until its deadline and then fails, rather
-///         than being treated as having no healthcheck at all.
-///     </para>
-/// </summary>
+/// <summary>The daemon's health verdict for one container, in the engine's own vocabulary.</summary>
+/// <remarks>
+///     An unrecognised health string maps to <see cref="None" /> and is logged once, which is not the same as "no
+///     healthcheck": a service that declared one waits until its deadline and then fails, rather than being treated
+///     as having none.
+/// </remarks>
 public enum ContainerHealthState
 {
     /// <summary>No healthcheck is declared, or the daemon reported a state this engine does not recognise.</summary>
@@ -64,15 +62,13 @@ public sealed record ContainerPublishedPort
     public required int HostPort { get; init; }
 }
 
-/// <summary>
-///     One mount the daemon actually applied.
-///     <para>
-///         Distinct from the request-side <see cref="ContainerMount" /> because the effective set is not the requested
-///         set: an image's own <c>VOLUME</c> instruction creates an anonymous volume that appears here and in no
-///         request. That is exactly the mount an application-policy verifier has to reject, since it would put
-///         application data outside the instance directory unnoticed.
-///     </para>
-/// </summary>
+/// <summary>One mount the daemon actually applied.</summary>
+/// <remarks>
+///     Distinct from the request-side <see cref="ContainerMount" /> because the effective set is not the requested
+///     set: an image's own <c>VOLUME</c> instruction creates an anonymous volume that appears here and in no
+///     request, and that is exactly the mount an application-policy verifier has to reject — it would put
+///     application data outside the instance directory unnoticed.
+/// </remarks>
 public sealed record ContainerMountView
 {
     /// <summary>The daemon's mount type, <c>bind</c> or <c>volume</c>.</summary>
@@ -88,13 +84,11 @@ public sealed record ContainerMountView
     public required bool ReadOnly { get; init; }
 }
 
-/// <summary>
-///     One row of a labelled container listing: enough to answer "is it still running, and if not why", in one call.
-///     <para>
-///         The bare id list the Development Mode client returns cannot distinguish a running container from an exited
-///         one, so an observer built on it would report a crashed application as healthy.
-///     </para>
-/// </summary>
+/// <summary>One row of a labelled container listing: enough to answer "is it still running, and if not why", in one call.</summary>
+/// <remarks>
+///     The bare id list the Development Mode client returns is NOT an alternative: it cannot distinguish a running
+///     container from an exited one, so an observer built on it would report a crashed application as healthy.
+/// </remarks>
 public sealed record ContainerSummary
 {
     /// <summary>The container id.</summary>
@@ -109,25 +103,21 @@ public sealed record ContainerSummary
     /// </summary>
     public required string State { get; init; }
 
-    /// <summary>
-    ///     The exit code, or null when the daemon did not say.
-    ///     <para>
-    ///         Nullable because the list response carries no exit-code field: the value is read out of the daemon's
-    ///         own status prose, so "absent" is a real answer and must never be read as <c>0</c>, which would report a
-    ///         crashed application as a clean exit.
-    ///     </para>
-    /// </summary>
+    /// <summary>The exit code, or null when the daemon did not say.</summary>
+    /// <remarks>
+    ///     Nullable because the list response carries no exit-code field: the value is read out of the daemon's own
+    ///     status prose, so "absent" is a real answer and must never be read as <c>0</c>, which would report a
+    ///     crashed application as a clean exit.
+    /// </remarks>
     public int? ExitCode { get; init; }
 }
 
-/// <summary>
-///     What the daemon says a container actually is, read back after creation and again after start. This is the
-///     evidence the application-container policy verifies against; "we passed the flag" is not verification.
-///     <para>
-///         It repeats the policy-relevant fields rather than embedding Development Mode's settings record: a verifier
-///         reaching through two record types for half its evidence checks the wrong half one refactor later.
-///     </para>
-/// </summary>
+/// <summary>What the daemon says a container actually is, read back after creation and again after start: the evidence the application-container policy verifies against.</summary>
+/// <remarks>
+///     "We passed the flag" is not verification. It repeats the policy-relevant fields rather than embedding
+///     Development Mode's settings record, because a verifier reaching through two record types for half its
+///     evidence checks the wrong half one refactor later.
+/// </remarks>
 public sealed record ContainerInspection
 {
     /// <summary>The container id.</summary>
@@ -136,15 +126,12 @@ public sealed record ContainerInspection
     /// <summary>The container name the daemon recorded.</summary>
     public required string Name { get; init; }
 
-    /// <summary>
-    ///     The image <em>reference</em> the container was created with — the string the caller pinned, digest and all.
-    ///     <para>
-    ///         Not the resolved image ID. The daemon reports both, and they are different answers to different
-    ///         questions: the ID says which bytes are running, the reference says which bytes were asked for, and only
-    ///         the second one can be compared against the digest-pinned reference an application manifest names. A
-    ///         verifier handed the ID would find it matches nothing it holds.
-    ///     </para>
-    /// </summary>
+    /// <summary>The image <em>reference</em> the container was created with — the string the caller pinned, digest and all.</summary>
+    /// <remarks>
+    ///     Not the resolved image ID. The daemon reports both, and they answer different questions: the ID says which
+    ///     bytes are running, the reference says which bytes were asked for, and only the second can be compared
+    ///     against the digest-pinned reference a manifest names. A verifier handed the ID matches nothing it holds.
+    /// </remarks>
     public required string Image { get; init; }
 
     /// <summary>The labels the daemon recorded.</summary>

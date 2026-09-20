@@ -6,34 +6,34 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
 /// <summary>
 ///     Resolves the identity the built-ins <c>XE_UID</c> and <c>XE_GID</c> carry into an application container.
-///     <para>
-///         This is NOT a <c>--user</c>. The engine passes no user at all: the curated images start as in-container
-///         root and drop privileges through their own <c>PUID</c>/<c>PGID</c> entrypoints, and forcing a uid breaks
-///         that and breaks a port-80 bind. What the built-ins do is tell such an image which identity to chown its
-///         data to, so that the identity it ends up running as can actually write the engine-created bind mount.
-///     </para>
-///     <para>
-///         Development Mode resolves the same question for its own containers and this deliberately does not call it.
-///         That resolver reads Development Mode's <c>ContainerSandbox</c> options, which would silently outrank
-///         <c>ExternalApps:ContainerIdentity</c>, and it throws for uid 0 on a rootful daemon — a refusal that belongs
-///         to a provider which really does pass <c>--user</c>, not to two environment values.
-///     </para>
 /// </summary>
+/// <remarks>
+///     This is NOT a <c>--user</c>: the engine passes no user at all, because the curated images start as in-container
+///     root and drop privileges through their own <c>PUID</c>/<c>PGID</c> entrypoints. The built-ins tell such an image
+///     which identity to chown its data to, so what it ends up running as can write the engine-created bind mount.
+///     Development Mode's resolver is deliberately not called: it reads <c>ContainerSandbox</c> options that would
+///     outrank <c>ExternalApps:ContainerIdentity</c>, and it throws for uid 0 on a rootful daemon.
+/// </remarks>
 public static class ExternalAppContainerIdentity
 {
     /// <summary>
     ///     The in-container id a rootless daemon maps to the invoking user, i.e. to the daemon owner's own host
-    ///     account. Zero because of that mapping, not because root is wanted: under a rootless daemon in-container
-    ///     root is an unprivileged host account, and it is the only identity that can write a bind mount the engine
-    ///     created.
+    ///     account.
     /// </summary>
+    /// <remarks>
+    ///     Zero because of that mapping, not because root is wanted: under a rootless daemon in-container root is an
+    ///     unprivileged host account, and it is the only identity that can write a bind mount the engine created.
+    /// </remarks>
     private const int RootlessMappedId = 0;
 
     /// <summary>
     ///     On Windows and macOS the engine is a native host process while the container is Linux, so the host's own
-    ///     account identifiers name nothing inside it. 1000 is the conventional first non-root Linux account, and an
-    ///     operator whose image expects another id sets <c>ExternalApps:ContainerIdentity</c>.
+    ///     account identifiers name nothing inside it.
     /// </summary>
+    /// <remarks>
+    ///     1000 is the conventional first non-root Linux account, and an operator whose image expects another id sets
+    ///     <c>ExternalApps:ContainerIdentity</c>.
+    /// </remarks>
     internal const int DesktopDefaultId = 1000;
 
     /// <summary>

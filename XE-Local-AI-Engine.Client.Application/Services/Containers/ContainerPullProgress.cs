@@ -1,14 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>
-///     Where an image pull has got to, aggregated from the daemon's per-layer stream.
-///     <para>
-///         An application image is large and the pull is the slowest thing a first install does, so this is the only
-///         evidence a user has that the install is working rather than hung. The byte counters are best-effort: the
-///         daemon reports a total for some layers and not others, so <see cref="TotalBytes" /> of <c>0</c> means "the
-///         daemon did not say" and a caller must render the layer counts instead of a false percentage.
-///     </para>
-/// </summary>
+/// <summary>Where an image pull has got to, aggregated from the daemon's per-layer stream.</summary>
+/// <remarks>
+///     An application image is large and the pull is the slowest thing a first install does, so this is the only
+///     evidence a user has that the install is working rather than hung. The byte counters are best-effort: the
+///     daemon reports a total for some layers and not others, so <see cref="TotalBytes" /> of <c>0</c> means "the
+///     daemon did not say" and a caller must render the layer counts rather than a false percentage.
+/// </remarks>
 public sealed record ContainerPullProgress
 {
     /// <summary>The digest-pinned image being pulled.</summary>

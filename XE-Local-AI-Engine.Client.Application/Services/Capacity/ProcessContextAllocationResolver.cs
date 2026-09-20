@@ -19,12 +19,12 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
 {
     private const int MaximumAutomaticDownTiers = 2;
 
-    /// <summary>
-    ///     The largest window the chat fallback will select when no tier fits with the model's weights resident. Kept in
-    ///     step with the application's default conversation window (<c>ConversationContextBudgetOptions.DefaultContextTokens</c>,
-    ///     8192) so the conversation budgeter's reserved output floor and always-keep turns still leave usable room for a
-    ///     system prompt, tool definitions, and history.
-    /// </summary>
+    /// <summary>The largest window the chat fallback will select when no tier fits with the model's weights resident.</summary>
+    /// <remarks>
+    ///     Kept in step with the application's default conversation window (<c>ConversationContextBudgetOptions.DefaultContextTokens</c>,
+    ///     8192), so the conversation budgeter's reserved output floor and always-keep turns still leave usable room for a system prompt,
+    ///     tool definitions and history.
+    /// </remarks>
     private const int FallbackContextCeilingTokens = 8192;
 
     private readonly ConcurrentDictionary<string, HardwareAllocationContext> _hardwareAllocationContexts =
@@ -348,9 +348,8 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
 
         foreach (var candidate in candidates)
         {
-            // The tier is chosen against the fp16 estimate even when the caller named a quantized KV type. That keeps
-            // the guarantee the whole option rests on — a quantized request can only ever reserve LESS — because a
-            // quantized tier walk could otherwise SELECT a larger window and end up booking more bytes than fp16 would.
+            // The tier is chosen against the fp16 estimate even when the caller named a quantized KV type, keeping the guarantee the whole option rests
+            // on — a quantized request can only ever reserve LESS — because a quantized tier walk could SELECT a larger window and book more bytes.
             var context = CapAndAlign(candidate, trainCeiling);
             var allocation = BuildAllocation(key, contentIdentity, context, trainCeiling, source, variant, profile, facts,
                 processGpuBudget, kvCacheQuant: null);
@@ -367,25 +366,14 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         return BuildAllocation(key, contentIdentity, fallback, trainCeiling, source, variant, profile, facts, processGpuBudget, kvCacheQuant);
     }
 
-    /// <summary>
-    ///     The window to launch with when no tier fits the stable budgets with the model's weights resident.
-    ///     <para>
-    ///         That situation does not mean the model cannot run: llama.cpp splits layers across the GPU and system RAM
-    ///         (and memory-maps the rest from disk) rather than refusing to launch, and the weights term that overflowed
-    ///         does not shrink with the context window — so collapsing to the smallest tier buys nothing and costs
-    ///         everything. At 2048 tokens the conversation budgeter's reserved output floor claims half the window, the
-    ///         agent scaffold alone overflows the always-keep set, and every send fails with a context-budget error that
-    ///         reads as an application bug rather than an oversized model.
-    ///     </para>
-    ///     <para>
-    ///         So the fallback walks down from the default conversation window instead, keeping the largest tier whose
-    ///         window-scaled cost — the KV cache plus its share of the safety margin, i.e. everything the estimate adds
-    ///         over a zero-context estimate — still fits the combined GPU + RAM budget the split placement draws on. It
-    ///         never selects ABOVE that ceiling (no tier fit, so this is a degraded launch, not an opportunity), and it
-    ///         still bottoms out at the smallest tier on a host that cannot hold even the KV cache. Auxiliary roles carry
-    ///         a single configured window rather than a ladder, so they are returned unchanged.
-    ///     </para>
-    /// </summary>
+    /// <summary>The window to launch with when no tier fits the stable budgets with the model's weights resident.</summary>
+    /// <remarks>
+    ///     Collapsing to the smallest tier buys nothing — llama.cpp splits layers across GPU and system RAM rather than refusing to launch,
+    ///     and the weights term that overflowed does not shrink with the window — so the walk starts at
+    ///     <see cref="FallbackContextCeilingTokens" /> and never selects ABOVE it, this being a degraded launch rather than an opportunity.
+    ///     The ladder, the window-scaled cost it scores and the 2048-token failure it avoids are in
+    ///     <c>docs/wiki/03-local-runtime-and-providers.md</c> ("2.8 Process context allocation and the fallback window").
+    /// </remarks>
     private int ResolveFallbackContextTokens(ModelRole role,
         IReadOnlyList<int> candidates,
         GgufModelFootprintFacts facts,
@@ -470,12 +458,14 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     }
 
     /// <summary>
-    ///     The reserve-adjusted budgets this resolver scores against, plus the synthetic profile that pins the estimator
-    ///     to exactly those budgets. The process GPU budget has already been probed per backend and had the reserve taken
-    ///     off it, so the raw free-VRAM reading is cleared from the profile: the estimator prefers a free-VRAM figure
-    ///     when one is present, and leaving it here would silently score against a global reading this resolver has
-    ///     deliberately narrowed to a per-process one.
+    ///     The reserve-adjusted budgets this resolver scores against, plus the synthetic profile that pins the estimator to exactly those
+    ///     budgets.
     /// </summary>
+    /// <remarks>
+    ///     The process GPU budget has already been probed per backend and had the reserve taken off it, so the raw free-VRAM reading is
+    ///     cleared from the profile: the estimator prefers a free-VRAM figure when one is present, and leaving it here would silently score
+    ///     against a global reading this resolver has deliberately narrowed to a per-process one.
+    /// </remarks>
     private static EstimationContext BuildEstimationContext(GpuVariant variant, HardwareProfile profile, long? processGpuBudget)
     {
         var useGpu = variant != GpuVariant.Cpu
@@ -573,11 +563,10 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     }
 
     /// <summary>
-    ///     The deterministic context-window override in force for this resolution: the request-scoped explore override
-    ///     when one was supplied, otherwise the never-bound
-    ///     <see cref="LlamaServerLaunchPolicyOptions.DeterministicContextTokensOverride" />. The request wins, so an
-    ///     operator benchmark explore pins its own window without touching options that outlive the call.
+    ///     The deterministic context-window override in force for this resolution: the request-scoped explore override when one was supplied,
+    ///     otherwise the never-bound <see cref="LlamaServerLaunchPolicyOptions.DeterministicContextTokensOverride" />.
     /// </summary>
+    /// <remarks>The request wins, so an operator benchmark explore pins its own window without touching options that outlive the call.</remarks>
     private int? ResolveDeterministicOverride(ResolvedLaunchArguments resolved)
     {
         return resolved.ExploreContextTokensOverride ?? _options.DeterministicContextTokensOverride;

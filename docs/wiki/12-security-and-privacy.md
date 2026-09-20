@@ -97,6 +97,31 @@ The marker used across redactors is the literal `[REDACTED]` (and `[REDACTED:…
 
 **Maintainer rule:** any new field that can carry a credential, host path, command, or URL toward the browser, logs, or a saved transcript must pass through (or extend) a redactor. When in doubt, clamp to a generic reason like `McpServerConnectionManager.Redact` does.
 
+### 2.3 Secret files and secret columns: one protector per purpose, 0600 at create, quarantine on failure
+
+Four stores hold credential material outside the chat columns — `CloudCredentialStore`, `CodexTokenStore`,
+`EntraTokenCacheStore` / `EntraAuthCodeAccountStore`, and `ExternalProviderStore` — and they share one posture.
+
+- **One protector per purpose.** Each store derives its own Data Protection purpose, so a blob written for one store can
+  never be decrypted as another's. Don't collapse two stores onto a shared purpose.
+- **A secret file is created at 0600, in the same syscall that creates it.** `File.WriteAllBytesAsync` creates at the
+  process umask — 0644 on a default Linux or macOS box — and narrowing it afterwards leaves a window in which another
+  local user can read the file. `CloudCredentialStore.WriteProtectedPayloadAsync` therefore passes
+  `FileStreamOptions.UnixCreateMode`, which closes that window. `UnixCreateMode` applies only on *create*, so
+  `SecureFilePermissions.Apply` still runs afterwards to narrow a pre-existing file left at 0644. This is the same
+  discipline `node.key` follows (§2.1).
+- **A decryption failure quarantines the blob rather than propagating.** A row or file that no longer decrypts — a
+  rotated operator secret, a corrupted write — would otherwise fail every later save's read-modify-write. The store
+  moves it aside and reports the credential as *missing*, not *unreadable*: quarantined means gone.
+
+**API keys are hashed, not KDF'd.** `IntegrationApiKeyService` (and `McpServerApiKeyService`) mint 256 bits of CSPRNG
+output, persist a single **unsalted SHA-256** of the key's UTF-8 bytes, and compare in constant time. A password KDF is
+deliberately not used: there is no guess space to slow down against 256 random bits, and it would add latency to every
+authenticated request. The corollary is that the key itself must never be low-entropy or operator-chosen. Verification
+resolves the row by its plaintext display prefix, because the digest column is encrypted at rest and cannot be queried,
+and every malformed bearer value is guarded *before* it is sliced — an unguarded slice turns a one-character token into a
+500 where a 401 is required, reachable by anyone who can reach the route.
+
 ---
 
 ## 3. Local admin API: loopback-only, Host/Origin-strict, authenticated, fail-closed
@@ -369,11 +394,34 @@ means for the security posture.
 
 ---
 
+**The bridge token's shape is a credential plus a lookup key.** `ContainerBridgeToken` mints
+`<instance id, "N" format>.<base64url of 32 CSPRNG bytes>`. The instance id travels **in the clear, in front**, so
+verification is a keyed row read rather than a scan of every installed application's secret. That is not a weakening:
+the id is not the credential, the 256 bits behind the separator are, and a scan would compare the presented secret
+against rows it was never meant for. Base64url — no padding, no `+`, `/` or `=` — so the token survives an environment
+variable, a container's own config file and an HTTP header untouched, and all three are on the path to the application.
+`ContainerBridge:BindAddress` refusing a wildcard is the bridge's own half of the §3.4 startup bind guard: the guard
+treats a wildcard bind as non-loopback and shuts the node down, so a bridge that accepted one would either be killed at
+startup or, worse, expand to an address the operator never chose.
+
 **Maintainer rules:**
 - Mount any new local-admin route under `/api/local/v1` so the middleware covers it; routes outside that prefix are *not* loopback-gated by this middleware. The container bridge (§3.5) is the one reviewed exception, and it carries its own peer guard and token gate in place of this middleware.
 - Keep the Origin check fail-closed — never widen `AllowedHosts` to a public address.
 - Apply an authorization policy in addition to the loopback gate; do not rely on loopback alone.
 - Do not add forwarded-headers middleware or a reverse proxy in front of this surface, and do not set `Security:AllowNonLoopbackBind` to enable a routable/headless deployment — those configurations are unsupported (§3.1).
+
+### 3.6 The loopback OAuth callback listener (`LoopbackAuthorizationCodeListener`)
+
+The Entra ID authorization-code sign-in needs a redirect target, and RFC 8252 §7.3 requires a native app's redirect URI
+to be a **loopback** interface. `LoopbackAuthorizationCodeListener` is a one-shot `HttpListener` that is bound only when
+a sign-in starts and stopped immediately after the single callback or a timeout — never left listening between sign-ins.
+`Start` re-validates that the URI is an absolute http(s) URI on a loopback host even though callers must already have
+passed `EntraAuthCodeDefaults.TryValidateRedirectUri`; that is defence in depth, not a duplicate.
+
+The response page is a **fixed static string** and never reflects any query-parameter content back. An attacker who can
+make the operator's browser hit this loopback port with a crafted query string must not be able to inject markup or
+script into the page it returns. AAD's own `error` / `error_description` text (RFC 6749 §4.1.2.1) is truncated to a
+single line before it is ever logged, and the callback page never renders it regardless.
 
 ---
 
@@ -437,6 +485,8 @@ playbook analysis/evaluation flow and the adaptive-memory extraction loop; the w
 ### Two recent subsystems have explicit egress boundaries
 
 - **Voice / text-to-speech delegates to Web Speech.** The repository makes no voice-model request, ships no voice inference runtime, and does not post generated audio to the node. Synthesis is provided by the browser/operating-system speech implementation; its installed voices, offline support, and any service network traffic are outside repository control. See [React Client](10-react-client.md).
+- **An external connection's connect-time probe refuses a redirect.** `ExternalProviderProbeService` sends its probe with automatic redirects disabled, the same class of control `CustomToolSsrfGuard` applies to a custom-tool fetch: a probe that followed a redirect would carry the operator's key to whatever host the endpoint named. The probe may fall back to the stored key when the request supplies none, so testing an existing connection does not require re-typing the secret; that fallback is exactly why the redirect refusal is load-bearing.
+- **Payloads that arrive from outside are fenced before a model reads them.** An integration's caller-supplied seed, the prior outputs replayed into a caller-managed session, and a `emit_output` payload replayed on a later turn all pass through `UntrustedContentFraming` before they re-enter the model's context. The fence carries a server-secret-derived nonce the caller cannot forge, and the framing is what separates "data an external caller sent" from "an instruction the node authored".
 - **Inference profiling / machine key is local-only, per-box.** The per-machine launch-tuning profiles ([Local Runtime & Providers](03-local-runtime-and-providers.md)) are keyed by a `MachineKeyProvider` identifier that is a **local-only random id** — never hardware-derived, and `IMachineKeyProvider` documents it must **NEVER** be emitted in telemetry, aggregates, or logs. The profiles themselves hold only structural launch args (no secrets) and never leave the node. Keep the machine key off every outbound DTO/aggregate.
 
 ### Custom Tools: operator-authored execution boundary
@@ -471,8 +521,11 @@ access is the feature. It never invokes a shell, expands each template item to e
 `ProcessStartInfo.ArgumentList` element, clears the inherited worker environment, overlays only an allowlist plus the
 tool's fixed environment, enforces a 1–300 second timeout (30-second default), tree-kills on cancellation/timeout, and
 caps each captured stream at 64 KiB. `HostExecutableGuard.Validate()` runs both while authoring and immediately before
-launch: absolute path only, no shell/interpreter/script, existing regular file, symlink/reparse rejection. On Linux a
-small check-to-`execve` TOCTOU window remains, and host commands retain the signed-in user's filesystem and network
+launch: absolute path only, no shell/interpreter/script, existing regular file, symlink/reparse rejection. The Linux
+regular-file check uses `statx` with `AT_SYMLINK_NOFOLLOW`, because a raw `(FileOptions)` cast for the flag throws. That
+check and the later `Process.Start()` re-resolve the same path string as two separate syscalls, so a
+small check-to-`execve` TOCTOU window remains — eliminating it would need `open(O_NOFOLLOW|O_PATH)+fstat+fexecve`, so
+validation and execution share one open file description — and host commands retain the signed-in user's filesystem and network
 rights with no per-process CPU/memory ceiling. Approval, time/output/concurrency bounds, and explicit acknowledgement
 reduce risk; they do not create OS isolation.
 
@@ -629,6 +682,7 @@ What a security reader needs from this page:
 - **Catalog trust is curation plus HTTPS plus digests. There is no signing in V1.** A configured refresh URL must be
   `https://`, with plain HTTP accepted only for `127.0.0.1`, `::1` and `localhost`; redirects are not followed, and a
   document that fails any validator rule is rejected whole.
+- **A secret variable's value is masked on the way out, and that is what makes the at-rest AEAD mean anything.** Stored variables hold an application's admin password and API keys, AEAD-encrypted at rest in `ExternalAppInstance.VariablesJson`. There is no editing reason to read one back — the settings form needs the variable *definitions*, never the values — so every secret value leaves the node as the single `ExternalAppVariableMask.Value` sentinel, and a configure or update that sends the sentinel back means "keep what is stored". Without the mask, anything holding a session could read the plaintext and the encryption would protect only the disk. It is one symbol shared by both sides on purpose: a mask the write side did not recognise would silently store the placeholder as the password.
 - **The kill switch is a surface switch, not a stop button.** `ExternalApps:Enabled=false` 404s every route and the
   hub negotiate at the request-path middleware, ahead of the security middleware, so the switch cannot be probed by
   status code. It does not stop running containers and does not hide the navigation group, which is compile-time.

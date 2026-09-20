@@ -22,13 +22,8 @@ internal sealed partial class SubAgentSpawnService
             _mcpToolRegistry,
             _logger);
 
-        // Two unconditional strips, both structural — a curated child tool is never one of these:
-        //   (1) DEPTH CAP: spawn_subagent, so a child can never spawn (mirrored by the runtime Depth guard).
-        //   (2) NO HITL ROUTE: any ApprovalRequiredAIFunction. A child runs as an agent-as-tool via
-        //       AsAIFunction, which invokes with no per-run options and no approval round-trip — an approval-gated tool
-        //       would surface a ToolApprovalRequestContent the child can never answer, silently failing every call to it.
-        //       The tools are DROPPED (and warned, naming them), never unwrapped to auto-execute — unwrapping would
-        //       bypass the approval control the offer/registry/MCP policy asserted.
+        // Two unconditional strips, both structural: spawn_subagent — the DEPTH CAP, mirrored by the runtime Depth guard — and any ApprovalRequiredAIFunction,
+        // because a child run via AsAIFunction has NO HITL ROUTE and fails every such call silently. Dropped and warned by name, never unwrapped to auto-execute.
         var curated = SubAgentSpawnPolicy.RemoveUnsupportedChildTools(offeredExecutables, out var droppedApprovalTools);
         if (droppedApprovalTools.Count > 0)
         {
@@ -40,19 +35,17 @@ internal sealed partial class SubAgentSpawnService
         return curated;
     }
 
-    // Builds a MAF AgentSkillsProvider from the resolved node skills and attaches it to the child agent's options,
-    // mirroring InvocationAgentFactory.BuildAgent's skills path (frontmatter + body-as-instructions + bundled
-    // resources; scripts are never registered). Empty/null is a no-op so a no-skills child stays byte-identical. The
-    // child receives the parent's ALREADY-RESOLVED skill set, so an imported skill arrives fenced — the trust decision
-    // was taken once at the resolver and is not re-taken, or reversed, here.
-    //
-    // Skill-tool approval is waived for children, and only for children. MAF gates load_skill, read_skill_resource and
-    // run_skill_script behind approval by default, but these tools arrive through AIContextProviders and so bypass
-    // CurateChildTools, which strips approval-required tools precisely because a spawned child has no human-in-the-loop
-    // route. Left at the default a child would be handed a load_skill it can never get approved: every call fails
-    // silently and an assigned skill is simply unreachable. The parent's approval of the spawn is the consent, and the
-    // child's skill set is the parent's resolved set — no wider. run_skill_script keeps its gate: inline skills cannot
-    // carry scripts (AddScript takes only a delegate), so the tool always fails closed and must never be pre-approved.
+    /// <summary>
+    ///     Builds a MAF <c>AgentSkillsProvider</c> from the resolved node skills (frontmatter, body-as-instructions, bundled resources; never
+    ///     scripts) and attaches it to the child's options, mirroring <c>InvocationAgentFactory.BuildAgent</c>.
+    /// </summary>
+    /// <remarks>
+    ///     Empty or null is a no-op, so a no-skills child stays byte-identical. The child receives the parent's ALREADY-RESOLVED skill set, so
+    ///     an imported skill arrives fenced: that trust decision is taken once at the resolver and is neither re-taken nor reversed here.
+    ///     <c>load_skill</c> and <c>read_skill_resource</c> have their MAF approval waived for children and only for children, because these
+    ///     tools arrive through <c>AIContextProviders</c> and so bypass <c>CurateChildTools</c>; <c>run_skill_script</c> keeps its gate. See
+    ///     <c>docs/wiki/04-agent-mode.md</c> ("4.4 The sub-agent waiver").
+    /// </remarks>
     private static void AttachSkillsProvider(ChatClientAgentOptions agentOptions,
         IReadOnlyList<ResolvedSkill>? skills,
         ILogger<SubAgentSpawnService> logger)
@@ -62,10 +55,8 @@ internal sealed partial class SubAgentSpawnService
             return;
         }
 
-        // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped [Experimental] in Microsoft.Agents.AI
-        // in 1.8.0. The scoped MAAI001 suppression remains at the pinned version (Directory.Packages.props) until
-        // explicit graduation evidence is available. Reached only when the child agent has assigned skills, the
-        // same scoped suppression InvocationAgentFactory uses.
+        // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped [Experimental] in Microsoft.Agents.AI 1.8.0, so the scoped suppression
+        // stays at the pinned version (Directory.Packages.props) until explicit graduation evidence — the same scoped suppression InvocationAgentFactory uses.
 #pragma warning disable MAAI001
         var inlineSkills = new AgentInlineSkill[resolvedSkills.Count];
         for (var index = 0; index < resolvedSkills.Count; index++)
@@ -79,9 +70,8 @@ internal sealed partial class SubAgentSpawnService
                 allowedTools: skill.AllowedTools,
                 metadata: ToFrontmatterMetadata(skill.Metadata));
 
-            // Registered BEFORE the provider below is constructed: the provider renders a skill's <available_resources>
-            // block from the resources present when it first resolves the skill, so one added afterwards would be
-            // readable but never advertised. Mirrors InvocationAgentFactory.BuildInlineSkill.
+            // Registered BEFORE the provider below is constructed: it renders a skill's <available_resources> block from the resources present when it
+            // first resolves the skill, so one added afterwards would be readable but never advertised. Mirrors InvocationAgentFactory.BuildInlineSkill.
             if (skill.Resources is { Count: > 0 } resources)
             {
                 foreach (var resource in resources)

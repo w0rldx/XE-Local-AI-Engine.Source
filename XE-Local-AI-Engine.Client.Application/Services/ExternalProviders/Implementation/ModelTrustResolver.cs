@@ -98,9 +98,8 @@ public sealed class ModelTrustResolver : IModelTrustResolver
         }
         catch (Exception exception)
         {
-            // Swallowed to Unresolved rather than propagated: the gates that call this must reach a decision, and the
-            // decision a failure earns is "withhold". Warning, not Debug — an unreadable external store is a real
-            // configuration fault the operator has to see, unlike a routine miss.
+            // Swallowed to Unresolved rather than propagated: the gates that call this must reach a decision, and the decision
+            // a failure earns is "withhold". Warning, not Debug — an unreadable external store is a configuration fault the operator has to see.
             _logger.LogWarning(exception, "External provider trust for '{ModelId}' could not be resolved; failing closed to cloud locality.", modelId);
             return null;
         }

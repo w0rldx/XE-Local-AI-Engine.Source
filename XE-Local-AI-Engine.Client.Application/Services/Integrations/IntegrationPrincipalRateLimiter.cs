@@ -5,19 +5,14 @@ using System.Threading.RateLimiting;
 /// <summary>
 ///     The per-principal request ceiling for the external integration API, consulted INSIDE the hand-mapped handlers
 ///     after authentication.
-///     <para>
-///         It exists because the route-level policy cannot do this job: <c>UseRateLimiter</c> runs before
-///         <c>UseAuthentication</c>, so at partition time there is no principal to partition on and every caller on a
-///         loopback-only surface shares one bucket. That layer is therefore a coarse per-IP abuse ceiling
-///         (<c>IntegrationOptions.IpRateLimitPerMinute</c>, 6,000/min) and this one is where fairness lives: one
-///         integrator exhausting its window must not refuse another (ruling R5-5).
-///     </para>
-///     <para>
-///         <b>Register as a singleton THROUGH A FACTORY so the container disposes it.</b> The wrapped
-///         <see cref="PartitionedRateLimiter{TResource}" /> starts a replenishment timer that is never collected, and an
-///         undisposed one roots the whole host graph — the leak the auth rate limiter's own comment documents.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The route-level policy cannot do this job: <c>UseRateLimiter</c> runs before <c>UseAuthentication</c>, so at
+///     partition time there is no principal and every caller shares one bucket. That layer is a coarse per-IP abuse
+///     ceiling (<c>IntegrationOptions.IpRateLimitPerMinute</c>, 6,000/min) and this one is where fairness lives: one
+///     integrator exhausting its window must not refuse another (ruling R5-5). Register it as a singleton THROUGH A
+///     FACTORY so the container disposes it — the wrapped limiter's replenishment timer otherwise roots the host graph.
+/// </remarks>
 public sealed class IntegrationPrincipalRateLimiter : IDisposable
 {
     private readonly PartitionedRateLimiter<string> _limiter;

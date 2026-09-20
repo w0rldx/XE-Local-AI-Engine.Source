@@ -1,16 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>
-///     Configuration for the application-container runtime layer (ADR 0010). Engine-owned throughout: nothing here is
-///     supplied by a catalog manifest, by a repository or by an agent.
-///     <para>
-///         It is deliberately separate from Development Mode's <c>Development:ContainerSandbox</c> section even though
-///         both end up talking to the same daemon. The two consumers have opposite time budgets — a build sandbox is
-///         created and torn down inside a request, an application image pull runs for half an hour — so one shared set
-///         of timeouts would have to be sized for the slower one, which would leave a dead Development Mode preflight
-///         hanging for minutes.
-///     </para>
-/// </summary>
+/// <summary>Configuration for the application-container runtime layer (ADR 0010), engine-owned throughout: nothing here comes from a catalog manifest, a repository or an agent.</summary>
+/// <remarks>
+///     Deliberately separate from Development Mode's <c>Development:ContainerSandbox</c> section even though both
+///     talk to the same daemon. The two consumers have opposite time budgets — a build sandbox is created and torn
+///     down inside a request, an application image pull runs for half an hour — so one shared set of timeouts would
+///     be sized for the slower one and leave a dead Development Mode preflight hanging for minutes.
+/// </remarks>
 // A record rather than a plain options class so a caller can derive a variant with `with`. Configuration binding is
 // unaffected: it uses the parameterless constructor and the init setters exactly as it would for a class.
 public sealed record ContainerRuntimeOptions
@@ -18,11 +14,11 @@ public sealed record ContainerRuntimeOptions
     /// <summary>The configuration section these options bind to.</summary>
     public const string SectionName = "ContainerRuntime";
 
-    /// <summary>
-    ///     Explicit daemon endpoint, or null to let discovery resolve one. A <c>unix://</c> URI, a <c>npipe://</c> URI
-    ///     or an absolute socket path; a remote transport is refused by the resolver rather than here, because the
-    ///     refusal has to cover a <c>DOCKER_HOST</c> that this setting never sees.
-    /// </summary>
+    /// <summary>Explicit daemon endpoint, or null to let discovery resolve one: a <c>unix://</c> URI, a <c>npipe://</c> URI or an absolute socket path.</summary>
+    /// <remarks>
+    ///     A remote transport is refused by the resolver rather than here, because the refusal has to cover a
+    ///     <c>DOCKER_HOST</c> that this setting never sees.
+    /// </remarks>
     public string? DaemonEndpoint { get; init; }
 
     /// <summary>

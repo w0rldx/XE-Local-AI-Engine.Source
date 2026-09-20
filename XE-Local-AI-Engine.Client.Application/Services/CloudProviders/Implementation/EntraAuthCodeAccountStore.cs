@@ -6,11 +6,14 @@ using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Encrypted at-rest store for the Entra ID authorization-code sign-in's MSAL home-account-id, mirroring
-///     <see cref="EntraTokenCacheStore" />: DataProtection at rest, Windows user-only file security, *nix
-///     <c>0600</c>. A dedicated protector purpose and file keep it from colliding with the device-code /
-///     interactive-browser <see cref="EntraTokenCacheStore" /> and the API-key-shaped <see cref="CloudCredentialStore" />.
+///     Encrypted at-rest store for the Entra ID authorization-code sign-in's MSAL home-account-id: DataProtection at
+///     rest, Windows user-only file security, *nix <c>0600</c>.
 /// </summary>
+/// <remarks>
+///     Mirrors <see cref="EntraTokenCacheStore" />. A dedicated protector purpose and file keep it from colliding with
+///     the device-code / interactive-browser <see cref="EntraTokenCacheStore" /> and the API-key-shaped
+///     <see cref="CloudCredentialStore" />.
+/// </remarks>
 public sealed class EntraAuthCodeAccountStore : IEntraAuthCodeAccountStore, IDisposable
 {
     private const string ProtectorPurpose = "WorkerNode.EntraId.AuthCodeHomeAccountId.v1";

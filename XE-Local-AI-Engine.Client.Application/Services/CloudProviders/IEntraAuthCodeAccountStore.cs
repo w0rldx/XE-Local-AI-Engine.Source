@@ -2,10 +2,13 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 /// <summary>
 ///     Persistence boundary for the single Entra ID authorization-code sign-in's MSAL home-account-id (silent-auth
-///     resume). Parallel to <see cref="IEntraTokenCacheStore" />, which is shaped around Azure.Identity's
-///     <see cref="Azure.Identity.AuthenticationRecord" /> — MSAL's <c>IAccount</c> is looked up from
-///     <c>IClientApplicationBase.GetAccountsAsync()</c> by this id, never persisted itself. Carries no token value.
+///     resume). Carries no token value.
 /// </summary>
+/// <remarks>
+///     Parallel to <see cref="IEntraTokenCacheStore" />, which is shaped around Azure.Identity's
+///     <see cref="Azure.Identity.AuthenticationRecord" />: MSAL's <c>IAccount</c> is looked up from
+///     <c>IClientApplicationBase.GetAccountsAsync()</c> by this id, never persisted itself.
+/// </remarks>
 public interface IEntraAuthCodeAccountStore
 {
     /// <summary>Loads the stored home account id, or <see langword="null" /> if none / undecryptable.</summary>

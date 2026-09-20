@@ -7,13 +7,15 @@ using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Encrypted at-rest store for the Entra ID <see cref="AuthenticationRecord" />, mirroring
-///     <c>CodexTokenStore</c>: DataProtection at rest, Windows user-only file security, *nix <c>0600</c>. A dedicated
-///     protector purpose and a separate <c>.enc</c> file keep it from colliding with the API-key-shaped
-///     <see cref="CloudCredentialStore" />. The record carries no token value — only the account descriptor Azure.
-///     Identity needs to attempt silent auth — but is still treated as sensitive (account identifiers) and never
-///     logged.
+///     Encrypted at-rest store for the Entra ID <see cref="AuthenticationRecord" />: DataProtection at rest, Windows
+///     user-only file security, *nix <c>0600</c>.
 /// </summary>
+/// <remarks>
+///     Mirrors <c>CodexTokenStore</c>. A dedicated protector purpose and a separate <c>.enc</c> file keep it from
+///     colliding with the API-key-shaped <see cref="CloudCredentialStore" />. The record carries no token value — only
+///     the account descriptor Azure.Identity needs to attempt silent auth — but is still treated as sensitive (account
+///     identifiers) and never logged.
+/// </remarks>
 public sealed class EntraTokenCacheStore : IEntraTokenCacheStore, IDisposable
 {
     private const string ProtectorPurpose = "WorkerNode.EntraId.AuthenticationRecord.v1";

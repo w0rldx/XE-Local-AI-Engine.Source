@@ -5,12 +5,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 /// <summary>
-///     Reads the stored cloud configuration to classify model ids. The three local-model endpoints (list, details,
-///     select) each used to carry their own copy of this read plus its best-effort catch; the catch now lives here
-///     only. Log LEVELS differ by call site on purpose: a failed classification degrades silently (Debug — the details
+///     Reads the stored cloud configuration to classify model ids.
+/// </summary>
+/// <remarks>
+///     The best-effort catch lives here only, not in each of the three local-model endpoints (list, details, select).
+///     Log LEVELS differ by call site on purpose: a failed classification degrades silently (Debug — the details
 ///     endpoint polls per selected model and would flood the console), while a failed model-list read is unexpected
 ///     enough to warrant a Warning.
-/// </summary>
+/// </remarks>
 public sealed class CloudModelResolver : ICloudModelResolver
 {
     private readonly ICloudCredentialStore _cloudCredentialStore;
@@ -37,9 +39,8 @@ public sealed class CloudModelResolver : ICloudModelResolver
             return false;
         }
 
-        // An external model is cloud unless it is POSITIVELY declared local. Unresolved counts as cloud here for the
-        // same reason it does everywhere else: this answer feeds egress cues and gates, and "we could not tell" must
-        // never render as "it stays on the machine".
+        // An external model is cloud unless POSITIVELY declared local, and unresolved counts as cloud as it does everywhere
+        // else: this answer feeds egress cues and gates, and "we could not tell" must never render as "it stays on the machine".
         if (ExternalModelId.HasExternalScheme(modelName))
         {
             return await _modelTrustResolver.ResolveAsync(modelName, cancellationToken) != ModelTrustLocality.Local;

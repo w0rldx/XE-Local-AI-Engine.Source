@@ -117,19 +117,8 @@ internal sealed partial class ExternalAppService : IExternalAppService
 
             RequireFingerprint(target, command.ManifestVersion, command.ManifestSha256);
 
-            // The BACKFILL, and the admission-time refusal that has to come with it.
-            //
-            // A row installed before the bridge existed carries no token (Odysseus v4 → v5 is the shape), and a
-            // target whose manifest reads a bridge built-in cannot be planned without one. This is the one pipeline
-            // that can mint without a migration that writes secrets: it rewrites the row and recreates every
-            // container anyway, so CommitUpdateAsync below persists the token in the same transaction as the
-            // manifest the containers were built from. Minted whether or not this node has an open bridge, exactly
-            // as install mints it — the token is the instance's, and whether it can be USED is the endpoint's
-            // question, which BridgeGrantFor asks.
-            //
-            // The refusal is HERE rather than in the pipeline because a pipeline failure settles the row by removing
-            // this instance's containers: a target this node cannot plan would cost a working application the
-            // version it was running, and the row would still describe that version, so the retry refuses again.
+            // The BACKFILL: a row installed before the bridge existed carries no token, and update is the only
+            // pipeline that mints one. Why, and why its refusal sits at admission: ADR 0011, the backfill section.
             var mintedBridgeToken = row.BridgeToken is null ? ContainerBridgeToken.Mint(instanceId) : null;
             var bridgeGrant = BridgeGrantFor(row.BridgeToken ?? mintedBridgeToken);
             RequireTargetIsPlannable(instanceId,
@@ -236,9 +225,8 @@ internal sealed partial class ExternalAppService : IExternalAppService
                     {
                         if (committed)
                         {
-                            // A replanned attempt reaches this point a second time. The
-                            // row already describes the target, and re-committing would
-                            // lose its own compare-and-swap against the version it set.
+                            // A replanned attempt reaches this a second time: the row already describes the target,
+                            // so re-committing would lose its own compare-and-swap against the version it set.
                             return;
                         }
 
@@ -267,9 +255,8 @@ internal sealed partial class ExternalAppService : IExternalAppService
                     },
                     cancellationToken);
 
-            // The desired state is the user's and an update is not a decision to start something that was stopped.
-            // Against the TARGET manifest: the containers standing here are the ones the rebuild just created, so the
-            // installed snapshot's service list would leave anything the target added or renamed running.
+            // The desired state is the user's: an update does not start what was stopped. Stopped against the TARGET
+            // manifest, since the containers standing here are the rebuild's and the target may have added services.
             var restoreStopped = context.Row.DesiredState == ExternalAppDesiredState.Stopped;
             if (restoreStopped)
             {
@@ -299,23 +286,14 @@ internal sealed partial class ExternalAppService : IExternalAppService
         }
     }
 
-    /// <summary>
-    ///     Whether the target manifest can be planned at all, asked at admission and only for the answer — the plan
-    ///     itself is discarded and the pipeline builds its own.
-    ///     <para>
-    ///         The host ports are placeholders, and they are enough: the pipeline holds real ones, and the planner
-    ///         only substitutes their numbers into <c>XE_UI_HOST_PORT_&lt;service&gt;</c>. What is being asked is
-    ///         whether the target RESOLVES — the bridge built-ins above all — and that does not depend on which port
-    ///         the allocator would hand out. Binding real ports to answer it would make admission fail for a reason
-    ///         that has nothing to do with the question.
-    ///     </para>
-    ///     <para>
-    ///         The refusal families are the ones <c>TryPlanForVerification</c> already treats as "this cannot be
-    ///         planned as it stands", re-raised as the validation exception the API renders as a 400 so the operator
-    ///         reads the planner's own message: for the bridge case, which feature is missing and which setting
-    ///         turns it on.
-    ///     </para>
-    /// </summary>
+    /// <summary>Whether the target manifest can be planned at all, asked at admission and only for the answer: the plan itself is discarded and the pipeline builds its own.</summary>
+    /// <remarks>
+    ///     The host ports are placeholders and they are enough, because the planner only substitutes their numbers
+    ///     into <c>XE_UI_HOST_PORT_&lt;service&gt;</c> while what is asked is whether the target RESOLVES — the
+    ///     bridge built-ins above all. Binding real ports would make admission fail for an unrelated reason. The
+    ///     refusal families are the ones <c>TryPlanForVerification</c> treats as "cannot be planned as it stands",
+    ///     re-raised as the validation exception the API renders as a 400 carrying the planner's own message.
+    /// </remarks>
     private void RequireTargetIsPlannable(Guid instanceId,
         ApplicationManifest target,
         IReadOnlyDictionary<string, string> variables,
@@ -359,21 +337,14 @@ internal sealed partial class ExternalAppService : IExternalAppService
         };
     }
 
-    /// <summary>
-    ///     The stored values an update may carry forward: the ones the TARGET still declares, minus the ones whose
-    ///     classification changed.
-    ///     <para>
-    ///         A variable the target removed or renamed is dropped rather than carried. Validation refuses an
-    ///         undeclared key on purpose — a mistyped password field must never be installed blank — but a key the
-    ///         node itself stored under the previous manifest is not a user's typo, and carrying it made every
-    ///         update to a manifest that dropped a variable refuse itself over a value nobody submitted.
-    ///     </para>
-    ///     <para>
-    ///         A variable that was <c>secret</c> in the installed snapshot and is not in the target is dropped too:
-    ///         keeping it would let a manifest change turn a password into an ordinary string the node hands back
-    ///         in plaintext.
-    ///     </para>
-    /// </summary>
+    /// <summary>The stored values an update may carry forward: the ones the TARGET still declares, minus the ones whose classification changed.</summary>
+    /// <remarks>
+    ///     A variable the target removed or renamed is dropped, not carried: validation refuses an undeclared key on
+    ///     purpose — a mistyped password field must never install blank — but a key the node itself stored under the
+    ///     previous manifest is not a typo, and carrying it made every update dropping a variable refuse itself over
+    ///     a value nobody submitted. One that was <c>secret</c> in the installed snapshot and is not in the target is
+    ///     dropped too, so no manifest change turns a password into a string the node hands back in plaintext.
+    /// </remarks>
     private static IReadOnlyDictionary<string, string> CarryForward(ApplicationManifest installed,
         ApplicationManifest target,
         IReadOnlyDictionary<string, string> stored)

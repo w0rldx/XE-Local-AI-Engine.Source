@@ -7,21 +7,22 @@ using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
-/// <summary>
-///     The rebuild block and the writes every pipeline shares. Install, start-with-a-rebuild, reset and update all
-///     re-enter <see cref="RebuildAsync" />, which is why the image pull sits inside it rather than in install: by
-///     the time a stopped instance is started again its image may be gone.
-/// </summary>
+/// <summary>The rebuild block and the writes every pipeline shares.</summary>
+/// <remarks>
+///     Install, start-with-a-rebuild, reset and update all re-enter <see cref="RebuildAsync" />, which is why the
+///     image pull sits inside it rather than in install: by the time a stopped instance is started again, its image
+///     may be gone.
+/// </remarks>
 internal sealed partial class ExternalAppService
 {
     /// <summary>Where the storage helper's one bind mount appears inside it.</summary>
     private const string HelperMountPath = "/storage";
 
-    /// <summary>
-    ///     The storage helper's whole command: remove the CONTENTS of the mounted directory and never the mount point
-    ///     itself, which the host-side delete that follows still needs. A compile-time constant, so no engine-side
-    ///     value — no instance id, no path — is ever interpolated into a shell string.
-    /// </summary>
+    /// <summary>The storage helper's whole command: remove the CONTENTS of the mounted directory, never the mount point itself, which the host-side delete still needs.</summary>
+    /// <remarks>
+    ///     A compile-time constant, so no engine-side value — no instance id, no path — is ever interpolated into a
+    ///     shell string.
+    /// </remarks>
     private const string StorageHelperCommand = "find " + HelperMountPath + " -mindepth 1 -delete";
 
     /// <summary>
@@ -47,21 +48,16 @@ internal sealed partial class ExternalAppService
         ExternalAppInstanceStatus.Uninstalling
     ];
 
-    /// <summary>
-    ///     Pull, network, ports, plan, storage, create-and-verify, start-and-verify, read back. The one path that
-    ///     turns a manifest plus its variables into running containers.
-    /// </summary>
-    /// <param name="bridgeGrant">
-    ///     This instance's bridge grant, or <see langword="null" /> when it has none. The CALLER resolves it, and
-    ///     deliberately: update mints a token for a row installed before the bridge existed and commits it inside the
-    ///     rebuild, so a grant read from the row here would be the null this rebuild is in the middle of replacing.
-    ///     It is also resolved once per rebuild rather than per attempt — a replan that minted a different grant
-    ///     would leave sibling containers pointing at a credential the engine no longer expects.
-    /// </param>
-    /// <param name="commitBeforeStart">
-    ///     Update's transactional commit, run after every replacement container is created and verified and before
-    ///     any is started, and given the ports the plan chose. Null for every other caller.
-    /// </param>
+    /// <summary>Pull, network, ports, plan, storage, create-and-verify, start-and-verify, read back: the one path that turns a manifest plus its variables into running containers.</summary>
+    /// <remarks>
+    ///     <paramref name="bridgeGrant" /> is the CALLER's deliberately: update mints a token for a pre-bridge row
+    ///     and commits it inside this rebuild, so a grant read from the row here would be the null being replaced.
+    ///     Resolving it once per rebuild, not per attempt, stops a replan that minted a different grant from leaving
+    ///     sibling containers on a credential nothing expects. <paramref name="commitBeforeStart" /> is given the
+    ///     ports the plan chose, and is null for every caller but update.
+    /// </remarks>
+    /// <param name="bridgeGrant">This instance's bridge grant, or <see langword="null" /> when it has none.</param>
+    /// <param name="commitBeforeStart">Update's transactional commit, run after every replacement container is created and verified and before any is started.</param>
     private async Task<IReadOnlyList<ExternalAppPublishedPort>> RebuildAsync(IContainerRuntime runtime,
         bool daemonIsRootless,
         Guid instanceId,
@@ -75,9 +71,8 @@ internal sealed partial class ExternalAppService
 
         var identity = ExternalAppContainerIdentity.Resolve(daemonIsRootless, _options.ContainerIdentity);
 
-        // One retry, and it replans EVERYTHING. Reassigning the one port that lost its race would leave every
-        // sibling's environment pointing at the old number, and a host-visible URL baked into a created container
-        // cannot be repaired by persisting what was observed.
+        // One retry, and it replans EVERYTHING: reassigning only the port that lost its race would leave every
+        // sibling's environment on the old number, and a URL baked into a created container cannot be repaired.
         var attempt = 0;
         while (true)
         {
@@ -123,11 +118,12 @@ internal sealed partial class ExternalAppService
         }
     }
 
-    /// <summary>
-    ///     One image, reported under <paramref name="progressLabel" />. Shared with the storage helper so its image
-    ///     is acquired exactly the way an application's is: skipped when the digest is already local, reported while
-    ///     it is not, and a failure that is an image-pull failure rather than something else.
-    /// </summary>
+    /// <summary>One image, reported under <paramref name="progressLabel" />.</summary>
+    /// <remarks>
+    ///     Shared with the storage helper so its image is acquired exactly the way an application's is: skipped when
+    ///     the digest is already local, reported while it is not, and failing as an image-pull failure rather than
+    ///     as something else.
+    /// </remarks>
     private async Task PullImageAsync(IContainerRuntime runtime,
         Guid instanceId,
         string image,
@@ -243,8 +239,7 @@ internal sealed partial class ExternalAppService
         foreach (var service in plan.Services)
         {
             // Immediately before the create, not once when the storage was prepared: every daemon call since then is
-            // a window in which a path component could have been replaced by a link, and the plan carries nothing but
-            // path strings, which resolve nothing.
+            // a window for a component to be replaced by a link, and the plan carries only path strings.
             VerifyBindSources(plan);
 
             // The listener is released here and nowhere earlier: the window between letting go of a port and the
@@ -276,11 +271,11 @@ internal sealed partial class ExternalAppService
         return await StartAllAsync(runtime, daemonIsRootless, instanceId, manifest, plan, containerIds, cancellationToken);
     }
 
-    /// <summary>
-    ///     Step 12b: start each service in dependency order, verify what the daemon actually did, wait for the
-    ///     condition anything asks of it, and prove once that the instance can write to its own storage. Shared with
-    ///     the start path that REUSES containers, because a reused container has to clear exactly the same bar.
-    /// </summary>
+    /// <summary>Start each service in dependency order, verify what the daemon did, wait for the condition anything asks of it, and prove the instance can write to its own storage.</summary>
+    /// <remarks>
+    ///     Shared with the start path that REUSES containers, because a reused container has to clear exactly the
+    ///     same bar.
+    /// </remarks>
     private async Task<IReadOnlyList<ExternalAppPublishedPort>> StartAllAsync(IContainerRuntime runtime,
         bool daemonIsRootless,
         Guid instanceId,
@@ -531,17 +526,14 @@ internal sealed partial class ExternalAppService
         ];
     }
 
-    /// <summary>
-    ///     Removes every container and network carrying this instance's three labels, and REPORTS whether the
-    ///     containers are actually gone. BY LABEL, never by the name <c>xe-app-&lt;id&gt;</c>: a second installation
-    ///     pointed at the same daemon generates the same names.
-    ///     <para>
-    ///         It still never throws — a teardown that did would strand the row in a transient status — but the
-    ///         answer is no longer silence. Every caller that goes on to DESTROY state (the row, the storage) or to
-    ///         materialise replacements has to know that the old containers are confirmed absent rather than
-    ///         merely asked to leave, and the confirmation is a second listing after the removals.
-    ///     </para>
-    /// </summary>
+    /// <summary>Removes every container and network carrying this instance's three labels, and REPORTS whether the containers are actually gone.</summary>
+    /// <remarks>
+    ///     BY LABEL, never by the name <c>xe-app-&lt;id&gt;</c>: a second installation on the same daemon generates
+    ///     the same names. It never throws — a teardown that did would strand the row in a transient status — but it
+    ///     does not answer with silence either: a caller that goes on to destroy the row or the storage, or to
+    ///     materialise replacements, must know the old containers are confirmed absent rather than merely asked to
+    ///     leave, and the confirmation is a second listing after the removals.
+    /// </remarks>
     /// <returns><see langword="true" /> when no container of this instance is left on the daemon.</returns>
     internal async Task<bool> RemoveInstanceContainersAsync(IContainerRuntime runtime, Guid instanceId, CancellationToken cancellationToken)
     {
@@ -585,11 +577,11 @@ internal sealed partial class ExternalAppService
         }
     }
 
-    /// <summary>
-    ///     The teardown as a PRECONDITION: the same removal, and a failure rather than a warning when the containers
-    ///     are still there. Every caller that would go on to delete the row, wipe the storage or create replacements
-    ///     runs this one, because each of those destroys the evidence the next attempt needs.
-    /// </summary>
+    /// <summary>The teardown as a PRECONDITION: the same removal, and a failure rather than a warning when the containers are still there.</summary>
+    /// <remarks>
+    ///     Every caller that would go on to delete the row, wipe the storage or create replacements runs this one,
+    ///     because each of those destroys the evidence the next attempt needs.
+    /// </remarks>
     private async Task RequireTeardownAsync(IContainerRuntime runtime, Guid instanceId, CancellationToken cancellationToken)
     {
         if (await RemoveInstanceContainersAsync(runtime, instanceId, cancellationToken))
@@ -606,27 +598,14 @@ internal sealed partial class ExternalAppService
         });
     }
 
-    /// <summary>
-    ///     Deletes the CONTENTS of the instance's volumes directory from inside a short-lived engine-owned container,
-    ///     leaving the directory itself for the host-side delete that follows.
-    ///     <para>
-    ///         The engine cannot always do this itself, and the reason is the uid mapping rather than a bug: an
-    ///         application whose image runs as its own non-root user creates <c>0700</c> directories owned by a host
-    ///         uid inside the operator's subuid range under a rootless daemon, and by that uid outright under a
-    ///         rootful one. Neither is the engine's, so it can traverse nothing and unlink nothing — which is why a
-    ///         reset reported a storage failure and an uninstall silently left the instance directory on disk after
-    ///         promising to delete it. The install-time write probe never saw it, because that probe writes as the
-    ///         container's INITIAL user, which is root.
-    ///     </para>
-    ///     <para>
-    ///         In-container root is the identity that can: under a rootless daemon it is the engine's own uid holding
-    ///         <c>CAP_DAC_OVERRIDE</c> across the whole mapped range inside the user namespace, and under a rootful
-    ///         one it is host root. What keeps that from being a hole is the confinement, not the identity — one
-    ///         bind mount, re-validated for links immediately before the run and read back from the daemon after it,
-    ///         no network, no added capabilities, no ports, a pinned digest and a fixed command into which no
-    ///         engine-side value is interpolated.
-    ///     </para>
-    /// </summary>
+    /// <summary>Deletes the CONTENTS of the instance's volumes directory from inside a short-lived engine-owned container, leaving the directory for the host-side delete.</summary>
+    /// <remarks>
+    ///     The engine cannot always do it itself, and the reason is the uid mapping rather than a bug; in-container
+    ///     root is the identity that can. Why, and the confinement that keeps that from being a hole — one bind
+    ///     mount re-validated for links immediately before the run and read back after it, no network, no added
+    ///     capabilities, no ports, a pinned digest and a fixed command — is in
+    ///     <c>docs/wiki/23-external-apps.md</c> ("Storage, and the helper container").
+    /// </remarks>
     internal async Task WipeVolumeContentsAsync(IContainerRuntime runtime, Guid instanceId, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(runtime);
@@ -694,9 +673,8 @@ internal sealed partial class ExternalAppService
             Image = _options.StorageHelperImage,
             Name = ExternalAppLabels.StorageHelperContainerName(instanceId),
 
-            // No user, and deliberately not one taken from the instance: in-container root is the ONLY identity that
-            // can unlink what an application's own non-root user left behind, and a --user would reintroduce the
-            // defect this container exists to fix.
+            // No user, and deliberately not one from the instance: in-container root is the ONLY identity that can
+            // unlink what an application's non-root user left behind, so a --user reintroduces the defect.
             User = null,
             Labels = ExternalAppLabels.ForStorageHelper(_installId, instanceId),
             Environment = new Dictionary<string, string>(StringComparer.Ordinal),
@@ -714,9 +692,8 @@ internal sealed partial class ExternalAppService
             ],
             PublishedPorts = [],
 
-            // Docker's own default set, kept and not widened. CAP_DAC_OVERRIDE is in it and is the point; dropping
-            // ALL would leave in-container root unable to traverse the 0700 directories it is here to remove, and
-            // adding anything back would exceed the default set the catalog rule bounds every container by.
+            // Docker's own default set, kept and not widened: CAP_DAC_OVERRIDE is in it and is the point, dropping ALL
+            // would leave root unable to traverse the 0700 directories, and adding any would exceed the catalog bound.
             CapabilitiesToDrop = [],
             CapabilitiesToAdd = [],
             SecurityOptions = [ApplicationContainerPolicy.NoNewPrivileges, DockerSeccompProfile.SecurityOption],
@@ -823,11 +800,11 @@ internal sealed partial class ExternalAppService
         return Failed(ExternalAppFailurePhase.Storage, new ExternalAppStorageException($"The storage helper {what}."));
     }
 
-    /// <summary>
-    ///     Removes the helper in a <c>finally</c>, by id. Best-effort, because a helper left behind is not a reason
-    ///     to replace the verdict of the operation that ran it: it carries the instance's labels, so the next
-    ///     teardown and the boot pass's orphan sweep both remove it anyway.
-    /// </summary>
+    /// <summary>Removes the helper in a <c>finally</c>, by id, best-effort.</summary>
+    /// <remarks>
+    ///     A helper left behind is not a reason to replace the verdict of the operation that ran it: it carries the
+    ///     instance's labels, so the next teardown and the boot pass's orphan sweep both remove it anyway.
+    /// </remarks>
     private async Task RemoveHelperAsync(IContainerRuntime runtime, string containerId, Guid instanceId)
     {
         try
@@ -947,9 +924,8 @@ internal sealed partial class ExternalAppService
             return;
         }
 
-        // The swap lost, which usually means another writer already settled the row — but it can also mean a writer
-        // moved it WITHOUT settling it, and then nobody has written the failure. A pipeline owes its row a terminal
-        // status, so re-read once and try again while the row is still in a transient this operation owns.
+        // A lost swap usually means another writer settled the row, but it can also mean one moved it WITHOUT
+        // settling it. A pipeline owes its row a terminal status, so re-read once and retry while it is still ours.
         var current = await store.GetAsync(cursor.InstanceId, CancellationToken.None);
         if (current is null || Array.IndexOf(Transient, current.Status) < 0)
         {
@@ -970,11 +946,11 @@ internal sealed partial class ExternalAppService
         };
     }
 
-    /// <summary>
-    ///     The shutdown path: no container is touched and the row keeps its transient status on purpose. Flattening
-    ///     it would make an interrupted uninstall unresumable, and stopping the containers would take the user's
-    ///     applications down with the engine.
-    /// </summary>
+    /// <summary>The shutdown path: no container is touched and the row keeps its transient status on purpose.</summary>
+    /// <remarks>
+    ///     Flattening it would make an interrupted uninstall unresumable, and stopping the containers would take the
+    ///     user's applications down with the engine.
+    /// </remarks>
     private void LeaveTransientForShutdown(Guid instanceId)
     {
         _logger.LogInformation("The operation on external application instance {InstanceId} was interrupted by shutdown; its row is left as it stands for the next boot to settle.",

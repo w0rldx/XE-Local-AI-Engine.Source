@@ -48,10 +48,13 @@ public static class AzureFoundryEndpoints
     }
 
     /// <summary>
-    ///     Shape guard for an operator-added allowed host suffix. A valid suffix starts with <c>.</c>, has
-    ///     at least two non-empty dot-separated DNS labels (so <c>.azure-api.net</c> ✓ but a bare TLD <c>.com</c> ✗),
-    ///     is at most 253 characters, contains only DNS label characters, and carries no wildcard.
+    ///     Shape guard for an operator-added allowed host suffix.
     /// </summary>
+    /// <remarks>
+    ///     A valid suffix starts with <c>.</c>, has at least two non-empty dot-separated DNS labels (so
+    ///     <c>.azure-api.net</c> ✓ but a bare TLD <c>.com</c> ✗), is at most 253 characters, contains only DNS label
+    ///     characters, and carries no wildcard.
+    /// </remarks>
     public static bool ValidateHostSuffix(string? suffix)
     {
         if (string.IsNullOrEmpty(suffix)

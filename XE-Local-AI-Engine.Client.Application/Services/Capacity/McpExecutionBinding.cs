@@ -67,13 +67,15 @@ public sealed record McpExecutionBinding
     public required bool SupportsThinking { get; init; }
 
     /// <summary>
-    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for <see cref="ModelId" />
-    ///     (its chat template renders a literal reasoning end marker). Gates the budget marker on the child agent's
-    ///     construction-time options exactly as <see cref="SupportsThinking" /> gates the <c>think</c> field.
-    ///     Deliberately NOT part of the keyed binding fingerprint: it is derived from <see cref="ModelId" />, which
-    ///     already participates, so folding it in would only invalidate every previously recorded fingerprint. Defaults to
-    ///     <see langword="true" />, the value that never removes a working cap.
+    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for <see cref="ModelId" />, which requires its chat
+    ///     template to render a literal reasoning end marker.
     /// </summary>
+    /// <remarks>
+    ///     Gates the budget marker on the child agent's construction-time options exactly as <see cref="SupportsThinking" /> gates the
+    ///     <c>think</c> field. Deliberately NOT part of the keyed binding fingerprint: it is derived from <see cref="ModelId" />, which
+    ///     already participates, so folding it in would only invalidate every previously recorded fingerprint. It defaults to
+    ///     <see langword="true" />, the value that never removes a working cap.
+    /// </remarks>
     public bool ReasoningBudgetEnforceable { get; init; } = true;
 }
 

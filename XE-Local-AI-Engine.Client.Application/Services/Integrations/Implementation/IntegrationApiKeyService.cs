@@ -7,12 +7,14 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Default <see cref="IIntegrationApiKeyService" />. Mints 256-bit keys, persists only their SHA-256 digest, and
-///     compares a presented key against that digest in constant time. Copied from
-///     <c>McpServerApiKeyService</c>, with the differences the many-keys-per-node shape forces: the row is resolved by
-///     its PLAINTEXT display prefix (the digest column is encrypted at rest and cannot be queried), revocation is soft,
-///     and every key belongs to a principal.
+///     Default <see cref="IIntegrationApiKeyService" />: mints 256-bit keys, persists only their SHA-256 digest, and
+///     compares a presented key against that digest in constant time.
 /// </summary>
+/// <remarks>
+///     Copied from <c>McpServerApiKeyService</c>, with the differences the many-keys-per-node shape forces: the row is
+///     resolved by its PLAINTEXT display prefix (the digest column is encrypted at rest and cannot be queried),
+///     revocation is soft, and every key belongs to a principal.
+/// </remarks>
 internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
 {
     /// <summary>Scheme marker. Makes a leaked key greppable, attributable to this product and recognisable to secret scanners.</summary>
@@ -49,10 +51,8 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
         var key = KeyScheme + secret;
         var prefix = KeyScheme + secret[..PrefixSecretCharacters];
 
-        // A supplied principal is a ROTATION: the new credential inherits every session and in-flight execution the
-        // old one owned. It is deliberately not validated against an existing row — a principal is an opaque grouping
-        // id, not an entity with a lifecycle, so a "principal not found" check would be a second table for no
-        // behaviour.
+        // A supplied principal is a ROTATION: the new credential inherits every session and in-flight execution the old one owned. It is deliberately not
+        // validated against an existing row — a principal is an opaque grouping id, not an entity with a lifecycle.
         var snapshot = await _store.CreateAsync(new IntegrationApiKeyCreateCommand
         {
             KeyId = Guid.NewGuid(),
@@ -79,9 +79,8 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
 
     public async Task<IntegrationApiKeyValidation?> ValidateAsync(string? presented, CancellationToken cancellationToken = default)
     {
-        // Guard BEFORE slicing. The authentication handler calls this with whatever followed "Bearer " and does not
-        // wrap it in a try/catch, so an unguarded `presented[..PrefixLength]` turns `Authorization: Bearer x` into a
-        // 500 where a 401 is required — reachable by anyone who can reach the route.
+        // Guard BEFORE slicing: the authentication handler calls this with whatever followed "Bearer " and does not wrap it in a try/catch, so an unguarded
+        // slice turns a one-character bearer token into a 500 where a 401 is required — reachable by anyone who can reach the route.
         if (string.IsNullOrEmpty(presented)
             || !presented.StartsWith(KeyScheme, StringComparison.Ordinal)
             || presented.Length < PrefixLength)
@@ -92,10 +91,8 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
         var snapshot = await _store.GetByPrefixAsync(presented[..PrefixLength], cancellationToken);
         if (snapshot is null || snapshot.RevokedAtUtc is not null)
         {
-            // Uniform: "no such prefix" and "revoked" read exactly like "wrong key" to the caller (ruling R2-6). The
-            // lookup itself is not constant-time across prefixes — an unknown prefix skips the store read and the
-            // hash — which is acceptable because the prefix is a public display value carrying no authority, and the
-            // surface is loopback-only and rate-limited.
+            // Uniform: "no such prefix" and "revoked" read exactly like "wrong key" to the caller (ruling R2-6). The lookup itself is not constant-time across
+            // prefixes — an unknown one skips the store read and the hash — which is acceptable: the prefix is a public display value carrying no authority.
             return null;
         }
 
@@ -143,11 +140,11 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
     private static string? SerializeAllowList(IReadOnlyList<Guid>? allowedTriggerIds) =>
         allowedTriggerIds is null ? null : JsonSerializer.Serialize(allowedTriggerIds.Distinct().ToArray());
 
-    /// <summary>
-    ///     A single SHA-256 over the key's UTF-8 bytes — deliberately NOT a password KDF. The input is 256 bits of
-    ///     CSPRNG output, so there is no guess space to slow down and a KDF would only add latency to every
-    ///     authenticated request. Unsalted for the same reason.
-    /// </summary>
+    /// <summary>A single SHA-256 over the key's UTF-8 bytes — deliberately NOT a password KDF.</summary>
+    /// <remarks>
+    ///     The input is 256 bits of CSPRNG output, so there is no guess space to slow down and a KDF would only add
+    ///     latency to every authenticated request. Unsalted for the same reason.
+    /// </remarks>
     private static byte[] HashKey(string key) =>
         SHA256.HashData(Encoding.UTF8.GetBytes(key));
 

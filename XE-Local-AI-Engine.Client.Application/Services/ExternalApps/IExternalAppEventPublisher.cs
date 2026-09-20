@@ -6,11 +6,11 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     Pushes what just happened to an instance to whoever is watching. Two messages, both content-free: a status
 ///     ping carrying the sequence a subscriber re-fetches from, and pull progress, which carries no sequence and
 ///     writes no row.
-///     <para>
-///         A ping is published AFTER the commit that allocated its sequence, so a subscriber replaying from a
-///         watermark can never be told about a row that is not yet readable.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A ping is published AFTER the commit that allocated its sequence, so a subscriber replaying from a watermark
+///     can never be told about a row that is not yet readable.
+/// </remarks>
 public interface IExternalAppEventPublisher
 {
     /// <summary>One status change, identified by the sequence the store minted for it.</summary>

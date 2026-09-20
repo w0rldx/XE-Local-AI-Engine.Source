@@ -26,9 +26,12 @@ public sealed class CodexSessionStatus
 
 /// <summary>
 ///     Owns the Codex OAuth session lifecycle behind the <c>cloud/codex/*</c> Operator endpoints: start a login,
-///     report the session/login state, and sign out. The expiry decision and the post-logout cache invalidation live
-///     here rather than in the endpoints, so the HTTP edge only maps this type onto its response DTOs.
+///     report the session/login state, and sign out.
 /// </summary>
+/// <remarks>
+///     The expiry decision and the post-logout cache invalidation live here rather than in the endpoints, so the HTTP
+///     edge only maps this type onto its response DTOs.
+/// </remarks>
 public sealed class CodexSessionService
 {
     private readonly IActiveCloudChatClientFactory _activeCloudFactory;

@@ -7,26 +7,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
-/// <summary>
-///     The boot pass that makes the stored instances agree with the daemon again, and the same pass the operator's
-///     runtime refresh re-runs.
-///     <para>
-///         Three kinds of disagreement, each with exactly one verdict per row. A row in a TRANSIENT status is an
-///         operation the host died inside: an interrupted uninstall is completed, everything else is settled to
-///         <c>Failed</c> and never resumed — safe only because the instance's storage is kept, so the user's next
-///         action is an ordinary reset or uninstall. A SETTLED row is judged on its desired state and what the daemon
-///         actually holds, never on the status it was left with, so an instance whose containers survived a crash
-///         comes back running. Anything the daemon holds under this installation that NO row claims is an orphan and
-///         is removed with its network.
-///     </para>
-///     <para>
-///         Two things it deliberately does not do. It never touches an instance a live operation holds — a refresh
-///         during an update would remove containers under the updater, and a lost compare-and-swap cannot undo a
-///         daemon mutation. And it writes nothing at all when no runtime is ready: rewriting every row to
-///         <c>Failed</c> would destroy the evidence the next pass needs, and would leave an interrupted uninstall
-///         unable ever to complete.
-///     </para>
-/// </summary>
+/// <summary>The boot pass that makes the stored instances agree with the daemon again, and the same pass the operator's runtime refresh re-runs.</summary>
+/// <remarks>
+///     The three verdicts — transient row, settled row, orphan — and the two things it deliberately does not do are
+///     stated in <c>docs/wiki/23-external-apps.md</c> ("Lifecycle and restore semantics"). Both non-actions are
+///     load-bearing here: it never touches an instance a live operation holds, because a lost compare-and-swap
+///     cannot undo a daemon mutation, and it writes nothing at all when no runtime is ready, because rewriting
+///     every row to <c>Failed</c> would destroy the evidence the next pass needs.
+/// </remarks>
 internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconciler, IHostedService
 {
     private const string UnverifiablePlanSummary =
@@ -161,9 +149,8 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // ONE row's judgement, not the pass. A container removed between the list and the inspect, or a
-                // stored snapshot the policy refuses, would otherwise skip every later row AND the orphan sweep —
-                // and reach the operator's refresh as a 500 rather than as an instance that kept its status.
+                // ONE row's judgement, not the pass: a container removed between list and inspect, or a snapshot the
+                // policy refuses, would otherwise skip every later row and the orphan sweep, and answer 500.
                 failed++;
                 _logger.LogWarning(exception, "Judging external application instance {InstanceId} failed; it keeps its status and the pass continues.", row.Id);
                 continue;
@@ -205,19 +192,16 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
             return RowVerdict.Busy;
         }
 
-        // The gate is what every operation actually holds, so it — not the runner map — is the authority. A row a
-        // live operation owns is skipped: removing its containers under it is a daemon mutation no lost
-        // compare-and-swap could undo.
+        // The gate is what every operation actually holds, so it — not the runner map — is the authority: a row a
+        // live operation owns is skipped, because removing its containers is a mutation no lost swap could undo.
         using var lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(row.Id));
         if (lease is null)
         {
             return RowVerdict.Busy;
         }
 
-        // The row in hand was read BEFORE the gate. An operation that finished and released the gate in between
-        // leaves this pass judging a snapshot that is already history — and the verdicts here are daemon mutations,
-        // which no lost compare-and-swap afterwards could undo: a stale 'Updating' would remove the containers the
-        // update had just created. Everything below therefore judges the row as it is NOW, or nothing at all.
+        // The row in hand was read BEFORE the gate, so an operation that released it in between leaves this pass on
+        // history: a stale Updating would remove what the update just created. Judge the row as it is NOW, or not.
         var current = await store.GetAsync(row.Id, cancellationToken);
         if (current is null || current.Version != row.Version)
         {
@@ -249,11 +233,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         };
     }
 
-    /// <summary>
-    ///     Branch A, uninstall arm: finishes what the user already authorised, in the order the pipeline uses.
-    ///     Resuming a destructive action somebody asked for is not a new destructive decision, and the rows go before
-    ///     the directory so a directory that cannot be removed leaves a warning rather than an unreachable row.
-    /// </summary>
+    /// <summary>Branch A, uninstall arm: finishes what the user already authorised, in the order the pipeline uses.</summary>
+    /// <remarks>
+    ///     Resuming a destructive action somebody asked for is not a new destructive decision, and the rows go
+    ///     before the directory, so a directory that cannot be removed leaves a warning rather than an unreachable
+    ///     row.
+    /// </remarks>
     private async Task<bool> CompleteUninstallAsync(IExternalAppInstanceStore store,
         IContainerRuntime runtime,
         ExternalAppInstanceSnapshot row,
@@ -261,9 +246,8 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
     {
         if (!await _service.RemoveInstanceContainersAsync(runtime, row.Id, cancellationToken))
         {
-            // The row stays in Uninstalling and the storage stays with it, which is what makes the NEXT pass run this
-            // same branch again. Deleting the row now would leave a container the user asked to be gone running with
-            // nothing left that describes it.
+            // The row stays Uninstalling and the storage with it, which is what makes the NEXT pass run this branch
+            // again. Deleting it now would leave a container the user asked to be gone with nothing describing it.
             _logger.LogWarning("The containers of external application instance {InstanceId} are still present, so its interrupted uninstall was not completed; the next pass retries it.",
                 row.Id);
 
@@ -306,11 +290,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         return true;
     }
 
-    /// <summary>
-    ///     Branch A, everything else: settle, never resume. The containers and the network go, the STORAGE stays, and
-    ///     the row keeps the snapshot and variables its insert wrote — so the user's next action is an ordinary reset
-    ///     or uninstall rather than an instance nothing can act on.
-    /// </summary>
+    /// <summary>Branch A, everything else: settle, never resume.</summary>
+    /// <remarks>
+    ///     The containers and the network go, the STORAGE stays, and the row keeps the snapshot and variables its
+    ///     insert wrote — so the user's next action is an ordinary reset or uninstall rather than an instance
+    ///     nothing can act on.
+    /// </remarks>
     private async Task<bool> SettleInterruptedAsync(IExternalAppInstanceStore store,
         IContainerRuntime runtime,
         ExternalAppInstanceSnapshot row,
@@ -390,11 +375,11 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         return await AdoptOrRefuseAsync(store, runtime, daemonIsRootless, row, manifest, byService, cancellationToken);
     }
 
-    /// <summary>
-    ///     Every container is present and running, so the remaining question is whether they are the containers this
-    ///     instance would create today. Reattachment VERIFIES before it trusts: a drifted container is running and
-    ///     non-compliant, which is a policy failure rather than "stopped unexpectedly".
-    /// </summary>
+    /// <summary>Every container is present and running, so the remaining question is whether they are the containers this instance would create today.</summary>
+    /// <remarks>
+    ///     Reattachment VERIFIES before it trusts: a drifted container is running and non-compliant, which is a
+    ///     policy failure rather than "stopped unexpectedly".
+    /// </remarks>
     private async Task<bool> AdoptOrRefuseAsync(IExternalAppInstanceStore store,
         IContainerRuntime runtime,
         bool daemonIsRootless,
@@ -407,19 +392,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         var plan = _service.TryPlanForVerification(row, manifest, ExternalAppService.ParseVariables(row.VariablesJson), identity);
         if (plan is null)
         {
-            // One cause of an unplannable snapshot is knowable and is NOT repaired by a Start: a manifest that reads
-            // the container bridge on a node that opened none. Telling that operator to start it again names the one
-            // command the Start/Restart admission refuses with ExternalAppBlockedReason.BridgeUnavailable, so this
-            // says what admission says, in admission's own words.
-            // The check is admission's own, and no finer: a manifest-wide "does this snapshot read the bridge, and
-            // did this node open one" — never a diagnosis of what actually failed to plan. So a row that is BOTH
-            // bridge-less and unplannable for some other reason is reported as the bridge, which is deliberate: it
-            // is the same answer admission would give that operator, and the one thing they can act on.
+            // One unplannable-snapshot cause is knowable and NOT repaired by a Start: a manifest reading the bridge on a
+            // node that opened none. Reported manifest-wide as admission's ExternalAppBlockedReason.BridgeUnavailable, never as a diagnosis of what failed to plan.
             var bridgeUnavailable = _service.BridgeUnavailableFor(row);
 
-            // Anything else is not a policy violation — nothing was observed to violate anything — and not "stopped
-            // unexpectedly" either, because the containers are up. It is an instance this engine can no longer
-            // describe, and the recovery is the rebuild a Start performs.
+            // Anything else is neither a policy violation (nothing was observed to violate anything) nor "stopped
+            // unexpectedly" (the containers are up): it is undescribable, and a Start's rebuild is the recovery.
             return await WriteAsync(store,
                     row,
                     ExternalAppInstanceStatus.Failed,
@@ -462,9 +440,8 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
                         cancellationToken);
             }
 
-            // Unhealthy rather than "not yet healthy": a healthcheck still inside its start period at boot is a
-            // container that has not answered, and failing it here would turn a slow start into an instance the user
-            // has to repair. The reuse path in ExternalAppService.FindReusableAsync draws the line in the same place.
+            // Unhealthy rather than "not yet healthy": failing a healthcheck still inside its start period would turn
+            // a slow boot into an instance to repair. ExternalAppService.FindReusableAsync draws the same line.
             if (service.Specification.Healthcheck is not null && inspection.State.Health == ContainerHealthState.Unhealthy)
             {
                 return await RefuseAsync(store, row, $"Service '{service.ServiceName}' reports itself unhealthy.", cancellationToken);
@@ -523,17 +500,14 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
                 cancellationToken);
     }
 
-    /// <summary>
-    ///     Branch C. Removes only what carries THIS install id and an instance label no row claims. The install-id
-    ///     filter is the security property: a container wearing the owner label under a different install id belongs
-    ///     to another installation of this engine and is counted, never removed.
-    ///     <para>
-    ///         "No row claims it" is decided against the list this pass opened with, which an install admitted a
-    ///         moment later is not in (R2-16). So an unclaimed instance is only removed once it is neither running
-    ///         an operation, nor holding its gate, nor — re-read now rather than then — in the store: an install
-    ///         whose row landed after that first read would otherwise have its containers taken out from under it.
-    ///     </para>
-    /// </summary>
+    /// <summary>Branch C. Removes only what carries THIS install id and an instance label no row claims.</summary>
+    /// <remarks>
+    ///     The install-id filter is the security property: a container wearing the owner label under a different
+    ///     install id belongs to another installation of this engine and is counted, never removed. "No row claims
+    ///     it" is decided against the list this pass opened with, which an install admitted a moment later is not in
+    ///     (R2-16), so an unclaimed instance is removed only once it is neither running an operation, nor holding
+    ///     its gate, nor — re-read NOW rather than then — in the store.
+    /// </remarks>
     private async Task<int> RemoveOrphansAsync(IExternalAppInstanceStore store,
         IContainerRuntime runtime,
         IReadOnlyDictionary<Guid, List<ContainerSummary>> byInstance,
@@ -562,11 +536,11 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         return removed;
     }
 
-    /// <summary>
-    ///     Whether an instance the pass's opening list did not know about is genuinely abandoned. The gate lease is
-    ///     released immediately: it is asked as a question — is somebody working on this — never held across the
-    ///     removal, which would make this pass the thing an install then waits behind.
-    /// </summary>
+    /// <summary>Whether an instance the pass's opening list did not know about is genuinely abandoned.</summary>
+    /// <remarks>
+    ///     The gate lease is released immediately: it is asked as a question — is somebody working on this — never
+    ///     held across the removal, which would make this pass the thing an install then waits behind.
+    /// </remarks>
     private async Task<bool> IsUnclaimedAsync(IExternalAppInstanceStore store, Guid instanceId, CancellationToken cancellationToken)
     {
         if (_runner.IsRunning(instanceId))
@@ -585,11 +559,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         return await store.GetAsync(instanceId, cancellationToken) is null;
     }
 
-    /// <summary>
-    ///     A second list by the owner label ALONE. It exists because a moved data directory leaves containers that
-    ///     this installation can neither see nor manage, still holding their loopback ports — invisible without this
-    ///     count, and an unexplained "port already in use" on the next install.
-    /// </summary>
+    /// <summary>A second list by the owner label ALONE.</summary>
+    /// <remarks>
+    ///     A moved data directory leaves containers this installation can neither see nor manage, still holding
+    ///     their loopback ports — invisible without this count, and an unexplained "port already in use" on the next
+    ///     install.
+    /// </remarks>
     private async Task<int> CountForeignAsync(IContainerRuntime runtime, CancellationToken cancellationToken)
     {
         var owned = await runtime

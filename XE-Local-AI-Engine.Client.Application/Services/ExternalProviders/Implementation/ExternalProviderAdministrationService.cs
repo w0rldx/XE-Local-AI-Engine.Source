@@ -7,22 +7,11 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 ///     then the caches.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The ORDER is the design. The encrypted file is the source of truth, so it commits first and everything else
-///         is repairable from it; then BOTH caches are dropped, before anything fallible runs; and only then does the
-///         reconciliation pass write the provider map and the allow-list.
-///     </para>
-///     <para>
-///         Both caches are dropped BEFORE reconciliation rather than after it. Reconciliation is fallible and can be
-///         slow, and the previous ordering left the router holding chat clients built against the OLD key on exactly
-///         those paths. A revoked or rotated credential that keeps working because a repair step failed or stalled is
-///         the worst outcome available here, so cache invalidation does not depend on the repair at all.
-///     </para>
-///     <para>
-///         Cleared on EVERY committed change, not only when reconciliation repaired something. An API-key or base-URL
-///         edit changes neither the map nor the allow-list, so reconciliation correctly reports no drift — and yet the
-///         router is still holding a client built against the previous key.
-///     </para>
+///     The ORDER is the design: the encrypted file is the source of truth and commits first, so everything else is
+///     repairable from it; then BOTH caches are dropped, before anything fallible runs; and only then does the
+///     reconciliation pass write the provider map and the allow-list. The caches are cleared on EVERY committed change,
+///     not only when reconciliation repaired something. Why that ordering and not a <c>finally</c>:
+///     docs/wiki/03-local-runtime-and-providers.md, "External connections: the store, the registry cache, and the reconciler".
 /// </remarks>
 public sealed class ExternalProviderAdministrationService : IExternalProviderAdministrationService
 {
@@ -83,15 +72,12 @@ public sealed class ExternalProviderAdministrationService : IExternalProviderAdm
 
     private async Task ApplySideEffectsAsync(bool changed, CancellationToken cancellationToken)
     {
-        // Always invalidated, even on a no-op save: the cheapest correct thing here is one re-projection of a file the
-        // node just read, and the alternative — reasoning about which no-ops are truly no-ops — is how a stale
-        // generation survives an edit.
+        // Always invalidated, even on a no-op save: the cheapest correct thing is one re-projection of a file the node
+        // just read, and the alternative — reasoning about which no-ops are truly no-ops — is how a stale generation survives an edit.
         _registryCache.Invalidate();
 
-        // BEFORE reconciliation, not after it. Reconciliation is fallible and can be slow — a lease timeout, a locked
-        // settings file, a cancelled request — and every moment it runs is a moment the router would otherwise keep
-        // serving chat clients built against the previous key. Ordering it first is strictly stronger than clearing in
-        // a finally: it survives a failure AND a hang.
+        // BEFORE reconciliation, not after it: reconciliation is fallible and can be slow (a lease timeout, a locked settings
+        // file, a cancelled request), and every moment it runs the router would otherwise keep serving chat clients built against the previous key.
         if (changed)
         {
             _chatClientCacheInvalidator.ClearClientCache();

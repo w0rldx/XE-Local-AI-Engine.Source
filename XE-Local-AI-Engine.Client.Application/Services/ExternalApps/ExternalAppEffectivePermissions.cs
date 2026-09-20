@@ -17,16 +17,13 @@ public sealed class ExternalAppServicePermissions
     public required IReadOnlySet<string> ExtraHosts { get; init; }
 }
 
-/// <summary>
-///     Everything an application may do, computed from one manifest. The single authority behind the install
-///     preview, the update preview, update admission, the acknowledgement payload and the permission panel — one
-///     derivation, so the disclosure a user accepts and the check an update runs cannot disagree.
-/// </summary>
+/// <summary>Everything an application may do, computed from one manifest.</summary>
 /// <remarks>
-///     The grants are kept PER SERVICE because a union hides real widenings: adding <c>CHOWN</c> to one service is
-///     invisible when a sibling already has it, and making a second service writable is invisible when the first
-///     already is. The application-level flags stay application-level because that is how the manifest declares
-///     them.
+///     The single authority behind the install preview, the update preview, update admission, the acknowledgement payload and the permission
+///     panel — one derivation, so the disclosure a user accepts and the check an update runs cannot disagree. The grants are kept PER SERVICE
+///     because a union hides real widenings: adding <c>CHOWN</c> to one service is invisible when a sibling already has it, and making a
+///     second service writable is invisible when the first already is. The application-level flags stay application-level, because that is
+///     how the manifest declares them.
 /// </remarks>
 public sealed class ExternalAppEffectivePermissions
 {

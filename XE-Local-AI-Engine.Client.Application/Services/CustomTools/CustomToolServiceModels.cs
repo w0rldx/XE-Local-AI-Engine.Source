@@ -2,12 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 
 using XE_Local_AI_Engine.Client.Persistence;
 
-/// <summary>
-///     Public, wire-safe projection of a custom tool's typed configuration. These records are the CRUD boundary the
-///     endpoints bind against (the internal <c>HttpFetchConfig</c>/<c>CommandConfig</c> family stays inside this
-///     assembly). The service owns the mapping to and from the store's opaque <c>ConfigJson</c>/<c>ParametersJson</c>
-///     columns so the endpoint layer never touches the JSON serializer or the secret-masking rule.
-/// </summary>
+/// <summary>Public, wire-safe projection of a custom tool's typed configuration.</summary>
+/// <remarks>
+///     These records are the CRUD boundary the endpoints bind against; the internal <c>HttpFetchConfig</c> and <c>CommandConfig</c> family
+///     stays inside this assembly. The service owns the mapping to and from the store's opaque <c>ConfigJson</c> and <c>ParametersJson</c>
+///     columns, so the endpoint layer never touches the JSON serializer or the secret-masking rule.
+/// </remarks>
 public sealed record CustomToolParameterModel
 {
     public string Name { get; init; } = string.Empty;

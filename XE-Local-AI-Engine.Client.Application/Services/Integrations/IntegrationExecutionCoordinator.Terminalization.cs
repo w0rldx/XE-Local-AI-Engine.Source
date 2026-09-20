@@ -8,16 +8,22 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
 ///     Terminalization half of <see cref="IntegrationExecutionCoordinator" />: the status/version CAS that closes an
-///     execution row exactly once, its retry loop, the stop-marker reconciliation, the audit row carried into the same
-///     transaction, and the pre-run, fault and stranded entry points that reach it.
+///     execution row exactly once, and the paths that reach it.
 /// </summary>
+/// <remarks>
+///     It holds the CAS retry loop, the stop-marker reconciliation, the audit row carried into the same transaction,
+///     and the pre-run, fault and stranded entry points.
+/// </remarks>
 internal sealed partial class IntegrationExecutionCoordinator
 {
     /// <summary>
     ///     The last resort for a dispatched execution whose every attempt escaped its own handler: re-read the row and
-    ///     close it through the ordinary fault path, so the admission slot it holds is released and its caller gets a
-    ///     terminal event instead of silence.
+    ///     close it through the ordinary fault path.
     /// </summary>
+    /// <remarks>
+    ///     The admission slot it holds is released by that close, and its caller gets a terminal event instead of
+    ///     silence.
+    /// </remarks>
     private async Task TerminalizeStrandedAsync(Guid executionId)
     {
         try
@@ -88,25 +94,15 @@ internal sealed partial class IntegrationExecutionCoordinator
 
     /// <summary>
     ///     The ONE terminal shape: reserve a sequence privately, commit the status and the event together, and only
-    ///     then publish. A lost CAS or a throw abandons the reservation — an unresolved one is not a hole readers
-    ///     tolerate, it is a stall that parks every reader on this execution until the entry is evicted.
-    ///     <para>
-    ///         Whoever's CAS returns <see langword="true" /> owns the terminal artefacts: the published event and the
-    ///         one kind-3 audit row. A caller that finds the row already terminal publishes nothing and audits nothing,
-    ///         so a queued cancel cannot produce two cancelled events and two audit rows.
-    ///     </para>
-    ///     <para>
-    ///         The retries exist because the cancel path stamps its durable stop marker through a NON-terminal status
-    ///         update, which bumps the row's version without terminalizing it. Without them a coordinator holding the
-    ///         pre-marker version would lose its CAS and leave the row stuck — and ONE retry is not enough, because a
-    ///         second cancel landing inside the window bumps the version again and exhausts it.
-    ///     </para>
-    ///     <para>
-    ///         Every reload also honours the marker it finds: a stop marker stamped after this outcome was chosen
-    ///         outranks it, so a pre-run rejection racing an accepted cancel writes <c>Cancelled</c> rather than the
-    ///         failure the caller never asked for.
-    ///     </para>
+    ///     then publish.
     /// </summary>
+    /// <remarks>
+    ///     A lost CAS or a throw abandons the reservation: an unresolved one is not a hole readers tolerate but a stall that
+    ///     parks every reader on this execution until the entry is evicted. Whoever's CAS returns <see langword="true" /> owns the
+    ///     terminal artefacts — the published event and the one kind-3 audit row — so a queued cancel cannot produce two cancelled
+    ///     events and two audit rows. The retries are bounded rather than single because each cancel bumps the row's version
+    ///     without terminalizing it, and every reload re-runs <see cref="HonourStopMarker" />.
+    /// </remarks>
     private async Task<bool> TerminalizeAsync(ExecutionRunContext context,
         IReadOnlySet<IntegrationExecutionStatus> expectedStatuses,
         IntegrationExecutionStatus status,
@@ -138,16 +134,15 @@ internal sealed partial class IntegrationExecutionCoordinator
     }
 
     /// <summary>
-    ///     A durable stop marker outranks the FAILURE a terminal path came with. The cancel primitive stamps it before
-    ///     it does anything else, so a row carrying one has an accepted 202 behind it: closing it as a failure shows
-    ///     the caller a fault it did not cause and never asked about.
-    ///     <para>
-    ///         A <c>Completed</c> outcome is the one exception, and is left alone. The generation had already produced
-    ///         its answer: its assistant turn is persisted, its <c>external.output</c> payloads are committed, and a
-    ///         row reading <c>Cancelled</c> over them would contradict every artefact the caller can read. The 202 the
-    ///         cancel endpoint returns says the stop was REQUESTED, never that it arrived in time.
-    ///     </para>
+    ///     A durable stop marker outranks the FAILURE a terminal path came with: the cancel primitive stamps it first,
+    ///     so the row has an accepted 202 behind it and closing it as a failure shows a fault the caller never caused.
     /// </summary>
+    /// <remarks>
+    ///     A <c>Completed</c> outcome is the one exception and is left alone: its assistant turn is persisted and its
+    ///     <c>external.output</c> payloads are committed, so a row reading <c>Cancelled</c> over them would contradict
+    ///     every artefact the caller can read. The cancel endpoint's 202 says the stop was REQUESTED, never that it
+    ///     arrived in time.
+    /// </remarks>
     private static (IntegrationExecutionStatus Status, string? FailureCategory, string? FailureSummary) HonourStopMarker(IntegrationExecutionSnapshot row,
         IntegrationExecutionStatus status,
         string? failureCategory,
@@ -234,11 +229,13 @@ internal sealed partial class IntegrationExecutionCoordinator
 
     /// <summary>
     ///     The ONE kind-3 audit row per execution, carried INTO the terminal command so the store inserts it in the
-    ///     same transaction as the status and the terminal event. It used to be a separate write after the terminal
-    ///     committed and its failures were swallowed, which lost the row for good: every later terminalization rejects
-    ///     an already-terminal row, so nothing could write it afterwards. Content-free by contract: ids, a trigger
-    ///     name, a credential prefix and a terminal status.
+    ///     same transaction as the status and the terminal event.
     /// </summary>
+    /// <remarks>
+    ///     A separate write after the terminal commits cannot be recovered: every later terminalization rejects an
+    ///     already-terminal row, so one swallowed failure loses the audit row for good. Content-free by contract — ids,
+    ///     a trigger name, a credential prefix and a terminal status.
+    /// </remarks>
     private static IntegrationInvocationAuditInput BuildAudit(ExecutionRunContext context, IntegrationExecutionStatus status, long endedAtUtc) =>
         new()
         {

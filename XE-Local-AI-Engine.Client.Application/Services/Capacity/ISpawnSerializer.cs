@@ -2,18 +2,13 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
-/// <summary>
-///     Serializes same-model sub-agent runs against the one running <c>(model, role)</c> process. A
-///     <see cref="CapacityVerdict.QueueSameModel" /> spawn does not load a second copy of an already-running model;
-///     instead it queues behind any other same-model spawn so concurrent requests do not pile onto a llama-server
-///     launched with ~1 slot (<c>BuildLaunchSpec</c> passes neither <c>--parallel</c> nor <c>-np</c>). The wait is
-///     BOUNDED — a queued spawn that cannot acquire the model's turn within the timeout is rejected ("busy") rather than
-///     hanging the parent tool call.
-/// </summary>
+/// <summary>Serializes same-model sub-agent runs against the one running <c>(model, role)</c> process.</summary>
 /// <remarks>
-///     Process-wide singleton: the per-<c>(model, role)</c> semaphore map must be shared by every concurrent spawn on
-///     the node so two same-model spawns observe the same gate. The per-turn fan-out and cloud counters live on
-///     <see cref="SpawnContext" />, not here.
+///     A <see cref="CapacityVerdict.QueueSameModel" /> spawn loads no second copy: it queues behind any other same-model spawn, because
+///     <c>BuildLaunchSpec</c> passes neither <c>--parallel</c> nor <c>-np</c>, so the llama-server runs with ~1 slot. The wait is BOUNDED — a
+///     spawn that cannot take the model's turn within the timeout is rejected ("busy") rather than hanging the parent tool call. A singleton,
+///     so the per-<c>(model, role)</c> semaphore map is shared by every concurrent spawn; the per-turn fan-out and cloud counters live on
+///     <see cref="SpawnContext" />.
 /// </remarks>
 public interface ISpawnSerializer
 {

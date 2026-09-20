@@ -3,17 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.Containers.Implementation;
 using System.Runtime.InteropServices;
 using Docker.DotNet.Models;
 
-/// <summary>
-///     Turns the daemon's per-layer pull stream into one progress figure a user can read.
-///     <para>
-///         Two things make this more than a projection. The daemon emits hundreds of messages a second across every
-///         layer at once, and a hub that relayed each one would spend the pull serialising status text — so emission
-///         is throttled, with a final report so the last state is never the one that was dropped. And the daemon
-///         reports a byte total for some layers and not others, so the totals are best-effort: a zero
-///         <see cref="ContainerPullProgress.TotalBytes" /> means "the daemon did not say" and the layer counts are
-///         what a caller renders instead of a false percentage.
-///     </para>
-/// </summary>
+/// <summary>Turns the daemon's per-layer pull stream into one progress figure a user can read.</summary>
+/// <remarks>
+///     The daemon emits hundreds of messages a second across every layer at once, and a hub relaying each would
+///     spend the pull serialising status text, so emission is throttled with a final report — the last state is
+///     never the one that was dropped. The daemon also reports a byte total for some layers and not others, so a
+///     zero <see cref="ContainerPullProgress.TotalBytes" /> means "the daemon did not say" and a caller renders the
+///     layer counts rather than a false percentage.
+/// </remarks>
 internal sealed class PullProgressAggregator
 {
     /// <summary>The shortest gap between two emitted reports.</summary>
@@ -33,11 +30,11 @@ internal sealed class PullProgressAggregator
         _timeProvider = timeProvider;
     }
 
-    /// <summary>
-    ///     The first error the daemon reported in the stream, or null. A pull that fails part-way still completes the
-    ///     HTTP call normally, so this is the only place the failure is visible — reading it after the call is what
-    ///     turns a silent half-pull into a named failure.
-    /// </summary>
+    /// <summary>The first error the daemon reported in the stream, or null.</summary>
+    /// <remarks>
+    ///     A pull that fails part-way still completes the HTTP call normally, so this is the only place the failure
+    ///     is visible: reading it after the call is what turns a silent half-pull into a named failure.
+    /// </remarks>
     public string? Error { get; private set; }
 
     /// <summary>
@@ -97,20 +94,15 @@ internal sealed class PullProgressAggregator
 
     private void Fold(JSONMessage message)
     {
-        // Messages without an id are the pull's own narration — the closing digest line and the up-to-date line.
-        // Per-layer messages carry one, and the layer id is an opaque daemon digest that identifies nothing about
-        // the user.
+        // Messages without an id are the pull's own narration (the closing digest line, the up-to-date line); per-layer
+        // ones carry an id, which is an opaque daemon digest identifying nothing about the user.
         if (string.IsNullOrEmpty(message.ID) || string.IsNullOrEmpty(message.Status))
         {
             return;
         }
 
-        // One narration line does carry an id and is not a layer. The daemon opens every pull with a line whose
-        // status begins as below and whose id is the tag or digest that was asked for. Folding it in would add a
-        // layer that never completes, so a finished pull would report n of n plus one layers forever — which is
-        // exactly what ContainerRuntimeRealDaemonTests caught against a real daemon. The fake Docker server now
-        // reproduces this line deliberately, so the fold is covered without a daemon; the real-daemon test remains
-        // the sentinel for the daemon REWORDING it, which no fake can be.
+        // One narration line carries an id and is not a layer: the pull's opening status below, id being the tag asked for.
+        // Folded out, or a finished pull reports n of n plus one forever. The fake reproduces it; the real-daemon test that caught it stays the sentinel for a REWORDING.
         if (message.Status.StartsWith("Pulling from", StringComparison.Ordinal))
         {
             return;
