@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed partial class DevWorkflowStore
+public sealed partial class DevWorkflowStore
 {
     public async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default)
     {

@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     SQLite runs WAL with a busy timeout. Upgrade path if contention ever shows: per-node-run sequence namespaces
 ///     merged on read.
 /// </remarks>
-internal sealed partial class DevWorkflowStore : IDevWorkflowStore
+public sealed partial class DevWorkflowStore : IDevWorkflowStore
 {
     /// <summary>
     ///     camelCase, matching the Application layer — which serializes its own event details with the Web defaults —

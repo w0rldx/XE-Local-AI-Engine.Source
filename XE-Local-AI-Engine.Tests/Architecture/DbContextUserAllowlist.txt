@@ -29,6 +29,8 @@ XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeChatContentEnc
 XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeChatTitleEncryptionBackfillService|permanent|Maintenance backfill: rewrites legacy plaintext conversation titles to ciphertext.
 XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeDbBackupService|permanent|Maintenance backup: VACUUM INTO over the live database file, an operation on the file rather than on any entity.
 XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeSqliteHealthCheck|permanent|Health check: probes that the connection behind the context is alive. Its subject IS the context, so a store between them would hide what it checks.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeBlobOrphanSweeper|permanent|One-shot startup sweep reclaiming document blobs whose row is gone, the knowledge counterpart of the retention sweeper's orphaned-upload resweep; its only query is an existence probe.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeVectorNormalizationBackfillService|permanent|One-time vector-normalization backfill, recording completion in the same chat_maintenance_state marker table the content-encryption backfill uses.
 
 # ---------------------------------------------------------------- migrate: Chat
 XE_Local_AI_Engine.Client.Services.Chat.NodeChatPersistenceWriter|migrate|Owns the conversation-scoped write lock and the scope that resolves the context; the seam the other eight Chat holders route through.
@@ -40,19 +42,25 @@ XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatReadModel|migrate
 XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatRestartRecoveryService|migrate|Recovers rows left mid-turn by a crash, in one transaction.
 XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatVariantBranchService|migrate|Branch-copy and edit-and-resend, two transactions plus the context's own content-encryption helpers.
 
-# ---------------------------------------------------------------- migrate: Knowledge
-XE_Local_AI_Engine.Client.Services.Knowledge.ContextExpansionService|migrate|Expands a chunk hit into its neighbours over the raw connection.
-XE_Local_AI_Engine.Client.Services.Knowledge.FtsSearch|migrate|The chunk_fts MATCH query; FTS5 is not expressible in LINQ, so it stays raw ADO wherever it lands.
-XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeBlobOrphanSweeper|migrate|Probes document existence before deleting an orphaned blob.
-XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeChunkEmbeddingReuseStore|migrate|Embedding-reuse cache lookup.
-XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeDocumentBlobStore|migrate|Encrypted document-blob storage, one transaction.
-XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeDocumentCatalogService|migrate|Document CRUD and listing, two transactions.
-XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeDocumentPurgeService|migrate|Document purge, one transaction.
-XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeIndexWriter|migrate|Writes chunk and vector rows, one transaction.
-XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeIngestionService|migrate|The ingestion pipeline's own reads and writes.
-XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeSearchService|migrate|Orchestrates FTS and vector search and hydrates the chunks.
-XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeVectorNormalizationBackfillService|migrate|One-time vector-normalization backfill; unlike the maintenance jobs above it works on knowledge rows a store will own.
-XE_Local_AI_Engine.Client.Services.Knowledge.ManagedCosineVectorSearch|migrate|Cosine-similarity scan over the packed-float vector column.
+# ---------------------------------------------------------------- permanent: knowledge persistence
+# Operator decision, 2026-09-21: the knowledge retrieval and ingestion lane stays in the application layer, on three
+# measured grounds. (1) KnowledgeDocumentStatus is bound as a SQL parameter by six of these types AND is a shipped
+# OpenAPI schema id and a SignalR parameter, so moving the SQL renames a generated client symbol. (2) Two units of
+# work hold application logic open inside one transaction: KnowledgeDocumentCatalogService.ResetStaleDocumentsToPendingAsync
+# evaluates the embedding-model staleness policy between its SELECT and its UPDATEs, and
+# KnowledgeDocumentBlobStore.UpdateRepositoryDocumentAsync keeps the transaction open across an encrypted blob write
+# and its atomic rename, rolling both back together. (3) Four of these interfaces are injected by host endpoints, which
+# EndpointDependencyTests forbids for a Persistence type. Entries are per type: a new knowledge holder fails as unlisted.
+XE_Local_AI_Engine.Client.Services.Knowledge.ContextExpansionService|permanent|Expands a chunk hit into its neighbours over the raw connection, merging disjoint windows into one parameterized query per document.
+XE_Local_AI_Engine.Client.Services.Knowledge.FtsSearch|permanent|The chunk_fts MATCH query; FTS5 is not expressible in LINQ, so it stays raw ADO wherever it lands.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeChunkEmbeddingReuseStore|permanent|Embedding-reuse cache lookup; its batched IN-list binds KnowledgeDocumentStatus.Indexed, a shipped contract type.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeDocumentBlobStore|permanent|Encrypted document-blob storage whose repository-update transaction stays open across the blob write and atomic rename, and encrypts through an application-layer protector.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeDocumentCatalogService|permanent|Document reads and reindex resets; its stale-reset transaction evaluates the embedding-model policy between the SELECT and the UPDATEs, and host endpoints inject its interface.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeDocumentPurgeService|permanent|Ordered child-to-parent purge in one transaction, with the on-disk delete strictly after commit; a host endpoint injects its interface.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeIndexWriter|permanent|Writes sections, chunks and vectors in one transaction against a captured content-hash revision, binding KnowledgeDocumentStatus twice.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeIngestionService|permanent|The ingestion state machine: its reads and status writes interleave with the extractor, chunker, embedder and notifier the persistence layer cannot reference.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeSearchService|permanent|Hybrid retrieval: fusion, rerank budget and hydration around the chunk reads, driven by provider-layer collaborators; a host endpoint injects its interface.
+XE_Local_AI_Engine.Client.Services.Knowledge.ManagedCosineVectorSearch|permanent|Cosine-similarity scan over the packed-float vector column, allocation-free over a pooled buffer and recording application-layer retrieval metrics.
 
 # ---------------------------------------------------------------- migrate: Tutorial
 XE_Local_AI_Engine.Client.Services.Tutorial.Implementation.NodeTutorialStateService|migrate|Single-entity tutorial state on the identity context.

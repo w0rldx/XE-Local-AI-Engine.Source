@@ -10,9 +10,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 /// <remarks>
 ///     The <c>model_provider_map</c> table is keyed by model name with a <c>NOCASE</c> collation, so name lookups and
-///     the upsert key are case-insensitive without any LINQ-side comparer. No column is encrypted.
+///     the upsert key are case-insensitive without any LINQ-side comparer. No column is encrypted. Public because the
+///     composition root registers it by concrete type and no longer sees this assembly's internals; the same
+///     architecture test that fences the interface fences this name.
 /// </remarks>
-internal sealed class ModelProviderMapStore : IModelProviderMapStore
+public sealed class ModelProviderMapStore : IModelProviderMapStore
 {
     private readonly NodeChatDbContext _dbContext;
     private readonly TimeProvider _timeProvider;

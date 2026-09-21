@@ -283,10 +283,7 @@ internal sealed class NodeChatConversationCommands
     /// </remarks>
     private static async Task<Guid?> ReadWorkSessionIdAsync(NodeChatDbContext dbContext, Guid conversationId, CancellationToken cancellationToken)
     {
-        return await dbContext.AgentWorkSessions.AsNoTracking()
-                              .Where(entity => entity.ConversationId == conversationId)
-                              .Select(entity => (Guid?)entity.Id)
-                              .SingleOrDefaultAsync(cancellationToken);
+        return await dbContext.ReadWorkSessionIdForConversationAsync(conversationId, cancellationToken);
     }
 
     public async Task<NodeChatConversationDto?> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default)

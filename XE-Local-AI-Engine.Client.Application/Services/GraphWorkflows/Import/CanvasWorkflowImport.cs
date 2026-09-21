@@ -97,11 +97,7 @@ public static class CanvasWorkflowImport
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var plaintext = Encoding.UTF8.GetString(NodePayloadProtector.Decrypt(row.GraphJson,
-                    dbContext.NodeEncryptionKey.Span,
-                    Guid.Empty,
-                    row.Id,
-                    "graph_json"));
+                var plaintext = dbContext.DecryptCanvasWorkflowGraphJson(row.GraphJson, row.Id);
 
                 // The only skip cause there is. A blob written by the Open Canvas endpoint decrypts under its own AAD
                 // and parses, so a failure here means the row was already damaged before this slice touched it.

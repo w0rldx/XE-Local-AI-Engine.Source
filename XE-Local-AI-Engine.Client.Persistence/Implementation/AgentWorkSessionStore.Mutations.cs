@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed partial class AgentWorkSessionStore
+public sealed partial class AgentWorkSessionStore
 {
     public Task<WorkSessionMutationResult> ApplyPlanAsync(ApplyWorkPlanCommand command, CancellationToken cancellationToken = default)
     {

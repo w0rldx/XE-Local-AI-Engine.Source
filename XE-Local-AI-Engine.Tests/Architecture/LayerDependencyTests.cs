@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Architecture;
 
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using NetArchTest.Rules;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
@@ -841,6 +842,38 @@ public sealed class LayerDependencyTests
             CapabilitiesNamespace,
             StableDiffusionCppNamespace,
             WhisperCppNamespace);
+    }
+
+    /// <summary>
+    /// The persistence layer grants its internals to its own test project and to nothing else.
+    /// </summary>
+    /// <remarks>
+    /// A friend-assembly grant is a hole in the layer boundary that no dependency rule above can see: the direction
+    /// stays legal while the application layer binds an entity, a raw protector or a store the persistence layer
+    /// meant to keep. The grant to the application assembly was revoked once its last user was migrated, and this is
+    /// what stops a re-add. Reflection over the compiled assembly, not the source file, so adding the attribute
+    /// through the SDK item instead of AssemblyInfo.cs is caught the same way.
+    /// </remarks>
+    [Test]
+    public void Persistence_GrantsItsInternalsToNoProductionAssembly()
+    {
+        var friends = PersistenceAssembly.GetCustomAttributes<InternalsVisibleToAttribute>()
+                                         .Select(attribute => attribute.AssemblyName)
+                                         .ToList();
+
+        AssertEx.NotEmpty(friends,
+            $"'{PersistenceAssembly.GetName().Name}' declares no InternalsVisibleTo at all. It is expected to grant "
+            + "its own test project, so an empty set means this scan lost its subject and would pass vacuously.");
+
+        var production = friends.Where(friend => !friend.EndsWith(".Tests", StringComparison.Ordinal))
+                                .Order(StringComparer.Ordinal)
+                                .ToList();
+
+        AssertEx.Empty(production,
+            "The persistence layer must not grant its internals to a production assembly: a friend assembly can bind "
+            + "an internal entity, cipher or store and bypass the store boundary that the layer rules above assume. "
+            + "Expose the member deliberately, or move the caller. Grants:"
+            + Environment.NewLine + string.Join(Environment.NewLine, production));
     }
 
     /// <summary>

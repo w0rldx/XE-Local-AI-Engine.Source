@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed partial class AgentWorkSessionStore
+public sealed partial class AgentWorkSessionStore
 {
     public async Task<IReadOnlyList<WorkSessionTaskSnapshot>> ListTasksAsync(Guid sessionId, long sinceSequence = 0, CancellationToken cancellationToken = default)
     {

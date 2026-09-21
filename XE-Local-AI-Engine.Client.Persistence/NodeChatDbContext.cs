@@ -418,6 +418,39 @@ public sealed class NodeChatDbContext : DbContext
         return Encoding.UTF8.GetString(plaintext);
     }
 
+    /// <summary>
+    ///     Decrypts a legacy Open Canvas workflow's <c>graph_json</c> blob back to a string, for the startup shim that
+    ///     reads <c>canvas_workflows</c> before the migration drops it.
+    /// </summary>
+    /// <remarks>
+    ///     AAD is <c>(Guid.Empty, canvasWorkflowId, "graph_json")</c>, exactly what the retired endpoint wrote under.
+    ///     It lives here for the same reason every cipher helper above does: the key and the AAD binding stay inside
+    ///     this assembly, so a caller can read a column without being handed the node key.
+    /// </remarks>
+    public string DecryptCanvasWorkflowGraphJson(byte[] encrypted, Guid canvasWorkflowId)
+    {
+        ArgumentNullException.ThrowIfNull(encrypted);
+
+        var plaintext = NodePayloadProtector.Decrypt(encrypted, NodeEncryptionKey.Span, Guid.Empty, canvasWorkflowId, "graph_json");
+        return Encoding.UTF8.GetString(plaintext);
+    }
+
+    /// <summary>
+    ///     The id of the agent work session a conversation owns one-to-one, or null when it owns none.
+    /// </summary>
+    /// <remarks>
+    ///     The work-session entity is internal to this assembly, so the read itself is exposed rather than the set.
+    ///     The chat writer calls it on its own connection instead of taking the scoped work-session store, which would
+    ///     be a captive dependency under its singleton facade.
+    /// </remarks>
+    public Task<Guid?> ReadWorkSessionIdForConversationAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        return AgentWorkSessions.AsNoTracking()
+                                .Where(entity => entity.ConversationId == conversationId)
+                                .Select(entity => (Guid?)entity.Id)
+                                .SingleOrDefaultAsync(cancellationToken);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);

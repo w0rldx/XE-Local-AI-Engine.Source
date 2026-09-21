@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     is what makes the single <c>last_sequence</c> counter safe: two writers cannot allocate the same watermark, and
 ///     neither can skip one.
 /// </summary>
-internal sealed partial class AgentWorkSessionStore : IAgentWorkSessionStore
+public sealed partial class AgentWorkSessionStore : IAgentWorkSessionStore
 {
     private static readonly IReadOnlyDictionary<AgentWorkSessionStatus, HashSet<AgentWorkSessionStatus>> LegalTransitions =
         new Dictionary<AgentWorkSessionStatus, HashSet<AgentWorkSessionStatus>>

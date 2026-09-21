@@ -185,6 +185,20 @@ Identity's `AddEntityFrameworkStores<T>` generic argument), the **health check**
 (backup, migration recovery, the encryption backfills, the downgrade safety check). Every other holder is
 migration debt.
 
+**Knowledge retrieval and ingestion** is a further reasoned exception, ruled permanent rather than migrated: its
+status vocabulary is bound as a SQL parameter *and* shipped as an OpenAPI schema id and a SignalR parameter, two
+of its transactions stay open across application-layer work (an embedding-model staleness decision; an encrypted
+blob write and its atomic rename), and four of its interfaces are injected by host endpoints. The allowlist
+entries state this per type.
+
+The boundary is also closed from the other side: `Client.Persistence` grants `InternalsVisibleTo` to its own test
+project and to no production assembly, so the application layer cannot bind an internal entity, cipher or store
+and bypass the store contract. `LayerDependencyTests` fails a re-added grant. A member the application layer
+genuinely needs is exposed deliberately — as the store interface, or as a method on the context beside the
+existing cipher helpers — never by widening the friend list. Where that made a store public that a decorator
+wraps, `ConcreteStoreConstructionArchitectureTests` keeps the concrete name to the module that registers it, so
+no caller can resolve the undecorated store and skip the event publishing every other caller gets.
+
 `ApplicationDbContextFenceTests` in `XE-Local-AI-Engine.Tests/Architecture/` fails the build for any application
 type that depends on either context, on an `IDbContextFactory<>` of one, or on the raw ADO reached through one,
 unless `Architecture/DbContextUserAllowlist.txt` lists it. That file is the authoritative list of holders — read

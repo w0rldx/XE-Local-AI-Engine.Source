@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     Rule-set CRUD. Its own partial rather than more of <c>DevWorkflowStore.Crud.cs</c>: a rule set is a third
 ///     aggregate root, tied neither to a work item nor to a run, and the file split here already groups by that.
 /// </summary>
-internal sealed partial class DevWorkflowStore
+public sealed partial class DevWorkflowStore
 {
     public async Task<DevWorkflowRuleSetSnapshot> CreateRuleSetAsync(CreateDevWorkflowRuleSetCommand command, CancellationToken cancellationToken = default)
     {

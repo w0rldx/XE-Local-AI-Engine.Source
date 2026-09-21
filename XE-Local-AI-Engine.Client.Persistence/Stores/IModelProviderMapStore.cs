@@ -6,8 +6,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <remarks>
 ///     Not encrypted — model names and provider keys are not secrets. The store performs no validation and applies no
 ///     routing default; the application-layer provider resolver owns the "unmapped model → default provider" policy.
+///     Public like every other store interface here: it was the one type the application layer reached through a
+///     friend-assembly grant, now revoked. Callers are kept off it by
+///     <c>ProviderMapCoordinationArchitectureTests</c>, not by visibility.
 /// </remarks>
-internal interface IModelProviderMapStore
+public interface IModelProviderMapStore
 {
     /// <summary>
     ///     Returns the provider key mapped to <paramref name="modelName" /> (case-insensitive), or <c>null</c> when the

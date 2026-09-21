@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     runtime advances one run at a time behind a single gate, and SQLite runs WAL with a busy timeout. Upgrade path
 ///     if contention ever shows: per-node-run sequence namespaces merged on read.
 /// </remarks>
-internal sealed class GraphWorkflowStore : IGraphWorkflowStore
+public sealed class GraphWorkflowStore : IGraphWorkflowStore
 {
     /// <summary>camelCase, matching every other document this product puts on a wire — these details are READ by name.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
