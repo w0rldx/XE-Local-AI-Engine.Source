@@ -38,7 +38,7 @@ export function readValue(value: unknown): string {
  * compares by JSON kind, so storing them as text makes the edge dead with nothing logged — and anything else stays the
  * string it was typed as, because a decision token is a string and quoting it would be noise.
  *
- * ponytail: a stored STRING that looks like a number turns into a number if the operator edits that one cell. The
+ * simplified: a stored STRING that looks like a number turns into a number if the operator edits that one cell. The
  * lossless alternative is showing every string quoted, which makes the ordinary case (`Approve`) read as `"Approve"`.
  */
 export function parseConditionValue(text: string): unknown {

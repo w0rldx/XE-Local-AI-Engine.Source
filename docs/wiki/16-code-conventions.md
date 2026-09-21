@@ -454,6 +454,11 @@ present-tense rule it actually states, not deleted.
 (S1135); the fix is to describe the present limitation directly, or to link the ADR/issue that owns it — not to
 reword the marker.
 
+**A deliberate simplification is marked `simplified:`.** A comment that admits a cut corner with a known ceiling —
+a process-wide lock, an O(n²) scan, a flat heuristic — names that ceiling and the upgrade path behind the
+`simplified:` keyword, and the keyword stays neutral because no optional tool, editor or agent product name belongs
+in product code, tests, gates or instructions.
+
 **Suppressing a static-analysis finding is the last step, in this order:** understand what the rule is telling
 you → fix the root cause → verify the finding is gone → only then suppress, at the **smallest** scope
 (`#pragma` around the one span, restored on the next line, or a `[SuppressMessage]` on the one member) **with a
@@ -463,9 +468,11 @@ reason**. A file-wide or project-wide suppression, or one with no reason, is a d
 one `<remarks>` — a second of either is a split doc, not a longer one. A `<seealso>` is a pointer, not a slot for
 prose: it carries a `cref` or an `href` and no body. A block that explains a member in `<remarks>` also names it in
 a `<summary>`, unless it is an `<inheritdoc>`; a block of `<param>`/`<returns>` tags alone continues documentation
-that lives elsewhere and is fine. Every block is well-formed XML — this repository leaves
-`GenerateDocumentationFile` unset, so the compiler never parses one and a `<remarks>` closed by `</summary>`, an
-orphan closer or a bare `&` would otherwise ship unseen.
+that lives elsewhere and is fine. Every block is well-formed XML, and here the scan and the compiler agree:
+`Directory.Build.props` sets `GenerateDocumentationFile` — which is what makes IDE0005 (unnecessary `using`) run at
+all — so csc parses every block and a `<remarks>` closed by `</summary>`, an orphan closer or a bare `&` is a build
+warning (`CS1570`) as well as a ratchet item. `CS1591`/`CS1573`/`CS1572` are suppressed there because they contradict
+the rules above; `CS1574`/`CS0419`/`CS1587`/`CS1734` are suppressed as a recorded backlog, with counts in that file.
 
 `CommentBudgetConventionTests` ratchets all five budgets and all four shapes over every solution project plus
 `tools/`, against `XE-Local-AI-Engine.Tests/Architecture/CommentBudgetAllowlist.txt` — one `file|rule|count` line

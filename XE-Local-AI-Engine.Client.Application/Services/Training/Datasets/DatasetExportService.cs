@@ -18,7 +18,7 @@ public interface IDatasetExportService
 /// </summary>
 /// <remarks>
 ///     Rejected samples are excluded — a rejection is an operator's decision that the sample must not train
-///     anything. ponytail: the whole export is built in memory. A definition is capped at 2000 samples, so the
+///     anything. simplified: the whole export is built in memory. A definition is capped at 2000 samples, so the
 ///     ceiling is a few MB; stream it if that cap is ever raised.
 /// </remarks>
 public sealed class DatasetExportService : IDatasetExportService

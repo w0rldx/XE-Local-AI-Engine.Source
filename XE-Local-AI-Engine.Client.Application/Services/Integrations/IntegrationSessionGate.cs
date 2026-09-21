@@ -13,7 +13,7 @@ using System.Collections.Concurrent;
 ///     inside the same critical section as the write it authorises. An accept naming no session takes no gate: nothing
 ///     can name a session that does not yet exist. A singleton, since accept and the session service must share it.
 /// </remarks>
-// ponytail: a ConcurrentDictionary of semaphores, not a lock manager. The node is single-process and admission is 8
+// simplified: a ConcurrentDictionary of semaphores, not a lock manager. The node is single-process and admission is 8
 // deep; if a session ever needs fairness or wait timeouts, that is when to grow this.
 internal sealed class IntegrationSessionGate
 {

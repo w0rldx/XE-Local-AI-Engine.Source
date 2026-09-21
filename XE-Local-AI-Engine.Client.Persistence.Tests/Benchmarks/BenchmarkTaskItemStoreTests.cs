@@ -202,7 +202,7 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
                                CountsTowardScore = false
                            });
 
-        // Foreign keys are off on this connection, so the delete order IS the referential integrity — a child left
+        // `parent_item_id` declares no foreign key, so the delete order IS the referential integrity — a child left
         // behind would point at a generator that no longer exists and nothing would complain.
         await store.DeleteTaskItemAsync(project.Id, generator.Id, generator.Version);
 
@@ -340,10 +340,10 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
     }
 
     /// <summary>
-    ///     Foreign keys are OFF on this database, so the ordered delete in <c>DeleteProjectAsync</c> IS the referential
-    ///     integrity: a table left out of it does not error, its rows simply outlive the project for good. Task items
-    ///     carry the encrypted prompts, reference answers and verifier overrides, and a pairwise fit is only
-    ///     DEACTIVATED when the runs it was fitted over go — so both would survive a project nobody can reach any more.
+    ///     The ordered delete in <c>DeleteProjectAsync</c> is what makes the delete legal: the project references all
+    ///     declare <c>Restrict</c>, so a table left out of it blocks the parent delete instead of quietly orphaning.
+    ///     Task items carry the encrypted prompts, reference answers and verifier overrides, and a pairwise fit is only
+    ///     DEACTIVATED when the runs it was fitted over go, so this counts both rather than trusting the cascade.
     /// </summary>
     [Test]
     public async Task DeleteProject_LeavesNoProjectScopedRowsBehind()

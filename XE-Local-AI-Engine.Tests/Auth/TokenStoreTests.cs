@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Auth;
 
 using System.Text;
 using System.Text.Json;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;

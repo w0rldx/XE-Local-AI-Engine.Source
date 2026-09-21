@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CodexOAuth;
 
 using System.Net;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http.Resilience;

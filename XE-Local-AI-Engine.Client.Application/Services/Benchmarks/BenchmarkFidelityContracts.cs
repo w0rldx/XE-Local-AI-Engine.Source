@@ -61,7 +61,7 @@ public static class BenchmarkFidelityPolicy
     ///     The registry does not record a model's <c>n_vocab</c>, and the estimate exists to REFUSE a write that will
     ///     not fit, so it assumes the largest vocabulary among the families this app runs (Gemma-3's 262 144) rather
     ///     than a typical one: an over-estimate costs an operator a refusal they can override by freeing space, an
-    ///     under-estimate costs them a full disk. ponytail: a fixed ceiling instead of reading n_vocab out of the GGUF
+    ///     under-estimate costs them a full disk. simplified: a fixed ceiling instead of reading n_vocab out of the GGUF
     ///     header — read the header if the over-estimate ever refuses a write that would in fact have fit.
     /// </remarks>
     public const int DefaultVocabSize = 262_144;

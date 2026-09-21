@@ -15,7 +15,7 @@
  * `ReferenceError: AudioWorkletProcessor is not defined` under vitest before any registration guard could run.
  * With the guard, loading this file from a test defines only `downsampleToInt16`.
  *
- * ponytail: linear interpolation, not a polyphase resampler — whisper's own front end is a 16 kHz mel filterbank
+ * simplified: linear interpolation, not a polyphase resampler — whisper's own front end is a 16 kHz mel filterbank
  * and the aliasing at 48k→16k is far below its noise floor; swap in a windowed-sinc kernel only if a live round
  * shows accuracy loss versus the same clip uploaded as a file.
  */

@@ -31,7 +31,7 @@ public static class ExternalAccessGate
             return;
         }
 
-        // ponytail: a poll, not a signal — the decision arrives from an HTTP save on another thread and nothing in the
+        // simplified: a poll, not a signal — the decision arrives from an HTTP save on another thread and nothing in the
         // node-settings stack publishes a change notification today. Swap for a write-side signal if boot latency matters.
         using var timer = new PeriodicTimer(PollInterval, timeProvider);
         while (await timer.WaitForNextTickAsync(cancellationToken))

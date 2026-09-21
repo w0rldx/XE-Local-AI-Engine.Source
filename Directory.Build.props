@@ -18,6 +18,25 @@
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <NuGetAuditLevel>low</NuGetAuditLevel>
+    <!-- IDE0005 (unnecessary using) only runs when the compiler is asked to produce an XML doc file: without
+         this property Roslyn reports EnableGenerateDocumentationFile instead of the finding, whatever severity
+         .editorconfig gives IDE0005. Turning it on also makes the compiler PARSE every /// block, which is the
+         other half of the reason: the four XML-doc shape rules CommentBudgetConventionTests scans for are now
+         also enforced by csc. The doc file itself is not a deliverable, so PublishDocumentationFiles=false keeps
+         the .xml out of the published output the packaging reads - the plural form is load-bearing: the singular
+         PublishDocumentationFile excludes only the ENTRY project's file, and the 16 project references would each
+         still copy theirs into the publish folder, which is 16 files the package never carried before.
+
+         The suppressions below are two different decisions. CS1591/CS1573/CS1572 are POLICY: a <param> is written
+         only when it adds information the name does not, and an undocumented public member is the norm outside the
+         seams that earn a doc, so these three would fire on most of the tree by design (16-code-conventions.md).
+         CS1574/CS0419/CS1587/CS1734 are a MEASURED BACKLOG this property newly revealed, silenced so enabling
+         IDE0005 does not require the same commit to rewrite ~95 files: 62 unresolved crefs, 33 ambiguous crefs,
+         11 doc blocks on a non-documentable element and 10 paramrefs naming no parameter. Delete an ID here as its
+         family is cleaned; none of them was ever enforced before, so nothing regressed by listing them. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PublishDocumentationFiles>false</PublishDocumentationFiles>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS1572;CS1574;CS0419;CS1587;CS1734</NoWarn>
   </PropertyGroup>
 
   <!-- Test/tooling projects are exempt from the extra banned-API + Meziantou guardrails: they

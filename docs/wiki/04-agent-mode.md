@@ -1302,6 +1302,29 @@ Every result the model sees is fenced through `UntrustedContentFraming` with a p
 names, match lines and file content are all attacker-influenced, and a tool result is query-dynamic rather than a
 prompt-cache-stable prefix. Node-authored lead lines and truncation notices stay outside the fence.
 
+### 2.7 Post-run adaptive memory: the extraction worker's shutdown contract
+
+A completed or failed run may enqueue a fire-and-forget extraction job on `MemoryExtractionDispatcher`;
+`MemoryExtractionWorker` (`Services/Memory/Implementation/MemoryExtractionWorker.cs`) drains that queue, running each
+job in **its own DI scope** and bounding concurrency with `MemoryExtractionOptions.MaxConcurrentExtractions`.
+
+The load-bearing decision is which token the work runs on. Jobs and the read loop both observe a private
+**drain-deadline** token, never the chat send token and never the host stopping token, and ordinary operation never
+cancels it. Without that, a client-side cancel or a disposed request scope would lose a completed run's memory — the
+one thing this pipeline exists to capture. A host stop completes the queue's writer instead, so the read loop drains
+what is buffered and exits on its own.
+
+**Shutdown drains QUEUED work as well as in-flight work**, because the queue is in-memory: a job dropped at shutdown is
+lost for good, where an in-flight one merely finishes late. `StopAsync` therefore completes the writer, waits out
+`ShutdownDrainTimeoutSeconds`, then cancels the drain deadline and allows a brief fixed `PostDeadlineGrace` for the
+read loop and any cancelled straggler to unwind before disposal. That grace is a **cap, not a wait**: a job that
+observes its token finishes well inside it, and the bound only binds one that ignores it.
+
+Past the grace a job is **abandoned** — a deliberate trade, not an oversight. An abandoned job may go on to observe
+already-disposed host services, so it is counted on `NodeMetrics.MemoryExtractionAbandonedTotal` rather than silently
+dropped, and every failure logs the exception **type name only** (extraction runs over conversation content, so a
+message would put transcript text in the log). Extraction stays disabled for a spawned sub-agent, as §2.3 notes.
+
 ---
 
 ## 3. The governed Playbook lifecycle (P1–P5)

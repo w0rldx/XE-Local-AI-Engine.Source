@@ -97,8 +97,9 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
     }
 
     /// <summary>
-    ///     Foreign keys are off on this connection and no cascade fires, so the ordered delete IS the referential
-    ///     integrity — and a test that deleted through the EF graph would false-pass.
+    ///     A case points at its generator through <c>parent_item_id</c>, which declares no foreign key, so no cascade
+    ///     fires and the ordered delete IS the referential integrity — a test that deleted through the EF graph would
+    ///     false-pass.
     /// </summary>
     [Test]
     public async Task DeleteTaskItem_TakesTheGeneratorsCasesWithIt()

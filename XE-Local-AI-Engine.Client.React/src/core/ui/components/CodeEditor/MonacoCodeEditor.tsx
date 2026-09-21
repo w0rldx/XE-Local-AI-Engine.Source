@@ -71,7 +71,7 @@ export default function MonacoCodeEditor({
 	// takes every character typed since with it, which reads as dropped and reordered input. The parent is the
 	// authority on the document only when the editor does not have focus.
 	//
-	// ponytail: a parent that REPLACES the content while the editor is focused (a Format button, say) would be
+	// simplified: a parent that REPLACES the content while the editor is focused (a Format button, say) would be
 	// ignored. Nothing does that today; the fix then is an explicit imperative handle, not a looser guard here.
 	useEffect(() => {
 		const editor = editorRef.current;

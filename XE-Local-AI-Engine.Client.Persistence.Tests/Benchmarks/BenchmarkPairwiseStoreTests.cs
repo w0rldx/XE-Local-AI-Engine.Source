@@ -270,7 +270,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         AssertEx.Equal(expected: 2, cohort.Candidates.Count);
         AssertEx.Equal(expected: 2, cohort.Comparisons.Count, "Only the surviving pair's two orders are left; four comparisons named the deleted run.");
         AssertEx.True(cohort.Comparisons.All(comparison => comparison.RunAId != runs[2] && comparison.RunBId != runs[2]),
-            "Foreign keys are off, so a comparison naming a deleted run would simply sit there forever.");
+            "A comparison's run ids declare no foreign key, so one naming a deleted run would simply sit there forever.");
         AssertEx.True(cohort.ComparisonSetVersion > beforeVersion, "The set the fit covered has changed, and staleness is that one integer.");
 
         // The published fit ranked a run that no longer exists, so it is retired rather than left stale-but-active:

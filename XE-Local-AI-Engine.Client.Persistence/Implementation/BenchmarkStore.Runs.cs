@@ -180,7 +180,6 @@ public sealed partial class BenchmarkStore
         return await PageAsync(ranking, projectId, skip: 0, int.MaxValue, modelContentFingerprint: null, includeUnscored: true, cancellationToken);
     }
 
-    /// <inheritdoc />
     private async Task<BenchmarkRunPage> PageAsync(BenchmarkProjectRanking ranking,
         Guid projectId,
         int skip,

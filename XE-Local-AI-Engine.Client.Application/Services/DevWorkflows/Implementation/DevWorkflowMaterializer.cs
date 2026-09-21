@@ -438,7 +438,7 @@ internal sealed class DevWorkflowMaterializer
                               .ToDictionary(static edge => (edge["from"]!.GetValue<string>(), edge["to"]!.GetValue<string>()));
 
         // A leaf of the template is what the join waits for, computed from the template's OWN edges, so the join waits for every task's last node rather than firing while they run.
-        // ponytail: an `Any` join is the author's — one task through it leaves a single live inbound edge, which parse refuses, so the run fails as unroutable rather than hanging.
+        // simplified: an `Any` join is the author's — one task through it leaves a single live inbound edge, which parse refuses, so the run fails as unroutable rather than hanging.
         var leaves = subtree.Where(key => !graph.OutboundEdges(key).Any(edge => subtree.Contains(edge.To))).ToList();
         var clones = new List<Clone>();
         var wired = new HashSet<(string From, string To)>();

@@ -80,7 +80,7 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 
         startInfo.Environment[LinuxTrainingProcessInspector.RunTokenVariable] = request.RunToken;
 
-        // ponytail: unbounded. The reader is the stdio parser, which coalesces its own database writes, so it never
+        // simplified: unbounded. The reader is the stdio parser, which coalesces its own database writes, so it never
         // stalls behind the trainer. Bound it if a future consumer does per-line I/O.
         var output = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
         {

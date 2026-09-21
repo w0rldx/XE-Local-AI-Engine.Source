@@ -86,7 +86,7 @@ public static class WhisperModelCatalog
     ///     invariant, not a presentation choice.
     /// </summary>
     /// <remarks>
-    ///     ponytail: only <c>base</c> — an upper bound measured with a second server resident — and
+    ///     simplified: only <c>base</c> — an upper bound measured with a second server resident — and
     ///     <c>large-v3-turbo-q8_0</c> are measured figures; the rest are interpolated from file size. Re-measure both in
     ///     isolation during a live round and correct the table from that run, not from a second guess.
     /// </remarks>

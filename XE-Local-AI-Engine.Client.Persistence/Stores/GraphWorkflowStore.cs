@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 /// </summary>
 /// <remarks>
 ///     Every run mutation takes the run row inside one transaction, which is what makes the single <c>seq</c> counter
-///     safe: two writers cannot allocate the same watermark, and neither can skip one. ponytail: that row is then the
+///     safe: two writers cannot allocate the same watermark, and neither can skip one. simplified: that row is then the
 ///     lock for its whole subtree, so writes across parallel node runs of one run serialize on it. Accepted — the
 ///     runtime advances one run at a time behind a single gate, and SQLite runs WAL with a busy timeout. Upgrade path
 ///     if contention ever shows: per-node-run sequence namespaces merged on read.

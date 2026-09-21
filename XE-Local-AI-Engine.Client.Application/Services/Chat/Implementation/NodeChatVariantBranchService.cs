@@ -247,7 +247,7 @@ internal sealed class NodeChatVariantBranchService
                         await insertCommand.ExecuteNonQueryAsync(token);
 
                         // Minting a sibling shifts the default selected path, so any compaction synopsis is cleared in
-                        // the same transaction. ponytail: blunt clear, a covered-span hash would invalidate less often.
+                        // the same transaction. simplified: blunt clear, a covered-span hash would invalidate less often.
                         await using var clearSummaryCommand = dbContext.Database.GetDbConnection().CreateCommand();
                         clearSummaryCommand.Transaction = dbTransaction;
                         clearSummaryCommand.CommandText =

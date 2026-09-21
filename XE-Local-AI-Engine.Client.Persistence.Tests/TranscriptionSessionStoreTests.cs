@@ -223,8 +223,8 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
         var databasePath = await CreateSchemaAsync("store-append-orphan.sqlite");
         var unknownSessionId = Guid.NewGuid();
 
-        // PRAGMA foreign_keys is off on the node connection, so nothing below the store would stop this write. Without
-        // the existence check the rows land, belong to no session, and no read path can ever reach or delete them.
+        // The segment's session reference would refuse the insert, but as a constraint exception rather than an answer:
+        // the store's own existence check is what turns an unknown session into `false` before any write is attempted.
         var appended = await QueryAsync(databasePath,
                 store => store.AppendSegmentsAsync(unknownSessionId, [NewSegment(seq: 1, startMs: 0, "orphan")], updatedAtUtc: 100, CancellationToken.None));
 

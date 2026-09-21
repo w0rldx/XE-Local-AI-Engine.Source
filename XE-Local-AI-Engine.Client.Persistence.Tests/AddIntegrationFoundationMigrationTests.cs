@@ -73,7 +73,7 @@ public sealed class AddIntegrationFoundationMigrationTests
                                      "execution_id",
                                      "sequence"));
         AssertEx.True(await probe.ForeignKeyExistsAsync("integration_execution_events", "execution_id", "integration_executions"),
-            "Declared for parity with dev_workflow_run_events; decorative at runtime because the node connection leaves PRAGMA foreign_keys off.");
+            "Declared for parity with dev_workflow_run_events, and enforced at runtime: the node connection sets Foreign Keys=True and PRAGMA foreign_keys=ON.");
     }
 
     [Test]

@@ -95,7 +95,7 @@ export type DevWorkflowEventsAnchor = "newest" | "oldest";
  * page boundary changes it once per page instead, and the tail request asks for TWO pages so it still spans from the
  * boundary all the way to `lastSequence` however far past the boundary that has moved.
  *
- * ponytail: crossing a boundary on a live run does re-anchor and discard loaded history. That is once per 200
+ * simplified: crossing a boundary on a live run does re-anchor and discard loaded history. That is once per 200
  * sequences, and the alternative — a cursor that moves with every event — discards it on every one. Exported so the
  * events tab can SAY so when it happens, rather than the older pages an operator had loaded silently disappearing.
  */

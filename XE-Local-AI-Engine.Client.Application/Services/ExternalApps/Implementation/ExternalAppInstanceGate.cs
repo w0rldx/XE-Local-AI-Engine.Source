@@ -10,7 +10,7 @@ using System.Globalization;
 ///     install takes both key shapes, is stated in <c>docs/wiki/23-external-apps.md</c> ("Lifecycle and restore
 ///     semantics").
 /// </remarks>
-// ponytail: a ConcurrentDictionary of semaphores, not a lock manager. Entries are dropped by Forget on uninstall;
+// simplified: a ConcurrentDictionary of semaphores, not a lock manager. Entries are dropped by Forget on uninstall;
 // the map is bounded by the number of installed applications, which V1 caps at one instance each.
 internal sealed class ExternalAppInstanceGate
 {

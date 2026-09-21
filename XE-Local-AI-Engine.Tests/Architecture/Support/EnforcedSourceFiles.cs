@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <remarks>
 ///     Reading the roots from the solution rather than a hand-kept list is the point: a project added tomorrow is
 ///     enforced the day it is added, and one whose directory cannot be found contributes no files and would be
-///     exempt without anyone deciding that. <c>PositionalRecordConventionTests</c> and
-///     <c>PrimaryConstructorConventionTests</c> still hold their own copies of this walk.
+///     exempt without anyone deciding that. <c>PrimaryConstructorConventionTests</c> asserts that every solution
+///     project's directory really is found, which is the non-vacuity half no file count can give.
 /// </remarks>
 internal static class EnforcedSourceFiles
 {

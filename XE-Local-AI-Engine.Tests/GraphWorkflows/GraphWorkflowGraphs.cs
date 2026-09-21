@@ -428,15 +428,16 @@ internal static class GraphWorkflowGraphs
                                                        }
                                                        """;
 
+    /// <summary>
     ///     The live-validation shape: an <c>Agent</c> node under a response schema, a <c>Condition</c> routing on the
     ///     answer it parsed, two mutually exclusive branches, a join and an <c>End</c>.
-    ///     <para>
-    ///         The join is <c>Any</c> and has to be. Its two inbound branches are the two arms of one Condition, so
-    ///         exactly one of them is always dead — and an <c>All</c> join over a dead edge is SKIPPED, which would
-    ///         skip the End behind it and leave the run <c>Cancelled</c> rather than <c>Completed</c>. The S1 plan's
-    ///         live script says "Join, All"; the shipped admission rule says that graph cannot complete.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The join is <c>Any</c> and has to be. Its two inbound branches are the two arms of one Condition, so
+    ///     exactly one of them is always dead — and an <c>All</c> join over a dead edge is SKIPPED, which would
+    ///     skip the End behind it and leave the run <c>Cancelled</c> rather than <c>Completed</c>. The S1 plan's
+    ///     live script says "Join, All"; the shipped admission rule says that graph cannot complete.
+    /// </remarks>
     public const string AgentBranchJoin = """
                                           {
                                             "schemaVersion": 1,

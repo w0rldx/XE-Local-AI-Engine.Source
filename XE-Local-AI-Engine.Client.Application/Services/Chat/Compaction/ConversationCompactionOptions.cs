@@ -56,7 +56,7 @@ public sealed class ConversationCompactionOptions : IValidatableObject
     ///     no provider request exceeds the bound. The default leaves at least 6,500 characters of source room per
     ///     fold even with the running summary at its cap, which is what keeps a long conversation from folding in
     ///     dozens of lossy passes. The summarizer never probes the model's window, so lower this on a 4k-token model.
-    ///     ponytail: a fixed budget, not a probed window — upgrade to per-model probing to fold in fewer passes.
+    ///     simplified: a fixed budget, not a probed window — upgrade to per-model probing to fold in fewer passes.
     /// </remarks>
     [Range(MinimumInputCharsPerSummarizationCall, int.MaxValue)]
     public int MaxInputCharsPerSummarizationCall { get; set; } = 12_000;

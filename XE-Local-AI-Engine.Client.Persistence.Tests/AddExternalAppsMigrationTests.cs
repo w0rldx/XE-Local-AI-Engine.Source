@@ -48,7 +48,7 @@ public sealed class AddExternalAppsMigrationTests
                                      "instance_id",
                                      "sequence"));
         AssertEx.True(await probe.ForeignKeyExistsAsync("external_app_instance_events", "instance_id", "external_app_instances"),
-            "Declared for parity with integration_execution_events; decorative at runtime because the node connection leaves PRAGMA foreign_keys off.");
+            "Declared for parity with integration_execution_events, and enforced at runtime: the node connection sets Foreign Keys=True and PRAGMA foreign_keys=ON.");
 
         // No unique index on application_id: decision D13 keeps the schema N:1 and the one-per-application rule is the
         // install gate's. A unique index added here would turn a race into a 500 instead of the 409 the gate answers.

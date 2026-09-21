@@ -1085,7 +1085,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 continue;
             }
 
-            // ponytail: one page, not a paging loop — an execution's persisted rows are bounded by the 40-iteration tool cap (a handful of phase events, at
+            // simplified: one page, not a paging loop — an execution's persisted rows are bounded by the 40-iteration tool cap (a handful of phase events, at
             // most 80 tool.* and at most 40 external.output). Raise this limit with MaximumToolIterationsPerRequest if that cap is ever raised.
             var events = await store.ListEventsAsync(execution.Id, sinceSequence: 0, limit: 200, cancellationToken);
             for (var index = events.Count - 1; index >= 0; index--)

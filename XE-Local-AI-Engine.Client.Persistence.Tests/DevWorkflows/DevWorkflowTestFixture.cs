@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     a fresh context proves the encrypt/decrypt path rather than the change tracker's in-memory plaintext.
 /// </summary>
 /// <remarks>
-///     ponytail: one file per test for isolation. Only the encryption suite genuinely needs a real file — it scans and
+///     simplified: one file per test for isolation. Only the encryption suite genuinely needs a real file — it scans and
 ///     mutates raw bytes — so if this namespace ever costs the memory-safe gate wall clock or handles, collapse the
 ///     rest to one fixture per class.
 /// </remarks>

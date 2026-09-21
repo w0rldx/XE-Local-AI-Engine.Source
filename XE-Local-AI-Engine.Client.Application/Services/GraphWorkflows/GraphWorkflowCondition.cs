@@ -134,7 +134,7 @@ internal sealed class GraphWorkflowCondition
                 return leftInteger.CompareTo(rightInteger);
             }
 
-            // ponytail: fractional and exponent tokens beyond decimal range still round through double, so two differing only past ~17 significant
+            // simplified: fractional and exponent tokens beyond decimal range still round through double, so two differing only past ~17 significant
             // digits read as equal. Upgrade path: normalise each token into a BigInteger significand plus a base-10 exponent and compare those.
             return left.TryGetDouble(out var leftDouble) && right.TryGetDouble(out var rightDouble)
                 ? leftDouble.CompareTo(rightDouble)

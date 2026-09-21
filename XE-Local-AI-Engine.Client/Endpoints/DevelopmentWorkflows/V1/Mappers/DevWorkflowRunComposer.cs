@@ -403,7 +403,7 @@ public sealed class DevWorkflowRunComposer
             return new Dictionary<Guid, AgentDefinitionRecord>();
         }
 
-        // ponytail: lists every agent definition to name a handful. Definitions are few and the alternative is one
+        // simplified: lists every agent definition to name a handful. Definitions are few and the alternative is one
         // read per node; a name-only projection on the agent store is the upgrade if a repaint ever feels it.
         var definitions = await _agents.ListAsync(cancellationToken);
         return definitions.ToDictionary(static definition => definition.Id);
@@ -429,7 +429,7 @@ public sealed class DevWorkflowRunComposer
             return new HashSet<Guid>();
         }
 
-        // ponytail: one read per node run, and only while a stale artifact exists on the run. A grouped
+        // simplified: one read per node run, and only while a stale artifact exists on the run. A grouped
         // "uses joined to stale artifacts" store query is the upgrade when staleness starts being written.
         var affected = new HashSet<Guid>();
         foreach (var nodeRunId in nodeRuns.Select(static nodeRun => nodeRun.Id))

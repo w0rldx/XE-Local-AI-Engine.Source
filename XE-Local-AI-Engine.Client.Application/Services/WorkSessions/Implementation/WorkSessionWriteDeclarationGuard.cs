@@ -66,7 +66,7 @@ internal sealed class WorkSessionWriteDeclarationGuard
             : pinnedModelOverride;
 
         // supportsTools: true rather than probed — a probe answering false makes the check inert where it is needed.
-        // ponytail: a full IAgentDefinitionResolver.ResolveAsync for tool categories; narrow to AllowedTools if it profiles.
+        // simplified: a full IAgentDefinitionResolver.ResolveAsync for tool categories; narrow to AllowedTools if it profiles.
         var resolved = await _runtimes.ResolveAsync(agentDefinitionId,
                                           activeModel,
                                           retrievalQuery: null,

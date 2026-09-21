@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 using System.Text.Json;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;

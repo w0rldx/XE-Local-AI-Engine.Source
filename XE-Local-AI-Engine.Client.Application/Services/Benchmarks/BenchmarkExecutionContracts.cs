@@ -375,7 +375,7 @@ public static class BenchmarkOutputParts
     /// <summary>Appended to the last text part the judge is shown when the answer had to be cut to fit its context.</summary>
     public const string TruncationMarker = "\n\n[truncated: the primary output exceeded the judge context budget]";
 
-    // ponytail: a coarse character allowance, not a second context budgeter — four chars per token mirrors HeuristicTokenEstimator's divisor, half the window left for the rest of the judge payload.
+    // simplified: a coarse character allowance, not a second context budgeter — four chars per token mirrors HeuristicTokenEstimator's divisor, half the window left for the rest of the judge payload.
     // Ceiling: tool arguments and results are not counted, so a tool-heavy transcript can still overrun. Upgrade path: budget the BUILT payload with ITokenEstimator.
     private const int EstimatedCharsPerToken = 4;
     private const int MinimumJudgeTextChars = 2048;

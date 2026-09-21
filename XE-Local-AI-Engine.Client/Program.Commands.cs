@@ -20,7 +20,7 @@ public sealed partial class Program
 
         if (string.IsNullOrWhiteSpace(newPassword))
         {
-            // ponytail: password passed on argv — acceptable on a local single-operator machine (the trust boundary is the
+            // simplified: password passed on argv — acceptable on a local single-operator machine (the trust boundary is the
             // machine), and it avoids a console-subsystem stdin prompt that the packaged GUI exe cannot reliably show.
             Log.Error("The {Flag} flag requires a new password argument, e.g. the flag followed by <NEW_PASSWORD>.", DesktopLaunch.ResetAdminPasswordArgument);
             return 2;

@@ -14,7 +14,7 @@
 // emits none), the editor's "Auto-arrange", and the run view's nodes-only fallback when the run's graph hash no longer
 // matches the definition's.
 //
-// ponytail: single barycenter pass, no crossing-minimisation iterations — swap in dagre if edge crossings become
+// simplified: single barycenter pass, no crossing-minimisation iterations — swap in dagre if edge crossings become
 // unreadable on real fan-out graphs; this module's signature is the seam.
 
 export const RANK_SPACING_X = 280;

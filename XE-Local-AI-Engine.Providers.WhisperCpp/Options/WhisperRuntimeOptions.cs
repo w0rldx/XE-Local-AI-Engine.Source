@@ -36,7 +36,7 @@ public sealed class WhisperRuntimeOptions
     ///     Flat, not scaled by model size: the largest catalogue row is 1.6 GB and the spike measured port-ready at
     ///     0.46 s for <c>base</c> on this box, so the image runtime's size-scaling (written for an 18 GB file-set) buys
     ///     nothing here.
-    ///     <c>ponytail: flat 2-minute readiness budget; scale it if a real cold-cache load on a spinning disk ever times out.</c>
+    ///     <c>simplified: flat 2-minute readiness budget; scale it if a real cold-cache load on a spinning disk ever times out.</c>
     /// </remarks>
     public TimeSpan ReadinessTimeout { get; set; } = TimeSpan.FromMinutes(2);
 

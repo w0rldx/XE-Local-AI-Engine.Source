@@ -57,7 +57,7 @@ internal sealed class DevWorkflowRetryPolicy
     ///     entry naming its run so a run that ends mid-delay can be forgotten in one call.
     /// </summary>
     /// <remarks>
-    ///     ponytail: in memory, so a restart re-admits immediately, which is the answer rather than a gap in it. A
+    ///     simplified: in memory, so a restart re-admits immediately, which is the answer rather than a gap in it. A
     ///     delay is a CUSHION, never a bound — the bounds are <c>Attempt</c> on the row and the run's total, both
     ///     durable — so early re-admission can only shorten a wait, in the one situation that already cost more
     ///     wall-clock than any delay a definition asks for. <c>node.retry.scheduled</c> carries <c>delayUntil</c>, so

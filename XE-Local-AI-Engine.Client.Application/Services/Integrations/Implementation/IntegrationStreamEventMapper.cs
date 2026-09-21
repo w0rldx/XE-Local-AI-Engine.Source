@@ -24,7 +24,7 @@ internal sealed class IntegrationStreamEventDraft
 ///     It maps NO terminal event: <c>execution.completed</c>, <c>.failed</c> and <c>.cancelled</c> have exactly one producer,
 ///     the coordinator's terminal transaction, which runs after <see cref="DrainAsync" /> — so the terminal is provably the
 ///     highest sequence in the ring, which is what lets a reader stop on it. What each half owns: ADR 0008 ("The stream mapper's two halves").
-///     ponytail: one Lock around the cursor, the timestamp, hasEmitted and the closed latch, not the chat pump's
+///     simplified: one Lock around the cursor, the timestamp, hasEmitted and the closed latch, not the chat pump's
 ///     channel-plus-consumer split; move to that shape only if work arrives that must leave the dispatcher's thread.
 /// </remarks>
 internal sealed class IntegrationStreamEventMapper : IAsyncDisposable

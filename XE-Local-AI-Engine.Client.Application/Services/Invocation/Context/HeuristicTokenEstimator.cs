@@ -24,7 +24,7 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
     // tool acknowledgement, from counting as zero-cost. The matching divisor of four is conservative for code and non-English text, where tokens are shorter.
     private const int PerMessageOverheadTokens = 4;
 
-    // ponytail: flat per-image charge, since llama.cpp vision costs a few hundred to ~2k tokens per image by resolution and projector patch grid; counting an
+    // simplified: flat per-image charge, since llama.cpp vision costs a few hundred to ~2k tokens per image by resolution and projector patch grid; counting an
     // image as zero-cost would let a vision turn overrun the window. Upgrade path: derive it from the mmproj patch grid. Mirrored in ProviderMessageTokenEstimator.
     private const int EstimatedTokensPerImage = 512;
 

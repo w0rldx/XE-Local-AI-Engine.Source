@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Architecture;
 
-using System.Xml.Linq;
 using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -8,16 +7,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Refuses a primary constructor on a class or struct: the project declares conventional constructors instead.
 /// </summary>
 /// <remarks>
-///     A primary constructor leaves no trace in IL, so this reads source, like <see cref="ConfigureAwaitPolicyTests" />.
-///     Every project in the solution is fenced, with no exemption; records are out of scope. Rationale:
-///     <c>docs/wiki/16-code-conventions.md</c>.
+///     A primary constructor leaves no trace in IL, so this reads source, like <see cref="ConfigureAwaitPolicyTests" />,
+///     over the shared <see cref="EnforcedSourceFiles" /> walk. Every project in the solution is fenced, with no
+///     exemption; records are out of scope. Rationale: <c>docs/wiki/16-code-conventions.md</c>.
 /// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class PrimaryConstructorConventionTests
 {
-    /// <summary>C# that ships outside the solution, fenced from the start: <c>tools/</c> holds a generator run by hand.</summary>
-    private static readonly string[] ExtraEnforcedRoots = ["tools"];
-
     /// <summary>The two declaration keywords the rule covers; <c>record</c> and <c>interface</c> are out of scope.</summary>
     private static readonly string[] Keywords = ["class", "struct"];
 
@@ -71,15 +67,12 @@ public sealed class PrimaryConstructorConventionTests
         var offenders = new List<string>();
         var files = 0;
 
-        foreach (var root in EnforcedRoots())
+        foreach (var (path, relative) in EnforcedSourceFiles.All())
         {
-            foreach (var (path, relative) in SourceFiles(root))
-            {
-                files++;
+            files++;
 
-                offenders.AddRange(Declarations(File.ReadAllText(path))
-                    .Select(site => $"{relative}:{site.Line}  {site.Keyword} {site.Type}"));
-            }
+            offenders.AddRange(Declarations(File.ReadAllText(path))
+                .Select(site => $"{relative}:{site.Line}  {site.Keyword} {site.Type}"));
         }
 
         AssertEx.True(files >= EnforcedFileFloor,
@@ -100,7 +93,7 @@ public sealed class PrimaryConstructorConventionTests
     [Test]
     public void EverySolutionProject_IsScanned()
     {
-        var projects = SolutionProjects();
+        var projects = EnforcedSourceFiles.SolutionProjects();
 
         AssertEx.NotEmpty(projects, "No projects were read from the solution file.");
 
@@ -314,53 +307,4 @@ public sealed class PrimaryConstructorConventionTests
         && (start + length >= text.Length || !IsWordCharacter(text[start + length]));
 
     private static bool IsWordCharacter(char character) => char.IsLetterOrDigit(character) || character == '_';
-
-    private static string[] SolutionProjects() =>
-        XDocument.Load(RepositoryPaths.Combine("XE-Local-AI-Engine.slnx"))
-                 .Descendants("Project")
-                 .Select(project => (string?)project.Attribute("Path"))
-                 .Where(path => path is not null && path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-                 .Select(path => Path.GetFileNameWithoutExtension(path!.Replace('\\', '/')))
-                 .Order(StringComparer.Ordinal)
-                 .ToArray();
-
-    private static IEnumerable<string> EnforcedRoots() =>
-        SolutionProjects().Concat(ExtraEnforcedRoots).Select(root => RepositoryPaths.Combine(root));
-
-    private static IEnumerable<(string Path, string Relative)> SourceFiles(string root)
-    {
-        if (!Directory.Exists(root))
-        {
-            yield break;
-        }
-
-        foreach (var path in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
-        {
-            var relative = Path.GetRelativePath(RepositoryPaths.Root, path).Replace('\\', '/');
-
-            if (IsGenerated(relative, path))
-            {
-                continue;
-            }
-
-            yield return (path, relative);
-        }
-    }
-
-    /// <summary>Generated sources are regenerated, never hand-edited, so the rule cannot be applied to them.</summary>
-    private static bool IsGenerated(string relative, string path) =>
-        relative.Contains("/obj/", StringComparison.Ordinal)
-        || relative.Contains("/bin/", StringComparison.Ordinal)
-        || relative.Contains("/Migrations/", StringComparison.Ordinal)
-        || relative.EndsWith(".Designer.cs", StringComparison.Ordinal)
-        || relative.EndsWith(".g.cs", StringComparison.Ordinal)
-        || HasGeneratedHeader(path);
-
-    private static bool HasGeneratedHeader(string path)
-    {
-        using var reader = new StreamReader(path);
-        var buffer = new char[400];
-        var read = reader.ReadBlock(buffer, 0, buffer.Length);
-        return new string(buffer, 0, read).Contains("<auto-generated", StringComparison.Ordinal);
-    }
 }

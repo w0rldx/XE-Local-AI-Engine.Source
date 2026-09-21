@@ -72,7 +72,7 @@ public interface IDevWorkflowStore
     /// </summary>
     /// <remarks>
     ///     Bodies included: the resolver SNAPSHOTS the text it matched onto the node run, so what a node was given can
-    ///     never be re-derived from a document that has since moved on. ponytail: a full scan of the enabled rows with
+    ///     never be re-derived from a document that has since moved on. simplified: a full scan of the enabled rows with
     ///     no cache — the scope is a JSON document with no column to index on, the working set is a handful of rows on
     ///     a single-operator node, and the call happens once per run start and once per expansion, not per node run.
     ///     Add a projected per-axis index table only if the rule count ever reaches the hundreds.

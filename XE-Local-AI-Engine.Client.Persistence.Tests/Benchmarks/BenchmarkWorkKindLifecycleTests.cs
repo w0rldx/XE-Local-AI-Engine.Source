@@ -252,8 +252,8 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
 
         await store.DeleteRunAsync(run.Id, AssertEx.NotNull(await store.GetRunAsync(run.Id)).Version);
 
-        // Foreign keys are off, so an attempt row nothing deletes simply survives its run forever — and it carries an
-        // encrypted receipt, which makes it a leak rather than a tidiness problem.
+        // The attempt's run reference declares Restrict, so a row the delete forgot would have failed DeleteRunAsync
+        // above; counted here anyway because the row carries an encrypted receipt, a leak rather than untidiness.
         context.ChangeTracker.Clear();
         AssertEx.Empty(await context.BenchmarkFidelityAttempts.AsNoTracking().Where(entity => entity.RunId == run.Id).ToListAsync());
     }
@@ -582,7 +582,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         // A cancelled run's work is terminal, so it is not what makes a project busy.
         _ = await store.CancelAsync(runs[1].Id, runs[1].Version);
 
-        // And another project's queue is not this project's — with foreign keys off, the join is the only thing saying so.
+        // And another project's queue is not this project's — a work item carries only a run id, so the join says so.
         var (other, _) = await CreateJudgeProjectAsync(store);
         _ = await store.StartRunAsync(CreateRun(other));
 

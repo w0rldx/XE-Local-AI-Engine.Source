@@ -89,7 +89,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(work);
 
-        // ponytail: a zero-timeout wait, so a full lane costs a tick rather than a parked thread. It does NOT bound how
+        // simplified: a zero-timeout wait, so a full lane costs a tick rather than a parked thread. It does NOT bound how
         // long a row sits Queued waiting on a node-wide slot below — bound the lease wait, or expire on a queued-at stamp, if that measures.
         if (!await _lane.WaitAsync(millisecondsTimeout: 0, cancellationToken))
         {
@@ -128,7 +128,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
             return false;
         }
 
-        // ponytail: the cost is up to one DispatchIntervalMilliseconds sweep before a stopped turn is noticed, where the spin noticed at once.
+        // simplified: the cost is up to one DispatchIntervalMilliseconds sweep before a stopped turn is noticed, where the spin noticed at once.
         // Signalling from the work's continuation would inject the dispatcher into the lane it takes; a settable signal or completion channel breaks that, if it measures.
         await flight.Cancellation.CancelAsync();
         return true;

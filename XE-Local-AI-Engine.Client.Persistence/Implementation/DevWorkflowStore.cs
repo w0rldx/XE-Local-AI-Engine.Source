@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     neither can skip one.
 /// </summary>
 /// <remarks>
-///     ponytail: the run row is the lock for its whole subtree, so writes across parallel node-runs of one run
+///     simplified: the run row is the lock for its whole subtree, so writes across parallel node-runs of one run
 ///     serialize on it. Accepted — the runtime already serializes agent nodes on one slot and bounds sandbox nodes, and
 ///     SQLite runs WAL with a busy timeout. Upgrade path if contention ever shows: per-node-run sequence namespaces
 ///     merged on read.

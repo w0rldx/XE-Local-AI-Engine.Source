@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Text.Json;
-using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 

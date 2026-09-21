@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <remarks>
 ///     The publish sits HERE rather than at each call site because a missed one is a pane that silently stops
 ///     updating, with no test that would notice. The change kind comes from the COMMAND, not the event row.
-///     ponytail: one ping per committed mutation, no coalescing window; a parallel stage would want a debounce here
+///     simplified: one ping per committed mutation, no coalescing window; a parallel stage would want a debounce here
 ///     keyed by run id. See docs/wiki/25-dev-workflows.md ("Node telemetry").
 /// </remarks>
 internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore

@@ -65,7 +65,7 @@ function cx(...values: Array<string | false | undefined>): string {
 }
 
 /**
- * ONE card for all seven node types. ponytail: the per-type difference on the card is an icon and a translated
+ * ONE card for all seven node types. simplified: the per-type difference on the card is an icon and a translated
  * kind badge — everything that actually diverges per type (a validation report, a Dev Mode deep link, an embedded
  * transcript) lives in the node PANEL, which already dispatches on kind. The registry below keeps seven entries so a
  * type that earns its own body later can be swapped in without touching the mapper or the view.

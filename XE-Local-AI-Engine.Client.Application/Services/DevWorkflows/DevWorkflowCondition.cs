@@ -134,7 +134,7 @@ internal sealed record DevWorkflowCondition
                 return leftInteger.CompareTo(rightInteger);
             }
 
-            // ponytail: the last resort, for the tokens no exact arm reads; a token not even double reads is no ordering
+            // simplified: the last resort, for the tokens no exact arm reads; a token not even double reads is no ordering
             // at all. Two differing past ~17 digits read as equal. Upgrade: a BigInteger significand plus an exponent.
             return left.TryGetDouble(out var leftDouble) && right.TryGetDouble(out var rightDouble)
                 ? leftDouble.CompareTo(rightDouble)

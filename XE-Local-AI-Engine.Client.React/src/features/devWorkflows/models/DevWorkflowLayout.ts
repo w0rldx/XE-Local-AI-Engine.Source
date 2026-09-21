@@ -6,7 +6,7 @@
 //               ties broken by (materializationGroupKey, materializationIndex, nodeKey, id)
 // x = rank * 280, y = indexInRank * 130                            — TOP-ALIGNED, see below
 //
-// ponytail: single barycenter pass, no crossing-minimisation iterations — swap in dagre if edge crossings become
+// simplified: single barycenter pass, no crossing-minimisation iterations — swap in dagre if edge crossings become
 // unreadable on real fan-out graphs; this module's signature is the seam.
 
 const RANK_SPACING_X = 280;

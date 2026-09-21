@@ -121,6 +121,14 @@ Probing logic (`ProbeAsync`):
 - **VRAM** — NVIDIA via `nvidia-smi --query-gpu=memory.total` (scans past warning-banner lines to the first parseable line); Windows via a DXGI seam; **Linux non-NVIDIA has no byte-accurate source → VRAM unknown**.
 - **Degrade rule (`HardwareProfiler.ProbeAsync`).** `gpuAccelAvailable = vramKnown && vendor ∈ {Nvidia, Amd, Intel}`. **VRAM unknown ⇒ no GPU budget**, even when a vendor is detected — so the estimator scores against RAM in CPU mode. This is why an AMD/Intel Linux box degrades to CPU mode in the tests.
 
+### Observed layer placement: a partial reading always outranks a full one
+
+The profiler says what the hardware *could* do; `ILlamaLayerPlacementReport` (`Providers.LlamaServer/Implementation/LlamaLayerPlacementReport.cs`) says what llama-server actually *did*. The supervisor records one `(model, role, variant)` observation per load and the runtime device audit reads `Current`.
+
+`Current` prefers the newest **partial** observation, and only then the newest of any kind. The preference is **absolute** — a partial outranks a full reading whatever their sequence numbers — because the alternative is dishonest: loading a small embedding model after a chat model that spilled layers would replace the actionable "38/49 on GPU" with a reassuring "13/13 on GPU" for a model nobody is waiting on. Two models really can be resident with only the older one spilling. What makes the absolute preference defensible rather than sticky is `Remove`, which retires every variant recorded under a `(model, role)` the moment that process is torn down; a stale partial can therefore never outlive the process that produced it.
+
+`0/N` is its own outcome, not a missing reading: it means the load ran entirely on CPU, which is a placement the operator needs told. The report is deliberately **not persisted** and each load overwrites its key rather than appending, because placement depends on the binary, the free VRAM at load time and the launch plan — a value carried across a restart could be wrong in exactly the situation it exists to expose, and a reload under different VRAM pressure can legitimately place layers differently.
+
 ## The curated catalog lane (primary recommendation source)
 
 `ModelFitRefreshService.BuildRecommendationsAsync` merges **two lanes** and returns the curated catalog first:

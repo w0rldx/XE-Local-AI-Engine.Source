@@ -1048,7 +1048,6 @@ XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowEndToEndTests.cs|summary|1
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowGraphContractTests.cs|summary|1
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowGraphTests.cs|summary|11
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowGraphs.cs|summary|12
-XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowGraphs.cs|xml|1
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowHarness.cs|run|2
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowHarness.cs|summary|3
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowHostFixture.cs|summary|3

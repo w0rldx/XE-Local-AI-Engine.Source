@@ -42,7 +42,7 @@ public sealed class DevWorkflowOptions
     /// <remarks>
     ///     Two because a build is already multi-core. The value exists because the attempt supervisor this lane copies
     ///     has no cap at all, so a workflow fanning out eight validation nodes would start eight builds.
-    ///     ponytail: the default is a guess. Size it from real runs, not from another guess.
+    ///     simplified: the default is a guess. Size it from real runs, not from another guess.
     /// </remarks>
     [Range(1, 32)]
     public int MaxParallelToolNodes { get; init; } = 2;

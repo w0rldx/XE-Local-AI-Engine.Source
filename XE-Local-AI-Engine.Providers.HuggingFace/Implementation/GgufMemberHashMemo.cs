@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 /// </summary>
 /// <remarks>
 ///     Verification re-reads every byte of every member on every acquire, and the benchmark freeze acquires once per run, so a ten-cell
-///     matrix re-hashes one unchanged multi-gigabyte weight dozens of times before a single token. ponytail: length + last-write-time is
+///     matrix re-hashes one unchanged multi-gigabyte weight dozens of times before a token. simplified: length + last-write-time is
 ///     the standard unchanged-file heuristic. Ceiling: a member rewritten with BOTH preserved is never re-detected in-process — but that
 ///     actor already has write access to the models directory, and could equally rewrite the registry it is compared against. Upgrade
 ///     path: key on inode/change time (<c>st_ctime</c>), which a plain rewrite cannot preserve.

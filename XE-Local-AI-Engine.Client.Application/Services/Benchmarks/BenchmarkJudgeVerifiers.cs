@@ -264,7 +264,7 @@ public static class BenchmarkJudgeVerifiers
         return options.Trim ? text.Trim() : text;
     }
 
-    // ponytail: the structural subset BenchmarkJudgeVerifierConfig already refuses anything outside of. Keeping the
+    // simplified: the structural subset BenchmarkJudgeVerifierConfig already refuses anything outside of. Keeping the
     // enforced set and the accepted set in one file is what makes "accepted implies enforced" checkable.
     private static string? SchemaFailure(JsonElement schema, JsonElement value, string path)
     {

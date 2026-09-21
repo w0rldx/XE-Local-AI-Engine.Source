@@ -242,7 +242,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     /// </remarks>
     public async Task<bool> StopAsync(Guid nodeRunId)
     {
-        // ponytail: the run waits up to one sweep (DevWorkflowOptions.SweepSeconds) to notice a stopped pass landed,
+        // simplified: the run waits up to one sweep (DevWorkflowOptions.SweepSeconds) to notice a stopped pass landed,
         // since signalling from its continuation needs the dispatcher, which takes THIS type. Fix: a settable signal.
         if (!_inflight.TryGetValue(nodeRunId, out var flight) || flight.Cancellation.IsCancellationRequested)
         {

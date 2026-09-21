@@ -166,7 +166,7 @@ public sealed partial class BenchmarkStore
         }
 
         // The SAME per-run deletion the single-run delete performs, once per run in this transaction, every run checked first. Re-read one at a time: DeleteRunCoreAsync
-        // clears the tracker, so a detached instance skips its judge-pointer write. ponytail: one pass per run (a few thousand statements for 400); set-based would be one.
+        // clears the tracker, so a detached instance skips its judge-pointer write. simplified: one pass per run (a few thousand statements for 400); set-based would be one.
         foreach (var run in runs)
         {
             await DeleteRunCoreAsync(await RequireRunAsync(run.Id, tracking: true, cancellationToken), cancellationToken);

@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 ///     ceiling a blocked collector holds a thread-pool worker and a service scope for the life of the process, one
 ///     per settle. A settle finding every slot taken goes ahead unmeasured, the trade the deadline already makes. A
 ///     container SINGLETON, since the scoped store makes a per-instance pool bound nothing and a static one would
-///     span every application. ponytail: a counter, not a semaphore, because admission never waits; next rung a keyed pool.
+///     span every application. simplified: a counter, not a semaphore, because admission never waits; next rung a keyed pool.
 /// </remarks>
 internal sealed class DevWorkflowNodeTelemetryCollectionPool
 {

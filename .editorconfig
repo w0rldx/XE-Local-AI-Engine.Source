@@ -465,6 +465,11 @@ dotnet_diagnostic.CA2208.severity = warning
 # Unused parameters.
 dotnet_diagnostic.IDE0060.severity = warning
 
+# Unnecessary using directives. Warning, like its IDE0060 sibling above, which TreatWarningsAsErrors turns into a
+# build error in Release. The rule is inert unless GenerateDocumentationFile is true — Directory.Build.props sets it
+# and says why.
+dotnet_diagnostic.IDE0005.severity = warning
+
 # LoggerMessage template must be a static expression — already error via TreatWarningsAsErrors; explicit so an
 # SDK default change cannot silently relax it.
 dotnet_diagnostic.CA2254.severity = warning

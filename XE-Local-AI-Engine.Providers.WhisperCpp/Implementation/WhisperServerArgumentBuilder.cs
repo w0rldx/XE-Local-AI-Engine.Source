@@ -72,7 +72,7 @@ internal static class WhisperServerArgumentBuilder
     ///     Threads for a CPU-backend launch: half the logical cores, bounded to 4..8.
     /// </summary>
     /// <remarks>
-    ///     ponytail: the CPU thread count is a guess (half the cores, clamped to 4..8). Size it from a real CPU-backend
+    ///     simplified: the CPU thread count is a guess (half the cores, clamped to 4..8). Size it from a real CPU-backend
     ///     run rather than from a second guess.
     /// </remarks>
     internal static int ResolveThreadCount(int processorCount) =>

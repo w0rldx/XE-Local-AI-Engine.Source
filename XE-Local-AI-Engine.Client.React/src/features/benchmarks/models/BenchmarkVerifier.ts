@@ -254,7 +254,7 @@ function constraintIssue(config: BenchmarkVerifierConfig): BenchmarkVerifierIssu
  * The node's rules, re-checked here. Two of them it cannot fully mirror, and both fail SAFE — this returns null and the
  * node refuses:
  *
- * ponytail: a JavaScript `RegExp` accepts lookaround, backreferences and atomic groups, which the node's
+ * simplified: a JavaScript `RegExp` accepts lookaround, backreferences and atomic groups, which the node's
  * `RegexOptions.NonBacktracking` refuses outright. So this catches a syntax error and the node catches the rest; the
  * upgrade path is a linear-time-construct check here, which is a parser, for a message the save already produces.
  */

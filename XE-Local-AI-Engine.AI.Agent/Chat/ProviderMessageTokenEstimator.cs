@@ -26,7 +26,7 @@ internal static class ProviderMessageTokenEstimator
     private const int CharsPerToken = TokenEstimatorCalibrationStore.DefaultCharsPerToken;
     private const int PerMessageOverheadTokens = 4;
 
-    // ponytail: flat per-image charge — llama.cpp vision costs a few hundred to ~1-2k tokens per image by resolution and
+    // simplified: flat per-image charge — llama.cpp vision costs a few hundred to ~1-2k tokens per image by resolution and
     // patch grid, and zero-cost would overrun the window. Mirrored in HeuristicTokenEstimator (Application) — change both.
     private const int EstimatedTokensPerImage = 512;
 

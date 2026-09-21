@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Data;
-using System.Data.Common;
 using System.Globalization;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;

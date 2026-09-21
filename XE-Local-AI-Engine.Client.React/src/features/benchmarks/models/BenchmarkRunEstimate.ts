@@ -30,7 +30,7 @@ export function benchmarkRunEstimate(input: BenchmarkRunEstimateInput, medianRun
 		...input,
 		runsPerItem,
 		totalRuns,
-		// ponytail: runs x median, ignoring that a cold first load is slower than the rest. A per-cell load estimate
+		// simplified: runs x median, ignoring that a cold first load is slower than the rest. A per-cell load estimate
 		// would need the model footprint and the host's disk speed; upgrade when an operator says the figure misleads.
 		estimatedMs: medianRunMs === null ? null : totalRuns * medianRunMs,
 		exceedsCap: totalRuns > benchmarkTaskItemLimits.maxRunsPerRequest,

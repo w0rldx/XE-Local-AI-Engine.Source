@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client;
 
 using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.Extensions.Options;
 using Serilog;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Hosting;

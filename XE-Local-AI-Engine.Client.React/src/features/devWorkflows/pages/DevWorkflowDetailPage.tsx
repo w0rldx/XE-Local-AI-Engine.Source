@@ -245,7 +245,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 			artifactNameById={artifactNameById}
 			// The whole loaded feed and the whole run, not a pre-filtered slice: attempt history, the cascade-rerun
 			// account and a structural node's dependencies are each a different question of the same two sources, and
-			// the panel is where they are asked. ponytail: the feed is the pages the events tab has LOADED, so evidence
+			// the panel is where they are asked. simplified: the feed is the pages the events tab has LOADED, so evidence
 			// past that watermark is simply absent — which the attempts list says out loud rather than guessing around.
 			events={events}
 			run={run}

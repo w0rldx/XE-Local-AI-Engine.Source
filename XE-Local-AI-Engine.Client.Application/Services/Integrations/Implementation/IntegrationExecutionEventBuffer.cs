@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 ///     serialized byte length, and a FIFO of terminal ids for eviction.
 /// </summary>
 /// <remarks>
-///     ponytail: one node-wide lock over the whole dictionary rather than a lock per execution. MaxTrackedExecutions is
+///     simplified: one node-wide lock over the whole dictionary rather than a lock per execution. MaxTrackedExecutions is
 ///     64 and appends run at human-answer rate; per-execution locks if a profile ever shows contention here.
 /// </remarks>
 internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEventBuffer, IDisposable

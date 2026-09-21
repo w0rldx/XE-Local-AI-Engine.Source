@@ -8,7 +8,7 @@
  * `unsloth/Qwen3-32B-GGUF` and `unsloth/Qwen3.8-27B-GGUF` both reduce to `qwen`: the owner segment is dropped, the rest
  * is lowercased, and the leading run of letters before the first digit, dash, dot or colon is the family.
  *
- * ponytail: naive leading-token heuristic. A vendor-prefixed name reduces to the VENDOR
+ * simplified: naive leading-token heuristic. A vendor-prefixed name reduces to the VENDOR
  * (`bartowski/Meta-Llama-3.1-8B` → `meta`, not `llama`), which still groups that vendor's models together and still
  * separates them from `qwen`, so it does its job — it just does not always name the architecture. The upgrade path is
  * the architecture string in the GGUF metadata, which the node already reads at import time; wire that through if the

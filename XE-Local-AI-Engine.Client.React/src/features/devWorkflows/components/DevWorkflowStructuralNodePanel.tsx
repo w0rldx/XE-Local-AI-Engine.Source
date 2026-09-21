@@ -147,7 +147,7 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
  *
  * The one edge state the panel cannot see is a `Succeeded` source whose edge CONDITION did not fire: judging that
  * needs the source's output document, and the summary row does not carry one. Join dependencies are unconditional in
- * every shape we ship. ponytail: a conditional join edge would need `outputJson` on the summary row to read honestly.
+ * every shape we ship. simplified: a conditional join edge would need `outputJson` on the summary row to read honestly.
  *
  * A materialization TEMPLATE is none of these, and is named as what it is instead.
  */

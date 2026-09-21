@@ -278,7 +278,7 @@ public static class BenchmarkJudgeVerifierConfig
         };
     }
 
-    // ponytail: a dependency-free structural subset of JSON Schema — type/properties/required/items/enum/const/additionalProperties. The ceiling is enforced, not hidden:
+    // simplified: a dependency-free structural subset of JSON Schema — type/properties/required/items/enum/const/additionalProperties. The ceiling is enforced, not hidden:
     // a schema naming any other keyword is refused at activation, so the subset can never silently under-check. A full validator can replace this behind the same seam.
     private static void ValidateSchemaShape(JsonElement schema)
     {

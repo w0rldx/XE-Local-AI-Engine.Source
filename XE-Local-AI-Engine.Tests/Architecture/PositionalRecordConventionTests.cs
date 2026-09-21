@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Architecture;
 
-using System.Xml.Linq;
 using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -12,9 +11,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <remarks>
 ///     A positional record leaves nothing in IL that separates it from a non-positional one — both compile to
 ///     properties plus a constructor — so this reads source, like <see cref="PrimaryConstructorConventionTests" />,
-///     which also fences the same set of roots and asserts that every solution project is among them. Reading files
-///     rather than assemblies has a second effect that matters here: a source file linked into two test projects is
-///     seen once, where a reflection walk would report its types twice.
+///     over the same <see cref="EnforcedSourceFiles" /> walk, which that guard also asserts covers every solution
+///     project. Reading files rather than assemblies has a second effect that matters here: a source file linked into
+///     two test projects is seen once, where a reflection walk would report its types twice.
 ///     <para>
 ///         <c>record struct</c> is out of scope by decision: a value type is what the positional form is for. The
 ///         allowlist is shrink-only — a stale entry fails as loudly as an unreasoned declaration, so a conversion
@@ -24,9 +23,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class PositionalRecordConventionTests
 {
-    /// <summary>C# that ships outside the solution, fenced the same way <see cref="PrimaryConstructorConventionTests" /> fences it.</summary>
-    private static readonly string[] ExtraEnforcedRoots = ["tools"];
-
     private static readonly string AllowlistPath =
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "PositionalRecordAllowlist.txt");
 
@@ -200,15 +196,12 @@ public sealed class PositionalRecordConventionTests
         var declarations = new List<(string Key, int Line)>();
         var files = 0;
 
-        foreach (var root in EnforcedRoots())
+        foreach (var (path, relative) in EnforcedSourceFiles.All())
         {
-            foreach (var (path, relative) in SourceFiles(root))
-            {
-                files++;
+            files++;
 
-                declarations.AddRange(Declarations(File.ReadAllText(path))
-                    .Select(site => ($"{relative}|{site.Type}", site.Line)));
-            }
+            declarations.AddRange(Declarations(File.ReadAllText(path))
+                .Select(site => ($"{relative}|{site.Type}", site.Line)));
         }
 
         return (files, declarations);
@@ -363,53 +356,4 @@ public sealed class PositionalRecordConventionTests
         && (start + length >= text.Length || !IsWordCharacter(text[start + length]));
 
     private static bool IsWordCharacter(char character) => char.IsLetterOrDigit(character) || character == '_';
-
-    private static string[] SolutionProjects() =>
-        XDocument.Load(RepositoryPaths.Combine("XE-Local-AI-Engine.slnx"))
-                 .Descendants("Project")
-                 .Select(project => (string?)project.Attribute("Path"))
-                 .Where(path => path is not null && path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-                 .Select(path => Path.GetFileNameWithoutExtension(path!.Replace('\\', '/')))
-                 .Order(StringComparer.Ordinal)
-                 .ToArray();
-
-    private static IEnumerable<string> EnforcedRoots() =>
-        SolutionProjects().Concat(ExtraEnforcedRoots).Select(root => RepositoryPaths.Combine(root));
-
-    private static IEnumerable<(string Path, string Relative)> SourceFiles(string root)
-    {
-        if (!Directory.Exists(root))
-        {
-            yield break;
-        }
-
-        foreach (var path in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
-        {
-            var relative = Path.GetRelativePath(RepositoryPaths.Root, path).Replace('\\', '/');
-
-            if (IsGenerated(relative, path))
-            {
-                continue;
-            }
-
-            yield return (path, relative);
-        }
-    }
-
-    /// <summary>Generated sources are regenerated, never hand-edited, so the rule cannot be applied to them.</summary>
-    private static bool IsGenerated(string relative, string path) =>
-        relative.Contains("/obj/", StringComparison.Ordinal)
-        || relative.Contains("/bin/", StringComparison.Ordinal)
-        || relative.Contains("/Migrations/", StringComparison.Ordinal)
-        || relative.EndsWith(".Designer.cs", StringComparison.Ordinal)
-        || relative.EndsWith(".g.cs", StringComparison.Ordinal)
-        || HasGeneratedHeader(path);
-
-    private static bool HasGeneratedHeader(string path)
-    {
-        using var reader = new StreamReader(path);
-        var buffer = new char[400];
-        var read = reader.ReadBlock(buffer, 0, buffer.Length);
-        return new string(buffer, 0, read).Contains("<auto-generated", StringComparison.Ordinal);
-    }
 }

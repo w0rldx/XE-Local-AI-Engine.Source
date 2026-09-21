@@ -89,7 +89,7 @@ public sealed class LiveTranscriptionSegmenter
     /// <remarks>
     ///     A list rather than a ring buffer: it holds at most the cap (ten seconds, 320 KB) and is compacted from the
     ///     front about once a second.
-    ///     <c>ponytail: front-compaction copies the retained tail; a ring buffer only pays off far above 10 s windows.</c>
+    ///     <c>simplified: front-compaction copies the retained tail; a ring buffer only pays off far above 10 s windows.</c>
     /// </remarks>
     private readonly List<byte> _tail = [];
 
@@ -272,7 +272,7 @@ public sealed class LiveTranscriptionSegmenter
         bool flush,
         List<LiveCommit> commits)
     {
-        // ponytail: one word per forced boundary is the accepted error; the upgrade path — carry keep_ms of the previous window into the next and de-duplicate
+        // simplified: one word per forced boundary is the accepted error; the upgrade path — carry keep_ms of the previous window into the next and de-duplicate
         // on tokens, as whisper.cpp's examples/stream/stream.cpp does — and the recorded fixtures are in docs/wiki/24-audio-transcription.md ("The segmenter").
         var committableUntilMs = atCap || flush ? long.MaxValue : windowEndMs - _settings.TailGuardMs;
 

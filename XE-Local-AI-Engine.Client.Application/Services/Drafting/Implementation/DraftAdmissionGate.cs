@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 /// </summary>
 /// <remarks>
 ///     A draft is a foreground generation on the same single local runtime an invocation uses, so it refuses rather
-///     than waits, and the slot is process-wide. ponytail: best-effort check-then-run — an invocation starting
+///     than waits, and the slot is process-wide. simplified: best-effort check-then-run — an invocation starting
 ///     between the check and the call still overlaps, as does background memory extraction, which bypasses the gate;
 ///     llama-server queues both, and the real fix is a cross-path admission service.
 /// </remarks>

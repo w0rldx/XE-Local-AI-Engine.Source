@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     test would notice, and every mutation returns the watermark its commit allocated, so wrapping the one interface
 ///     they all go through makes it impossible to forget, later code included. The kind comes from the COMMAND, not
 ///     the event row — a caller parking a node run on a human is asking for a person, the one push with a consequence
-///     beyond a re-render. ponytail: one ping per mutation, no coalescing; a per-run debounce goes here if it measures.
+///     beyond a re-render. simplified: one ping per mutation, no coalescing; a per-run debounce goes here if it measures.
 /// </remarks>
 internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
 {

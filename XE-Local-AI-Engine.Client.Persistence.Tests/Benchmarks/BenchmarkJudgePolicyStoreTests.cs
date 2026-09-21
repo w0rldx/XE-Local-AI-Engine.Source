@@ -783,9 +783,9 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
 
     /// <summary>
     ///     The project delete takes its finished runs with it, and every table that hangs off a run or off the project
-    ///     is emptied — foreign keys are off on this database, so a table the cascade forgets does not error, its rows
-    ///     simply outlive the project forever, and most of them carry encrypted evidence. A second project with its
-    ///     own run is the control: a cascade that deletes by the wrong predicate would take it too.
+    ///     is emptied — the benchmark references all declare <c>Restrict</c>, so a table the ordered delete forgets
+    ///     blocks the parent delete outright rather than orphaning rows that carry encrypted evidence. A second project
+    ///     with its own run is the control: a delete that matched by the wrong predicate would take it too.
     /// </summary>
     [Test]
     public async Task DeleteProject_WithFinishedRuns_TakesEveryDependentRowWithIt_AndLeavesOtherProjectsAlone()
@@ -834,8 +834,8 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
             AssertEx.NotNull(await store.GetProjectAsync(survivorId), "Deleting one project must not reach another one's rows.");
         }
 
-        // Foreign keys off is the real node configuration, so nothing catches an orphan for us: every table is counted
-        // by hand, scoped to the deleted project, and the survivor's own rows are counted to prove the blast radius.
+        // A Restrict reference fails the parent delete when a child is left behind, but the run ids a comparison names
+        // declare no reference at all, so those rows go only if this delete names them: every table is counted by hand.
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
         // Counted over the WHOLE table rather than filtered by project id: a `WHERE project_id = '…'` predicate that

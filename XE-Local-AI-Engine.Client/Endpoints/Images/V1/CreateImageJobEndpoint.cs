@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 

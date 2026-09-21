@@ -19,7 +19,7 @@ public sealed class ModelNameValidator
         _allowedPattern = new Regex(pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
     }
 
-    /// <inheritdoc />
+    /// <summary>The reason <paramref name="modelName" /> is not an acceptable model identifier, or null when it is.</summary>
     /// <remarks>
     ///     An external id (<c>ext:{connectionId}/{wireId}</c>) is validated by its OWN grammar and returns unconditionally: the general allow-pattern
     ///     cannot express the namespaced form (its first slash segment may not contain a colon, and two slashes fail outright), and widening it would

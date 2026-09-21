@@ -27,7 +27,7 @@ import {
 /**
  * Matches the server's `MaxNodeRunsPerRun` bound exactly, so the guard fires only if that bound is raised without the
  * client following — which is precisely when a guard earns its keep (a 300 cap over a 200 bound was dead code).
- * ponytail: flat render past the cap is refused outright rather than collapsed — grouping a materialized sibling group
+ * simplified: flat render past the cap is refused outright rather than collapsed — grouping a materialized sibling group
  * into one expandable node is the v2 seam, and it needs a server-side group id.
  */
 export const DEV_WORKFLOW_MAX_RENDERED_NODES = 200;

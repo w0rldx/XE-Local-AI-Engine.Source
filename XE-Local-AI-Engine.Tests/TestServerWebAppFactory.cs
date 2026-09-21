@@ -15,7 +15,6 @@ using NSubstitute;
 using OllamaSharp;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client;
-using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
