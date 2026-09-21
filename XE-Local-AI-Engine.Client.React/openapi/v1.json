@@ -1281,6 +1281,16 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -5477,6 +5487,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -5646,6 +5666,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -5689,6 +5719,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillDraftResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -8831,6 +8871,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -8886,6 +8936,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -8930,6 +8990,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -8968,6 +9038,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelLaunchArgumentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -11104,6 +11184,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -12690,6 +12780,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -12765,6 +12865,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StartImageModelDownloadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -22256,6 +22366,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -22639,6 +22759,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
@@ -22841,6 +22971,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentDraftResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }

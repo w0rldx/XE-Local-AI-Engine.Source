@@ -7113,6 +7113,10 @@ export type SaveTutorialStateData = {
 
 export type SaveTutorialStateErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -7121,6 +7125,8 @@ export type SaveTutorialStateErrors = {
 	 */
 	403: unknown;
 };
+
+export type SaveTutorialStateError = SaveTutorialStateErrors[keyof SaveTutorialStateErrors];
 
 export type SaveTutorialStateResponses = {
 	/**
@@ -9640,6 +9646,10 @@ export type CreateSkillData = {
 
 export type CreateSkillErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9648,6 +9658,8 @@ export type CreateSkillErrors = {
 	 */
 	403: unknown;
 };
+
+export type CreateSkillError = CreateSkillErrors[keyof CreateSkillErrors];
 
 export type CreateSkillResponses = {
 	/**
@@ -9727,6 +9739,10 @@ export type UpdateSkillData = {
 
 export type UpdateSkillErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -9735,6 +9751,8 @@ export type UpdateSkillErrors = {
 	 */
 	403: unknown;
 };
+
+export type UpdateSkillError = UpdateSkillErrors[keyof UpdateSkillErrors];
 
 export type UpdateSkillResponses = {
 	/**
@@ -9753,6 +9771,10 @@ export type DraftSkillData = {
 };
 
 export type DraftSkillErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -11750,6 +11772,10 @@ export type DeleteModelKindData = {
 
 export type DeleteModelKindErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11758,6 +11784,8 @@ export type DeleteModelKindErrors = {
 	 */
 	403: unknown;
 };
+
+export type DeleteModelKindError = DeleteModelKindErrors[keyof DeleteModelKindErrors];
 
 export type DeleteModelKindResponses = {
 	/**
@@ -11779,6 +11807,10 @@ export type PutModelKindData = {
 
 export type PutModelKindErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11787,6 +11819,8 @@ export type PutModelKindErrors = {
 	 */
 	403: unknown;
 };
+
+export type PutModelKindError = PutModelKindErrors[keyof PutModelKindErrors];
 
 export type PutModelKindResponses = {
 	/**
@@ -11808,6 +11842,10 @@ export type DeleteModelLaunchArgumentsData = {
 
 export type DeleteModelLaunchArgumentsErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11816,6 +11854,8 @@ export type DeleteModelLaunchArgumentsErrors = {
 	 */
 	403: unknown;
 };
+
+export type DeleteModelLaunchArgumentsError = DeleteModelLaunchArgumentsErrors[keyof DeleteModelLaunchArgumentsErrors];
 
 export type DeleteModelLaunchArgumentsResponses = {
 	/**
@@ -11837,6 +11877,10 @@ export type GetModelLaunchArgumentsData = {
 
 export type GetModelLaunchArgumentsErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -11845,6 +11889,8 @@ export type GetModelLaunchArgumentsErrors = {
 	 */
 	403: unknown;
 };
+
+export type GetModelLaunchArgumentsError = GetModelLaunchArgumentsErrors[keyof GetModelLaunchArgumentsErrors];
 
 export type GetModelLaunchArgumentsResponses = {
 	/**
@@ -13026,6 +13072,10 @@ export type SearchKnowledgeData = {
 
 export type SearchKnowledgeErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -13034,6 +13084,8 @@ export type SearchKnowledgeErrors = {
 	 */
 	403: unknown;
 };
+
+export type SearchKnowledgeError = SearchKnowledgeErrors[keyof SearchKnowledgeErrors];
 
 export type SearchKnowledgeResponses = {
 	/**
@@ -13999,6 +14051,10 @@ export type InspectImageRepositoryData = {
 
 export type InspectImageRepositoryErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -14007,6 +14063,8 @@ export type InspectImageRepositoryErrors = {
 	 */
 	403: unknown;
 };
+
+export type InspectImageRepositoryError = InspectImageRepositoryErrors[keyof InspectImageRepositoryErrors];
 
 export type InspectImageRepositoryResponses = {
 	/**
@@ -14053,6 +14111,10 @@ export type StartImageModelDownloadData = {
 
 export type StartImageModelDownloadErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -14061,6 +14123,8 @@ export type StartImageModelDownloadErrors = {
 	 */
 	403: unknown;
 };
+
+export type StartImageModelDownloadError = StartImageModelDownloadErrors[keyof StartImageModelDownloadErrors];
 
 export type StartImageModelDownloadResponses = {
 	/**
@@ -19615,6 +19679,10 @@ export type CreateAgentDefinitionData = {
 
 export type CreateAgentDefinitionErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -19623,6 +19691,8 @@ export type CreateAgentDefinitionErrors = {
 	 */
 	403: unknown;
 };
+
+export type CreateAgentDefinitionError = CreateAgentDefinitionErrors[keyof CreateAgentDefinitionErrors];
 
 export type CreateAgentDefinitionResponses = {
 	/**
@@ -19820,6 +19890,10 @@ export type UpdateAgentDefinitionData = {
 
 export type UpdateAgentDefinitionErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
@@ -19828,6 +19902,8 @@ export type UpdateAgentDefinitionErrors = {
 	 */
 	403: unknown;
 };
+
+export type UpdateAgentDefinitionError = UpdateAgentDefinitionErrors[keyof UpdateAgentDefinitionErrors];
 
 export type UpdateAgentDefinitionResponses = {
 	/**
@@ -19936,6 +20012,10 @@ export type DraftAgentDefinitionData = {
 };
 
 export type DraftAgentDefinitionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */

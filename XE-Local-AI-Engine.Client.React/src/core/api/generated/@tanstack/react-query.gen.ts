@@ -560,6 +560,7 @@ import type {
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeResponse,
 	CreateAgentDefinitionData,
+	CreateAgentDefinitionError,
 	CreateAgentDefinitionResponse,
 	CreateBaseArtifactData,
 	CreateBaseArtifactError,
@@ -620,6 +621,7 @@ import type {
 	CreateScheduledJobData,
 	CreateScheduledJobResponse,
 	CreateSkillData,
+	CreateSkillError,
 	CreateSkillResponse,
 	CreateSlashCommandData,
 	CreateSlashCommandError,
@@ -707,8 +709,10 @@ import type {
 	DeleteMcpServerData,
 	DeleteMcpServerResponse,
 	DeleteModelKindData,
+	DeleteModelKindError,
 	DeleteModelKindResponse,
 	DeleteModelLaunchArgumentsData,
+	DeleteModelLaunchArgumentsError,
 	DeleteModelLaunchArgumentsResponse,
 	DeleteNodeChatConversationData,
 	DeleteNodeChatConversationError,
@@ -949,6 +953,7 @@ import type {
 	GetModelCatalogInfoData,
 	GetModelCatalogInfoResponse,
 	GetModelLaunchArgumentsData,
+	GetModelLaunchArgumentsError,
 	GetModelLaunchArgumentsResponse,
 	GetNodeChatConversationData,
 	GetNodeChatConversationError,
@@ -1027,6 +1032,7 @@ import type {
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryResponse,
 	InspectImageRepositoryData,
+	InspectImageRepositoryError,
 	InspectImageRepositoryResponse,
 	InstallExternalAppData,
 	InstallExternalAppError,
@@ -1257,6 +1263,7 @@ import type {
 	PromoteTrainingArtifactError,
 	PromoteTrainingArtifactResponse,
 	PutModelKindData,
+	PutModelKindError,
 	PutModelKindResponse,
 	PutModelLaunchArgumentsData,
 	PutModelLaunchArgumentsError,
@@ -1355,11 +1362,13 @@ import type {
 	SaveNodeSettingsError,
 	SaveNodeSettingsResponse,
 	SaveTutorialStateData,
+	SaveTutorialStateError,
 	SaveTutorialStateResponse,
 	ScoreBenchmarkRunData,
 	ScoreBenchmarkRunError,
 	ScoreBenchmarkRunResponse,
 	SearchKnowledgeData,
+	SearchKnowledgeError,
 	SearchKnowledgeResponse,
 	SelectLocalModelData,
 	SelectLocalModelError,
@@ -1407,6 +1416,7 @@ import type {
 	StartGraphWorkflowRunError,
 	StartGraphWorkflowRunResponse,
 	StartImageModelDownloadData,
+	StartImageModelDownloadError,
 	StartImageModelDownloadResponse,
 	StartLiveTranscriptionSessionData,
 	StartLiveTranscriptionSessionError,
@@ -1454,6 +1464,7 @@ import type {
 	UnloadLocalModelError,
 	UnloadLocalModelResponse,
 	UpdateAgentDefinitionData,
+	UpdateAgentDefinitionError,
 	UpdateAgentDefinitionResponse,
 	UpdateBenchmarkJudgePolicyData,
 	UpdateBenchmarkJudgePolicyError,
@@ -1500,6 +1511,7 @@ import type {
 	UpdateScheduledJobData,
 	UpdateScheduledJobResponse,
 	UpdateSkillData,
+	UpdateSkillError,
 	UpdateSkillResponse,
 	UpdateSlashCommandData,
 	UpdateSlashCommandError,
@@ -2015,10 +2027,10 @@ export const getTutorialStateOptions = (options?: Options<GetTutorialStateData>)
 
 export const saveTutorialStateMutation = (
 	options?: Partial<Options<SaveTutorialStateData>>,
-): UseMutationOptions<SaveTutorialStateResponse, AxiosError<DefaultError>, Options<SaveTutorialStateData>> => {
+): UseMutationOptions<SaveTutorialStateResponse, AxiosError<SaveTutorialStateError>, Options<SaveTutorialStateData>> => {
 	const mutationOptions: UseMutationOptions<
 		SaveTutorialStateResponse,
-		AxiosError<DefaultError>,
+		AxiosError<SaveTutorialStateError>,
 		Options<SaveTutorialStateData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -3841,8 +3853,8 @@ export const listSkillsOptions = (options?: Options<ListSkillsData>) =>
 
 export const createSkillMutation = (
 	options?: Partial<Options<CreateSkillData>>,
-): UseMutationOptions<CreateSkillResponse, AxiosError<DefaultError>, Options<CreateSkillData>> => {
-	const mutationOptions: UseMutationOptions<CreateSkillResponse, AxiosError<DefaultError>, Options<CreateSkillData>> = {
+): UseMutationOptions<CreateSkillResponse, AxiosError<CreateSkillError>, Options<CreateSkillData>> => {
+	const mutationOptions: UseMutationOptions<CreateSkillResponse, AxiosError<CreateSkillError>, Options<CreateSkillData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await createSkill({
 				...options,
@@ -3889,8 +3901,8 @@ export const getSkillOptions = (options: Options<GetSkillData>) =>
 
 export const updateSkillMutation = (
 	options?: Partial<Options<UpdateSkillData>>,
-): UseMutationOptions<UpdateSkillResponse, AxiosError<DefaultError>, Options<UpdateSkillData>> => {
-	const mutationOptions: UseMutationOptions<UpdateSkillResponse, AxiosError<DefaultError>, Options<UpdateSkillData>> = {
+): UseMutationOptions<UpdateSkillResponse, AxiosError<UpdateSkillError>, Options<UpdateSkillData>> => {
+	const mutationOptions: UseMutationOptions<UpdateSkillResponse, AxiosError<UpdateSkillError>, Options<UpdateSkillData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateSkill({
 				...options,
@@ -5331,8 +5343,12 @@ export const deleteLocalModelMutation = (
 
 export const deleteModelKindMutation = (
 	options?: Partial<Options<DeleteModelKindData>>,
-): UseMutationOptions<DeleteModelKindResponse, AxiosError<DefaultError>, Options<DeleteModelKindData>> => {
-	const mutationOptions: UseMutationOptions<DeleteModelKindResponse, AxiosError<DefaultError>, Options<DeleteModelKindData>> = {
+): UseMutationOptions<DeleteModelKindResponse, AxiosError<DeleteModelKindError>, Options<DeleteModelKindData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteModelKindResponse,
+		AxiosError<DeleteModelKindError>,
+		Options<DeleteModelKindData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await deleteModelKind({
 				...options,
@@ -5347,8 +5363,8 @@ export const deleteModelKindMutation = (
 
 export const putModelKindMutation = (
 	options?: Partial<Options<PutModelKindData>>,
-): UseMutationOptions<PutModelKindResponse, AxiosError<DefaultError>, Options<PutModelKindData>> => {
-	const mutationOptions: UseMutationOptions<PutModelKindResponse, AxiosError<DefaultError>, Options<PutModelKindData>> = {
+): UseMutationOptions<PutModelKindResponse, AxiosError<PutModelKindError>, Options<PutModelKindData>> => {
+	const mutationOptions: UseMutationOptions<PutModelKindResponse, AxiosError<PutModelKindError>, Options<PutModelKindData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await putModelKind({
 				...options,
@@ -5363,10 +5379,14 @@ export const putModelKindMutation = (
 
 export const deleteModelLaunchArgumentsMutation = (
 	options?: Partial<Options<DeleteModelLaunchArgumentsData>>,
-): UseMutationOptions<DeleteModelLaunchArgumentsResponse, AxiosError<DefaultError>, Options<DeleteModelLaunchArgumentsData>> => {
+): UseMutationOptions<
+	DeleteModelLaunchArgumentsResponse,
+	AxiosError<DeleteModelLaunchArgumentsError>,
+	Options<DeleteModelLaunchArgumentsData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		DeleteModelLaunchArgumentsResponse,
-		AxiosError<DefaultError>,
+		AxiosError<DeleteModelLaunchArgumentsError>,
 		Options<DeleteModelLaunchArgumentsData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -5387,7 +5407,7 @@ export const getModelLaunchArgumentsQueryKey = (options: Options<GetModelLaunchA
 export const getModelLaunchArgumentsOptions = (options: Options<GetModelLaunchArgumentsData>) =>
 	queryOptions<
 		GetModelLaunchArgumentsResponse,
-		AxiosError<DefaultError>,
+		AxiosError<GetModelLaunchArgumentsError>,
 		GetModelLaunchArgumentsResponse,
 		ReturnType<typeof getModelLaunchArgumentsQueryKey>
 	>({
@@ -6204,8 +6224,12 @@ export const reindexKnowledgeDocumentMutation = (
 
 export const searchKnowledgeMutation = (
 	options?: Partial<Options<SearchKnowledgeData>>,
-): UseMutationOptions<SearchKnowledgeResponse, AxiosError<DefaultError>, Options<SearchKnowledgeData>> => {
-	const mutationOptions: UseMutationOptions<SearchKnowledgeResponse, AxiosError<DefaultError>, Options<SearchKnowledgeData>> = {
+): UseMutationOptions<SearchKnowledgeResponse, AxiosError<SearchKnowledgeError>, Options<SearchKnowledgeData>> => {
+	const mutationOptions: UseMutationOptions<
+		SearchKnowledgeResponse,
+		AxiosError<SearchKnowledgeError>,
+		Options<SearchKnowledgeData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await searchKnowledge({
 				...options,
@@ -6980,7 +7004,7 @@ export const inspectImageRepositoryQueryKey = (options?: Options<InspectImageRep
 export const inspectImageRepositoryOptions = (options?: Options<InspectImageRepositoryData>) =>
 	queryOptions<
 		InspectImageRepositoryResponse,
-		AxiosError<DefaultError>,
+		AxiosError<InspectImageRepositoryError>,
 		InspectImageRepositoryResponse,
 		ReturnType<typeof inspectImageRepositoryQueryKey>
 	>({
@@ -7020,10 +7044,14 @@ export const listImageModelDownloadsOptions = (options?: Options<ListImageModelD
 
 export const startImageModelDownloadMutation = (
 	options?: Partial<Options<StartImageModelDownloadData>>,
-): UseMutationOptions<StartImageModelDownloadResponse, AxiosError<DefaultError>, Options<StartImageModelDownloadData>> => {
+): UseMutationOptions<
+	StartImageModelDownloadResponse,
+	AxiosError<StartImageModelDownloadError>,
+	Options<StartImageModelDownloadData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		StartImageModelDownloadResponse,
-		AxiosError<DefaultError>,
+		AxiosError<StartImageModelDownloadError>,
 		Options<StartImageModelDownloadData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10563,10 +10591,14 @@ export const listAgentDefinitionsOptions = (options?: Options<ListAgentDefinitio
 
 export const createAgentDefinitionMutation = (
 	options?: Partial<Options<CreateAgentDefinitionData>>,
-): UseMutationOptions<CreateAgentDefinitionResponse, AxiosError<DefaultError>, Options<CreateAgentDefinitionData>> => {
+): UseMutationOptions<
+	CreateAgentDefinitionResponse,
+	AxiosError<CreateAgentDefinitionError>,
+	Options<CreateAgentDefinitionData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		CreateAgentDefinitionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CreateAgentDefinitionError>,
 		Options<CreateAgentDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -10709,10 +10741,14 @@ export const getAgentDefinitionOptions = (options: Options<GetAgentDefinitionDat
 
 export const updateAgentDefinitionMutation = (
 	options?: Partial<Options<UpdateAgentDefinitionData>>,
-): UseMutationOptions<UpdateAgentDefinitionResponse, AxiosError<DefaultError>, Options<UpdateAgentDefinitionData>> => {
+): UseMutationOptions<
+	UpdateAgentDefinitionResponse,
+	AxiosError<UpdateAgentDefinitionError>,
+	Options<UpdateAgentDefinitionData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		UpdateAgentDefinitionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UpdateAgentDefinitionError>,
 		Options<UpdateAgentDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
