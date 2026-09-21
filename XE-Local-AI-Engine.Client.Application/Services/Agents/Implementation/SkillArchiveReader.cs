@@ -8,15 +8,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     Reads skills out of an untrusted <c>.zip</c> entirely in memory, nothing ever written to disk.
 /// </summary>
 /// <remarks>
-///     Staying in memory removes the symlink-follow and TOCTOU classes outright rather than guarding them, and every
-///     remaining guard fails closed with an operator-visible reason.
-/// </remarks>
-/// <remarks>
-///     The bomb guards bound the bytes ACTUALLY INFLATED. <see cref="ZipArchiveEntry.Length" /> and
-///     <see cref="ZipArchiveEntry.CompressedLength" /> are attacker-authored assertions, never measurements, so
-///     nothing here allocates from them or decides on them: an entry declaring 4 GiB for twenty real bytes would
-///     otherwise abort a harmless archive. Only entries the import intends to keep are inflated at all, so a
-///     repository full of binaries costs nothing and is refused for nothing.
+///     Staying in memory removes the symlink-follow and TOCTOU classes outright rather than guarding them, and every remaining guard fails
+///     closed with an operator-visible reason. The bomb guards bound the bytes ACTUALLY INFLATED: <see cref="ZipArchiveEntry.Length" /> and
+///     <see cref="ZipArchiveEntry.CompressedLength" /> are attacker-authored assertions, never measurements, so nothing here allocates from
+///     them or decides on them — an entry declaring 4 GiB for twenty real bytes would otherwise abort a harmless archive. Only entries the
+///     import intends to keep are inflated at all, so a repository full of binaries costs nothing and is refused for nothing.
 /// </remarks>
 internal static class SkillArchiveReader
 {

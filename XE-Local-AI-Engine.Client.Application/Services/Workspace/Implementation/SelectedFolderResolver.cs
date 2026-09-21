@@ -60,6 +60,7 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
         return records.Select(record => new SelectedFolderReference { Id = record.Id.ToString(), Alias = record.Alias }).ToArray();
     }
 
+    /// <summary>Resolves one selected folder reference to the folder it names, or reports why it cannot be used.</summary>
     /// <remarks>
     ///     Accepts either form the node hands out: the opaque GUID, or the human-facing <b>alias</b> that Node Settings displays and that
     ///     <c>run_in_agent_home</c>'s schema advertises — without the alias path only the GUID works, and no tool result ever shows the model one. The

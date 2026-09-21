@@ -59,6 +59,7 @@ public sealed class ValidateGraphWorkflowDefinitionRequest
 // The wire graph: a field-for-field mirror of the stored graph document rather than a projection, so the mapper is a deserialize and nothing else, and a definition read
 // back, edited and saved keeps every field it arrived with. There is no node or edge table — the shape is composed from the encrypted graph blob on the definition row.
 
+/// <summary>The wire form of an authored graph: its schema version, its nodes and its edges.</summary>
 /// <remarks>
 ///     <see cref="SchemaVersion" /> is NULLABLE, and that is the whole point: as a plain <c>int</c> an absent member
 ///     and an explicit <c>0</c> both arrive as 0, so the mapper could not tell "the author omitted it" from "the author

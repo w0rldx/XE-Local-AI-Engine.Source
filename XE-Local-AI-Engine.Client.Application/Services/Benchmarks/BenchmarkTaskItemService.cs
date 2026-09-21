@@ -346,6 +346,7 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
         ];
     }
 
+    /// <summary>Serialises an optional JSON body to UTF-8 bytes for an encrypted column, keeping an absent one null.</summary>
     /// <remarks>
     ///     The cast is load-bearing. Without it the conditional's natural type is <c>byte[]?</c>, and a null array
     ///     converts to an EMPTY <see cref="ReadOnlyMemory{T}" /> rather than to a null nullable — so an omitted payload

@@ -16,6 +16,7 @@ internal static class DevWorkflowRunSeeds
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>Builds the node-run seeds for one run: a row per node of the graph, bounded by the per-run cap.</summary>
     /// <param name="enabledRuleSets">Read once by the CALLER, the only thing here that touches the store.</param>
     /// <remarks>
     ///     That keeps this composition static and testable, exactly as <c>maxNodeRunsPerRun</c> being a plain value

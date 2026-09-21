@@ -16,13 +16,13 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 ///     copy → run → export → apply lifecycle with no container dependency.
 /// </summary>
 /// <remarks>
-///     Supervised execution, not an OS isolation boundary: a future hardware-isolated (MXC) provider
-///     replaces the whole provider, not the contract. Always enforced: the jail, <see cref="SandboxJailPathGuard" />'s
-///     path and symlink guards, a scrubbed child environment, the per-command timeout, tree-kill, output byte caps and
-///     a jail-disk ceiling. Cgroup ceilings, egress denial and filesystem isolation hold only where the launcher's
-///     probe measured them active, which <see cref="Capabilities" /> reads too, so a request is refused, not downgraded.
+///     Supervised execution, not an OS isolation boundary: a future hardware-isolated (MXC) provider replaces the whole provider, not the
+///     contract. Always enforced: the jail, <see cref="SandboxJailPathGuard" />'s path and symlink guards, a scrubbed child environment, the
+///     per-command timeout, tree-kill, output byte caps and a jail-disk ceiling. Cgroup ceilings, egress denial and filesystem isolation hold
+///     only where the launcher's probe measured them active, which <see cref="Capabilities" /> reads too, so a request is refused, not
+///     downgraded. Section 7 of the security wiki page below; substrate rules: ADR 0004 and ADR 0007.
 /// </remarks>
-/// <seealso href="../../../../docs/wiki/12-security-and-privacy.md">Section 7; substrate rules: ADR 0004, ADR 0007.</seealso>
+/// <seealso href="../../../../docs/wiki/12-security-and-privacy.md" />
 // Serves BOTH per-feature roles — AgentHome/Coder through IAgentSandboxRuntimeProvider, Development Mode through
 // IDevelopmentSandboxRuntimeProvider — and both resolve the SAME DI singleton; see the _jailRoot comment for why.
 public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, IDevelopmentSandboxRuntimeProvider, IWorkSessionSandboxRuntimeProvider, IDisposable

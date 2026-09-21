@@ -21,6 +21,7 @@ public sealed class ListBenchmarkRunsRequest
     public bool IncludeUnscored { get; init; } = true;
 }
 
+/// <summary>Starts one benchmark run, or a repeat group of them, for one model against one frozen project snapshot.</summary>
 /// <remarks>
 ///     With <see cref="RepeatCount" /> above 1, or with <see cref="Warmup" />, the node freezes ONCE and enqueues several runs against that one snapshot, sharing a
 ///     <c>repeatGroupId</c> and numbered by <c>repeatIndex</c> (0 = the warm-up when one was asked for, then 1..N), back-to-back in FIFO order. Each still spawns its
@@ -142,6 +143,7 @@ public sealed class CancelBenchmarkRunRequest
     public long ExpectedVersion { get; init; }
 }
 
+/// <summary>Records the operator's quality score for one finished run.</summary>
 /// <remarks>
 ///     <see cref="Score" /> is nullable on purpose: a CLR-default <c>0</c> is a VALID operator score now, so an omitted
 ///     body field must be distinguishable from a deliberate zero and is rejected as a 400.

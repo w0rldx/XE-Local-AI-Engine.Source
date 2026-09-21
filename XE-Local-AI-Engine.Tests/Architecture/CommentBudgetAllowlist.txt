@@ -4,12 +4,17 @@
 # many items in that file exceed that budget today. A file with no line for a rule must measure zero.
 # Blank lines and lines starting with '#' are ignored.
 #
-# Rules and their budgets (docs/wiki/16-code-conventions.md):
+# Rules (docs/wiki/16-code-conventions.md). The first five are length budgets, the last four are shapes
+# that satisfy a length budget while being wrong:
 #   summary   a <summary> over 240 characters of tag-stripped text
 #   tag       a <param>/<returns>/<value> over 160 characters
 #   remarks   a <remarks> over 5 content lines or 600 characters
 #   block     a /// block over 15 lines
 #   run       more than 2 consecutive own-line // lines
+#   multi     a /// block carrying a second <summary> or <remarks>
+#   seealso   a <seealso> carrying a prose body, which no budget measures
+#   nosummary a /// block with <remarks> but no <summary> and no <inheritdoc>
+#   xml       a /// block that is not well-formed XML; nothing else in the build parses one
 #
 # The list is SHRINK-ONLY. Measuring more than the count fails; measuring less fails as stale, so the commit
 # that cleans a file lowers or deletes its line in the same change and the room cannot be spent twice. To
@@ -756,8 +761,10 @@ XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowSliceATests.cs|summary|5
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowStateMachineTests.cs|summary|11
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowToolExecutorTests.cs|summary|11
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowToolOverlayTests.cs|summary|7
+XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowToolSandboxTests.cs|multi|1
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowToolSandboxTests.cs|summary|6
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowWorkspaceSecretsSinkTests.cs|summary|3
+XE-Local-AI-Engine.Tests/DevWorkflows/Dispatch/DevWorkflowDevTaskTests.cs|multi|2
 XE-Local-AI-Engine.Tests/DevWorkflows/Dispatch/DevWorkflowDevTaskTests.cs|run|4
 XE-Local-AI-Engine.Tests/DevWorkflows/Dispatch/DevWorkflowDevTaskTests.cs|summary|26
 XE-Local-AI-Engine.Tests/DevWorkflows/Dispatch/DevWorkflowDispatcherTests.cs|run|2
@@ -869,6 +876,7 @@ XE-Local-AI-Engine.Tests/Endpoints/Development/V1/DevelopmentEndpointTests.cs|ru
 XE-Local-AI-Engine.Tests/Endpoints/Development/V1/DevelopmentEndpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Endpoints/Development/V1/SandboxIsolationSummaryTests.cs|run|7
 XE-Local-AI-Engine.Tests/Endpoints/Development/V1/SandboxIsolationSummaryTests.cs|summary|4
+XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowEndpointTests.cs|multi|1
 XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowEndpointTests.cs|summary|8
 XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowRunComposerTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Endpoints/DevelopmentWorkflows/V1/DevWorkflowRunEndpointTests.cs|run|2
@@ -989,6 +997,7 @@ XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppBridgeTokenVerifierTests.cs|sum
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppContainerIdentityTests.cs|summary|1
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppEffectivePermissionsTests.cs|summary|1
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppRealDaemonTests.cs|block|2
+XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppRealDaemonTests.cs|multi|1
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppRealDaemonTests.cs|run|3
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppRealDaemonTests.cs|summary|8
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppResourceGateTests.cs|summary|3
@@ -999,6 +1008,7 @@ XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppServiceInstallTests.cs|summary|
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppServiceLifecycleTests.cs|run|3
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppServiceLifecycleTests.cs|summary|5
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppServiceUpdateTests.cs|summary|5
+XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStartupReconcilerTests.cs|multi|1
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStartupReconcilerTests.cs|run|1
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStartupReconcilerTests.cs|summary|7
 XE-Local-AI-Engine.Tests/ExternalApps/ExternalAppStateObserverTests.cs|run|1
@@ -1038,6 +1048,7 @@ XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowEndToEndTests.cs|summary|1
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowGraphContractTests.cs|summary|1
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowGraphTests.cs|summary|11
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowGraphs.cs|summary|12
+XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowGraphs.cs|xml|1
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowHarness.cs|run|2
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowHarness.cs|summary|3
 XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowHostFixture.cs|summary|3
@@ -1542,6 +1553,7 @@ XE-Local-AI-Engine.Tests/Sandbox/ProcessSandboxFilesystemReachTests.cs|block|1
 XE-Local-AI-Engine.Tests/Sandbox/ProcessSandboxFilesystemReachTests.cs|run|1
 XE-Local-AI-Engine.Tests/Sandbox/ProcessSandboxFilesystemReachTests.cs|summary|7
 XE-Local-AI-Engine.Tests/Sandbox/ProcessSandboxRuntimeProviderTests.cs|block|1
+XE-Local-AI-Engine.Tests/Sandbox/ProcessSandboxRuntimeProviderTests.cs|multi|1
 XE-Local-AI-Engine.Tests/Sandbox/ProcessSandboxRuntimeProviderTests.cs|run|15
 XE-Local-AI-Engine.Tests/Sandbox/ProcessSandboxRuntimeProviderTests.cs|summary|10
 XE-Local-AI-Engine.Tests/Sandbox/SandboxCreateRequestTests.cs|summary|1
@@ -1686,6 +1698,7 @@ XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionOfferProjectionTests.cs|summary
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionServiceTests.cs|run|1
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionStateBlockTests.cs|run|3
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionStateBlockTests.cs|summary|1
+XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionStepLoopTests.cs|multi|1
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionStepLoopTests.cs|run|7
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionStepLoopTests.cs|summary|7
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionTestSupport.cs|run|1

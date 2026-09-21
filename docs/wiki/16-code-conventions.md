@@ -402,10 +402,18 @@ you → fix the root cause → verify the finding is gone → only then suppress
 (`#pragma` around the one span, restored on the next line, or a `[SuppressMessage]` on the one member) **with a
 reason**. A file-wide or project-wide suppression, or one with no reason, is a defect.
 
-`CommentBudgetConventionTests` ratchets all five budgets over every solution project plus `tools/`, against
-`XE-Local-AI-Engine.Tests/Architecture/CommentBudgetAllowlist.txt` — one `file|rule|count` line per file and rule,
-recording how many items in that file exceed that budget today. A file with no line for a rule must measure zero.
-The list is shrink-only in both directions: measuring more than the count fails, and measuring less fails as
+**Four shapes that satisfy a budget while being wrong.** A `///` block carries at most one `<summary>` and at most
+one `<remarks>` — a second of either is a split doc, not a longer one. A `<seealso>` is a pointer, not a slot for
+prose: it carries a `cref` or an `href` and no body. A block that explains a member in `<remarks>` also names it in
+a `<summary>`, unless it is an `<inheritdoc>`; a block of `<param>`/`<returns>` tags alone continues documentation
+that lives elsewhere and is fine. Every block is well-formed XML — this repository leaves
+`GenerateDocumentationFile` unset, so the compiler never parses one and a `<remarks>` closed by `</summary>`, an
+orphan closer or a bare `&` would otherwise ship unseen.
+
+`CommentBudgetConventionTests` ratchets all five budgets and all four shapes over every solution project plus
+`tools/`, against `XE-Local-AI-Engine.Tests/Architecture/CommentBudgetAllowlist.txt` — one `file|rule|count` line
+per file and rule, recording how many items in that file break that rule today. A file with no line for a rule must
+measure zero. The list is shrink-only in both directions: measuring more than the count fails, and measuring less fails as
 stale, so the commit that cleans a file lowers or deletes its line in the same change and the room cannot be spent
 twice. After a cleanup batch, `XE_COMMENT_BUDGET_SHRINK=1` rewrites the whole file — it lowers counts, drops
 emptied entries, never adds a key, never raises a count, and always fails afterwards, so a regeneration can never
@@ -415,8 +423,8 @@ The scan reads source text: no analyzer in the three active families measures th
 height of a comment run. Comment recognition comes from `SourceCommentStripper`, so a `//` or `///` inside a
 regular, verbatim, interpolated or raw literal is content and never an item.
 
-*Migration status:* the ratchet is live and holds the whole tree. Production files are cleaned in later
-file-disjoint batches, each lowering its own allowlist lines; test projects carry the ratchet only.
+*Migration status:* the ratchet is live and holds the whole tree. Production measures zero for the four shape
+rules; test projects carry the ratchet only.
 
 ### Tests: TUnit, not xUnit
 

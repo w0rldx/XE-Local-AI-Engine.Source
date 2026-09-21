@@ -80,6 +80,7 @@ public interface IWorkerEventDispatcher
     /// </remarks>
     Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase);
 
+    /// <summary>Moves the invocation to its terminal completed state, recording whatever usage the provider reported.</summary>
     /// <param name="finishReason">
     ///     Why the model stopped generating (<c>ChatFinishReason.Value</c>), or null when the provider reported none.
     /// </param>
