@@ -49,6 +49,9 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
     private const string Model = "qwen3:8b";
     private const string WorkspaceAlias = "selected-project";
 
+    /// <summary>The alias of a selected folder with nothing to copy, so the workspace holds no directory for it.</summary>
+    private const string EmptyAlias = "selected-empty";
+
     private static readonly JsonSerializerOptions ChangedFilesJsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly List<string> _tempPaths = [];
@@ -329,6 +332,82 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         var patch = await ReadPatchAsync(run);
         AssertEx.Contains(patch, "GIT binary patch");
         AssertEx.Contains(patch, $"b/{WorkspaceAlias}/empty.txt");
+        await AssertHostFolderUnchangedAsync(fixture);
+    }
+
+    /// <summary>
+    ///     <c>run_command</c> has no allow-list, so a run can still put a file at the workspace ROOT, outside every
+    ///     copied folder.
+    /// </summary>
+    /// <remarks>
+    ///     With the diff scoped to the alias pathspecs that file reaches neither artifact, so the file count, the
+    ///     line totals and the patch bytes describe one set — the disagreement that made the host apply refuse the
+    ///     whole patch over a single alias-less block.
+    /// </remarks>
+    [Test]
+    public async Task Export_WhenTheRunWroteAFileAtTheWorkspaceRoot_LeavesItOutOfBothArtifacts()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture();
+        var run = await fixture.RunAsync(
+            ("run_command", new()
+            {
+                ["executable"] = "/bin/sh",
+                ["arguments"] = new[] { "-c", "printf 'stray\\n' > rootfile.txt" }
+            }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = "# notes\n" }));
+
+        var changed = await ReadChangedFilesAsync(run);
+        AssertChange(changed, "docs/notes.md", "added");
+        AssertEx.Equal(expected: 1, changed.Count, "the root-level file is not a change inside any reviewed folder");
+        AssertEx.Equal(changed.Count, run.Patch.ChangedFileCount, "the reported count is the list, with nothing filtered away after it");
+
+        var patch = await ReadPatchAsync(run);
+        AssertEx.False(patch.Contains("rootfile.txt", StringComparison.Ordinal), "the patch text never carries the alias-less path");
+        AssertEx.False(patch.Contains("stray", StringComparison.Ordinal), "nor its content");
+        AssertEx.Equal(expected: 1, run.Patch.LinesAdded, "the line totals count the reviewed hunk only, so they agree with the file count");
+
+        // The file really is there — the export left it alone rather than the command having failed.
+        AssertEx.True(await MarkerExistsAsync(fixture.Provider, "rootfile.txt"), "the run did write at the workspace root");
+        await AssertHostFolderUnchangedAsync(fixture);
+    }
+
+    /// <summary>
+    ///     A selection may hold a folder that resolved but copied nothing, and that folder has no directory in the
+    ///     sandbox at all.
+    /// </summary>
+    /// <remarks>
+    ///     <c>git add -A</c> exits 128 the moment ONE of its pathspecs matches neither the index nor the working
+    ///     tree, so naming such an alias would fail the export for the whole run and throw away the other folder's
+    ///     real changes. Only real git shows that, which is why this lives here rather than on the scripted seam.
+    /// </remarks>
+    [Test]
+    public async Task Export_WhenASelectedFolderCopiedNothing_StillExportsTheOtherFoldersChanges()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture(emptyAlias: EmptyAlias);
+        var run = await fixture.RunAsync(
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = "# notes\n" }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }));
+
+        AssertEx.False(run.Patch.Failed,
+            "an alias with no directory must never reach a pathspec — git add -A would exit 128 and refuse the whole export");
+
+        var changed = await ReadChangedFilesAsync(run);
+        AssertChange(changed, "docs/notes.md", "added");
+        AssertChange(changed, "README.md", "modified");
+        AssertEx.Equal(expected: 2, changed.Count, "only the folder that copied contributes changes");
+        AssertEx.True(changed.TrueForAll(static entry => entry.Alias != EmptyAlias), "the empty folder names no change");
+
+        // commands.jsonl is the argv that really ran, so it is where an alias that leaked into a pathspec would show.
+        var logged = await ReadCommandsAsync(run);
+        AssertEx.True(logged.TrueForAll(static record => record.GetProperty("arguments")
+                                                               .EnumerateArray()
+                                                               .All(static argument => argument.GetString()?.Contains(EmptyAlias, StringComparison.Ordinal) != true)),
+            "no git the node ran names the folder that copied nothing");
+
         await AssertHostFolderUnchangedAsync(fixture);
     }
 
@@ -791,7 +870,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         };
     }
 
-    private ExportFixture CreateFixture(long? maxPatchBytes = null)
+    private ExportFixture CreateFixture(long? maxPatchBytes = null, string? emptyAlias = null)
     {
         var clock = TimeProvider.System;
         var provider = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), clock);
@@ -803,6 +882,13 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         File.WriteAllText(Path.Combine(hostFolder, "guide.txt"), "one\ntwo\nthree\nfour\nfive\nsix\n");
 
         var resolver = new StaticSelectedFolderResolver(WorkspaceAlias, hostFolder);
+        if (emptyAlias is { Length: > 0 })
+        {
+            // A second selection with nothing to copy: the workspace copy makes no directory for it, so it is the
+            // shape whose alias must never reach a git pathspec.
+            resolver.Add(emptyAlias, CreateTempDirectory("xe-ah-empty-src"));
+        }
+
         var root = CreateTempDirectory("xe-ah-state");
         var options = Options.Create(new AgentHomeOptions
         {
@@ -859,6 +945,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             provider,
             new StaticIdentityProvider(),
             leases,
+            new AgentHomeRunExecutionRegistry(),
             isolation,
             workspaceService,
             patchService,
@@ -873,7 +960,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             clock,
             NullLogger<AgentHomeService>.Instance);
 
-        return new ExportFixture(service, provider, manifestService, serviceProvider, chatClient, hostFolder, root, resolver.FolderId);
+        return new ExportFixture(service, provider, manifestService, serviceProvider, chatClient, hostFolder, root, resolver.FolderIds);
     }
 
     private sealed class ExportFixture : IDisposable
@@ -883,7 +970,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         private readonly ProcessSandboxRuntimeProvider _provider;
         private readonly AgentHomeService _service;
         private readonly ServiceProvider _serviceProvider;
-        private readonly Guid _folderId;
+        private readonly IReadOnlyList<Guid> _folderIds;
 
         public ExportFixture(AgentHomeService service,
             ProcessSandboxRuntimeProvider provider,
@@ -892,7 +979,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             ScriptedGitPayloadChatClient chatClient,
             string hostFolder,
             string stateRoot,
-            Guid folderId)
+            IReadOnlyList<Guid> folderIds)
         {
             _service = service;
             _provider = provider;
@@ -901,7 +988,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             _chatClient = chatClient;
             HostFolder = hostFolder;
             StateRoot = stateRoot;
-            _folderId = folderId;
+            _folderIds = folderIds;
         }
 
         /// <summary>The real provider, so a test can ask it what is in the workspace under either isolation mode.</summary>
@@ -921,7 +1008,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             using var root = SpawnContext.BeginRoot(fanOutCap: 1, cloudSpawnCap: 0, Model);
             return await _service.RunLifecycleAsync(new AgentHomeRunLifecycleRequest
             {
-                SelectedFolderIds = [_folderId.ToString()],
+                SelectedFolderIds = [.. _folderIds.Select(static id => id.ToString())],
                 Goal = "fix the typo in the readme",
                 AllowedActions =
                 [
@@ -1008,15 +1095,25 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
 
     private sealed class StaticSelectedFolderResolver : ISelectedFolderResolver
     {
-        private readonly ResolvedSelectedFolder _folder;
+        private readonly List<ResolvedSelectedFolder> _folders = [];
 
         public StaticSelectedFolderResolver(string alias, string hostPath)
         {
             FolderId = Guid.NewGuid();
-            _folder = new ResolvedSelectedFolder { Id = FolderId, Alias = alias, HostPath = hostPath, Mode = SelectedFolderMode.Copy };
+            _folders.Add(new ResolvedSelectedFolder { Id = FolderId, Alias = alias, HostPath = hostPath, Mode = SelectedFolderMode.Copy });
         }
 
+        /// <summary>The first folder's id — the one every test's real content lives in.</summary>
         public Guid FolderId { get; }
+
+        /// <summary>Every registered folder's id, in registration order, as the run selects them.</summary>
+        public IReadOnlyList<Guid> FolderIds => [.. _folders.Select(static folder => folder.Id)];
+
+        /// <summary>Registers a further selected folder, so a run can select more than one.</summary>
+        public void Add(string alias, string hostPath)
+        {
+            _folders.Add(new ResolvedSelectedFolder { Id = Guid.NewGuid(), Alias = alias, HostPath = hostPath, Mode = SelectedFolderMode.Copy });
+        }
 
         public Task<SelectedFolderReference> RegisterAsync(SelectedFolderRegistration registration, CancellationToken cancellationToken = default)
         {
@@ -1025,19 +1122,19 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
 
         public Task<IReadOnlyList<SelectedFolderReference>> ListReferencesAsync(CancellationToken cancellationToken = default)
         {
-            IReadOnlyList<SelectedFolderReference> references = [new() { Id = _folder.Id.ToString(), Alias = _folder.Alias }];
+            IReadOnlyList<SelectedFolderReference> references =
+                [.. _folders.Select(static folder => new SelectedFolderReference { Id = folder.Id.ToString(), Alias = folder.Alias })];
             return Task.FromResult(references);
         }
 
         public Task<ResolvedSelectedFolder> ResolveAsync(string id, CancellationToken cancellationToken = default)
         {
-            if (string.Equals(id, _folder.Id.ToString(), StringComparison.Ordinal)
-                || string.Equals(id, _folder.Alias, StringComparison.Ordinal))
-            {
-                return Task.FromResult(_folder);
-            }
+            var match = _folders.Find(folder => string.Equals(id, folder.Id.ToString(), StringComparison.Ordinal)
+                                                || string.Equals(id, folder.Alias, StringComparison.Ordinal));
 
-            throw new SelectedFolderValidationException($"Unknown selected folder id '{id}'.");
+            return match is null
+                ? throw new SelectedFolderValidationException($"Unknown selected folder id '{id}'.")
+                : Task.FromResult(match);
         }
     }
 }

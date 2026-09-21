@@ -98,8 +98,8 @@ public sealed record NodePatchApplyResult
 /// <summary>One reason a patch, or one entry inside it, was refused.</summary>
 /// <remarks>
 ///     <see cref="Path" /> names the refused entry when the parser reached a path it had already validated enough to
-///     echo. It stays <see langword="null" /> for a refusal about the patch as a whole, and for a C-quoted path: the
-///     parser deliberately never unescapes one, so there is no name to show rather than a name to trust.
+///     echo. It stays <see langword="null" /> for a refusal about the patch as a whole, and for a C-quoted literal the
+///     decoder could not read: git answers one by taking the raw text as the name, so there is no name to trust.
 /// </remarks>
 public sealed record PatchApplyRejection
 {

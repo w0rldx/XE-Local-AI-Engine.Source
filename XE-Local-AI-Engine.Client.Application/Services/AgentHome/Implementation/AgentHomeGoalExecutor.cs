@@ -272,7 +272,11 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         // filesystem boundary. Read and write need no such gate; nothing in the node constrains what a command opens.
         if (allowedActions.Contains(AgentHomeAllowedActions.RunCommands, StringComparer.Ordinal) && commandsIsolated)
         {
-            tools.Add(AIFunctionFactory.Create(gateway.RunCommandAsync, "run_command", "Run one command inside the workspace copy and read its output."));
+            // The description carries the containment rule too: write_file refuses a path outside the copied folders,
+            // but a command can still create one there, and the export would silently leave it out.
+            tools.Add(AIFunctionFactory.Create(gateway.RunCommandAsync,
+                "run_command",
+                "Run one command inside the workspace copy and read its output. Files it creates outside the workspace's top-level folders are not collected into the patch."));
         }
 
         return tools;
@@ -297,7 +301,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         {
             _ = builder.Append("The workspace contains these top-level folders: ")
                        .Append(string.Join(", ", request.WorkspaceAliases))
-                       .Append(".\n\n");
+                       .Append(". Every file you write must live inside one of them — only their contents are collected into the patch.\n\n");
         }
 
         _ = builder.Append("Your tools are exactly: ")
@@ -463,6 +467,17 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
                 return Refuse("write_file rejected: the .git directory holds the change baseline and is not writable.");
             }
 
+            // The patch export diffs the copied folders only, so a file written beside them at the workspace root
+            // would be work nobody ever sees. Refused here, while the model can still put it in the right place.
+            if (!IsUnderCopiedFolder(confined.RelativePath))
+            {
+                return Refuse(_request.WorkspaceAliases.Count == 0
+                    ? "write_file rejected: this run copied no folder, so there is nowhere in the workspace your changes could be collected from."
+                    : "write_file rejected: every path must start with one of this workspace's top-level folders ("
+                      + string.Join(", ", _request.WorkspaceAliases)
+                      + "); a file written anywhere else is not collected into the patch.");
+            }
+
             var contentBytes = Encoding.UTF8.GetByteCount(content);
             if (contentBytes > _executor._options.MaxWriteFileBytes)
             {
@@ -511,6 +526,19 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
 
             return string.Create(CultureInfo.InvariantCulture,
                 $"write_file wrote {contentBytes} byte(s) to {confined.RelativePath}.");
+        }
+
+        /// <summary>
+        ///     Whether a confined workspace-relative path lies under one of the folders this run copied.
+        /// </summary>
+        /// <remarks>
+        ///     Segment-exact on the first segment, so <c>projectile/x</c> is not accepted for the alias
+        ///     <c>project</c>, and a path with no segment at all — a bare file at the workspace root — is refused.
+        /// </remarks>
+        private bool IsUnderCopiedFolder(string relativePath)
+        {
+            var separator = relativePath.IndexOf(value: '/', StringComparison.Ordinal);
+            return separator > 0 && _request.WorkspaceAliases.Contains(relativePath[..separator], StringComparer.Ordinal);
         }
 
         private async Task<string> RunCommandCoreAsync(string executable, IReadOnlyList<string> arguments, CancellationToken cancellationToken)

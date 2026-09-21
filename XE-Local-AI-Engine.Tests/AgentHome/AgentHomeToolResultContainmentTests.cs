@@ -256,6 +256,7 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
             provider,
             new StaticIdentityProvider(),
             leases,
+            new AgentHomeRunExecutionRegistry(),
             isolation,
             workspaceService,
             patchService,

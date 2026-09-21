@@ -114,11 +114,13 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
     }
 
     [Test]
-    public async Task DeleteAsync_WhileTheExecutionLeaseIsHeld_AnswersConflictAndLeavesTheRunIntact()
+    public async Task DeleteAsync_OfARunThatIsExecuting_AnswersConflictAndLeavesTheRunIntact()
     {
         var run = SeedRun(Now.AddDays(-1));
+        var executing = new AgentHomeRunExecutionRegistry();
 
-        var outcome = await Service(leaseHeld: true).DeleteAsync(Path.GetFileName(run));
+        using var scope = executing.Begin(Path.GetFileName(run));
+        var outcome = await Service(executingRuns: executing).DeleteAsync(Path.GetFileName(run));
 
         AssertEx.Equal(AgentHomeRunDeleteOutcome.Conflict, outcome);
         AssertEx.True(Directory.Exists(run), "deleting under a live run destroys work irrecoverably; it must refuse.");
@@ -126,33 +128,47 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     The lease is read LAST, not at entry: a run starting while the path is resolved must still stop the
-    ///     delete. The identity lookup is the seam — a lease taken there lands in the window a check-at-entry
-    ///     implementation would already have passed.
+    ///     The bug the per-run signal fixes: the execution lease is keyed per owner-node SANDBOX, so reading it
+    ///     refused every finished run's delete whenever anything at all was touching that sandbox.
     /// </summary>
     [Test]
-    public async Task DeleteAsync_WhenARunTakesTheLeaseAfterThePathIsResolved_StillRefuses()
+    public async Task DeleteAsync_OfAFinishedRunWhileAnotherRunIsExecuting_StillDeletesIt()
+    {
+        var finished = SeedRun(Now.AddDays(-2));
+        var live = SeedRun(Now.AddDays(-1));
+        var executing = new AgentHomeRunExecutionRegistry();
+
+        using var scope = executing.Begin(Path.GetFileName(live));
+        var outcome = await Service(executingRuns: executing).DeleteAsync(Path.GetFileName(finished));
+
+        AssertEx.Equal(AgentHomeRunDeleteOutcome.Deleted, outcome,
+            "a run that finished hours ago is not in flight because something else is holding the sandbox.");
+        AssertEx.False(Directory.Exists(finished));
+        AssertEx.True(Directory.Exists(live), "the run that IS executing is the one that must survive.");
+    }
+
+    /// <summary>
+    ///     The registry is read per call, not sampled once when the service is built: a run that starts between the
+    ///     node's startup and this delete is exactly the case the gate exists for.
+    /// </summary>
+    [Test]
+    public async Task DeleteAsync_WhenTheRunStartsAfterTheServiceWasBuilt_StillRefuses()
     {
         var run = SeedRun(Now.AddDays(-1));
-        var lease = new SwitchableLeaseManager();
-        var service = new AgentHomeRunDeleteService(Options.Create(AgentHomeOptions()),
-            new FakeNodeDataDirectory(_dataRoot.Path),
-            new LeaseTakingIdentityProvider(lease),
-            lease,
-            new AgentHomeRunApplyGuard(),
-            new RecordingLogger<AgentHomeRunDeleteService>());
+        var executing = new AgentHomeRunExecutionRegistry();
+        var service = Service(executingRuns: executing);
 
+        using var scope = executing.Begin(Path.GetFileName(run));
         var outcome = await service.DeleteAsync(Path.GetFileName(run));
 
         AssertEx.Equal(AgentHomeRunDeleteOutcome.Conflict, outcome,
-            "the lease must be re-read immediately before the removal, not once at entry.");
+            "the registry must be read on the way to the removal, not captured when the service is constructed.");
         AssertEx.True(Directory.Exists(run));
     }
 
     /// <summary>
-    ///     The apply guard, not the execution lease: an apply never takes the lease, and the lease is keyed per
-    ///     sandbox rather than per run. Held through the real guard the node registers — a double would prove only
-    ///     that the test can lie to it.
+    ///     The apply guard, not the executing registry: the two gates answer for different halves of a run's life.
+    ///     Held through the real guard the node registers — a double would prove only that the test can lie to it.
     /// </summary>
     [Test]
     public async Task DeleteAsync_WhileThisRunsPatchIsBeingApplied_AnswersConflictAndLeavesTheRunIntact()
@@ -211,8 +227,7 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
         var logger = new RecordingLogger<AgentHomeRunDeleteService>();
         var service = new AgentHomeRunDeleteService(Options.Create(AgentHomeOptions()),
             new FakeNodeDataDirectory(_dataRoot.Path),
-            new StaticIdentityProvider(),
-            new StubLeaseManager(held: false),
+            new AgentHomeRunExecutionRegistry(),
             new AgentHomeRunApplyGuard(),
             logger);
 
@@ -235,11 +250,11 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
         }
     }
 
-    private AgentHomeRunDeleteService Service(bool leaseHeld = false, AgentHomeRunApplyGuard? applyGuard = null) =>
+    private AgentHomeRunDeleteService Service(AgentHomeRunExecutionRegistry? executingRuns = null,
+        AgentHomeRunApplyGuard? applyGuard = null) =>
         new(Options.Create(AgentHomeOptions()),
             new FakeNodeDataDirectory(_dataRoot.Path),
-            new StaticIdentityProvider(),
-            new StubLeaseManager(leaseHeld),
+            executingRuns ?? new AgentHomeRunExecutionRegistry(),
             applyGuard ?? new AgentHomeRunApplyGuard(),
             new RecordingLogger<AgentHomeRunDeleteService>());
 
@@ -264,74 +279,4 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
         return directory;
     }
 
-    private sealed class StaticIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner", NodeId = "node" });
-    }
-
-    /// <summary>Stands in for a run that started while the delete was resolving the path.</summary>
-    private sealed class LeaseTakingIdentityProvider : IAgentHomeIdentityProvider
-    {
-        private readonly SwitchableLeaseManager _lease;
-
-        public LeaseTakingIdentityProvider(SwitchableLeaseManager lease)
-        {
-            _lease = lease;
-        }
-
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            _lease.Held = true;
-            return Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner", NodeId = "node" });
-        }
-    }
-
-    /// <summary>
-    ///     The lease manager, answering one fixed held/not-held. Acquisition throws on purpose: a delete that took the
-    ///     lease out from under a live run would be a correctness bug, so the double proves it never tries.
-    /// </summary>
-    private class StubLeaseManager : IAgentHomeExecutionLeaseManager
-    {
-        private readonly bool _held;
-
-        public StubLeaseManager(bool held)
-        {
-            _held = held;
-        }
-
-        public IAgentHomeExecutionLease? TryAcquire(AgentHomeExecutionLeaseKey key) =>
-            throw new InvalidOperationException("The run delete must never acquire the execution lease.");
-
-        public IAgentHomeExecutionLease? TryAcquireForRecovery(AgentHomeExecutionLeaseKey key) =>
-            throw new InvalidOperationException("The run delete must never acquire the execution lease.");
-
-        public virtual bool IsHeld(AgentHomeExecutionLeaseKey key) =>
-            _held;
-
-        public bool IsPoisoned(AgentHomeExecutionLeaseKey key) =>
-            false;
-
-        public void MarkPoisoned(AgentHomeExecutionLeaseKey key)
-        {
-        }
-
-        public void ClearPoison(AgentHomeExecutionLeaseKey key)
-        {
-        }
-    }
-
-    /// <summary>A lease that starts free and can be taken mid-call, so the ordering of the check can be observed.</summary>
-    private sealed class SwitchableLeaseManager : StubLeaseManager
-    {
-        public SwitchableLeaseManager()
-            : base(held: false)
-        {
-        }
-
-        public bool Held { get; set; }
-
-        public override bool IsHeld(AgentHomeExecutionLeaseKey key) =>
-            Held;
-    }
 }

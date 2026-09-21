@@ -14,8 +14,8 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///     It stages the workspace with <c>add -A</c> — not <c>--force</c>, so <c>.gitignore</c> still decides what is offered, as it did for the baseline — then
 ///     runs two in-sandbox <c>git diff --cached</c> commands with the byte-stabilizing flags: a full <c>--binary</c> patch and a <c>--name-status</c>
 ///     summary, under <see cref="AgentHomeGitHardening" />, which keeps a model-authored <c>textconv</c>/<c>clean</c> driver from executing after the model's
-///     turn has ended. Their standard output becomes <c>changes.patch</c> and <c>changed-files.json</c> under <c>runs/&lt;run-id&gt;/patches/</c>, bounded by
-///     <see cref="AgentHomeOptions.MaxPatchBytes" />. Model-facing paths stay run-relative.
+///     turn has ended, and all three scoped to the copied folders' aliases. Their standard output becomes <c>changes.patch</c> and <c>changed-files.json</c>
+///     under <c>runs/&lt;run-id&gt;/patches/</c>, bounded by <see cref="AgentHomeOptions.MaxPatchBytes" />. Model-facing paths stay run-relative.
 /// </remarks>
 internal sealed class AgentHomePatchService : IAgentHomePatchService
 {
@@ -49,6 +49,15 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Every git below is scoped to these, never to the repository root: a file written beside the copied folders
+        // would otherwise ride changes.patch and the line totals while TryMapEntry dropped it from changed-files.json.
+        var pathspecs = AliasPathspecs(request.ResolvedFolders);
+        if (pathspecs.Length == 0)
+        {
+            // No copied folder is no reviewable tree — and no baseline commit to diff against either. Never ".".
+            return EmptyExport(AgentHomeWrittenFileGap.None);
+        }
+
         var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken);
         var commandTimeout = TimeSpan.FromSeconds(commandTimeoutSeconds);
 
@@ -67,7 +76,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             request,
             $"{request.RunId}-patch-stage",
             commandTimeout,
-            ["add", "-A", "--", "."],
+            ["add", "-A", "--", .. pathspecs],
             cancellationToken);
 
         // Full binary-aware patch, captured from standard output because the SPI carries no shell redirection.
@@ -76,7 +85,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             request,
             $"{request.RunId}-patch-diff",
             commandTimeout,
-            ["diff", "--cached", "--no-textconv", "--no-ext-diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."],
+            ["diff", "--cached", "--no-textconv", "--no-ext-diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", .. pathspecs],
             cancellationToken);
 
         // Name-status summary used to build changed-files.json. -z is load-bearing: without it git C-quotes any
@@ -85,7 +94,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             request,
             $"{request.RunId}-patch-status",
             commandTimeout,
-            ["diff", "--cached", "--no-textconv", "--no-ext-diff", "--name-status", "-z", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."],
+            ["diff", "--cached", "--no-textconv", "--no-ext-diff", "--name-status", "-z", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", .. pathspecs],
             cancellationToken);
 
         if (!IsSuccessful(stageResult) || !IsSuccessful(patchResult) || !IsSuccessful(statusResult))
@@ -537,6 +546,25 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             // Best-effort logging: a filesystem, permissions or not-opened error must never fail the export.
             _logger.LogDebug(exception, "Patch export for run {RunId} could not append its git command to the run log.", request.RunId);
         }
+    }
+
+    /// <summary>
+    ///     The pathspecs that limit every export git command to the copied folders' own alias directories.
+    /// </summary>
+    /// <remarks>
+    ///     <c>:(literal)</c> so an alias holding pathspec magic — a leading colon, a glob — matches itself and nothing
+    ///     else, the same form <see cref="ResolvePresenceAsync" /> uses for a written path. Each alias must name a
+    ///     directory that really copied: <c>add -A</c> exits 128 on a pathspec matching neither the index nor the
+    ///     working tree, which would fail the whole export.
+    /// </remarks>
+    private static string[] AliasPathspecs(IReadOnlyList<ResolvedSelectedFolder> resolvedFolders)
+    {
+        return
+        [
+            .. resolvedFolders.Select(static folder => folder.Alias)
+                              .Distinct(StringComparer.Ordinal)
+                              .Select(static alias => ":(literal)" + alias)
+        ];
     }
 
     private static bool IsSuccessful(SandboxCommandResult result)

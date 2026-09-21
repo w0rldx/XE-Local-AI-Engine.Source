@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     A startup sweep runs before the periodic loop, so a node down past a run's window does not keep it until the
 ///     first tick. Three limits apply oldest-first — age, run count, total bytes — and every deletion passes the same
 ///     five gates: the directory name is one the node minted, the path resolves under the runs root, the directory is
-///     not a link, the execution lease is not held, and no apply of that run's patch is in flight. A sweep failure is
-///     logged and never stops the service.
+///     not a link, the run is not executing, and no apply of that run's patch is in flight. Both in-flight gates are
+///     keyed per run, so one live run costs the sweep that run alone. A sweep failure is logged, never fatal.
 /// </remarks>
 internal sealed partial class AgentHomeRunRetentionService : BackgroundService
 {
@@ -19,7 +19,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     ///     How recently a run may have started and still be left alone regardless of every limit.
     /// </summary>
     /// <remarks>
-    ///     Belt and braces behind the lease check: a just-finished run's <c>events.jsonl</c> can still be mid-append
+    ///     Belt and braces behind the executing check: a just-finished run's <c>events.jsonl</c> can still be mid-append
     ///     when the walk observes it (the run logger holds no lock a sweep could take), and the mistakes are not
     ///     symmetric — deleting a live run destroys work irrecoverably, while keeping one for another interval costs
     ///     bytes the next sweep reclaims.
@@ -31,8 +31,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
 
     private readonly AgentHomeRunApplyGuard _applyGuard;
     private readonly string _dataDirectoryRoot;
-    private readonly IAgentHomeIdentityProvider _identityProvider;
-    private readonly IAgentHomeExecutionLeaseManager _leaseManager;
+    private readonly AgentHomeRunExecutionRegistry _executingRuns;
     private readonly ILogger<AgentHomeRunRetentionService> _logger;
     private readonly AgentHomeOptions _agentHomeOptions;
     private readonly AgentHomeRunRetentionOptions _options;
@@ -41,8 +40,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     public AgentHomeRunRetentionService(IOptions<AgentHomeRunRetentionOptions> options,
         IOptions<AgentHomeOptions> agentHomeOptions,
         INodeDataDirectory dataDirectory,
-        IAgentHomeIdentityProvider identityProvider,
-        IAgentHomeExecutionLeaseManager leaseManager,
+        AgentHomeRunExecutionRegistry executingRuns,
         AgentHomeRunApplyGuard applyGuard,
         TimeProvider timeProvider,
         ILogger<AgentHomeRunRetentionService> logger)
@@ -53,8 +51,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
         _agentHomeOptions = agentHomeOptions.Value ?? throw new ArgumentNullException(nameof(agentHomeOptions));
         _dataDirectoryRoot = dataDirectory.Root;
-        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
-        _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
+        _executingRuns = executingRuns ?? throw new ArgumentNullException(nameof(executingRuns));
         _applyGuard = applyGuard ?? throw new ArgumentNullException(nameof(applyGuard));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -113,18 +110,17 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     }
 
     /// <summary>One sweep, exposed to the tests so a sweep can be observed without driving the whole service loop.</summary>
-    internal async Task SweepAsync(CancellationToken cancellationToken)
+    /// <remarks>
+    ///     A sweep is filesystem work end to end and awaits nothing; the <see cref="Task" /> stays because the loop
+    ///     below and the tests await it, and because a sweep is exactly the kind of work that would grow one.
+    /// </remarks>
+    internal Task SweepAsync(CancellationToken cancellationToken)
     {
         var runsRoot = AgentHomeRunPaths.ResolveRunsRoot(_agentHomeOptions, _dataDirectoryRoot);
         if (!Directory.Exists(runsRoot))
         {
-            return;
+            return Task.CompletedTask;
         }
-
-        // Identity first: without it there is no lease key, so there is no way to tell an in-flight run from a
-        // finished one. Fail closed — a sweep that cannot ask is a sweep that deletes nothing.
-        var identity = await _identityProvider.GetAsync(cancellationToken);
-        var leaseKey = new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId);
 
         var now = _timeProvider.GetUtcNow();
         var runs = Classify(runsRoot, out var unclassified);
@@ -135,7 +131,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
 
         if (runs.Count == 0)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         // Oldest first: every limit evicts from this end. The last entry is the newest run — never evicted, whatever
@@ -149,6 +145,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
         var byCount = 0;
         var byBytes = 0;
         var bytesReclaimed = 0L;
+        var skippedExecuting = 0;
         var removed = new List<string>();
 
         for (var index = 0; index < runs.Count - 1; index++)
@@ -168,12 +165,12 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
                 continue;
             }
 
-            // Re-read the lease immediately before the delete, never once for the whole sweep: a run that started
-            // while the walk was measuring must stop the sweep here rather than after its directory is gone.
-            if (_leaseManager.IsHeld(leaseKey))
+            // Read immediately before the delete, and per run id, so a run that started while the walk was measuring
+            // costs the sweep that run alone. It stays in the accounting: its bytes never came free.
+            if (_executingRuns.IsExecuting(candidate.RunId))
             {
-                SweepYieldedToRun(_logger, removed.Count);
-                break;
+                skippedExecuting++;
+                continue;
             }
 
             if (!TryDelete(candidate))
@@ -199,12 +196,21 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
             }
         }
 
+        if (skippedExecuting > 0)
+        {
+            // Counted and reported once rather than per candidate: a sweep that yielded is one fact about the sweep,
+            // not one per run, and at most a handful of runs can be executing at a time.
+            SweepYieldedToRuns(_logger, skippedExecuting, removed.Count);
+        }
+
         if (removed.Count > 0)
         {
             // Run ids are node-minted (`run-{unixMs}-{counter}`) and carry nothing of the model's, so naming them is
             // what makes the line an audit trail; the host path they sat at never appears.
             SweepCompleted(_logger, removed.Count, byAge, byCount, byBytes, bytesReclaimed, string.Join(separator: ',', removed));
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>Which limit takes this run, or <see langword="null" /> when none does.</summary>
@@ -289,8 +295,8 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     private static partial void UnclassifiedRuns(ILogger logger, int unclassifiedCount);
 
     [LoggerMessage(EventId = 4812, Level = LogLevel.Debug,
-        Message = "AgentHome run retention stopped after {DeletedCount} deletion(s): a run took the execution lease.")]
-    private static partial void SweepYieldedToRun(ILogger logger, int deletedCount);
+        Message = "AgentHome run retention left {SkippedCount} executing run(s) alone and deleted {DeletedCount}.")]
+    private static partial void SweepYieldedToRuns(ILogger logger, int skippedCount, int deletedCount);
 
     [LoggerMessage(EventId = 4815, Level = LogLevel.Debug,
         Message = "AgentHome run retention left run {RunId} alone: its exported patch is being applied right now.")]

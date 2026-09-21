@@ -209,8 +209,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
         // The fake has no real git, so script the two diff commands: one changed file and a small patch body.
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\0selected-project/README.md\0");
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("selected-project"), exitCode: 0, "M\0selected-project/README.md\0");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("selected-project"), exitCode: 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
 
         using var harness = CreateHarness(clock, provider, resolver);
 
@@ -554,6 +554,85 @@ public sealed class AgentHomeServiceTests : IDisposable
         AssertEx.True(next.Completed, "a cancelled run must release the owner-node lease for the next one");
     }
 
+    /// <summary>
+    ///     The registry the operator delete and the retention sweep read to tell a finished run's directory from a
+    ///     live one: registered before the directory exists, released after the last write into it.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_RegistersTheRunAsExecutingWhileItRunsAndClearsItWhenItFinishes()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var folderId = Guid.NewGuid();
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
+
+        var executingRuns = new AgentHomeRunExecutionRegistry();
+        var registeredInsideTheLoop = false;
+        var executor = new StubAgentHomeGoalExecutor((request, _) =>
+        {
+            registeredInsideTheLoop = executingRuns.IsExecuting(request.RunId);
+            return Task.FromResult(new AgentHomeGoalOutcome { Status = AgentHomeGoalStatus.Completed });
+        });
+        using var harness = CreateHarness(clock, provider, resolver, goalExecutor: executor, executingRuns: executingRuns);
+
+        var run = await harness.Service.RunLifecycleAsync(NewLifecycle(folderId));
+
+        AssertEx.True(registeredInsideTheLoop,
+            "the run directory already exists by the time the goal loop runs, so the id must already be registered "
+            + "or a delete arriving here would take a directory the run is still writing to.");
+        AssertEx.False(executingRuns.IsExecuting(run.RunId),
+            "a registration that outlives its run makes that run permanently undeletable.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheGoalLoopThrows_StillClearsTheExecutingRegistration()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var folderId = Guid.NewGuid();
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
+
+        var executingRuns = new AgentHomeRunExecutionRegistry();
+        var executor = new StubAgentHomeGoalExecutor((_, _) =>
+            Task.FromException<AgentHomeGoalOutcome>(new InvalidOperationException("the goal loop failed.")));
+        using var harness = CreateHarness(clock, provider, resolver, goalExecutor: executor, executingRuns: executingRuns);
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => harness.Service.RunLifecycleAsync(NewLifecycle(folderId)));
+
+        AssertEx.False(executingRuns.IsExecuting(executor.Requests.Single().RunId),
+            "a run that failed is over; leaving it registered would strand its directory forever.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenCancelled_StillClearsTheExecutingRegistration()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var folderId = Guid.NewGuid();
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
+
+        var executingRuns = new AgentHomeRunExecutionRegistry();
+        var loop = GateableGoalExecutor.Create();
+        using var harness = CreateHarness(clock, provider, resolver, goalExecutor: loop.Executor, executingRuns: executingRuns);
+
+        using var cancellation = new CancellationTokenSource();
+        var runTask = harness.Service.RunLifecycleAsync(NewLifecycle(folderId), cancellation.Token);
+        await loop.WaitForEntryAsync(count: 1);
+
+        var runId = loop.Executor.Requests.Single().RunId;
+        AssertEx.True(executingRuns.IsExecuting(runId), "the run is in flight, or the assertion below is vacuous.");
+
+        await cancellation.CancelAsync();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => runTask);
+
+        AssertEx.False(executingRuns.IsExecuting(runId),
+            "a cancelled run releases the registration on the way out, exactly as it releases the lease.");
+        loop.Release();
+    }
+
     [Test]
     public async Task RunAsync_HandsTheGoalLoopTheGoalActionsAndTheCopiedWorkspaceAliases()
     {
@@ -613,8 +692,8 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         // Script the diff commands so a patch WOULD export if the gate let it; AllowedActions omits export_patch, so it
         // must be skipped despite a real baseline.
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\0selected-project/README.md\0");
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("selected-project"), exitCode: 0, "M\0selected-project/README.md\0");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("selected-project"), exitCode: 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
 
         using var harness = CreateHarness(clock, provider, resolver);
 
@@ -983,7 +1062,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         SandboxOptions? sandboxOptions = null,
         ComputeOptions? ceilingDefaults = null,
         LocalContainerOptions? nodeOptions = null,
-        IAgentHomeGoalExecutor? goalExecutor = null)
+        IAgentHomeGoalExecutor? goalExecutor = null,
+        AgentHomeRunExecutionRegistry? executingRuns = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
@@ -1024,6 +1104,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             provider,
             identity ?? new MutableIdentityProvider("owner-a", "node-1"),
             leases,
+            executingRuns ?? new AgentHomeRunExecutionRegistry(),
             isolation,
             workspaceService,
             patchService,

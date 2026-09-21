@@ -8,24 +8,22 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 /// <remarks>
 ///     No grace window, unlike the sweep: that window buys an unattended walk a margin no one is watching, while a
-///     delete an operator asked for is covered by two reads taken immediately before the removal — the execution
-///     lease for a run that is still executing, and <see cref="AgentHomeRunApplyGuard" /> for one whose patch is
-///     being applied. The lease is read there rather than at entry because a run can start while the path is
-///     being resolved.
+///     delete an operator asked for is covered by two reads taken immediately before the removal —
+///     <see cref="AgentHomeRunExecutionRegistry" /> for a run that is still executing, and
+///     <see cref="AgentHomeRunApplyGuard" /> for one whose patch is being applied. Both are read there rather than at
+///     entry because a run can start while the path is being resolved.
 /// </remarks>
 internal sealed partial class AgentHomeRunDeleteService : IAgentHomeRunDeleteService
 {
     private readonly AgentHomeRunApplyGuard _applyGuard;
     private readonly string _dataDirectoryRoot;
-    private readonly IAgentHomeIdentityProvider _identityProvider;
-    private readonly IAgentHomeExecutionLeaseManager _leaseManager;
+    private readonly AgentHomeRunExecutionRegistry _executingRuns;
     private readonly ILogger<AgentHomeRunDeleteService> _logger;
     private readonly AgentHomeOptions _options;
 
     public AgentHomeRunDeleteService(IOptions<AgentHomeOptions> options,
         INodeDataDirectory dataDirectory,
-        IAgentHomeIdentityProvider identityProvider,
-        IAgentHomeExecutionLeaseManager leaseManager,
+        AgentHomeRunExecutionRegistry executingRuns,
         AgentHomeRunApplyGuard applyGuard,
         ILogger<AgentHomeRunDeleteService> logger)
     {
@@ -33,14 +31,19 @@ internal sealed partial class AgentHomeRunDeleteService : IAgentHomeRunDeleteSer
         ArgumentNullException.ThrowIfNull(dataDirectory);
         _options = options.Value;
         _dataDirectoryRoot = dataDirectory.Root;
-        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
-        _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
+        _executingRuns = executingRuns ?? throw new ArgumentNullException(nameof(executingRuns));
         _applyGuard = applyGuard ?? throw new ArgumentNullException(nameof(applyGuard));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <inheritdoc />
-    public async Task<AgentHomeRunDeleteOutcome> DeleteAsync(string runId, CancellationToken cancellationToken = default)
+    public Task<AgentHomeRunDeleteOutcome> DeleteAsync(string runId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(RemoveRun(runId));
+    }
+
+    private AgentHomeRunDeleteOutcome RemoveRun(string runId)
     {
         var runsRoot = AgentHomeRunPaths.ResolveRunsRoot(_options, _dataDirectoryRoot);
         if (AgentHomeRunPaths.TryResolveRun(runsRoot, runId) is not { } run)
@@ -48,10 +51,9 @@ internal sealed partial class AgentHomeRunDeleteService : IAgentHomeRunDeleteSer
             return AgentHomeRunDeleteOutcome.NotFound;
         }
 
-        // Identity first, so the lease read below is the LAST thing before the removal. Without it there is no lease
-        // key, so there is no way to tell an in-flight run from a finished one — and a delete that cannot ask refuses.
-        var identity = await _identityProvider.GetAsync(cancellationToken);
-        if (_leaseManager.IsHeld(new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId)))
+        // Read LAST, because a run can start while the path is being resolved — but never THIS run: an id is minted
+        // once, and registered before its directory exists, so a run starting here wrote nothing that resolved above.
+        if (_executingRuns.IsExecuting(run.RunId))
         {
             return AgentHomeRunDeleteOutcome.Conflict;
         }

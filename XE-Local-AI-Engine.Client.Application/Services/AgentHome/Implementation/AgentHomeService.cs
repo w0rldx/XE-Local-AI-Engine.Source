@@ -39,6 +39,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     private readonly IAgentHomeGoalExecutor _goalExecutor;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly IAgentHomeExecutionLeaseManager _leaseManager;
+    private readonly AgentHomeRunExecutionRegistry _executingRuns;
     private readonly IAgentHomeWorkspaceIsolation _isolation;
     private readonly ILogger<AgentHomeService> _logger;
     private readonly IAgentHomeManifestService _manifestService;
@@ -59,6 +60,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         IAgentSandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
         IAgentHomeExecutionLeaseManager leaseManager,
+        AgentHomeRunExecutionRegistry executingRuns,
         IAgentHomeWorkspaceIsolation isolation,
         IAgentHomeWorkspaceService workspaceService,
         IAgentHomePatchService patchService,
@@ -77,6 +79,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
         _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
+        _executingRuns = executingRuns ?? throw new ArgumentNullException(nameof(executingRuns));
         _isolation = isolation ?? throw new ArgumentNullException(nameof(isolation));
         _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
         _patchService = patchService ?? throw new ArgumentNullException(nameof(patchService));
@@ -379,6 +382,10 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         var runId = CreateRunId();
 
+        // Registered BEFORE the directory exists and, declared first, disposed after everything that writes into it —
+        // the patch export and the run log included. A directory whose id is unregistered is therefore always over.
+        using var executing = _executingRuns.Begin(runId);
+
         // Re-check cancellation before touching the host filesystem so an early cancel leaves no orphaned run dir.
         cancellationToken.ThrowIfCancellationRequested();
         var runDirectory = Path.Combine(request.Prepared.Layout.RootPath, AgentHomeRunPaths.RunsDirectoryName, runId);
@@ -403,6 +410,10 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             string.Create(CultureInfo.InvariantCulture, $"goal_length={request.Goal.Length}"),
             cancellationToken);
 
+        // ONE reading of which folders really copied: the loop is told it may write only in these, and the export
+        // scopes its git to exactly the same list, so the two cannot describe different sets for one run.
+        string[] copiedAliases = [.. CopiedWorkspaceAliases(request.Prepared.FolderSnapshots)];
+
         // The GOAL is what runs. The executor owns the inner loop, its tools (built from AllowedActions, so each value
         // gates a real capability) and the budgets; every tool works on the copied workspace, which is also every CWD.
         AgentHomeGoalOutcome goal;
@@ -414,7 +425,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                     RunId = runId,
                     Goal = request.Goal,
                     AllowedActions = request.AllowedActions,
-                    WorkspaceAliases = [.. CopiedWorkspaceAliases(request.Prepared.FolderSnapshots)],
+                    WorkspaceAliases = copiedAliases,
                     RunLogger = runLogger
                 },
                 cancellationToken);
@@ -434,7 +445,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         // Export after the loop, so the agent's edits diff against the workspace-copy baseline. Gated on export_patch in
         // AllowedActions and on the baseline existing. A budget-cut run still exports: the partial work is real.
-        var patch = await ExportPatchAsync(request, goal, runId, runDirectory, runLogger, cancellationToken);
+        var patch = await ExportPatchAsync(request, goal, copiedAliases, runId, runDirectory, runLogger, cancellationToken);
 
         var timedOut = goal.Status == AgentHomeGoalStatus.TimeBudgetExceeded;
         var completed = goal.Status is AgentHomeGoalStatus.Completed or AgentHomeGoalStatus.NotRun;
@@ -471,21 +482,22 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
     private async Task<AgentHomePatchExport> ExportPatchAsync(AgentHomeRunRequest request,
         AgentHomeGoalOutcome goal,
+        IReadOnlyList<string> copiedAliases,
         string runId,
         string runDirectory,
         IAgentHomeRunLogger runLogger,
         CancellationToken cancellationToken)
     {
-        // The AgentHome gateway requires the model to grant export_patch. A Git baseline exists only after workspace copy, so
-        // when at least one folder copied at least one file. Both must hold before a diff is attempted.
+        // The AgentHome gateway requires the model to grant export_patch. That and a baseline must both hold before a
+        // diff is attempted.
         if (!request.AllowedActions.Contains("export_patch", StringComparer.Ordinal))
         {
             return EmptyPatchExport;
         }
 
-        var hasBaseline = request.Prepared.FolderSnapshots
-                                 .Any(snapshot => snapshot is { Status: SelectedFolderCopyStatus.Copied, CopiedFileCount: > 0 });
-        if (!hasBaseline)
+        // A git baseline exists only when something copied, and only those aliases have a directory the export can
+        // name as a pathspec — `git add -A` exits 128 on one that matches neither the index nor the working tree.
+        if (copiedAliases.Count == 0)
         {
             return EmptyPatchExport;
         }
@@ -495,7 +507,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             {
                 RunId = runId,
                 HostRunDirectory = runDirectory,
-                ResolvedFolders = request.Prepared.ResolvedFolders,
+                ResolvedFolders = [.. request.Prepared.ResolvedFolders.Where(folder => copiedAliases.Contains(folder.Alias, StringComparer.Ordinal))],
                 WrittenFiles = goal.WrittenFiles,
                 RunLogger = runLogger
             },

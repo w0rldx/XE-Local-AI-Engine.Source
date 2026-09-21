@@ -49,6 +49,9 @@ internal static class AddNodeAgentHomeExtensions
         // Which runs are mid-apply, shared by the scoped apply service, the operator delete and the retention sweep.
         // Singleton or it guards nothing: a per-request instance is a separate idea of what is in flight.
         builder.Services.AddSingleton<AgentHomeRunApplyGuard>();
+        // Which runs are executing, shared by the gateway that registers them, the operator delete and the retention
+        // sweep. Singleton for the same reason the guard is: a per-request instance knows about no run but its own.
+        builder.Services.AddSingleton<AgentHomeRunExecutionRegistry>();
         // Host patch-apply service: approval-gated landing of exported changes.patch onto selected host folders.
         builder.Services.AddScoped<INodePatchApplyService, NodePatchApplyService>();
         builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();

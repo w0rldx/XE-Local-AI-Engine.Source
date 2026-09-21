@@ -231,6 +231,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             provider,
             new StaticIdentityProvider("owner-a", "node-1"),
             leases,
+            new AgentHomeRunExecutionRegistry(),
             isolation,
             workspaceService,
             patchService,

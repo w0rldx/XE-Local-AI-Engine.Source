@@ -119,42 +119,41 @@ internal static class AgentHomeRunPaths
 
         while (pending.Count > 0 && visited < maxEntries)
         {
-            IEnumerable<FileSystemInfo> entries;
+            // The walk is inside the try, not just the call that starts it: enumeration is lazy, so a directory
+            // deleted mid-sweep throws from the iterator, and letting that out would abort the whole sweep tick.
             try
             {
-                entries = new DirectoryInfo(pending.Pop()).EnumerateFileSystemInfos();
+                foreach (var entry in new DirectoryInfo(pending.Pop()).EnumerateFileSystemInfos())
+                {
+                    if (++visited >= maxEntries)
+                    {
+                        break;
+                    }
+
+                    if (entry.LinkTarget is not null)
+                    {
+                        continue;
+                    }
+
+                    if (entry is DirectoryInfo)
+                    {
+                        pending.Push(entry.FullName);
+                        continue;
+                    }
+
+                    try
+                    {
+                        total += ((FileInfo)entry).Length;
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        // A file that vanished between the walk and the stat contributes nothing.
+                    }
+                }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                continue;
-            }
-
-            foreach (var entry in entries)
-            {
-                if (++visited >= maxEntries)
-                {
-                    break;
-                }
-
-                if (entry.LinkTarget is not null)
-                {
-                    continue;
-                }
-
-                if (entry is DirectoryInfo)
-                {
-                    pending.Push(entry.FullName);
-                    continue;
-                }
-
-                try
-                {
-                    total += ((FileInfo)entry).Length;
-                }
-                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-                {
-                    // A file that vanished between the walk and the stat contributes nothing.
-                }
+                // An unreadable or vanished directory contributes what was measured before it went.
             }
         }
 

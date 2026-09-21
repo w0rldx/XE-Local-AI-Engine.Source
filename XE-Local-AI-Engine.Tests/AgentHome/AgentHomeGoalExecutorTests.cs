@@ -325,6 +325,46 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
 
     // ---------------------------------------------------------------- containment
 
+    /// <summary>
+    ///     The export diffs only the copied folders, so a write beside them at the workspace root would be work the
+    ///     operator never sees.
+    /// </summary>
+    /// <remarks>
+    ///     It is refused where the model can still fix it, and the refusal names the folders it may use rather than
+    ///     leaving it to guess.
+    /// </remarks>
+    [Test]
+    [Arguments("notes.txt")]
+    [Arguments("scratch/notes.txt")]
+    [Arguments("projectile/notes.txt")]
+    public async Task WriteFile_OutsideEveryCopiedFolder_IsRefusedNamingTheFoldersAndWritesNothing(string path)
+    {
+        SkipUnlessProcessJailIsUsable();
+
+        using var provider = CreateProvider();
+        var handle = await SeedWorkspaceAsync(provider, isolated: true, ("README.md", "# project\n"));
+        using var client = new ScriptedChatClient(
+            ("write_file", new() { ["path"] = path, ["content"] = "outside" }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/inside.txt", ["content"] = "kept" }));
+
+        var outcome = await ExecuteAsync(provider, handle, client, AllActions);
+
+        AssertEx.Contains(client.Results[0], "write_file rejected");
+        AssertEx.Contains(client.Results[0], WorkspaceAlias, StringComparison.Ordinal,
+            "the refusal names the top-level folders the model may write into");
+        AssertEx.Equal(expected: 1, outcome.RefusedCallCount, "the refusal is counted like every other one");
+
+        // Nothing was written: neither the path the model asked for nor a stray file under the workspace root.
+        _ = await AssertEx.ThrowsAsync<FileNotFoundException>(async () =>
+                await provider.ReadFileAsync(handle, $"{WorkspacePathGuard.WorkspaceRoot}/{path}"),
+            "a refused write must leave no file behind");
+
+        // The alias rule is the only thing that changed: a write under a copied folder still lands.
+        AssertEx.Equal(expected: 1, outcome.WrittenFiles.Count);
+        AssertEx.Equal($"{WorkspaceAlias}/inside.txt", outcome.WrittenFiles[0]);
+        AssertEx.Equal("kept", await provider.ReadFileAsync(handle, $"{WorkspacePathGuard.WorkspaceRoot}/{WorkspaceAlias}/inside.txt"));
+    }
+
     [Test]
     [Arguments("/etc/passwd", "absolute paths are not allowed")]
     [Arguments("../../../etc/passwd", "traverses above the workspace root")]

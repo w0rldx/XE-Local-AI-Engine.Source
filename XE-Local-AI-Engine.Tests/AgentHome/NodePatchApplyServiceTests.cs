@@ -767,6 +767,148 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     }
 
     /// <summary>
+    ///     A header holding a literal <c>" b/"</c> was cut at the first one, guarding <c>x</c> while git wrote
+    ///     <c>x b/sneaky/evil.txt</c>. REAL git writes both patches, so the header shape is git's own.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WithAHeaderOnlyBlockUnderASpaceBSlashDirectory_ChangesExactlyThatPath()
+    {
+        var harness = NewHarness();
+        var addRoot = harness.AddFolder("repo-01");
+
+        var addPatch = await GenerateAddPatchAsync("repo-01", NewTempDir(), ("x b/sneaky/evil.txt", string.Empty));
+        AssertEx.Contains(addPatch, "diff --git a/repo-01/x b/sneaky/evil.txt b/repo-01/x b/sneaky/evil.txt\n",
+            message: "the fixture must carry git's own mis-splittable header");
+        AssertEx.False(addPatch.Contains("+++ ", StringComparison.Ordinal),
+            $"an empty added file is the header-only shape this test is about: {addPatch}");
+        await WritePatchAsync(harness, "run-header-add", addPatch);
+
+        var added = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-header-add"
+        });
+
+        AssertEx.True(added.Applied, $"a legitimate empty file under 'x b/' applies. rejections: {Describe(added.Rejections)}");
+        AssertEx.True(File.Exists(Path.Combine(addRoot, "x b", "sneaky", "evil.txt")), "git writes the whole header path");
+        AssertEx.False(File.Exists(Path.Combine(addRoot, "x")), "nothing lands at the prefix the first-\" b/\" split produced");
+
+        // The same shape the other way round: a delete has no body lines either once the file it removes is empty.
+        var deleteHarness = NewHarness();
+        var deleteRoot = deleteHarness.AddFolder("repo-01");
+        var deletePatch = await GenerateGPatchAsync("repo-01", deleteRoot, ("x b/sneaky/gone.txt", string.Empty, null));
+        AssertEx.False(deletePatch.Contains("--- ", StringComparison.Ordinal),
+            $"an empty deleted file is the header-only shape this test is about: {deletePatch}");
+        await WritePatchAsync(deleteHarness, "run-header-delete", deletePatch);
+
+        var deleted = await deleteHarness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-header-delete"
+        });
+
+        AssertEx.True(deleted.Applied, $"a legitimate empty delete under 'x b/' applies. rejections: {Describe(deleted.Rejections)}");
+        AssertEx.False(File.Exists(Path.Combine(deleteRoot, "x b", "sneaky", "gone.txt")), "git removes the whole header path");
+    }
+
+    /// <summary>
+    ///     git answers a header that does not spell the same name twice with "lacks filename information", so a
+    ///     crafted one that merely LOOKS splittable must name nothing here either, rather than a guess.
+    /// </summary>
+    [Test]
+    [Arguments("an added empty file",
+        "diff --git a/repo-01/x b/sneaky/evil.txt b/repo-01/other b/sneaky/evil.txt\nnew file mode 100644\nindex 0000000..e69de29\n")]
+    [Arguments("a mode change",
+        "diff --git a/repo-01/x b/sneaky/run.sh b/repo-01/x b/other/run.sh\nold mode 100644\nnew mode 100755\n")]
+    public async Task PreviewAndApply_WithAnAsymmetricHeaderOnlyBlock_RefuseAndWriteNothing(string shape, string patch)
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        await WritePatchAsync(harness, "run-header-asymmetric", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-header-asymmetric"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-header-asymmetric"
+        });
+
+        AssertEx.False(preview.CanApply, shape);
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("unparseable", StringComparison.Ordinal),
+            $"{shape}: {Describe(preview.Rejections)}");
+        AssertEx.False(result.Applied);
+        AssertEx.Empty(Directory.GetFileSystemEntries(hostRoot, "*", SearchOption.AllDirectories));
+    }
+
+    /// <summary>
+    ///     The escape the truncated path hid: reading only <c>x</c>, the reparse-point walk never saw the <c>x b</c>
+    ///     the patch traverses — the one guard git's own <c>..</c> and <c>.git</c> refusals do not duplicate.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WithASymlinkedIntermediateInsideASpaceBSlashHeaderPath_Rejects()
+    {
+        SymlinkSupport.EnsureSupported();
+
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        var outside = NewTempDir();
+        Directory.CreateSymbolicLink(Path.Combine(hostRoot, "x b"), outside);
+
+        const string Patch = "diff --git a/repo-01/x b/evil.txt b/repo-01/x b/evil.txt\n"
+                             + "new file mode 100644\nindex 0000000..e69de29\n";
+        await WritePatchAsync(harness, "run-header-symlink", Patch);
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-header-symlink"
+        });
+
+        AssertEx.False(result.Applied, "a symlinked intermediate reached only through the header path tail is rejected");
+        AssertEx.Contains(result.Rejections, rejection => rejection.Reason.Contains("symlink", StringComparison.Ordinal),
+            Describe(result.Rejections));
+        AssertEx.False(File.Exists(Path.Combine(outside, "evil.txt")), "nothing is written outside through the symlink");
+    }
+
+    /// <summary>
+    ///     A character this host cannot write arrives UNQUOTED, because git quotes for none of them, so gating the
+    ///     refusal on the quoting let exactly those through.
+    /// </summary>
+    /// <remarks>
+    ///     The character is read from the host's own rule rather than hard-coded: <c>:</c> and <c>*</c> are invalid
+    ///     on Windows and ordinary Linux file names, which must stay applyable, and the NUL byte is refused by both.
+    /// </remarks>
+    [Test]
+    public async Task PreviewAndApply_WithAnUnquotedNameTheHostCannotWrite_RefuseAndNameIt()
+    {
+        var forbidden = Array.FindAll(Path.GetInvalidFileNameChars(), character => character is not ('/' or '\n' or '\r'));
+        AssertEx.True(forbidden.Length > 0, "every host forbids at least one character in a file name");
+
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        var name = $"ev{forbidden[0]}il.txt";
+        var patch = $"diff --git a/repo-01/{name} b/repo-01/{name}\nindex 0000001..0000002 100644\n"
+                    + $"--- a/repo-01/{name}\n+++ b/repo-01/{name}\n@@ -1 +1 @@\n-old\n+new\n";
+        await WritePatchAsync(harness, "run-unwritable-unquoted", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-unwritable-unquoted"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-unwritable-unquoted"
+        });
+
+        AssertEx.False(preview.CanApply, "an unquoted name this host cannot write is refused");
+        AssertEx.Contains(preview.Rejections,
+            rejection => rejection.Reason.Contains("will not write", StringComparison.Ordinal)
+                         && rejection.Path?.StartsWith("repo-01/", StringComparison.Ordinal) == true,
+            $"the refusal names the entry: {Describe(preview.Rejections)}");
+        AssertEx.False(result.Applied);
+        AssertEx.Empty(Directory.GetFileSystemEntries(hostRoot, "*", SearchOption.AllDirectories));
+    }
+
+    /// <summary>
     ///     The per-alias sub-patch copies the operator's source into the shared temp directory, so it is created
     ///     0600 and gone before the call returns. Narrowing after creation leaves a umask-wide window in which
     ///     another local user can read it.
@@ -955,36 +1097,208 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     Git C-quotes a path whenever the name holds a quote, a backslash or a control character, and this parser
-    ///     does not unescape them. It refuses by name rather than as an unregistered folder, pinning unescaping
-    ///     as a deliberate change later.
+    ///     Git C-quotes a path whenever the name holds a quote, a backslash or a control byte. The parser decodes
+    ///     that literal into the name git itself will write, so such a run is reviewable AND applyable.
+    /// </summary>
+    /// <remarks>
+    ///     Generated by REAL git, because the whole point is that our decoder and git's agree: the file the apply
+    ///     leaves on disk is the one the preview named, beside an ordinary file in the same patch.
+    /// </remarks>
+    [Test]
+    public async Task ApplyApprovedAsync_WithQuoteAndBackslashNames_AppliesThemBesideACleanFile()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Skip.Test("A quote and a backslash are not legal characters in a Windows file name, so the host files cannot be created.");
+        }
+
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var patch = await GenerateGPatchAsync("repo-01",
+            hostRoot,
+            ("we\"ird.txt", "alpha\n", "alpha\nbravo\n"),
+            ("back\\slash.txt", "charlie\n", "charlie\ndelta\n"),
+            ("clean.txt", "echo\n", "echo\nfoxtrot\n"));
+        AssertEx.Contains(patch, "\"b/repo-01/we\\\"ird.txt\"", message: "the fixture must be a patch git actually C-quoted");
+        await WritePatchAsync(harness, "run-quoted-apply", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-quoted-apply"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-quoted-apply"
+        });
+
+        AssertEx.True(preview.CanApply, $"a decoded quoted path applies. rejections: {Describe(preview.Rejections)}");
+        AssertEx.Contains(preview.Files, file => file is { RelativePath: "we\"ird.txt", Added: 1 });
+        AssertEx.Contains(preview.Files, file => file is { RelativePath: "back\\slash.txt", Added: 1 });
+        AssertEx.True(result.Applied, $"the apply lands. rejections: {Describe(result.Rejections)}");
+        AssertEx.Equal("alpha\nbravo\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "we\"ird.txt")));
+        AssertEx.Equal("charlie\ndelta\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "back\\slash.txt")));
+        AssertEx.Equal("echo\nfoxtrot\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "clean.txt")));
+    }
+
+    /// <summary>
+    ///     The decode runs BEFORE every guard, so a name that hides a climb, a git directory or a missing alias
+    ///     behind octal escapes faces exactly the checks its plain spelling would.
     /// </summary>
     [Test]
-    public async Task PreviewAsync_WithAQuotedPath_RejectsSayingWhy()
+    [Arguments("a quoted traversal", "repo-01/../escape.txt", "outside its folder")]
+    [Arguments("an octal-escaped traversal", "repo-01/\\056\\056/escape.txt", "outside its folder")]
+    [Arguments("an octal-escaped git directory", "repo-01/\\056git/hooks/pre-commit", "git directory")]
+    [Arguments("a quoted path with no alias", "escape\\\"d.txt", "no alias segment")]
+    public async Task PreviewAndApply_WithADecodedPathThatBreaksAGuard_RefuseAndWriteNothing(string shape, string inner, string reason)
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        await SeedHostAsync(hostRoot, ("keep.txt", "keep\n"));
+
+        var patch = $"diff --git \"a/{inner}\" \"b/{inner}\"\nnew file mode 100644\nindex 0000000..e69de29\n"
+                    + $"--- /dev/null\n+++ \"b/{inner}\"\n@@ -0,0 +1 @@\n+text\n";
+        await WritePatchAsync(harness, "run-decoded-guard", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-decoded-guard"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-decoded-guard"
+        });
+
+        AssertEx.False(preview.CanApply, $"{shape} is refused. rejections: {Describe(preview.Rejections)}");
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains(reason, StringComparison.Ordinal), shape);
+        AssertEx.False(result.Applied, shape);
+        AssertEx.Equal(expected: 1, Directory.GetFileSystemEntries(hostRoot, "*", SearchOption.AllDirectories).Length,
+            $"{shape} left the folder holding only its seeded file");
+        AssertEx.False(File.Exists(Path.GetFullPath(Path.Combine(hostRoot, "..", "escape.txt"))), $"{shape} wrote nothing beside the folder");
+    }
+
+    /// <summary>
+    ///     A quoted symlink or submodule block is now named: the same decoder the guards use feeds the refusal,
+    ///     so the operator learns WHICH file blocks the patch without any raw literal being echoed.
+    /// </summary>
+    [Test]
+    [Arguments("a symbolic link", "120000", "symbolic link")]
+    [Arguments("a submodule reference", "160000", "submodule")]
+    public async Task PreviewAndApply_WithAQuotedLinkEntry_RefuseAndNameIt(string shape, string mode, string reason)
     {
         var harness = NewHarness();
         var hostRoot = harness.AddFolder("repo-01");
 
-        // The shape git produces for a name containing a literal quote: the whole path is C-quoted and escaped.
-        var patch =
-            "diff --git \"a/repo-01/od\\\"d.txt\" \"b/repo-01/od\\\"d.txt\"\n" +
-            "new file mode 100644\n" +
-            "index 0000000..e69de29\n" +
-            "--- /dev/null\n" +
-            "+++ \"b/repo-01/od\\\"d.txt\"\n" +
-            "@@ -0,0 +1 @@\n" +
-            "+text\n";
-        await WritePatchAsync(harness, "run-quoted", patch);
+        var patch = $"diff --git \"a/repo-01/ev\\\"il\" \"b/repo-01/ev\\\"il\"\nnew file mode {mode}\nindex 0000000..1111111\n"
+                    + "--- /dev/null\n+++ \"b/repo-01/ev\\\"il\"\n@@ -0,0 +1 @@\n+/etc/passwd\n";
+        await WritePatchAsync(harness, "run-quoted-link", patch);
 
         var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
         {
-            RunId = "run-quoted"
+            RunId = "run-quoted-link"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-quoted-link"
         });
 
-        AssertEx.False(preview.CanApply, "a quoted path is refused rather than parsed past");
-        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("quoted path", StringComparison.Ordinal));
-        AssertEx.True(preview.Rejections.All(rejection => !rejection.Reason.Contains(hostRoot, StringComparison.Ordinal)),
-            "the rejection carries no host path");
+        AssertEx.False(preview.CanApply, shape);
+        AssertEx.Contains(preview.Rejections,
+            rejection => rejection.Path == "repo-01/ev\"il" && rejection.Reason.Contains(reason, StringComparison.Ordinal),
+            $"{shape} is named through the decoder: {Describe(preview.Rejections)}");
+        AssertEx.False(result.Applied);
+        AssertEx.False(Path.Exists(Path.Combine(hostRoot, "ev\"il")), $"{shape} created nothing on the host");
+    }
+
+    /// <summary>
+    ///     A decoded name holding more than the quote or backslash it was quoted for is still refused — and named,
+    ///     with the character itself escaped, so the refusal cannot spoof the file it is about.
+    /// </summary>
+    [Test]
+    [Arguments("a bell", "ev\\007il.txt", "repo-01/ev\\u{0007}il.txt", "\u0007")]
+    [Arguments("a right-to-left override", "ev\\342\\200\\256il.txt", "repo-01/ev\\u{202E}il.txt", "‮")]
+    [Arguments("a zero-width joiner", "ev\\342\\200\\215il.txt", "repo-01/ev\\u{200D}il.txt", "‍")]
+    public async Task PreviewAndApply_WithAControlCharacterInADecodedName_RefuseAndNameItEscaped(string shape,
+        string inner,
+        string expectedPath,
+        string raw)
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var patch = $"diff --git \"a/repo-01/{inner}\" \"b/repo-01/{inner}\"\nnew file mode 100644\nindex 0000000..e69de29\n"
+                    + $"--- /dev/null\n+++ \"b/repo-01/{inner}\"\n@@ -0,0 +1 @@\n+text\n";
+        await WritePatchAsync(harness, "run-decoded-control", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-decoded-control"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-decoded-control"
+        });
+
+        AssertEx.False(preview.CanApply, shape);
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Path == expectedPath,
+            $"{shape} is named escaped: {Describe(preview.Rejections)}");
+        AssertEx.True(preview.Rejections.All(rejection => rejection.Path?.Contains(raw, StringComparison.Ordinal) != true
+                                                          && !rejection.Reason.Contains(raw, StringComparison.Ordinal)),
+            $"the raw {shape} must not survive into the response");
+        AssertEx.False(result.Applied);
+        AssertEx.Empty(Directory.GetFileSystemEntries(hostRoot, "*", SearchOption.AllDirectories));
+    }
+
+    /// <summary>
+    ///     A mode-only block carries no body lines, so its quoted HEADER path is the only one there is. Reaching
+    ///     these reasons at all proves the header decoded; failing to decode would read as an unparseable header.
+    /// </summary>
+    [Test]
+    [Arguments("an octal-escaped traversal", "repo-01/\\056\\056/escape.txt", "outside its folder")]
+    [Arguments("an octal-escaped git directory", "repo-01/\\056git/config", "git directory")]
+    [Arguments("a control character", "repo-01/ev\\007il.txt", "will not write")]
+    public async Task PreviewAsync_WithAQuotedModeOnlyBlock_RefusesOnTheHeaderPath(string shape, string inner, string reason)
+    {
+        var harness = NewHarness();
+        harness.AddFolder("repo-01");
+
+        var patch = $"diff --git \"a/{inner}\" \"b/{inner}\"\nold mode 100644\nnew mode 100755\n";
+        await WritePatchAsync(harness, "run-quoted-mode-only", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-quoted-mode-only"
+        });
+
+        AssertEx.False(preview.CanApply, shape);
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains(reason, StringComparison.Ordinal),
+            $"{shape}: {Describe(preview.Rejections)}");
+    }
+
+    /// <summary>
+    ///     The header's own path is C-quoted on the same rules, so the cross-check that catches a crafted header
+    ///     keeps working through the decoder rather than going quiet whenever a name needed quoting.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WithAQuotedHeaderNamingAnotherAlias_Rejects()
+    {
+        var harness = NewHarness();
+        harness.AddFolder("repo-01");
+        harness.AddFolder("repo-02");
+
+        const string Patch = "diff --git \"a/repo-02/we\\\"ird.txt\" \"b/repo-02/we\\\"ird.txt\"\nindex 0000001..0000002 100644\n"
+                             + "--- \"a/repo-01/we\\\"ird.txt\"\n+++ \"b/repo-01/we\\\"ird.txt\"\n@@ -1 +1 @@\n-old\n+new\n";
+        await WritePatchAsync(harness, "run-quoted-header", Patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-quoted-header"
+        });
+
+        AssertEx.False(preview.CanApply, "a header naming another alias than the body is refused");
+        AssertEx.Contains(preview.Rejections,
+            rejection => rejection.Reason.Contains("header b-path does not match", StringComparison.Ordinal),
+            Describe(preview.Rejections));
     }
 
     /// <summary>
@@ -1420,26 +1734,64 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     A C-quoted path stays UNNAMED: the parser deliberately never unescapes one, so there is no name it could
-    ///     show that it has any right to trust.
+    ///     A literal git's own reader would give up on stays UNNAMED. git answers one by taking the raw text as the
+    ///     name, so there is nothing here that could be echoed and still describe the file git would write.
     /// </summary>
     [Test]
-    public async Task PreviewAsync_WithAQuotedEntryName_RefusesWithoutNamingIt()
+    [Arguments("a two-digit octal escape", "od\\56d.txt")]
+    [Arguments("an escape git does not define", "od\\zd.txt")]
+    [Arguments("an octal escape over one byte", "od\\400d.txt")]
+    [Arguments("text after the closing quote", "od.txt\" trailing")]
+    public async Task PreviewAsync_WithMalformedQuoting_RefusesWithoutNamingIt(string shape, string inner)
     {
         var harness = NewHarness();
         harness.AddFolder("repo-01");
-        const string Patch = "diff --git \"a/repo-01/od\\\"d.txt\" \"b/repo-01/od\\\"d.txt\"\nnew file mode 120000\n"
-                             + "index 0000000..1111111\n--- /dev/null\n+++ \"b/repo-01/od\\\"d.txt\"\n@@ -0,0 +1 @@\n+/etc/passwd\n";
-        await WritePatchAsync(harness, "run-unnamed", Patch);
+        var patch = $"diff --git \"a/repo-01/{inner}\" \"b/repo-01/{inner}\"\nnew file mode 100644\n"
+                    + $"index 0000000..e69de29\n--- /dev/null\n+++ \"b/repo-01/{inner}\"\n@@ -0,0 +1 @@\n+text\n";
+        await WritePatchAsync(harness, "run-unnamed", patch);
 
         var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
         {
             RunId = "run-unnamed"
         });
 
-        AssertEx.False(preview.CanApply, "a quoted path is refused");
+        AssertEx.False(preview.CanApply, $"{shape} is refused");
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("quoted path", StringComparison.Ordinal), shape);
         AssertEx.True(preview.Rejections.All(rejection => rejection.Path is null),
-            $"a quoted path must not be echoed back: {Describe(preview.Rejections)}");
+            $"an unreadable literal must not be echoed back: {Describe(preview.Rejections)}");
+    }
+
+    /// <summary>
+    ///     All-or-nothing survives the decoder: one refused block still voids the whole plan, leaving no file list
+    ///     for the clean blocks beside it — and the refusal names the file that caused it.
+    /// </summary>
+    [Test]
+    public async Task PreviewAndApply_WithOneRefusedQuotedBlockAmongCleanOnes_RefuseTheWholePlan()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        await SeedHostAsync(hostRoot, ("clean.txt", "old\n"));
+
+        const string Patch = "diff --git a/repo-01/clean.txt b/repo-01/clean.txt\nindex 0000001..0000002 100644\n"
+                             + "--- a/repo-01/clean.txt\n+++ b/repo-01/clean.txt\n@@ -1 +1 @@\n-old\n+new\n"
+                             + "diff --git \"a/repo-01/ev\\007il.txt\" \"b/repo-01/ev\\007il.txt\"\nnew file mode 100644\n"
+                             + "index 0000000..e69de29\n--- /dev/null\n+++ \"b/repo-01/ev\\007il.txt\"\n@@ -0,0 +1 @@\n+text\n";
+        await WritePatchAsync(harness, "run-quoted-mixed", Patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-quoted-mixed"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-quoted-mixed"
+        });
+
+        AssertEx.False(preview.CanApply, "one refused block refuses the whole patch");
+        AssertEx.Empty(preview.Files, "no per-file breakdown survives a rejected plan");
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Path == "repo-01/ev\\u{0007}il.txt", Describe(preview.Rejections));
+        AssertEx.False(result.Applied);
+        AssertEx.Equal("old\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "clean.txt")), "the clean block's file is untouched");
     }
 
     /// <summary>
@@ -1927,14 +2279,13 @@ public sealed class NodePatchApplyServiceTests : IDisposable
 
     /// <summary>The operator delete over the same tree and apply guard the harness's apply service holds.</summary>
     /// <remarks>
-    ///     The pairing the node's singleton registrations produce. The execution lease is the REAL manager, never
-    ///     acquired here, so the only thing that can refuse a delete in these tests is the apply guard.
+    ///     The pairing the node's singleton registrations produce. The executing registry is empty and no run is in
+    ///     flight, so the only thing that can refuse a delete in these tests is the apply guard.
     /// </remarks>
     private static AgentHomeRunDeleteService DeleteService(TestHarness harness) =>
         new(Options.Create(new AgentHomeOptions { RootPath = harness.StateRoot }),
             new FakeNodeDataDirectory(harness.StateRoot),
-            new StubIdentityProvider(),
-            new AgentHomeExecutionLeaseManager(),
+            new AgentHomeRunExecutionRegistry(),
             harness.ApplyGuard,
             NullLogger<AgentHomeRunDeleteService>.Instance);
 

@@ -9,7 +9,9 @@ internal sealed partial class NodePatchApplyService
     // which is null whenever the block's path could not be reached safely.
     private const string GitDirectoryRejection = "a patch block targets a git directory.";
 
-    private const string QuotedPathRejection = "a patch block has a quoted path, which is not supported.";
+    private const string QuotedPathRejection = "a patch block has a quoted path that cannot be read.";
+
+    private const string UnwritableNameRejection = "a patch block has a path holding a character the node will not write.";
 
     private const string GitlinkRejection = "a patch block changes a submodule reference, which is not supported.";
 
@@ -144,6 +146,15 @@ internal sealed partial class NodePatchApplyService
                 return ParsedBlock.Rejected(GitDirectoryRejection, Describe(headerAlias, headerRelative));
             }
 
+            // The same refusal the body paths get: this block's header path is the only path it has, so a name the
+            // host cannot write must not slip past on this branch either.
+            var headerPathText = string.Create(CultureInfo.InvariantCulture, $"{headerAlias}/{headerRelative}");
+            if (HasHostInvalidNameCharacter(headerPathText)
+                || (GitQuotedPath.IsQuoted(lines[0][DiffHeaderPrefix.Length..]) && HasUnsafeControlCharacter(headerPathText)))
+            {
+                return ParsedBlock.Rejected(UnwritableNameRejection, Describe(headerAlias, headerRelative));
+            }
+
             return new ParsedBlock
             {
                 Alias = headerAlias,
@@ -161,11 +172,17 @@ internal sealed partial class NodePatchApplyService
             // Unified-diff body paths carry an "a/" or "b/" diff prefix; rename/copy lines do not.
             var normalized = raw.Trim();
 
-            // git C-quotes a name containing a quote, a backslash or a control character, REGARDLESS of
-            // core.quotePath. This parser does not unescape, so it refuses by name rather than split a nonsense alias.
-            if (normalized.StartsWith('"'))
+            // git C-quotes a name holding a quote, a backslash or a control byte, REGARDLESS of core.quotePath. It is
+            // decoded HERE, before the diff prefix comes off, so every guard below reads the name git will write.
+            var wasQuoted = GitQuotedPath.IsQuoted(normalized);
+            if (wasQuoted)
             {
-                return ParsedBlock.Rejected(QuotedPathRejection);
+                if (GitQuotedPath.TryDecode(normalized) is not { } decoded)
+                {
+                    return ParsedBlock.Rejected(QuotedPathRejection);
+                }
+
+                normalized = decoded;
             }
 
             if (normalized.StartsWith("a/", StringComparison.Ordinal) || normalized.StartsWith("b/", StringComparison.Ordinal))
@@ -191,6 +208,13 @@ internal sealed partial class NodePatchApplyService
                 return ParsedBlock.Rejected(GitDirectoryRejection, Describe(alias, relative));
             }
 
+            // A name the host cannot write is refused however the patch spelled it; a decoded one holding more than
+            // it was quoted for too. NAMED, unlike a raw literal, because SafeDisplayPath has escaped the text.
+            if (HasHostInvalidNameCharacter(normalized) || (wasQuoted && HasUnsafeControlCharacter(normalized)))
+            {
+                return ParsedBlock.Rejected(UnwritableNameRejection, Describe(alias, relative));
+            }
+
             allAliasResults.Add(new BodyAliasPath { Prefix = prefix, Alias = alias, Relative = relative });
         }
 
@@ -208,7 +232,7 @@ internal sealed partial class NodePatchApplyService
         var destBodyPath = allAliasResults.FirstOrDefault(result => result.Prefix == prefixDest);
         if (destBodyPath is not null)
         {
-            var headerBAlias = ExtractAliasFromHeader(lines[0]);
+            var headerBAlias = TryParseHeaderAPath(lines[0])?.Alias;
             if (headerBAlias is not null && !string.Equals(headerBAlias, blockAlias, StringComparison.Ordinal))
             {
                 return ParsedBlock.Rejected("the patch header b-path does not match the body destination path.",
@@ -261,9 +285,9 @@ internal sealed partial class NodePatchApplyService
     ///     that is safe to echo.
     /// </summary>
     /// <remarks>
-    ///     Refused before the per-path guards run, so it repeats their entry conditions rather than trusting them: a
-    ///     C-quoted path is never unescaped, and a raw control character — which git would have quoted — is refused
-    ///     rather than carried into a log line or the dialog.
+    ///     Reached before the per-path guards run, so it repeats their entry conditions rather than trusting them: a
+    ///     C-quoted path is decoded by the same decoder the guards use and stays unnamed when that refuses, so raw
+    ///     undecoded bytes never reach a log line or the dialog.
     /// </remarks>
     private static string? TryDescribeTarget(string[] lines)
     {
@@ -274,9 +298,14 @@ internal sealed partial class NodePatchApplyService
         }
 
         var normalized = candidate.Trim();
-        if (normalized.StartsWith('"'))
+        if (GitQuotedPath.IsQuoted(normalized))
         {
-            return null;
+            if (GitQuotedPath.TryDecode(normalized) is not { } decoded)
+            {
+                return null;
+            }
+
+            normalized = decoded;
         }
 
         if (normalized.StartsWith("a/", StringComparison.Ordinal) || normalized.StartsWith("b/", StringComparison.Ordinal))
@@ -392,36 +421,15 @@ internal sealed partial class NodePatchApplyService
     }
 
     /// <summary>
-    ///     Extracts the alias component from the <c>diff --git a/…</c> header for the cross-check only.
-    ///     Returns <see langword="null" /> when the header cannot be parsed (non-fatal — the guard is advisory).
-    /// </summary>
-    private static string? ExtractAliasFromHeader(string header)
-    {
-        if (!header.StartsWith(DiffHeaderPrefix, StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        // The header is "diff --git a/<rest> b/<rest>". We only need the alias from the a/ side, which is the first
-        // path component after "a/". A mis-split here is safe because this is advisory only — advisory-path guard guards.
-        var afterPrefix = header[DiffHeaderPrefix.Length..];
-        if (!afterPrefix.StartsWith("a/", StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        var rest = afterPrefix[2..];
-        var slashIndex = rest.IndexOf(value: '/', StringComparison.Ordinal);
-        return slashIndex > 0 ? rest[..slashIndex] : null;
-    }
-
-    /// <summary>
     ///     Parses the <c>a/…</c> path from a <c>diff --git a/… b/…</c> header into an <see cref="AliasPath" /> using
     ///     <see cref="SplitAlias" />, or <see langword="null" /> when the header cannot be parsed.
     /// </summary>
     /// <remarks>
-    ///     Used for mode-only blocks that carry no <c>---</c>/<c>+++</c> body lines. The result is fed through the
-    ///     same traversal and within-root guards as every other target path.
+    ///     Serves the blocks with no <c>---</c>/<c>+++</c> body lines — a mode change, a binary block, an empty file
+    ///     added or deleted — whose header path is the only one they have and goes through the same guards as any
+    ///     target path, and the advisory alias cross-check, where an unparseable header is non-fatal. It reads a
+    ///     name only where git does: each side is C-quoted on its own, an unquoted header must spell the same name
+    ///     twice, and a rename header therefore parses as none — as it does for git, whose body lines rule there.
     /// </remarks>
     private static AliasPath? TryParseHeaderAPath(string header)
     {
@@ -430,22 +438,41 @@ internal sealed partial class NodePatchApplyService
             return null;
         }
 
-        var afterPrefix = header[DiffHeaderPrefix.Length..];
-        if (!afterPrefix.StartsWith("a/", StringComparison.Ordinal))
+        var afterPrefix = header[DiffHeaderPrefix.Length..].TrimEnd('\r');
+        string aPath;
+        if (GitQuotedPath.IsQuoted(afterPrefix))
         {
-            return null;
+            // git quotes each side of the header on its own, so the a-path ends at its own closing quote.
+            var closing = GitQuotedPath.FindClosingQuote(afterPrefix);
+            if (closing < 0 || GitQuotedPath.TryDecode(afterPrefix[..(closing + 1)]) is not { } decoded)
+            {
+                return null;
+            }
+
+            aPath = decoded;
+        }
+        else
+        {
+            // git accepts an unquoted header only where the name shows up TWICE in the same form, so the text is
+            // "a/" + N + " b/" + N and N's length follows from the line's; the first " b/" would truncate one.
+            const string sourcePrefix = "a/";
+            const string separator = " b/";
+            var nameLength = (afterPrefix.Length - sourcePrefix.Length - separator.Length) / 2;
+            if (nameLength <= 0
+                || afterPrefix.Length != sourcePrefix.Length + separator.Length + (2 * nameLength)
+                || !afterPrefix.AsSpan(sourcePrefix.Length + nameLength, separator.Length).SequenceEqual(separator)
+                || !afterPrefix.AsSpan(sourcePrefix.Length + nameLength + separator.Length)
+                               .SequenceEqual(afterPrefix.AsSpan(sourcePrefix.Length, nameLength)))
+            {
+                return null;
+            }
+
+            aPath = afterPrefix[..(sourcePrefix.Length + nameLength)];
         }
 
         // Strip the "a/" prefix: the header pairs an a-path with a b-path, and only the a-side feeds the traversal
         // guard, with SplitAlias extracting the alias from the stripped path.
-        var aRest = afterPrefix[2..];
-
-        // The canonical separator for a well-formed header is the first " b/", and a symmetric header mirrors the a-path
-        // after it, so everything up to that point is the a-side.
-        var sepIndex = aRest.IndexOf(" b/", StringComparison.Ordinal);
-        var aPath = sepIndex > 0 ? aRest[..sepIndex] : aRest;
-
-        return SplitAlias(aPath);
+        return aPath.StartsWith("a/", StringComparison.Ordinal) ? SplitAlias(aPath[2..]) : null;
     }
 
     private static string DetermineChangeType(string block)
@@ -473,19 +500,56 @@ internal sealed partial class NodePatchApplyService
         return "modified";
     }
 
+    /// <summary>
+    ///     Splits a path whose <c>a/</c> or <c>b/</c> diff prefix is already off into its alias and the rest.
+    /// </summary>
+    /// <remarks>
+    ///     Splits on <c>/</c> alone, which is the only separator git puts in a patch path and the only one
+    ///     <c>git apply -p2</c> counts, so a decoded name holding a literal backslash stays the ONE name git writes
+    ///     rather than being re-cut into two. The traversal and git-directory guards still read a backslash as a
+    ///     separator, so a Windows-shaped escape hidden behind one is refused there instead.
+    /// </remarks>
     private static AliasPath? SplitAlias(string path)
     {
-        // Path arrives with the a/ or b/ diff prefix already stripped. Split on the first '/' into alias + relative.
-        var normalized = path.Replace(oldChar: '\\', newChar: '/');
-        var separatorIndex = normalized.IndexOf(value: '/', StringComparison.Ordinal);
-        if (separatorIndex <= 0 || separatorIndex == normalized.Length - 1)
+        var separatorIndex = path.IndexOf(value: '/', StringComparison.Ordinal);
+        if (separatorIndex <= 0 || separatorIndex == path.Length - 1)
         {
             return null;
         }
 
-        var alias = normalized[..separatorIndex];
-        var relative = normalized[(separatorIndex + 1)..];
+        var alias = path[..separatorIndex];
+        var relative = path[(separatorIndex + 1)..];
         return relative.Length == 0 ? null : new AliasPath(alias, relative);
+    }
+
+    /// <summary>
+    ///     Whether any segment of a path holds a character this host cannot put in a file name, per
+    ///     <see cref="Path.GetInvalidFileNameChars" />.
+    /// </summary>
+    /// <remarks>
+    ///     Asked of EVERY path, quoted or not: git C-quotes for a quote, a backslash or a control byte and nothing
+    ///     else, so <c>: &lt; &gt; | ? *</c> — all invalid on Windows — arrive unquoted. A quote and a backslash are
+    ///     ordinary bytes on a POSIX host, which keeps those names applyable there; on Windows this refuses them BY
+    ///     NAME instead of leaving git to fail mid-apply. It knows neither the reserved device names nor a trailing
+    ///     dot or space, which <see cref="Path.GetInvalidFileNameChars" /> does not cover either.
+    /// </remarks>
+    private static bool HasHostInvalidNameCharacter(string path)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return path.Split('/').Any(segment => segment.IndexOfAny(invalid) >= 0);
+    }
+
+    /// <summary>
+    ///     Whether a DECODED path holds a character that can move, hide or reorder the text around it.
+    /// </summary>
+    /// <remarks>
+    ///     Asked only of a path the patch C-quoted, because a raw one carrying the same character is a pinned
+    ///     contract: it is shown escaped and still applies. Reaching it through an octal escape is not, and a name
+    ///     that had to be quoted for a control byte has no business carrying more than the byte it was quoted for.
+    /// </remarks>
+    private static bool HasUnsafeControlCharacter(string path)
+    {
+        return path.Any(character => IsUnsafeToDisplay(character));
     }
 
     /// <summary>

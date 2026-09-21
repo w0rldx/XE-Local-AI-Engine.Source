@@ -891,8 +891,10 @@ tools':
   whose content is the link target, so applying it would point a real host link anywhere) and a **nested
   repository** (`mode 160000`), both refused by name in `NodePatchApplyService.ParseBlock` — see
   [Security & Privacy](12-security-and-privacy.md). A refusal now also names the entry it is about
-  (`<alias>/<relative>`, on `PatchApplyRejection.Path`), so the dialog can group the reasons per file; a
-  C-quoted path stays unnamed, because the parser never unescapes one. A path the workspace's `.gitignore`
+  (`<alias>/<relative>`, on `PatchApplyRejection.Path`), so the dialog can group the reasons per file. A
+  C-quoted path — git's spelling for a name holding a quote, a backslash or a control byte — is decoded by
+  `GitQuotedPath` before any guard runs and then applies like any other; a quoted literal that git itself could
+  not decode is refused without a name. A path the workspace's `.gitignore`
   covers is not in the patch at all, because staging honours it (below).
 - **The preview also reads what the operator's own folders already hold.** For each selected folder the patch
   touches that is inside a git work tree, `PreviewAsync` runs one `git --no-optional-locks status
@@ -937,7 +939,9 @@ human-in-the-loop route, which is why the operator's single approval of the oute
 envelope up front. Every model-supplied path goes through `WorkspacePathGuard` and then the provider's
 `ResolveJailPath` + `EnsureNoSymlinkComponentsUnderJail` pair, so an absolute path, a `..` climb, or a symlink a
 command just planted is refused; writes anywhere under `.git` are refused outright, because that is where the
-baseline the exported patch is diffed against lives. File contents and command output are fenced with
+baseline the exported patch is diffed against lives, and a `write_file` outside every copied folder — a file
+beside them at the workspace root — is refused naming the folders it may use, because the export diffs only
+those folders and such a file would be work the operator never sees. File contents and command output are fenced with
 `UntrustedContentFraming` before they re-enter the model, and the sandbox's own root is stripped from captured
 output so no host path reaches it.
 
@@ -949,6 +953,15 @@ baseline `add -A` honours `.gitignore`, so forcing would report every ignored-bu
 added, and the two sides of the comparison have to apply the same rule. A model that hides its own creation
 behind a `.gitignore` shrinks what the operator is offered but cannot get an unreviewed file onto the host; the
 run's `run_completed` event carries `changed_files` beside `files_written` so the two numbers can be compared.
+
+**And it diffs the copied folders, not the repository.** All three export commands — the `add -A`, the patch
+diff and the `--name-status` diff — carry the copied folders' aliases as `:(literal)` pathspecs instead of `.`.
+A whole-repository pathspec let a file at the workspace root into `changes.patch` and the `+`/`-` totals while
+the alias split dropped it from `changed-files.json` and `ChangedFileCount`, so the model was shown a file count
+that did not match the line count, and the host apply refused the *whole* patch — valid hunks included — over
+that one block with no alias segment. Scoping makes the patch text, the name-status stream and both counts
+describe one set by construction. The mapping keeps its skip for an entry with no alias, which now only a stream
+the node's own git did not produce can trigger.
 
 **The patch export's own git is hardened, and logged.** Export runs `git diff` over the workspace the model just
 had `write_file` and `run_command` access to, **after** its turn ended and outside the run's budgets — and git

@@ -101,16 +101,60 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
             "a host path in the audit line would leak where the operator's data directory is.");
     }
 
+    /// <summary>
+    ///     The signal is per run id, so a live run costs the sweep that run alone. Reading the sandbox-wide lease
+    ///     instead abandoned the whole pass, starving every older run for as long as the sandbox was busy.
+    /// </summary>
     [Test]
-    public async Task Sweep_WhileTheExecutionLeaseIsHeld_DeletesNothing()
+    public async Task Sweep_WhileARunIsExecuting_SkipsOnlyThatRunAndTakesTheOtherEligibleOnes()
     {
-        var old = SeedRun(Now.AddDays(-40));
+        var live = SeedRun(Now.AddDays(-41));
+        var otherOld = SeedRun(Now.AddDays(-40));
         SeedRun(Now.AddHours(-1));
+        var executing = new AgentHomeRunExecutionRegistry();
+        var logger = new RecordingLogger<AgentHomeRunRetentionService>();
 
-        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 }, leaseHeld: true);
+        using (executing.Begin(Path.GetFileName(live)))
+        {
+            await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 }, executing, logger: logger);
 
-        AssertEx.True(Directory.Exists(old),
-            "a run may be in flight while the lease is held, so the sweep waits rather than racing it.");
+            AssertEx.True(Directory.Exists(live),
+                "the run is still writing its log and its patch export into this directory; the sweep must not take it.");
+            AssertEx.False(Directory.Exists(otherOld),
+                "one run being executed must not stop the sweep — the signal is per run, unlike the execution lease.");
+            AssertEx.True(logger.HasEntry(LogLevel.Debug, "left 1 executing run(s) alone"),
+                "a run the sweep skipped for a reason other than its limits says so, or the skip is invisible.");
+        }
+
+        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 }, executing);
+
+        AssertEx.False(Directory.Exists(live), "the next sweep after the run finishes takes it like any other.");
+    }
+
+    /// <summary>
+    ///     A skipped run keeps its place in the count and byte accounting: its bytes are still on disk, and the caps
+    ///     are about what is on disk. Discounting it would stop evicting one run early and leave the cap overshot
+    ///     until a later tick.
+    /// </summary>
+    [Test]
+    public async Task Sweep_CountsAnExecutingRunTowardsTheCapsSoTheCapIsStillReached()
+    {
+        var live = SeedRun(Now.AddDays(-5));
+        var second = SeedRun(Now.AddDays(-4));
+        var third = SeedRun(Now.AddDays(-3));
+        var newest = SeedRun(Now.AddDays(-2));
+        var executing = new AgentHomeRunExecutionRegistry();
+
+        using var scope = executing.Begin(Path.GetFileName(live));
+        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 0, MaxRuns = 2, MaxTotalBytes = 0 },
+            executing);
+
+        AssertEx.True(Directory.Exists(live), "the executing run is skipped, not deleted.");
+        AssertEx.False(Directory.Exists(second), "the cap evicts oldest-first among the runs the sweep may take.");
+        AssertEx.False(Directory.Exists(third),
+            "the skipped run still occupies a slot, so the cap of 2 is only reached once BOTH deletable middle runs "
+            + "go; discounting it would stop an eviction early and leave three runs on disk.");
+        AssertEx.True(Directory.Exists(newest), "the newest run is never evicted, whatever any limit says.");
     }
 
     /// <summary>
@@ -227,7 +271,6 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
 
         using var service = CreateService(new AgentHomeRunRetentionOptions { Enabled = retentionEnabled, RetentionDays = 30 },
             new AgentHomeOptions { Enabled = agentHomeEnabled, RootPath = Path.Combine(_dataRoot.Path, "agent-home-state") },
-            leaseHeld: false,
             new RecordingLogger<AgentHomeRunRetentionService>(),
             new ManualTimeProvider(Now));
 
@@ -253,10 +296,9 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
             Options.Create(new AgentHomeRunRetentionOptions { RetentionDays = 30, SweepInterval = TimeSpan.FromHours(1) }),
             Options.Create(new AgentHomeOptions { Enabled = true, RootPath = Path.Combine(_dataRoot.Path, "agent-home-state") }),
             new FakeNodeDataDirectory(_dataRoot.Path),
-            new ThrowOnceIdentityProvider(),
-            new StubLeaseManager(held: false),
+            new AgentHomeRunExecutionRegistry(),
             new AgentHomeRunApplyGuard(),
-            clock,
+            new ThrowOnceClock(clock),
             logger);
 
         await service.StartAsync(CancellationToken.None);
@@ -283,31 +325,30 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
                 .Message;
 
     private async Task SweepAsync(AgentHomeRunRetentionOptions options,
-        bool leaseHeld = false,
+        AgentHomeRunExecutionRegistry? executingRuns = null,
         string? rootPath = null,
         RecordingLogger<AgentHomeRunRetentionService>? logger = null,
         AgentHomeRunApplyGuard? applyGuard = null)
     {
         using var service = CreateService(options,
             new AgentHomeOptions { Enabled = true, RootPath = rootPath ?? Path.Combine(_dataRoot.Path, "agent-home-state") },
-            leaseHeld,
             logger ?? new RecordingLogger<AgentHomeRunRetentionService>(),
             new ManualTimeProvider(Now),
-            applyGuard);
+            applyGuard,
+            executingRuns);
         await service.SweepAsync(CancellationToken.None);
     }
 
     private AgentHomeRunRetentionService CreateService(AgentHomeRunRetentionOptions options,
         AgentHomeOptions agentHomeOptions,
-        bool leaseHeld,
         ILogger<AgentHomeRunRetentionService> logger,
         TimeProvider timeProvider,
-        AgentHomeRunApplyGuard? applyGuard = null) =>
+        AgentHomeRunApplyGuard? applyGuard = null,
+        AgentHomeRunExecutionRegistry? executingRuns = null) =>
         new(Options.Create(options),
             Options.Create(agentHomeOptions),
             new FakeNodeDataDirectory(_dataRoot.Path),
-            new StaticIdentityProvider(),
-            new StubLeaseManager(leaseHeld),
+            executingRuns ?? new AgentHomeRunExecutionRegistry(),
             applyGuard ?? new AgentHomeRunApplyGuard(),
             timeProvider,
             logger);
@@ -330,53 +371,31 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         return directory;
     }
 
-    private sealed class StaticIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner", NodeId = "node" });
-    }
-
-    private sealed class ThrowOnceIdentityProvider : IAgentHomeIdentityProvider
-    {
-        private int _calls;
-
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default) =>
-            Interlocked.Increment(ref _calls) == 1
-                ? Task.FromException<AgentHomeOwnerIdentity>(new InvalidOperationException("identity is unavailable."))
-                : Task.FromResult(new AgentHomeOwnerIdentity { OwnerUserId = "owner", NodeId = "node" });
-    }
-
     /// <summary>
-    ///     The lease manager, answering one fixed held/not-held. Acquisition throws on purpose: a sweep that took the
-    ///     lease out from under a live run would be a correctness bug, so the double proves it never tries.
+    ///     The manual clock with its first reading replaced by a failure. The sweep reads the clock before it walks
+    ///     anything, so exactly one sweep fails; every later sweep, and every timer, works normally.
     /// </summary>
-    private sealed class StubLeaseManager : IAgentHomeExecutionLeaseManager
+    private sealed class ThrowOnceClock : TimeProvider
     {
-        private readonly bool _held;
+        private readonly ManualTimeProvider _inner;
+        private int _pendingFailure = 1;
 
-        public StubLeaseManager(bool held)
-        {
-            _held = held;
-        }
+        public ThrowOnceClock(ManualTimeProvider inner) =>
+            _inner = inner;
 
-        public IAgentHomeExecutionLease? TryAcquire(AgentHomeExecutionLeaseKey key) =>
-            throw new InvalidOperationException("The retention sweep must never acquire the execution lease.");
+        public override TimeZoneInfo LocalTimeZone => _inner.LocalTimeZone;
 
-        public IAgentHomeExecutionLease? TryAcquireForRecovery(AgentHomeExecutionLeaseKey key) =>
-            throw new InvalidOperationException("The retention sweep must never acquire the execution lease.");
+        public override long TimestampFrequency => _inner.TimestampFrequency;
 
-        public bool IsHeld(AgentHomeExecutionLeaseKey key) =>
-            _held;
+        public override DateTimeOffset GetUtcNow() =>
+            Interlocked.Exchange(ref _pendingFailure, value: 0) == 1
+                ? throw new InvalidOperationException("the clock is unavailable.")
+                : _inner.GetUtcNow();
 
-        public bool IsPoisoned(AgentHomeExecutionLeaseKey key) =>
-            false;
+        public override long GetTimestamp() =>
+            _inner.GetTimestamp();
 
-        public void MarkPoisoned(AgentHomeExecutionLeaseKey key)
-        {
-        }
-
-        public void ClearPoison(AgentHomeExecutionLeaseKey key)
-        {
-        }
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            _inner.CreateTimer(callback, state, dueTime, period);
     }
 }

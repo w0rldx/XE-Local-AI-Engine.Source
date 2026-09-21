@@ -32,7 +32,14 @@ internal sealed record AgentHomePatchExportRequest
     /// </remarks>
     public required string HostRunDirectory { get; init; }
 
-    /// <summary>The resolved selected folders, used to map a changed <c>&lt;alias&gt;</c> back to its selected-folder id.</summary>
+    /// <summary>
+    ///     The selected folders that really copied into the workspace, used both to scope every export git command to
+    ///     their alias directories and to map a changed <c>&lt;alias&gt;</c> back to its selected-folder id.
+    /// </summary>
+    /// <remarks>
+    ///     A folder that resolved but copied no file has no directory in the sandbox, and naming it as a pathspec
+    ///     would fail the export outright; an empty list means there is nothing to diff at all.
+    /// </remarks>
     public required IReadOnlyList<ResolvedSelectedFolder> ResolvedFolders { get; init; }
 
     /// <summary>

@@ -107,8 +107,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("M", "repo-01/src/App.cs"));
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("M", "repo-01/src/App.cs"));
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
         var service = CreateService(provider);
 
         await service.ExportPatchAsync(handle, Request("run-x", NewTempDir(), Folder("repo-01")));
@@ -135,8 +135,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("A", "repo-01/docs/notes.md"));
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("A", "repo-01/docs/notes.md"));
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
         var service = CreateService(provider);
 
         await service.ExportPatchAsync(handle, Request("run-stage", NewTempDir(), Folder("repo-01")));
@@ -161,9 +161,9 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.StageAll, exitCode: 128, string.Empty, "fatal: unable to index file");
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, string.Empty);
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.StageAll("repo-01"), exitCode: 128, string.Empty, "fatal: unable to index file");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, string.Empty);
         var service = CreateService(provider);
 
         var runDir = NewTempDir();
@@ -185,8 +185,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
             "D", "repo-01/old/Gone.cs",
             "R100", "repo-01/a.txt", "repo-01/b.txt",
             "M", "repo-02/lib/X.cs");
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatus);
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/repo-01/src/Program.cs b/repo-01/src/Program.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01", "repo-02"), exitCode: 0, nameStatus);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01", "repo-02"), exitCode: 0, "diff --git a/repo-01/src/Program.cs b/repo-01/src/Program.cs\n");
         var service = CreateService(provider);
 
         var repo01 = Folder("repo-01");
@@ -223,8 +223,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("M", "repo-01/src/App.cs"));
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, new string(c: 'x', count: 4096));
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("M", "repo-01/src/App.cs"));
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, new string(c: 'x', count: 4096));
         var service = CreateService(provider, maxPatchBytes: 16);
 
         var runDir = NewTempDir();
@@ -244,8 +244,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, string.Empty);
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, string.Empty);
         var service = CreateService(provider);
 
         var runDir = NewTempDir();
@@ -262,8 +262,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 128, string.Empty, "fatal: bad revision 'HEAD'");
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 128, string.Empty, "fatal: bad revision 'HEAD'");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 128, string.Empty, "fatal: bad revision 'HEAD'");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 128, string.Empty, "fatal: bad revision 'HEAD'");
         var service = CreateService(provider);
 
         var runDir = NewTempDir();
@@ -276,6 +276,71 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         AssertEx.False(Directory.Exists(Path.Combine(runDir, "patches")), "no artifacts are written on failure");
     }
 
+    /// <summary>
+    ///     Every export git is limited to the copied folders' own alias pathspecs.
+    /// </summary>
+    /// <remarks>
+    ///     A whole-repository <c>.</c> is what let a file written at the workspace root into <c>changes.patch</c> and
+    ///     the line totals while the alias map dropped it from <c>changed-files.json</c>: the counts disagreed and the
+    ///     host apply then refused the whole patch over the one alias-less block.
+    /// </remarks>
+    [Test]
+    public async Task ExportPatchAsync_ScopesStagingAndBothDiffsToTheCopiedFolders()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01", "repo-02"), exitCode: 0, NameStatusZ("M", "repo-01/src/App.cs"));
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01", "repo-02"), exitCode: 0, "patch-body\n");
+        var service = CreateService(provider);
+
+        var export = await service.ExportPatchAsync(handle, Request("run-scope", NewTempDir(), Folder("repo-01"), Folder("repo-02")));
+
+        AssertEx.Equal(expected: 1, export.ChangedFileCount, "the scripted output is only reached when the scoped command line matches");
+
+        var gitCommands = provider.ExecutedCommands.Where(command => command.Executable == "git").ToArray();
+        var scoped = gitCommands.Where(command => command.Arguments.Contains("add")
+                                                  || command.Arguments.Contains("--binary")
+                                                  || command.Arguments.Contains("--name-status"))
+                                .ToArray();
+
+        AssertEx.Equal(expected: 3, scoped.Length, "staging and both diffs are the three commands that must be scoped");
+        foreach (var command in scoped)
+        {
+            var tail = command.Arguments.SkipWhile(static argument => argument != "--").Skip(count: 1).ToArray();
+            AssertEx.Equal(":(literal)repo-01,:(literal)repo-02", string.Join(",", tail),
+                "the pathspec tail is the copied aliases, in literal form so an alias can carry pathspec magic harmlessly");
+            AssertEx.False(command.Arguments.Contains("."),
+                "a whole-repository '.' pathspec would put a root-level write back into the patch the counts do not describe");
+        }
+    }
+
+    /// <summary>
+    ///     No copied folder means no alias directory to diff and no baseline commit to diff against, so the export
+    ///     reports an empty run rather than falling back to the whole repository.
+    /// </summary>
+    [Test]
+    public async Task ExportPatchAsync_WithNoCopiedFolder_ReportsNothingAndRunsNoGit()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        var service = CreateService(provider);
+
+        ResolvedSelectedFolder[] noFolders = [];
+        var runDir = NewTempDir();
+        var export = await service.ExportPatchAsync(handle, Request("run-nofolders", runDir, [], noFolders));
+
+        AssertEx.Equal(expected: 0, export.ChangedFileCount);
+        AssertEx.False(export.Failed, "an empty selection is a clean zero-change run, not an export failure");
+        AssertEx.True(export.PatchRelativePath is null, "no folders means no patch path");
+        AssertEx.False(Directory.Exists(Path.Combine(runDir, "patches")), "no artifacts are written");
+        AssertEx.False(provider.ExecutedCommands.Any(command => command.Executable == "git"),
+            "with nothing to scope to, no git runs at all");
+    }
+
+    /// <summary>
+    ///     Reachable now only for a stream the node did not get from its own scoped git — the pathspecs keep a
+    ///     root-level or foreign-alias path out of the diff — so the mapping keeps its defensive skip.
+    /// </summary>
     [Test]
     public async Task ExportPatchAsync_SkipsEntriesWithUnknownAliasOrNoAliasSegment()
     {
@@ -285,8 +350,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var nameStatus = NameStatusZ("M", "repo-01/keep.cs", // mapped
             "M", "unknown-alias/skip.cs", // alias not in the prepared workspace → skipped
             "M", "rootfile.txt"); // no alias segment → skipped
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatus);
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/repo-01/keep.cs b/repo-01/keep.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, nameStatus);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "diff --git a/repo-01/keep.cs b/repo-01/keep.cs\n");
         var service = CreateService(provider);
 
         var runDir = NewTempDir();
@@ -314,8 +379,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
             "A", "repo-01/data.bin",
             "A", "repo-01/empty.txt",
             "D", "repo-01/gone.txt");
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatus);
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, MixedShapePatch);
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, nameStatus);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, MixedShapePatch);
         var service = CreateService(provider);
 
         var export = await service.ExportPatchAsync(handle, Request("run-lines", NewTempDir(), Folder("repo-01")));
@@ -329,10 +394,10 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus,
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"),
             exitCode: 0,
             NameStatusZ("M", "repo-01/src/App.cs", "R100", "repo-01/old.txt", "repo-01/new.txt"));
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
         var service = CreateService(provider);
 
         var export = await service.ExportPatchAsync(handle,
@@ -353,8 +418,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("M", "repo-01/kept.cs"));
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("M", "repo-01/kept.cs"));
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
         provider.RegisterCommand(GitDiffCommandKeys.CheckIgnore, exitCode: 0, "repo-01/hidden.txt\0");
         provider.RegisterCommand(GitDiffCommandKeys.LsFiles(MissingPaths),
             exitCode: 0,
@@ -392,8 +457,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("M", "repo-01/kept.cs"));
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("M", "repo-01/kept.cs"));
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
         provider.RegisterCommand(GitDiffCommandKeys.CheckIgnore, exitCode: 128, string.Empty, "fatal: pathspec is in submodule");
         var service = CreateService(provider);
 
@@ -418,10 +483,10 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
         string[] modifications = [.. QuotablePaths.SelectMany(static entry => new[] { "M", entry.WorkspacePath })];
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus,
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"),
             exitCode: 0,
             NameStatusZ([.. modifications, "R100", "repo-01/plain.txt", "repo-01/re\"named\".txt"]));
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
         var service = CreateService(provider);
 
         var repo01 = Folder("repo-01");
@@ -495,8 +560,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
         var written = QuotablePaths[0].WorkspacePath;
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("M", written));
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, NameStatusZ("M", written));
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, "patch-body\n");
         var service = CreateService(provider);
 
         var export = await service.ExportPatchAsync(handle, Request("run-quoted-gap", NewTempDir(), [written], Folder("repo-01")));
@@ -516,8 +581,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, string.Empty);
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus("repo-01"), exitCode: 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff("repo-01"), exitCode: 0, string.Empty);
         provider.RegisterCommand(GitDiffCommandKeys.CheckIgnore, exitCode: 1, string.Empty);
         provider.RegisterCommand(GitDiffCommandKeys.LsFiles("repo-01/written.cs"), exitCode: 0, "? repo-01/written.cs\0");
         var service = CreateService(provider);
@@ -544,8 +609,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatusOutput);
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus(folder.Alias), exitCode: 0, nameStatusOutput);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff(folder.Alias), exitCode: 0, "patch-body\n");
 
         var runDir = NewTempDir();
         await CreateService(provider).ExportPatchAsync(handle, Request(runId, runDir, folder));

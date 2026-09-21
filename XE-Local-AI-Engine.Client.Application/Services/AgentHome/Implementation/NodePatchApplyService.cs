@@ -277,9 +277,21 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
             var added = int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var a) ? a : 0;
             var removed = int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r) ? r : 0;
+            // git C-quotes a numstat path on the same rules as a diff header, so it is decoded with the same decoder
+            // the plan used; an unreadable one is dropped, which costs a line count and never a wrong one.
+            var relative = parts[2].Trim();
+            if (GitQuotedPath.IsQuoted(relative))
+            {
+                if (GitQuotedPath.TryDecode(relative) is not { } decoded)
+                {
+                    continue;
+                }
+
+                relative = decoded;
+            }
+
             // Keyed on the DISPLAY rendering, because that is the shape PatchApplyFileEntry.RelativePath carries:
             // a name holding a bidi or zero-width character would otherwise miss its own line counts.
-            var relative = parts[2].Trim();
             numstat[Describe(alias, relative)] = new LineStat(added, removed);
         }
     }
