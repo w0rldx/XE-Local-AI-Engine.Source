@@ -4,9 +4,14 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function installJsdomEnvironmentMocks(): void {

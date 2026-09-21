@@ -28,6 +28,7 @@ vi.mock("@/features/loaded-models/queries/useLoadedModels", () => ({
 }));
 
 import { AssistActions } from "@/features/assist/components/AssistActions";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const chatModel = { modelName: "qwen3-4b", kind: "Chat", provider: "llamacpp" };
 const embeddingModel = { modelName: "nomic-embed", kind: "Embedding", provider: "llamacpp" };
@@ -37,7 +38,7 @@ function renderActions(existingContent = "") {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<AssistActions
 					surface="skill"
 					existing={{ name: "", description: "", content: existingContent }}

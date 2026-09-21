@@ -34,6 +34,7 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 }));
 
 import { DevelopmentLivePanel } from "@/features/development/components/DevelopmentLivePanel";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const live: DevelopmentAttemptLiveState = {
 	connectionState: "idle",
@@ -151,7 +152,7 @@ function renderPanel(
 	attempt: DevelopmentAttempt | null = null,
 ): void {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<DevelopmentLivePanel attempt={attempt} live={live} artifacts={artifacts} events={[]} />
 		</MantineProvider>,
 	);

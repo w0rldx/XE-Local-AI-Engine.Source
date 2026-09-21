@@ -9,6 +9,7 @@ import {
 	type NodeSettingsAdvancedFieldsCardProps,
 } from "@/features/node-settings/components/NodeSettingsAdvancedFieldsCard";
 import { toNodeSettingsFieldBounds, toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
@@ -42,7 +43,7 @@ function installJsdomEnvironmentMocks(): void {
 
 function renderCard(): void {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<NodeSettingsAdvancedFieldsCard
 				form={toNodeSettingsFieldsForm(undefined)}
 				bounds={toNodeSettingsFieldBounds(undefined)}

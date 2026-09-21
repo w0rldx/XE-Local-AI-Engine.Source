@@ -20,6 +20,7 @@ vi.mock("react-i18next", () => ({
 
 import { SkillList } from "@/features/skills/components/SkillList";
 import type { SkillSummary } from "@/features/skills/models/SkillModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const base = {
 	allowedTools: null,
@@ -38,7 +39,7 @@ const base = {
 
 function renderList(skills: SkillSummary[]) {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<SkillList skills={skills} isMutating={false} onEdit={vi.fn()} onDelete={vi.fn()} />
 		</MantineProvider>,
 	);

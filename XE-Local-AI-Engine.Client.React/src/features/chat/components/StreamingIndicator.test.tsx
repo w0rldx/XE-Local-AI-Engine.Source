@@ -10,9 +10,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // NOT change this file's bare-MantineProvider wrapper; without it `t` returns "{{elapsed}}" uninterpolated.
 import "@/i18n";
 import { StreamingIndicator } from "@/features/chat/components/StreamingIndicator";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderBare(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("StreamingIndicator", () => {
@@ -170,7 +175,7 @@ describe("StreamingIndicator", () => {
 			const clearsAfterMount = clearIntervalSpy.mock.calls.length;
 
 			view.rerender(
-				<MantineProvider env="test">
+				<MantineProvider env="test" theme={testMantineTheme}>
 					<StreamingIndicator
 						isActive={true}
 						isQueued={false}
@@ -185,7 +190,7 @@ describe("StreamingIndicator", () => {
 			// A queued turn that still carries a loading phase must not arm the ticker either: the queued branch
 			// returns first, so a running interval there would re-render every second behind a static badge.
 			view.rerender(
-				<MantineProvider env="test">
+				<MantineProvider env="test" theme={testMantineTheme}>
 					<StreamingIndicator
 						isActive={true}
 						isQueued={false}
@@ -198,7 +203,7 @@ describe("StreamingIndicator", () => {
 			const clearsBeforeQueued = clearIntervalSpy.mock.calls.length;
 
 			view.rerender(
-				<MantineProvider env="test">
+				<MantineProvider env="test" theme={testMantineTheme}>
 					<StreamingIndicator
 						isActive={true}
 						isQueued={true}

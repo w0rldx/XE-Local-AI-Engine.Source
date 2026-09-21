@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ScheduledJobList } from "@/features/scheduler/components/ScheduledJobList";
 import type { ScheduledJob } from "@/features/scheduler/models/SchedulerModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
@@ -77,7 +78,7 @@ function renderList(props: Partial<Parameters<typeof ScheduledJobList>[0]> = {})
 		onToggleEnabled: vi.fn(),
 	};
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<ScheduledJobList jobs={[cronJob]} isMutating={false} {...handlers} {...props} />
 		</MantineProvider>,
 	);

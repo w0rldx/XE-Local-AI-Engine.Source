@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageJobCard } from "@/features/images/components/ImageJobCard";
 import type { ImageJobProgressView, ImageJobView } from "@/features/images/models/ImageModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // The card reads the live timeline through this hook; driving it directly keeps the test on the rendering contract
 // rather than on the hub transport (which useImageJobHub.test covers).
@@ -73,7 +74,7 @@ function renderCard(view = job()) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ImageJobCard job={view} isCancelling={false} onCancel={() => undefined} />
 			</MantineProvider>
 		</QueryClientProvider>,

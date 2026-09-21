@@ -39,6 +39,7 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: con
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { LoadedModelsPage } from "@/features/loaded-models/pages/LoadedModelsPage";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function makeQuery<T>(data: T, overrides: Record<string, unknown> = {}) {
 	return { data, isLoading: false, error: null, ...overrides };
@@ -77,7 +78,7 @@ function renderPage() {
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<QueryClientProvider client={queryClient}>
 				<LoadedModelsPage />
 			</QueryClientProvider>

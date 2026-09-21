@@ -30,6 +30,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 
 import type { XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse } from "@/core/api/generated";
 import { SkillImportDialog } from "@/features/skills/components/SkillImportDialog";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const report: XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse = {
 	token: "report-token-1",
@@ -91,7 +92,7 @@ function renderDialog() {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<SkillImportDialog opened={true} onClose={vi.fn()} />
 			</MantineProvider>
 		</QueryClientProvider>,

@@ -155,6 +155,7 @@ import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStor
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { NodeSettings } from "@/features/node-settings/pages/NodeSettings";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function installJsdomEnvironmentMocks(): void {
 	Object.defineProperty(window, "matchMedia", {
@@ -197,7 +198,9 @@ function renderPage(cachedSettings?: unknown): QueryClient {
 
 	const wrapper = ({ children }: { children: ReactNode }) => (
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">{children}</MantineProvider>
+			<MantineProvider env="test" theme={testMantineTheme}>
+				{children}
+			</MantineProvider>
 		</QueryClientProvider>
 	);
 

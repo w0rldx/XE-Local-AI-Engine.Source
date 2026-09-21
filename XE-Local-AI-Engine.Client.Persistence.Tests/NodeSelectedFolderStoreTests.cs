@@ -96,14 +96,22 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
             _ = await store.AddAsync("secret-folder", hostPath, SelectedFolderMode.Copy);
         }
 
-        SqliteFileProbe.ReleasePooledHandles();
-        var databaseFamily = Directory.EnumerateFiles(Path.GetDirectoryName(databasePath)!, Path.GetFileName(databasePath) + "*").ToArray();
-        AssertEx.True(databaseFamily.Length > 0, "The plaintext probe must inspect at least the SQLite database file.");
-        foreach (var file in databaseFamily)
+        var plaintext = Encoding.UTF8.GetBytes(hostPath);
+
+        // The probe's scoped ClearPool checkpoints the WAL back into the main file BEFORE it reads. Listing the family
+        // first instead raced the pool's idle pruning: the enumerate saw a "-wal" the read could not open.
+        var databaseBytes = await SqliteFileProbe.ReadAllBytesAsync(databasePath);
+        AssertEx.True(databaseBytes.Length > 0, "The plaintext scan must have a database file to read, or it verifies nothing.");
+        AssertEx.False(ContainsSubsequence(databaseBytes, plaintext),
+            "The SQLite database file should not contain the plaintext host path.");
+
+        // Anything the checkpoint left behind still has to be scanned; the file set is settled by now, so this
+        // listing and the reads below agree with each other by construction.
+        foreach (var sidecar in Directory.EnumerateFiles(Path.GetDirectoryName(databasePath)!, Path.GetFileName(databasePath) + "*")
+                                         .Where(path => !string.Equals(path, databasePath, StringComparison.Ordinal)))
         {
-            var fileBytes = await File.ReadAllBytesAsync(file);
-            AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(hostPath)),
-                $"The SQLite database family member '{Path.GetFileName(file)}' should not contain the plaintext host path.");
+            AssertEx.False(ContainsSubsequence(await File.ReadAllBytesAsync(sidecar), plaintext),
+                $"The SQLite database family member '{Path.GetFileName(sidecar)}' should not contain the plaintext host path.");
         }
     }
 

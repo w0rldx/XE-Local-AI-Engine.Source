@@ -42,6 +42,7 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { InferenceProfilePanel } from "@/features/model-fit/components/InferenceProfilePanel";
 import type { InferenceProfileView } from "@/features/model-fit/models/InferenceProfileModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function makeProfile(overrides: Partial<InferenceProfileView> = {}): InferenceProfileView {
 	return {
@@ -73,7 +74,7 @@ function makeQuery(data: readonly InferenceProfileView[], overrides: Record<stri
 
 function renderPanel() {
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<InferenceProfilePanel />
 		</MantineProvider>,
 	);

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { HardwareProfileCard } from "@/features/model-fit/components/HardwareProfileCard";
 import type { HardwareProfile } from "@/features/model-fit/models/ModelFitModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // Stands in for i18next including its {{placeholder}} interpolation, so assertions can read the rendered sentence
 // rather than an uninterpolated template. Mirrors the two call shapes the card uses: (key, default) and
@@ -26,7 +27,11 @@ vi.mock("react-i18next", () => ({
 }));
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function profile(overrides: Partial<HardwareProfile> = {}): HardwareProfile {

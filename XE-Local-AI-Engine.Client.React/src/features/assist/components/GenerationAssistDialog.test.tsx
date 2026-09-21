@@ -41,6 +41,7 @@ import type {
 import { ApiError } from "@/core/api/errors/ApiError";
 import { GenerationAssistDialog } from "@/features/assist/components/GenerationAssistDialog";
 import type { AssistDraft, GenerationMetadata } from "@/features/assist/models/AssistModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const models: XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse[] = [
 	{
@@ -84,7 +85,7 @@ function renderDialog() {
 
 	render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<GenerationAssistDialog
 					opened={true}
 					surface="skill"

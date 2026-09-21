@@ -49,6 +49,7 @@ import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
 import { PromoteConflictError } from "@/features/agents/models/PlaybookActionMappers";
 import type { EvalResult, PlaybookAction } from "@/features/agents/models/PlaybookActionModels";
 import type { PlaybookMonitor, PlaybookMonitorItem } from "@/features/agents/models/PlaybookMonitorModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function makeAction(overrides: Partial<PlaybookAction> = {}): PlaybookAction {
 	return {
@@ -171,7 +172,11 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 function renderPanel(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("PlaybookPanel", () => {
@@ -411,7 +416,7 @@ describe("PlaybookPanel", () => {
 			error: null,
 		});
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />
 			</MantineProvider>,
 		);
@@ -430,7 +435,7 @@ describe("PlaybookPanel", () => {
 			error: null,
 		});
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />
 			</MantineProvider>,
 		);
@@ -640,7 +645,7 @@ describe("PlaybookPanel", () => {
 			makeMonitorQuery(makeMonitor({ retrieval: { threshold: 3, topK: 2, ranker: "lexical", embeddingModel: null } })),
 		);
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />
 			</MantineProvider>,
 		);

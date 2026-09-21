@@ -55,9 +55,14 @@ vi.mock("@/core/auth/api/NodeAuthApi", () => authApiMock);
 import { Login } from "@/core/auth/pages/Login";
 import { Setup } from "@/core/auth/pages/Setup";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("node auth pages", () => {

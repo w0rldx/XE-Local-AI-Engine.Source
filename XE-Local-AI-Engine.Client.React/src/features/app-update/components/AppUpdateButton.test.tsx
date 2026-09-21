@@ -15,6 +15,7 @@ vi.mock("@/features/app-update/queries/useAppUpdate", () => ({
 
 import { useApplyAppUpdate, useAppUpdateStatus, useProbeAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
 import { AppUpdateButton } from "./AppUpdateButton";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 describe("AppUpdateButton", () => {
 	beforeEach(() => {
@@ -53,7 +54,7 @@ describe("AppUpdateButton", () => {
 		vi.mocked(useApplyAppUpdate).mockReturnValue({ mutateAsync } as never);
 		const fetchSpy = vi.spyOn(globalThis, "fetch");
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<AppUpdateButton />
 			</MantineProvider>,
 		);
@@ -78,7 +79,7 @@ describe("AppUpdateButton", () => {
 		vi.mocked(useApplyAppUpdate).mockReturnValue({ mutateAsync: vi.fn() } as never);
 
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<AppUpdateButton />
 			</MantineProvider>,
 		);
@@ -94,7 +95,7 @@ describe("AppUpdateButton", () => {
 			vi.mocked(useApplyAppUpdate).mockReturnValue({ mutateAsync } as never);
 			const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("host restarting"));
 			render(
-				<MantineProvider env="test">
+				<MantineProvider env="test" theme={testMantineTheme}>
 					<AppUpdateButton />
 				</MantineProvider>,
 			);
@@ -128,7 +129,7 @@ describe("AppUpdateButton", () => {
 			vi.mocked(useProbeAppUpdateStatus).mockReturnValue({ mutateAsync: refreshStatus } as never);
 			const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true } as Response);
 			render(
-				<MantineProvider env="test">
+				<MantineProvider env="test" theme={testMantineTheme}>
 					<AppUpdateButton />
 				</MantineProvider>,
 			);

@@ -27,11 +27,12 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 }));
 
 import { UsageDashboard } from "@/features/usage-dashboard/pages/UsageDashboard";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
 		</MantineProvider>,
 	);

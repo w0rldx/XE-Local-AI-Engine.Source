@@ -84,6 +84,7 @@ vi.mock("@/features/tools/queries/useToolCatalog", () => ({
 }));
 
 import { AgentsPage } from "@/features/agents/pages/AgentsPage";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const sampleDefinition: AgentDefinition = {
 	id: "agent-1",
@@ -144,7 +145,7 @@ function renderPage() {
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<QueryClientProvider client={queryClient}>
 				<AgentsPage />
 			</QueryClientProvider>

@@ -17,12 +17,15 @@ vi.mock("@/features/chat/api/AskUserQuestionWire", async (importOriginal) => ({
 
 import type { PendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
 import { AskUserQuestionCard } from "@/features/chat/components/AskUserQuestionCard";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">{ui}</MantineProvider>
+			<MantineProvider env="test" theme={testMantineTheme}>
+				{ui}
+			</MantineProvider>
 		</QueryClientProvider>,
 	);
 }

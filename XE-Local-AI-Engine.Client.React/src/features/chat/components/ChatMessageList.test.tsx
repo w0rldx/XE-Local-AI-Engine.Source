@@ -7,9 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
 import type { ChatConversationModel, ChatMessageModel, ChatStreamingState } from "@/features/chat/models/ChatModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function userMessage(overrides: Partial<ChatMessageModel> = {}): ChatMessageModel {

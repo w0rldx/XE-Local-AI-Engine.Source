@@ -97,10 +97,11 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderPanel(): void {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<LlamaCppUpdaterPanel />
 		</MantineProvider>,
 	);

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function installJsdomEnvironmentMocks(): void {
 	Object.defineProperty(window, "matchMedia", {
@@ -37,7 +38,7 @@ async function renderWithProviders(ui: ReactElement) {
 	const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={qc}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ConfirmProvider>{ui}</ConfirmProvider>
 			</MantineProvider>
 		</QueryClientProvider>,

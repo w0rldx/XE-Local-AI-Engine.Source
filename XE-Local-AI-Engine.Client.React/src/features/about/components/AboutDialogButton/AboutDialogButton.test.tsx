@@ -17,6 +17,7 @@ vi.mock("@/features/about/components/AboutDialog/AboutDialog", () => ({
 }));
 
 import { AboutDialogButton } from "./AboutDialogButton";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 describe("AboutDialogButton", () => {
 	beforeEach(() => {
@@ -40,7 +41,7 @@ describe("AboutDialogButton", () => {
 
 	it("lazy-loads once and keeps the update lifecycle mounted after close", async () => {
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<AboutDialogButton />
 			</MantineProvider>,
 		);

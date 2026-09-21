@@ -28,6 +28,7 @@ vi.mock("@/features/agents/queries/useAgentExecutionLogs", () => hookMock);
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { AgentExecutionLogPanel } from "@/features/agents/components/AgentExecutionLogPanel";
 import type { AgentExecutionLog } from "@/features/agents/models/AgentExecutionLogModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function makeLog(overrides: Partial<AgentExecutionLog> = {}): AgentExecutionLog {
 	return {
@@ -72,7 +73,11 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 function renderPanel(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("AgentExecutionLogPanel", () => {

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageJobDeleteButton } from "@/features/images/components/ImageJobDeleteButton";
 import type { ImageJobView } from "@/features/images/models/ImageModels";
-import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { setupMswServer } from "@/test/UseMswServer";
@@ -49,7 +49,7 @@ function renderButton(view = job()) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ImageJobDeleteButton job={view} />
 			</MantineProvider>
 		</QueryClientProvider>,

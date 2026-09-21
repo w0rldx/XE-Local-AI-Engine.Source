@@ -13,7 +13,7 @@ import type {
 	IntegrationTrigger,
 } from "@/features/integrations/models/IntegrationModels";
 import { useIntegrationsUiStore } from "@/features/integrations/stores/IntegrationsUiStore";
-import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
@@ -124,7 +124,7 @@ function makeListQuery<T>(items: readonly T[], totalCount = items.length) {
 function renderPage() {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<IntegrationSessionsPage />

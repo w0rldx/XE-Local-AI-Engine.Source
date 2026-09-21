@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LocalModelProxyKeyPanel } from "@/features/node-settings/components/LocalModelProxyKeyPanel";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // The panel manages the INBOUND local-model-proxy credential — the key an external OpenAI-compatible tool presents
 // to this node's OpenAI-compatible proxy endpoint. What is worth pinning: the key is NEVER rendered on load (the
@@ -77,7 +78,7 @@ function renderPanel() {
 	});
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<LocalModelProxyKeyPanel />
 			</MantineProvider>
 		</QueryClientProvider>,

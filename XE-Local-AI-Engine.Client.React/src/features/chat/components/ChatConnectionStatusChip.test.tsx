@@ -43,9 +43,14 @@ const { chatConnectionMock } = vi.hoisted(() => {
 vi.mock("@/features/chat/api/NodeChatConnection", () => ({ nodeChatConnection: chatConnectionMock }));
 
 import { ChatConnectionStatusChip } from "@/features/chat/components/ChatConnectionStatusChip";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("ChatConnectionStatusChip", () => {

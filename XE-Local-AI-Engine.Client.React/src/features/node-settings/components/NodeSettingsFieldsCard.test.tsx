@@ -14,6 +14,7 @@ import {
 	toNodeSettingsFieldsForm,
 	type UsageRateRow,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // Deterministic i18n: t returns the supplied default (with {{var}} interpolation applied) so the human copy is
 // asserted, not the raw key — this doubles as the i18n-keys-resolve check (the card never renders a bare dotted key).
@@ -80,7 +81,7 @@ function renderCard(overrides: RenderOverrides = {}): {
 	const onDownloadEmbedding = overrides.onDownloadRecommendedEmbedding ?? vi.fn();
 	const onChange = overrides.onChange ?? vi.fn();
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<NodeSettingsFieldsCard
 				form={overrides.form ?? toNodeSettingsFieldsForm(undefined)}
 				bounds={toNodeSettingsFieldBounds(undefined)}

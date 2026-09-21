@@ -125,11 +125,12 @@ import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubCo
 import "@/i18n";
 import { ModelManagement } from "@/features/models/pages/ModelManagement";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
 		</MantineProvider>,
 	);

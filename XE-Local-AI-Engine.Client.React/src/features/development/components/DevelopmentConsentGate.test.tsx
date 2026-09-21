@@ -16,13 +16,14 @@ vi.mock("@/features/development/queries/useDevelopment", () => ({ useDevelopment
 
 import { DevelopmentConsentGate } from "@/features/development/components/DevelopmentConsentGate";
 import { useDevelopmentConsentStore } from "@/features/development/stores/DevelopmentConsentStore";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const CONSENT_STORAGE_KEY = "xe-development-consent-v1";
 
 function renderGate(sandboxProvider = "process") {
 	capabilityMock.mockReturnValue({ data: { enabled: true, sandboxProvider } });
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<DevelopmentConsentGate>
 				<div data-testid="development-page-body">page</div>
 			</DevelopmentConsentGate>
@@ -188,7 +189,7 @@ describe("DevelopmentConsentGate", () => {
 	it("does not ask while the capability is unresolved or Development is disabled", () => {
 		capabilityMock.mockReturnValue({ data: { enabled: false, sandboxProvider: "process" } });
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<DevelopmentConsentGate>
 					<div data-testid="development-page-body">page</div>
 				</DevelopmentConsentGate>

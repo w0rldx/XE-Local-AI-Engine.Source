@@ -72,6 +72,7 @@ import { ACTIONS, EVENTS, STATUS } from "react-joyride";
 import { OnboardingProvider } from "@/features/onboarding/components/OnboardingProvider";
 import { type OnboardingContextValue, useOnboarding } from "@/features/onboarding/context/OnboardingContext";
 import { tutorialProgressStorageKey } from "@/features/onboarding/hooks/useTourState";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const contextRef = { current: null as OnboardingContextValue | null };
 
@@ -99,7 +100,7 @@ function installDomMocks() {
 
 function renderProvider() {
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<OnboardingProvider>
 				<ContextCapture />
 				app
@@ -112,7 +113,7 @@ function applyModelsQuery(view: ReturnType<typeof renderProvider>, query: typeof
 	modelsRef.current = query;
 	act(() => {
 		view.rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<OnboardingProvider>
 					<ContextCapture />
 					app
@@ -126,7 +127,7 @@ function applyConversations(view: ReturnType<typeof renderProvider>, conversatio
 	conversationsRef.current = conversations;
 	act(() => {
 		view.rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<OnboardingProvider>
 					<ContextCapture />
 					app
@@ -403,7 +404,7 @@ describe("frozen Quick Start readiness", () => {
 		};
 		act(() => {
 			view.rerender(
-				<MantineProvider env="test">
+				<MantineProvider env="test" theme={testMantineTheme}>
 					<OnboardingProvider>
 						<ContextCapture />
 						app

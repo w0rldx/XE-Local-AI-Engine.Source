@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // t() returns the default value (2nd arg) so assertions don't depend on the real i18n bundle,
 // matching the convention used across the React test suite.
@@ -42,7 +43,7 @@ function setBlockerState(state: BlockerState) {
 function makeWrapper() {
 	return function Wrapper({ children }: { children: ReactNode }) {
 		return (
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ConfirmProvider>{children}</ConfirmProvider>
 			</MantineProvider>
 		);

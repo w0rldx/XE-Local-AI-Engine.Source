@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ComparisonCreateDialog } from "@/features/training/components/ComparisonCreateDialog";
 import type { EvaluationRun } from "@/features/training/models/ComparisonModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({ t: (_key: string, defaultValue?: string) => defaultValue ?? _key }),
@@ -96,7 +97,7 @@ describe("ComparisonCreateDialog revalidation", () => {
 
 	it("ignores bound evaluations and creates the report only from fresh ids", () => {
 		const view = render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ComparisonCreateDialog
 					artifactId="artifact-1"
 					freshEvaluations={true}
@@ -118,7 +119,7 @@ describe("ComparisonCreateDialog revalidation", () => {
 		baseCallbacks.onSuccess({ id: "fresh-base" });
 		mocks.evaluations = [...mocks.evaluations, evaluation("fresh-base", "InstalledModel", null, null)];
 		view.rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ComparisonCreateDialog
 					artifactId="artifact-1"
 					freshEvaluations={true}
@@ -134,7 +135,7 @@ describe("ComparisonCreateDialog revalidation", () => {
 		tunedCallbacks.onSuccess({ id: "fresh-tuned" });
 		mocks.evaluations = [...mocks.evaluations, evaluation("fresh-tuned", "StagedTrainingArtifact", "artifact-1", null)];
 		view.rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ComparisonCreateDialog
 					artifactId="artifact-1"
 					freshEvaluations={true}

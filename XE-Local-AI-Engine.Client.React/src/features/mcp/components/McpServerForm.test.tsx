@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { McpServerForm } from "@/features/mcp/components/McpServerForm";
 import { type McpServerFormValues, maskedEnvValue } from "@/features/mcp/models/McpServerModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // react-i18next is deliberately NOT mocked: the suite initialises `src/i18n.ts`, so `t()` resolves against the shipped
 // `en` bundle and interpolates. A stub returning the in-code default verbatim would assert "{{index}}" at a user.
@@ -60,7 +61,7 @@ function renderForm(onSubmit: (values: McpServerFormValues) => void) {
 	};
 
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<McpServerForm initialValues={initialValues} isSubmitting={false} onSubmit={onSubmit} onCancel={vi.fn()} />
 		</MantineProvider>,
 	);

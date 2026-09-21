@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToolCallCard } from "@/features/chat/components/ToolCallCard";
 import type { ChatToolPart } from "@/features/chat/models/ChatModels";
 import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // The Approve/Deny controls fire the generated resolve-approval mutation; stub its mutationFn so the click wiring can
 // be asserted without a backend. `withResponseValidation` (which the card composes over the mutation) preserves the
@@ -51,7 +52,9 @@ function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">{ui}</MantineProvider>
+			<MantineProvider env="test" theme={testMantineTheme}>
+				{ui}
+			</MantineProvider>
 		</QueryClientProvider>,
 	);
 }
@@ -313,7 +316,7 @@ describe("ToolCallCard", () => {
 
 		rerender(
 			<QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}>
-				<MantineProvider env="test">
+				<MantineProvider env="test" theme={testMantineTheme}>
 					<ToolCallCard part={{ ...part, pendingApprovalRequestId: "approval-2" }} />
 				</MantineProvider>
 			</QueryClientProvider>,

@@ -27,6 +27,7 @@ vi.mock("react-i18next", () => ({
 
 import { RecommendationTable } from "@/features/model-fit/components/RecommendationTable";
 import type { ModelFitRecommendation } from "@/features/model-fit/models/ModelFitModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFitRecommendation {
 	return {
@@ -66,7 +67,11 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 }
 
 function renderTable(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("RecommendationTable", () => {

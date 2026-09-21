@@ -7,9 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isRemoteImageSrc, markdownImageUrlTransform, remoteImageOrigin } from "@/features/chat/components/MarkdownImagePolicy";
 import { SafeMarkdownImage } from "@/features/chat/components/SafeMarkdownImage";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 const DATA_IMAGE =
@@ -138,7 +143,7 @@ describe("SafeMarkdownImage consent flow", () => {
 
 		// Same component position, new remote source B: prior consent must not leak — the placeholder returns.
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<SafeMarkdownImage src="https://b.example.com/two.png" alt="two" />
 			</MantineProvider>,
 		);

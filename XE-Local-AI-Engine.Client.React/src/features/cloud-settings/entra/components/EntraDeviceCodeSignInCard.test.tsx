@@ -45,6 +45,7 @@ const { toastMock } = vi.hoisted(() => ({ toastMock: { success: vi.fn(), error: 
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { EntraDeviceCodeSignInCard } from "@/features/cloud-settings/entra/components/EntraDeviceCodeSignInCard";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function installJsdomEnvironmentMocks(): void {
 	Object.defineProperty(window, "matchMedia", {
@@ -66,7 +67,7 @@ function buildUi(): ReactElement {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return (
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<EntraDeviceCodeSignInCard />
 			</MantineProvider>
 		</QueryClientProvider>

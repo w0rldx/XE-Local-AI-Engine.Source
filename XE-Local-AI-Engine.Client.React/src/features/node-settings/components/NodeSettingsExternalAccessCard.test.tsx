@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NodeSettingsExternalAccessCard } from "@/features/node-settings/components/NodeSettingsExternalAccessCard";
 import { type NodeSettingsFieldsForm, toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // Deterministic i18n: t returns the supplied default so the human copy is asserted, not the raw key. This file asserts
 // CONTROL STATE and CALLBACKS, never prose — the R18/R18a copy itself is asserted against the real bundles in
@@ -50,7 +51,7 @@ function renderCard(formOverrides: Partial<NodeSettingsFieldsForm> = {}): {
 	const onChange = vi.fn();
 	const onApplyPreset = vi.fn();
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<NodeSettingsExternalAccessCard
 				form={{ ...toNodeSettingsFieldsForm(undefined), ...formOverrides }}
 				onChange={onChange}

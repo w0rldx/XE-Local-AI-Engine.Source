@@ -47,6 +47,7 @@ vi.mock("@/features/integrations/queries/useIntegrationAgentOptions", () => agen
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
 
 import { IntegrationTriggersPage } from "@/features/integrations/pages/IntegrationTriggersPage";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const readOnlyAgent: IntegrationAgentOption = {
 	id: "agent-read",
@@ -131,7 +132,7 @@ function installJsdomEnvironmentMocks(): void {
 function pageElement() {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return (
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<IntegrationTriggersPage />

@@ -44,6 +44,7 @@ vi.mock("@/features/diagnostics/UseSnapshots", () => ({
 }));
 
 import { DiagnosticsPanel } from "@/features/diagnostics/components/DiagnosticsPanel";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 	return {
@@ -60,7 +61,11 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 }
 
 function renderPanel(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("DiagnosticsPanel", () => {

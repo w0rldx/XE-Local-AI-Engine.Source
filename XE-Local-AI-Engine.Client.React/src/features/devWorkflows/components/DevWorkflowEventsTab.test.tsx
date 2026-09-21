@@ -15,6 +15,7 @@ import { DevWorkflowEventsTab } from "@/features/devWorkflows/components/DevWork
 import type { DevWorkflowEventsAnchor } from "@/features/devWorkflows/queries/useDevWorkflows";
 import { devWorkflowRunEvent } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderTab(
 	options: {
@@ -53,7 +54,7 @@ function renderTab(
 function rerenderWithAnchorParam(view: ReturnType<typeof renderWithProviders>, anchorParam: number, onLoadMore = vi.fn()) {
 	view.rerender(
 		<QueryClientProvider client={view.queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<DevWorkflowEventsTab
 					events={[]}
 					labelByNodeRunId={new Map()}

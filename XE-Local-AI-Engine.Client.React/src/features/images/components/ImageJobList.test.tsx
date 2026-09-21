@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageJobList } from "@/features/images/components/ImageJobList";
 import type { ImageJobView } from "@/features/images/models/ImageModels";
-import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // The card's live timeline rides the hub; this file is about the pager, so the transport is driven directly.
 vi.mock("@/features/images/hooks/useImageJobHub", () => ({ useImageJobProgress: () => null }));
@@ -46,7 +46,7 @@ function renderList({ jobs = [job("job-1")], totalCount, page, pageSize = 10, on
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	const view = render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ImageJobList
 					jobs={jobs}
 					totalCount={totalCount}

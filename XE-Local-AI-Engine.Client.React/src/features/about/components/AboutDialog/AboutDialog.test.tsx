@@ -17,6 +17,7 @@ vi.mock("@/features/app-update/components/AppUpdateSection", () => ({
 import { AboutDialog } from "@/features/about/components/AboutDialog/AboutDialog";
 import { OnboardingContext, type OnboardingContextValue } from "@/features/onboarding/context/OnboardingContext";
 import { applicationInfo, runtimeLegalDocumentsForUserAgent } from "@/features/about/data/AboutData";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({
@@ -25,7 +26,9 @@ function renderWithProviders(ui: ReactElement) {
 	function Wrapper({ children }: { children: ReactNode }) {
 		return (
 			<QueryClientProvider client={queryClient}>
-				<MantineProvider env="test">{children}</MantineProvider>
+				<MantineProvider env="test" theme={testMantineTheme}>
+					{children}
+				</MantineProvider>
 			</QueryClientProvider>
 		);
 	}

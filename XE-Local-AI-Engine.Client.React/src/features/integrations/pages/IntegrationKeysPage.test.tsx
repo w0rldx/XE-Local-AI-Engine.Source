@@ -38,6 +38,7 @@ vi.mock("@/features/integrations/queries/useIntegrationTriggers", () => triggerH
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
 
 import { IntegrationKeysPage } from "@/features/integrations/pages/IntegrationKeysPage";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const PRINCIPAL_A = "3f9c1a2b-0000-0000-0000-000000000001";
 const PRINCIPAL_B = "aa11bb22-0000-0000-0000-000000000002";
@@ -136,7 +137,7 @@ function installJsdomEnvironmentMocks(): void {
 function renderPage() {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<IntegrationKeysPage />
@@ -294,7 +295,7 @@ describe("IntegrationKeysPage", () => {
 		// reading it, and clearing here would destroy their only copy.
 		keyHooksMock.useIntegrationKeys.mockReturnValue(makeQuery([...keys]));
 		view.rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ConfirmProvider>
 					<QueryClientProvider client={new QueryClient()}>
 						<IntegrationKeysPage />

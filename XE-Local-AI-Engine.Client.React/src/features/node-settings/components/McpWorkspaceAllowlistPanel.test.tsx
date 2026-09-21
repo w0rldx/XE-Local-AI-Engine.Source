@@ -41,10 +41,11 @@ vi.mock("@/features/mcp/queries/useMcpWorkspaces", () => ({
 }));
 
 import { McpWorkspaceAllowlistPanel } from "@/features/node-settings/components/McpWorkspaceAllowlistPanel";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderPanel(): void {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<McpWorkspaceAllowlistPanel />
 		</MantineProvider>,
 	);
@@ -89,7 +90,7 @@ describe("McpWorkspaceAllowlistPanel", () => {
 		hooksMock.query.isLoading = true;
 		hooksMock.create.isPending = true;
 		const { rerender } = render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<McpWorkspaceAllowlistPanel />
 			</MantineProvider>,
 		);
@@ -100,7 +101,7 @@ describe("McpWorkspaceAllowlistPanel", () => {
 		hooksMock.create.isPending = false;
 		hooksMock.query.error = new Error("offline");
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<McpWorkspaceAllowlistPanel />
 			</MantineProvider>,
 		);
@@ -109,7 +110,7 @@ describe("McpWorkspaceAllowlistPanel", () => {
 
 		hooksMock.query.error = null;
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<McpWorkspaceAllowlistPanel />
 			</MantineProvider>,
 		);

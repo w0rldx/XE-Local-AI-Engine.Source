@@ -11,9 +11,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // the call site); picking the Default Assistant row calls onSelectAgent("") (which disables it).
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import type { AgentOption } from "@/features/chat/models/ChatModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function makeOption(overrides: Partial<AgentOption> = {}): AgentOption {

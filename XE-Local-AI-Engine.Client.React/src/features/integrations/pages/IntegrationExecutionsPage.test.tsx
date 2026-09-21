@@ -14,7 +14,7 @@ import type {
 	IntegrationTrigger,
 } from "@/features/integrations/models/IntegrationModels";
 import { useIntegrationsUiStore } from "@/features/integrations/stores/IntegrationsUiStore";
-import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
@@ -139,7 +139,7 @@ function renderPage() {
 	// A FRESH element each time: re-rendering the identical one lets React bail out, and a poll test needs the page
 	// to actually read its hooks again.
 	const tree = () => (
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<IntegrationExecutionsPage />

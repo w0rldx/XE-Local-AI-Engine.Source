@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DevelopmentAttemptsTable } from "@/features/development/components/DevelopmentAttemptsTable";
 import type { DevelopmentAttempt } from "@/features/development/models/DevelopmentModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key }) }));
 afterEach(cleanup);
@@ -35,7 +36,7 @@ describe("DevelopmentAttemptsTable", () => {
 			terminalReason: "Validation failed.",
 		} as DevelopmentAttempt;
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<DevelopmentAttemptsTable attempts={[attempt]} />
 			</MantineProvider>,
 		);

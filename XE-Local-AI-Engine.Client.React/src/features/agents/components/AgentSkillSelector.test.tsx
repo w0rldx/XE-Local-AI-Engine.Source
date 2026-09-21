@@ -30,6 +30,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { AgentSkillSelector } from "@/features/agents/components/AgentSkillSelector";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const skillDefaults = {
 	allowedTools: null,
@@ -63,7 +64,11 @@ const library: SkillSummary[] = [
 ];
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function installJsdomEnvironmentMocks(): void {

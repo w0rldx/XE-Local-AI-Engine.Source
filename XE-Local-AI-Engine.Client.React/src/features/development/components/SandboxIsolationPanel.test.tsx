@@ -10,10 +10,11 @@ vi.mock("react-i18next", () => ({
 
 import type { XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse as SandboxIsolation } from "@/core/api/generated/types.gen";
 import { SandboxIsolationPanel } from "@/features/development/components/SandboxIsolationPanel";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderPanel(roles: readonly SandboxIsolation[] | undefined) {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<SandboxIsolationPanel roles={roles} />
 		</MantineProvider>,
 	);

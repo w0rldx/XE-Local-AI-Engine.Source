@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TrainingArtifactTextDialog } from "@/features/training/components/TrainingArtifactTextDialog";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key }) }));
 afterEach(cleanup);
@@ -25,7 +26,7 @@ describe("TrainingArtifactTextDialog", () => {
 		const confirm = vi.fn();
 		const change = vi.fn();
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<TrainingArtifactTextDialog
 					kind="promote"
 					onChange={change}

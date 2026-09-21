@@ -83,6 +83,7 @@ import type { GenerationMetadata } from "@/features/assist/models/AssistModels";
 import type { Skill } from "@/features/skills/models/SkillModels";
 import { SkillsPage } from "@/features/skills/pages/SkillsPage";
 import { useSkillManagementStore } from "@/features/skills/stores/SkillManagementStore";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const draftMetadata: GenerationMetadata = {
 	model: "qwen3-4b",
@@ -120,7 +121,7 @@ function renderPage() {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<SkillsPage />
 			</MantineProvider>
 		</QueryClientProvider>,

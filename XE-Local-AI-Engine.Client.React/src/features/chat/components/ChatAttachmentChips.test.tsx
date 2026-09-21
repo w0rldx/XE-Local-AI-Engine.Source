@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // Mantine's color-scheme provider reads window.matchMedia on mount; jsdom does not implement it.
 Object.defineProperty(window, "matchMedia", {
@@ -22,7 +23,11 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function attachment(overrides: Partial<ChatAttachment> = {}): ChatAttachment {

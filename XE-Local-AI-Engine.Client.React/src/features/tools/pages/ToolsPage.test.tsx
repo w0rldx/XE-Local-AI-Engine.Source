@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
 import { ToolsPage } from "@/features/tools/pages/ToolsPage";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const { useToolCatalogMock } = vi.hoisted(() => ({
 	useToolCatalogMock: vi.fn(),
@@ -38,7 +39,11 @@ const catalogTools: ToolCatalogEntry[] = [
 ];
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function installJsdomEnvironmentMocks(): void {

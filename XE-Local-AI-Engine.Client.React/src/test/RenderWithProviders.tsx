@@ -4,7 +4,7 @@ import { createMemoryHistory, createRootRoute, createRoute, createRouter, Outlet
 import { render, type RenderResult } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 
-import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // i18n is NOT set up here: `src/i18n.ts` is the first vitest `setupFiles` entry, so the app's own i18next instance is
 // initialised once per test file — before any test imports anything — and `useTranslation()` resolves against the real
@@ -94,7 +94,9 @@ export function renderWithProviders(
 
 	const result = render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">{content}</MantineProvider>
+			<MantineProvider env="test" theme={testMantineTheme}>
+				{content}
+			</MantineProvider>
 		</QueryClientProvider>,
 	);
 
@@ -117,7 +119,7 @@ export function createProvidersWrapper(options: RenderWithProvidersOptions = {})
 	function Wrapper({ children }: { children: ReactNode }): ReactElement {
 		return (
 			<QueryClientProvider client={queryClient}>
-				<MantineProvider env="test">
+				<MantineProvider env="test" theme={testMantineTheme}>
 					{withRouter ? renderInMemoryRouter(children, options.route ?? "/") : children}
 				</MantineProvider>
 			</QueryClientProvider>

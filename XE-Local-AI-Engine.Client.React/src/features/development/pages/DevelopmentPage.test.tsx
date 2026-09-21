@@ -49,6 +49,7 @@ vi.mock("@/features/development/components/DevelopmentLivePanel", () => ({
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { useDevelopmentPageController } from "@/features/development/hooks/useDevelopmentPageController";
 import { DevelopmentPage } from "@/features/development/pages/DevelopmentPage";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 /** The build-time devWorkflows flag, which is a plain module constant — readonly to TypeScript, not at runtime. */
 const capabilities = nodeCapabilities as { devWorkflows: boolean };
@@ -145,7 +146,7 @@ function installDomMocks(): void {
 
 function renderPage(props: { initialProjectId?: string; initialTaskId?: string } = {}): void {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<DevelopmentPage {...props} />
 		</MantineProvider>,
 	);

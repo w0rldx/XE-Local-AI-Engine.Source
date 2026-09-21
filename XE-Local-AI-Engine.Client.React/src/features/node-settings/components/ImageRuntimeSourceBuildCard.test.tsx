@@ -117,10 +117,11 @@ vi.mock("@/features/node-settings/hooks/useImageRuntimeSourceBuildHub", () => ({
 }));
 
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderCard(): void {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<ImageRuntimeSourceBuildCard />
 		</MantineProvider>,
 	);
@@ -449,7 +450,7 @@ describe("ImageRuntimeSourceBuildCard", () => {
 		// A fresh element each time: React bails out of re-rendering a referentially identical one, which would make
 		// the surviving draft below prove nothing.
 		const card = () => (
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ImageRuntimeSourceBuildCard />
 			</MantineProvider>
 		);

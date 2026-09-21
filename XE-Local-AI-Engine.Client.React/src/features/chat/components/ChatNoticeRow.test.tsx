@@ -7,9 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatNoticeRow } from "@/features/chat/components/ChatNoticeRow";
 import type { ChatNoticePart } from "@/features/chat/models/ChatModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function noticePart(overrides: Partial<ChatNoticePart> = {}): ChatNoticePart {
@@ -53,14 +58,14 @@ describe("ChatNoticeRow", () => {
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ModelSubstituted");
 
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ChatNoticeRow part={noticePart({ noticeKind: "ToolDisabled", text: "A tool was disabled." })} />
 			</MantineProvider>,
 		);
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ToolDisabled");
 
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ChatNoticeRow part={noticePart({ noticeKind: "HistoryTruncated", text: "Older history was trimmed." })} />
 			</MantineProvider>,
 		);

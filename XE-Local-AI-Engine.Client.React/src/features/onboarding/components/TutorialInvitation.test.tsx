@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TutorialInvitation } from "@/features/onboarding/components/TutorialInvitation";
 import { OnboardingContext, type OnboardingContextValue } from "@/features/onboarding/context/OnboardingContext";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
@@ -29,7 +30,7 @@ function context(overrides: Partial<OnboardingContextValue> = {}): OnboardingCon
 
 function renderInvitation(value: OnboardingContextValue) {
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<OnboardingContext.Provider value={value}>
 				<TutorialInvitation tutorialId="agents-basics" />
 			</OnboardingContext.Provider>
@@ -70,7 +71,7 @@ describe("TutorialInvitation", () => {
 		const view = renderInvitation(skipped);
 		expect(screen.queryByTestId("tutorial-invitation-agents-basics")).toBeNull();
 		view.rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<OnboardingContext.Provider
 					value={context({
 						tutorials: {

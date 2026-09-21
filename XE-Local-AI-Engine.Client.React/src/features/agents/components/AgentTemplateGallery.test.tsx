@@ -80,6 +80,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 import { listAgentTemplatesQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import { AgentTemplateGallery } from "@/features/agents/components/AgentTemplateGallery";
 import { agentDefinitionsInvalidationKey, agentDefinitionsQueryIds } from "@/features/agents/queries/useAgentDefinitions";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function installJsdomEnvironmentMocks(): void {
 	Object.defineProperty(window, "matchMedia", {
@@ -111,7 +112,7 @@ function installJsdomEnvironmentMocks(): void {
 
 function renderGallery(queryClient: QueryClient) {
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<QueryClientProvider client={queryClient}>
 				<AgentTemplateGallery opened={true} onClose={vi.fn()} />
 			</QueryClientProvider>

@@ -23,6 +23,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 import { ChatMessage } from "@/features/chat/components/ChatMessage";
 import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // A tool-call card in the ordered parts can now fire the resolve-approval TanStack mutation, so the render
 // tree needs a QueryClientProvider even for turns that never surface an approval. Kept as an element helper (not a
@@ -31,7 +32,9 @@ function withProviders(ui: ReactNode): ReactElement {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 	return (
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">{ui}</MantineProvider>
+			<MantineProvider env="test" theme={testMantineTheme}>
+				{ui}
+			</MantineProvider>
 		</QueryClientProvider>
 	);
 }

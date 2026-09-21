@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TrainingArtifactPanel } from "@/features/training/components/TrainingArtifactPanel";
 import type { TrainingArtifactView } from "@/features/training/models/TrainingModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({ t: (_key: string, defaultValue?: string) => defaultValue ?? _key }),
@@ -81,7 +82,7 @@ function artifact(overrides: Partial<TrainingArtifactView> = {}): TrainingArtifa
 function renderPanel(row: TrainingArtifactView) {
 	mocks.artifacts = [row];
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<TrainingArtifactPanel exportPhase={null} onExportStarted={vi.fn()} runId="run-1" />
 		</MantineProvider>,
 	);

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DevelopmentEventTimeline } from "@/features/development/components/DevelopmentEventTimeline";
 import type { DevelopmentEvent } from "@/features/development/models/DevelopmentModels";
 import en from "@/locales/en.json";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // Resolves against the REAL en.json rather than echoing the fallback the way the sibling component tests do: the
 // whole claim under test is that the key exists and wins over the raw backend token, and a t() that always answers
@@ -61,7 +62,7 @@ function event(id: string, sequence: number, outcome: string | null, operationPh
 
 function renderTimeline(events: readonly DevelopmentEvent[]) {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<DevelopmentEventTimeline events={events} untiedEvents={[]} onRefresh={vi.fn()} />
 		</MantineProvider>,
 	);

@@ -70,6 +70,7 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { ModelRecommendationsPage } from "@/features/model-fit/pages/ModelRecommendationsPage";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function modelFitJob(overrides: Partial<ScheduledJob> = {}): ScheduledJob {
 	return {
@@ -139,7 +140,7 @@ function renderPage() {
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<QueryClientProvider client={queryClient}>
 				<ModelRecommendationsPage />
 			</QueryClientProvider>

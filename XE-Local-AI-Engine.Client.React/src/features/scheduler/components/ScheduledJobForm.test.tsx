@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ScheduledJobForm, type ScheduledJobFormHandle } from "@/features/scheduler/components/ScheduledJobForm";
 import type { ScheduledJobFormValues, ScheduledJobTemplate } from "@/features/scheduler/models/SchedulerModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
@@ -97,7 +98,7 @@ function renderForm(props: Partial<Parameters<typeof ScheduledJobForm>[0]> = {})
 	const onCancel = vi.fn();
 	const ref = createRef<ScheduledJobFormHandle>();
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<ScheduledJobForm
 				ref={ref}
 				initialValues={emptyValues()}

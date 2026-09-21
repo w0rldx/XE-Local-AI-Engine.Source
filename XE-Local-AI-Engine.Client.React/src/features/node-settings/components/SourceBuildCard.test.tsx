@@ -100,10 +100,11 @@ vi.mock("@/features/node-settings/hooks/useSourceBuildHub", () => ({
 import { ApiError } from "@/core/api/errors/ApiError";
 import { toast } from "@/core/ui/notifications/Toast";
 import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderCard(): void {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<SourceBuildCard />
 		</MantineProvider>,
 	);

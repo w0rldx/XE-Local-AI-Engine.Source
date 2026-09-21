@@ -29,6 +29,7 @@ vi.mock("react-i18next", () => ({
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderCard(): { queryClient: QueryClient } {
 	const queryClient = new QueryClient({
@@ -36,7 +37,7 @@ function renderCard(): { queryClient: QueryClient } {
 	});
 	const ui: ReactElement = (
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<VoiceSettingsCard />
 			</MantineProvider>
 		</QueryClientProvider>

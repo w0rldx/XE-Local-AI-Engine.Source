@@ -31,6 +31,7 @@ vi.mock("@/core/api/generated", async (importOriginal) => ({
 
 import type { TrainingDefinition } from "@/features/training/models/TrainingModels";
 import { DefinitionEditorDialog } from "@/features/training/components/DefinitionEditorDialog";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const existing: TrainingDefinition = {
 	id: "def-1",
@@ -54,7 +55,7 @@ function renderDialog(definition: TrainingDefinition | null) {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<DefinitionEditorDialog definition={definition} onClose={vi.fn()} opened={true} />
 			</MantineProvider>
 		</QueryClientProvider>,

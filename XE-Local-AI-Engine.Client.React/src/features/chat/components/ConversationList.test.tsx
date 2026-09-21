@@ -7,9 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConversationList } from "@/features/chat/components/ConversationList";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function conversation(overrides: Partial<ChatConversationModel> = {}): ChatConversationModel {
@@ -275,7 +280,7 @@ describe("ConversationList management actions", () => {
 		expect(screen.queryByTestId("conversation-item-archived-1")).toBeNull();
 
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<ConversationList
 					conversations={[archivedConversation]}
 					showArchived={true}

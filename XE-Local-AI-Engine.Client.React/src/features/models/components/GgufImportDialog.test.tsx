@@ -31,6 +31,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 
 import type { XeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportResponse } from "@/core/api/generated";
 import { GgufImportDialog } from "@/features/models/components/GgufImportDialog";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const preview: XeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportResponse = {
 	previewToken: "preview-token-1",
@@ -51,7 +52,7 @@ function renderDialog() {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<GgufImportDialog opened={true} onClose={vi.fn()} onStarted={vi.fn()} />
 			</MantineProvider>
 		</QueryClientProvider>,

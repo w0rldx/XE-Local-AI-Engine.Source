@@ -13,6 +13,7 @@ vi.mock("react-i18next", () => ({
 
 import { ProfileMetricsCard } from "@/features/model-fit/components/ProfileMetricsCard";
 import type { InferenceBenchmarkMetrics } from "@/features/model-fit/models/InferenceProfileModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function makeMetrics(overrides: Partial<InferenceBenchmarkMetrics> = {}): InferenceBenchmarkMetrics {
 	return {
@@ -47,7 +48,11 @@ function makeMetrics(overrides: Partial<InferenceBenchmarkMetrics> = {}): Infere
 }
 
 function renderCard(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("ProfileMetricsCard", () => {

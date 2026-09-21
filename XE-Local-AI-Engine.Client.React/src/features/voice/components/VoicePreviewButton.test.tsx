@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VoicePreviewButton } from "@/features/voice/components/VoicePreviewButton";
 import type { VoiceRuntimeContextValue } from "@/features/voice/VoiceRuntimeContext";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // Controllable runtime context (component reads it via useVoiceRuntime).
 let mockContext: VoiceRuntimeContextValue;
@@ -37,7 +38,11 @@ function baseContext(overrides: Partial<VoiceRuntimeContextValue> = {}): VoiceRu
 }
 
 function renderButton(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("VoicePreviewButton", () => {

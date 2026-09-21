@@ -44,6 +44,7 @@ vi.mock("@/features/skills/queries/useSkills", () => ({
 import { AgentDefinitionForm, type AgentDefinitionFormHandle } from "@/features/agents/components/AgentDefinitionForm";
 import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
 import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function makeDefinition(overrides: Partial<AgentDefinition> = {}): AgentDefinition {
 	return {
@@ -120,7 +121,11 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 const baseValues: AgentDefinitionFormValues = {

@@ -53,6 +53,7 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 }));
 
 import { SchedulerPage } from "@/features/scheduler/pages/SchedulerPage";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const cronJob: ScheduledJob = {
 	id: "job-1",
@@ -119,7 +120,7 @@ function renderPage() {
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<ConfirmProvider>
 				<QueryClientProvider client={queryClient}>
 					<SchedulerPage />

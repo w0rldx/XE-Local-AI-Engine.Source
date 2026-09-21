@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IntegrationApprovalWarning } from "@/features/integrations/components/IntegrationApprovalWarning";
 import type { IntegrationToolFacts } from "@/features/integrations/models/IntegrationModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
@@ -55,7 +56,7 @@ function renderWarning(
 	toolsByName: ReadonlyMap<string, IntegrationToolFacts>,
 ) {
 	return render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<IntegrationApprovalWarning allowedToolNames={allowedToolNames} toolApprovals={toolApprovals} toolsByName={toolsByName} />
 		</MantineProvider>,
 	);

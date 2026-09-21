@@ -17,6 +17,7 @@ vi.mock("@/features/app-update/components/AppUpdateButton", () => ({
 
 import { useAppUpdateStatus, useRefreshAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
 import { AppUpdateSection } from "./AppUpdateSection";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function setup(overrides: Record<string, unknown> = {}) {
 	vi.mocked(useAppUpdateStatus).mockReturnValue({
@@ -67,7 +68,7 @@ describe("AppUpdateSection", () => {
 	it("offers anonymous update checks without any GitHub sign-in UI", () => {
 		setup();
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<AppUpdateSection />
 			</MantineProvider>,
 		);
@@ -79,7 +80,7 @@ describe("AppUpdateSection", () => {
 	it("shows the update button when the public feed has an update", () => {
 		setup({ updateAvailable: true, availableVersion: "0.1.0-rc.3" });
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<AppUpdateSection />
 			</MantineProvider>,
 		);
@@ -90,7 +91,7 @@ describe("AppUpdateSection", () => {
 	it("withholds controls when the artifact has no public source", () => {
 		setup({ isConfigured: false });
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<AppUpdateSection />
 			</MantineProvider>,
 		);
@@ -102,7 +103,7 @@ describe("AppUpdateSection", () => {
 	it("distinguishes an offline feed from a failed feed", () => {
 		setup({ checkStatus: "offline" });
 		const { rerender } = render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<AppUpdateSection />
 			</MantineProvider>,
 		);
@@ -111,7 +112,7 @@ describe("AppUpdateSection", () => {
 
 		setup({ checkStatus: "failed" });
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<AppUpdateSection />
 			</MantineProvider>,
 		);
@@ -123,7 +124,7 @@ describe("AppUpdateSection", () => {
 	it("renders nothing outside desktop mode", () => {
 		setup({ isDesktop: false });
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<AppUpdateSection />
 			</MantineProvider>,
 		);

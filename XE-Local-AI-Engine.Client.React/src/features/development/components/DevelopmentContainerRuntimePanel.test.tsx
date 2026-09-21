@@ -13,6 +13,7 @@ import type {
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse as ContainerDaemon,
 	XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse as ContainerRuntimeStatus,
 } from "@/core/api/generated/types.gen";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // The probe answers every member on every branch, endpoints and daemon identities included, so these builders carry
 // the nulls the wire really sends rather than leaving the members off.
@@ -47,7 +48,7 @@ function renderPanel(
 	sandboxProvider?: string,
 ) {
 	render(
-		<MantineProvider env="test">
+		<MantineProvider env="test" theme={testMantineTheme}>
 			<DevelopmentContainerRuntimePanel
 				runtime={runtime}
 				onConfirm={onConfirm}

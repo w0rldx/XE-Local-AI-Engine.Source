@@ -37,6 +37,7 @@ vi.mock("@/core/api/ResponseValidation", () => ({
 
 import { getAppUpdateStatus } from "@/core/api/generated/sdk.gen";
 import { AppUpdateSection } from "./AppUpdateSection";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 describe("AppUpdateSection restart polling", () => {
 	beforeEach(() => {
@@ -74,7 +75,7 @@ describe("AppUpdateSection restart polling", () => {
 		});
 		render(
 			<QueryClientProvider client={queryClient}>
-				<MantineProvider env="test">
+				<MantineProvider env="test" theme={testMantineTheme}>
 					<AppUpdateSection />
 				</MantineProvider>
 			</QueryClientProvider>,

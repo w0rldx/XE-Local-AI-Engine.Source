@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { McpServerKeyPanel } from "@/features/node-settings/components/McpServerKeyPanel";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 // The panel manages the INBOUND MCP credential — the key an external client presents to this node's own MCP endpoint.
 // What is worth pinning: the key is NEVER rendered on load (the node stores only a hash, so the GET has none to give),
@@ -77,7 +78,7 @@ function renderPanel() {
 	});
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<McpServerKeyPanel />
 			</MantineProvider>
 		</QueryClientProvider>,

@@ -26,6 +26,7 @@ vi.mock("@/features/assist/components/AssistActions", () => ({ AssistActions: ()
 
 import { SkillForm, type SkillFormHandle } from "@/features/skills/components/SkillForm";
 import type { SkillFormValues } from "@/features/skills/models/SkillModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const baseValues: SkillFormValues = {
 	allowedTools: "",
@@ -69,7 +70,11 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 interface HarnessProps {
@@ -196,7 +201,7 @@ describe("SkillForm", () => {
 
 	it("says an imported skill's instructions run with the agent's tool access", () => {
 		render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<SkillForm
 					initialValues={baseValues}
 					isSubmitting={false}
@@ -216,7 +221,7 @@ describe("SkillForm", () => {
 
 	it("hides the enabled toggle on create and shows it on edit", () => {
 		const { rerender } = render(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<SkillForm
 					initialValues={baseValues}
 					isSubmitting={false}
@@ -230,7 +235,7 @@ describe("SkillForm", () => {
 		expect(screen.queryByTestId("skill-form-enabled")).toBeNull();
 
 		rerender(
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<SkillForm
 					initialValues={baseValues}
 					isSubmitting={false}

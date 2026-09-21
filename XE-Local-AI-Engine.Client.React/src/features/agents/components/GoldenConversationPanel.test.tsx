@@ -39,6 +39,7 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { GoldenConversationPanel } from "@/features/agents/components/GoldenConversationPanel";
 import type { GoldenConversation } from "@/features/agents/models/GoldenConversationModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function makeGoldenCase(overrides: Partial<GoldenConversation> = {}): GoldenConversation {
 	return {
@@ -91,7 +92,11 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 function renderPanel(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("GoldenConversationPanel", () => {

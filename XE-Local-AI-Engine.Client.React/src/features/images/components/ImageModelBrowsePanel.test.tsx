@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageModelBrowsePanel } from "@/features/images/components/ImageModelBrowsePanel";
 import type { ImageRepositoryFileView, ImageRepositoryView } from "@/features/images/models/ImageModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 let repositories: ImageRepositoryView[] = [];
 let files: ImageRepositoryFileView[] = [];
@@ -37,7 +38,11 @@ vi.mock("react-i18next", () => ({
 }));
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function repository(overrides: Partial<ImageRepositoryView> = {}): ImageRepositoryView {

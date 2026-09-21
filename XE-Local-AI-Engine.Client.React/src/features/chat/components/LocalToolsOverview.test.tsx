@@ -30,6 +30,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { LocalToolsOverview } from "@/features/chat/components/LocalToolsOverview";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const builtinTools: ToolCatalogEntry[] = [
 	{
@@ -63,7 +64,11 @@ const mcpTool: ToolCatalogEntry = {
 };
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function installJsdomEnvironmentMocks(): void {

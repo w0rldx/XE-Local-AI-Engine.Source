@@ -20,9 +20,14 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { ToolSourceBadge } from "@/features/tools/components/ToolSourceBadge";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function installJsdomEnvironmentMocks(): void {

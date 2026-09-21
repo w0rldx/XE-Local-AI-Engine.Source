@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageModelManager } from "@/features/images/components/ImageModelManager";
 import type { ImageModelCatalogEntryView, ImageModelDownloadView, ImageModelView } from "@/features/images/models/ImageModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const startMutate = vi.fn();
 const cancelMutate = vi.fn();
@@ -60,7 +61,11 @@ vi.mock("@/core/ui/notifications/Toast", () => ({
 }));
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function download(overrides: Partial<ImageModelDownloadView> = {}): ImageModelDownloadView {

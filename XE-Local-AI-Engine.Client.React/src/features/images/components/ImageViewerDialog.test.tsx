@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageViewerDialog } from "@/features/images/components/ImageViewerDialog";
 import type { ImageJobView } from "@/features/images/models/ImageModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 const objectUrlResult: { url: string | undefined; blob: Blob | undefined; isLoading: boolean; isError: boolean } = {
 	url: "blob:generated-image",
@@ -48,7 +49,11 @@ vi.mock("@/features/images/GeneratedImageDownload", async (importOriginal) => {
 });
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function job(overrides: Partial<ImageJobView> = {}): ImageJobView {

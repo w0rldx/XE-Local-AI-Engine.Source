@@ -8,9 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatUiCapabilities, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 function installJsdomEnvironmentMocks(): void {

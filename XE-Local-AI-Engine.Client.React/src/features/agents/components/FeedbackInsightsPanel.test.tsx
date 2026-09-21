@@ -29,6 +29,7 @@ vi.mock("@/features/agents/queries/useFeedbackInsights", () => hooksMock);
 
 import { FeedbackInsightsPanel } from "@/features/agents/components/FeedbackInsightsPanel";
 import type { FeedbackInsights } from "@/features/agents/models/FeedbackInsightsModels";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function makeInsights(overrides: Partial<FeedbackInsights> = {}): FeedbackInsights {
 	return {
@@ -81,7 +82,11 @@ function installJsdomEnvironmentMocks(): void {
 }
 
 function renderPanel(ui: ReactElement) {
-	return render(<MantineProvider env="test">{ui}</MantineProvider>);
+	return render(
+		<MantineProvider env="test" theme={testMantineTheme}>
+			{ui}
+		</MantineProvider>,
+	);
 }
 
 describe("FeedbackInsightsPanel", () => {

@@ -9,7 +9,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatConversationModel, ChatDisplayShellProps, ChatMessagePart } from "@/features/chat/models/ChatModels";
-import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // A streaming tool-call card can fire the resolve-approval TanStack mutation, so the tree needs a
 // QueryClientProvider even for turns that never surface an approval.
@@ -17,7 +17,9 @@ function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">{ui}</MantineProvider>
+			<MantineProvider env="test" theme={testMantineTheme}>
+				{ui}
+			</MantineProvider>
 		</QueryClientProvider>,
 	);
 }

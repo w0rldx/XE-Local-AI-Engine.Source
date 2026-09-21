@@ -62,6 +62,7 @@ vi.mock("@/features/cloud-settings/codex/queries/useCodexAuth", () => ({
 }));
 
 import { CodexSignInCard } from "@/features/cloud-settings/codex/components/CodexSignInCard";
+import { testMantineTheme } from "@/test/MantineTestRender";
 
 function installJsdomEnvironmentMocks(): void {
 	Object.defineProperty(window, "matchMedia", {
@@ -83,7 +84,7 @@ function renderCard(onSignedInChange?: (v: boolean) => void): void {
 	});
 	const ui: ReactElement = (
 		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test">
+			<MantineProvider env="test" theme={testMantineTheme}>
 				<CodexSignInCard onSignedInChange={onSignedInChange} />
 			</MantineProvider>
 		</QueryClientProvider>
