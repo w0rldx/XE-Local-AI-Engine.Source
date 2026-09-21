@@ -36,6 +36,12 @@ internal sealed record AgentHomePatchExportRequest
     public required IReadOnlyList<ResolvedSelectedFolder> ResolvedFolders { get; init; }
 
     /// <summary>
+    ///     The workspace-relative paths (<c>&lt;alias&gt;/&lt;rel&gt;</c>) the goal loop recorded writing, reconciled
+    ///     against what the diff reports so a write the patch does not carry cannot stay silent.
+    /// </summary>
+    public IReadOnlyList<string> WrittenFiles { get; init; } = [];
+
+    /// <summary>
     ///     The run's logger, to which export's git commands are appended in <c>commands.jsonl</c> beside the model's
     ///     own, attributed to the node.
     /// </summary>

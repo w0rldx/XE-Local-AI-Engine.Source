@@ -161,6 +161,9 @@ export const allNavigationLinks: INavigationLink[] = [
 			// Advanced-only, and NOT removed: it is the read-only catalog of what the four authoring surfaces above
 			// register, so in Simple mode — where none of them is offered — it would list nothing and lead nowhere.
 			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools, simple: false },
+			// Advanced-only, appended rather than placed among the authoring surfaces above: this is operator
+			// forensics over what an agent already did on this computer, not another thing to author.
+			{ translationKey: "navigation.agentRuns", to: nodeRoutePaths.agentRuns, simple: false },
 		],
 	},
 	// External Integrations group: every child carries the same `integrations` capability, so the generic

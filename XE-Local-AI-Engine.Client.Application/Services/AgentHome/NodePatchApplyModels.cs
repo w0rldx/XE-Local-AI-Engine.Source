@@ -34,7 +34,20 @@ public sealed record NodePatchApplyPreview
     public required IReadOnlyList<PatchApplyFileEntry> Files { get; init; }
 
     /// <summary>Host-path-safe reasons the patch cannot apply (unknown alias, traversal, binary-not-allowed, conflict).</summary>
-    public required IReadOnlyList<string> Rejections { get; init; }
+    public required IReadOnlyList<PatchApplyRejection> Rejections { get; init; }
+
+    /// <summary>
+    ///     Patch targets that already differ from their committed state on the host, informational only. Never affects
+    ///     <see cref="CanApply" /> and never enters <see cref="PatchSha256" />.
+    /// </summary>
+    public IReadOnlyList<PatchApplyDirtyEntry> DirtyTargets { get; init; } = [];
+
+    /// <summary>
+    ///     <see langword="true" /> when the host state of at least one folder could not be read, so
+    ///     <see cref="DirtyTargets" /> is incomplete rather than empty-because-clean. A folder that is no git work
+    ///     tree is neither: there is nothing to compare against, so it reports nothing and sets nothing.
+    /// </summary>
+    public bool DirtyCheckUnavailable { get; init; }
 
     /// <summary>Whether the patch contains a binary block (detected in the patch text, not via git).</summary>
     public bool ContainsBinary { get; init; }
@@ -67,7 +80,7 @@ public sealed record NodePatchApplyResult
     public required IReadOnlyList<PatchApplyFileEntry> AppliedFiles { get; init; }
 
     /// <summary>Host-path-safe reasons the apply was rejected or could not complete.</summary>
-    public required IReadOnlyList<string> Rejections { get; init; }
+    public required IReadOnlyList<PatchApplyRejection> Rejections { get; init; }
 
     /// <summary>
     ///     <see langword="true" /> when the pre-apply check passed for every alias but a later write failed (rare race),
@@ -80,6 +93,31 @@ public sealed record NodePatchApplyResult
     ///     <see cref="NodePatchApplyPreview.PatchMissing" />.
     /// </summary>
     public bool PatchMissing { get; init; }
+}
+
+/// <summary>One reason a patch, or one entry inside it, was refused.</summary>
+/// <remarks>
+///     <see cref="Path" /> names the refused entry when the parser reached a path it had already validated enough to
+///     echo. It stays <see langword="null" /> for a refusal about the patch as a whole, and for a C-quoted path: the
+///     parser deliberately never unescapes one, so there is no name to show rather than a name to trust.
+/// </remarks>
+public sealed record PatchApplyRejection
+{
+    /// <summary>The host-path-safe reason, in the service's own words.</summary>
+    public required string Reason { get; init; }
+
+    /// <summary>The refused entry as <c>&lt;alias&gt;/&lt;rel&gt;</c>, or <see langword="null" /> when it has no single name.</summary>
+    public string? Path { get; init; }
+}
+
+/// <summary>One patch target that already differs from its committed state in the host folder's work tree.</summary>
+public sealed record PatchApplyDirtyEntry
+{
+    /// <summary>The target as <c>&lt;alias&gt;/&lt;rel&gt;</c>; never a host path.</summary>
+    public required string Path { get; init; }
+
+    /// <summary>The kind of local difference: <c>modified</c>, <c>staged</c>, or <c>untracked</c>.</summary>
+    public required string State { get; init; }
 }
 
 /// <summary>A single changed file in a patch apply preview/result. Carries no alias prefix and no host path.</summary>

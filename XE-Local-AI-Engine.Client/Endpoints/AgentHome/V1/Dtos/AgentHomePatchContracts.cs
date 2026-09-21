@@ -36,7 +36,16 @@ public sealed class AgentHomePatchPreviewResponse
     public required IReadOnlyList<AgentHomePatchFileDto> Files { get; init; }
 
     /// <summary>Why the patch cannot apply, in the service's own host-path-safe words. Empty when it can.</summary>
-    public required IReadOnlyList<string> Rejections { get; init; }
+    public required IReadOnlyList<AgentHomePatchRejectionDto> Rejections { get; init; }
+
+    /// <summary>
+    ///     Patch targets that already carry local changes in the operator's folder. A warning to read before
+    ///     approving, never a refusal: it does not gate <see cref="CanApply" />.
+    /// </summary>
+    public required IReadOnlyList<AgentHomePatchDirtyTargetDto> DirtyTargets { get; init; }
+
+    /// <summary>Whether at least one folder's local state could not be read, so the warning above is incomplete.</summary>
+    public required bool DirtyCheckUnavailable { get; init; }
 
     /// <summary>Whether the patch contains a binary block. Binary is refused unless the node opted in.</summary>
     public required bool ContainsBinary { get; init; }
@@ -54,6 +63,25 @@ public sealed class AgentHomePatchApplyResponse
 {
     /// <summary>The files written to the host, folder-relative.</summary>
     public required IReadOnlyList<AgentHomePatchFileDto> AppliedFiles { get; init; }
+}
+
+/// <summary>One refusal. <see cref="Path" /> names the refused entry when it has one that is safe to show.</summary>
+public sealed class AgentHomePatchRejectionDto
+{
+    public required string Reason { get; init; }
+
+    /// <summary>Folder-relative (<c>&lt;alias&gt;/&lt;rel&gt;</c>), or null for a refusal about the patch as a whole.</summary>
+    public required string? Path { get; init; }
+}
+
+/// <summary>One patch target that already differs from its committed state in the operator's folder.</summary>
+public sealed class AgentHomePatchDirtyTargetDto
+{
+    /// <summary>Folder-relative (<c>&lt;alias&gt;/&lt;rel&gt;</c>); never a host path.</summary>
+    public required string Path { get; init; }
+
+    /// <summary><c>modified</c>, <c>staged</c> or <c>untracked</c>.</summary>
+    public required string State { get; init; }
 }
 
 /// <summary>One changed file. Carries no host path — <see cref="Alias" /> names the selected folder instead.</summary>

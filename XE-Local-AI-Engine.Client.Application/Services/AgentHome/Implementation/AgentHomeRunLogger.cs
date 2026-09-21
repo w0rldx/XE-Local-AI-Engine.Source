@@ -43,14 +43,15 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
             runId = context.RunId,
             nodeId = context.NodeId,
             ownerUserId = context.OwnerUserId,
-            providerName = context.ProviderName
+            providerName = context.ProviderName,
+            conversationId = context.ConversationId
         };
 
         await AppendLineAsync(EventsFile(), record, cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task AppendEventAsync(string eventName, string? detail = null, CancellationToken cancellationToken = default)
+    public async Task AppendEventAsync(string eventName, string? detail = null, object? data = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(eventName);
         var ctx = RequireContext();
@@ -64,7 +65,9 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
             nodeId = ctx.NodeId,
             ownerUserId = ctx.OwnerUserId,
             providerName = ctx.ProviderName,
-            detail
+            detail,
+            // Omitted entirely when null, so every event that has no structured payload keeps the shape it had.
+            data
         };
 
         await AppendLineAsync(EventsFile(), record, cancellationToken);

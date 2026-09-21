@@ -373,6 +373,9 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         public IAgentHomeExecutionLease? TryAcquireForRecovery(AgentHomeExecutionLeaseKey key) =>
             Lease;
 
+        public bool IsHeld(AgentHomeExecutionLeaseKey key) =>
+            false;
+
         public bool IsPoisoned(AgentHomeExecutionLeaseKey key) =>
             IsPoisonedValue;
 

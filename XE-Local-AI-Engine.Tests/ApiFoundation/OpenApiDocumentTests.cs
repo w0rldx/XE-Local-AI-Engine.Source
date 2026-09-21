@@ -63,6 +63,15 @@ public sealed class OpenApiDocumentTests
     // and namespace-free — never the FastEndpoints default (e.g. "xeLocalAiEngineClientEndpoints...Endpoint").
     private static readonly Regex CleanCamelCase = new("^[a-z][A-Za-z0-9]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    // The deletes that genuinely read a payload: an optimistic-concurrency version everywhere but the chat purge,
+    // which sends a flag. Every other GET or DELETE declares no body. Each entry is asserted to still be one.
+    private static readonly string[] DeleteOperationsThatReadABody =
+    [
+        "clearBenchmarkRunScore", "deleteBenchmarkProject", "deleteBenchmarkRun", "deleteBenchmarkTaskItem",
+        "deleteComparison", "deleteEvaluation", "deleteNodeChatConversation", "deleteToolMock",
+        "deleteTrainingArtifact", "deleteTrainingDataset", "deleteTrainingDefinition"
+    ];
+
     [Test]
     public async Task LocalOpenApiDocument_DescribesLocalApiOnly()
     {
@@ -605,6 +614,123 @@ public sealed class OpenApiDocumentTests
         // would fail here rather than pass both halves.
         var start = paths.GetProperty("/api/local/v1/external-apps/instances/{instanceId}/start").GetProperty("post");
         AssertEx.True(start.TryGetProperty("requestBody", out _), "start sends expectedVersion in its body.");
+    }
+
+    /// <summary>
+    ///     Every declared request body describes something the endpoint really reads, and no bodyless verb declares one
+    ///     it does not.
+    /// </summary>
+    /// <remarks>
+    ///     The generator strips route- and query-bound members from the ONE schema it emits per request type, in place,
+    ///     and then decides per operation whether anything is left to send. A request type shared by two endpoints that
+    ///     bind its members differently therefore answers that question differently depending on which endpoint the
+    ///     generator reached first — so moving endpoints between files changed the contract. The two shapes that leak
+    ///     are a body on a verb that carries none and a body whose schema can hold nothing; both are refused here.
+    /// </remarks>
+    [Test]
+    public async Task LocalOpenApiDocument_DeclaresARequestBodyOnlyWhereOneIsRead()
+    {
+        using var client = Factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+
+        var operations = 0;
+        var seenDeletesWithABody = new List<string>();
+        var bodyOnABodylessVerb = new List<string>();
+        var bodyThatCanCarryNothing = new List<string>();
+
+        foreach (var pathItem in document.RootElement.GetProperty("paths").EnumerateObject())
+        {
+            if (!pathItem.Name.StartsWith("/api/local/v1/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            foreach (var operation in pathItem.Value.EnumerateObject())
+            {
+                if (!HttpVerbs.Contains(operation.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                operations++;
+                if (!operation.Value.TryGetProperty("requestBody", out var requestBody))
+                {
+                    continue;
+                }
+
+                var operationId = operation.Value.TryGetProperty("operationId", out var id) ? id.GetString() ?? string.Empty : string.Empty;
+                var label = $"{operation.Name.ToUpperInvariant()} {pathItem.Name} ({operationId})";
+
+                if (operation.Name is "get" or "head")
+                {
+                    bodyOnABodylessVerb.Add(label);
+                }
+                else if (operation.Name == "delete")
+                {
+                    if (DeleteOperationsThatReadABody.Contains(operationId, StringComparer.Ordinal))
+                    {
+                        seenDeletesWithABody.Add(operationId);
+                    }
+                    else
+                    {
+                        bodyOnABodylessVerb.Add(label);
+                    }
+                }
+
+                if (IsEmptySchema(schemas, requestBody))
+                {
+                    bodyThatCanCarryNothing.Add(label);
+                }
+            }
+        }
+
+        // Non-vacuity floor under the operation count this document publishes: a document that generated no paths would
+        // otherwise pass every assertion below with nothing to check.
+        AssertEx.True(operations >= 400,
+            $"Only {operations} operations were found under /api/local/v1/; refusing a vacuous pass.");
+
+        AssertEx.Empty(bodyOnABodylessVerb,
+            "A GET or DELETE that declares a request body makes the generated client demand one the endpoint never "
+            + "reads, and it is the shape an endpoint registration reorder produces when a request type is shared with "
+            + "an endpoint that binds its members elsewhere. Add a genuinely body-reading DELETE to "
+            + $"{nameof(DeleteOperationsThatReadABody)} deliberately:"
+            + Environment.NewLine + string.Join(Environment.NewLine, bodyOnABodylessVerb.Order(StringComparer.Ordinal)));
+
+        AssertEx.Empty(bodyThatCanCarryNothing,
+            "A request body whose schema declares no members describes a payload with nothing in it — the generated "
+            + "client is made to send an empty object. This is what the allowlist above must never be used to hide:"
+            + Environment.NewLine + string.Join(Environment.NewLine, bodyThatCanCarryNothing.Order(StringComparer.Ordinal)));
+
+        var stale = DeleteOperationsThatReadABody.Except(seenDeletesWithABody, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        AssertEx.Empty(stale,
+            "The allowlist is shrink-only: these operations no longer declare a DELETE body, so they must be removed "
+            + "from it rather than left to excuse a future one: " + string.Join(", ", stale));
+    }
+
+    /// <summary>
+    ///     Whether the body's JSON schema resolves to a component that declares no members at all.
+    /// </summary>
+    private static bool IsEmptySchema(JsonElement schemas, JsonElement requestBody)
+    {
+        if (!requestBody.TryGetProperty("content", out var content)
+            || !content.TryGetProperty("application/json", out var json)
+            || !json.TryGetProperty("schema", out var schema)
+            || !schema.TryGetProperty("$ref", out var reference)
+            || reference.GetString() is not { Length: > 0 } pointer)
+        {
+            return false;
+        }
+
+        var name = pointer[(pointer.LastIndexOf('/') + 1)..];
+
+        return schemas.TryGetProperty(name, out var resolved)
+               && !resolved.TryGetProperty("properties", out _)
+               && !resolved.TryGetProperty("allOf", out _);
     }
 
     /// <summary>

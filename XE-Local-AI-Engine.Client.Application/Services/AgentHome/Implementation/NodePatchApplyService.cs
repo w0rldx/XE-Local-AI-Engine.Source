@@ -84,7 +84,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             };
         }
 
-        var rejections = new List<string>(plan.Rejections);
+        var rejections = new List<PatchApplyRejection>(plan.Rejections);
         var runner = new HostGitRunner(_options.PatchApplyTimeoutSeconds);
         var numstat = new Dictionary<string, LineStat>(StringComparer.Ordinal);
         foreach (var alias in plan.Aliases)
@@ -92,8 +92,11 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             var check = await CheckSubPatchAsync(runner, alias, cancellationToken);
             if (check is null || check.ExitCode != 0)
             {
-                rejections.Add(string.Create(CultureInfo.InvariantCulture,
-                    $"alias '{alias.Alias}': patch does not apply cleanly ({Redact(check?.StandardError ?? string.Empty, alias.ResolvedRoot)})"));
+                rejections.Add(new PatchApplyRejection
+                {
+                    Reason = string.Create(CultureInfo.InvariantCulture,
+                        $"alias '{alias.Alias}': patch does not apply cleanly ({Redact(check?.StandardError ?? string.Empty, alias.ResolvedRoot)})")
+                });
                 continue;
             }
 
@@ -104,11 +107,17 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             }
         }
 
+        // Advisory, and read AFTER CanApply is decided by the loop above so it cannot be mistaken for a gate: what an
+        // operator is owed before clicking Apply is whether the files it will rewrite already hold work of their own.
+        var (dirtyTargets, dirtyUnavailable) = await ReadDirtyTargetsAsync(runner, plan.Aliases, cancellationToken);
+
         return new NodePatchApplyPreview
         {
             CanApply = rejections.Count == 0,
             Files = ApplyNumstat(plan.Files, numstat),
             Rejections = rejections,
+            DirtyTargets = dirtyTargets,
+            DirtyCheckUnavailable = dirtyUnavailable,
             ContainsBinary = plan.ContainsBinary,
             PatchSha256 = plan.PatchSha256
         };
@@ -135,7 +144,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     {
         // Re-run the full validation + dry-run check (TOCTOU defense; never blind-apply).
         var plan = await BuildPlanAsync(request, cancellationToken);
-        var rejections = new List<string>(plan.Rejections);
+        var rejections = new List<PatchApplyRejection>(plan.Rejections);
         var runner = new HostGitRunner(_options.PatchApplyTimeoutSeconds);
 
         if (plan.IsValid)
@@ -145,8 +154,11 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 var check = await CheckSubPatchAsync(runner, alias, cancellationToken);
                 if (check is null || check.ExitCode != 0)
                 {
-                    rejections.Add(string.Create(CultureInfo.InvariantCulture,
-                        $"alias '{alias.Alias}': patch does not apply cleanly ({Redact(check?.StandardError ?? string.Empty, alias.ResolvedRoot)})"));
+                    rejections.Add(new PatchApplyRejection
+                    {
+                        Reason = string.Create(CultureInfo.InvariantCulture,
+                            $"alias '{alias.Alias}': patch does not apply cleanly ({Redact(check?.StandardError ?? string.Empty, alias.ResolvedRoot)})")
+                    });
                 }
             }
         }
@@ -178,10 +190,13 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             {
                 // git is not transactional across files, so a cancelled apply can leave this alias half written.
                 // Logged on an uncancelled token, or the run log keeps no record that the apply ever started.
-                var cancelled = new List<string>(rejections)
+                var cancelled = new List<PatchApplyRejection>(rejections)
                 {
-                    string.Create(CultureInfo.InvariantCulture,
-                        $"alias '{alias.Alias}': the apply was cancelled while running; this folder may be partly written.")
+                    new()
+                    {
+                        Reason = string.Create(CultureInfo.InvariantCulture,
+                            $"alias '{alias.Alias}': the apply was cancelled while running; this folder may be partly written.")
+                    }
                 };
                 await LogRejectionAsync(request.RunId, cancelled, CancellationToken.None);
                 throw;
@@ -193,8 +208,11 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 // A clean --check passed for every alias above, so a non-zero apply here is a rare race. Report the
                 // aliases that did land as partially applied rather than silently dropping the failure.
                 var partial = appliedAliases > 0;
-                rejections.Add(string.Create(CultureInfo.InvariantCulture,
-                    $"alias '{alias.Alias}': apply failed after a clean check ({Redact(apply?.StandardError ?? string.Empty, alias.ResolvedRoot)})"));
+                rejections.Add(new PatchApplyRejection
+                {
+                    Reason = string.Create(CultureInfo.InvariantCulture,
+                        $"alias '{alias.Alias}': apply failed after a clean check ({Redact(apply?.StandardError ?? string.Empty, alias.ResolvedRoot)})")
+                });
                 await LogRejectionAsync(request.RunId, rejections, cancellationToken);
                 return new NodePatchApplyResult
                 {
@@ -256,8 +274,10 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
             var added = int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var a) ? a : 0;
             var removed = int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r) ? r : 0;
+            // Keyed on the DISPLAY rendering, because that is the shape PatchApplyFileEntry.RelativePath carries:
+            // a name holding a bidi or zero-width character would otherwise miss its own line counts.
             var relative = parts[2].Trim();
-            numstat[string.Create(CultureInfo.InvariantCulture, $"{alias}/{relative}")] = new LineStat(added, removed);
+            numstat[Describe(alias, relative)] = new LineStat(added, removed);
         }
     }
 
@@ -267,7 +287,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         return files
                .Select(file =>
                {
-                   var key = string.Create(CultureInfo.InvariantCulture, $"{file.Alias}/{file.RelativePath}");
+                   var key = Describe(file.Alias, file.RelativePath);
                    return numstat.TryGetValue(key, out var stats)
                        ? file with
                        {
@@ -400,7 +420,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             };
         }
 
-        var rejections = new List<string>();
+        var rejections = new List<PatchApplyRejection>();
         var containsBinary = false;
         var parsed = new List<ParsedBlock>();
         foreach (var block in blocks)
@@ -423,7 +443,14 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         // Binary reject by default — reject the whole apply when a binary block is present and the option is off.
         if (containsBinary && !_options.AllowBinaryPatchApply)
         {
-            rejections.Add("the patch contains a binary change, which is not allowed.");
+            // One per binary block rather than one for the patch, so the reason names the file it is about. The
+            // sentence is unchanged: a binary block is still what refuses the whole apply.
+            rejections.AddRange(parsed.Where(block => block.IsBinary)
+                                      .Select(block => new PatchApplyRejection
+                                      {
+                                          Reason = "the patch contains a binary change, which is not allowed.",
+                                          Path = DescribeFile(block)
+                                      }));
         }
 
         if (rejections.Count != 0)
@@ -467,7 +494,24 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         };
     }
 
-    private async Task<AliasPlan?> BuildAliasPlanAsync(string alias, IReadOnlyList<ParsedBlock> blocks, List<string> rejections, CancellationToken cancellationToken)
+    /// <summary>
+    ///     The block's own file entry as <c>&lt;alias&gt;/&lt;rel&gt;</c>, or null for a block that describes no single
+    ///     file. A binary block carries no unified-diff body lines, so its name comes from the target it collected.
+    /// </summary>
+    private static string? DescribeFile(ParsedBlock block)
+    {
+        if (block.Files.Count == 1)
+        {
+            return Describe(block.Files[0].Alias, block.Files[0].RelativePath);
+        }
+
+        return block.TargetRelativePaths.Count == 1 ? Describe(block.Alias, block.TargetRelativePaths[0]) : null;
+    }
+
+    private async Task<AliasPlan?> BuildAliasPlanAsync(string alias,
+        IReadOnlyList<ParsedBlock> blocks,
+        List<PatchApplyRejection> rejections,
+        CancellationToken cancellationToken)
     {
         // Map alias -> id -> trusted host path. Unknown/unresolvable alias rejects (fail closed).
         ResolvedSelectedFolder resolved;
@@ -477,7 +521,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             var reference = references.FirstOrDefault(candidate => string.Equals(candidate.Alias, alias, StringComparison.Ordinal));
             if (reference is null)
             {
-                rejections.Add(string.Create(CultureInfo.InvariantCulture, $"alias '{alias}': not a registered selected folder."));
+                rejections.Add(AliasRejection(alias, "not a registered selected folder."));
                 return null;
             }
 
@@ -485,14 +529,14 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         }
         catch (SelectedFolderValidationException)
         {
-            rejections.Add(string.Create(CultureInfo.InvariantCulture, $"alias '{alias}': not a registered selected folder."));
+            rejections.Add(AliasRejection(alias, "not a registered selected folder."));
             return null;
         }
 
         var resolvedRoot = HostPathSafety.TryResolveTrustedRoot(resolved.HostPath);
         if (resolvedRoot is null)
         {
-            rejections.Add(string.Create(CultureInfo.InvariantCulture, $"alias '{alias}': its host root could not be resolved."));
+            rejections.Add(AliasRejection(alias, "its host root could not be resolved."));
             return null;
         }
 
@@ -505,13 +549,13 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 var candidate = Path.GetFullPath(Path.Combine(resolvedRoot, relativePath));
                 if (!HostPathSafety.IsPathWithinRoot(resolvedRoot, candidate))
                 {
-                    rejections.Add(string.Create(CultureInfo.InvariantCulture, $"alias '{alias}': a target path escapes the folder root."));
+                    rejections.Add(AliasRejection(alias, "a target path escapes the folder root.", relativePath));
                     return null;
                 }
 
                 if (EscapesViaReparsePoint(resolvedRoot, candidate))
                 {
-                    rejections.Add(string.Create(CultureInfo.InvariantCulture, $"alias '{alias}': a target path traverses a symlink that escapes the folder root."));
+                    rejections.Add(AliasRejection(alias, "a target path traverses a symlink that escapes the folder root.", relativePath));
                     return null;
                 }
             }
@@ -519,7 +563,28 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
         var subPatch = string.Concat(blocks.Select(block => block.Text));
         var files = blocks.SelectMany(block => block.Files).ToArray();
-        return new AliasPlan { Alias = alias, ResolvedRoot = resolvedRoot, SubPatch = subPatch, Files = files };
+        var targets = blocks.SelectMany(block => block.TargetRelativePaths).Distinct(StringComparer.Ordinal).ToArray();
+        return new AliasPlan
+        {
+            Alias = alias,
+            ResolvedRoot = resolvedRoot,
+            SubPatch = subPatch,
+            Files = files,
+            TargetRelativePaths = targets
+        };
+    }
+
+    /// <summary>
+    ///     An alias-scoped rejection. The alias rides in the prose, as it always has; the optional relative path is
+    ///     what turns it into a named entry.
+    /// </summary>
+    private static PatchApplyRejection AliasRejection(string alias, string reason, string? relativePath = null)
+    {
+        return new PatchApplyRejection
+        {
+            Reason = string.Create(CultureInfo.InvariantCulture, $"alias '{alias}': {reason}"),
+            Path = relativePath is null ? null : Describe(alias, relativePath)
+        };
     }
 
     private static bool EscapesViaReparsePoint(string resolvedRoot, string candidate)
@@ -621,6 +686,9 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         public required string SubPatch { get; init; }
 
         public required IReadOnlyList<PatchApplyFileEntry> Files { get; init; }
+
+        /// <summary>Every folder-relative path the alias's blocks write or read, as the within-root guard collected them.</summary>
+        public required IReadOnlyList<string> TargetRelativePaths { get; init; }
     }
 
     private sealed record ApplyPlan
@@ -631,7 +699,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
         public IReadOnlyList<PatchApplyFileEntry> Files { get; init; } = [];
 
-        public IReadOnlyList<string> Rejections { get; init; } = [];
+        public IReadOnlyList<PatchApplyRejection> Rejections { get; init; } = [];
 
         public bool ContainsBinary { get; init; }
 
@@ -644,7 +712,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return new ApplyPlan
             {
                 IsValid = false,
-                Rejections = [reason]
+                Rejections = [new PatchApplyRejection { Reason = reason }]
             };
         }
 
@@ -654,12 +722,12 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return new ApplyPlan
             {
                 IsValid = false,
-                Rejections = [reason],
+                Rejections = [new PatchApplyRejection { Reason = reason }],
                 PatchMissing = true
             };
         }
 
-        public static ApplyPlan WithRejections(IReadOnlyList<string> rejections, bool containsBinary)
+        public static ApplyPlan WithRejections(IReadOnlyList<PatchApplyRejection> rejections, bool containsBinary)
         {
             return new ApplyPlan
             {

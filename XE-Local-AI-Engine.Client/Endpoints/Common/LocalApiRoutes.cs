@@ -990,6 +990,16 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Read-only AgentHome run history. Runs live only as directories on disk, so this family is a bounded,
+    ///     server-paged scan of them rather than a query over rows.
+    /// </summary>
+    public static class AgentHomeRuns
+    {
+        /// <summary>Newest-first page of run summaries (GET, limit/offset), with the unpaged total.</summary>
+        public const string List = "agent-home/runs";
+    }
+
+    /// <summary>
     ///     Operator review-and-land over an AgentHome changes.patch. Both POST: the preview runs git apply --check,
     ///     a command, not a read. Off every model-facing surface, so only an authenticated operator on loopback
     ///     reaches INodePatchApplyService.

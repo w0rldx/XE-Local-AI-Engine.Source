@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -67,7 +68,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-apply"
         });
 
-        AssertEx.True(result.Applied, $"a clean patch applies. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"a clean patch applies. rejections: {Describe(result.Rejections)}");
         AssertEx.Empty(result.Rejections);
         AssertEx.Equal("line1\nline2\nline3\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")));
         AssertEx.False(File.Exists(Path.Combine(hostRoot, "old", "Gone.cs")), "the deleted file is removed on the host");
@@ -90,7 +91,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-preview"
         });
 
-        AssertEx.True(preview.CanApply, $"the patch checks clean. rejections: {string.Join(separator: ';', preview.Rejections)}");
+        AssertEx.True(preview.CanApply, $"the patch checks clean. rejections: {Describe(preview.Rejections)}");
         AssertEx.Equal(before, await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")), "preview must not mutate the host");
         var entry = preview.Files.Single(file => file.RelativePath == "src/App.cs");
         AssertEx.Equal(expected: 1, entry.Added);
@@ -146,7 +147,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-root"
         });
 
-        AssertEx.True(result.Applied, $"rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"rejections: {Describe(result.Rejections)}");
         AssertEx.Equal(siblingSnapshot, Directory.GetFileSystemEntries(sibling).Length, "the unrelated sibling dir is untouched");
     }
 
@@ -167,7 +168,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         });
 
         AssertEx.False(result.Applied);
-        AssertEx.Contains(result.Rejections, reason => reason.Contains("repo-99", StringComparison.Ordinal) && reason.Contains("not a registered", StringComparison.Ordinal));
+        AssertEx.Contains(result.Rejections, rejection => rejection.Reason.Contains("repo-99", StringComparison.Ordinal) && rejection.Reason.Contains("not a registered", StringComparison.Ordinal));
     }
 
     [Test]
@@ -190,7 +191,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         });
 
         AssertEx.False(preview.CanApply);
-        AssertEx.Contains(preview.Rejections, reason => reason.Contains("across selected folders", StringComparison.Ordinal));
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("across selected folders", StringComparison.Ordinal));
     }
 
     [Test]
@@ -211,7 +212,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-multi"
         });
 
-        AssertEx.True(result.Applied, $"rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"rejections: {Describe(result.Rejections)}");
         AssertEx.Equal("one\nupdated\n", await File.ReadAllTextAsync(Path.Combine(root01, "one.txt")));
         AssertEx.Equal("two\nupdated\n", await File.ReadAllTextAsync(Path.Combine(root02, "two.txt")));
         AssertEx.False(File.Exists(Path.Combine(root01, "two.txt")), "no cross-contamination between alias roots");
@@ -237,7 +238,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-binary"
         });
         AssertEx.True(preview.ContainsBinary, "the binary block is detected");
-        AssertEx.Contains(preview.Rejections, reason => reason.Contains("binary", StringComparison.Ordinal));
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("binary", StringComparison.Ordinal));
 
         // With the option on, the same patch is no longer rejected for the binary reason and applies.
         var allowed = NewHarness(true);
@@ -249,7 +250,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         {
             RunId = "run-binary"
         });
-        AssertEx.True(allowedResult.Applied, $"a binary patch applies when allowed. rejections: {string.Join(separator: ';', allowedResult.Rejections)}");
+        AssertEx.True(allowedResult.Applied, $"a binary patch applies when allowed. rejections: {Describe(allowedResult.Rejections)}");
     }
 
     [Test]
@@ -355,7 +356,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         {
             RunId = "run-log"
         });
-        AssertEx.True(result.Applied, $"rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"rejections: {Describe(result.Rejections)}");
 
         var eventsPath = Path.Combine(harness.AgentHomeRoot, "runs", "run-log", "logs", "events.jsonl");
         AssertEx.True(File.Exists(eventsPath), "the run events log exists");
@@ -383,7 +384,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         });
 
         AssertEx.False(preview.CanApply);
-        AssertEx.True(preview.Rejections.All(reason => !reason.Contains(hostRoot, StringComparison.Ordinal)),
+        AssertEx.True(preview.Rejections.All(rejection => !rejection.Reason.Contains(hostRoot, StringComparison.Ordinal)),
             "no rejection string may contain the host root path");
     }
 
@@ -448,7 +449,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         });
 
         AssertEx.False(result.Applied, "a symlink that escapes the root is rejected");
-        AssertEx.Contains(result.Rejections, reason => reason.Contains("symlink", StringComparison.Ordinal));
+        AssertEx.Contains(result.Rejections, rejection => rejection.Reason.Contains("symlink", StringComparison.Ordinal));
         AssertEx.False(File.Exists(Path.Combine(outside, "target.txt")), "nothing is written outside via symlink");
     }
 
@@ -527,7 +528,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         });
 
         AssertEx.False(preview.CanApply, "a patch exceeding MaxPatchBytes is rejected");
-        AssertEx.Contains(preview.Rejections, reason => reason.Contains("maximum allowed size", StringComparison.Ordinal));
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("maximum allowed size", StringComparison.Ordinal));
     }
 
     [Test]
@@ -548,7 +549,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-dirb"
         });
 
-        AssertEx.True(result.Applied, $"a file under 'dir b/' must not be falsely rejected. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"a file under 'dir b/' must not be falsely rejected. rejections: {Describe(result.Rejections)}");
         AssertEx.Equal("old\nnew\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "dir b", "file.cs")));
     }
 
@@ -601,11 +602,11 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-modeonly-clean"
         });
 
-        AssertEx.False(preview.Rejections.Any(reason =>
-                reason.Contains("traversal", StringComparison.OrdinalIgnoreCase)
-                || reason.Contains("outside its folder", StringComparison.OrdinalIgnoreCase)
-                || reason.Contains("no alias", StringComparison.OrdinalIgnoreCase)
-                || reason.Contains("unparseable", StringComparison.OrdinalIgnoreCase)),
+        AssertEx.False(preview.Rejections.Any(rejection =>
+                rejection.Reason.Contains("traversal", StringComparison.OrdinalIgnoreCase)
+                || rejection.Reason.Contains("outside its folder", StringComparison.OrdinalIgnoreCase)
+                || rejection.Reason.Contains("no alias", StringComparison.OrdinalIgnoreCase)
+                || rejection.Reason.Contains("unparseable", StringComparison.OrdinalIgnoreCase)),
             "a clean mode-only block must not be rejected for path-guard reasons");
     }
 
@@ -666,7 +667,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             {
                 RunId = "run-tempmode"
             });
-            AssertEx.True(result.Applied, $"rejections: {string.Join(separator: ';', result.Rejections)}");
+            AssertEx.True(result.Applied, $"rejections: {Describe(result.Rejections)}");
         }
 
         (string Path, UnixFileMode Mode)[] captured;
@@ -700,7 +701,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         {
             RunId = "run-bound"
         });
-        AssertEx.True(preview.CanApply, $"rejections: {string.Join(separator: ';', preview.Rejections)}");
+        AssertEx.True(preview.CanApply, $"rejections: {Describe(preview.Rejections)}");
         AssertEx.NotNull(preview.PatchSha256, "a preview that read a patch reports its hash");
         AssertEx.Equal(expected: 64, preview.PatchSha256!.Length, "SHA-256 renders as 64 lowercase hex characters");
 
@@ -710,7 +711,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             ExpectedPatchSha256 = preview.PatchSha256
         });
 
-        AssertEx.True(result.Applied, $"the hash the preview reported is the hash the apply accepts. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"the hash the preview reported is the hash the apply accepts. rejections: {Describe(result.Rejections)}");
         AssertEx.Equal("alpha\nbravo\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")));
     }
 
@@ -732,7 +733,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         {
             RunId = "run-swap"
         });
-        AssertEx.True(preview.CanApply, $"rejections: {string.Join(separator: ';', preview.Rejections)}");
+        AssertEx.True(preview.CanApply, $"rejections: {Describe(preview.Rejections)}");
 
         // The swapped-in patch targets the SAME pre-image, so it passes every check the reviewed one passed.
         var swapped = await GenerateGPatchAsync("repo-01", NewTempDir(), ("src/App.cs", "alpha\n", "alpha\nsomething else entirely\n"));
@@ -746,7 +747,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         });
 
         AssertEx.False(result.Applied, "a patch that changed since the preview is refused");
-        AssertEx.Contains(result.Rejections, reason => reason.Contains("changed since it was previewed", StringComparison.Ordinal));
+        AssertEx.Contains(result.Rejections, rejection => rejection.Reason.Contains("changed since it was previewed", StringComparison.Ordinal));
         AssertEx.Equal(before, await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")), "the host is untouched by a refused apply");
 
         // And the swapped patch is not refused on its own terms — the refusal above is the BINDING, not a second
@@ -791,7 +792,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         });
 
         AssertEx.False(preview.CanApply, $"a {position} path under .git is rejected");
-        AssertEx.Contains(preview.Rejections, reason => reason.Contains("git directory", StringComparison.Ordinal));
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("git directory", StringComparison.Ordinal));
         AssertEx.False(result.Applied);
         AssertEx.False(Directory.Exists(gitDirectory), "no .git directory is created on the host");
         AssertEx.Equal("safe\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "safe.txt")), "the block's other side is untouched too");
@@ -825,8 +826,8 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         });
 
         AssertEx.False(preview.CanApply, "a quoted path is refused rather than parsed past");
-        AssertEx.Contains(preview.Rejections, reason => reason.Contains("quoted path", StringComparison.Ordinal));
-        AssertEx.True(preview.Rejections.All(reason => !reason.Contains(hostRoot, StringComparison.Ordinal)),
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("quoted path", StringComparison.Ordinal));
+        AssertEx.True(preview.Rejections.All(rejection => !rejection.Reason.Contains(hostRoot, StringComparison.Ordinal)),
             "the rejection carries no host path");
     }
 
@@ -860,7 +861,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         });
 
         AssertEx.False(preview.CanApply, $"a {shape} submodule reference is refused");
-        AssertEx.Contains(preview.Rejections, reason => reason.Contains("submodule", StringComparison.Ordinal));
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("submodule", StringComparison.Ordinal));
         AssertEx.False(result.Applied);
         AssertEx.False(Directory.Exists(Path.Combine(hostRoot, "vendor")), "no empty submodule directory is created on the host");
     }
@@ -897,8 +898,8 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         });
 
         AssertEx.False(preview.CanApply, $"a {shape} symbolic link is refused");
-        AssertEx.Contains(preview.Rejections, reason => reason.Contains("symbolic link", StringComparison.Ordinal));
-        AssertEx.True(preview.Rejections.All(reason => !reason.Contains(hostRoot, StringComparison.Ordinal)),
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("symbolic link", StringComparison.Ordinal));
+        AssertEx.True(preview.Rejections.All(rejection => !rejection.Reason.Contains(hostRoot, StringComparison.Ordinal)),
             "the rejection carries no host path");
         AssertEx.False(result.Applied);
         AssertEx.False(Path.Exists(Path.Combine(hostRoot, "evil")), "no link is created on the host");
@@ -926,7 +927,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-lookalike"
         });
 
-        AssertEx.True(result.Applied, $"a file that merely describes a mode line applies. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"a file that merely describes a mode line applies. rejections: {Describe(result.Rejections)}");
         AssertEx.Equal(Body, await File.ReadAllTextAsync(Path.Combine(hostRoot, "docs", "patch-format.md")));
     }
 
@@ -951,7 +952,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-dotgit-files"
         });
 
-        AssertEx.True(result.Applied, $"a .gitattributes / .gitignore change is ordinary. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"a .gitattributes / .gitignore change is ordinary. rejections: {Describe(result.Rejections)}");
         AssertEx.Contains(await File.ReadAllTextAsync(Path.Combine(hostRoot, ".gitattributes")), "*.bin binary");
     }
 
@@ -976,7 +977,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-norepo"
         });
 
-        AssertEx.True(result.Applied, $"a non-repository folder is a valid apply target. rejections: {string.Join(separator: ';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"a non-repository folder is a valid apply target. rejections: {Describe(result.Rejections)}");
         AssertEx.Equal("alpha\nbravo\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")));
     }
 
@@ -1022,10 +1023,587 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         AssertEx.Equal(expected: 1, harness.Resolver.MaxConcurrent,
             "two applies were inside the resolver at once, so the node-wide apply gate did not hold them apart.");
         AssertEx.Equal(expected: 2, harness.Resolver.EnteredCount, "both applies must have run; a serialized pair is not a dropped one.");
-        AssertEx.True(results.All(result => result.Applied), $"both applies land. rejections: {string.Join(separator: ';', results.SelectMany(result => result.Rejections))}");
+        AssertEx.True(results.All(result => result.Applied), $"both applies land. rejections: {Describe([.. results.SelectMany(result => result.Rejections)])}");
         AssertEx.Equal("a\nchanged\n", await File.ReadAllTextAsync(Path.Combine(hostRootA, "a.txt")));
         AssertEx.Equal("b\nchanged\n", await File.ReadAllTextAsync(Path.Combine(hostRootB, "b.txt")));
     }
+
+    /// <summary>
+    ///     The warning an operator is owed before approving: the patch applies, but these targets already carry work
+    ///     of their own. It must never gate the apply — <c>git apply --check</c> stays the only thing that does.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WhenTargetsAlreadyCarryLocalChanges_WarnsWithoutBlocking()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        // The patch edits the TOP of a long file; the host's own edit is at the bottom, far outside the hunk's
+        // context, so the drift is real and the patch still applies — exactly the case a blocking check would ruin.
+        var before = string.Concat(Enumerable.Range(start: 1, count: 20).Select(line => $"l{line}\n"));
+        var after = before.Replace("l2\n", "l2-changed\n", StringComparison.Ordinal);
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", before, after), ("staged.txt", "s\n", "s-changed\n"));
+        await SeedHostAsync(hostRoot, ("unrelated.txt", "untouched\n"));
+        await InitHostRepositoryAsync(hostRoot);
+
+        await SeedHostAsync(hostRoot, ("src/App.cs", before.Replace("l19\n", "l19-local\n", StringComparison.Ordinal)));
+        await SeedHostAsync(hostRoot, ("staged.txt", "staged locally\n"));
+        await GitOkAsync(hostRoot, "add", "staged.txt");
+
+        // Back to the committed bytes in the WORK TREE, so the index alone differs and the patch still applies.
+        await SeedHostAsync(hostRoot, ("staged.txt", "s\n"), ("unrelated.txt", "locally edited\n"));
+        await WritePatchAsync(harness, "run-dirty", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-dirty"
+        });
+
+        AssertEx.True(preview.CanApply, $"a dirty target is a warning, never a refusal. rejections: {Describe(preview.Rejections)}");
+        AssertEx.False(preview.DirtyCheckUnavailable, "the host state was readable, so nothing is unknown");
+        AssertEx.Contains(preview.DirtyTargets, entry => entry is { Path: "repo-01/src/App.cs", State: "modified" });
+        AssertEx.Contains(preview.DirtyTargets, entry => entry is { Path: "repo-01/staged.txt", State: "staged" });
+        AssertEx.False(preview.DirtyTargets.Any(entry => entry.Path.Contains("unrelated", StringComparison.Ordinal)),
+            "a dirty file the patch does not touch is none of this warning's business");
+        AssertEx.True(preview.DirtyTargets.All(entry => !entry.Path.Contains(hostRoot, StringComparison.Ordinal)),
+            "the warning carries no host path");
+    }
+
+    /// <summary>
+    ///     An untracked file already sitting where the patch would create one. <c>git apply --check</c> refuses that
+    ///     on its own; the warning is what tells the operator the refusal is about a file THEY left there.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WhenThePatchAddsAPathTheHostAlreadyHolds_WarnsUntracked()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        await SeedHostAsync(hostRoot, ("keep.txt", "keep\n"));
+        await InitHostRepositoryAsync(hostRoot);
+
+        var throwaway = NewTempDir();
+        var patch = await GenerateAddPatchAsync("repo-01", throwaway, ("notes/new.txt", "from the run\n"));
+        await SeedHostAsync(hostRoot, ("notes/new.txt", "mine, written by hand\n"));
+        await WritePatchAsync(harness, "run-untracked", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-untracked"
+        });
+
+        AssertEx.Contains(preview.DirtyTargets, entry => entry is { Path: "repo-01/notes/new.txt", State: "untracked" });
+        AssertEx.False(preview.DirtyCheckUnavailable);
+    }
+
+    /// <summary>
+    ///     A selected folder need not be a repository, and most are not. "No history to compare against" is silence,
+    ///     not a warning and not a failure — a banner on every non-repository folder would be a false alarm.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WhenTheHostFolderIsNoWorkTree_WarnsAboutNothingAndReportsNothingUnknown()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        AssertEx.False(Directory.Exists(Path.Combine(hostRoot, ".git")), "the host folder must not be a repository for this test to prove anything");
+        await WritePatchAsync(harness, "run-norepo-dirty", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-norepo-dirty"
+        });
+
+        AssertEx.True(preview.CanApply, $"rejections: {Describe(preview.Rejections)}");
+        AssertEx.Empty(preview.DirtyTargets);
+        AssertEx.False(preview.DirtyCheckUnavailable, "no repository is not the same as could-not-read");
+    }
+
+    /// <summary>
+    ///     A selected folder that is a SUBDIRECTORY of a repository: git reports status paths from the repository
+    ///     root, so the folder-relative name only comes out right if the repository prefix is stripped.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WhenTheFolderSitsInsideARepository_NamesTargetsFolderRelative()
+    {
+        var harness = NewHarness();
+        var repositoryRoot = NewTempDir();
+        var hostRoot = Path.Combine(repositoryRoot, "packages", "app");
+        Directory.CreateDirectory(hostRoot);
+        harness.Resolver.Add(Guid.NewGuid(), "repo-01", hostRoot);
+
+        var before = string.Concat(Enumerable.Range(start: 1, count: 20).Select(line => $"l{line}\n"));
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", before, before.Replace("l2\n", "l2-changed\n", StringComparison.Ordinal)));
+        await InitHostRepositoryAsync(repositoryRoot);
+        await SeedHostAsync(hostRoot, ("src/App.cs", before.Replace("l19\n", "l19-local\n", StringComparison.Ordinal)));
+        await WritePatchAsync(harness, "run-nested", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-nested"
+        });
+
+        AssertEx.True(preview.CanApply, $"rejections: {Describe(preview.Rejections)}");
+        AssertEx.Contains(preview.DirtyTargets, entry => entry is { Path: "repo-01/src/App.cs", State: "modified" });
+    }
+
+    /// <summary>
+    ///     The warning is advisory, so a git that cannot answer must not cost the operator their preview. It says the
+    ///     state is unknown instead of implying "clean".
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WhenTheHostStateCannotBeRead_StillPreviewsAndSaysTheStateIsUnknown()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await InitHostRepositoryAsync(hostRoot);
+
+        // An index git cannot map: `rev-parse` still reports a work tree, so this is a FAILED read rather than the
+        // no-repository case, which is the distinction the two fields exist to make.
+        var indexPath = Path.Combine(hostRoot, ".git", "index");
+        File.Delete(indexPath);
+        Directory.CreateDirectory(indexPath);
+        await WritePatchAsync(harness, "run-status-broken", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-status-broken"
+        });
+
+        AssertEx.True(preview.CanApply, $"a failed status read must never refuse a patch. rejections: {Describe(preview.Rejections)}");
+        AssertEx.True(preview.DirtyCheckUnavailable, "the state could not be read, and the operator is told so");
+        AssertEx.Empty(preview.DirtyTargets);
+    }
+
+    /// <summary>
+    ///     A preview is a read of the operator's repository, including of its <c>.git</c>: <c>status</c> refreshes
+    ///     and rewrites the index unless it is told not to.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_LeavesTheHostGitDirectoryByteIdentical()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var before = string.Concat(Enumerable.Range(start: 1, count: 20).Select(line => $"l{line}\n"));
+        var patch = await GenerateGPatchAsync("repo-01",
+            hostRoot,
+            ("src/App.cs", before, before.Replace("l2\n", "l2-changed\n", StringComparison.Ordinal)),
+            ("docs/Notes.md", "notes\n", "notes\nmore\n"));
+        await InitHostRepositoryAsync(hostRoot);
+        await SeedHostAsync(hostRoot, ("src/App.cs", before.Replace("l19\n", "l19-local\n", StringComparison.Ordinal)));
+
+        // A PATCH TARGET whose content still matches its commit but whose cached stat does not: the entry `status`
+        // refreshes by rewriting the index. Git refreshes only what the pathspec names, so it has to be a target.
+        var notes = Path.Combine(hostRoot, "docs", "Notes.md");
+        File.SetLastWriteTimeUtc(notes, File.GetLastWriteTimeUtc(notes).AddSeconds(value: 50));
+        await WritePatchAsync(harness, "run-nowrite", patch);
+
+        var gitDirectory = Path.Combine(hostRoot, ".git");
+        var fingerprintBefore = FingerprintDirectory(gitDirectory);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-nowrite"
+        });
+
+        AssertEx.NotEmpty(preview.DirtyTargets, "the status read must actually have happened, or this proves nothing.");
+        AssertEx.Equal(fingerprintBefore, FingerprintDirectory(gitDirectory), "a preview must not write into the operator's own .git");
+    }
+
+    /// <summary>
+    ///     A refusal names the entry it is about. The reason stays the same sentence; what is new is that the
+    ///     operator can tell WHICH of several changed files it refers to.
+    /// </summary>
+    [Test]
+    [Arguments("symlink", "repo-01/evil", "diff --git a/repo-01/evil b/repo-01/evil\nnew file mode 120000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/evil\n@@ -0,0 +1 @@\n+/etc/passwd\n")]
+    [Arguments("gitlink", "repo-01/vendor", "diff --git a/repo-01/vendor b/repo-01/vendor\nnew file mode 160000\nindex 0000000..1111111\n--- /dev/null\n+++ b/repo-01/vendor\n@@ -0,0 +1 @@\n+Subproject commit 1111111111111111111111111111111111111111\n")]
+    [Arguments("git directory", "repo-01/.git/config", "diff --git a/repo-01/.git/config b/repo-01/.git/config\nnew file mode 100644\n--- /dev/null\n+++ b/repo-01/.git/config\n@@ -0,0 +1 @@\n+[core]\n")]
+    [Arguments("traversal", "repo-01/../escape.txt", "diff --git a/repo-01/../escape.txt b/repo-01/../escape.txt\nnew file mode 100644\n--- /dev/null\n+++ b/repo-01/../escape.txt\n@@ -0,0 +1 @@\n+pwned\n")]
+    [Arguments("mode-only git directory", "repo-01/.git/hooks/pre-commit", "diff --git a/repo-01/.git/hooks/pre-commit b/repo-01/.git/hooks/pre-commit\nold mode 100644\nnew mode 100755\n")]
+    public async Task PreviewAsync_WhenAnEntryIsRefused_NamesItFolderRelative(string shape, string expectedPath, string patch)
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        await WritePatchAsync(harness, "run-named", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-named"
+        });
+
+        AssertEx.False(preview.CanApply, $"a {shape} entry is refused");
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Path == expectedPath);
+        AssertEx.True(preview.Rejections.All(rejection => rejection.Path?.Contains(hostRoot, StringComparison.Ordinal) != true),
+            "a named entry is folder-relative, never a host path");
+    }
+
+    /// <summary>
+    ///     The binary refusal names the file too, one refusal per binary entry, so a mixed patch says which of its
+    ///     files is the one that cannot be reviewed here.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WhenABinaryEntryIsRefused_NamesIt()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        await SeedHostBinaryAsync(hostRoot, "blob.bin", [0x00, 0x01, 0x02, 0x03]);
+
+        var patch = await GenerateBinaryPatchAsync("repo-01", "blob.bin", [0x00, 0x01, 0x02, 0x03], [0x00, 0x01, 0x02, 0x03, 0xFF, 0x10]);
+        await WritePatchAsync(harness, "run-binary-named", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-binary-named"
+        });
+
+        AssertEx.Contains(preview.Rejections,
+            rejection => rejection.Path == "repo-01/blob.bin" && rejection.Reason.Contains("binary", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     A C-quoted path stays UNNAMED: the parser deliberately never unescapes one, so there is no name it could
+    ///     show that it has any right to trust.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WithAQuotedEntryName_RefusesWithoutNamingIt()
+    {
+        var harness = NewHarness();
+        harness.AddFolder("repo-01");
+        const string Patch = "diff --git \"a/repo-01/od\\\"d.txt\" \"b/repo-01/od\\\"d.txt\"\nnew file mode 120000\n"
+                             + "index 0000000..1111111\n--- /dev/null\n+++ \"b/repo-01/od\\\"d.txt\"\n@@ -0,0 +1 @@\n+/etc/passwd\n";
+        await WritePatchAsync(harness, "run-unnamed", Patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-unnamed"
+        });
+
+        AssertEx.False(preview.CanApply, "a quoted path is refused");
+        AssertEx.True(preview.Rejections.All(rejection => rejection.Path is null),
+            $"a quoted path must not be echoed back: {Describe(preview.Rejections)}");
+    }
+
+    /// <summary>
+    ///     A name that can move, hide or reorder the text around it spoofs another name at the moment the operator
+    ///     decides to write to their own disk. Every such code point is shown as a visible escape instead.
+    /// </summary>
+    [Test]
+    [Arguments("right-to-left override", "\u202E", "repo-01/ev\\u{202E}il.txt")]
+    [Arguments("zero-width joiner", "\u200D", "repo-01/ev\\u{200D}il.txt")]
+    [Arguments("directional isolate", "\u2066", "repo-01/ev\\u{2066}il.txt")]
+    [Arguments("line separator", "\u2028", "repo-01/ev\\u{2028}il.txt")]
+    [Arguments("byte-order mark", "\uFEFF", "repo-01/ev\\u{FEFF}il.txt")]
+    [Arguments("bell", "\u0007", "repo-01/ev\\u{0007}il.txt")]
+    public async Task PreviewAsync_WithASpoofingEntryName_NamesItEscaped(string shape, string injected, string expected)
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        var name = "ev" + injected + "il.txt";
+        var patch = $"diff --git a/repo-01/{name} b/repo-01/{name}\nnew file mode 120000\nindex 0000000..1111111\n"
+                    + $"--- /dev/null\n+++ b/repo-01/{name}\n@@ -0,0 +1 @@\n+/etc/passwd\n";
+        await WritePatchAsync(harness, "run-spoof", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-spoof"
+        });
+
+        AssertEx.False(preview.CanApply, $"a {shape} name is still a symbolic link, and still refused");
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Path == expected);
+        AssertEx.True(preview.Rejections.All(rejection => rejection.Path?.Contains(injected, StringComparison.Ordinal) != true),
+            $"the raw {shape} must not survive into the response");
+        AssertEx.True(preview.Rejections.All(rejection => rejection.Path?.Contains(hostRoot, StringComparison.Ordinal) != true));
+    }
+
+    /// <summary>
+    ///     The same rule on the per-file table, which is the list the operator actually reads before approving. The
+    ///     patch here parses cleanly and only fails its <c>--check</c>, which is what leaves the file list populated.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WithASpoofingFileName_EscapesItInTheFileList()
+    {
+        var harness = NewHarness();
+        harness.AddFolder("repo-01");
+        const string Name = "no\u202Etes.txt";
+        const string Patch = "diff --git a/repo-01/no\u202Etes.txt b/repo-01/no\u202Etes.txt\n"
+                             + "index 0000001..0000002 100644\n--- a/repo-01/no\u202Etes.txt\n+++ b/repo-01/no\u202Etes.txt\n"
+                             + "@@ -1 +1 @@\n-old\n+new\n";
+        await WritePatchAsync(harness, "run-spoof-files", Patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-spoof-files"
+        });
+
+        AssertEx.Contains(preview.Files, file => file.RelativePath == "no\\u{202E}tes.txt");
+        AssertEx.True(preview.Files.All(file => !file.RelativePath.Contains(Name, StringComparison.Ordinal)),
+            "the raw name must not survive into the file list");
+    }
+
+    /// <summary>
+    ///     The control: this is a DISPLAY rule, not a character set. A name that is merely not ASCII is a perfectly
+    ///     ordinary name and must arrive unchanged, astral-plane code points included.
+    /// </summary>
+    [Test]
+    [Arguments("umlaut", "Größe.cs")]
+    [Arguments("CJK", "文档.md")]
+    [Arguments("astral plane", "notes-\U0001F600.md")]
+    public async Task PreviewAsync_WithALegitimateNonAsciiName_LeavesItUnchanged(string shape, string name)
+    {
+        var harness = NewHarness();
+        harness.AddFolder("repo-01");
+        var patch = $"diff --git a/repo-01/{name} b/repo-01/{name}\nindex 0000001..0000002 100644\n"
+                    + $"--- a/repo-01/{name}\n+++ b/repo-01/{name}\n@@ -1 +1 @@\n-old\n+new\n";
+        await WritePatchAsync(harness, "run-nonascii", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-nonascii"
+        });
+
+        AssertEx.Contains(preview.Files, file => file.RelativePath == name, $"a {shape} name must not be mangled");
+    }
+
+    /// <summary>
+    ///     The warning's own names go through the same rule: a spoofing name reaches it from the host's work tree
+    ///     rather than from the patch text, and must be just as unable to imitate another file.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WithASpoofingNameOnTheHost_EscapesItInTheWarning()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Skip.Test("A bidi override is not a legal character in a Windows file name, so the host file cannot be created.");
+        }
+
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var before = string.Concat(Enumerable.Range(start: 1, count: 20).Select(line => $"l{line}\n"));
+        var patch = await GenerateGPatchAsync("repo-01",
+            hostRoot,
+            ("no\u202Etes.txt", before, before.Replace("l2\n", "l2-changed\n", StringComparison.Ordinal)));
+        await InitHostRepositoryAsync(hostRoot);
+        await SeedHostAsync(hostRoot, ("no\u202Etes.txt", before.Replace("l19\n", "l19-local\n", StringComparison.Ordinal)));
+        await WritePatchAsync(harness, "run-spoof-dirty", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-spoof-dirty"
+        });
+
+        AssertEx.Contains(preview.DirtyTargets, entry => entry.Path == "repo-01/no\\u{202E}tes.txt");
+        AssertEx.True(preview.DirtyTargets.All(entry => !entry.Path.Contains('\u202E', StringComparison.Ordinal)),
+            "the raw override must not survive into the warning");
+    }
+
+    /// <summary>
+    ///     These paths are model-authored, so they are pathspecs only in the sense that git would read magic in
+    ///     them. A leading colon is the sharp case: unquoted it matches nothing, and the warning goes silent.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WithPathspecMagicInATargetName_StillReadsThatFilesOwnState()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Skip.Test("A colon is not a legal character in a Windows file name, so the host file cannot be created.");
+        }
+
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var before = string.Concat(Enumerable.Range(start: 1, count: 20).Select(line => $"l{line}\n"));
+        var patch = await GenerateGPatchAsync("repo-01",
+            hostRoot,
+            (":magic.txt", before, before.Replace("l2\n", "l2-changed\n", StringComparison.Ordinal)));
+        await InitHostRepositoryAsync(hostRoot);
+        await SeedHostAsync(hostRoot, (":magic.txt", before.Replace("l19\n", "l19-local\n", StringComparison.Ordinal)));
+        await WritePatchAsync(harness, "run-magic", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-magic"
+        });
+
+        AssertEx.False(preview.DirtyCheckUnavailable, "a colon in a file name is a file name, not a failure");
+        AssertEx.Contains(preview.DirtyTargets, entry => entry is { Path: "repo-01/:magic.txt", State: "modified" });
+    }
+
+    /// <summary>
+    ///     A repository git refuses to read is not the same answer as no repository. Silence would read as "clean"
+    ///     to the operator, so a folder that LOOKS like a checkout and cannot be read reports unknown instead.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WhenTheRepositoryItselfCannotBeRead_ReportsTheStateAsUnknown()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await InitHostRepositoryAsync(hostRoot);
+
+        // A .git that is still there but that git will not open: discovery fails, and git answers exactly as it
+        // does for a folder that never was a repository, so the directory on disk is what tells the two apart.
+        File.Delete(Path.Combine(hostRoot, ".git", "HEAD"));
+        await WritePatchAsync(harness, "run-broken-repo", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-broken-repo"
+        });
+
+        AssertEx.True(preview.CanApply, $"an unreadable repository must not refuse a patch. rejections: {Describe(preview.Rejections)}");
+        AssertEx.True(preview.DirtyCheckUnavailable, "a repository git cannot read is unknown, never clean");
+        AssertEx.Empty(preview.DirtyTargets);
+    }
+
+    /// <summary>
+    ///     A submodule the operator already had is not this preview's business: the warning is about files the patch
+    ///     will rewrite, and a submodule's own contents are not among them.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WithADirtySubmodule_ReportsNoEntryForIt()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var before = string.Concat(Enumerable.Range(start: 1, count: 20).Select(line => $"l{line}\n"));
+        var patch = await GenerateGPatchAsync("repo-01",
+            hostRoot,
+            ("src/App.cs", before, before.Replace("l2\n", "l2-changed\n", StringComparison.Ordinal)),
+            ("sub", "placeholder\n", "placeholder\nchanged\n"));
+
+        var inner = NewTempDir();
+        await WriteTextAsync(Path.Combine(inner, "i.txt"), "inner\n");
+        await InitHostRepositoryAsync(inner);
+
+        File.Delete(Path.Combine(hostRoot, "sub"));
+        await InitHostRepositoryAsync(hostRoot);
+        await GitOkAsync(hostRoot,
+            "-c", "protocol.file.allow=always",
+            "-c", "user.email=agent-home@localhost",
+            "-c", "user.name=AgentHome",
+            "submodule", "add", "--quiet", inner, "sub");
+        await GitOkAsync(hostRoot, "-c", "user.email=agent-home@localhost", "-c", "user.name=AgentHome", "commit", "-m", "add submodule");
+
+        // Dirty the submodule's own work tree, which is what makes the parent report `sub` as modified.
+        await WriteTextAsync(Path.Combine(hostRoot, "sub", "i.txt"), "inner changed\n");
+        await SeedHostAsync(hostRoot, ("src/App.cs", before.Replace("l19\n", "l19-local\n", StringComparison.Ordinal)));
+        await WritePatchAsync(harness, "run-submodule", patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-submodule"
+        });
+
+        AssertEx.False(preview.DirtyCheckUnavailable);
+        AssertEx.Contains(preview.DirtyTargets, entry => entry.Path == "repo-01/src/App.cs",
+            "the ordinary target must still be reported, or this test proves only that nothing was read at all");
+        AssertEx.False(preview.DirtyTargets.Any(entry => entry.Path == "repo-01/sub"),
+            "a dirty submodule must not surface as a dirty patch target");
+    }
+
+    /// <summary>Renders rejections for an assertion message, entry name included where the service supplied one.</summary>
+
+    /// <summary>
+    ///     A whole-patch refusal has no entry to name, and must not borrow one. The hash binding is the clearest
+    ///     example: nothing about a single file failed.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WhenTheRefusalIsAboutTheWholePatch_NamesNoEntry()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await WritePatchAsync(harness, "run-whole", patch);
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-whole",
+            ExpectedPatchSha256 = new string(c: 'a', count: 64)
+        });
+
+        AssertEx.False(result.Applied);
+        AssertEx.True(result.Rejections.All(rejection => rejection.Path is null), Describe(result.Rejections));
+    }
+
+    /// <summary>The refused entry reaches the run log folder-relative, beside its reason and with no host path.</summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WhenAnEntryIsRefused_LogsItsNameFolderRelative()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        Directory.CreateDirectory(Path.Combine(harness.AgentHomeRoot, "runs", "run-reject-log", "logs"));
+
+        const string Patch = "diff --git a/repo-01/evil b/repo-01/evil\nnew file mode 120000\nindex 0000000..1111111\n"
+                             + "--- /dev/null\n+++ b/repo-01/evil\n@@ -0,0 +1 @@\n+/etc/passwd\n";
+        await WritePatchAsync(harness, "run-reject-log", Patch);
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-reject-log"
+        });
+        AssertEx.False(result.Applied);
+
+        var events = await File.ReadAllTextAsync(Path.Combine(harness.AgentHomeRoot, "runs", "run-reject-log", "logs", "events.jsonl"));
+        AssertEx.Contains(events, "patch_apply_rejected");
+        AssertEx.Contains(events, "repo-01/evil");
+        AssertEx.False(events.Contains(hostRoot, StringComparison.Ordinal), "the log must not leak a host path");
+    }
+
+    /// <summary>A stable fingerprint of every file under a directory: relative path, length and content hash.</summary>
+    private static string FingerprintDirectory(string root)
+    {
+        var builder = new StringBuilder();
+        foreach (var path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+        {
+            builder.Append(Path.GetRelativePath(root, path).Replace('\\', '/'))
+                   .Append(':')
+                   .Append(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))))
+                   .Append('\n');
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>Turns a seeded host folder into a committed git work tree, so its later drift is measurable.</summary>
+    private static async Task InitHostRepositoryAsync(string hostRoot)
+    {
+        await GitOkAsync(hostRoot, "init");
+        await GitOkAsync(hostRoot, "config", "core.autocrlf", "false");
+        await GitOkAsync(hostRoot, "config", "core.filemode", "false");
+        await GitOkAsync(hostRoot, "add", "-A");
+        await GitOkAsync(hostRoot, "-c", "user.email=agent-home@localhost", "-c", "user.name=AgentHome", "commit", "-m", "host baseline", "--allow-empty");
+    }
+
+    /// <summary>
+    ///     A patch that ADDS files, generated against a baseline that never held them, so the host folder is not
+    ///     seeded with a pre-image the way <see cref="GenerateGPatchAsync" /> seeds one.
+    /// </summary>
+    private static async Task<string> GenerateAddPatchAsync(string alias, string baselineRoot, params (string Relative, string Content)[] files)
+    {
+        var selected = Path.Combine(baselineRoot, "selected");
+        Directory.CreateDirectory(selected);
+        await InitBaselineAsync(selected);
+
+        foreach (var (relative, content) in files)
+        {
+            await WriteTextAsync(Path.Combine(selected, alias, relative), content);
+        }
+
+        // Staged before the diff, the way the export stages before it diffs: `git diff HEAD` cannot see a file
+        // git has never been told about, so an unstaged add produces an EMPTY patch.
+        await GitOkAsync(selected, "add", "-A");
+        return await DiffAsync(selected);
+    }
+
+    /// <summary>Renders rejections for an assertion message, entry name included where the service supplied one.</summary>
+    private static string Describe(IReadOnlyList<PatchApplyRejection> rejections) =>
+        string.Join(separator: ';', rejections.Select(rejection => rejection.Path is null ? rejection.Reason : $"{rejection.Path}: {rejection.Reason}"));
 
     private TestHarness NewHarness(bool allowBinary = false)
     {
@@ -1137,6 +1715,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         await GitOkAsync(repoRoot, "init");
         await GitOkAsync(repoRoot, "config", "core.autocrlf", "false");
         await GitOkAsync(repoRoot, "config", "core.filemode", "false");
+
+        // The export runs every git call with core.quotePath=false, so a non-ASCII name reaches the patch as its
+        // own bytes. A fixture that let git C-quote it would generate a patch shape the export never produces.
+        await GitOkAsync(repoRoot, "config", "core.quotePath", "false");
         await GitOkAsync(repoRoot, "add", "-A");
         await GitOkAsync(repoRoot,
             "-c", "user.email=agent-home@localhost",

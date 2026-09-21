@@ -10,7 +10,13 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     Clears the base-logit cache. Refused while any fidelity work item is live: deleting a file a queued
 ///     measurement is on its way to reading would fail that measurement for a reason the operator never sees.
 /// </summary>
-public sealed class ClearBenchmarkFidelityCacheEndpoint : Endpoint<GetKldDiskEstimateRequest>
+/// <remarks>
+///     Takes the route-only request, never the estimate's: a request type whose members are not all route-bound,
+///     shared with an endpoint that binds them elsewhere, makes the generated OpenAPI body depend on which of the
+///     two the document generator reaches first. Pinned by
+///     <c>LocalOpenApiDocument_DeclaresARequestBodyOnlyWhereOneIsRead</c>.
+/// </remarks>
+public sealed class ClearBenchmarkFidelityCacheEndpoint : Endpoint<BenchmarkProjectRouteRequest>
 {
     private readonly BenchmarkKldBaseCache _cache;
     private readonly BenchmarkRecordService _records;
@@ -31,7 +37,7 @@ public sealed class ClearBenchmarkFidelityCacheEndpoint : Endpoint<GetKldDiskEst
                                       .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
-    public override async Task HandleAsync(GetKldDiskEstimateRequest req, CancellationToken ct)
+    public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
         if (await _records.GetProjectAsync(req.ProjectId, ct) is null)

@@ -25,6 +25,12 @@ public sealed class ApplyAgentHomePatchEndpoint : Endpoint<AgentHomePatchApplyRe
     /// </summary>
     private const string PartiallyAppliedErrorName = "partiallyApplied";
 
+    /// <summary>
+    ///     FastEndpoints' <c>ErrorOptions.GeneralErrorsField</c> default, which <c>AddError(message)</c> attaches a
+    ///     message-only failure to. Named here because the refusals are added directly, not through <c>AddError</c>.
+    /// </summary>
+    private const string GeneralErrorsName = "GeneralErrors";
+
     private readonly INodePatchApplyService _service;
 
     public ApplyAgentHomePatchEndpoint(INodePatchApplyService service)
@@ -61,11 +67,13 @@ public sealed class ApplyAgentHomePatchEndpoint : Endpoint<AgentHomePatchApplyRe
 
         if (!result.Applied)
         {
-            // The service's own strings, unedited: they are already redacted, and rewording them here would mean
-            // maintaining a second vocabulary for the same refusals.
-            foreach (var rejection in result.Rejections)
+            // The service's own redacted strings, unedited. One error per NAME — the refused entry, folder-relative —
+            // carrying that name's distinct reasons: ProblemDetails renders one error per name and drops the rest.
+            foreach (var group in result.Rejections.GroupBy(rejection => rejection.Path is { Length: > 0 } path ? path : GeneralErrorsName,
+                         StringComparer.Ordinal))
             {
-                AddError(rejection);
+                ValidationFailures.Add(new ValidationFailure(group.Key,
+                    string.Join(separator: ' ', group.Select(rejection => rejection.Reason).Distinct(StringComparer.Ordinal))));
             }
 
             if (result.PartiallyApplied)

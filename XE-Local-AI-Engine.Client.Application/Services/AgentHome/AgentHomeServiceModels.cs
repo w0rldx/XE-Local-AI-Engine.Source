@@ -69,6 +69,9 @@ internal sealed record AgentHomeRunRequest
 
     /// <summary>The validated <c>allowedActions</c> the run is permitted (enforced fully in AgentHome gateway).</summary>
     public required IReadOnlyList<string> AllowedActions { get; init; }
+
+    /// <summary>The ambient conversation id, carried so the run log can record what the run was started from.</summary>
+    public Guid? ConversationId { get; init; }
 }
 
 /// <summary>
@@ -185,11 +188,53 @@ internal sealed record AgentHomePatchExport
     /// <summary>The size in bytes of the captured patch (the would-be <c>changes.patch</c> content).</summary>
     public required long PatchBytes { get; init; }
 
+    /// <summary>Lines the patch adds, totalled over its text blocks. A binary block counts as a file, not as lines.</summary>
+    public int LinesAdded { get; init; }
+
+    /// <summary>Lines the patch removes, totalled over its text blocks. A binary block counts as a file, not as lines.</summary>
+    public int LinesRemoved { get; init; }
+
+    /// <summary>
+    ///     What the inner loop recorded writing that this patch does not carry, as counts per reason. All zero when
+    ///     every write is accounted for, which is the common case.
+    /// </summary>
+    public AgentHomeWrittenFileGap WrittenGap { get; init; } = AgentHomeWrittenFileGap.None;
+
     /// <summary>Run-relative path to <c>changes.patch</c>, or <see langword="null" /> when blocked or empty.</summary>
     public string? PatchRelativePath { get; init; }
 
     /// <summary>Run-relative path to <c>changed-files.json</c>, or <see langword="null" /> when there were no changes.</summary>
     public string? ChangedFilesRelativePath { get; init; }
+}
+
+/// <summary>
+///     The reconciliation between the paths the goal loop recorded writing and the paths the exported patch carries,
+///     counted by the reason the node could establish for each one.
+/// </summary>
+/// <remarks>
+///     Never a failure: a gap does not block the export or change what the operator may apply. Only
+///     <see cref="UnexplainedCount" /> reports a patch that is silently incomplete — the defect class a run once hit
+///     with nothing comparing the two halves of the ledger.
+/// </remarks>
+internal sealed record AgentHomeWrittenFileGap
+{
+    /// <summary>The empty gap: every written path is accounted for.</summary>
+    public static readonly AgentHomeWrittenFileGap None = new();
+
+    /// <summary>Written paths a <c>.gitignore</c> keeps out, exactly as they stayed out of the baseline.</summary>
+    public int IgnoredCount { get; init; }
+
+    /// <summary>Written paths that are no longer in the workspace: something deleted them after the write.</summary>
+    public int DeletedCount { get; init; }
+
+    /// <summary>Written paths whose content matches the baseline, so the patch has nothing to carry for them.</summary>
+    public int UnchangedCount { get; init; }
+
+    /// <summary>Written paths the node could not account for at all, including every path when classification failed.</summary>
+    public int UnexplainedCount { get; init; }
+
+    /// <summary>The whole gap.</summary>
+    public int Total => IgnoredCount + DeletedCount + UnchangedCount + UnexplainedCount;
 }
 
 /// <summary>

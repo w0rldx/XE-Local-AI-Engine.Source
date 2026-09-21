@@ -430,6 +430,76 @@ public sealed class AgentHomeToolGatewayTests
     }
 
     [Test]
+    public async Task ExecuteAsync_WhenThePatchCarriesLineTotals_RendersThemBesideTheFileCount()
+    {
+        var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
+            {
+                RunId = "run-lines",
+                Completed = true,
+                ExitCode = 0,
+                LogPath = "/tmp/agent-home/runs/run-lines/logs",
+                Patch = new AgentHomePatchExport
+                {
+                    ChangedFileCount = 3,
+                    Blocked = false,
+                    PatchBytes = 900,
+                    LinesAdded = 42,
+                    LinesRemoved = 7,
+                    PatchRelativePath = "runs/run-lines/patches/changes.patch",
+                    ChangedFilesRelativePath = "runs/run-lines/patches/changed-files.json"
+                },
+                SandboxProviderName = "process"
+            }),
+            GatewayOptions);
+
+        var result = await gateway.ExecuteAsync(ValidRequest);
+
+        AssertEx.Contains(result, "3 file(s) changed (+42/-7), 900 byte(s) exported", StringComparison.Ordinal,
+            "totals only, in the patch line the model already reads for size");
+        AssertEx.False(result.Contains("not part of this patch", StringComparison.Ordinal),
+            "a run whose writes all reached the patch gets no gap note at all");
+    }
+
+    /// <summary>
+    ///     The gap note is counts from a fixed template. It must render for a run whose diff was EMPTY too, which is
+    ///     the case where a missing write is most worth saying out loud.
+    /// </summary>
+    [Test]
+    public async Task ExecuteAsync_WhenTheRunWroteFilesThePatchDoesNotCarry_SaysSoInCountsOnly()
+    {
+        var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
+            {
+                RunId = "run-gap",
+                Completed = true,
+                ExitCode = 0,
+                LogPath = "/tmp/agent-home/runs/run-gap/logs",
+                Patch = new AgentHomePatchExport
+                {
+                    ChangedFileCount = 0,
+                    Blocked = false,
+                    PatchBytes = 0,
+                    WrittenGap = new AgentHomeWrittenFileGap
+                    {
+                        IgnoredCount = 2,
+                        DeletedCount = 1,
+                        UnchangedCount = 0,
+                        UnexplainedCount = 3
+                    }
+                },
+                SandboxProviderName = "process"
+            }),
+            GatewayOptions);
+
+        var result = await gateway.ExecuteAsync(ValidRequest);
+
+        AssertEx.Contains(result, "Patch: no file changes.", StringComparison.Ordinal);
+        AssertEx.Contains(result,
+            "NOTE: 6 file(s) the run wrote are not part of this patch (2 ignored, 1 deleted, 0 unchanged, 3 unexplained).",
+            StringComparison.Ordinal,
+            "the note is a fixed template of counts");
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenABudgetCutTheRunOff_SaysSo()
     {
         var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult

@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
+using System.Globalization;
 using System.Text;
 
 internal sealed partial class NodePatchApplyService
 {
-    // None of these carries a path, in keeping with every other rejection string here.
+    // The reasons stay path-free prose; the refused entry's own name rides beside them on PatchApplyRejection.Path,
+    // which is null whenever the block's path could not be reached safely.
     private const string GitDirectoryRejection = "a patch block targets a git directory.";
 
     private const string QuotedPathRejection = "a patch block has a quoted path, which is not supported.";
@@ -76,14 +78,14 @@ internal sealed partial class NodePatchApplyService
         // name. The index-line arm catches a same-mode pointer bump, which carries no `mode 160000` line at all.
         if (DeclaresMode(lines, GitlinkMode))
         {
-            return ParsedBlock.Rejected(GitlinkRejection);
+            return ParsedBlock.Rejected(GitlinkRejection, TryDescribeTarget(lines));
         }
 
         // A symlink block's one-line content IS the link target, so applying it creates a REAL link on the host
         // pointing wherever that names. Refused by name for the same reason as the gitlink; see SymlinkMode.
         if (DeclaresMode(lines, SymlinkMode))
         {
-            return ParsedBlock.Rejected(SymlinkRejection);
+            return ParsedBlock.Rejected(SymlinkRejection, TryDescribeTarget(lines));
         }
 
         // Every path git can act on comes from one of these body-line prefixes, with /dev/null skipped for new and
@@ -134,12 +136,12 @@ internal sealed partial class NodePatchApplyService
             var (headerAlias, headerRelative) = headerPath;
             if (ContainsTraversal(headerRelative))
             {
-                return ParsedBlock.Rejected("a patch block targets a path outside its folder.");
+                return ParsedBlock.Rejected("a patch block targets a path outside its folder.", Describe(headerAlias, headerRelative));
             }
 
             if (ContainsGitDirectory(headerRelative))
             {
-                return ParsedBlock.Rejected(GitDirectoryRejection);
+                return ParsedBlock.Rejected(GitDirectoryRejection, Describe(headerAlias, headerRelative));
             }
 
             return new ParsedBlock
@@ -181,12 +183,12 @@ internal sealed partial class NodePatchApplyService
 
             if (ContainsTraversal(relative))
             {
-                return ParsedBlock.Rejected("a patch block targets a path outside its folder.");
+                return ParsedBlock.Rejected("a patch block targets a path outside its folder.", Describe(alias, relative));
             }
 
             if (ContainsGitDirectory(relative))
             {
-                return ParsedBlock.Rejected(GitDirectoryRejection);
+                return ParsedBlock.Rejected(GitDirectoryRejection, Describe(alias, relative));
             }
 
             allAliasResults.Add(new BodyAliasPath { Prefix = prefix, Alias = alias, Relative = relative });
@@ -196,7 +198,7 @@ internal sealed partial class NodePatchApplyService
         var aliases = allAliasResults.Select(result => result.Alias).Distinct(StringComparer.Ordinal).ToArray();
         if (aliases.Length != 1)
         {
-            return ParsedBlock.Rejected("a patch block renames or copies across selected folders.");
+            return ParsedBlock.Rejected("a patch block renames or copies across selected folders.", TryDescribeTarget(lines));
         }
 
         var blockAlias = aliases[0];
@@ -209,7 +211,8 @@ internal sealed partial class NodePatchApplyService
             var headerBAlias = ExtractAliasFromHeader(lines[0]);
             if (headerBAlias is not null && !string.Equals(headerBAlias, blockAlias, StringComparison.Ordinal))
             {
-                return ParsedBlock.Rejected("the patch header b-path does not match the body destination path.");
+                return ParsedBlock.Rejected("the patch header b-path does not match the body destination path.",
+                    Describe(destBodyPath.Alias, destBodyPath.Relative));
             }
         }
 
@@ -231,12 +234,14 @@ internal sealed partial class NodePatchApplyService
             ? aRelative ?? targetPaths[0]
             : bRelative ?? targetPaths[0];
 
+        // The DISPLAY path only. The paths git acts on are TargetRelativePaths, which stay exactly as the patch
+        // wrote them: escaping here must never change which patches apply, only what the operator reads.
         var files = new List<PatchApplyFileEntry>
         {
             new()
             {
                 Alias = blockAlias,
-                RelativePath = displayRelative,
+                RelativePath = SafeDisplayPath(displayRelative),
                 ChangeType = changeType
             }
         };
@@ -249,6 +254,141 @@ internal sealed partial class NodePatchApplyService
             TargetRelativePaths = targetPaths,
             Files = files
         };
+    }
+
+    /// <summary>
+    ///     The folder-relative name to show beside a refusal, or <see langword="null" /> when the block has no path
+    ///     that is safe to echo.
+    /// </summary>
+    /// <remarks>
+    ///     Refused before the per-path guards run, so it repeats their entry conditions rather than trusting them: a
+    ///     C-quoted path is never unescaped, and a raw control character — which git would have quoted — is refused
+    ///     rather than carried into a log line or the dialog.
+    /// </remarks>
+    private static string? TryDescribeTarget(string[] lines)
+    {
+        var candidate = FirstBodyPathCandidate(lines);
+        if (candidate is null)
+        {
+            return TryParseHeaderAPath(lines[0]) is { } headerPath ? Describe(headerPath.Alias, headerPath.Relative) : null;
+        }
+
+        var normalized = candidate.Trim();
+        if (normalized.StartsWith('"'))
+        {
+            return null;
+        }
+
+        if (normalized.StartsWith("a/", StringComparison.Ordinal) || normalized.StartsWith("b/", StringComparison.Ordinal))
+        {
+            normalized = normalized[2..];
+        }
+
+        return SplitAlias(normalized) is { } split ? Describe(split.Alias, split.Relative) : null;
+    }
+
+    /// <summary>The block's destination path if it has one, else its source path. Both raw, still diff-prefixed.</summary>
+    private static string? FirstBodyPathCandidate(string[] lines)
+    {
+        string[] destinationPrefixes = ["+++ ", "rename to ", "copy to "];
+        string[] sourcePrefixes = ["--- ", "rename from ", "copy from "];
+        return FirstAfterAnyPrefix(lines, destinationPrefixes) ?? FirstAfterAnyPrefix(lines, sourcePrefixes);
+    }
+
+    private static string? FirstAfterAnyPrefix(string[] lines, string[] prefixes)
+    {
+        foreach (var line in lines)
+        {
+            foreach (var prefix in prefixes)
+            {
+                if (line.StartsWith(prefix, StringComparison.Ordinal) && line[prefix.Length..] is var rest && rest != "/dev/null")
+                {
+                    return rest;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Joins an already-split alias and relative into the displayable <c>&lt;alias&gt;/&lt;rel&gt;</c> form.</summary>
+    private static string Describe(string alias, string relative)
+    {
+        return SafeDisplayPath(string.Create(CultureInfo.InvariantCulture, $"{alias}/{relative}"));
+    }
+
+    /// <summary>
+    ///     Renders a model-authored path so that what the operator reads is what the patch names.
+    /// </summary>
+    /// <remarks>
+    ///     Every code point that can move, hide or reorder the text around it — Cc, Cf (bidi overrides and isolates,
+    ///     zero-width marks, the byte-order mark), Zl/Zp and any unpaired surrogate — becomes a visible
+    ///     <c>\u{XXXX}</c> escape, so a spoofed name cannot render as the name it imitates. Everything else, an
+    ///     umlaut or an ideograph included, passes through: a display rule, not a character set. It decides nothing
+    ///     about whether a patch applies, and the paths git acts on come from elsewhere.
+    /// </remarks>
+    private static string SafeDisplayPath(string path)
+    {
+        if (!path.Any(character => IsUnsafeToDisplay(character)))
+        {
+            return path;
+        }
+
+        var builder = new StringBuilder(path.Length);
+        var index = 0;
+        while (index < path.Length)
+        {
+            var current = path[index];
+            if (char.IsHighSurrogate(current) && index + 1 < path.Length && char.IsLowSurrogate(path[index + 1]))
+            {
+                // A well-formed pair stands for one code point, so the category that decides its fate is the RUNE's,
+                // not either half's — every surrogate reads as category Surrogate on its own.
+                var rune = new Rune(current, path[index + 1]);
+                if (IsUnsafeCategory(Rune.GetUnicodeCategory(rune)))
+                {
+                    AppendEscaped(builder, rune.Value);
+                }
+                else
+                {
+                    _ = builder.Append(current).Append(path[index + 1]);
+                }
+
+                index += 2;
+                continue;
+            }
+
+            if (IsUnsafeToDisplay(current))
+            {
+                AppendEscaped(builder, current);
+            }
+            else
+            {
+                _ = builder.Append(current);
+            }
+
+            index++;
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool IsUnsafeToDisplay(char character)
+    {
+        return IsUnsafeCategory(CharUnicodeInfo.GetUnicodeCategory(character));
+    }
+
+    private static bool IsUnsafeCategory(UnicodeCategory category)
+    {
+        return category is UnicodeCategory.Control
+            or UnicodeCategory.Format
+            or UnicodeCategory.LineSeparator
+            or UnicodeCategory.ParagraphSeparator
+            or UnicodeCategory.Surrogate;
+    }
+
+    private static void AppendEscaped(StringBuilder builder, int codePoint)
+    {
+        _ = builder.Append("\\u{").Append(codePoint.ToString("X4", CultureInfo.InvariantCulture)).Append('}');
     }
 
     /// <summary>
@@ -423,13 +563,17 @@ internal sealed partial class NodePatchApplyService
 
         public IReadOnlyList<PatchApplyFileEntry> Files { get; init; } = [];
 
-        public string? Rejection { get; init; }
+        public PatchApplyRejection? Rejection { get; init; }
 
-        public static ParsedBlock Rejected(string reason)
+        public static ParsedBlock Rejected(string reason, string? path = null)
         {
             return new ParsedBlock
             {
-                Rejection = reason
+                Rejection = new PatchApplyRejection
+                {
+                    Reason = reason,
+                    Path = path
+                }
             };
         }
     }

@@ -19,6 +19,16 @@ internal static class GitDiffCommandKeys
 
     public static string NameStatus => CommandKey(AgentHomeGit.WorkspaceArguments("diff", "--cached", "--no-textconv", "--no-ext-diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."));
 
+    public static string CheckIgnore => CommandKey(AgentHomeGit.WorkspaceArguments("check-ignore", "-z", "--stdin"));
+
+    public static string LsFiles(params string[] workspaceRelativePaths)
+    {
+        return CommandKey(AgentHomeGit.WorkspaceArguments([
+            "ls-files", "-z", "-t", "-v", "--cached", "--others", "--deleted", "--exclude-standard", "--",
+            .. workspaceRelativePaths.Select(static path => ":(literal)" + path)
+        ]));
+    }
+
     private static string CommandKey(IReadOnlyList<string> arguments)
     {
         return AgentHomeGit.Executable + " " + string.Join(" ", arguments);

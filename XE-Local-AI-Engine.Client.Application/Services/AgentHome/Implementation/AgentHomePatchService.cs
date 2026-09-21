@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -102,10 +103,15 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         }
 
         var changedFiles = ParseChangedFiles(statusResult.StandardOutput, request.ResolvedFolders);
+
+        // Reconcile BEFORE the zero-change return: a run that wrote files and produced an empty diff is the loudest
+        // form of the gap, and returning early would be exactly the silence this reconciliation exists to end.
+        var writtenGap = await ReconcileWrittenFilesAsync(handle, request, statusResult.StandardOutput, commandTimeout, cancellationToken);
+
         if (changedFiles.Count == 0)
         {
             // Baseline == workspace: nothing changed, so write neither artifact (no patches/ directory is created).
-            return EmptyExport();
+            return EmptyExport(writtenGap);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -118,6 +124,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
 
         var patchText = patchResult.StandardOutput;
         var patchBytes = Encoding.UTF8.GetByteCount(patchText);
+        var (linesAdded, linesRemoved) = CountChangedLines(patchText);
         var maxPatchBytes = await _runtimeSettings.GetAgentHomeMaxPatchBytesAsync(cancellationToken);
         if (patchBytes > maxPatchBytes)
         {
@@ -132,6 +139,9 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
                 ChangedFileCount = changedFiles.Count,
                 Blocked = true,
                 PatchBytes = patchBytes,
+                LinesAdded = linesAdded,
+                LinesRemoved = linesRemoved,
+                WrittenGap = writtenGap,
                 PatchRelativePath = null,
                 ChangedFilesRelativePath = changedFilesRelative
             };
@@ -149,9 +159,270 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             ChangedFileCount = changedFiles.Count,
             Blocked = false,
             PatchBytes = patchBytes,
+            LinesAdded = linesAdded,
+            LinesRemoved = linesRemoved,
+            WrittenGap = writtenGap,
             PatchRelativePath = RunRelativePath(request.RunId, "changes.patch"),
             ChangedFilesRelativePath = changedFilesRelative
         };
+    }
+
+    /// <summary>
+    ///     Totals the lines the patch adds and removes by walking the text it already captured, so no further git
+    ///     process runs.
+    /// </summary>
+    /// <remarks>
+    ///     Only lines inside a hunk are counted, which is what makes the walk safe: the <c>---</c>/<c>+++</c> file
+    ///     headers precede the first <c>@@</c>, a binary block never opens one at all, and a <c>\ No newline</c>
+    ///     marker is neither an addition nor a removal. A binary or pure-rename block therefore contributes nothing,
+    ///     matching git's own "not a line count" convention for them.
+    /// </remarks>
+    private static (int Added, int Removed) CountChangedLines(string patchText)
+    {
+        var added = 0;
+        var removed = 0;
+        var inHunk = false;
+
+        foreach (var line in patchText.AsSpan().EnumerateLines())
+        {
+            if (line.StartsWith("diff --git ", StringComparison.Ordinal))
+            {
+                inHunk = false;
+            }
+            else if (line.StartsWith("@@", StringComparison.Ordinal))
+            {
+                inHunk = true;
+            }
+            else if (inHunk && line.Length > 0 && line[0] == '+')
+            {
+                added++;
+            }
+            else if (inHunk && line.Length > 0 && line[0] == '-')
+            {
+                removed++;
+            }
+        }
+
+        return (added, removed);
+    }
+
+    /// <summary>
+    ///     Compares the paths the goal loop recorded writing with the paths the diff reports and classifies whatever
+    ///     is missing, so a write the patch does not carry is recorded rather than lost.
+    /// </summary>
+    /// <remarks>
+    ///     Never fails the export: an unclassifiable path counts as unexplained, which is the honest answer to "the
+    ///     node cannot say where this went". The two classification commands run only when there IS a gap, so a run
+    ///     whose writes all reached the patch costs no extra process.
+    /// </remarks>
+    private async Task<AgentHomeWrittenFileGap> ReconcileWrittenFilesAsync(SandboxHandle handle,
+        AgentHomePatchExportRequest request,
+        string nameStatusOutput,
+        TimeSpan commandTimeout,
+        CancellationToken cancellationToken)
+    {
+        if (request.WrittenFiles.Count == 0)
+        {
+            return AgentHomeWrittenFileGap.None;
+        }
+
+        var exported = ExportedPaths(nameStatusOutput);
+        var missing = request.WrittenFiles.Where(path => !exported.Contains(path)).ToList();
+        if (missing.Count == 0)
+        {
+            return AgentHomeWrittenFileGap.None;
+        }
+
+        var ignored = await ResolveIgnoredAsync(handle, request, missing, commandTimeout, cancellationToken);
+        var presence = await ResolvePresenceAsync(handle, request, missing, commandTimeout, cancellationToken);
+
+        var buckets = new Dictionary<string, List<string>>(StringComparer.Ordinal)
+        {
+            ["ignored"] = [],
+            ["deleted"] = [],
+            ["unchanged"] = [],
+            ["unexplained"] = []
+        };
+
+        foreach (var path in missing)
+        {
+            buckets[ClassifyMissing(path, ignored, presence)].Add(path);
+        }
+
+        var gap = new AgentHomeWrittenFileGap
+        {
+            IgnoredCount = buckets["ignored"].Count,
+            DeletedCount = buckets["deleted"].Count,
+            UnchangedCount = buckets["unchanged"].Count,
+            UnexplainedCount = buckets["unexplained"].Count
+        };
+
+        await AppendGapEventAsync(request, gap, buckets, cancellationToken);
+
+        if (gap.UnexplainedCount > 0)
+        {
+            // The run id, never the paths: those are workspace-authored and belong in the run's own log.
+            _logger.LogWarning("Patch export for run {RunId} could not account for {Count} file(s) the run wrote; the patch does not carry them.",
+                request.RunId,
+                gap.UnexplainedCount);
+        }
+
+        return gap;
+    }
+
+    /// <summary>
+    ///     Which of the four reasons explains a written path the diff does not name. A classification the node could
+    ///     not obtain leaves every path unexplained rather than guessing a benign reason for it.
+    /// </summary>
+    private static string ClassifyMissing(string path,
+        HashSet<string>? ignored,
+        IReadOnlyDictionary<string, char>? presence)
+    {
+        if (ignored is null || presence is null)
+        {
+            return "unexplained";
+        }
+
+        if (ignored.Contains(path))
+        {
+            return "ignored";
+        }
+
+        if (!presence.TryGetValue(path, out var tag))
+        {
+            // Neither in the index nor on disk: something removed it between the write and the export.
+            return "deleted";
+        }
+
+        return tag switch
+        {
+            'R' => "deleted",
+
+            // ONLY a plain cached entry says the index holds this path unchanged. Every other tag — untracked after
+            // `add -A`, skip-worktree, assume-unchanged, modified — the node cannot vouch for.
+            'H' => "unchanged",
+            _ => "unexplained"
+        };
+    }
+
+    /// <summary>
+    ///     The written paths a <c>.gitignore</c> excludes, or <see langword="null" /> when git could not answer.
+    /// </summary>
+    /// <remarks>
+    ///     <c>check-ignore</c> exits 1 when nothing matched, which is an answer and not a failure; any other non-zero
+    ///     exit (a path inside a nested repository makes it exit 128) discards the partial output.
+    /// </remarks>
+    private async Task<HashSet<string>?> ResolveIgnoredAsync(SandboxHandle handle,
+        AgentHomePatchExportRequest request,
+        IReadOnlyList<string> missing,
+        TimeSpan commandTimeout,
+        CancellationToken cancellationToken)
+    {
+        var result = await RunGitAsync(handle,
+            request,
+            $"{request.RunId}-patch-check-ignore",
+            commandTimeout,
+            ["check-ignore", "-z", "--stdin"],
+            cancellationToken,
+            string.Concat(missing.Select(static path => path + '\0')));
+
+        if (!result.Completed || result.ExitCode is not (0 or 1))
+        {
+            _logger.LogDebug("Patch export for run {RunId} could not determine which written paths are ignored (exit {ExitCode}).",
+                request.RunId,
+                result.ExitCode);
+            return null;
+        }
+
+        return [.. SplitNul(result.StandardOutput)];
+    }
+
+    /// <summary>
+    ///     The index/working-tree tag git reports per written path, or <see langword="null" /> when it could not
+    ///     answer. A path git names in neither role is absent from the map.
+    /// </summary>
+    /// <remarks>
+    ///     <c>-v</c> is load-bearing: a model can mark its own edit <c>assume-unchanged</c> with <c>run_command</c>,
+    ///     which makes <c>add -A</c> skip it, and only the lowercase tag <c>-v</c> adds tells that apart from a file
+    ///     that genuinely matches the baseline.
+    /// </remarks>
+    private async Task<IReadOnlyDictionary<string, char>?> ResolvePresenceAsync(SandboxHandle handle,
+        AgentHomePatchExportRequest request,
+        IReadOnlyList<string> missing,
+        TimeSpan commandTimeout,
+        CancellationToken cancellationToken)
+    {
+        // :(literal) so a path holding pathspec magic (a leading colon, a glob) matches itself and nothing else.
+        string[] arguments =
+        [
+            "ls-files", "-z", "-t", "-v", "--cached", "--others", "--deleted", "--exclude-standard", "--",
+            .. missing.Select(static path => ":(literal)" + path)
+        ];
+
+        var result = await RunGitAsync(handle, request, $"{request.RunId}-patch-ls-files", commandTimeout, arguments, cancellationToken);
+        if (!IsSuccessful(result))
+        {
+            _logger.LogDebug("Patch export for run {RunId} could not determine which written paths still exist (exit {ExitCode}).",
+                request.RunId,
+                result.ExitCode);
+            return null;
+        }
+
+        var tags = new Dictionary<string, char>(StringComparer.Ordinal);
+        foreach (var record in SplitNul(result.StandardOutput))
+        {
+            if (record.Length < 3 || record[1] != ' ')
+            {
+                continue;
+            }
+
+            // A deleted-from-disk path is also listed as cached; the removal tag is the one that describes it.
+            var path = record[2..];
+            if (record[0] == 'R' || !tags.ContainsKey(path))
+            {
+                tags[path] = record[0];
+            }
+        }
+
+        return tags;
+    }
+
+    private async Task AppendGapEventAsync(AgentHomePatchExportRequest request,
+        AgentHomeWrittenFileGap gap,
+        IReadOnlyDictionary<string, List<string>> buckets,
+        CancellationToken cancellationToken)
+    {
+        var detail = string.Create(CultureInfo.InvariantCulture,
+            $"total={gap.Total};ignored={gap.IgnoredCount};deleted={gap.DeletedCount};unchanged={gap.UnchangedCount};unexplained={gap.UnexplainedCount}");
+
+        try
+        {
+            // The paths ride the run's OWN log and go nowhere else: they are workspace-authored, and the operator
+            // reading this run is the only reader that can act on them.
+            await request.RunLogger.AppendEventAsync("written_not_exported", detail, buckets, cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _logger.LogDebug(exception, "Patch export for run {RunId} could not append its written-file reconciliation to the run log.", request.RunId);
+        }
+    }
+
+    /// <summary>Every path the name-status output names, destination and rename source alike.</summary>
+    private static HashSet<string> ExportedPaths(string nameStatusOutput)
+    {
+        return new HashSet<string>(nameStatusOutput
+                                   .Split('\n')
+                                   .Select(static line => line.TrimEnd('\r'))
+                                   .Where(static line => line.Length > 0)
+                                   .Select(static line => line.Split('\t'))
+                                   .Where(static fields => fields.Length >= 2)
+                                   .SelectMany(static fields => fields.Skip(count: 1)),
+            StringComparer.Ordinal);
+    }
+
+    private static IEnumerable<string> SplitNul(string output)
+    {
+        return output.Split('\0').Where(static entry => entry.Length > 0);
     }
 
     /// <summary>
@@ -167,7 +438,8 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         string executionId,
         TimeSpan timeout,
         string[] tail,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? standardInput = null)
     {
         var arguments = AgentHomeGit.WorkspaceArguments(tail);
         var startedAt = _timeProvider.GetUtcNow();
@@ -179,7 +451,8 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
                 Arguments = arguments,
                 WorkingDirectory = AgentHomeGit.WorkspaceSelectedRoot,
                 Environment = AgentHomeGitHardening.Environment,
-                Timeout = timeout
+                Timeout = timeout,
+                StandardInput = standardInput
             },
             cancellationToken);
 
@@ -311,13 +584,14 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         return $"runs/{runId}/patches/{fileName}";
     }
 
-    private static AgentHomePatchExport EmptyExport()
+    private static AgentHomePatchExport EmptyExport(AgentHomeWrittenFileGap writtenGap)
     {
         return new AgentHomePatchExport
         {
             ChangedFileCount = 0,
             Blocked = false,
             PatchBytes = 0,
+            WrittenGap = writtenGap,
             PatchRelativePath = null,
             ChangedFilesRelativePath = null
         };

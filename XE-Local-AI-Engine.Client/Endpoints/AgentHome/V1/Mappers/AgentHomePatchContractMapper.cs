@@ -17,9 +17,27 @@ internal static class AgentHomePatchContractMapper
         {
             CanApply = preview.CanApply,
             Files = [.. preview.Files.Select(ToDto)],
-            Rejections = preview.Rejections,
+            Rejections = [.. preview.Rejections.Select(ToDto)],
+            DirtyTargets =
+            [
+                .. preview.DirtyTargets.Select(static entry => new AgentHomePatchDirtyTargetDto
+                {
+                    Path = entry.Path,
+                    State = entry.State
+                })
+            ],
+            DirtyCheckUnavailable = preview.DirtyCheckUnavailable,
             ContainsBinary = preview.ContainsBinary,
             PatchSha256 = preview.PatchSha256
+        };
+    }
+
+    private static AgentHomePatchRejectionDto ToDto(PatchApplyRejection rejection)
+    {
+        return new AgentHomePatchRejectionDto
+        {
+            Reason = rejection.Reason,
+            Path = rejection.Path
         };
     }
 

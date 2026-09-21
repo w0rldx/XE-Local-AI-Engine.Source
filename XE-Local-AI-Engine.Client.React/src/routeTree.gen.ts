@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as UiModeSetupRouteImport } from './routes/ui-mode-setup'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutAgentRunsRouteImport } from './routes/_layout/agent-runs'
 import { Route as LayoutAgentsRouteImport } from './routes/_layout/agents'
 import { Route as LayoutBenchmarksRouteImport } from './routes/_layout/benchmarks'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
@@ -83,6 +84,11 @@ const UiModeSetupRoute = UiModeSetupRouteImport.update({
 const LayoutIndexRoute = LayoutIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutAgentRunsRoute = LayoutAgentRunsRouteImport.update({
+  id: '/agent-runs',
+  path: '/agent-runs',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutAgentsRoute = LayoutAgentsRouteImport.update({
@@ -305,6 +311,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/ui-mode-setup': typeof UiModeSetupRoute
+  '/agent-runs': typeof LayoutAgentRunsRoute
   '/agents': typeof LayoutAgentsRoute
   '/benchmarks': typeof LayoutBenchmarksRoute
   '/chat': typeof LayoutChatRoute
@@ -351,6 +358,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/ui-mode-setup': typeof UiModeSetupRoute
+  '/agent-runs': typeof LayoutAgentRunsRoute
   '/agents': typeof LayoutAgentsRoute
   '/benchmarks': typeof LayoutBenchmarksRoute
   '/chat': typeof LayoutChatRoute
@@ -400,6 +408,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/ui-mode-setup': typeof UiModeSetupRoute
+  '/_layout/agent-runs': typeof LayoutAgentRunsRoute
   '/_layout/agents': typeof LayoutAgentsRoute
   '/_layout/benchmarks': typeof LayoutBenchmarksRoute
   '/_layout/chat': typeof LayoutChatRoute
@@ -450,6 +459,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/ui-mode-setup'
+    | '/agent-runs'
     | '/agents'
     | '/benchmarks'
     | '/chat'
@@ -496,6 +506,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/ui-mode-setup'
+    | '/agent-runs'
     | '/agents'
     | '/benchmarks'
     | '/chat'
@@ -544,6 +555,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/ui-mode-setup'
+    | '/_layout/agent-runs'
     | '/_layout/agents'
     | '/_layout/benchmarks'
     | '/_layout/chat'
@@ -637,6 +649,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof LayoutIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/agent-runs': {
+      id: '/_layout/agent-runs'
+      path: '/agent-runs'
+      fullPath: '/agent-runs'
+      preLoaderRoute: typeof LayoutAgentRunsRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/agents': {
@@ -923,6 +942,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface LayoutRouteChildren {
+  LayoutAgentRunsRoute: typeof LayoutAgentRunsRoute
   LayoutAgentsRoute: typeof LayoutAgentsRoute
   LayoutBenchmarksRoute: typeof LayoutBenchmarksRoute
   LayoutChatRoute: typeof LayoutChatRoute
@@ -967,6 +987,7 @@ interface LayoutRouteChildren {
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
+  LayoutAgentRunsRoute: LayoutAgentRunsRoute,
   LayoutAgentsRoute: LayoutAgentsRoute,
   LayoutBenchmarksRoute: LayoutBenchmarksRoute,
   LayoutChatRoute: LayoutChatRoute,

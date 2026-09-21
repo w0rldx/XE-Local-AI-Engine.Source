@@ -23,7 +23,11 @@ internal interface IAgentHomeRunLogger
     ///     Appends a generic event record to <c>events.jsonl</c> (e.g. <c>prepare_completed</c>,
     ///     <c>run_completed</c>, <c>cancelled</c>).
     /// </summary>
-    Task AppendEventAsync(string eventName, string? detail = null, CancellationToken cancellationToken = default);
+    /// <param name="eventName">The node-authored event name.</param>
+    /// <param name="detail">A node-authored summary line, conventionally <c>key=value</c> clauses.</param>
+    /// <param name="data">A caller-supplied model-safe object written as a nested field, or null for none.</param>
+    /// <param name="cancellationToken">Cancels the append.</param>
+    Task AppendEventAsync(string eventName, string? detail = null, object? data = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Appends a command execution record to <c>commands.jsonl</c>. The executable and any
@@ -61,6 +65,12 @@ internal sealed record AgentHomeRunLogContext
 
     /// <summary>The sandbox provider name (e.g. <c>fake</c>, <c>local-container</c>).</summary>
     public required string ProviderName { get; init; }
+
+    /// <summary>
+    ///     The conversation the run was started from, written into the <c>started</c> event so the run remains
+    ///     traceable to it. Ambient, never model-supplied; <see langword="null" /> outside a chat turn.
+    /// </summary>
+    public Guid? ConversationId { get; init; }
 }
 
 /// <summary>Record appended to <c>commands.jsonl</c> for each in-sandbox command execution.</summary>

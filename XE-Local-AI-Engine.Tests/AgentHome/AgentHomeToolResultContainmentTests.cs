@@ -106,7 +106,45 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
         AssertEx.Contains(result, "This run has ended", StringComparison.Ordinal, $"the fixed closing sentence is there. Result: {result}");
     }
 
+    /// <summary>
+    ///     The written-file gap is reported to the model as COUNTS. The paths behind those counts are model-chosen,
+    ///     so they may reach the run's own log and nothing else.
+    /// </summary>
+    [Test]
+    public async Task ToolResult_ReportsTheWrittenFileGapAsCountsOnly_WhileTheRunLogKeepsThePaths()
+    {
+        SkipUnlessRealGitAndIsolatedProcessJail();
+
+        using var fixture = CreateFixture();
+
+        // The marker is the NAME of a file the run's own .gitignore then hides, so the path lands in the gap and
+        // the only question left is where its name is allowed to appear.
+        var result = await fixture.ExecuteToolAsync(
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/.gitignore", ["content"] = $"{Marker}.txt\n" }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/{Marker}.txt", ["content"] = "hidden\n" }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nedited\n" }));
+
+        AssertEx.False(result.Contains(Marker, StringComparison.Ordinal),
+            $"the gap note names no path, not even one the patch left out. The result was: {result}");
+        AssertEx.Contains(result,
+            "NOTE: 1 file(s) the run wrote are not part of this patch (1 ignored, 0 deleted, 0 unchanged, 0 unexplained).",
+            StringComparison.Ordinal,
+            $"the model is told how many writes the patch does not carry, and why. Result: {result}");
+
+        var runId = RunIdFromHeader(result);
+        var eventsPath = Directory.EnumerateFiles(fixture.StateRoot, "events.jsonl", SearchOption.AllDirectories)
+                                  .Single(path => path.Contains(runId, StringComparison.Ordinal));
+        AssertEx.Contains(await File.ReadAllTextAsync(eventsPath), Marker, StringComparison.Ordinal,
+            "the operator's own record of the run keeps the paths the model may not see");
+    }
+
     // ---------------------------------------------------------------- harness
+
+    private static string RunIdFromHeader(string result)
+    {
+        var start = result.IndexOf("run=", StringComparison.Ordinal) + "run=".Length;
+        return result[start..result.IndexOf(' ', start)];
+    }
 
     private static void SkipUnlessRealGitAndIsolatedProcessJail()
     {
@@ -233,7 +271,7 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
             NullLogger<AgentHomeService>.Instance);
 
         var gateway = new AgentHomeToolGateway(service, runtimeSettings);
-        return new ContainmentFixture(gateway, provider, manifestService, serviceProvider, chatClient, resolver.FolderId);
+        return new ContainmentFixture(gateway, provider, manifestService, serviceProvider, chatClient, root, resolver.FolderId);
     }
 
     private sealed class ContainmentFixture : IDisposable
@@ -250,6 +288,7 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
             AgentHomeManifestService manifestService,
             ServiceProvider serviceProvider,
             ScriptedInnerChatClient chatClient,
+            string stateRoot,
             Guid folderId)
         {
             _gateway = gateway;
@@ -257,8 +296,12 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
             _manifestService = manifestService;
             _serviceProvider = serviceProvider;
             _chatClient = chatClient;
+            StateRoot = stateRoot;
             _folderId = folderId;
         }
+
+        /// <summary>The AgentHome state root, under which this run's own logs live.</summary>
+        public string StateRoot { get; }
 
         /// <summary>Runs the whole lifecycle through the TOOL GATEWAY, so the assertion grades what the model is handed.</summary>
         public async Task<string> ExecuteToolAsync(params (string Tool, Dictionary<string, object?> Arguments)[] script)

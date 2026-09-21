@@ -450,9 +450,10 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         var preview = await applyService.PreviewAsync(new NodePatchApplyRequest { RunId = run.RunId });
 
         AssertEx.False(preview.CanApply, "a patch that creates a symbolic link must not be offered as applicable");
-        AssertEx.Contains(preview.Rejections, reason => reason.Contains("symbolic link", StringComparison.Ordinal));
-        AssertEx.True(preview.Rejections.All(reason => !reason.Contains(target, StringComparison.Ordinal)
-                                                       && !reason.Contains(fixture.HostFolder, StringComparison.Ordinal)),
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("symbolic link", StringComparison.Ordinal));
+        AssertEx.True(preview.Rejections.All(rejection => !rejection.Reason.Contains(target, StringComparison.Ordinal)
+                                                          && !rejection.Reason.Contains(fixture.HostFolder, StringComparison.Ordinal)
+                                                          && rejection.Path?.Contains(fixture.HostFolder, StringComparison.Ordinal) != true),
             "the rejection carries no host path");
 
         var result = await applyService.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = run.RunId });
@@ -508,11 +509,115 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         var preview = await applyService.PreviewAsync(new NodePatchApplyRequest { RunId = run.RunId });
 
         AssertEx.False(preview.CanApply, "a nested repository is not something the operator can apply");
-        AssertEx.Contains(preview.Rejections, reason => reason.Contains("submodule", StringComparison.Ordinal));
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Reason.Contains("submodule", StringComparison.Ordinal));
         AssertEx.False(Path.Exists(Path.Combine(target, "vendor")), "no empty submodule directory is created on the host");
     }
 
+    /// <summary>
+    ///     The quiet case, and the one that must stay quiet: every path the loop recorded writing is named by the
+    ///     diff, so there is no gap, no event and nothing extra for the node to run.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenEveryWriteReachesThePatch_ReportsNoGapAndLogsNoGapEvent()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture();
+        var run = await fixture.RunAsync(
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/docs/notes.md", ["content"] = "# notes\n" }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmall\n" }));
+
+        AssertEx.Equal(expected: 0, run.Patch.WrittenGap.Total, "both writes are in the patch, so nothing is missing from it");
+        AssertEx.True((await ReadEventsAsync(run)).TrueForAll(static record => record.GetProperty("eventName").GetString() != "written_not_exported"),
+            "a run with nothing to report must not write a gap event");
+    }
+
+    /// <summary>
+    ///     All four reasons a write can be missing from the patch, in ONE real-git run: each one is an assumption
+    ///     about what git answers, not about the node's arithmetic.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenWritesAreMissingFromThePatch_ClassifiesEachOneAndRecordsThePathsInTheRunLog()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture();
+        var run = await fixture.RunAsync(
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/.gitignore", ["content"] = "secret.txt\n" }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/secret.txt", ["content"] = "hidden\n" }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/scratch.txt", ["content"] = "temporary\n" }),
+            // Byte-identical to what the host folder was seeded with, so the baseline has nothing to diff against.
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/README.md", ["content"] = "# project\nsmal\n" }),
+            ("run_command", new()
+            {
+                ["executable"] = "git",
+                ["arguments"] = new[] { "update-index", "--skip-worktree", $"{WorkspaceAlias}/notes.txt" }
+            }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/notes.txt", ["content"] = "notes rewritten by the run\n" }),
+            ("run_command", new()
+            {
+                ["executable"] = "/bin/sh",
+                ["arguments"] = new[] { "-c", $"rm {WorkspaceAlias}/scratch.txt" }
+            }),
+            ("write_file", new() { ["path"] = $"{WorkspaceAlias}/guide.txt", ["content"] = "rewritten\n" }));
+
+        var gap = run.Patch.WrittenGap;
+        AssertEx.Equal(expected: 1, gap.IgnoredCount, $"secret.txt is ignored. gap was {Describe(gap)}");
+        AssertEx.Equal(expected: 1, gap.DeletedCount, $"scratch.txt was removed after the write. gap was {Describe(gap)}");
+        AssertEx.Equal(expected: 1, gap.UnchangedCount, $"README.md was rewritten with the baseline's own bytes. gap was {Describe(gap)}");
+        AssertEx.Equal(expected: 1, gap.UnexplainedCount,
+            $"a skip-worktree edit is a real change the patch does not carry, and the node cannot explain it. gap was {Describe(gap)}");
+        AssertEx.True(run.Patch.ChangedFileCount > 0, "the writes that did reach the patch are still exported");
+
+        var gapEvents = (await ReadEventsAsync(run))
+                        .Where(static record => record.GetProperty("eventName").GetString() == "written_not_exported")
+                        .ToList();
+        AssertEx.Equal(expected: 1, gapEvents.Count, "the run's own log carries exactly one reconciliation event");
+
+        var gapEvent = gapEvents[0];
+        AssertEx.Equal("total=4;ignored=1;deleted=1;unchanged=1;unexplained=1", gapEvent.GetProperty("detail").GetString());
+
+        var data = gapEvent.GetProperty("data");
+        AssertEx.Equal($"{WorkspaceAlias}/secret.txt", data.GetProperty("ignored")[0].GetString());
+        AssertEx.Equal($"{WorkspaceAlias}/scratch.txt", data.GetProperty("deleted")[0].GetString());
+        AssertEx.Equal($"{WorkspaceAlias}/README.md", data.GetProperty("unchanged")[0].GetString());
+        AssertEx.Equal($"{WorkspaceAlias}/notes.txt", data.GetProperty("unexplained")[0].GetString());
+
+        // The two classification commands are the node's own, and an audit must see them like every other one.
+        var logged = await ReadCommandsAsync(run);
+        foreach (var executionId in new[] { $"{run.RunId}-patch-check-ignore", $"{run.RunId}-patch-ls-files" })
+        {
+            var matching = logged.Where(candidate => candidate.GetProperty("executionId").GetString() == executionId).ToList();
+            AssertEx.Equal(expected: 1, matching.Count, $"commands.jsonl records '{executionId}' exactly once");
+            AssertEx.Equal(AgentHomeCommandActors.Node, matching[0].GetProperty("actor").GetString());
+            AssertEx.True(!matching[0].TryGetProperty("standardOutput", out _) && !matching[0].TryGetProperty("standardError", out _),
+                "a classification command is logged by its argv and exit code, never by what it printed");
+        }
+    }
+
     // ---------------------------------------------------------------- harness
+
+    private static string Describe(AgentHomeWrittenFileGap gap)
+    {
+        return $"ignored={gap.IgnoredCount},deleted={gap.DeletedCount},unchanged={gap.UnchangedCount},unexplained={gap.UnexplainedCount}";
+    }
+
+    private static async Task<List<JsonElement>> ReadEventsAsync(AgentHomeRunResult run)
+    {
+        return await ReadJsonLinesAsync(Path.Combine(run.LogPath, "events.jsonl"));
+    }
+
+    private static async Task<List<JsonElement>> ReadCommandsAsync(AgentHomeRunResult run)
+    {
+        return await ReadJsonLinesAsync(Path.Combine(run.LogPath, "commands.jsonl"));
+    }
+
+    private static async Task<List<JsonElement>> ReadJsonLinesAsync(string path)
+    {
+        return [.. (await File.ReadAllLinesAsync(path))
+                  .Where(static line => !string.IsNullOrWhiteSpace(line))
+                  .Select(static line => JsonDocument.Parse(line).RootElement)];
+    }
 
     /// <summary>
     ///     The whole loop needs REAL git in the jail and a POSIX shell for the payloads. Skipping VISIBLY is the

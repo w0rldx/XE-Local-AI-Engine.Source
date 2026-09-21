@@ -890,8 +890,17 @@ tools':
   that lands. Two things a run can produce are exported but never landed: a **symbolic link** (`mode 120000`,
   whose content is the link target, so applying it would point a real host link anywhere) and a **nested
   repository** (`mode 160000`), both refused by name in `NodePatchApplyService.ParseBlock` — see
-  [Security & Privacy](12-security-and-privacy.md). A path the workspace's `.gitignore` covers is not in the
-  patch at all, because staging honours it (below).
+  [Security & Privacy](12-security-and-privacy.md). A refusal now also names the entry it is about
+  (`<alias>/<relative>`, on `PatchApplyRejection.Path`), so the dialog can group the reasons per file; a
+  C-quoted path stays unnamed, because the parser never unescapes one. A path the workspace's `.gitignore`
+  covers is not in the patch at all, because staging honours it (below).
+- **The preview also reads what the operator's own folders already hold.** For each selected folder the patch
+  touches that is inside a git work tree, `PreviewAsync` runs one `git --no-optional-locks status
+  --porcelain=v1 -z` through the same hardened `HostGitRunner`, scoped by pathspec to the patch's own targets,
+  and reports the ones that are modified, staged or untracked (`NodePatchApplyPreview.DirtyTargets`). It is a
+  **warning, never a gate**: `git apply --check` stays the only thing that decides `CanApply`, the warning is
+  outside the hash binding, and it does not run at apply time. A folder that is no work tree reports nothing;
+  a status call that fails or times out sets `DirtyCheckUnavailable` and leaves the preview otherwise intact.
 
 **What a run does with the `goal`.** `AgentHomeService.RunAsync` hands it to `IAgentHomeGoalExecutor`
 (`Services/AgentHome/Implementation/AgentHomeGoalExecutor.cs`), which runs a **bounded nested agent loop** on the
@@ -1012,7 +1021,7 @@ do not reorder the fields, add one, or widen a value.
 only from facts the **node** derived: the header above, the run id and run-relative output paths, a stop-reason
 sentence, the per-folder copy counts, the loop's tool-call /
 refusal / written-file counts and elapsed seconds, an aggregate of the commands run with their exit codes, the
-patch's changed-file count and byte size, the `fake`-backend honesty notice, and a fixed closing sentence saying
+patch's changed-file count, its added/removed line totals and byte size, the `fake`-backend honesty notice, and a fixed closing sentence saying
 the run has ended and need not be repeated (a live round watched a 27B model re-invoke the tool two and three
 times in one turn because the summary was too thin to trust). **Command output and workspace file bytes never
 appear there**, and neither do the paths `write_file` wrote: the outer model still holds the node's other tools,
@@ -1020,6 +1029,23 @@ so workspace-authored text arriving as "your tool result" is steering text with 
 lives on disk, under `runs/<run-id>/`. `AgentHomeToolResultContainmentTests` plants one marker through all three
 routes at once — a command's stdout, a written file's content, and the path the model chose for a second file — and
 grades the returned string on its absence.
+
+**Writes the patch does not carry.** The loop records every path `write_file` wrote. At export time the node
+compares that list against the paths the diff names and classifies whatever is missing: hidden by a `.gitignore`,
+deleted again before the export ran, byte-identical to the baseline so there is nothing for a patch to carry, or
+**unexplained** — the node saying plainly that it cannot account for a file the run wrote, which is the shape a
+silently incomplete patch takes. The full breakdown, with the paths, is written to the run's own `events.jsonl`
+and, as the argument of the classifying git call, into its `commands.jsonl` — operator-only run logs, never the
+tool result, because those paths are workspace-authored; the tool result gets the per-reason counts from a
+fixed template and never a path, the apply preview gets nothing at all (it previews the patch, not the run), and
+an unexplained path additionally raises a host warning naming the run. A gap is never a failure: it does not
+block the export, change what the operator may apply, or alter the header. Two limits are worth stating rather
+than discovering. What a `run_command` changed on its own is outside this ledger entirely — the node sees what
+its own write tool was asked to do, not what a command did — so a command that created a file the patch missed
+is not caught here. And an ignored file is *reported*, not exported: staging honours `.gitignore` exactly as the
+baseline did, so the honest answer for one is "it is not in the patch, and here is why". The classification asks
+git two further questions, and only when something is missing to ask about, so a run whose writes all reached
+the patch pays nothing for it.
 
 **It only runs from an approved chat turn.** The loop reads the outer model id off the ambient `SpawnContext`
 root that `InvocationRunner` seeds, and refuses when there is none or when that model is outside the node's

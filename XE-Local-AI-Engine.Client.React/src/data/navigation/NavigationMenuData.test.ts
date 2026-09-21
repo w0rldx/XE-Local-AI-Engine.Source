@@ -139,6 +139,7 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.mcp,
 			nodeRoutePaths.scheduler,
 			nodeRoutePaths.tools,
+			nodeRoutePaths.agentRuns,
 		]);
 	});
 
@@ -170,6 +171,8 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.mcp,
 			nodeRoutePaths.scheduler,
 			nodeRoutePaths.tools,
+			// Ungated, like Commands and Tools: the run history is operator forensics, not an agent-mode capability.
+			nodeRoutePaths.agentRuns,
 		]);
 		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.skills)).toBe(false);
 		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.customTools)).toBe(false);
@@ -378,6 +381,19 @@ describe("filterNavigationLinksByUiMode", () => {
 		for (const groupId of ["automation", "integrations", "externalApps", "preview", "training"]) {
 			expect(simpleIds).not.toContain(groupId);
 		}
+	});
+
+	it("offers the AgentHome run history in Advanced mode only", () => {
+		const targets = (mode: "simple" | "advanced"): (string | undefined)[] =>
+			filterNavigationLinksByUiMode(navigationLinks, mode).flatMap((link) => [
+				link.to,
+				...(link.links ?? []).map((nestedLink) => nestedLink.to),
+			]);
+
+		// Operator forensics over an opt-in capability: a Simple-mode operator is never offered it, and never has it
+		// promoted to a top-level entry either — the whole Automation group is gone in that mode.
+		expect(targets("advanced")).toContain(nodeRoutePaths.agentRuns);
+		expect(targets("simple")).not.toContain(nodeRoutePaths.agentRuns);
 	});
 
 	it("keeps a mixed group and hides only its Advanced children", () => {

@@ -104,6 +104,15 @@ internal static class AddNodeAgentHomeExtensions
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<AgentHomeOptions>, AgentHomeOptionsValidator>();
         builder.Services.AddSingleton<IAgentHomeManifestService, AgentHomeManifestService>();
+        // Read-only projection of the on-disk run history; no database row exists for a run.
+        builder.Services.AddSingleton<IAgentHomeRunListService, AgentHomeRunListService>();
+        // Run-directory retention; nothing else ever deletes a run. Registered LAST on purpose: the sweep's first act
+        // is a filesystem walk, which must not start ahead of the orphan reaper's process gates.
+        builder.Services.AddOptions<AgentHomeRunRetentionOptions>()
+               .Bind(configuration.GetSection(AgentHomeRunRetentionOptions.SectionName))
+               .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<AgentHomeRunRetentionOptions>, AgentHomeRunRetentionOptionsValidator>();
+        builder.Services.AddHostedService<AgentHomeRunRetentionService>();
 
         return builder;
     }

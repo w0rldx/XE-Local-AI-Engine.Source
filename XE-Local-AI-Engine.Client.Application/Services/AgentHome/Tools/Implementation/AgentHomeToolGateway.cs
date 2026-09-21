@@ -276,15 +276,23 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
     {
         if (patch.Failed)
         {
+            // Nothing was reconciled either, so there is no gap note to carry here.
             return " Patch: export failed.";
         }
 
-        // A SIZE, never the content: the node's own byte count says whether the run made a one-line edit or rewrote
-        // a tree, which is what the model re-invokes the tool to find out. No patch text crosses into this result.
+        return PatchLine(patch) + BuildWrittenGapNote(patch.WrittenGap);
+    }
+
+    /// <summary>
+    ///     The patch's own line. Sizes and totals, never content: the node's byte count and line totals say whether
+    ///     the run made a one-line edit or rewrote a tree, which is what the model re-invokes the tool to find out.
+    /// </summary>
+    private static string PatchLine(AgentHomePatchExport patch)
+    {
         if (patch.Blocked)
         {
             return string.Create(CultureInfo.InvariantCulture,
-                $" Patch: {patch.ChangedFileCount} file(s) changed, {patch.PatchBytes} byte(s); patch over size budget (not written), see {patch.ChangedFilesRelativePath}.");
+                $" Patch: {patch.ChangedFileCount} file(s) changed (+{patch.LinesAdded}/-{patch.LinesRemoved}), {patch.PatchBytes} byte(s); patch over size budget (not written), see {patch.ChangedFilesRelativePath}.");
         }
 
         if (patch.ChangedFileCount == 0)
@@ -293,6 +301,26 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
         }
 
         return string.Create(CultureInfo.InvariantCulture,
-            $" Patch: {patch.ChangedFileCount} file(s) changed, {patch.PatchBytes} byte(s) exported -> {patch.PatchRelativePath}.");
+            $" Patch: {patch.ChangedFileCount} file(s) changed (+{patch.LinesAdded}/-{patch.LinesRemoved}), {patch.PatchBytes} byte(s) exported -> {patch.PatchRelativePath}.");
+    }
+
+    /// <summary>
+    ///     The honesty clause for the export's own ledger: the run wrote files this patch does not carry.
+    /// </summary>
+    /// <remarks>
+    ///     COUNTS from a fixed template, never the paths — those are model-chosen, and this result reaches a model
+    ///     holding the node's other tools. An unexplained file is not an error here: the operator's ruling is that a
+    ///     gap is reported and never blocks. Silent when everything reconciles, which is the common case.
+    /// </remarks>
+    private static string BuildWrittenGapNote(AgentHomeWrittenFileGap gap)
+    {
+        if (gap.Total == 0)
+        {
+            return string.Empty;
+        }
+
+        return string.Create(CultureInfo.InvariantCulture,
+            $" NOTE: {gap.Total} file(s) the run wrote are not part of this patch ({gap.IgnoredCount} ignored,"
+            + $" {gap.DeletedCount} deleted, {gap.UnchangedCount} unchanged, {gap.UnexplainedCount} unexplained).");
     }
 }

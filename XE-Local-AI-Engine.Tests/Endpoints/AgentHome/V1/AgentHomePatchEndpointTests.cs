@@ -105,7 +105,7 @@ public sealed class AgentHomePatchEndpointTests
             {
                 CanApply = false,
                 Files = [],
-                Rejections = ["alias 'repo-01': patch does not apply cleanly (error: patch failed)"],
+                Rejections = [Rejection("alias 'repo-01': patch does not apply cleanly (error: patch failed)")],
                 ContainsBinary = true,
                 PatchSha256 = PatchHash
             }
@@ -116,6 +116,61 @@ public sealed class AgentHomePatchEndpointTests
         AssertEx.False(document.RootElement.GetProperty("canApply").GetBoolean());
         AssertEx.True(document.RootElement.GetProperty("containsBinary").GetBoolean());
         AssertEx.Equal(expected: 1, document.RootElement.GetProperty("rejections").GetArrayLength());
+        var rejection = document.RootElement.GetProperty("rejections")[0];
+        AssertEx.Contains(rejection.GetProperty("reason").GetString() ?? string.Empty, "does not apply cleanly");
+        AssertEx.Equal(JsonValueKind.Null, rejection.GetProperty("path").ValueKind, "a whole-patch refusal names no entry");
+    }
+
+    /// <summary>
+    ///     A refused entry reaches the client by NAME, so the dialog can say which file the reason is about rather
+    ///     than leaving the operator to guess among the ones the table lists.
+    /// </summary>
+    [Test]
+    public async Task Preview_WhenAnEntryIsRefused_Answers200NamingIt()
+    {
+        var service = new StubPatchApplyService
+        {
+            PreviewResult = new NodePatchApplyPreview
+            {
+                CanApply = false,
+                Files = [],
+                Rejections = [Rejection("a patch block creates or changes a symbolic link, which is not supported.", "repo-01/evil")],
+                PatchSha256 = PatchHash
+            }
+        };
+
+        using var document = await SendJsonAsync(service, "POST", Preview, body: null, HttpStatusCode.OK);
+
+        AssertEx.Equal("repo-01/evil", document.RootElement.GetProperty("rejections")[0].GetProperty("path").GetString());
+    }
+
+    /// <summary>
+    ///     The dirty-target warning is additive and advisory: it rides a 200 beside <c>canApply: true</c>, because
+    ///     nothing about local changes refuses a patch that git says applies.
+    /// </summary>
+    [Test]
+    public async Task Preview_WhenTargetsAreDirtyOnTheHost_Answers200WithTheWarningAndStillCanApply()
+    {
+        var service = new StubPatchApplyService
+        {
+            PreviewResult = new NodePatchApplyPreview
+            {
+                CanApply = true,
+                Files = [],
+                Rejections = [],
+                DirtyTargets = [new PatchApplyDirtyEntry { Path = "repo-01/src/App.cs", State = "modified" }],
+                DirtyCheckUnavailable = true,
+                PatchSha256 = PatchHash
+            }
+        };
+
+        using var document = await SendJsonAsync(service, "POST", Preview, body: null, HttpStatusCode.OK);
+
+        AssertEx.True(document.RootElement.GetProperty("canApply").GetBoolean(), "a warning must not gate the apply");
+        var dirty = document.RootElement.GetProperty("dirtyTargets")[0];
+        AssertEx.Equal("repo-01/src/App.cs", dirty.GetProperty("path").GetString());
+        AssertEx.Equal("modified", dirty.GetProperty("state").GetString());
+        AssertEx.True(document.RootElement.GetProperty("dirtyCheckUnavailable").GetBoolean());
     }
 
     [Test]
@@ -129,14 +184,14 @@ public sealed class AgentHomePatchEndpointTests
             {
                 CanApply = false,
                 Files = [],
-                Rejections = ["no exported patch is available for this run."],
+                Rejections = [Rejection("no exported patch is available for this run.")],
                 PatchMissing = true
             },
             ApplyResult = new NodePatchApplyResult
             {
                 Applied = false,
                 AppliedFiles = [],
-                Rejections = ["no exported patch is available for this run."],
+                Rejections = [Rejection("no exported patch is available for this run.")],
                 PatchMissing = true
             }
         };
@@ -190,13 +245,83 @@ public sealed class AgentHomePatchEndpointTests
             {
                 Applied = false,
                 AppliedFiles = [],
-                Rejections = ["alias 'repo-01': a target path escapes the folder root."]
+                Rejections = [Rejection("alias 'repo-01': a target path escapes the folder root.", "repo-01/src/App.cs")]
             }
         };
 
         using var document = await SendJsonAsync(service, "POST", Apply, ApplyBody(PatchHash), HttpStatusCode.Conflict);
 
         AssertEx.Contains(document.RootElement.ToString(), "escapes the folder root");
+        // The refused entry rides the error NAME, folder-relative, the same way the partial-apply error does.
+        AssertEx.Contains(document.RootElement.ToString(), "repo-01/src/App.cs");
+    }
+
+    /// <summary>
+    ///     Every refusal that SAYS something different — a second file, or a second reason about the same file —
+    ///     has to reach the operator, or the 409 under-reports what was wrong.
+    /// </summary>
+    [Test]
+    public async Task Apply_WithSeveralRefusals_Answers409CarryingEachDistinctOne()
+    {
+        const string SymlinkReason = "a patch block creates or changes a symbolic link, which is not supported.";
+        const string BinaryReason = "the patch contains a binary change, which is not allowed.";
+        var service = new StubPatchApplyService
+        {
+            ApplyResult = new NodePatchApplyResult
+            {
+                Applied = false,
+                AppliedFiles = [],
+                Rejections =
+                [
+                    Rejection(SymlinkReason, "repo-01/evil"),
+                    Rejection(SymlinkReason, "repo-01/worse"),
+                    Rejection(BinaryReason, "repo-01/evil"),
+                    Rejection("the exported patch contains no file changes."),
+                    Rejection("the exported patch changed since it was previewed.")
+                ]
+            }
+        };
+
+        using var document = await SendJsonAsync(service, "POST", Apply, ApplyBody(PatchHash), HttpStatusCode.Conflict);
+
+        var errors = document.RootElement.GetProperty("errors").EnumerateArray().ToList();
+        var body = document.RootElement.ToString();
+        AssertEx.Contains(errors, error => error.GetProperty("name").GetString() == "repo-01/worse");
+
+        var evil = errors.Single(error => error.GetProperty("name").GetString() == "repo-01/evil").GetProperty("reason").GetString() ?? string.Empty;
+        AssertEx.Contains(evil, "symbolic link");
+        AssertEx.Contains(evil, "binary change");
+
+        var general = errors.Single(error => error.GetProperty("name").GetString() == "generalErrors").GetProperty("reason").GetString() ?? string.Empty;
+        AssertEx.Contains(general, "contains no file changes");
+        AssertEx.Contains(general, "changed since it was previewed");
+        AssertEx.Equal(expected: 3, errors.Count, $"one error per refused entry, plus one for the patch as a whole: {body}");
+    }
+
+    /// <summary>
+    ///     The edge of the above: a patch that repeats a block refuses twice in the same words about the same file,
+    ///     which says nothing twice. It renders once, and the reason is not doubled.
+    /// </summary>
+    [Test]
+    public async Task Apply_WithTwoIdenticalRefusals_Answers409ReportingItOnce()
+    {
+        const string Reason = "a patch block creates or changes a symbolic link, which is not supported.";
+        var service = new StubPatchApplyService
+        {
+            ApplyResult = new NodePatchApplyResult
+            {
+                Applied = false,
+                AppliedFiles = [],
+                Rejections = [Rejection(Reason, "repo-01/evil"), Rejection(Reason, "repo-01/evil")]
+            }
+        };
+
+        using var document = await SendJsonAsync(service, "POST", Apply, ApplyBody(PatchHash), HttpStatusCode.Conflict);
+
+        AssertEx.Equal(expected: 1, document.RootElement.GetProperty("errors").GetArrayLength());
+        AssertEx.Equal("repo-01/evil", document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        AssertEx.Equal(Reason, document.RootElement.GetProperty("errors")[0].GetProperty("reason").GetString(),
+            "the same sentence must not be pasted to itself.");
     }
 
     /// <summary>
@@ -212,7 +337,7 @@ public sealed class AgentHomePatchEndpointTests
             {
                 Applied = false,
                 AppliedFiles = [],
-                Rejections = ["the exported patch changed since it was previewed."]
+                Rejections = [Rejection("the exported patch changed since it was previewed.")]
             }
         };
 
@@ -242,7 +367,7 @@ public sealed class AgentHomePatchEndpointTests
                         ChangeType = "modified"
                     }
                 ],
-                Rejections = ["alias 'repo-02': apply failed after a clean check (git rejected the patch.)"],
+                Rejections = [Rejection("alias 'repo-02': apply failed after a clean check (git rejected the patch.)")],
                 PartiallyApplied = true
             }
         };
@@ -331,6 +456,13 @@ public sealed class AgentHomePatchEndpointTests
         AssertEx.Equal(upper, service.LastRequest?.ExpectedPatchSha256,
             "the hash must reach the service unchanged; the case-insensitive comparison is the service's own.");
     }
+
+    private static PatchApplyRejection Rejection(string reason, string? path = null) =>
+        new()
+        {
+            Reason = reason,
+            Path = path
+        };
 
     private static string ApplyBody(string hash) =>
         JsonSerializer.Serialize(new

@@ -25,6 +25,45 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>The written paths the classification test leaves out of its diff, in the order the export asks about them.</summary>
+    private static readonly string[] MissingPaths = ["repo-01/hidden.txt", "repo-01/gone.tmp", "repo-01/same.cs", "repo-01/unstaged.txt", "repo-01/assumed.cs"];
+
+    /// <summary>One patch carrying every block shape the line walk has to tell apart.</summary>
+    private const string MixedShapePatch = """
+        diff --git a/repo-01/src/App.cs b/repo-01/src/App.cs
+        index 1111111..2222222 100644
+        --- a/repo-01/src/App.cs
+        +++ b/repo-01/src/App.cs
+        @@ -1,3 +1,4 @@
+         context stays
+        -old line
+        +new line
+        +extra added
+        \ No newline at end of file
+        diff --git a/repo-01/old.txt b/repo-01/new.txt
+        similarity index 100%
+        rename from repo-01/old.txt
+        rename to repo-01/new.txt
+        diff --git a/repo-01/data.bin b/repo-01/data.bin
+        new file mode 100644
+        index 0000000..3333333
+        GIT binary patch
+        literal 4
+        Lc$_OqJOKb%00
+
+        diff --git a/repo-01/empty.txt b/repo-01/empty.txt
+        new file mode 100644
+        index 0000000..e69de29
+        diff --git a/repo-01/gone.txt b/repo-01/gone.txt
+        deleted file mode 100644
+        index 4444444..0000000
+        --- a/repo-01/gone.txt
+        +++ /dev/null
+        @@ -1,2 +0,0 @@
+        -first
+        -second
+        """;
+
     private readonly List<string> _tempDirs = [];
 
     public void Dispose()
@@ -247,6 +286,136 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         AssertEx.Equal("keep.cs", entries[0].RelativePath);
     }
 
+    /// <summary>
+    ///     The totals come from the patch text itself, so one walk must handle every block shape git emits: hunks, a
+    ///     pure rename, a binary block, an empty creation, a deletion and the <c>\ No newline</c> marker.
+    /// </summary>
+    [Test]
+    public async Task ExportPatchAsync_TotalsOnlyTheLinesInsideHunks()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+
+        var nameStatus = string.Join(separator: '\n',
+            "M\trepo-01/src/App.cs",
+            "R100\trepo-01/old.txt\trepo-01/new.txt",
+            "A\trepo-01/data.bin",
+            "A\trepo-01/empty.txt",
+            "D\trepo-01/gone.txt");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatus);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, MixedShapePatch);
+        var service = CreateService(provider);
+
+        var export = await service.ExportPatchAsync(handle, Request("run-lines", NewTempDir(), Folder("repo-01")));
+
+        AssertEx.Equal(expected: 2, export.LinesAdded, "only the two '+' lines inside the one hunk count as additions");
+        AssertEx.Equal(expected: 3, export.LinesRemoved, "one removal in the modified file and both lines of the deleted one");
+    }
+
+    [Test]
+    public async Task ExportPatchAsync_WhenEveryWrittenPathIsInTheDiff_ReportsNoGapAndRunsNoExtraGit()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\trepo-01/src/App.cs\nR100\trepo-01/old.txt\trepo-01/new.txt\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        var service = CreateService(provider);
+
+        var export = await service.ExportPatchAsync(handle,
+            Request("run-nogap", NewTempDir(), ["repo-01/src/App.cs", "repo-01/new.txt", "repo-01/old.txt"], Folder("repo-01")));
+
+        AssertEx.Equal(expected: 0, export.WrittenGap.Total, "every written path is named by the diff, the rename's source included");
+        AssertEx.False(provider.ExecutedCommands.Any(command => command.Arguments.Contains("check-ignore")),
+            "a run whose writes all reached the patch pays for no classification commands");
+    }
+
+    /// <summary>
+    ///     The four reasons, in one export: an ignored path, one deleted after the write, one whose content matches
+    ///     the baseline, and two the node cannot account for — an unstaged file and one hidden behind
+    ///     <c>assume-unchanged</c>.
+    /// </summary>
+    [Test]
+    public async Task ExportPatchAsync_ClassifiesEveryWrittenPathTheDiffDoesNotCarry()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\trepo-01/kept.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.CheckIgnore, exitCode: 0, "repo-01/hidden.txt\0");
+        provider.RegisterCommand(GitDiffCommandKeys.LsFiles(MissingPaths),
+            exitCode: 0,
+            "H repo-01/same.cs\0? repo-01/unstaged.txt\0h repo-01/assumed.cs\0");
+        var service = CreateService(provider);
+
+        var logger = new NoOpAgentHomeRunLogger();
+        var export = await service.ExportPatchAsync(handle,
+            Request("run-gap", NewTempDir(), ["repo-01/kept.cs", .. MissingPaths], Folder("repo-01"), logger));
+
+        AssertEx.Equal(expected: 1, export.WrittenGap.IgnoredCount);
+        AssertEx.Equal(expected: 1, export.WrittenGap.DeletedCount, "a path git names neither in the index nor on disk is gone");
+        AssertEx.Equal(expected: 1, export.WrittenGap.UnchangedCount);
+        AssertEx.Equal(expected: 2, export.WrittenGap.UnexplainedCount,
+            "an unstaged path and an assume-unchanged one are both absences the node cannot vouch for");
+
+        var gapEvents = logger.Events.Where(entry => entry.EventName == "written_not_exported").ToList();
+        AssertEx.Equal(expected: 1, gapEvents.Count, "the run's own log records the gap exactly once");
+
+        var (_, gapDetail, gapData) = gapEvents[0];
+        AssertEx.Equal("total=5;ignored=1;deleted=1;unchanged=1;unexplained=2", gapDetail);
+
+        var buckets = AssertEx.NotNull(gapData as IReadOnlyDictionary<string, List<string>>, "the event carries the paths per reason");
+        AssertEx.Contains(buckets["ignored"], "repo-01/hidden.txt");
+        AssertEx.Contains(buckets["deleted"], "repo-01/gone.tmp");
+        AssertEx.Contains(buckets["unexplained"], "repo-01/assumed.cs");
+    }
+
+    /// <summary>
+    ///     The classification is best-effort but never optimistic: when git cannot say which paths are ignored, every
+    ///     missing path is unexplained and the export still succeeds.
+    /// </summary>
+    [Test]
+    public async Task ExportPatchAsync_WhenTheIgnoreQueryFails_CallsEveryMissingPathUnexplained()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\trepo-01/kept.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.CheckIgnore, exitCode: 128, string.Empty, "fatal: pathspec is in submodule");
+        var service = CreateService(provider);
+
+        var runDir = NewTempDir();
+        var export = await service.ExportPatchAsync(handle,
+            Request("run-degrade", runDir, ["repo-01/kept.cs", "repo-01/a.txt", "repo-01/b.txt"], Folder("repo-01")));
+
+        AssertEx.Equal(expected: 2, export.WrittenGap.UnexplainedCount);
+        AssertEx.Equal(expected: 0, export.WrittenGap.IgnoredCount);
+        AssertEx.Equal(expected: 1, export.ChangedFileCount, "a classification that failed must not fail the export");
+        AssertEx.True(File.Exists(Path.Combine(runDir, "patches", "changes.patch")), "the patch is still written");
+    }
+
+    /// <summary>
+    ///     The loudest gap: the run wrote files and the diff reports nothing at all. The export returns early there,
+    ///     so the reconciliation has to run before it or the whole defect class stays silent again.
+    /// </summary>
+    [Test]
+    public async Task ExportPatchAsync_WhenTheRunWroteFilesAndTheDiffIsEmpty_StillReportsTheGap()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.CheckIgnore, exitCode: 1, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.LsFiles("repo-01/written.cs"), exitCode: 0, "? repo-01/written.cs\0");
+        var service = CreateService(provider);
+
+        var export = await service.ExportPatchAsync(handle,
+            Request("run-empty-diff", NewTempDir(), ["repo-01/written.cs"], Folder("repo-01")));
+
+        AssertEx.Equal(expected: 0, export.ChangedFileCount);
+        AssertEx.Equal(expected: 1, export.WrittenGap.UnexplainedCount,
+            "a write that reached neither the index nor the diff is exactly the silence this reconciliation ends");
+    }
+
     private static void AssertEntry(ChangedFileEntry[] entries, string folderId, string alias, string relativePath, string changeType)
     {
         var entry = entries.Single(candidate => candidate.RelativePath == relativePath);
@@ -277,12 +446,31 @@ public sealed class AgentHomePatchServiceTests : IDisposable
 
     private static AgentHomePatchExportRequest Request(string runId, string hostRunDirectory, params ResolvedSelectedFolder[] folders)
     {
+        return Request(runId, hostRunDirectory, [], folders);
+    }
+
+    private static AgentHomePatchExportRequest Request(string runId,
+        string hostRunDirectory,
+        IReadOnlyList<string> writtenFiles,
+        ResolvedSelectedFolder folder,
+        NoOpAgentHomeRunLogger? runLogger = null)
+    {
+        return Request(runId, hostRunDirectory, writtenFiles, [folder], runLogger);
+    }
+
+    private static AgentHomePatchExportRequest Request(string runId,
+        string hostRunDirectory,
+        IReadOnlyList<string> writtenFiles,
+        ResolvedSelectedFolder[] folders,
+        NoOpAgentHomeRunLogger? runLogger = null)
+    {
         return new AgentHomePatchExportRequest
         {
-            RunLogger = new NoOpAgentHomeRunLogger(),
+            RunLogger = runLogger ?? new NoOpAgentHomeRunLogger(),
             RunId = runId,
             HostRunDirectory = hostRunDirectory,
-            ResolvedFolders = folders
+            ResolvedFolders = folders,
+            WrittenFiles = writtenFiles
         };
     }
 

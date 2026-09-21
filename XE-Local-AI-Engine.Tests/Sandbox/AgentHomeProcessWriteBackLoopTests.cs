@@ -118,7 +118,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             RunId = run.RunId
         });
 
-        AssertEx.True(applied.Applied, $"the exported patch applies to the host. rejections: {string.Join(separator: ';', applied.Rejections)}");
+        AssertEx.True(applied.Applied, $"the exported patch applies to the host. rejections: {string.Join(separator: ';', applied.Rejections.Select(rejection => rejection.Path is null ? rejection.Reason : $"{rejection.Path}: {rejection.Reason}"))}");
         var hostReadme = await File.ReadAllTextAsync(Path.Combine(hostFolder, "README.md"));
         AssertEx.Contains(hostReadme, "bravo");
     }

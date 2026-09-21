@@ -18,6 +18,11 @@ internal sealed class AgentHomeExecutionLeaseManager : IAgentHomeExecutionLeaseM
         return TryAcquireCore(key, allowPoisoned: true);
     }
 
+    // A read of the gate, never a wait on it: CurrentCount is 0 exactly while an OwnedLease holds it, and a key that
+    // has never been acquired has no gate at all. An ambient borrow needs no branch: the owning gate is taken anyway.
+    public bool IsHeld(AgentHomeExecutionLeaseKey key) =>
+        _gates.TryGetValue(key, out var gate) && gate.CurrentCount == 0;
+
     public bool IsPoisoned(AgentHomeExecutionLeaseKey key) =>
         _poisoned.ContainsKey(key);
 

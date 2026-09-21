@@ -12,13 +12,17 @@ internal sealed class NoOpAgentHomeRunLogger : IAgentHomeRunLogger
     /// <summary>The command records appended, in order — enough to assert WHO ran what without a temp directory.</summary>
     public List<AgentHomeCommandLogRecord> Commands { get; } = [];
 
+    /// <summary>The event records appended, in order, so a test can grade an event without a temp directory.</summary>
+    public List<(string EventName, string? Detail, object? Data)> Events { get; } = [];
+
     public Task OpenAsync(AgentHomeRunLogContext context, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
     }
 
-    public Task AppendEventAsync(string eventName, string? detail = null, CancellationToken cancellationToken = default)
+    public Task AppendEventAsync(string eventName, string? detail = null, object? data = null, CancellationToken cancellationToken = default)
     {
+        Events.Add((eventName, detail, data));
         return Task.CompletedTask;
     }
 

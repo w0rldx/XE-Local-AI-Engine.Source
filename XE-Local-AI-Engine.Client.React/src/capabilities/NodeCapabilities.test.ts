@@ -94,6 +94,7 @@ describe("nodeCapabilities", () => {
 			usage: "/usage",
 			tools: "/tools",
 			agents: "/agents",
+			agentRuns: "/agent-runs",
 			skills: "/skills",
 			customTools: "/custom-tools",
 			commands: "/commands",

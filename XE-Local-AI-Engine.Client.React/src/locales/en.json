@@ -119,6 +119,7 @@
 		"recommendations": "Recommendations",
 		"loadedModels": "Loaded",
 		"tools": "Tools",
+		"agentRuns": "Agent runs",
 		"commands": "Commands",
 		"agents": "Agents",
 		"mcp": "MCP",
@@ -191,6 +192,14 @@
 				"noFiles": "This run's patch changes no files.",
 				"binaryTitle": "Contains binary changes",
 				"binaryBody": "Binary files cannot be reviewed here, and this node does not apply them unless it has been configured to.",
+				"dirtyTitle": "Some of these files have local changes",
+				"dirtyBody": "These files already differ from your last commit. Applying writes over them, and may fail where the changes overlap.",
+				"dirtyUnavailable": "At least one folder's local state could not be read, so this list may be incomplete.",
+				"dirtyState": {
+					"modified": "unsaved edit",
+					"staged": "staged change",
+					"untracked": "new file, not in git"
+				},
 				"rejectedTitle": "These changes cannot be applied",
 				"appliedTitle": "Applied to your folders",
 				"applyFailedTitle": "Nothing was applied",
@@ -3080,6 +3089,37 @@
 					"completionTokens": "Completion",
 					"error": "Error class"
 				}
+			}
+		},
+		"agentRuns": {
+			"title": "Agent runs",
+			"subtitle": "Every AgentHome run this node has kept, newest first.",
+			"loading": "Loading the run history…",
+			"loadError": "The run history could not be loaded.",
+			"empty": "This node has not run an agent task yet.",
+			"review": "Review changes",
+			"noPatch": "No changes exported",
+			"files": "{{value}} file(s)",
+			"filesUnknown": "Patch exported",
+			"columns": {
+				"run": "Run",
+				"started": "Started",
+				"outcome": "Outcome",
+				"changes": "Changes",
+				"size": "Size"
+			},
+			"outcome": {
+				"unknown": "Unknown",
+				"cancelled": "Cancelled",
+				"NotRun": "Did not run",
+				"Completed": "Completed",
+				"ToolCallBudgetExceeded": "Tool-call budget reached",
+				"TimeBudgetExceeded": "Time budget reached",
+				"Failed": "Failed"
+			},
+			"applyState": {
+				"applied": "Applied",
+				"rejected": "Apply refused"
 			}
 		},
 		"mcp": {

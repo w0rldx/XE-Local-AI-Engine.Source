@@ -134,7 +134,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 {
                     Prepared = prepared,
                     Goal = request.Goal,
-                    AllowedActions = request.AllowedActions
+                    AllowedActions = request.AllowedActions,
+                    ConversationId = request.ConversationId
                 },
                 cancellationToken);
             if (!result.Completed || result.TimedOut)
@@ -389,7 +390,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         using var loggerScope = _scopeFactory.CreateScope();
         var runLogger = loggerScope.ServiceProvider.GetRequiredService<IAgentHomeRunLogger>();
         var identity = await _identityProvider.GetAsync(cancellationToken);
-        await OpenRunLogAsync(runLogger, runId, logDirectory, identity, cancellationToken);
+        await OpenRunLogAsync(runLogger, runId, logDirectory, identity, request.ConversationId, cancellationToken);
 
         // The git baseline ran during prepare, before this log existed. Flush its records first so commands.jsonl
         // opens on the node's own invocations, the order they really ran in and the order an audit must see.
@@ -433,7 +434,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         // Export after the loop, so the agent's edits diff against the workspace-copy baseline. Gated on export_patch in
         // AllowedActions and on the baseline existing. A budget-cut run still exports: the partial work is real.
-        var patch = await ExportPatchAsync(request, runId, runDirectory, runLogger, cancellationToken);
+        var patch = await ExportPatchAsync(request, goal, runId, runDirectory, runLogger, cancellationToken);
 
         var timedOut = goal.Status == AgentHomeGoalStatus.TimeBudgetExceeded;
         var completed = goal.Status is AgentHomeGoalStatus.Completed or AgentHomeGoalStatus.NotRun;
@@ -469,6 +470,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     }
 
     private async Task<AgentHomePatchExport> ExportPatchAsync(AgentHomeRunRequest request,
+        AgentHomeGoalOutcome goal,
         string runId,
         string runDirectory,
         IAgentHomeRunLogger runLogger,
@@ -494,6 +496,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 RunId = runId,
                 HostRunDirectory = runDirectory,
                 ResolvedFolders = request.Prepared.ResolvedFolders,
+                WrittenFiles = goal.WrittenFiles,
                 RunLogger = runLogger
             },
             cancellationToken);
@@ -503,6 +506,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         string runId,
         string logDirectory,
         AgentHomeOwnerIdentity identity,
+        Guid? conversationId,
         CancellationToken cancellationToken)
     {
         try
@@ -513,7 +517,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                     HostLogDirectory = logDirectory,
                     NodeId = identity.NodeId,
                     OwnerUserId = identity.OwnerUserId,
-                    ProviderName = _provider.ProviderName
+                    ProviderName = _provider.ProviderName,
+                    ConversationId = conversationId
                 },
                 cancellationToken);
         }
@@ -541,7 +546,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     {
         try
         {
-            await runLogger.AppendEventAsync(eventName, detail, cancellationToken);
+            await runLogger.AppendEventAsync(eventName, detail, cancellationToken: cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

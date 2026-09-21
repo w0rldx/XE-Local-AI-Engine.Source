@@ -15,13 +15,22 @@ interface AgentHomePatchApplyDialogProps {
 	onClose: () => void;
 }
 
+/** One refusal: the node's own redacted reason, and the refused entry's folder-relative name when it has one. */
+interface RejectionEntry {
+	readonly reason: string;
+	readonly path: string | null;
+}
+
 /**
- * Reads the node's per-error reasons off a ProblemDetails 409. The apply endpoint answers with the service's own
+ * Reads the node's per-error refusals off a ProblemDetails 409. The apply endpoint answers with the service's own
  * redacted rejection strings, one per error, and those are the whole content of the refusal — the top-level `detail`
  * is a generic sentence. Anything else (a network failure, a 500) has no list, and the caller falls back to
  * {@link apiErrorMessage}.
+ *
+ * The error `name` carries the refused entry when the node knew one. Its other two values name no entry and contain
+ * no slash, which is what separates them from a folder-relative `<alias>/<rel>` path.
  */
-function rejectionReasons(error: unknown): readonly string[] {
+function rejectionEntries(error: unknown): readonly RejectionEntry[] {
 	if (!(error instanceof ApiError)) {
 		return [];
 	}
@@ -32,8 +41,57 @@ function rejectionReasons(error: unknown): readonly string[] {
 	}
 
 	return errors
-		.map((entry) => (entry !== null && typeof entry === "object" ? (entry as Record<string, unknown>)["reason"] : undefined))
-		.filter((reason): reason is string => typeof reason === "string" && reason.trim().length > 0);
+		.map((entry) => (entry !== null && typeof entry === "object" ? (entry as Record<string, unknown>) : undefined))
+		.map((entry) => {
+			const reason = entry?.["reason"];
+			const name = entry?.["name"];
+			if (typeof reason !== "string" || reason.trim().length === 0) {
+				return null;
+			}
+			return { reason, path: typeof name === "string" && name.includes("/") ? name : null };
+		})
+		.filter((entry): entry is RejectionEntry => entry !== null);
+}
+
+/** Splits refusals into the ones about a named file and the ones about the patch as a whole. */
+function groupRejections(entries: readonly RejectionEntry[]) {
+	const byPath = new Map<string, string[]>();
+	const general: string[] = [];
+	for (const entry of entries) {
+		if (entry.path === null || entry.path.length === 0) {
+			general.push(entry.reason);
+			continue;
+		}
+		byPath.set(entry.path, [...(byPath.get(entry.path) ?? []), entry.reason]);
+	}
+	return { byPath: [...byPath.entries()], general };
+}
+
+/** Refusals, grouped under the file each one is about, with the patch-wide ones kept separate below them. */
+function RejectionList({ entries }: { entries: readonly RejectionEntry[] }) {
+	const { byPath, general } = groupRejections(entries);
+
+	return (
+		<Stack gap={6}>
+			{byPath.map(([path, reasons]) => (
+				<Stack key={path} gap={2}>
+					<Code>{path}</Code>
+					<List size="sm">
+						{reasons.map((reason) => (
+							<List.Item key={reason}>{reason}</List.Item>
+						))}
+					</List>
+				</Stack>
+			))}
+			{general.length === 0 ? null : (
+				<List size="sm">
+					{general.map((reason) => (
+						<List.Item key={reason}>{reason}</List.Item>
+					))}
+				</List>
+			)}
+		</Stack>
+	);
 }
 
 /**
@@ -92,7 +150,20 @@ export function AgentHomePatchApplyDialog({ runId, onClose }: AgentHomePatchAppl
 		apply.mutate({ body: { patchSha256: previewedHash }, path: { runId } });
 	}, [apply, previewedHash, runId]);
 
-	const applyReasons = rejectionReasons(apply.error);
+	const applyRejections = rejectionEntries(apply.error);
+
+	const dirtyStateLabel = useCallback(
+		(state: string) => {
+			if (state === "staged") {
+				return t("chat.toolCall.patchApply.dirtyState.staged", "staged change");
+			}
+			if (state === "untracked") {
+				return t("chat.toolCall.patchApply.dirtyState.untracked", "new file, not in git");
+			}
+			return t("chat.toolCall.patchApply.dirtyState.modified", "unsaved edit");
+		},
+		[t],
+	);
 
 	return (
 		<DialogShell
@@ -179,16 +250,50 @@ export function AgentHomePatchApplyDialog({ runId, onClose }: AgentHomePatchAppl
 							</Alert>
 						) : null}
 
+						{plan.dirtyTargets.length === 0 && !plan.dirtyCheckUnavailable ? null : (
+							<Alert
+								variant="light"
+								color="yellow"
+								role="status"
+								icon={<IconAlertTriangle size={16} />}
+								title={t("chat.toolCall.patchApply.dirtyTitle", "Some of these files have local changes")}
+								data-testid="agent-home-patch-apply-dirty"
+							>
+								<Stack gap={4}>
+									<Text size="sm">
+										{t(
+											"chat.toolCall.patchApply.dirtyBody",
+											"These files already differ from your last commit. Applying writes over them, and may fail where the changes overlap.",
+										)}
+									</Text>
+									{plan.dirtyTargets.length === 0 ? null : (
+										<List size="sm">
+											{plan.dirtyTargets.map((target) => (
+												<List.Item key={target.path}>
+													<Text size="sm" ff="monospace" span={true}>
+														{target.path}
+													</Text>
+													{` — ${dirtyStateLabel(target.state)}`}
+												</List.Item>
+											))}
+										</List>
+									)}
+									{plan.dirtyCheckUnavailable ? (
+										<Text size="sm" c="dimmed">
+											{t(
+												"chat.toolCall.patchApply.dirtyUnavailable",
+												"At least one folder's local state could not be read, so this list may be incomplete.",
+											)}
+										</Text>
+									) : null}
+								</Stack>
+							</Alert>
+						)}
+
 						{plan.rejections.length === 0 ? null : (
 							<InlineErrorAlert
 								title={t("chat.toolCall.patchApply.rejectedTitle", "These changes cannot be applied")}
-								message={
-									<List size="sm">
-										{plan.rejections.map((rejection) => (
-											<List.Item key={rejection}>{rejection}</List.Item>
-										))}
-									</List>
-								}
+								message={<RejectionList entries={plan.rejections} />}
 								data-testid="agent-home-patch-apply-rejections"
 							/>
 						)}
@@ -250,7 +355,7 @@ export function AgentHomePatchApplyDialog({ runId, onClose }: AgentHomePatchAppl
 						title={t("chat.toolCall.patchApply.applyFailedTitle", "Nothing was applied")}
 						message={
 							<Stack gap={4}>
-								{applyReasons.length === 0 ? (
+								{applyRejections.length === 0 ? (
 									<Text size="sm">
 										{apiErrorMessage(
 											apply.error,
@@ -258,11 +363,7 @@ export function AgentHomePatchApplyDialog({ runId, onClose }: AgentHomePatchAppl
 										)}
 									</Text>
 								) : (
-									<List size="sm">
-										{applyReasons.map((reason) => (
-											<List.Item key={reason}>{reason}</List.Item>
-										))}
-									</List>
+									<RejectionList entries={applyRejections} />
 								)}
 								<Text size="sm" c="dimmed">
 									{t(

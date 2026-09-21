@@ -119,6 +119,7 @@
 		"recommendations": "Empfehlungen",
 		"loadedModels": "Geladen",
 		"tools": "Tools",
+		"agentRuns": "Agent-Läufe",
 		"commands": "Befehle",
 		"agents": "Agenten",
 		"mcp": "MCP",
@@ -191,6 +192,14 @@
 				"noFiles": "Der Patch dieses Laufs ändert keine Dateien.",
 				"binaryTitle": "Enthält binäre Änderungen",
 				"binaryBody": "Binärdateien lassen sich hier nicht prüfen, und dieser Node wendet sie nur an, wenn er dafür konfiguriert wurde.",
+				"dirtyTitle": "Einige dieser Dateien haben lokale Änderungen",
+				"dirtyBody": "Diese Dateien weichen bereits von deinem letzten Commit ab. Beim Anwenden wird darüber geschrieben, und es kann fehlschlagen, wo sich die Änderungen überschneiden.",
+				"dirtyUnavailable": "Der lokale Stand mindestens eines Ordners konnte nicht gelesen werden, diese Liste ist daher möglicherweise unvollständig.",
+				"dirtyState": {
+					"modified": "ungespeicherte Änderung",
+					"staged": "vorgemerkte Änderung",
+					"untracked": "neue Datei, nicht in Git"
+				},
 				"rejectedTitle": "Diese Änderungen können nicht angewendet werden",
 				"appliedTitle": "Auf deine Ordner angewendet",
 				"applyFailedTitle": "Es wurde nichts angewendet",
@@ -3080,6 +3089,37 @@
 					"completionTokens": "Antwort",
 					"error": "Fehlerklasse"
 				}
+			}
+		},
+		"agentRuns": {
+			"title": "Agent-Läufe",
+			"subtitle": "Alle AgentHome-Läufe, die dieser Node aufbewahrt hat, neueste zuerst.",
+			"loading": "Lauf-Historie wird geladen…",
+			"loadError": "Die Lauf-Historie konnte nicht geladen werden.",
+			"empty": "Dieser Node hat noch keine Agent-Aufgabe ausgeführt.",
+			"review": "Änderungen prüfen",
+			"noPatch": "Keine Änderungen exportiert",
+			"files": "{{value}} Datei(en)",
+			"filesUnknown": "Patch exportiert",
+			"columns": {
+				"run": "Lauf",
+				"started": "Gestartet",
+				"outcome": "Ergebnis",
+				"changes": "Änderungen",
+				"size": "Größe"
+			},
+			"outcome": {
+				"unknown": "Unbekannt",
+				"cancelled": "Abgebrochen",
+				"NotRun": "Nicht ausgeführt",
+				"Completed": "Abgeschlossen",
+				"ToolCallBudgetExceeded": "Tool-Aufruf-Budget erreicht",
+				"TimeBudgetExceeded": "Zeitbudget erreicht",
+				"Failed": "Fehlgeschlagen"
+			},
+			"applyState": {
+				"applied": "Angewendet",
+				"rejected": "Anwendung abgelehnt"
 			}
 		},
 		"mcp": {

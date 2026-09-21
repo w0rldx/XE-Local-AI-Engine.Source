@@ -24,6 +24,8 @@ const cleanPreview = {
 	canApply: true,
 	files: [{ alias: "repo-01", relativePath: "src/App.cs", changeType: "modified", added: 3, removed: 1 }],
 	rejections: [],
+	dirtyTargets: [],
+	dirtyCheckUnavailable: false,
 	containsBinary: false,
 	patchSha256: PATCH_HASH,
 };
@@ -91,7 +93,7 @@ describe("AgentHomePatchApplyDialog", () => {
 			jsonRoute("post", PREVIEW_ROUTE, {
 				...cleanPreview,
 				canApply: false,
-				rejections: ["alias 'repo-01': patch does not apply cleanly (error: patch failed)"],
+				rejections: [{ reason: "alias 'repo-01': patch does not apply cleanly (error: patch failed)", path: null }],
 			}),
 		);
 		renderDialog();
@@ -99,6 +101,65 @@ describe("AgentHomePatchApplyDialog", () => {
 		const rejections = await screen.findByTestId("agent-home-patch-apply-rejections");
 		expect(rejections.textContent).toContain("does not apply cleanly");
 		expect((screen.getByTestId("agent-home-patch-apply-confirm") as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it("names the file each refusal is about, and keeps patch-wide reasons separate", async () => {
+		server.use(
+			jsonRoute("post", PREVIEW_ROUTE, {
+				...cleanPreview,
+				canApply: false,
+				rejections: [
+					{ reason: "a patch block creates or changes a symbolic link, which is not supported.", path: "repo-01/evil" },
+					{ reason: "the exported patch contains no file changes.", path: null },
+				],
+			}),
+		);
+		renderDialog();
+
+		const rejections = await screen.findByTestId("agent-home-patch-apply-rejections");
+		expect(rejections.textContent).toContain("repo-01/evil");
+		expect(rejections.textContent).toContain("symbolic link");
+		expect(rejections.textContent).toContain("contains no file changes");
+	});
+
+	// Advisory, never a gate: the node says the patch applies, so Apply stays available and the operator decides.
+	it("warns about targets that already carry local changes without disabling Apply", async () => {
+		server.use(
+			jsonRoute("post", PREVIEW_ROUTE, {
+				...cleanPreview,
+				dirtyTargets: [
+					{ path: "repo-01/src/App.cs", state: "modified" },
+					{ path: "repo-01/notes/new.txt", state: "untracked" },
+				],
+			}),
+		);
+		renderDialog();
+
+		const warning = await screen.findByTestId("agent-home-patch-apply-dirty");
+		expect(warning.textContent).toContain("repo-01/src/App.cs");
+		expect(warning.textContent).toContain("repo-01/notes/new.txt");
+		// Announced rather than silently painted, and a real list for a list of files.
+		expect(warning.getAttribute("role")).toBe("status");
+		expect(warning.querySelectorAll("li")).toHaveLength(2);
+
+		const confirm = await screen.findByTestId("agent-home-patch-apply-confirm");
+		await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+	});
+
+	it("says so when a folder's local state could not be read", async () => {
+		server.use(jsonRoute("post", PREVIEW_ROUTE, { ...cleanPreview, dirtyCheckUnavailable: true }));
+		renderDialog();
+
+		const warning = await screen.findByTestId("agent-home-patch-apply-dirty");
+		expect(warning.textContent).toContain("could not be read");
+	});
+
+	it("shows no dirty-target warning when nothing on the host has drifted", async () => {
+		server.use(jsonRoute("post", PREVIEW_ROUTE, cleanPreview));
+		renderDialog();
+
+		await screen.findByTestId("agent-home-patch-apply-files");
+		expect(screen.queryByTestId("agent-home-patch-apply-dirty")).toBeNull();
 	});
 
 	it("warns about binary changes the operator cannot review here", async () => {
@@ -134,6 +195,36 @@ describe("AgentHomePatchApplyDialog", () => {
 
 		await waitFor(() => expect(previews).toBe(2));
 		await waitFor(() => expect(screen.queryByTestId("agent-home-patch-apply-error")).toBeNull());
+	});
+
+	// The apply's 409 carries the refused entry in the error NAME, which is what lets the dialog group it per file.
+	it("names the refused file on a 409 that carries one", async () => {
+		server.use(
+			jsonRoute("post", PREVIEW_ROUTE, cleanPreview),
+			http.post(localApiPath(APPLY_ROUTE), () =>
+				HttpResponse.json(
+					{
+						type: "about:blank",
+						title: "Conflict",
+						status: 409,
+						detail: "One or more errors occurred.",
+						errors: [
+							{ name: "repo-01/evil", reason: "a patch block creates or changes a symbolic link, which is not supported." },
+						],
+					},
+					{ status: 409, headers: { "content-type": "application/problem+json" } },
+				),
+			),
+		);
+		renderDialog();
+
+		const confirm = await screen.findByTestId("agent-home-patch-apply-confirm");
+		await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+		fireEvent.click(confirm);
+
+		const failure = await screen.findByTestId("agent-home-patch-apply-error");
+		expect(failure.textContent).toContain("repo-01/evil");
+		expect(failure.textContent).toContain("symbolic link");
 	});
 
 	it("shows a refused apply's reasons without closing", async () => {

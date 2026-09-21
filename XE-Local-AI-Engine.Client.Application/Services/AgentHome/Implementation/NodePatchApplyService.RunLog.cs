@@ -6,15 +6,20 @@ internal sealed partial class NodePatchApplyService
 {
     private async Task LogAppliedAsync(string runId, IReadOnlyList<PatchApplyFileEntry> files, CancellationToken cancellationToken)
     {
-        var detail = string.Join(separator: ';', files.Select(file => string.Create(CultureInfo.InvariantCulture, $"{file.Alias}/{file.RelativePath}")));
+        var detail = string.Join(separator: ';', files.Select(file => Describe(file.Alias, file.RelativePath)));
         PatchApplied(_logger, runId, files.Count);
         await AppendEventSafelyAsync(runId, "patch_applied", detail, cancellationToken);
     }
 
-    private async Task LogRejectionAsync(string runId, IReadOnlyList<string> rejections, CancellationToken cancellationToken)
+    private async Task LogRejectionAsync(string runId, IReadOnlyList<PatchApplyRejection> rejections, CancellationToken cancellationToken)
     {
+        // The entry name joins the reason folder-relative, the same form the applied-files line already writes.
+        var detail = string.Join(separator: ';',
+            rejections.Select(rejection => rejection.Path is null
+                ? rejection.Reason
+                : string.Create(CultureInfo.InvariantCulture, $"{rejection.Path}: {rejection.Reason}")));
         PatchApplyRejected(_logger, runId, rejections.Count);
-        await AppendEventSafelyAsync(runId, "patch_apply_rejected", string.Join(separator: ';', rejections), cancellationToken);
+        await AppendEventSafelyAsync(runId, "patch_apply_rejected", detail, cancellationToken);
     }
 
     // Outcome only, so an apply is visible without opening the run directory: run id and a count, never a path.
@@ -51,7 +56,7 @@ internal sealed partial class NodePatchApplyService
                     ProviderName = ProviderName
                 },
                 cancellationToken);
-            await runLogger.AppendEventAsync(eventName, detail, cancellationToken);
+            await runLogger.AppendEventAsync(eventName, detail, cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException)
         {

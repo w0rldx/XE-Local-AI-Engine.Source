@@ -197,6 +197,9 @@ export const nodeRoutePaths = {
 	// human composer resolves commands, and every authenticated node exposes the management surface.
 	commands: "/commands",
 	agents: "/agents",
+	// Read-only AgentHome run history (operator forensics), ungated for the same reason as usage/invocations: it is
+	// backed by an operator-gated endpoint and the authenticated _layout is the gate.
+	agentRuns: "/agent-runs",
 	skills: "/skills",
 	customTools: "/custom-tools",
 	mcp: "/mcp",

@@ -99,6 +99,51 @@ public sealed class AgentHomeExecutionLeaseManagerTests
         AssertEx.False(manager.IsPoisoned(KeyA));
     }
 
+    /// <summary>
+    ///     The non-acquiring peek the run-retention sweep reads: it must answer for a key nobody ever took, become
+    ///     true while a lease is held, and go false again on disposal — all without ever taking the gate itself.
+    /// </summary>
+    [Test]
+    public async Task IsHeld_TracksTheGateWithoutTakingIt()
+    {
+        var manager = new AgentHomeExecutionLeaseManager();
+
+        AssertEx.False(manager.IsHeld(KeyA), "a key nobody ever acquired has no gate, so it cannot be held.");
+
+        var lease = AssertEx.NotNull(manager.TryAcquire(KeyA));
+        AssertEx.True(manager.IsHeld(KeyA), "a held lease must read as held, or the sweep would delete a live run.");
+        AssertEx.False(manager.IsHeld(KeyB), "the peek is per key.");
+
+        // The peek must not have consumed the gate: an unrelated context still finds the key busy.
+        Task<IAgentHomeExecutionLease?> contender;
+        using (ExecutionContext.SuppressFlow())
+        {
+            contender = Task.Run(() => manager.TryAcquire(KeyA));
+        }
+
+        AssertEx.Null(await contender, "IsHeld must be a read; a peek that acquired would have released the owner's gate.");
+
+        lease.Dispose();
+        AssertEx.False(manager.IsHeld(KeyA), "a released lease reads as free again.");
+    }
+
+    /// <summary>
+    ///     The race the peek cannot close, pinned as the behaviour it IS: a lease taken after the read still reads as
+    ///     free to the caller holding that stale answer. Callers treat "held" as a refusal, never "not held" as
+    ///     exclusivity.
+    /// </summary>
+    [Test]
+    public async Task IsHeld_ReadBeforeAnAcquisition_IsAStaleAnswerNotALock()
+    {
+        var manager = new AgentHomeExecutionLeaseManager();
+        var beforeAcquire = manager.IsHeld(KeyA);
+
+        using var lease = await AcquireAfterYieldAsync(manager);
+
+        AssertEx.False(beforeAcquire, "the snapshot taken before the acquisition is free, and stays free.");
+        AssertEx.True(manager.IsHeld(KeyA), "a fresh read sees the lease the stale one could not.");
+    }
+
     [Test]
     public async Task OutOfOrderCrossContextDisposal_DoesNotResurrectDisposedAmbientScope()
     {
