@@ -14,7 +14,10 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 /// <remarks>
 ///     WAL is a file-level property, so once any connection sets it the whole database file runs under WAL — the
-///     shared Quartz job store's connections included.
+///     shared Quartz job store's connections included. The three tuning pragmas degrade with a warning;
+///     <c>foreign_keys</c> fails the open instead, because this is the layer that enforces it on connection strings
+///     the process did not build. Callers that own their connection dispose it and retry; EF's interceptor fails the
+///     query that triggered the open.
 /// </remarks>
 public static class NodeSqlitePragmas
 {
@@ -72,7 +75,7 @@ public static class NodeSqlitePragmas
             command.ExecuteNonQuery();
         });
 
-        TryExecute(logger, "foreign_keys", () =>
+        ExecuteRequired(logger, "foreign_keys", () =>
         {
             using var command = connection.CreateCommand();
             command.CommandText = ForeignKeysSql;
@@ -116,7 +119,7 @@ public static class NodeSqlitePragmas
             await command.ExecuteNonQueryAsync(cancellationToken);
         });
 
-        await TryExecuteAsync(logger, "foreign_keys", async () =>
+        await ExecuteRequiredAsync(logger, "foreign_keys", async () =>
         {
             await using var command = connection.CreateCommand();
             command.CommandText = ForeignKeysSql;
@@ -196,6 +199,36 @@ public static class NodeSqlitePragmas
         }
     }
 
+    // The enforcement pragma never degrades: it is the guarantee this type exists to make, on connection strings this
+    // process did not build, so a failure fails the open and the caller retries rather than getting an unchecked one.
+    private static void ExecuteRequired(ILogger? logger, string pragma, Action execute)
+    {
+        try
+        {
+            execute();
+        }
+        catch (Exception exception)
+        {
+            logger?.LogError(exception, "Node SQLite could not apply PRAGMA {Pragma}; failing the connection open.", pragma);
+            throw;
+        }
+    }
+
+    private static async Task ExecuteRequiredAsync(ILogger? logger, string pragma, Func<Task> execute)
+    {
+        try
+        {
+            await execute();
+        }
+        catch (Exception exception)
+        {
+            logger?.LogError(exception, "Node SQLite could not apply PRAGMA {Pragma}; failing the connection open.", pragma);
+            throw;
+        }
+    }
+
+    // Tuning pragmas only, and only SqliteException degrades. Anything else means the command failed for a reason
+    // SQLite did not report, so it is named and rethrown rather than swallowed.
     private static void TryExecute(ILogger? logger, string pragma, Action execute)
     {
         try
@@ -205,6 +238,11 @@ public static class NodeSqlitePragmas
         catch (SqliteException exception)
         {
             logger?.LogWarning(exception, "Node SQLite could not apply PRAGMA {Pragma}; continuing without it.", pragma);
+        }
+        catch (Exception exception)
+        {
+            logger?.LogError(exception, "Node SQLite failed to apply PRAGMA {Pragma}; failing the connection open.", pragma);
+            throw;
         }
     }
 
@@ -217,6 +255,11 @@ public static class NodeSqlitePragmas
         catch (SqliteException exception)
         {
             logger?.LogWarning(exception, "Node SQLite could not apply PRAGMA {Pragma}; continuing without it.", pragma);
+        }
+        catch (Exception exception)
+        {
+            logger?.LogError(exception, "Node SQLite failed to apply PRAGMA {Pragma}; failing the connection open.", pragma);
+            throw;
         }
     }
 }

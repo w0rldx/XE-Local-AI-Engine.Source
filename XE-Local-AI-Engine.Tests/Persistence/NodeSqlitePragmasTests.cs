@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Persistence;
 
+using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -238,6 +239,66 @@ public sealed class NodeSqlitePragmasTests : IDisposable
         await context.Database.CloseConnectionAsync();
     }
 
+    /// <summary>
+    ///     Layer three: a <c>foreign_keys</c> failure fails the open. It is the guarantee this type makes for
+    ///     connection strings the process did not build, so it must never degrade the way the tuning pragmas do.
+    /// </summary>
+    [Test]
+    public async Task ForeignKeysPragmaFailure_FailsTheOpen_OnBothPaths()
+    {
+        var logger = new LogCapturingLogger();
+        await using var connection = new PragmaScriptedConnection("foreign_keys");
+
+        _ = await AssertEx.ThrowsAsync<SqliteException>(() =>
+            NodeSqlitePragmas.ApplyAsync(connection, NodeSqlitePragmaSettings.Default, logger, CancellationToken.None));
+        _ = AssertEx.Throws<SqliteException>(() =>
+            NodeSqlitePragmas.Apply(connection, NodeSqlitePragmaSettings.Default, logger));
+
+        AssertEx.Empty(logger.Warnings, "A failed enforcement pragma must not be logged as a survivable warning.");
+        AssertEx.True(logger.Errors.TrueForAll(entry => entry.Contains("foreign_keys", StringComparison.Ordinal)),
+            "The failing pragma must be named in the log.");
+    }
+
+    /// <summary>
+    ///     The other half of the split: a tuning pragma still degrades. It fails with a warning, and the pragmas after
+    ///     it — <c>foreign_keys</c> included — still run.
+    /// </summary>
+    [Test]
+    public async Task TuningPragmaFailure_LogsAWarningAndAppliesTheRemainingPragmas()
+    {
+        var logger = new LogCapturingLogger();
+        await using var connection = new PragmaScriptedConnection("busy_timeout");
+
+        await NodeSqlitePragmas.ApplyAsync(connection, NodeSqlitePragmaSettings.Default, logger, CancellationToken.None);
+
+        AssertEx.Empty(logger.Errors, "A tuning pragma that SQLite refused is survivable, not a failed open.");
+        AssertEx.True(logger.Warnings.Exists(entry => entry.Contains("busy_timeout", StringComparison.Ordinal)),
+            "The degraded pragma must be named in the warning.");
+        AssertEx.True(connection.Executed.Exists(sql => sql.Contains("foreign_keys", StringComparison.Ordinal)),
+            "Enforcement must still be applied after a tuning pragma failed.");
+    }
+
+    /// <summary>
+    ///     A pragma failure that is not a <see cref="SqliteException" /> must propagate, never degrade: a caller handed
+    ///     the connection back would be running without the foreign-key enforcement the node guarantees.
+    /// </summary>
+    [Test]
+    public async Task PragmaFailureOfAnotherExceptionType_PropagatesAndNamesThePragma()
+    {
+        // A never-opened connection is the real seam: Microsoft.Data.Sqlite refuses the command with an
+        // InvalidOperationException, exactly the "not a SqliteException" shape the narrow catch must not eat.
+        var logger = new LogCapturingLogger();
+        await using var connection = new SqliteConnection($"Data Source={Path.Combine(_dir, "never-opened.sqlite")}");
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+            NodeSqlitePragmas.ApplyAsync(connection, NodeSqlitePragmaSettings.Default, logger, CancellationToken.None));
+        _ = AssertEx.Throws<InvalidOperationException>(() =>
+            NodeSqlitePragmas.Apply(connection, NodeSqlitePragmaSettings.Default, logger));
+
+        AssertEx.True(logger.Errors.Exists(entry => entry.Contains("busy_timeout", StringComparison.Ordinal)),
+            "The failing pragma must be named in the log, or the failure is undiagnosable.");
+    }
+
     [Test]
     public async Task SharedCacheConnection_SkipsWalWithoutLoggingAWarning()
     {
@@ -253,7 +314,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
             Mode = SqliteOpenMode.ReadWriteCreate
         }.ToString();
 
-        var logger = new WarningCapturingLogger();
+        var logger = new LogCapturingLogger();
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync();
 
@@ -299,22 +360,142 @@ public sealed class NodeSqlitePragmasTests : IDisposable
         }
     }
 
-    // Captures Warning-level log entries so a test can assert the pragma path stayed quiet.
-    private sealed class WarningCapturingLogger : ILogger
+    /// <summary>
+    ///     A connection whose commands touch no database: the chosen pragma throws a <see cref="SqliteException" />,
+    ///     every other one is recorded and succeeds.
+    /// </summary>
+    /// <remarks>
+    ///     No real SQLite connection can be put in a state where exactly one pragma fails — an open transaction and a
+    ///     read-only connection both apply <c>foreign_keys</c> without complaint — and the applier takes a
+    ///     <see cref="DbConnection" />, so this is the seam the type itself offers, not an abstraction for the test.
+    /// </remarks>
+    private sealed class PragmaScriptedConnection : DbConnection
+    {
+        private readonly string _failingPragma;
+
+        public PragmaScriptedConnection(string failingPragma)
+        {
+            _failingPragma = failingPragma;
+        }
+
+        public List<string> Executed { get; } = [];
+
+        // ":memory:" keeps the WAL branch out of the way: those two pragmas are not what these tests are about.
+        [AllowNull]
+        public override string ConnectionString { get; set; } = "Data Source=:memory:";
+
+        public override string Database => "main";
+
+        public override string DataSource => ":memory:";
+
+        public override string ServerVersion => "3.0.0";
+
+        public override ConnectionState State => ConnectionState.Open;
+
+        public override void ChangeDatabase(string databaseName) =>
+            throw new NotSupportedException();
+
+        public override void Close()
+        {
+        }
+
+        public override void Open()
+        {
+        }
+
+        public int Execute(string commandText)
+        {
+            Executed.Add(commandText);
+            if (commandText.Contains(_failingPragma, StringComparison.Ordinal))
+            {
+                throw new SqliteException($"SQLite Error 5: 'database is locked' on {commandText}", 5);
+            }
+
+            return 0;
+        }
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) =>
+            throw new NotSupportedException();
+
+        protected override DbCommand CreateDbCommand() =>
+            new ScriptedCommand(this);
+
+        private sealed class ScriptedCommand : DbCommand
+        {
+            private readonly PragmaScriptedConnection _owner;
+
+            public ScriptedCommand(PragmaScriptedConnection owner)
+            {
+                _owner = owner;
+            }
+
+            [AllowNull]
+            public override string CommandText { get; set; } = string.Empty;
+
+            public override int CommandTimeout { get; set; }
+
+            public override CommandType CommandType { get; set; } = CommandType.Text;
+
+            public override bool DesignTimeVisible { get; set; }
+
+            public override UpdateRowSource UpdatedRowSource { get; set; }
+
+            protected override DbConnection? DbConnection { get; set; }
+
+            protected override DbParameterCollection DbParameterCollection => throw new NotSupportedException();
+
+            protected override DbTransaction? DbTransaction { get; set; }
+
+            public override void Cancel()
+            {
+            }
+
+            public override int ExecuteNonQuery() =>
+                _owner.Execute(CommandText);
+
+            public override object? ExecuteScalar()
+            {
+                _ = _owner.Execute(CommandText);
+                return null;
+            }
+
+            public override void Prepare()
+            {
+            }
+
+            protected override DbParameter CreateDbParameter() =>
+                throw new NotSupportedException();
+
+            protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) =>
+                throw new NotSupportedException();
+        }
+    }
+
+    // Captures Warning and Error entries so a test can assert the pragma path stayed quiet, or named what failed.
+    private sealed class LogCapturingLogger : ILogger
     {
         public List<string> Warnings { get; } = [];
+
+        public List<string> Errors { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
             null;
 
         public bool IsEnabled(LogLevel logLevel) =>
-            logLevel == LogLevel.Warning;
+            logLevel is LogLevel.Warning or LogLevel.Error;
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            if (logLevel == LogLevel.Warning)
+            switch (logLevel)
             {
-                Warnings.Add(formatter(state, exception));
+                case LogLevel.Warning:
+                    Warnings.Add(formatter(state, exception));
+                    break;
+                case LogLevel.Error:
+                    Errors.Add(formatter(state, exception));
+                    break;
+                default:
+                    break;
             }
         }
     }
