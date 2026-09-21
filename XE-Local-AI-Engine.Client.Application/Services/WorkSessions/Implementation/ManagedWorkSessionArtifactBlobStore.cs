@@ -55,6 +55,11 @@ public sealed class ManagedWorkSessionArtifactBlobStore : IWorkSessionArtifactBl
         _blobs.DeleteScope(sessionId);
     }
 
+    public IReadOnlyList<Guid> ListSessionIdsLastWrittenBefore(DateTimeOffset cutoffUtc)
+    {
+        return _blobs.ListScopeIdsLastWrittenBefore(cutoffUtc);
+    }
+
     private static WorkSessionArtifactReadStatus Map(ManagedBlobReadStatus status) =>
         status switch
         {

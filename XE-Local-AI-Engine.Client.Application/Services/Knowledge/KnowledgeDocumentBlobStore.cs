@@ -21,6 +21,16 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
 {
     private const string RootFolderName = "knowledge-base";
     private const string DocumentsFolderName = "documents";
+    private const string TempSuffix = ".tmp";
+    private const string BackupSuffix = ".backup";
+
+    /// <summary>How long an interrupted write's sibling is spared, so the sweep can never race a write in flight.</summary>
+    /// <remarks>
+    ///     This store holds no lock a sweeper could take, so age is the only signal that a <c>.tmp</c>/<c>.backup</c>
+    ///     sibling belongs to a dead writer rather than a live one. Comfortably longer than any single blob write, and
+    ///     the same window <c>RetentionSweeperService</c> gives an orphaned artifact scope for the same reason.
+    /// </remarks>
+    private static readonly TimeSpan InterruptedWriteGrace = TimeSpan.FromMinutes(15);
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly INodeDataDirectory _dataDirectory;
@@ -192,7 +202,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         Directory.CreateDirectory(DocumentsDirectory());
         var bytesPath = BytesPath(documentId, extension);
         var encryptedBytes = _blobProtector.Encrypt(Guid.Empty, documentId, UploadedFileBlobProtector.FileBytesColumn, content.Span);
-        var tempPath = string.Concat(bytesPath, ".", Guid.NewGuid().ToString("N"), ".tmp");
+        var tempPath = string.Concat(bytesPath, ".", Guid.NewGuid().ToString("N"), TempSuffix);
         try
         {
             await File.WriteAllBytesAsync(tempPath, encryptedBytes, cancellationToken);
@@ -260,6 +270,47 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         return [.. ids];
     }
 
+    public KnowledgeBlobReconciliationResult ReconcileInterruptedWrites()
+    {
+        var documentsDirectory = DocumentsDirectory();
+        if (!Directory.Exists(documentsDirectory))
+        {
+            return new KnowledgeBlobReconciliationResult { RestoredBlobNames = [], RemovedLitterCount = 0 };
+        }
+
+        var staleBefore = (_timeProvider.GetUtcNow() - InterruptedWriteGrace).UtcDateTime;
+        var restored = new List<string>();
+        var removed = 0;
+        foreach (var path in Directory.GetFiles(documentsDirectory))
+        {
+            if (InterruptedWriteSuffix(path) is not { } suffix || LiveBlobPathOf(path, suffix) is not { } liveBlobPath)
+            {
+                continue;
+            }
+
+            // Recovery before reclamation: while the live path is missing, a backup IS the document its row still
+            // claims to own, whatever its age, and deleting on age alone would be permanent loss of a live document.
+            if (string.Equals(suffix, BackupSuffix, StringComparison.Ordinal) && !File.Exists(liveBlobPath))
+            {
+                if (TryRestoreBackup(path, liveBlobPath))
+                {
+                    restored.Add(Path.GetFileName(liveBlobPath));
+                }
+
+                continue;
+            }
+
+            // A temp is aged out, never promoted: its bytes were never verified, so installing them under a live row
+            // would be worse than the missing blob AddAsync's dedupe-repair path already restores on the next re-add.
+            if (File.GetLastWriteTimeUtc(path) < staleBefore && TryDeleteFile(path))
+            {
+                removed++;
+            }
+        }
+
+        return new KnowledgeBlobReconciliationResult { RestoredBlobNames = restored, RemovedLitterCount = removed };
+    }
+
     public Task DeleteAllBytesAsync(Guid documentId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -294,7 +345,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
     {
         var oldBlobPath = BytesPath(row.DocumentId, row.Extension);
         var replacementBlobPath = BytesPath(row.DocumentId, extension);
-        var backupBlobPath = string.Concat(oldBlobPath, ".", Guid.NewGuid().ToString("N"), ".backup");
+        var backupBlobPath = string.Concat(oldBlobPath, ".", Guid.NewGuid().ToString("N"), BackupSuffix);
         var backedUpOldBlob = false;
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         try
@@ -373,8 +424,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                 _ = await updateCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            // Keep the database transaction open until the replacement blob is durably atomically renamed. When the
-            // extension is unchanged, rename the old encrypted blob aside first so a failed write/commit can restore it.
+            // The replacement blob is published to its live path BEFORE the commit, and that order is load-bearing for
+            // KnowledgeBlobOrphanSweeper: it is what makes a surviving temp sibling provably not the row's content.
             if (string.Equals(oldBlobPath, replacementBlobPath, StringComparison.Ordinal) && File.Exists(oldBlobPath))
             {
                 File.Move(oldBlobPath, backupBlobPath);
@@ -399,7 +450,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
 
         if (!string.Equals(row.Extension, extension, StringComparison.Ordinal))
         {
-            DeleteFileIfExists(BytesPath(row.DocumentId, row.Extension));
+            DeleteFileIfExists(oldBlobPath);
         }
     }
 
@@ -497,13 +548,63 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         return Path.Combine(DocumentsDirectory(), string.Concat(documentId.ToString("D"), extension));
     }
 
+    /// <summary>The interrupted-write suffix this file carries, or null when it is not one this store wrote.</summary>
+    private static string? InterruptedWriteSuffix(string path)
+    {
+        if (path.EndsWith(TempSuffix, StringComparison.Ordinal))
+        {
+            return TempSuffix;
+        }
+
+        return path.EndsWith(BackupSuffix, StringComparison.Ordinal) ? BackupSuffix : null;
+    }
+
+    /// <summary>The blob path a <c>{blobPath}.{guid:N}{suffix}</c> sibling belongs to, or null when it is foreign.</summary>
+    /// <remarks>
+    ///     The suffix and the write's own guid are stripped back off, and the remainder must still name a document the
+    ///     way <see cref="ListStoredDocumentIds" /> requires — so a file this store did not write is never a candidate,
+    ///     the same guarantee the id-keyed sweep gives.
+    /// </remarks>
+    private static string? LiveBlobPathOf(string path, string suffix)
+    {
+        var withoutSuffix = path[..^suffix.Length];
+        var separator = withoutSuffix.LastIndexOf(value: '.');
+        if (separator <= 0 || !Guid.TryParseExact(withoutSuffix[(separator + 1)..], "N", out _))
+        {
+            return null;
+        }
+
+        var liveBlobPath = withoutSuffix[..separator];
+        return Guid.TryParse(Path.GetFileNameWithoutExtension(liveBlobPath.AsSpan()), out _) ? liveBlobPath : null;
+    }
+
+    private static bool TryRestoreBackup(string backupPath, string liveBlobPath)
+    {
+        try
+        {
+            File.Move(backupPath, liveBlobPath);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Another writer won the live path, or the file is locked: leave the backup for the next start to retry.
+            return false;
+        }
+    }
+
     private static void DeleteFileIfExists(string path)
+    {
+        _ = TryDeleteFile(path);
+    }
+
+    private static bool TryDeleteFile(string path)
     {
         try
         {
             if (File.Exists(path))
             {
                 File.Delete(path);
+                return true;
             }
         }
         catch (IOException)
@@ -515,6 +616,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         {
             // Best-effort cleanup; a permission error leaves the file behind, reclaimed by the same startup sweep.
         }
+
+        return false;
     }
 
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",

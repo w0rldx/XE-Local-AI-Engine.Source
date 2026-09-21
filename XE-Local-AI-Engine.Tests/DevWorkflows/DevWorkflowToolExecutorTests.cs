@@ -611,5 +611,8 @@ public sealed class DevWorkflowToolExecutorTests
 
         public void DeleteRun(Guid runId) =>
             _inner.DeleteRun(runId);
+
+        public IReadOnlyList<Guid> ListRunIdsLastWrittenBefore(DateTimeOffset cutoffUtc) =>
+            _inner.ListRunIdsLastWrittenBefore(cutoffUtc);
     }
 }

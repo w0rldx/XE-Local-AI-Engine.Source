@@ -1550,6 +1550,9 @@ public sealed class DevWorkflowDevTaskTests
         public void DeleteRun(Guid runId)
         {
         }
+
+        public IReadOnlyList<Guid> ListRunIdsLastWrittenBefore(DateTimeOffset cutoffUtc) =>
+            [];
     }
 
     /// <summary>Lands the held attempt the way its runner would have, so the drain has nothing left to wait for.</summary>

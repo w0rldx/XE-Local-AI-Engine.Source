@@ -40,6 +40,19 @@ public interface IKnowledgeDocumentBlobStore
     IReadOnlyList<Guid> ListStoredDocumentIds();
 
     /// <summary>
+    ///     Restores any backup whose live blob is missing, then reclaims the aged temp and backup siblings an
+    ///     interrupted write left beside a live one.
+    /// </summary>
+    /// <remarks>
+    ///     <c>KnowledgeBlobOrphanSweeper</c> runs this before its id-keyed pass, because those siblings belong to
+    ///     documents whose row is still live and that pass skips a live document by construction. Recovery comes
+    ///     first: while a document's live blob is missing, its backup is the only copy of what the row claims to own.
+    ///     A temp sibling is only ever aged out: its bytes were never verified, and the reindex publishes the blob to
+    ///     its live path before committing — reverse that order and an aged temp becomes the row's only correct copy.
+    /// </remarks>
+    KnowledgeBlobReconciliationResult ReconcileInterruptedWrites();
+
+    /// <summary>
     ///     Removes every on-disk file this store holds for one document. Unlike
     ///     <see cref="DeleteBytesAsync(Guid, string, CancellationToken)" /> it needs no extension, because the sweeper
     ///     reaches a document only once its row — and with it the stored extension — is already gone. Best-effort.

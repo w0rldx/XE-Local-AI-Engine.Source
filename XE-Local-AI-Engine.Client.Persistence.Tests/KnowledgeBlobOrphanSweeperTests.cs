@@ -74,14 +74,130 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
         await File.WriteAllTextAsync(strayTempPath, "interrupted write");
 
         using var sweeper = CreateSweeper(provider, store);
+        _ = sweeper.ReconcileInterruptedWrites();
         var reclaimed = await sweeper.SweepOnceAsync(CancellationToken.None);
 
-        // Neither name parses as "{documentId:D}{extension}", so neither is ever a candidate: the sweep deletes only
-        // files it can attribute to a document, and a temp/backup sibling is reclaimed with its document or not at all.
+        // The foreign name parses as neither "{documentId:D}{extension}" nor a sibling of one, so no pass can attribute
+        // it to a document; the temp leftover is attributable but was just written, and the grace window spares it.
         AssertEx.Equal(expected: 0, reclaimed);
         AssertEx.True(File.Exists(foreignPath), "A file that is not named after a document must never be deleted.");
-        AssertEx.True(File.Exists(strayTempPath), "An unattributable temp leftover must not be mistaken for an orphan blob.");
+        AssertEx.True(File.Exists(strayTempPath), "A temp leftover younger than the grace window must survive: a write may still be running.");
     }
+
+    [Test]
+    public async Task ReconcileInterruptedWrites_WhenTheLiveBlobIsMissing_RestoresTheBackupInsteadOfDeletingIt()
+    {
+        // The dangerous window: a same-extension reindex renamed the live blob aside and the process died before the
+        // transaction committed, so this backup is the ONLY copy of what the still-live row claims to own.
+        await using var provider = BuildProvider(GetDatabasePath("reconcile-restore.sqlite"));
+        var livePath = BlobPath(Guid.NewGuid(), ".txt");
+        Directory.CreateDirectory(DocumentsDirectory());
+        var backupPath = WriteLitter(livePath, ".backup", "the only surviving copy", AgedWriteTimeUtc());
+
+        var reconciled = CreateStore(provider, FixedClock()).ReconcileInterruptedWrites();
+
+        AssertEx.Equal(expected: 1, reconciled.RestoredBlobNames.Count);
+        AssertEx.True(File.Exists(livePath), "A backup whose live blob is missing must be restored to the live path.");
+        AssertEx.False(File.Exists(backupPath), "The restore is a move, so the backup name must not survive it.");
+        AssertEx.Equal("the only surviving copy", await File.ReadAllTextAsync(livePath));
+    }
+
+    [Test]
+    public async Task ReconcileInterruptedWrites_RemovesAnAgedSiblingOfALiveBlobAndSparesAFreshOne()
+    {
+        await using var provider = BuildProvider(GetDatabasePath("reconcile-litter.sqlite"));
+        var livePath = BlobPath(Guid.NewGuid(), ".txt");
+        Directory.CreateDirectory(DocumentsDirectory());
+        await File.WriteAllTextAsync(livePath, "the live blob");
+        var agedBackupPath = WriteLitter(livePath, ".backup", "superseded", AgedWriteTimeUtc());
+        var agedTempPath = WriteLitter(livePath, ".tmp", "abandoned", AgedWriteTimeUtc());
+        var freshTempPath = WriteLitter(livePath, ".tmp", "a write in flight", FreshWriteTimeUtc());
+
+        var reconciled = CreateStore(provider, FixedClock()).ReconcileInterruptedWrites();
+
+        AssertEx.Equal(expected: 2, reconciled.RemovedLitterCount);
+        AssertEx.False(File.Exists(agedBackupPath), "A backup is superseded once its live blob is back, and past the grace window it is litter.");
+        AssertEx.False(File.Exists(agedTempPath), "A temp sibling past the grace window belongs to a dead writer.");
+        AssertEx.True(File.Exists(freshTempPath), "A temp sibling inside the grace window may still be a write in flight.");
+        AssertEx.True(File.Exists(livePath), "The live blob itself is never a candidate.");
+        AssertEx.Equal("the live blob", await File.ReadAllTextAsync(livePath));
+    }
+
+    [Test]
+    public async Task ReconcileInterruptedWrites_DeletesAnAgedTempEvenWhenNoLiveBlobSitsBesideIt()
+    {
+        // A temp sibling is aged out rather than recovered: its bytes were never verified, and a live row whose blob a
+        // crash left missing is repaired by AddAsync's dedupe-repair path on the next re-add, not by promoting this.
+        await using var provider = BuildProvider(GetDatabasePath("reconcile-orphan-temp.sqlite"));
+        var livePath = BlobPath(Guid.NewGuid(), ".txt");
+        Directory.CreateDirectory(DocumentsDirectory());
+        var agedTempPath = WriteLitter(livePath, ".tmp", "a half-written blob no row ever named", AgedWriteTimeUtc());
+
+        var reconciled = CreateStore(provider, FixedClock()).ReconcileInterruptedWrites();
+
+        AssertEx.Equal(expected: 0, reconciled.RestoredBlobNames.Count);
+        AssertEx.Equal(expected: 1, reconciled.RemovedLitterCount);
+        AssertEx.False(File.Exists(agedTempPath), "An aged temp sibling is litter whether or not a live blob sits beside it.");
+        AssertEx.False(File.Exists(livePath), "A temp sibling must never be promoted to the live path: its bytes were never verified.");
+    }
+
+    [Test]
+    public async Task UpdateRepositoryDocument_PublishesTheBlobBeforeItCommits_LeavingNoLitterBehind()
+    {
+        // The writer-side half of the invariant above, asserted through what a completed reindex leaves on disk: the
+        // new bytes at the live path and nothing under a temp or backup suffix for the sweep to have to judge.
+        var databasePath = GetDatabasePath("reindex-publishes-before-commit.sqlite");
+        await MigrateAsync(databasePath);
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider, FixedClock());
+        var documentId = await SeedRepositoryDocumentAsync(store, "the first revision");
+
+        var reindexed = await AddRepositoryDocumentAsync(store, documentId, "the second revision");
+
+        AssertEx.True(reindexed.WasUpdated, "Precondition: the same repository path with new content must reindex, not dedupe.");
+        AssertEx.Equal("the second revision", Encoding.UTF8.GetString((await store.ReadBytesAsync(documentId, CancellationToken.None))!));
+        AssertEx.Empty(Directory.GetFiles(DocumentsDirectory(), "*.tmp"));
+        AssertEx.Empty(Directory.GetFiles(DocumentsDirectory(), "*.backup"));
+    }
+
+    [Test]
+    public async Task ReconcileInterruptedWrites_LeavesALiveDocumentWithNoLitterUntouched()
+    {
+        var databasePath = GetDatabasePath("reconcile-no-litter.sqlite");
+        await MigrateAsync(databasePath);
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider, FixedClock());
+        var liveDocumentId = await SeedDocumentAsync(store, "live document bytes");
+        var livePath = BlobPath(liveDocumentId, ".txt");
+        File.SetLastWriteTimeUtc(livePath, AgedWriteTimeUtc());
+
+        using var sweeper = CreateSweeper(provider, store);
+        var reconciled = sweeper.ReconcileInterruptedWrites();
+        var reclaimed = await sweeper.SweepOnceAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, reconciled.RestoredBlobNames.Count);
+        AssertEx.Equal(expected: 0, reconciled.RemovedLitterCount);
+        AssertEx.Equal(expected: 0, reclaimed);
+        AssertEx.True(File.Exists(livePath), "A live document's own blob is never litter, however old it is.");
+    }
+
+    // The interrupted-write siblings this store writes: "{blobPath}.{guid:N}{suffix}", stamped to a chosen instant so
+    // the grace window is decided by the fixed clock rather than by how long the test took.
+    private static string WriteLitter(string liveBlobPath, string suffix, string content, DateTime lastWriteUtc)
+    {
+        var path = string.Concat(liveBlobPath, ".", Guid.NewGuid().ToString("N"), suffix);
+        File.WriteAllText(path, content);
+        File.SetLastWriteTimeUtc(path, lastWriteUtc);
+        return path;
+    }
+
+    private static DateTime AgedWriteTimeUtc() =>
+        FixedNowUtc.AddHours(-1).UtcDateTime;
+
+    private static DateTime FreshWriteTimeUtc() =>
+        FixedNowUtc.AddMinutes(-1).UtcDateTime;
 
     [Test]
     public async Task SweepOnceAsync_WhenTheDocumentsDirectoryDoesNotExist_IsANoOp()
@@ -142,6 +258,35 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
         return documentId;
     }
 
+    // A repository-sourced document, the only identity whose re-add reindexes in place rather than deduping.
+    private static async Task<Guid> SeedRepositoryDocumentAsync(KnowledgeDocumentBlobStore store, string text)
+    {
+        var documentId = Guid.NewGuid();
+        var result = await AddRepositoryDocumentAsync(store, documentId, text);
+        AssertEx.True(result.WasInserted, "Precondition: the repository document must be inserted with its blob.");
+        return documentId;
+    }
+
+    private static async Task<KnowledgeDocumentAddResult> AddRepositoryDocumentAsync(KnowledgeDocumentBlobStore store, Guid documentId, string text)
+    {
+        var content = Encoding.UTF8.GetBytes(text);
+        return await store.AddAsync(new KnowledgeDocumentInput
+            {
+                DocumentId = documentId,
+                OriginalFileName = "README.md",
+                MimeType = "text/markdown",
+                Extension = ".md",
+                SizeBytes = content.Length,
+                ContentHash = Convert.ToHexString(SHA256.HashData(content)),
+                Content = content,
+                EmbeddingModel = "nomic-embed-text",
+                SourceKind = "repository",
+                SourceId = "repo-under-test",
+                SourcePath = "docs/README.md"
+            },
+            CancellationToken.None);
+    }
+
     // Puts a file where a purged document's blob would sit: on disk, with no knowledge_documents row behind it.
     private async Task<string> WriteStrayBlobAsync(Guid documentId, string extension)
     {
@@ -158,12 +303,34 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
             NullLogger<KnowledgeBlobOrphanSweeper>.Instance);
     }
 
-    private KnowledgeDocumentBlobStore CreateStore(ServiceProvider provider)
+    private KnowledgeDocumentBlobStore CreateStore(ServiceProvider provider, TimeProvider? timeProvider = null)
     {
         return new KnowledgeDocumentBlobStore(provider.GetRequiredService<IServiceScopeFactory>(),
             new FixedNodeDataDirectory(DataDirectory()),
             _keyHolder,
-            TimeProvider.System);
+            timeProvider ?? TimeProvider.System);
+    }
+
+    // The interrupted-write grace window is measured against the store's clock, so pinning it makes "aged" and "fresh"
+    // a property of the file stamps below rather than of how long the test took to reach the assertion.
+    private static readonly DateTimeOffset FixedNowUtc = new(year: 2026, month: 9, day: 21, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
+
+    private static TimeProvider FixedClock() =>
+        new FixedTimeProvider(FixedNowUtc);
+
+    private sealed class FixedTimeProvider : TimeProvider
+    {
+        private readonly DateTimeOffset _now;
+
+        public FixedTimeProvider(DateTimeOffset now)
+        {
+            _now = now;
+        }
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            return _now;
+        }
     }
 
     private string DataDirectory()
@@ -251,6 +418,9 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
 
         public IReadOnlyList<Guid> ListStoredDocumentIds() =>
             _inner.ListStoredDocumentIds();
+
+        public KnowledgeBlobReconciliationResult ReconcileInterruptedWrites() =>
+            _inner.ReconcileInterruptedWrites();
 
         public Task DeleteAllBytesAsync(Guid documentId, CancellationToken cancellationToken)
         {

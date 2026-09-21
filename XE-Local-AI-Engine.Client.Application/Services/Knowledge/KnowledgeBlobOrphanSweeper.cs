@@ -36,6 +36,8 @@ public sealed class KnowledgeBlobOrphanSweeper : BackgroundService
 
         try
         {
+            _ = ReconcileInterruptedWrites();
+
             var reclaimed = await SweepOnceAsync(stoppingToken);
             if (reclaimed > 0)
             {
@@ -50,6 +52,33 @@ public sealed class KnowledgeBlobOrphanSweeper : BackgroundService
         {
             _logger.LogWarning(exception, "The orphaned knowledge blob sweep failed; the affected files stay on disk until the next start.");
         }
+    }
+
+    /// <summary>
+    ///     Recovers the blobs an interrupted reindex left behind a backup suffix and reclaims the aged litter beside
+    ///     the live ones. Internal so a test can drive it without the hosted lifecycle.
+    /// </summary>
+    /// <remarks>
+    ///     Runs ahead of <see cref="SweepOnceAsync" /> so a restored blob is judged by the row probe in the same pass:
+    ///     a backup whose document was purged meanwhile is restored here and reclaimed as an orphan there.
+    /// </remarks>
+    internal KnowledgeBlobReconciliationResult ReconcileInterruptedWrites()
+    {
+        var reconciled = _blobStore.ReconcileInterruptedWrites();
+
+        foreach (var restoredBlobName in reconciled.RestoredBlobNames)
+        {
+            // A restore means the process died between an old blob being renamed aside and the reindex committing,
+            // so the operator should know the bytes came back and which document they belong to.
+            _logger.LogWarning("Restored knowledge document blob {BlobName} from the backup an interrupted reindex left behind.", restoredBlobName);
+        }
+
+        if (reconciled.RemovedLitterCount > 0)
+        {
+            _logger.LogInformation("Reclaimed {OrphanCount} interrupted-write sibling(s) of live knowledge document blob(s).", reconciled.RemovedLitterCount);
+        }
+
+        return reconciled;
     }
 
     // One deterministic sweep pass. Internal so a test can drive it without the hosted lifecycle.

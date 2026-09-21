@@ -51,4 +51,11 @@ public interface IWorkSessionArtifactBlobStore
 
     /// <summary>Best-effort removal of every artifact a deleted session owned. Never throws on a missing directory.</summary>
     void DeleteSession(Guid sessionId);
+
+    /// <summary>The session ids with artifact bytes on disk whose newest write is older than <paramref name="cutoffUtc" />.</summary>
+    /// <remarks>
+    ///     Candidates for the orphan resweep in <c>RetentionSweeperService</c>: a session's row is always committed
+    ///     before it can hold an artifact, so a session id on disk with no row is a deleted session's leftover bytes.
+    /// </remarks>
+    IReadOnlyList<Guid> ListSessionIdsLastWrittenBefore(DateTimeOffset cutoffUtc);
 }

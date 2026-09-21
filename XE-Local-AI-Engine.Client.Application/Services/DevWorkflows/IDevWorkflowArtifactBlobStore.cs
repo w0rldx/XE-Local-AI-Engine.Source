@@ -51,4 +51,12 @@ public interface IDevWorkflowArtifactBlobStore
 
     /// <summary>Best-effort removal of every artifact a deleted run owned. Never throws on a missing directory.</summary>
     void DeleteRun(Guid runId);
+
+    /// <summary>The run ids with artifact bytes on disk whose newest write is older than <paramref name="cutoffUtc" />.</summary>
+    /// <remarks>
+    ///     Candidates for the orphan resweep in <c>RetentionSweeperService</c>: a run's row is committed by
+    ///     <c>StartAsync</c> before any node can write an artifact, so a run id on disk with no row is a deleted
+    ///     run's leftover bytes — what the best-effort <see cref="DeleteRun" /> beside the row delete failed to take.
+    /// </remarks>
+    IReadOnlyList<Guid> ListRunIdsLastWrittenBefore(DateTimeOffset cutoffUtc);
 }

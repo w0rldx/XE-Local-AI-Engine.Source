@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
@@ -21,6 +22,15 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 /// </remarks>
 public sealed class RetentionSweeperService : BackgroundService
 {
+    /// <summary>How long an artifact scope directory is spared after its newest write before it can be reclaimed.</summary>
+    /// <remarks>
+    ///     A scope directory appears only after its owning row commits, so an orphan is settled — but the sweep still
+    ///     reads the disk and the database a moment apart, and it deletes recursively. The window is cheap insurance,
+    ///     comfortably longer than any artifact write, and matches the one the knowledge blob store gives its own
+    ///     interrupted-write siblings for the same reason.
+    /// </remarks>
+    private static readonly TimeSpan OrphanedScopeGrace = TimeSpan.FromMinutes(15);
+
     private readonly ILogger<RetentionSweeperService> _logger;
     private readonly ChatRetentionOptions _options;
     private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -131,8 +141,8 @@ public sealed class RetentionSweeperService : BackgroundService
             await uploadedFileStore.DeleteAllForConversationAsync(conversationId, cancellationToken);
             if (workSessionId is { } sessionId)
             {
-                // Work-session artifact bytes live on disk under the session id, out of the row purge's reach, and
-                // unlike uploads they have no orphan resweep, so a crash before this call strands one directory.
+                // Work-session artifact bytes live on disk under the session id, out of the row purge's reach. A crash
+                // before this call strands the directory until the next start's PurgeOrphanedArtifactScopesAsync.
                 workSessionArtifactBlobStore.DeleteSession(sessionId);
             }
         }
@@ -160,6 +170,8 @@ public sealed class RetentionSweeperService : BackgroundService
             {
                 _logger.LogInformation("Retention orphan resweep removed {OrphanCount} orphaned upload director(ies).", orphanCount);
             }
+
+            await PurgeOrphanedArtifactScopesAsync(scope, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -168,6 +180,84 @@ public sealed class RetentionSweeperService : BackgroundService
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Retention orphan resweep failed.");
+        }
+    }
+
+    /// <summary>Reclaims the artifact bytes of a work session or a workflow run whose owning row is gone.</summary>
+    /// <remarks>
+    ///     The state a crash between the row commit and the best-effort <c>DeleteSession</c>/<c>DeleteRun</c> beside
+    ///     it leaves for good. Scope-keyed, never blob-keyed: a writer commits the blob BEFORE its row, so a blob id
+    ///     with no row may still be in flight, while the scope's row is committed before the scope directory can
+    ///     exist. Development Mode shares the store and needs no sweep — nothing deletes a project, so no scope of
+    ///     its own can be orphaned.
+    /// </remarks>
+    private async Task PurgeOrphanedArtifactScopesAsync(AsyncServiceScope scope, CancellationToken cancellationToken)
+    {
+        var cutoffUtc = _timeProvider.GetUtcNow() - OrphanedScopeGrace;
+
+        // Both modules are feature-gated and this resweep runs on every start, enabled or not, so an absent store is
+        // an ordinary configuration rather than a failure: nothing wrote those bytes, so nothing has to reclaim them.
+        if (scope.ServiceProvider.GetService<IWorkSessionArtifactBlobStore>() is { } sessionBlobs)
+        {
+            await PurgeOrphanedScopesAsync(scope,
+                "SELECT id FROM agent_work_sessions WHERE id = {0}",
+                sessionBlobs.ListSessionIdsLastWrittenBefore(cutoffUtc),
+                sessionBlobs.DeleteSession,
+                "work session",
+                cancellationToken);
+        }
+
+        if (scope.ServiceProvider.GetService<IDevWorkflowArtifactBlobStore>() is { } runBlobs)
+        {
+            await PurgeOrphanedScopesAsync(scope,
+                "SELECT id FROM dev_workflow_runs WHERE id = {0}",
+                runBlobs.ListRunIdsLastWrittenBefore(cutoffUtc),
+                runBlobs.DeleteRun,
+                "development workflow run",
+                cancellationToken);
+        }
+    }
+
+    private async Task PurgeOrphanedScopesAsync(AsyncServiceScope scope,
+        string ownerProbeSql,
+        IReadOnlyList<Guid> scopeIds,
+        Action<Guid> deleteScope,
+        string subject,
+        CancellationToken cancellationToken)
+    {
+        if (scopeIds.Count == 0)
+        {
+            return;
+        }
+
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+
+        var orphanCount = 0;
+        foreach (var scopeId in scopeIds)
+        {
+            try
+            {
+                // A per-id existence probe stays bounded, like the upload resweep above: the candidate set is the
+                // scopes that actually hold bytes, not every row of the owning table.
+                var ownerExists = await dbContext.Database.SqlQueryRaw<Guid>(ownerProbeSql, scopeId).AnyAsync(cancellationToken);
+                if (ownerExists)
+                {
+                    continue;
+                }
+
+                deleteScope(scopeId);
+                orphanCount++;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // One unreadable directory or failed probe must not cost the remaining candidates their sweep.
+                _logger.LogWarning(exception, "Could not reclaim the orphaned {Subject} artifact directory {ScopeId}.", subject, scopeId);
+            }
+        }
+
+        if (orphanCount > 0)
+        {
+            _logger.LogInformation("Retention orphan resweep reclaimed {OrphanCount} orphaned {Subject} artifact director(ies).", orphanCount, subject);
         }
     }
 

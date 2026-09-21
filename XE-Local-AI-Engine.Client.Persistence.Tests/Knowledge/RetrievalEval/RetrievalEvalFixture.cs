@@ -297,6 +297,9 @@ internal sealed class RetrievalEvalFixture : IDisposable
             _ = _bytesById.Remove(documentId);
             return Task.CompletedTask;
         }
+
+        public KnowledgeBlobReconciliationResult ReconcileInterruptedWrites() =>
+            new() { RestoredBlobNames = [], RemovedLitterCount = 0 };
     }
 
     /// <summary>Returns the one managed cosine search instance bound to the search service's scoped context.</summary>

@@ -170,10 +170,55 @@ internal sealed class ManagedEncryptedBlobStore
         DeleteIfPresent(BlobPath(scopeId, blobId));
     }
 
+    /// <summary>The scope ids on disk whose newest write is older than <paramref name="cutoffUtc" />.</summary>
+    /// <remarks>
+    ///     The candidate set of a SCOPE-level orphan sweep, which is safe where the id-level one <see cref="Delete" />
+    ///     rules out is not: every consumer commits the scope's owning row before the scope directory can exist. The
+    ///     age gate keeps a scope being written right now out of the set, and a symbolic link is never a candidate —
+    ///     <see cref="DeleteScope" /> deletes recursively, and only a directory this store itself made is its business.
+    /// </remarks>
+    public IReadOnlyList<Guid> ListScopeIdsLastWrittenBefore(DateTimeOffset cutoffUtc)
+    {
+        var root = ScopesDirectory();
+        if (!Directory.Exists(root))
+        {
+            return [];
+        }
+
+        var cutoff = cutoffUtc.UtcDateTime;
+        var scopeIds = new List<Guid>();
+        foreach (var directory in Directory.EnumerateDirectories(root))
+        {
+            if (!Guid.TryParseExact(Path.GetFileName(directory), "N", out var scopeId)
+                || !PathContainment.IsUnderRoot(directory, root))
+            {
+                continue;
+            }
+
+            try
+            {
+                var info = new DirectoryInfo(directory);
+                if (info.LinkTarget is not null || NewestWriteUtc(info) >= cutoff)
+                {
+                    continue;
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Unreadable right now, so unjudgeable: never a delete candidate. The next sweep looks again.
+                continue;
+            }
+
+            scopeIds.Add(scopeId);
+        }
+
+        return scopeIds;
+    }
+
     /// <summary>Best-effort removal of an entire scope's directory, for a deleted owner.</summary>
     public void DeleteScope(Guid scopeId)
     {
-        var directory = Path.Combine(_dataDirectory.Root, _folderSegment, _leafSegment, scopeId.ToString("N"));
+        var directory = Path.Combine(ScopesDirectory(), scopeId.ToString("N"));
         try
         {
             if (Directory.Exists(directory))
@@ -243,9 +288,27 @@ internal sealed class ManagedEncryptedBlobStore
             BuildAssociatedData(scopeId, blobId));
     }
 
+    private string ScopesDirectory()
+    {
+        return Path.Combine(_dataDirectory.Root, _folderSegment, _leafSegment);
+    }
+
     private string BlobPath(Guid scopeId, Guid blobId)
     {
-        return Path.Combine(_dataDirectory.Root, _folderSegment, _leafSegment, scopeId.ToString("N"), string.Concat(blobId.ToString("N"), ".blob"));
+        return Path.Combine(ScopesDirectory(), scopeId.ToString("N"), string.Concat(blobId.ToString("N"), ".blob"));
+    }
+
+    /// <summary>The newest write stamp anywhere in one scope directory.</summary>
+    /// <remarks>
+    ///     The directory's own stamp already moves when a blob is created or renamed into it, but sparing a write in
+    ///     flight is the whole point of the age gate, so take the newest stamp in the scope rather than trust one.
+    /// </remarks>
+    private static DateTime NewestWriteUtc(DirectoryInfo directory)
+    {
+        return directory.EnumerateFiles()
+                        .Select(static file => file.LastWriteTimeUtc)
+                        .Append(directory.LastWriteTimeUtc)
+                        .Max();
     }
 
     private byte[] BuildAssociatedData(Guid scopeId, Guid blobId)

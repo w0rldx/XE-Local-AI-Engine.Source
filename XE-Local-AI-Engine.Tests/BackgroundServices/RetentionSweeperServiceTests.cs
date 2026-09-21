@@ -15,6 +15,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
@@ -233,6 +235,165 @@ public sealed class RetentionSweeperServiceTests : IDisposable
 
         AssertEx.True(await chat.GetConversationAsync(session.ConversationId) is null, "The purged conversation must be deleted.");
         AssertEx.False(Directory.Exists(artifactDirectory), "An immediate purge must also delete the session's artifact bytes.");
+    }
+
+    [Test]
+    public async Task OrphanResweep_ReclaimsAnArtifactScopeWhoseOwningRowIsGone()
+    {
+        // What a crash between the row commit and the best-effort DeleteSession/DeleteRun beside it strands for good:
+        // artifact bytes under a scope id no row names any more. Both consumers that can delete a row are swept.
+        await using var provider = await BuildProviderAsync("orphan-scopes.sqlite", RegisterDevWorkflowArtifactBlobStore);
+        var orphanedSession = SeedArtifactScope("work-sessions", Guid.NewGuid(), AgedWriteTimeUtc());
+        var orphanedRun = SeedArtifactScope("dev-workflows", Guid.NewGuid(), AgedWriteTimeUtc());
+
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new FixedTimeProvider(FixedNowUtc));
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(orphanedSession), "A work-session artifact directory with no agent_work_sessions row must be reclaimed.");
+        AssertEx.False(Directory.Exists(orphanedRun), "A workflow-run artifact directory with no dev_workflow_runs row must be reclaimed.");
+    }
+
+    [Test]
+    public async Task OrphanResweep_SparesAnArtifactScopeWrittenInsideTheGraceWindow()
+    {
+        // The creation race: the scope directory is listed from disk and its row probed a moment later, so a scope
+        // whose first artifact was just written must survive even though nothing has committed its row yet here.
+        await using var provider = await BuildProviderAsync("orphan-scope-grace.sqlite");
+        var freshScope = SeedArtifactScope("work-sessions", Guid.NewGuid(), FreshWriteTimeUtc());
+        var agedScope = SeedArtifactScope("work-sessions", Guid.NewGuid(), AgedWriteTimeUtc());
+
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new FixedTimeProvider(FixedNowUtc));
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(freshScope), "A scope written inside the grace window may still be racing its own row commit.");
+        AssertEx.False(Directory.Exists(agedScope), "The aged peer proves the sweep ran, so the spared scope is not spared by a no-op.");
+    }
+
+    [Test]
+    public async Task OrphanResweep_SparesTheArtifactScopeOfALiveSession()
+    {
+        await using var factory = WorkSessionServiceTests.NewFactory();
+        var sessionId = Guid.NewGuid();
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId);
+        AgeDirectory(artifactDirectory, AgedWriteTimeUtc());
+
+        using var sweeper = CreateSweeper(factory.Services, enabled: false, timeProvider: new FixedTimeProvider(FixedNowUtc));
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(artifactDirectory), "A live session's artifact bytes must survive the orphan resweep however old they are.");
+    }
+
+    [Test]
+    public async Task OrphanResweep_DoesNotFollowOrDeleteASymlinkedArtifactScope()
+    {
+        SymlinkSupport.EnsureSupported();
+
+        await using var provider = await BuildProviderAsync("orphan-scope-symlink.sqlite");
+        var target = Path.Combine(_rootPath, "outside-the-store");
+        Directory.CreateDirectory(target);
+        await File.WriteAllTextAsync(Path.Combine(target, "keep-me.txt"), "not the node's to delete");
+        var linkPath = Path.Combine(_rootPath, "work-sessions", "artifacts", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
+        Directory.CreateSymbolicLink(linkPath, target);
+        var agedScope = SeedArtifactScope("work-sessions", Guid.NewGuid(), AgedWriteTimeUtc());
+
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new FixedTimeProvider(FixedNowUtc));
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(linkPath), "A symbolic link planted in the store is never a sweep candidate.");
+        AssertEx.True(File.Exists(Path.Combine(target, "keep-me.txt")), "A recursive delete must never reach through a link to what it points at.");
+        AssertEx.False(Directory.Exists(agedScope), "The aged peer proves the sweep ran, so the link is not spared by a no-op.");
+    }
+
+    [Test]
+    public async Task OrphanResweep_WhenOneArtifactScopeDeleteFails_StillReclaimsTheRest()
+    {
+        var failingSessionId = Guid.NewGuid();
+        await using var provider = await BuildProviderAsync("orphan-scope-failure.sqlite",
+            services => services.AddSingleton<IWorkSessionArtifactBlobStore>(serviceProvider =>
+                new ThrowingDeleteArtifactBlobStore(ActivatorUtilities.CreateInstance<ManagedWorkSessionArtifactBlobStore>(serviceProvider), failingSessionId)));
+        var failingScope = SeedArtifactScope("work-sessions", failingSessionId, AgedWriteTimeUtc());
+        var secondOrphan = SeedArtifactScope("work-sessions", Guid.NewGuid(), AgedWriteTimeUtc());
+
+        using var sweeper = CreateSweeper(provider, enabled: false, timeProvider: new FixedTimeProvider(FixedNowUtc));
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(failingScope), "The scope whose delete threw is left for the next start.");
+        AssertEx.False(Directory.Exists(secondOrphan), "A failure on one scope must not stop the sweep reclaiming the rest.");
+    }
+
+    private static void RegisterDevWorkflowArtifactBlobStore(ServiceCollection services)
+    {
+        services.AddSingleton(Options.Create(new DevWorkflowOptions()));
+        services.AddSingleton<IDevWorkflowArtifactBlobStore, ManagedDevWorkflowArtifactBlobStore>();
+    }
+
+    // Puts artifact bytes where a scope directory sits, with every stamp the age gate reads pinned to one instant so
+    // "aged" and "fresh" are properties of the fixture rather than of how long the test took.
+    private string SeedArtifactScope(string folderSegment, Guid scopeId, DateTime lastWriteUtc)
+    {
+        var directory = Path.Combine(_rootPath, folderSegment, "artifacts", scopeId.ToString("N"));
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, string.Concat(Guid.NewGuid().ToString("N"), ".blob")), "encrypted artifact bytes");
+        AgeDirectory(directory, lastWriteUtc);
+        return directory;
+    }
+
+    private static void AgeDirectory(string directory, DateTime lastWriteUtc)
+    {
+        foreach (var file in Directory.GetFiles(directory))
+        {
+            File.SetLastWriteTimeUtc(file, lastWriteUtc);
+        }
+
+        Directory.SetLastWriteTimeUtc(directory, lastWriteUtc);
+    }
+
+    // The instant the artifact-scope sweeps read as "now"; the grace window is 15 minutes, so an hour back is settled
+    // litter and a minute back is a write that may still be running.
+    private static readonly DateTimeOffset FixedNowUtc = new(year: 2026, month: 9, day: 21, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
+
+    private static DateTime AgedWriteTimeUtc() =>
+        FixedNowUtc.AddHours(-1).UtcDateTime;
+
+    private static DateTime FreshWriteTimeUtc() =>
+        FixedNowUtc.AddMinutes(-1).UtcDateTime;
+
+    // Wraps the real store and fails the scope delete of one nominated session, reproducing a directory the OS refuses
+    // to remove without faking the listing or the row probe around it.
+    private sealed class ThrowingDeleteArtifactBlobStore : IWorkSessionArtifactBlobStore
+    {
+        private readonly IWorkSessionArtifactBlobStore _inner;
+        private readonly Guid _failingSessionId;
+
+        public ThrowingDeleteArtifactBlobStore(IWorkSessionArtifactBlobStore inner, Guid failingSessionId)
+        {
+            _inner = inner;
+            _failingSessionId = failingSessionId;
+        }
+
+        public Task<WorkSessionArtifactBlobWriteResult> WriteAsync(Guid sessionId, Guid artifactId, ReadOnlyMemory<byte> content, CancellationToken cancellationToken = default) =>
+            _inner.WriteAsync(sessionId, artifactId, content, cancellationToken);
+
+        public Task<WorkSessionArtifactBlobReadResult> ReadAsync(Guid sessionId, Guid artifactId, string expectedHash, long expectedByteCount, CancellationToken cancellationToken = default) =>
+            _inner.ReadAsync(sessionId, artifactId, expectedHash, expectedByteCount, cancellationToken);
+
+        public void Delete(Guid sessionId, Guid artifactId) =>
+            _inner.Delete(sessionId, artifactId);
+
+        public void DeleteSession(Guid sessionId)
+        {
+            if (sessionId == _failingSessionId)
+            {
+                throw new IOException("The directory is in use by another process.");
+            }
+
+            _inner.DeleteSession(sessionId);
+        }
+
+        public IReadOnlyList<Guid> ListSessionIdsLastWrittenBefore(DateTimeOffset cutoffUtc) =>
+            _inner.ListSessionIdsLastWrittenBefore(cutoffUtc);
     }
 
     // Writes one artifact through the real blob store and returns the session's on-disk directory, asserting it exists

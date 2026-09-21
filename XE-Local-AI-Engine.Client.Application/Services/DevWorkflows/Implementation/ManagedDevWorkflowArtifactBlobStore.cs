@@ -59,6 +59,11 @@ public sealed class ManagedDevWorkflowArtifactBlobStore : IDevWorkflowArtifactBl
         _blobs.DeleteScope(runId);
     }
 
+    public IReadOnlyList<Guid> ListRunIdsLastWrittenBefore(DateTimeOffset cutoffUtc)
+    {
+        return _blobs.ListScopeIdsLastWrittenBefore(cutoffUtc);
+    }
+
     private static DevWorkflowArtifactReadStatus Map(ManagedBlobReadStatus status) =>
         status switch
         {
