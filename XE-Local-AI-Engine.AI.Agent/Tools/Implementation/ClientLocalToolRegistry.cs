@@ -7,11 +7,14 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 
 /// <summary>
 ///     Builds and caches the executable <see cref="AITool" /> for each registered
-///     <see cref="IClientLocalToolHandler" />. Each tool carries its handler's model-visible schema + description
-///     (via <see cref="MetadataToolFunction" />) and is wrapped in <see cref="ApprovalRequiredAIFunction" /> when the
-///     handler is high-risk, so the framework's function-invocation pipeline surfaces an approval request before the
-///     tool runs.
+///     <see cref="IClientLocalToolHandler" />.
 /// </summary>
+/// <remarks>
+///     Each tool carries its handler's model-visible schema and description through
+///     <see cref="MetadataToolFunction" />, and a high-risk handler's tool is wrapped in
+///     <see cref="ApprovalRequiredAIFunction" />, so the function-invocation pipeline surfaces an approval request
+///     before it runs.
+/// </remarks>
 internal sealed class ClientLocalToolRegistry : IClientLocalToolRegistry
 {
     private readonly IReadOnlyDictionary<string, AITool> _tools;
@@ -47,15 +50,12 @@ internal sealed class ClientLocalToolRegistry : IClientLocalToolRegistry
             schema,
             handler.ExecuteAsync);
 
-        // Innermost guard: coerce + validate the model's arguments against this tool's schema and run the per-request
-        // repair loop before the handler ever sees them, so a malformed call returns actionable guidance instead of a
-        // throw. Sits under the budget and approval wrappers, which stay transparent to it. Strict unknown-property
-        // rejection is safe here: these are the app's own tools, whose schemas fully enumerate their inputs.
+        // Innermost guard: coerce and validate arguments against the schema, running the per-request repair loop before
+        // the handler sees them. Strict unknown-property rejection is safe: these schemas enumerate their own inputs.
         function = new ToolArgumentRepairAIFunction(function, maxInvalidCalls, rejectUnknownProperties: true);
 
-        // Backstop the handler's output with the shared result budget. This wraps the executable UNDER the approval
-        // gate so ApprovalRequiredAIFunction stays the outermost type (the pipeline's approval detection and the
-        // registry's own type checks rely on that), while still bounding what the tool emits into chat history.
+        // Backstop the output with the shared result budget, UNDER the approval gate so ApprovalRequiredAIFunction
+        // stays the outermost type, which the pipeline's approval detection and the registry's type checks rely on.
         function = new BudgetedToolResultAIFunction(function, maxResultCharacters);
 
         return handler.RequiresApproval

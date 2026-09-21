@@ -3,50 +3,36 @@ namespace XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
 using System.Runtime.CompilerServices;
 
 /// <summary>
-///     Wraps a streamed <see cref="IAsyncEnumerator{T}" /> with a WALL-CLOCK idle bound a non-cooperative workflow /
-///     provider cannot defeat — the AI.Agent-layer twin of the application layer's <c>StreamIdleWatchdog</c> (the two
-///     live in separate assemblies by the layer arrow, so the small race/abandon/bounded-dispose primitives are
-///     deliberately duplicated rather than shared across the boundary). Unlike the watchdog, the idle deadline is not a
-///     fixed per-wait timeout owned here: it is an EXTERNAL, re-armable <c>idleToken</c> (the caller's idle CTS, which it
-///     resets per event and suspends across an approval pause), and the stopping mechanism is surfaced as an ordinary
-///     <see cref="OperationCanceledException" /> (the layer cannot reference the application's typed watchdog exception,
-///     and orchestration idle expiry has always surfaced as a cancellation).
-///     <para>
-///         Each pull races <c>MoveNextAsync</c> against the idle token, so the wait returns at the deadline even when the
-///         enumerator ignores its cancellation token and never returns. On expiry the provider is asked to stop and given
-///         a bounded grace to unwind; a cooperative one unwinds cleanly, a non-cooperative one is ABANDONED — its stuck
-///         pull is left running but observed off-thread (never an unobserved-task fault), disposal is bounded the same
-///         way, and the abandonment is reported via <paramref name="onAbandoned" />. Because the iterator terminates on
-///         expiry, a late item from an abandoned enumerator can never reach the consumer. This class takes ownership of
-///         the enumerator's disposal.
-///     </para>
+///     Wraps a streamed <see cref="IAsyncEnumerator{T}" /> with a WALL-CLOCK idle bound a non-cooperative workflow or
+///     provider cannot defeat, and takes ownership of the enumerator's disposal.
 /// </summary>
+/// <remarks>
+///     The AI.Agent-layer twin of the application layer's <c>StreamIdleWatchdog</c>; the two sit in separate assemblies
+///     by the layer arrow, so the race/abandon/bounded-dispose primitives are deliberately duplicated rather than
+///     shared. The deadline is an EXTERNAL, re-armable idle token rather than a fixed per-wait timeout owned here, and
+///     a stop surfaces as an ordinary <see cref="OperationCanceledException" />, because this layer cannot reference
+///     the typed watchdog exception. See docs/wiki/04-agent-mode.md ("The idle guard: bounding a non-cooperative provider").
+/// </remarks>
 internal static class IdleStreamGuard
 {
     /// <summary>
-    ///     After the idle deadline (or outer cancellation) the provider is asked to stop; this is how long it is then
-    ///     given to honour cancellation — for its stuck <c>MoveNextAsync</c> to unwind, and separately for a
-    ///     <c>DisposeAsync</c> to complete — before it is abandoned. Small so a wedged workflow cannot hold an invocation
-    ///     or shutdown for long, but non-zero so a cooperative workflow unwinds cleanly and is not misreported.
+    ///     How long a provider asked to stop is given to honour cancellation — separately for its stuck
+    ///     <c>MoveNextAsync</c> to unwind and for a <c>DisposeAsync</c> to complete — before it is abandoned.
     /// </summary>
+    /// <remarks>
+    ///     Small, so a wedged workflow cannot hold an invocation or a shutdown for long, but non-zero so a cooperative
+    ///     workflow unwinds cleanly and is not misreported.
+    /// </remarks>
     public static readonly TimeSpan DefaultAbandonmentGrace = TimeSpan.FromSeconds(5);
 
-    /// <summary>
-    ///     Guards <paramref name="enumeratorFactory" /> against a non-cooperative provider. The factory receives a token
-    ///     linked to <paramref name="outerToken" /> only (NOT the idle deadline), so the enumerator still cancels
-    ///     cooperatively on outer cancellation while the idle deadline is enforced by the race rather than by the
-    ///     enumerator observing a token. <paramref name="idleToken" /> is the caller's re-armable idle CTS token (fires on
-    ///     the idle deadline, and — because the caller links it to <paramref name="outerToken" /> — on outer cancellation
-    ///     too). On idle expiry <paramref name="onIdleTimeout" /> is invoked and an <see cref="OperationCanceledException" />
-    ///     is thrown; on outer cancellation a plain <see cref="OperationCanceledException" /> is thrown with no idle signal.
-    ///     <para>
-    ///         Stop semantics are strict: outer cancellation and idle-deadline expiry are observed BEFORE every
-    ///         advancement AND again BEFORE every yield — including for items a pre-buffered enumerator produces
-    ///         synchronously (which never reach the async race). An observed stop halts the stream before the pending
-    ///         item is yielded (it is never emitted), so a stream that completes synchronously forever cannot outrun a
-    ///         cancel or an expired deadline; a not-yet-cancelled stream never has an item dropped.
-    ///     </para>
-    /// </summary>
+    /// <summary>Guards <paramref name="enumeratorFactory" /> against a non-cooperative provider.</summary>
+    /// <remarks>
+    ///     The factory receives a token linked to the context's outer token ONLY, not the idle deadline, so the
+    ///     enumerator still cancels cooperatively while the deadline is enforced by the race. Idle expiry invokes the
+    ///     context's idle-timeout callback and throws; outer cancellation throws with no idle signal. Stop semantics
+    ///     are strict — a stop is observed before every advancement AND before every yield. See
+    ///     docs/wiki/04-agent-mode.md ("The idle guard: bounding a non-cooperative provider").
+    /// </remarks>
     public static IAsyncEnumerable<T> GuardAsync<T>(Func<CancellationToken, IAsyncEnumerator<T>> enumeratorFactory, IdleGuardContext context)
     {
         ArgumentNullException.ThrowIfNull(enumeratorFactory);
@@ -65,11 +51,8 @@ internal static class IdleStreamGuard
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        // `await foreach (… .WithCancellation(token))` flows its token here, and it is honoured by folding it into BOTH
-        // of the guard's own tokens rather than by adding a third stop condition: into the outer token so it cancels the
-        // provider and is reported as a cancellation (never as an idle timeout), and into the idle token so the per-pull
-        // race resolves on it instead of waiting out the idle deadline. With no enumeration token, or with the same token
-        // the caller already put in the context (the only call site today), both links are inert and nothing changes.
+        // An enumeration token is folded into BOTH of the guard's own tokens rather than added as a third stop
+        // condition, so it cancels the provider AND resolves the per-pull race; an absent or duplicate token is inert.
         using var outerCts = CancellationTokenSource.CreateLinkedTokenSource(callerContext.OuterToken, cancellationToken);
         using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(callerContext.IdleToken, cancellationToken);
         var context = callerContext with
@@ -78,10 +61,8 @@ internal static class IdleStreamGuard
             IdleToken = idleCts.Token
         };
 
-        // The enumerator binds cancellation to providerCts (linked to the OUTER token only); cancelling providerCts is
-        // the cooperative signal to stop. Keeping it separate from the idle deadline makes the deadline race
-        // deterministic — the deadline firing does not itself cancel the pull, so the idle signal reliably wins the race
-        // and the pull is only cancelled deliberately, inside the timeout branch.
+        // providerCts is linked to the OUTER token only, and cancelling it is the cooperative stop signal. Keeping it
+        // off the idle deadline makes the race deterministic: the idle signal wins, and the pull is cancelled below.
         using var providerCts = CancellationTokenSource.CreateLinkedTokenSource(context.OuterToken);
         var enumerator = enumeratorFactory(providerCts.Token);
         var disposalHandedOff = false;
@@ -89,9 +70,8 @@ internal static class IdleStreamGuard
         {
             while (true)
             {
-                // Observe cancellation / idle expiry BEFORE advancing: a stream whose MoveNextAsync always completes
-                // synchronously (a pre-buffered enumerator) never reaches the async race below, so without this it could
-                // emit past a cancel or an expired deadline forever.
+                // Observe a stop BEFORE advancing: a MoveNextAsync that always completes synchronously never reaches
+                // the async race below, so without this it could emit past a cancel or an expired deadline forever.
                 ThrowIfStopped(context);
 
                 var moveNext = enumerator.MoveNextAsync();
@@ -137,9 +117,8 @@ internal static class IdleStreamGuard
         }
         finally
         {
-            // Normal completion, a consumer break, or a timeout whose provider unwound cooperatively: dispose within a
-            // bound so a hung DisposeAsync cannot wedge the pipeline. When disposal was handed to an abandonment cleanup
-            // it owns the enumerator (which may still be mid-MoveNextAsync), so do not touch it here.
+            // Dispose within a bound so a hung DisposeAsync cannot wedge the pipeline. When disposal was handed to an
+            // abandonment cleanup it owns the enumerator, possibly mid-MoveNextAsync, so do not touch it here.
             if (!disposalHandedOff)
             {
                 var disposeTask = enumerator.DisposeAsync().AsTask();
@@ -173,11 +152,14 @@ internal static class IdleStreamGuard
     }
 
     /// <summary>
-    ///     Throws if a stop has already been observed, so the synchronous fast path cannot emit past it. Outer
-    ///     cancellation takes precedence over an idle deadline (the caller links the idle token to the outer token, so
-    ///     both are set on cancellation) and surfaces as a plain <see cref="OperationCanceledException" />; an idle
-    ///     deadline fires <see cref="IdleGuardContext.OnIdleTimeout" /> exactly as the async race path does.
+    ///     Throws if a stop has already been observed, so the synchronous fast path cannot emit past it.
     /// </summary>
+    /// <remarks>
+    ///     Outer cancellation takes precedence over an idle deadline — the caller links the idle token to the outer
+    ///     one, so both are set on cancellation — and surfaces as a plain
+    ///     <see cref="OperationCanceledException" />; an idle deadline fires
+    ///     <see cref="IdleGuardContext.OnIdleTimeout" /> exactly as the async race path does.
+    /// </remarks>
     private static void ThrowIfStopped(IdleGuardContext context)
     {
         context.OuterToken.ThrowIfCancellationRequested();
@@ -220,9 +202,8 @@ internal static class IdleStreamGuard
         }
         else
         {
-            // Non-cooperative: leave MoveNextAsync running and hand its observation AND the enumerator's bounded disposal
-            // to an off-thread cleanup — disposing while a MoveNextAsync is pending is an IAsyncEnumerator contract
-            // violation.
+            // Non-cooperative: leave MoveNextAsync running and hand its observation AND the enumerator's bounded
+            // disposal off-thread — disposing during a pending MoveNextAsync violates the IAsyncEnumerator contract.
             disposalHandedOff = true;
             AbandonAsync(moveTask, enumerator, context.Grace);
             context.OnAbandoned();
@@ -263,12 +244,14 @@ internal static class IdleStreamGuard
     }
 
     /// <summary>
-    ///     Abandons a stuck pull: observes <paramref name="moveTask" /> off-thread (so its eventual fault is not
-    ///     unobserved) and, only once it has settled (never concurrently with the pending pull), disposes the
-    ///     <paramref name="enumerator" /> within <paramref name="grace" />. Returns immediately; the cleanup runs
-    ///     detached. If the pull never settles the enumerator is never disposed — the documented cost of bounding a
-    ///     provider that ignores cancellation.
+    ///     Abandons a stuck pull: observes <paramref name="moveTask" /> off-thread and, once it has settled, disposes
+    ///     the <paramref name="enumerator" /> within <paramref name="grace" />.
     /// </summary>
+    /// <remarks>
+    ///     Returns immediately; the cleanup runs detached, and disposal never races the pending pull. If the pull never
+    ///     settles the enumerator is never disposed — the documented cost of bounding a provider that ignores
+    ///     cancellation.
+    /// </remarks>
     private static void AbandonAsync<T>(Task<bool> moveTask, IAsyncEnumerator<T> enumerator, TimeSpan grace)
     {
         _ = CleanupAsync(moveTask, enumerator, grace);
@@ -335,14 +318,15 @@ internal static class IdleStreamGuard
 }
 
 /// <summary>
-///     The idle-guard's parameters bundled so no method carries multiple loose <see cref="CancellationToken" />s (the two
-///     tokens are kept last so a single loose token would still satisfy the analyzer). <paramref name="OnIdleTimeout" />
-///     fires once when the idle deadline stops the run; <paramref name="OnAbandoned" /> fires once per abandoned
-///     advancement or disposal. <paramref name="IdleToken" /> is the caller's re-armable idle deadline (linked by the
-///     caller to <paramref name="OuterToken" />, so it fires on both idle expiry and outer cancellation);
-///     <paramref name="OuterToken" /> is the caller's cancellation, used to bind the workflow's own cancellation and to
-///     tell an idle timeout apart from a plain cancellation.
+///     The idle-guard's parameters, bundled so no method carries multiple loose <see cref="CancellationToken" />s.
 /// </summary>
+/// <remarks>
+///     The two tokens are kept last so a single loose token would still satisfy the analyzer.
+///     <paramref name="OnIdleTimeout" /> fires once when the deadline stops the run and
+///     <paramref name="OnAbandoned" /> once per abandoned advancement or disposal.
+///     <paramref name="IdleToken" /> is the caller's re-armable deadline, linked by the caller to
+///     <paramref name="OuterToken" />, which tells an idle timeout apart from a plain cancellation.
+/// </remarks>
 internal readonly record struct IdleGuardContext(
     TimeSpan Grace,
     Action OnIdleTimeout,

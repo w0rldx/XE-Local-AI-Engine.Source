@@ -12,17 +12,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
 ///     Innermost pipeline hop (below <c>UseFunctionInvocation</c>) that re-budgets EVERY raw provider round against the
-///     effective context window and enforces the invocation's cumulative provider-call ceilings. The outer invocation
-///     runner budgets only its two OUTER history-growth points (initial seed and each approval-resume); the autonomous
-///     tool-calling loop inside <c>FunctionInvokingChatClient</c> appends tool results and calls the provider again
-///     without the runner seeing it, and MAF participant turns are likewise invisible to the runner — so this hop is the
-///     only place that sees, and can bound, those inner rounds.
-///     <para>
-///         Budgeting is gated on an ambient <see cref="ProviderCallBudget" /> scope (seeded per invocation by the
-///         runner); when none is present (the eval / preview-workflow runners drive the same shared client without one)
-///         the client is a transparent pass-through, so those paths are byte-identical to before.
-///     </para>
+///     effective context window and enforces the invocation's cumulative provider-call ceilings.
 /// </summary>
+/// <remarks>
+///     The outer invocation runner budgets only its two OUTER history-growth points, so the inner tool-calling loop and
+///     MAF participant rounds are visible only here. Gated on an ambient <see cref="ProviderCallBudget" /> scope seeded
+///     per invocation by the runner; with no scope the hop is a transparent pass-through.
+///     See docs/wiki/04-agent-mode.md ("Provider-boundary budgeting").
+/// </remarks>
 internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
 {
     private static readonly Meter Meter = new(TelemetrySourceNames.Agent, "1.0.0");
@@ -119,17 +116,14 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
 
     /// <summary>
     ///     Feeds one real round back into the estimator's per-model calibration: what the provider counted for the
-    ///     prompt, against what this hop estimated for the very message set it sent. This is the only place in the
-    ///     process that holds both numbers for the SAME request — the invocation runner sees a turn's last usage
-    ///     without the per-round estimate that produced it, and the outer conversation budgeter never sees usage at
-    ///     all.
-    ///     <para>
-    ///         Only budgeted rounds carry a model name (see <see cref="ApplyBudget" />), so the eval / preview
-    ///         pass-through paths record nothing, and neither do the summarizer and the other side calls that build
-    ///         their own per-run client instead of routing through this pipeline. The store applies its own minimum
-    ///         sample size and bounds; everything here is a null check.
-    ///     </para>
+    ///     prompt, against what this hop estimated for the very message set it sent.
     /// </summary>
+    /// <remarks>
+    ///     The only place in the process that holds both numbers for the SAME request. Only budgeted rounds carry a
+    ///     model name (see <see cref="ApplyBudget" />), so the pass-through paths record nothing, and neither do the
+    ///     summarizer and the other side calls that build their own per-run client. The store applies its own minimum
+    ///     sample size and bounds; everything here is a null check.
+    /// </remarks>
     private void RecordObservedUsage(in BudgetedRound round, long? observedInputTokens)
     {
         if (round.ModelName is not { } modelName || observedInputTokens is not { } observed || observed <= 0)
@@ -141,14 +135,16 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     }
 
     /// <summary>
-    ///     Applies the per-round input budget and registers the round against the cumulative ceilings. Returns the
-    ///     (possibly reduced) message list to send, plus the options to send with it — the same instance unless the
-    ///     reasoning budget had to be narrowed against the room this round's input actually leaves (see
-    ///     <see cref="NarrowReasoningBudget" />) — plus what <see cref="RecordObservedUsage" /> needs to feed this
-    ///     round's outcome back into calibration. A pass-through (returns both inputs unchanged, and no model name, so
-    ///     nothing is recorded) when no ambient budget scope is present. Throws
-    ///     <see cref="ProviderCallBudgetExceededException" /> when a cumulative ceiling trips.
+    ///     Applies the per-round input budget, registers the round against the cumulative ceilings, and returns the
+    ///     (possibly reduced) message list to send plus the options to send it with.
     /// </summary>
+    /// <remarks>
+    ///     The options are the caller's own instance unless the reasoning budget had to be narrowed against the room
+    ///     this round's input leaves (see <see cref="NarrowReasoningBudget" />); the model name and estimate are what
+    ///     <see cref="RecordObservedUsage" /> feeds back into calibration. A pass-through — both inputs unchanged, no
+    ///     model name, nothing recorded — when no ambient budget scope is present. Throws
+    ///     <see cref="ProviderCallBudgetExceededException" /> when a cumulative ceiling trips.
+    /// </remarks>
     private BudgetedRound ApplyBudget(IEnumerable<ChatMessage> messages, ChatOptions? options)
     {
         var budget = ProviderCallBudget.Current;
@@ -163,19 +159,14 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         var window = ResolveContextWindow(options, budgetOptions);
         var reserved = ResolveReservedOutputTokens(options, budgetOptions);
 
-        // Measure against TokenEstimatorCalibrationStore.EstimateSafetyFactor of the window, not the whole of it: the
-        // char heuristic under-counts by roughly a tenth on markdown and JSON, and an under-count at the window edge is
-        // a provider rejection rather than a trim. On top of that flat factor, divide by whatever real rounds of THIS
-        // model have since shown the residual optimism to be (tighten-only; exactly neutral until a round has been
-        // recorded, so an uncalibrated model is byte-identical to before). Comparison only — nothing else here knows
-        // about either margin.
+        // Two comparison-only margins: EstimateSafetyFactor of the window (the char heuristic under-counts ~10% on
+        // markdown/JSON, and an under-count at the edge is a rejection, not a trim), then this model's own correction.
         var modelId = options?.ModelId;
         var observedCorrection = _calibrationStore.ResolveObservedCorrection(modelId);
         var effectiveWindow = Math.Max(TokenEstimatorCalibrationStore.ApplyEstimateMargins(window, observedCorrection) - reserved, 0);
         var charsPerToken = _calibrationStore.ResolveDivisor(modelId);
-        // Instructions AND the tool definitions (name + description + JSON schema) are fixed per-round input the model
-        // never sees as a droppable message but which still counts against the window — folding both into the overhead
-        // stops a tool-heavy agent from under-estimating and rounding an over-window request through.
+        // Instructions AND tool definitions (name + description + JSON schema) are fixed per-round input the model never
+        // sees as a droppable message; folding both in stops a tool-heavy agent rounding an over-window request through.
         var toolSchemaTokens = ProviderMessageTokenEstimator.EstimateTools(options?.Tools, charsPerToken);
         var instructionsTokens = ProviderMessageTokenEstimator.EstimateTokens(options?.Instructions, charsPerToken)
                                  + toolSchemaTokens;
@@ -199,12 +190,8 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
                 result.ExceedsWindow);
         }
 
-        // A single round whose pinned set alone still exceeds the window is irreducible: no further trimming can shrink
-        // it (the budgeter already excerpted and dropped everything it may). Sending it would overrun the model's
-        // launched context window or be rejected deep inside the provider with an opaque error, so fail it HERE — before
-        // the inner client is called, in both the sync and streaming paths (both route through ApplyBudget) — with a
-        // classified, sanitized error. The cumulative-ceiling registration below is intentionally skipped: this round
-        // never reaches the provider.
+        // An irreducible round (the pinned set alone is over the window) is failed HERE with a classified, sanitized
+        // error; the ceiling registration below is skipped deliberately, because this round never reaches the provider.
         if (result.ExceedsWindow)
         {
             ContextWindowExceededCounter.Add(1);
@@ -247,17 +234,15 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
 
     /// <summary>
     ///     Narrows the llama.cpp thinking-budget marker to the room THIS round's input actually leaves, when the turn
-    ///     carries one. The provider-side clamp can only see the launched window, so on a long conversation it still
-    ///     permits a budget larger than the tokens remaining after the prompt — and a reasoning phase that eats the
-    ///     remainder returns no answer, which is the failure the budget exists to prevent. This hop is the one place
-    ///     that knows both numbers: the window and the round's estimated input.
-    ///     <para>
-    ///         Half the remainder, matching the provider clamp's split, so at least as many tokens are left for the
-    ///         answer as the model may spend thinking. Returns <paramref name="options" /> unchanged whenever there is
-    ///         no marker or the marker is already smaller — the overwhelming majority of rounds — so nothing is cloned
-    ///         on the common path.
-    ///     </para>
+    ///     carries one.
     /// </summary>
+    /// <remarks>
+    ///     The provider-side clamp sees only the launched window, so on a long conversation it still permits a budget
+    ///     larger than the tokens left after the prompt — and a reasoning phase that eats the remainder returns no
+    ///     answer, the failure the budget exists to prevent. Half the remainder, matching the provider clamp's split.
+    ///     Returns <paramref name="options" /> unchanged when there is no marker or it is already smaller, so nothing
+    ///     is cloned on the common path.
+    /// </remarks>
     private static ChatOptions? NarrowReasoningBudget(ChatOptions? options, int window, int estimatedInputTokens)
     {
         if (options?.AdditionalProperties is not { } properties

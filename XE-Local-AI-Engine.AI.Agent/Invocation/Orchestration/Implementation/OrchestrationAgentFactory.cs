@@ -59,14 +59,8 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
             throw new ArgumentException("An orchestration must declare at least one participant.", nameof(definition));
         }
 
-        // Build one agent per participant. Each agent receives the production-decorated IChatClient (the DI pipeline
-        // is already FunctionInvokingChatClient-wrapped) plus its own resolved tools. ChatClientAgent's ctor detects
-        // the existing FICC and sets the agent's own tools as AdditionalTools, while the handoff builder injects the
-        // bodyless handoff_to_* declarations the executor routes — FICC has no implementation for those so it lets
-        // them flow through unserviced. An external FICC that tried to invoke handoff_to_* would be unsafe, but the
-        // pre-decorated pipeline is safe because the same FICC services only the agent's own
-        // tools — proven by CreateAsync_ApprovalAcrossHandoff_OverProductionDecoratedClient_StillSurfacesAndExecutes.)
-        // The agent's Name/Description drive handoff routing (the target's Description is the routing reason).
+        // One agent per participant over the production-decorated IChatClient, whose FICC services only the agent's own
+        // tools and lets the bodyless handoff_to_* declarations reach the executor unserviced (pinned by a named test).
         var agentsByKey = new Dictionary<string, AIAgent>(StringComparer.Ordinal);
         var participantsByAgentId = new Dictionary<string, OrchestrationParticipant>(StringComparer.Ordinal);
         foreach (var participant in definition.Participants)
@@ -115,26 +109,16 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
             _logger,
             cancellationToken).ConfigureAwait(false);
 
-        // A handoff workflow drives its participant agents itself, so the outer runner's per-turn RunOptions.ChatOptions
-        // (which carries model id + reasoning on the single-agent path) NEVER reaches them. The participant's resolved
-        // model + reasoning must therefore be baked into the agent at CONSTRUCTION time, via ChatClientAgentOptions.
-        // ChatOptions — the same channel the single-agent factory's skills path uses. ModelId routes the shared
-        // (production-decorated) IChatClient to this participant's resolved model; the reasoning AdditionalProperties
-        // mirror the single-agent think contract (see ParticipantReasoningOptions), gated on the participant's own
-        // thinking capability. Instructions + the agent's own tools ride ChatOptions exactly as the positional ctor
-        // moves them under the hood, so ChatClientAgent still detects the pre-decorated FICC and treats the agent tools
-        // as AdditionalTools while handoff_to_* flows through (proven by the approval-across-handoff tests).
+        // A handoff workflow drives its participants itself, so the outer runner's RunOptions.ChatOptions never reaches
+        // them: model id and reasoning are baked in at CONSTRUCTION through ChatClientAgentOptions.ChatOptions.
         var additionalProperties = ParticipantReasoningOptions.Build(participant.ReasoningEffort,
             participant.SupportsThinking,
             participant.ReasoningBudgetEnforceable,
             _logger,
             participant.ModelId);
 
-        // Carry this participant's launched effective context window as num_ctx so the innermost provider-round
-        // budgeter (ProviderCallBudgetChatClient) sizes THIS participant against the window ITS model was launched with,
-        // not the shared configured default — a participant pinned to a smaller-window model could otherwise be fed past
-        // its real window. Mirrors the single-agent InvocationAgentFactory num_ctx write; the ContainsKey guard leaves
-        // any per-send override (none on this workflow path today) in place.
+        // This participant's launched window as num_ctx, so ProviderCallBudgetChatClient sizes IT against its own model
+        // rather than the shared default; the ContainsKey guard leaves any per-send override in place.
         if (participant.EffectiveContextTokens is { } effectiveContext
             && effectiveContext > 0
             && !additionalProperties.ContainsKey(NumCtxKey))
@@ -171,9 +155,8 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
 
         if (definition.Edges.Count == 0)
         {
-            // No explicit edges means a fully-connected mesh: registering the non-initial participants with no
-            // handoff edges makes the builder auto-wire every agent to hand off to every other (the initial/triage
-            // agent is already registered by CreateHandoffBuilderWith).
+            // No explicit edges means a fully-connected mesh: registering the non-initial participants with no handoff
+            // edges auto-wires every agent to every other (CreateHandoffBuilderWith already registered triage).
             var others = definition.Participants
                                    .Where(participant => !string.Equals(participant.Key, definition.Triage.Key, StringComparison.Ordinal))
                                    .Select(participant => agentsByKey[participant.Key]);

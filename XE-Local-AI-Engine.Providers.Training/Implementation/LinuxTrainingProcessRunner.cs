@@ -6,15 +6,15 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
-///     The production <see cref="ITrainingProcessRunner" />. Spawns a tool by argv (no shell) under <c>setsid -w</c> so
-///     the child runs in a NEW session/process group and <c>kill(-pgid)</c> reaps the whole tree; streams stdout+stderr
-///     line-by-line to a sink as the install runs; awaits exit; and tree-kills the group on cancellation or timeout.
+///     The production <see cref="ITrainingProcessRunner" />: spawns a tool by argv (no shell) under <c>setsid -w</c>,
+///     streams stdout and stderr line-by-line to a sink, awaits exit, and tree-kills on cancellation or timeout.
 /// </summary>
 /// <remarks>
-///     The child's environment is the SCRUBBED, allowlisted dictionary the caller supplies — the inherited environment is
-///     cleared entirely first, so a uv install never inherits <c>LD_PRELOAD</c>, proxy/credential variables, or any node
-///     secret. This mirrors <c>StreamingProcessRunner</c> in the LlamaServer provider, which cannot be reused directly:
-///     it is internal to that assembly and this project references <c>Providers.Abstractions</c> only (ADR 0005 §3).
+///     <c>setsid</c> puts the child in a NEW session and process group so <c>kill(-pgid)</c> reaps the whole tree. The
+///     child's environment is the SCRUBBED, allowlisted dictionary the caller supplies, with the inherited environment
+///     cleared entirely first. Mirrors <c>StreamingProcessRunner</c> in the LlamaServer provider, which cannot be
+///     reused: it is internal to that assembly and this project references <c>Providers.Abstractions</c> only
+///     (ADR 0005 decision 3).
 /// </remarks>
 public sealed class LinuxTrainingProcessRunner : ITrainingProcessRunner
 {

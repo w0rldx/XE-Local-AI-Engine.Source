@@ -3,18 +3,15 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     A name-only offer placeholder for a tool whose executable lives in one of the resolution registries
-///     (<see cref="IAgentToolRegistry" /> / <see cref="IClientLocalToolRegistry" /> / <see cref="IMcpToolRegistry" />).
-///     The runtime package carries only the offer list; <see cref="InvocationToolResolver" /> substitutes this
-///     placeholder for the matching registry executable before the agent runs. It throws if it is ever invoked, because
-///     an offered local tool with no registry match must be dropped rather than executed.
-///     <para>
-///         It also carries the resolved per-agent <see cref="RequiresApproval" /> policy so the resolver can enforce a
-///         TIGHTEN-ONLY approval override: when the offer requires approval the resolver wraps the resolved executable in
-///         <c>ApprovalRequiredAIFunction</c> unless it already is one. A name-only placeholder dropped this flag, which
-///         silently discarded a per-agent tightening of a ClientLocal tool.
-///     </para>
+///     A name-only offer placeholder for a tool whose executable lives in one of the resolution registries.
 /// </summary>
+/// <remarks>
+///     The runtime package carries only the offer list, and <see cref="InvocationToolResolver" /> substitutes this
+///     placeholder for the matching registry executable before the agent runs. It THROWS if ever invoked, because an
+///     offered local tool with no registry match must be dropped rather than executed. It also carries the resolved
+///     per-agent <see cref="RequiresApproval" /> policy, without which a per-agent tightening of a ClientLocal tool
+///     would be silently discarded, since the resolver's TIGHTEN-ONLY wrap reads it from here.
+/// </remarks>
 internal sealed class OfferPlaceholderAIFunction : AIFunction
 {
     public OfferPlaceholderAIFunction(string toolName, bool requiresApproval)

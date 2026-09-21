@@ -12,21 +12,11 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 ///     connection — a multiplexer, not one provider per connection.
 /// </summary>
 /// <remarks>
-///     <para>
-///         WHY one registration: the provider resolver snapshots the registered <see cref="ILocalModelProvider" /> set
-///         in its constructor, so a provider-per-connection design would require rebuilding the container every time an
-///         operator adds a connection. Here the connection is recovered from the model id
-///         (<c>ext:{connectionId}/{wireId}</c>) and looked up live in the registry, so adding, editing or removing a
-///         connection needs no restart and no DI change.
-///     </para>
-///     <para>
-///         WHY the lifecycle operations split the way they do: <see cref="WarmModelAsync" /> and
-///         <see cref="UnloadModelAsync" /> are benign no-ops because the keep-warm background service calls warm
-///         generically for whatever model is selected — throwing there would turn "an external model is the default"
-///         into a recurring background failure. <see cref="PullModelAsync" /> and <see cref="DeleteModelAsync" /> DO
-///         throw, because silently succeeding at deleting a model the node does not own would be a lie the UI would
-///         then render as a completed deletion.
-///     </para>
+///     ONE registration, because the provider resolver snapshots the registered <see cref="ILocalModelProvider" /> set
+///     in its constructor; the connection is recovered from the model id and looked up live, so adding or editing one
+///     needs no restart. The lifecycle split is deliberate: <see cref="WarmModelAsync" /> and
+///     <see cref="UnloadModelAsync" /> are benign no-ops because the keep-warm service calls warm generically, while
+///     <see cref="PullModelAsync" /> and <see cref="DeleteModelAsync" /> DO throw rather than fake a deletion.
 /// </remarks>
 public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
 {
@@ -184,9 +174,8 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
             MaxContextTokens = model.ContextLength,
             IsToolCapable = model.SupportsTools,
             IsReasoningCapable = model.SupportsReasoning,
-            // Native reasoning is a llama.cpp chat-template concept (the graded think switch a harmony-family template
-            // lacks). External reasoning is declared, and the graded path here is the typed reasoning_effort field, so
-            // the native flag stays false and never diverts an external model out of the graded branch.
+            // Native reasoning is a llama.cpp chat-template concept; external reasoning is declared and graded through
+            // the typed reasoning_effort field, so the flag stays false and never diverts the model off that branch.
             IsNativeReasoningCapable = false,
             // Vacuously true: the budget marker is a llama-server field this provider never emits, so nothing here can
             // silently lose a cap. Reporting false would make the UI warn about an enforcement gap that does not exist.
@@ -197,10 +186,12 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
     }
 
     /// <summary>
-    ///     One representative registered model id per configured connection — the handle the health probe resolves its
-    ///     endpoint AND key through in one atomic read, rather than pairing a cached descriptor with a separate key
-    ///     lookup that a concurrent edit can desynchronize.
+    ///     One representative registered model id per configured connection: the handle the health probe resolves its
+    ///     endpoint AND key through in one atomic read.
     /// </summary>
+    /// <remarks>
+    ///     Pairing a cached descriptor with a separate key lookup lets a concurrent edit desynchronize the two.
+    /// </remarks>
     private async Task<IReadOnlyList<string>> ListConnectionModelIdsAsync(CancellationToken ct)
     {
         var registrations = await _registry.ListRegistrationsAsync(ct).ConfigureAwait(false);

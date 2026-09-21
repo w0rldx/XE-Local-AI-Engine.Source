@@ -4,13 +4,13 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-/// <summary>
-///     Linux process handle whose tree-kill signals the child's whole process group. The child is started under
-///     <c>setsid</c> (see <see cref="LinuxTrainingProcessRunner" />), so its pid is also its process-group id and
-///     <c>kill(-pid)</c> reaps uv plus everything it forked — a uv install spawns build backends and downloaders, and
-///     killing only uv would orphan them. Mirrors the LlamaServer and StableDiffusionCpp handles; each provider owns its
-///     own because only <c>SetsidLocator</c> is shared across them.
-/// </summary>
+/// <summary>Linux process handle whose tree-kill signals the child's whole process group.</summary>
+/// <remarks>
+///     The child is started under <c>setsid</c> (see <see cref="LinuxTrainingProcessRunner" />), so its pid is also
+///     its process-group id and <c>kill(-pid)</c> reaps uv plus everything it forked — a uv install spawns build
+///     backends and downloaders, and killing only uv would orphan them. Mirrors the LlamaServer and
+///     StableDiffusionCpp handles; each provider owns its own because only <c>SetsidLocator</c> is shared.
+/// </remarks>
 [SupportedOSPlatform("linux")]
 internal sealed partial class LinuxTrainingProcessGroupHandle : IDisposable
 {

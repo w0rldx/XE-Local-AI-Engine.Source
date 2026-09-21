@@ -10,29 +10,11 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 ///     The <see cref="IChatClient" /> for ONE registered external model, resolved against the registry on first use.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Construction is deferred for the same reason the llama-server client defers it:
-///         <see cref="Abstractions.ILocalModelProvider.CreateChatClient" /> is synchronous while resolving the
-///         connection (and decrypting its key) is asynchronous. Paying that cost on the first send is a normal
-///         first-token delay; blocking the sync factory on it is not.
-///     </para>
-///     <para>
-///         The binding is re-read on EVERY send and the built adapter is rebuilt whenever the endpoint identity
-///         changes, so an operator who edits a connection's base URL, key or timeout does not keep talking to the old
-///         one. It is read as ONE atomic value — endpoint, declared trust, generation and credential together — because
-///         reading the address and the key separately lets a concurrent edit present a new key at an old address.
-///     </para>
-///     <para>
-///         When the send belongs to a PINNED invocation (the normal chat/agent turn), the freshly read binding is
-///         checked against the pin the turn's tools were authorized against, and a send whose locality, origin or
-///         generation no longer matches is refused. Tool authorization happens once per turn while a tool loop sends
-///         many times; without this check an operator edit landing mid-loop would redirect the later sends — carrying
-///         the already-authorized local tools and their results — to an endpoint that never earned them.
-///     </para>
-///     <para>
-///         An unresolvable id is TERMINAL, never a fallback: without a resolved registration there is no operator
-///         locality declaration to honour, and a prompt must not be sent to a guessed endpoint.
-///     </para>
+///     Construction is DEFERRED because <see cref="Abstractions.ILocalModelProvider.CreateChatClient" /> is synchronous
+///     while resolving the connection and decrypting its key is not. The binding is re-read on EVERY send, as ONE
+///     atomic value — endpoint, declared trust, generation and credential together, since reading address and key
+///     separately lets a concurrent edit present a new key at an old address — and the adapter is rebuilt whenever the
+///     endpoint identity changes. An unresolvable id is TERMINAL: a prompt must not be sent to a guessed endpoint.
 /// </remarks>
 internal sealed class ExternalOpenAiChatClient : IChatClient
 {
@@ -63,10 +45,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
 
     /// <param name="registry">The read-only registry the connection and key are resolved from.</param>
     /// <param name="modelId">The namespaced <c>ext:{connectionId}/{wireId}</c> id this client serves.</param>
-    /// <param name="transportHandlerFactory">
-    ///     Test seam: supplies the INNERMOST handler so a request can be driven through the real assembled pipeline —
-    ///     endpoint guard included — without live network I/O. <see langword="null" /> in production.
-    /// </param>
+    /// <param name="transportHandlerFactory">Test seam supplying the INNERMOST handler, so a request drives the real pipeline without network I/O.</param>
     public ExternalOpenAiChatClient(IExternalProviderRegistry registry, string modelId, Func<HttpMessageHandler>? transportHandlerFactory = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
@@ -159,17 +138,11 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
     ///     Refuses a send whose binding no longer matches what its invocation was authorized against.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         PINNED sends (a chat or agent turn) compare against the pin the tool offer was computed from: locality,
-    ///         origin and registry generation. That is the mid-invocation swap this closes — editing the connection
-    ///         Local→Cloud, or moving it to another host, between two rounds of one tool loop.
-    ///     </para>
-    ///     <para>
-    ///         UNPINNED sends (a background summarization, a health-adjacent probe — contexts with no tool offer to
-    ///         invalidate) resolve live, but may never become MORE privileged than the declaration this client was
-    ///         first built against: a connection that was Cloud when this instance resolved it and is Local now has
-    ///         escalated underneath a live client, and re-using it is refused rather than silently honoured.
-    ///     </para>
+    ///     A PINNED send — a chat or agent turn — compares locality, origin and registry generation against the pin the
+    ///     tool offer was computed from, closing the mid-invocation swap: tool authorization happens once per turn
+    ///     while a tool loop sends many times, so an edit landing mid-loop would redirect later sends, carrying the
+    ///     already-authorized local tools and their results, to an endpoint that never earned them. An UNPINNED send
+    ///     resolves live but may never become MORE privileged than the declaration this client was first built against.
     /// </remarks>
     private void VerifyStillAuthorized(ExternalProviderBinding binding)
     {
@@ -192,9 +165,8 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         }
     }
 
-    // Assembles the full per-connection stack: hardened transport -> endpoint guard -> OpenAI chat-completions adapter
-    // -> reasoning rewriting. Every disposable created here transfers into the returned ResolvedEndpoint, which owns
-    // them for as long as it is the current one; CA2000 cannot follow that ownership transfer.
+    // Assembles the per-connection stack: hardened transport, endpoint guard, chat-completions adapter, reasoning
+    // rewriting. Every disposable transfers into the returned ResolvedEndpoint, an ownership CA2000 cannot follow.
 #pragma warning disable CA2000
     private ResolvedEndpoint Build(ExternalProviderModelRegistration registration, string? apiKey, EndpointIdentity identity)
     {

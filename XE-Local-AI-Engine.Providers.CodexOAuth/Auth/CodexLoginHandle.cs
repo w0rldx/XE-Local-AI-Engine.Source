@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 /// <summary>
-///     A pending Codex OAuth login: the <see cref="AuthorizeUrl" /> is available immediately (so the endpoint can
-///     hand it to the React UI as a copyable/clickable link), while <see cref="Completion" /> resolves
-///     once the loopback callback delivers the authorization code and the token exchange persists the session.
+///     A pending Codex OAuth login: <see cref="AuthorizeUrl" /> is available immediately, so the endpoint can hand it
+///     to the React UI as a copyable link.
 /// </summary>
+/// <remarks>
+///     <see cref="Completion" /> resolves once the loopback callback delivers the authorization code and the token
+///     exchange persists the session.
+/// </remarks>
 public sealed class CodexLoginHandle
 {
     /// <summary>The PKCE authorize URL the operator opens in a browser. Contains no secrets.</summary>

@@ -7,20 +7,11 @@ using System.Diagnostics.CodeAnalysis;
 ///     operation paths to (<c>/chat/completions</c>, <c>/models</c>, …).
 /// </summary>
 /// <remarks>
-///     <para>
-///         WHY normalization has to happen exactly ONCE, at save time: the same value feeds the connect-time probe, the
-///         chat transport, and the outbound guard that pins every request to it. If the probe normalized one way and
-///         the guard another, the guard would either reject legitimate traffic or — worse — admit a base it never
-///         verified. Everything downstream therefore consumes the already-normalized value and never re-derives it.
-///     </para>
-///     <para>
-///         Accepted: <c>http(s)://host[:port]</c> and <c>http(s)://host[:port]/some/prefix</c>, with or without a
-///         trailing <c>/v1</c> and with or without a trailing slash. Rejected: any non-http(s) scheme (a
-///         <c>file://</c> or <c>ws://</c> endpoint is never an OpenAI-compatible API), embedded userinfo
-///         (<c>https://user:pass@host</c> — credentials belong in the encrypted key field, not in a base URL that is
-///         logged and rendered), a query string, and a fragment. A relative URI is rejected outright: the guard can
-///         only pin an absolute origin.
-///     </para>
+///     Normalization happens exactly ONCE, at save time, because the same value feeds the connect-time probe, the chat
+///     transport and the outbound guard that pins every request to it: were the probe and the guard to normalize
+///     differently, the guard would reject legitimate traffic or admit a base it never verified. Rejected outright are
+///     a non-http(s) scheme, embedded userinfo — credentials belong in the encrypted key field, not a base URL that is
+///     logged and rendered — a query string, a fragment, and a relative URI the guard could not pin.
 /// </remarks>
 public static class OpenAICompatibleBaseAddress
 {

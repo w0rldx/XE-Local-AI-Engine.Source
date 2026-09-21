@@ -13,15 +13,14 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
 {
     /// <summary>
     ///     The maximum time to wait for the TCP connection to the Ollama endpoint to establish before failing fast.
-    ///     This bounds ONLY the connect phase (<see cref="SocketsHttpHandler.ConnectTimeout" />), not the overall
-    ///     request: a long model pull still runs to the five-minute <see cref="HttpClient.Timeout" />. The short value
-    ///     is the lever that kills the multi-second stall when no Ollama daemon is listening (desktop mode): a refused
-    ///     or absent endpoint fails in well under a second instead of waiting out the OS connect timeout. A fired
-    ///     connect timeout surfaces as an <see cref="OperationCanceledException" />, which
-    ///     <see cref="OllamaConnectFailureHandler" /> translates to <see cref="HttpRequestException" /> so the
-    ///     "Ollama unreachable" handling is uniform whether the host refuses (RST) or silently drops the SYN. It does not
-    ///     shorten any genuine Ollama call once connected.
     /// </summary>
+    /// <remarks>
+    ///     Bounds ONLY the connect phase, not the request: a long model pull still runs to the five-minute
+    ///     <see cref="HttpClient.Timeout" />, and nothing is shortened once connected. The short value is the lever
+    ///     that kills the multi-second stall when no daemon is listening in desktop mode. A fired connect timeout
+    ///     surfaces as an <see cref="OperationCanceledException" />, which <see cref="OllamaConnectFailureHandler" />
+    ///     translates so the "Ollama unreachable" handling is uniform for an RST and for a dropped SYN alike.
+    /// </remarks>
     private static readonly TimeSpan OllamaConnectTimeout = TimeSpan.FromMilliseconds(750);
 
     /// <summary>
@@ -39,25 +38,22 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(resolveRegistration);
 
-        // The factory owns the ONE hardened transport. Every Ollama client — the singleton management client below and
-        // each per-model chat/embedding client the provider mints — is created through it, so a routed send inherits the
-        // same fail-fast connect bound and unreachable-daemon normalization instead of a raw default transport.
+        // The factory owns the ONE hardened transport, and every Ollama client is created through it, so a routed send
+        // inherits the same fail-fast connect bound and unreachable-daemon normalization, not a raw default transport.
         _ = services.AddSingleton(serviceProvider =>
         {
             var registration = resolveRegistration(serviceProvider);
 
 #pragma warning disable CA2000 // The handler and HttpClient lifetimes transfer to the returned factory singleton, which disposes them.
-            // SocketsHttpHandler.ConnectTimeout bounds only TCP connection establishment, so a refused/absent endpoint
-            // fails fast while the 5-minute HttpClient.Timeout still covers genuine long pulls once connected. The
-            // handler is owned by the HttpClient (disposeHandler: true), which the factory owns.
+            // ConnectTimeout bounds only TCP establishment, so a refused endpoint fails fast while the 5-minute
+            // HttpClient.Timeout still covers long pulls. The HttpClient owns the handler, and the factory the client.
             var handler = new SocketsHttpHandler
             {
                 ConnectTimeout = OllamaConnectTimeout
             };
 
-            // Wrap the connect-timeout handler so a fired ConnectTimeout (an OperationCanceledException) presents as an
-            // HttpRequestException — the shape every "Ollama unreachable" catch in the codebase expects. The outer
-            // handler is disposed by the HttpClient (disposeHandler: true) and disposes the inner one in turn.
+            // Wrap the connect-timeout handler so a fired ConnectTimeout presents as an HttpRequestException, the shape
+            // every "Ollama unreachable" catch expects. The HttpClient disposes the outer, which disposes the inner.
             var connectFailureHandler = new OllamaConnectFailureHandler(handler);
 
             var httpClient = new HttpClient(connectFailureHandler, disposeHandler: true)

@@ -7,22 +7,11 @@ using Microsoft.Extensions.AI;
 ///     <see cref="TextReasoningContent" />, leaving the rest as ordinary <see cref="TextContent" />.
 /// </summary>
 /// <remarks>
-///     <para>
-///         This is the LAST-RESORT branch of reasoning detection, used only when a server surfaced no reasoning channel
-///         of its own. Some OpenAI-compatible servers (and many chat templates driven through them) emit the model's
-///         raw thinking inline in <c>content</c> instead of a separate field. Left alone, that text is rendered to the
-///         user as the answer, and it also gets replayed verbatim as conversation history on the next turn.
-///     </para>
-///     <para>
-///         Only a LEADING block is recognised, and only one: an interior <c>&lt;think&gt;</c> is far more likely to be
-///         a model quoting markup than a reasoning channel, and stripping it would silently delete part of a legitimate
-///         answer. Everything after the first <c>&lt;/think&gt;</c> is passed through untouched.
-///     </para>
-///     <para>
-///         The splitter is a streaming state machine: a tag can arrive split across SSE deltas, so text is buffered only
-///         as far as it must be — at most the length of the tag being matched — and released as soon as the decision is
-///         unambiguous. It is stateful and single-consumer; one instance serves one response.
-///     </para>
+///     The LAST-RESORT branch of reasoning detection, for a server that surfaced no reasoning channel of its own and
+///     emits raw thinking inline in <c>content</c>, which would otherwise be rendered as the answer and replayed as
+///     history. Only a LEADING block is recognised, and only one: an interior <c>&lt;think&gt;</c> is far more likely
+///     a model quoting markup, and stripping it would delete part of a legitimate answer. A streaming state machine,
+///     buffering at most the length of the tag being matched; stateful and single-consumer, one instance per response.
 /// </remarks>
 internal sealed class ThinkTagReasoningSplitter
 {

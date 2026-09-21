@@ -3,11 +3,12 @@ namespace XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
-/// <summary>
-///     Model management against the Ollama runtime. Declared inside this provider (not in
-///     <c>Providers.Abstractions</c>) because it is an Ollama-only contract: no other provider implements it, and the
-///     implementation lives in the same assembly, so no project edge is reversed.
-/// </summary>
+/// <summary>Model management against the Ollama runtime.</summary>
+/// <remarks>
+///     Declared inside this provider rather than in <c>Providers.Abstractions</c> because it is an Ollama-only
+///     contract: no other provider implements it, and the implementation lives in the same assembly, so no project
+///     edge is reversed.
+/// </remarks>
 public interface IOllamaModelService
 {
     Task<IEnumerable<OllamaModelSummary>> ListLocalModelsAsync(CancellationToken ct = default);
@@ -29,10 +30,10 @@ public interface IOllamaModelService
 
     Task<bool> IsAvailableAsync(CancellationToken ct = default);
 
-    /// <summary>
-    ///     Whether the named model is installed on a runtime this node reaches over loopback. The loopback check is the
-    ///     same fact the composition-time SSRF guard enforces, read without throwing: a remote endpoint, a disabled
-    ///     runtime or an unreachable daemon all answer <see langword="false" />.
-    /// </summary>
+    /// <summary>Whether the named model is installed on a runtime this node reaches over loopback.</summary>
+    /// <remarks>
+    ///     The loopback check is the same fact the composition-time SSRF guard enforces, read without throwing: a
+    ///     remote endpoint, a disabled runtime or an unreachable daemon all answer <see langword="false" />.
+    /// </remarks>
     Task<bool> IsLoopbackModelInstalledAsync(string modelName, CancellationToken ct = default);
 }

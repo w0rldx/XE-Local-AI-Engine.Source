@@ -8,12 +8,14 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 public interface ICodexAuthService
 {
     /// <summary>
-    ///     Starts the interactive PKCE (S256) loopback login: binds the loopback callback listener, builds the
-    ///     authorize URL, and begins waiting for the callback in the background. The returned
-    ///     <see cref="CodexLoginHandle" /> exposes the authorize URL <em>immediately</em> so the React client can render
-    ///     it as a user-clicked link, and a
-    ///     <see cref="CodexLoginHandle.Completion" /> task that resolves once the code is exchanged and persisted.
+    ///     Starts the interactive PKCE (S256) loopback login: binds the callback listener, builds the authorize URL,
+    ///     and begins waiting for the callback in the background.
     /// </summary>
+    /// <remarks>
+    ///     The returned <see cref="CodexLoginHandle" /> exposes the authorize URL <em>immediately</em>, so the React
+    ///     client can render it as a user-clicked link, plus a <see cref="CodexLoginHandle.Completion" /> task that
+    ///     resolves once the code is exchanged and persisted.
+    /// </remarks>
     CodexLoginHandle BeginLogin(CancellationToken cancellationToken = default);
 
     /// <summary>

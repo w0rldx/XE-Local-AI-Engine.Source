@@ -7,26 +7,14 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 /// <summary>
 ///     The escape hatch for the tool-relevance offer: an argument-free, approval-free listing of the tools this turn
 ///     held back, which also REVEALS them so the very next round of the same turn can call one.
-///     <para>
-///         <b>Binding is by object identity, not by key.</b> The send-time hop is the only layer that knows which tool
-///         array it is filtering, and this function is built long before it runs — so the hop calls
-///         <see cref="Bind" /> on the instance it finds in the INCOMING array, which is the same object
-///         <c>FunctionInvokingChatClient</c> resolves calls against. Substituting a fresh instance into the hop's clone
-///         instead would be provably dead: the function-invoking layer never consults the clone, so the substituted
-///         object would never be invoked and the escape hatch would silently do nothing.
-///     </para>
-///     <para>
-///         <b>An unbound invocation is defined, not exceptional.</b> On a round the hop passed through — at or below
-///         the threshold, blank query, feature disabled, agent opted out — the slot is null, the function returns an
-///         empty array, reveals nothing, and the turn continues.
-///     </para>
-///     <para>
-///         <b>Stated exemption.</b> Because it is appended AFTER <c>InvocationToolResolver.ResolveAsync</c>, this
-///         function is subject to neither the tighten-only node approval policy nor <c>AllowedToolNames</c>, and being
-///         absent from the package's allowed-tool list it does not feed the turn's <c>approvalPossible</c> flag. That
-///         is deliberate for an in-process listing of names the agent is already authorised for.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <b>Binding is by object identity, not by key</b> — the hop calls <see cref="Bind" /> on the instance in the
+///     INCOMING array, the object <c>FunctionInvokingChatClient</c> resolves against. An unbound invocation is defined,
+///     not exceptional: it returns an empty array and reveals nothing. Appended AFTER
+///     <c>InvocationToolResolver.ResolveAsync</c>, it is subject to neither the node approval policy nor
+///     <c>AllowedToolNames</c>. See docs/wiki/04-agent-mode.md ("The lexical ranker and the `list_tools` escape hatch").
+/// </remarks>
 internal sealed class ListToolsFunction : AIFunction
 {
     /// <summary>The tool name, matched at the offer's core-set check and by the hop's gate.</summary>

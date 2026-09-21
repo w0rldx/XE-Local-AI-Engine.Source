@@ -11,25 +11,11 @@ using OpenAI;
 ///     external connection (vLLM, LM Studio, a hosted OpenAI-compatible API).
 /// </summary>
 /// <remarks>
-///     <para>
-///         The adapters are built off <c>OpenAIClient.GetChatClient(modelId).AsIChatClient()</c> and
-///         <c>GetEmbeddingClient(modelId).AsIEmbeddingGenerator()</c> — the CHAT-COMPLETIONS surface, not the Responses
-///         surface the Codex provider uses. Only <c>POST /v1/chat/completions</c> is universal across
-///         OpenAI-compatible servers; the Responses API is effectively OpenAI-only.
-///     </para>
-///     <para>
-///         Auth is a deliberate two-branch decision rather than a single sentinel: a supplied key rides the SDK's
-///         standard <c>Authorization: Bearer</c> credential, and NO key means no header at all (see
-///         <see cref="UnauthenticatedPipelinePolicy" />). A shared "ignored" sentinel would be wrong here — this
-///         factory also serves endpoints that genuinely validate the header they are sent.
-///     </para>
-///     <para>
-///         The transport policy is pinned EXPLICITLY rather than left to the System.ClientModel defaults.
-///         <c>NetworkTimeout</c> comes from the caller (a generous outer floor) so a single call never inherits the
-///         SDK's 100 s default and aborts a legitimately long generation, and <c>RetryPolicy</c> is pinned to
-///         <c>ClientRetryPolicy(0)</c> so the SDK NEVER re-issues a request: a chat completion is non-idempotent and a
-///         transient-looking failure must surface rather than silently produce a second generation.
-///     </para>
+///     Built on the CHAT-COMPLETIONS surface, not the Responses surface the Codex provider uses, because only
+///     <c>POST /v1/chat/completions</c> is universal across OpenAI-compatible servers. Auth is two branches rather than
+///     one sentinel — a supplied key rides the standard bearer credential and NO key means no header at all (see
+///     <see cref="UnauthenticatedPipelinePolicy" />) — since this factory also serves endpoints that validate what
+///     they are sent. The transport policy is pinned explicitly, never left to the System.ClientModel defaults.
 /// </remarks>
 public static class OpenAICompatibleClientFactory
 {
@@ -40,11 +26,7 @@ public static class OpenAICompatibleClientFactory
     /// <param name="modelId">The backing model id sent as the request's <c>model</c> field.</param>
     /// <param name="apiKey">The bearer key, or <see langword="null" />/blank for a keyless endpoint.</param>
     /// <param name="networkTimeout">The outer per-call network timeout.</param>
-    /// <param name="transport">
-    ///     An explicit transport — the seam through which a caller injects a hardened <see cref="HttpClient" /> (an
-    ///     outbound-guard handler, a connect timeout) or a test's capturing handler. <see langword="null" /> uses the
-    ///     SDK default transport.
-    /// </param>
+    /// <param name="transport">The seam for a hardened or capturing <see cref="HttpClient" />; <see langword="null" /> uses the SDK default.</param>
     public static IChatClient CreateChatClient(Uri baseAddress,
         string modelId,
         string? apiKey,
@@ -59,9 +41,14 @@ public static class OpenAICompatibleClientFactory
     }
 
     /// <summary>
-    ///     Creates an embedding generator for <paramref name="modelId" /> at <paramref name="baseAddress" />. Same
-    ///     transport and auth contract as <see cref="CreateChatClient" />.
+    ///     Creates an embedding generator for <paramref name="modelId" /> at <paramref name="baseAddress" />, on the
+    ///     same transport and auth contract as <see cref="CreateChatClient" />.
     /// </summary>
+    /// <remarks>
+    ///     Its gen_ai span is metadata-only, and <c>EnableSensitiveData</c> is hard-coded false, deliberately NOT
+    ///     reading <c>AgentTelemetryOptions</c>: embeddings carry conversation, memory and knowledge-base text this
+    ///     node keeps on-box. Setting it explicitly also beats the ambient capture variable Aspire injects as true.
+    /// </remarks>
     public static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(Uri baseAddress,
         string modelId,
         string? apiKey,
@@ -73,14 +60,8 @@ public static class OpenAICompatibleClientFactory
 
         var openAiClient = CreateClient(baseAddress, apiKey, networkTimeout, transport);
 
-        // Metadata-only gen_ai span (model id, input/token counts, latency, dimension count) on every embedding call.
-        // The source name is pinned to the one the agent DI pipeline uses: MEAI's own default
-        // ("Experimental.Microsoft.Extensions.AI") does NOT match the ServiceDefaults wildcard
-        // AddSource("Microsoft.Extensions.AI*"), so a span emitted under it is never exported. EnableSensitiveData is
-        // hard-coded false and deliberately does not read AgentTelemetryOptions.CaptureSensitiveContent: embeddings
-        // carry conversation, memory and knowledge-base text that this node keeps on-box, and the operator's
-        // interactive-pipeline opt-in must never widen to it. Setting it explicitly also beats the ambient
-        // OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT, which Aspire injects as true.
+        // Metadata-only gen_ai span under the source name the agent DI pipeline pins, because MEAI's own default is
+        // never exported by the ServiceDefaults wildcard. See this member's remarks for the sensitive-data rule.
         return openAiClient.GetEmbeddingClient(modelId)
                            .AsIEmbeddingGenerator()
                            .AsBuilder()
@@ -89,15 +70,13 @@ public static class OpenAICompatibleClientFactory
                            .Build();
     }
 
-    /// <summary>
-    ///     Builds the underlying <see cref="OpenAIClient" />. Exposed so a test can assert the assembled pipeline (and
-    ///     the resulting wire headers) directly rather than inferring them — see the pipeline-behavior lesson in
-    ///     <c>docs/agent-knowledge.md</c> §4.
-    /// </summary>
-    // OPENAI001: OpenAIClient(AuthenticationPolicy, OpenAIClientOptions) is experimental. It is the ONLY constructor
-    // that puts a caller-supplied policy in the SDK's FIXED authentication slot, which is what makes "send no
-    // Authorization header at all" expressible; every other route leaves the SDK's placeholder-credential policy as
-    // the last writer. Same scoped-suppression pattern the Azure Foundry v1 builders use.
+    /// <summary>Builds the underlying <see cref="OpenAIClient" />.</summary>
+    /// <remarks>
+    ///     Exposed so a test can assert the assembled pipeline, and the resulting wire headers, directly rather than
+    ///     inferring them — see the pipeline-behavior lesson in <c>docs/agent-knowledge.md</c> §4.
+    /// </remarks>
+    // OPENAI001: OpenAIClient(AuthenticationPolicy, OpenAIClientOptions) is experimental, but it is the ONLY ctor that
+    // puts a caller policy in the SDK's FIXED authentication slot, which is what makes "send no header" expressible.
 #pragma warning disable OPENAI001
     public static OpenAIClient CreateClient(Uri baseAddress, string? apiKey, TimeSpan networkTimeout, PipelineTransport? transport = null)
     {

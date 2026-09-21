@@ -2,11 +2,13 @@ namespace XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 
 /// <summary>
 ///     The compiled, MAF-agnostic input to <see cref="IOrchestrationAgentFactory" />: the triage agent, the full
-///     participant set (which INCLUDES the triage), the handoff edges, and the workflow knobs. The resolver
-///     produces this 1:1 from a <c>Kind=Orchestrator</c> agent definition's topology; the factory turns it
-///     into a handoff <c>Workflow</c> and a drive session, confining all <c>Microsoft.Agents.AI.Workflows</c> types
-///     to this assembly.
+///     participant set (which INCLUDES the triage), the handoff edges and the workflow knobs.
 /// </summary>
+/// <remarks>
+///     The resolver produces this 1:1 from a <c>Kind=Orchestrator</c> agent definition's topology; the factory turns
+///     it into a handoff <c>Workflow</c> and a drive session, confining all <c>Microsoft.Agents.AI.Workflows</c> types
+///     to this assembly.
+/// </remarks>
 public sealed record OrchestrationAgentDefinition
 {
     /// <summary>The coordinator that receives the workflow input. Also present in <see cref="Participants" />.</summary>
@@ -27,11 +29,12 @@ public sealed record OrchestrationAgentDefinition
     /// </summary>
     public bool EmitStreamingUpdates { get; init; } = true;
 
-    /// <summary>
-    ///     Autonomous-mode per-agent turn cap (maps to MAF's <c>WithAutonomousMode</c>). When &gt; 0 an agent whose response
-    ///     contains no handoff is re-invoked up to this many times; the loop ends on a handoff, the termination
-    ///     condition, or the cap. 0 disables autonomous mode (every user turn re-enters via triage).
-    /// </summary>
+    /// <summary>Autonomous-mode per-agent turn cap, mapped to MAF's <c>WithAutonomousMode</c>.</summary>
+    /// <remarks>
+    ///     When greater than 0, an agent whose response contains no handoff is re-invoked up to this many times, and
+    ///     the loop ends on a handoff, the termination condition or the cap. 0 disables autonomous mode, so every user
+    ///     turn re-enters via triage.
+    /// </remarks>
     public int MaxTurnsPerAgent { get; init; }
 
     /// <summary>

@@ -12,36 +12,26 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 {
-    // The option keys for the knobs with no strongly-typed ChatOptions property now live in the shared
-    // SamplingOptionKeys (Providers.Abstractions) because they reach TWO runtimes: Ollama reads them from
-    // ChatOptions.AdditionalProperties via OllamaSharp 5.4.25's AbstractionMapper (→ OllamaOption.*.Name; verified
-    // against the installed assembly 2026-06-05), and DeferredLlamaServerChatClient.ApplySamplingPassthrough patches
-    // min_p/repeat_penalty/repeat_last_n (plus the strongly-typed TopK, which the MEAI OpenAI adapter also drops) onto
-    // the outbound llama-server body. num_ctx stays Ollama-only — llama-server's window is fixed at launch. The
-    // natively-mapped knobs (temperature/top_p/top_k/num_predict/presence_penalty/frequency_penalty/seed/stop) ride the
-    // strongly-typed ChatOptions properties.
+    // The keys with no strongly-typed ChatOptions property live in the shared SamplingOptionKeys because they reach TWO
+    // runtimes: OllamaSharp 5.4.25's AbstractionMapper and DeferredLlamaServerChatClient.ApplySamplingPassthrough.
 
     /// <summary>
     ///     In-process marker on <see cref="ChatOptions.AdditionalProperties" /> that tells the llama.cpp chat client to
-    ///     inject <c>chat_template_kwargs.enable_thinking=false</c> into the outbound request. Set ONLY when
-    ///     reasoning is explicitly OFF on a thinking-capable model: the Ollama <c>think:false</c> written alongside it
-    ///     suppresses reasoning on the Ollama wire, but the llama.cpp OpenAI adapter ignores <c>think</c>, so a
-    ///     Qwen3-class chat template would keep emitting a reasoning block. The key never reaches any wire — Ollama's
-    ///     mapper reads a fixed allowlist and Codex reads its own keys, so both stay byte-identical; only
-    ///     <c>DeferredLlamaServerChatClient</c> consumes it. The literal is intentionally duplicated there (the AI.Agent
-    ///     assembly does not reference the LlamaServer provider); keep the two in sync.
+    ///     inject <c>chat_template_kwargs.enable_thinking=false</c> into the outbound request.
     /// </summary>
+    /// <remarks>
+    ///     Set ONLY when reasoning is explicitly OFF on a thinking-capable model, because the llama.cpp OpenAI adapter
+    ///     ignores the <c>think:false</c> written alongside it. The key never reaches any wire; only
+    ///     <c>DeferredLlamaServerChatClient</c> consumes it, and the literal is intentionally duplicated there because
+    ///     the AI.Agent assembly does not reference the LlamaServer provider. Keep the two in sync.
+    /// </remarks>
     internal const string LlamaDisableThinkingMarkerKey = "xe.llama.disable_thinking";
 
     /// <summary>Forwards to <see cref="ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey" />; kept alongside the disable-thinking marker so both llama.cpp markers read the same here.</summary>
     internal const string LlamaReasoningBudgetMarkerKey = ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey;
 
-    // The MAF skill-discovery tools an agent WITH skills also carries. They reach the model through AIContextProviders
-    // rather than the resolver, so the factory has to count them by hand to measure the same array the send-time hop
-    // will. Counted off ToolRelevanceChatClient's own list rather than a second constant here, so the count and the
-    // core-name list cannot drift apart. It fails SAFE either way: an undercount skips the append, the hop then
-    // refuses to filter for lack of list_tools, and the cost is a missed optimisation on one agent shape, never a
-    // hidden tool the model cannot recover. Never relax the hop's gate.
+    // The MAF skill-discovery tools an agent WITH skills also carries; they reach the model through AIContextProviders,
+    // so the factory counts them off ToolRelevanceChatClient's own list to measure the array the send-time hop will.
     private static readonly int MafSkillToolCount = ToolRelevanceChatClient.SkillToolNames.Length;
 
     private readonly IChatClient _chatClient;
@@ -202,23 +192,15 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     }
 
     /// <summary>
-    ///     Builds the turn's <see cref="ChatClientAgent" /> and wraps it with the approval-replay validator. The inner
-    ///     agent is built with NO instructions on either path:
-    ///     the system instructions are delivered exactly once per request as the leading <see cref="ChatRole.System" />
-    ///     seed message (<see cref="BuildSeedMessages" />, replayed by the invocation runner). Passing them to the
-    ///     ctor's <c>instructions</c> parameter (or to <see cref="ChatOptions.Instructions" />) as well would
-    ///     double-send them — MAF forwards ctor/options instructions to the <see cref="IChatClient" /> on every
-    ///     invocation, alongside the seed system message. The agent's <c>name</c>/<c>description</c> carry identity
-    ///     only (not sent to the model as content). With NO resolved skills this uses the 7-arg constructor; with one
-    ///     or more resolved skills it builds a MAF <see cref="AgentSkillsProvider" /> from <see cref="AgentInlineSkill" />
-    ///     records (name + description + body-as-instructions; no scripts/resources in v1) and constructs the agent
-    ///     through the <see cref="ChatClientAgentOptions" /> constructor with that provider attached via
-    ///     <see cref="ChatClientAgentOptions.AIContextProviders" />. The provider serves each skill's body on demand
-    ///     (progressive disclosure); its skill-discovery tools are serviced by the same FunctionInvokingChatClient that
-    ///     already services the agent's own tools. Constructor argument order is
-    ///     (chatClient, instructions, name, description, tools, loggerFactory, services) — verified at
-    ///     Microsoft.Agents.AI 1.20.0; named arguments pin it against a positional-order change at a bump.
+    ///     Builds the turn's <see cref="ChatClientAgent" /> and wraps it with the approval-replay validator.
     /// </summary>
+    /// <remarks>
+    ///     The inner agent carries NO instructions on either path: they are delivered exactly once per request as the
+    ///     leading <see cref="ChatRole.System" /> seed message (<see cref="BuildSeedMessages" />), and MAF would forward
+    ///     ctor or options instructions alongside it. Constructor argument order is
+    ///     (chatClient, instructions, name, description, tools, loggerFactory, services), verified at
+    ///     Microsoft.Agents.AI 1.20.0 and pinned with named arguments. See docs/wiki/04-agent-mode.md ("Building the agent: instructions once, skills through a context provider").
+    /// </remarks>
     private AIAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
     {
         var agentName = $"{_options.AgentNamePrefix}-{definition.ModelId}";
@@ -226,9 +208,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         if (definition.Skills is not { Count: > 0 } skills)
         {
-            // No-skills path: instructions are NULL on the agent — they are carried once by the seed system message
-            // (see BuildSeedMessages). Named arguments pin the ctor order so name/description land as identity
-            // and the model receives the instructions exactly once.
+            // No-skills path: instructions are NULL on the agent, carried once by the seed system message. Named
+            // arguments pin the ctor order so name/description land as identity.
             return new ApprovalResponseValidatingAgent(new ChatClientAgent(_chatClient,
                 instructions: null,
                 name: agentName,
@@ -239,11 +220,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         }
 
         // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped as [Experimental] in Microsoft.Agents.AI
-        // 1.8.0. The scoped MAAI001 suppression remains at the pinned version (Directory.Packages.props) until
-        // explicit graduation evidence is available. The surface (the full-frontmatter
-        // AgentInlineSkill ctor + AgentSkill[] provider ctor) is the documented progressive-disclosure path; the
-        // no-skills path above stays on the stable ctor, so the experimental surface is reached only when an agent has
-        // assigned skills. Suppress is scoped to this block.
+        // 1.8.0; the scoped suppression stays at the pinned version until there is explicit graduation evidence.
 #pragma warning disable MAAI001
         var inlineSkills = new AgentInlineSkill[skills.Count];
         for (var index = 0; index < skills.Count; index++)
@@ -261,10 +238,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             {
                 Name = agentName,
                 Description = agentDescription,
-                // Instructions are NOT set here (Instructions null) — they are carried once by the seed system message,
-                // exactly as on the no-skills path, so the two paths deliver instructions identically. Only the agent's
-                // own tools ride these ChatOptions; the per-turn RunOptions.ChatOptions still carries model id / think /
-                // sampling.
+                // Instructions are NOT set here — carried once by the seed system message, as on the no-skills path.
+                // Only the agent's own tools ride these ChatOptions; RunOptions.ChatOptions carries the per-turn rest.
                 ChatOptions = new ChatOptions
                 {
                     Tools = tools
@@ -276,23 +251,15 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     }
 
     /// <summary>
-    ///     Builds one MAF <c>AgentInlineSkill</c> from a resolved skill: the full frontmatter constructor (name,
-    ///     description, instructions, license, compatibility, allowed-tools, metadata) plus one <c>AddResource</c> per
-    ///     bundled file. The 3-argument call this replaced was the same constructor taking its defaults, so a skill
-    ///     carrying no frontmatter and no resources builds byte-identically to before.
-    ///     <para>
-    ///         Resources MUST be registered here, before the <c>AgentSkillsProvider</c> is constructed: the provider
-    ///         resolves a skill's content once and the <c>&lt;available_resources&gt;</c> block is rendered from the
-    ///         resources present at that moment. A resource added afterwards would exist but never be advertised, so the
-    ///         model would have no way to learn it can be read.
-    ///     </para>
-    ///     <para>
-    ///         <c>allowedTools</c> is carried as frontmatter only. The Agent Skills standard defines it as pre-approval
-    ///         rather than restriction, so nothing here grants or withholds a tool on its account — the tool offer and
-    ///         the tighten-only approval policy remain the only authorities. Scripts are never registered: an inline
-    ///         skill's <c>AddScript</c> takes a delegate, and this node has no execution surface to bind one to.
-    ///     </para>
+    ///     Builds one MAF <c>AgentInlineSkill</c> from a resolved skill: the full frontmatter constructor plus one
+    ///     <c>AddResource</c> per bundled file.
     /// </summary>
+    /// <remarks>
+    ///     Resources MUST be registered here, before the <c>AgentSkillsProvider</c> is constructed: the provider
+    ///     resolves a skill's content once, and a resource added afterwards would exist but never be advertised.
+    ///     <c>allowedTools</c> is frontmatter only and grants nothing; scripts are never registered. See
+    ///     docs/wiki/04-agent-mode.md ("Building the agent: instructions once, skills through a context provider").
+    /// </remarks>
     // MAAI001: scoped to the experimental Agent Skills surface, same rationale as the block in BuildAgent that calls this.
 #pragma warning disable MAAI001
     internal static AgentInlineSkill BuildInlineSkill(InvocationSkill skill)
@@ -319,10 +286,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     }
 #pragma warning restore MAAI001
 
-    /// <summary>
-    ///     Converts the skill's string metadata map onto the loosely-typed dictionary MAF's frontmatter takes. Null for
-    ///     an absent or empty map so a skill without metadata keeps the constructor's own default.
-    /// </summary>
+    /// <summary>Converts the skill's string metadata map onto the loosely-typed dictionary MAF's frontmatter takes.</summary>
+    /// <remarks>Null for an absent or empty map, so a skill without metadata keeps the constructor's own default.</remarks>
     private static AdditionalPropertiesDictionary? ToFrontmatterMetadata(IReadOnlyDictionary<string, string>? metadata)
     {
         return metadata is { Count: > 0 }
@@ -331,20 +296,15 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     }
 
     /// <summary>
-    ///     Applies the developer-gated per-send sampling overrides onto the turn's <see cref="ChatOptions" />. Native
-    ///     knobs ride the strongly-typed properties; the four knobs without a native property travel as
-    ///     <see cref="AdditionalPropertiesDictionary" /> entries keyed by <see cref="SamplingOptionKeys" /> (the same
-    ///     channel the existing <c>think</c> property proves). Each field is applied only when set and only when it
-    ///     passes a defensive range guard (NaN/negative/out-of-range → skipped). When both <c>MaxOutputTokens</c> and
-    ///     <c>NumCtx</c> are set, the output cap is clamped to the context window.
-    ///     <para>
-    ///         These entries reach BOTH runtimes: OllamaSharp's <c>AbstractionMapper</c> maps all four onto the Ollama
-    ///         wire, and <c>DeferredLlamaServerChatClient.ApplySamplingPassthrough</c> patches
-    ///         <c>min_p</c>/<c>repeat_penalty</c>/<c>repeat_last_n</c> — plus the strongly-typed <c>TopK</c>, which the
-    ///         MEAI OpenAI adapter drops — onto the llama-server body. <c>num_ctx</c> is deliberately NOT sent to
-    ///         llama-server (its window is fixed at process launch); there it only budgets client-side history.
-    ///     </para>
+    ///     Applies the developer-gated per-send sampling overrides onto the turn's <see cref="ChatOptions" />.
     /// </summary>
+    /// <remarks>
+    ///     Native knobs ride the strongly-typed properties; the four without one travel as
+    ///     <see cref="AdditionalPropertiesDictionary" /> entries keyed by <see cref="SamplingOptionKeys" />, and reach
+    ///     BOTH runtimes. Each field is applied only when set and only when it passes a defensive range guard, so
+    ///     NaN, negative or out-of-range keeps the model default. See docs/wiki/04-agent-mode.md ("Per-send sampling
+    ///     reaches two runtimes").
+    /// </remarks>
     private static void ApplySamplingOptions(ChatOptions chatOptions,
         AdditionalPropertiesDictionary additionalProperties,
         InvocationSamplingOptions? sampling)
@@ -437,12 +397,14 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     }
 
     /// <summary>
-    ///     Intersects the offer list the definition carries with the executable catalogs, matched by name (Option A
-    ///     built-in / B ClientLocal / C MCP). Offered names are sourced from <c>definition.Tools</c> (which the runner
-    ///     builds from the runtime package's allowed-tool list). Delegates to the shared
-    ///     <see cref="InvocationToolResolver" /> so the single-agent and orchestration factories resolve tools
-    ///     identically.
+    ///     Intersects the offer list the definition carries with the executable catalogs, matched by name, and appends
+    ///     the tool-relevance escape hatch when the offer is large enough to be filtered.
     /// </summary>
+    /// <remarks>
+    ///     Offered names come from <c>definition.Tools</c>, which the runner builds from the runtime package's
+    ///     allowed-tool list; resolution delegates to the shared <see cref="InvocationToolResolver" /> so the
+    ///     single-agent and orchestration factories resolve identically.
+    /// </remarks>
     private async Task<IList<AITool>> ResolveExecutableToolsAsync(InvocationAgentDefinition definition, CancellationToken cancellationToken)
     {
         var tools = await InvocationToolResolver.ResolveAsync(definition.Tools,
@@ -454,12 +416,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
                                                     cancellationToken)
                                                 .ConfigureAwait(false);
 
-        // The escape hatch for the tool-relevance offer, appended ABOVE the pipeline so it is executable, and NOT part
-        // of the offer so no runtime config hash moves. This is the only site in the product that appends it, which is
-        // what makes the hop inert by construction for orchestration participants and spawned sub-agents.
-        //
-        // The skill-tool term closes a two-count mismatch: the array the hop measures carries the MAF skill tools, the
-        // array resolved here does not.
+        // The ONLY site in the product that appends the relevance escape hatch — above the pipeline so it is
+        // executable, outside the offer so no config hash moves — which is what makes the hop inert elsewhere.
         var skillToolCount = definition.Skills is { Count: > 0 } ? MafSkillToolCount : 0;
         if (ToolRelevanceScope.Current is { Active: true } && tools.Count + skillToolCount > _toolRelevanceOptions.Threshold)
         {

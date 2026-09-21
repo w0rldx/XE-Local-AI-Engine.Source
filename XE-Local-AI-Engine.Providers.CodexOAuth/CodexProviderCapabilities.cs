@@ -21,15 +21,14 @@ public sealed class AgentModelCapabilities
     public required bool SupportsServiceSideThreads { get; init; }
 }
 
-/// <summary>
-///     Capability values for Codex OAuth. <c>SupportsToolCalling</c> is <see langword="true" /> for ALL
-///     Codex ids: the .NET serialization is proven (spike <c>CodexToolCallingSpikeWireTests</c>) and the stateless
-///     tool loop replays the encrypted reasoning item via MEAI's verbatim <c>RawRepresentation is ResponseItem</c>
-///     path. <c>SupportsParallelToolCalls</c> stays <see langword="false" /> — single-call first. Every Codex tool
-///     consumer (the chat capability gate in
-///     <c>ModelCapabilityResolver.ResolveAsync</c> and the <c>/models</c> <c>IsToolCapable</c> tag in
-///     <c>LocalModelsMapper</c>) reads <see cref="V0" /> directly, so this single flag governs both surfaces.
-/// </summary>
+/// <summary>Capability values for Codex OAuth.</summary>
+/// <remarks>
+///     <c>SupportsToolCalling</c> is <see langword="true" /> for ALL Codex ids: the .NET serialization is proven by the
+///     <c>CodexToolCallingSpikeWireTests</c> spike, and the stateless tool loop replays the encrypted reasoning item
+///     through MEAI's verbatim <c>RawRepresentation is ResponseItem</c> path. <c>SupportsParallelToolCalls</c> stays
+///     <see langword="false" />, single-call first. Both <c>ModelCapabilityResolver.ResolveAsync</c> and
+///     <c>LocalModelsMapper</c>'s <c>IsToolCapable</c> tag read <see cref="V0" />, so one flag governs both surfaces.
+/// </remarks>
 public static class CodexProviderCapabilities
 {
     public static AgentModelCapabilities V0 { get; } = new()

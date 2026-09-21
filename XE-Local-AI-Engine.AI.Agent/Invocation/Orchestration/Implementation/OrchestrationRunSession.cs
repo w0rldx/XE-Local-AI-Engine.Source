@@ -8,13 +8,15 @@ using Microsoft.Extensions.Logging;
 
 /// <summary>
 ///     Drives one handoff <see cref="Workflow" /> run and normalizes its <see cref="WorkflowEvent" /> stream into
-///     <see cref="OrchestrationUpdate" />s. A single continuous <see cref="StreamingRun.WatchStreamAsync" />
-///     enumeration carries the whole run, including a tool-approval pause/resume: the consumer answers a surfaced
-///     <see cref="OrchestrationUpdateKind.ApprovalRequest" /> via <see cref="RespondToApprovalAsync" /> between
-///     <c>MoveNext</c> calls (it queues the response on the held run for the next superstep) and keeps enumerating,
-///     so the tool executes in a later superstep without re-entering the stream. Confines all
-///     <c>Microsoft.Agents.AI.Workflows</c> types to this assembly.
+///     <see cref="OrchestrationUpdate" />s, confining all <c>Microsoft.Agents.AI.Workflows</c> types to this assembly.
 /// </summary>
+/// <remarks>
+///     A single continuous <see cref="StreamingRun.WatchStreamAsync" /> enumeration carries the whole run, including a
+///     tool-approval pause and resume: the consumer answers a surfaced
+///     <see cref="OrchestrationUpdateKind.ApprovalRequest" /> via <see cref="RespondToApprovalAsync" /> between
+///     <c>MoveNext</c> calls, which queues the response on the held run, and keeps enumerating, so the tool executes in
+///     a later superstep without re-entering the stream.
+/// </remarks>
 internal sealed class OrchestrationRunSession : IOrchestrationRunSession
 {
     private readonly TimeSpan _abandonmentGrace = IdleStreamGuard.DefaultAbandonmentGrace;
@@ -42,14 +44,8 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
 
     public async IAsyncEnumerable<OrchestrationUpdate> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // A handoff run drives itself to completion as the stream is pulled: the workflow advances supersteps
-        // (triage → handoff → specialist → terminal WorkflowOutputEvent) and the stream then ENDS, so a full drain
-        // is the natural terminator — no early break, which would otherwise change superstep timing and cut the
-        // specialist's turn short. The idle CTS is a per-quiescence safety bound: it is reset after each event so a
-        // legitimate multi-hop run is never cut off mid-stream, and it is SUSPENDED while a tool approval is pending
-        // (the consumer blocks on a human round-trip for minutes after the ApprovalRequest is yielded, and
-        // RespondToApprovalAsync restarts the clock on resume). True wall-clock lifetime is governed by the caller's
-        // cancellation token, which is linked in here.
+        // A handoff run drives itself to completion as the stream is pulled, so a full drain is the terminator and an
+        // early break would cut the specialist short. The idle CTS is per-quiescence; the linked token bounds the run.
         var idleCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         lock (_idleClockGate)
         {
@@ -60,12 +56,8 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         {
             idleCts.CancelAfter(_idleTimeout);
 
-            // The idle CTS is only a COOPERATIVE deadline: a workflow that ignores its token would never return from
-            // MoveNextAsync, so neither the timer nor disposal could run. IdleStreamGuard adds the wall-clock bound —
-            // it races each advancement against idleCts.Token and, on expiry, abandons a non-cooperative workflow
-            // (observed off-thread, bounded disposal) instead of awaiting it forever. The guard binds the workflow's
-            // own cancellation to the OUTER token so cooperative cancellation still works, and surfaces idle expiry as
-            // an OperationCanceledException (as before), invoking the metric callbacks on timeout/abandonment.
+            // The idle CTS is only a COOPERATIVE deadline — a workflow ignoring its token never returns from
+            // MoveNextAsync, so neither the timer nor disposal could run. IdleStreamGuard adds the wall-clock bound.
             var guarded = IdleStreamGuard.GuardAsync(watchToken => _run.WatchStreamAsync(watchToken).GetAsyncEnumerator(watchToken),
                 new IdleGuardContext(_abandonmentGrace,
                     static () => WorkflowWatchdogMetrics.RecordWatchdogTimeout(WorkflowWatchdogMetrics.OrchestrationSurface),
@@ -75,17 +67,14 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
 
             await foreach (var evt in guarded.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
-                // One source event can normalize to MORE than one update — a single streaming update carrying both
-                // reasoning and visible text yields a reasoning fragment AND a text fragment. Each is
-                // surfaced in order (reasoning first) so no visible text is dropped.
+                // One source event can normalize to MORE than one update: a streaming update carrying both reasoning and
+                // visible text yields both, in order, reasoning first, so no visible text is dropped.
                 foreach (var update in MapEvent(evt))
                 {
                     lock (_idleClockGate)
                     {
-                        // Set the idle bound BEFORE yielding (the consumer may block for minutes on the yielded update,
-                        // and the clock must already reflect the new state by then): suspend it while a tool approval is
-                        // outstanding (the consumer is awaiting a human decision; RespondToApprovalAsync restarts it on
-                        // resume), otherwise reset it so each productive event renews the inter-event bound.
+                        // Set BEFORE yielding, since the consumer may block for minutes: suspended while an approval is
+                        // outstanding (RespondToApprovalAsync restarts it), else reset per productive event.
                         idleCts.CancelAfter(_pendingApprovals.IsEmpty ? _idleTimeout : Timeout.InfiniteTimeSpan);
                     }
 
@@ -171,9 +160,8 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
     {
         try
         {
-            // Bound disposal on the same discipline as the watch: a workflow that ignores cancellation could leave its
-            // DisposeAsync pending forever and hold up shutdown. If it does not complete within the grace, abandon it
-            // (observed off-thread) and record it rather than blocking indefinitely.
+            // Bound disposal on the same discipline as the watch, because a workflow ignoring cancellation could leave
+            // DisposeAsync pending forever and hold up shutdown; past the grace it is abandoned and recorded.
             if (!await IdleStreamGuard.DisposeBoundedAsync(_run, _abandonmentGrace).ConfigureAwait(false))
             {
                 WorkflowWatchdogMetrics.RecordAbandoned(WorkflowWatchdogMetrics.OrchestrationSurface);
@@ -199,9 +187,8 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         return request.CreateResponse(approvalRequest.CreateResponse(approved, reason ?? string.Empty));
     }
 
-    // Zero, one, or two normalized updates per source event. Eager materialization is deliberate: MapApprovalRequest
-    // registers the request in _pendingApprovals as a side effect that must run before the update is yielded (the idle
-    // clock reads _pendingApprovals when deciding whether to suspend), so the mapping cannot be deferred.
+    // Zero, one or two normalized updates per source event. Eager materialization is deliberate: MapApprovalRequest
+    // registers into _pendingApprovals, which the idle clock reads, before the update is yielded.
     private IReadOnlyList<OrchestrationUpdate> MapEvent(WorkflowEvent evt)
     {
         switch (evt)
@@ -231,14 +218,13 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         return ComposeStreamingUpdates(updateEvent.Update.Contents, updateEvent.Update.Text, participantKey, participantName);
     }
 
-    /// <summary>
-    ///     Normalizes one streaming update's contents into ordered <see cref="OrchestrationUpdate" />s. A single update
-    ///     can carry reasoning AND visible text (both co-occur on the wire), so this emits BOTH — a reasoning delta first,
-    ///     then a text delta — rather than returning early on reasoning and dropping the visible text (the
-    ///     bug this fixes). A MAF handoff <c>FunctionCallContent</c> carries neither, so it maps to an empty list.
-    ///     Pure and static so the mapping is unit-testable without the concrete MAF <c>StreamingRun</c> (which cannot be
-    ///     faked).
-    /// </summary>
+    /// <summary>Normalizes one streaming update's contents into ordered <see cref="OrchestrationUpdate" />s.</summary>
+    /// <remarks>
+    ///     A single update can carry reasoning AND visible text, since both co-occur on the wire, so BOTH are emitted —
+    ///     reasoning delta first, then text — rather than returning early on reasoning and dropping the visible text. A
+    ///     MAF handoff <c>FunctionCallContent</c> carries neither and maps to an empty list. Pure and static, so the
+    ///     mapping is unit-testable without the concrete MAF <c>StreamingRun</c>, which cannot be faked.
+    /// </remarks>
     internal static IReadOnlyList<OrchestrationUpdate> ComposeStreamingUpdates(IEnumerable<AIContent> contents,
         string? text,
         string? participantKey,

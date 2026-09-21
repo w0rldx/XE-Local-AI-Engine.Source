@@ -4,20 +4,23 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 
-/// <summary>
-///     Shared truncation for tool results at the function-invocation boundary. A tool result becomes part of the chat
-///     history and is re-sent to the model on every subsequent turn, so an unbounded result is unbounded input for the
-///     rest of the conversation. This clips the textual payload to a character budget and appends an explicit marker so
-///     the model can tell the output was cut. Non-text content (for example an image data block) is left intact.
-/// </summary>
+/// <summary>Shared truncation for tool results at the function-invocation boundary.</summary>
+/// <remarks>
+///     A tool result becomes part of the chat history and is re-sent on every later turn, so an unbounded result is
+///     unbounded input for the rest of the conversation. The textual payload is clipped to a character budget with an
+///     explicit marker so the model can tell the output was cut; non-text content, an image data block for instance,
+///     is left intact.
+/// </remarks>
 internal static class ToolResultBudget
 {
     /// <summary>
     ///     Returns <paramref name="result" /> unchanged when it is within budget, otherwise a truncated equivalent.
-    ///     Handles the concrete shapes a tool can return through the Microsoft.Extensions.AI pipeline: a raw
-    ///     <see cref="string" /> (ClientLocal handlers), a single <see cref="TextContent" />, a <see cref="JsonElement" />
-    ///     (structured MCP result), or an <see cref="AIContent" /> array (multi-block MCP result).
     /// </summary>
+    /// <remarks>
+    ///     Handles the concrete shapes a tool can return through the Microsoft.Extensions.AI pipeline: a raw
+    ///     <see cref="string" /> from a ClientLocal handler, a single <see cref="TextContent" />, a
+    ///     <see cref="JsonElement" /> structured MCP result, or an <see cref="AIContent" /> multi-block MCP array.
+    /// </remarks>
     public static object? Apply(object? result, int maxCharacters)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCharacters);

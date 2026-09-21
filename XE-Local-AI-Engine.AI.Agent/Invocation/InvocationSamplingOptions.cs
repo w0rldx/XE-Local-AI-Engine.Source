@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.AI.Agent.Invocation;
 
-/// <summary>
-///     Provider-agnostic mirror of the client-side sampling overrides. Lives in <c>.AI.Agent</c> because that project
-///     cannot reference <c>Client.Models</c>; the invocation runner maps the client record onto this one. Every field is
-///     optional — a null field means "no override" and the factory leaves the corresponding Ollama option at its model
-///     default, keeping the no-override path byte-identical.
-/// </summary>
+/// <summary>Provider-agnostic mirror of the client-side sampling overrides.</summary>
+/// <remarks>
+///     Lives in <c>.AI.Agent</c> because that project cannot reference <c>Client.Models</c>; the invocation runner maps
+///     the client record onto this one. Every field is optional — a null field means "no override", and the factory
+///     leaves the corresponding Ollama option at its model default, keeping the no-override path byte-identical.
+/// </remarks>
 public sealed record InvocationSamplingOptions
 {
     public float? Temperature { get; init; }

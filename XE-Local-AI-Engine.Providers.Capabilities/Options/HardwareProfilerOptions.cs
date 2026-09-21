@@ -16,11 +16,13 @@ public sealed record HardwareProfilerOptions
     public string ModelsVolumePath { get; init; } = Directory.GetCurrentDirectory();
 
     /// <summary>
-    ///     Wall-clock deadline (seconds) for each native hardware process probe (e.g. <c>nvidia-smi</c>). On overrun the
-    ///     probe is killed (process tree) and the profiler degrades to the last cached profile or the CPU-safe default —
-    ///     a wedged GPU driver must never hang first-run provisioning or a capacity decision. Defaults to 5 s; must be
-    ///     positive.
+    ///     Wall-clock deadline in seconds for each native hardware process probe, such as <c>nvidia-smi</c>. Defaults
+    ///     to 5 s and must be positive.
     /// </summary>
+    /// <remarks>
+    ///     On overrun the probe is killed as a process tree and the profiler degrades to the last cached profile or the
+    ///     CPU-safe default: a wedged GPU driver must never hang first-run provisioning or a capacity decision.
+    /// </remarks>
     public int HardwareProbeTimeoutSeconds
     {
         get => _hardwareProbeTimeoutSeconds;

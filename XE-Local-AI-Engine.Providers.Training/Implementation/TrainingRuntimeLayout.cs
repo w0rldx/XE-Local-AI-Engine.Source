@@ -58,12 +58,12 @@ internal static class TrainingRuntimeLayout
         return Path.Combine(venvDirectory, ".venv", "bin", "python");
     }
 
-    /// <summary>
-    ///     Resolves the directory holding <c>probe.py</c> / <c>pyproject.toml</c> / <c>uv.lock</c>. The published app
-    ///     carries them beside the executable; a dev or test run reads them straight out of the working tree, which is
-    ///     why the repo path is a fallback rather than the only answer — the repo root is outside the publish glob and
-    ///     does not exist in a shipped install.
-    /// </summary>
+    /// <summary>Resolves the directory holding <c>probe.py</c>, <c>pyproject.toml</c> and <c>uv.lock</c>.</summary>
+    /// <remarks>
+    ///     The published app carries them beside the executable, while a dev or test run reads them straight out of the
+    ///     working tree — which is why the repo path is the second answer rather than the only one: the repo root is
+    ///     outside the publish glob and does not exist in a shipped install.
+    /// </remarks>
     public static string ResolveScriptsDirectory()
     {
         var published = Path.Combine(AppContext.BaseDirectory, PublishedScriptsDirectoryName);

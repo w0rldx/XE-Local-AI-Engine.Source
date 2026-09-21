@@ -5,17 +5,18 @@ using System.Text.Json.Nodes;
 
 /// <summary>
 ///     Builds the structured, model-actionable results a tool returns instead of throwing when a call cannot proceed.
-///     Returning a well-shaped result (rather than an exception) turns the framework's function-invocation loop into the
-///     repair loop: the model sees exactly what was wrong plus the schema it must satisfy, and self-corrects on the next
-///     turn. Messages are deliberately structural — they name the offending property, never echo the supplied argument
-///     values — so a malformed call can never leak secrets into chat history, logs, or telemetry.
 /// </summary>
+/// <remarks>
+///     A well-shaped result rather than an exception turns the framework's function-invocation loop into the repair
+///     loop: the model sees what was wrong plus the schema it must satisfy, and self-corrects on the next turn.
+///     Messages are deliberately structural — they name the offending property and never echo the supplied argument
+///     values — so a malformed call can never leak secrets into chat history, logs or telemetry.
+/// </remarks>
 internal static class ToolArgumentRepairResult
 {
     /// <summary>
-    ///     Result for a call whose arguments failed validation (or could not be parsed by the handler). Carries the
-    ///     specific <paramref name="reason" /> and the tool's <paramref name="expectedSchema" /> so the model can repair
-    ///     and retry.
+    ///     Result for a call whose arguments failed validation, or that the handler could not parse: it carries the
+    ///     specific <paramref name="reason" /> and the tool's <paramref name="expectedSchema" /> for a repaired retry.
     /// </summary>
     public static string InvalidArguments(string reason, JsonElement expectedSchema)
     {
@@ -33,8 +34,8 @@ internal static class ToolArgumentRepairResult
     }
 
     /// <summary>
-    ///     Terminal result for a tool that has exhausted its repair budget for the request: the model is told to stop
-    ///     calling it so it does not burn the remaining iteration budget looping on the same malformed call.
+    ///     Terminal result for a tool that has exhausted its repair budget for the request, telling the model to stop
+    ///     calling it rather than burn the remaining iteration budget on the same malformed call.
     /// </summary>
     public static string ToolDisabled(string toolName)
     {

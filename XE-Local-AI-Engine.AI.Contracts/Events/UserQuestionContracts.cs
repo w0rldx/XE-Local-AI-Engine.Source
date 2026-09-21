@@ -32,12 +32,12 @@ public sealed class UserQuestionSpec
     public required IReadOnlyList<UserQuestionOption> Options { get; init; }
 }
 
-/// <summary>
-///     The operator's answer to one <see cref="UserQuestionSpec" />. <see cref="Selected" /> carries the chosen option
-///     labels; <see cref="Other" /> carries free text when the operator used the client-appended "Other" row. Both may
-///     be populated (a multi-select answer plus free text); an empty <see cref="Selected" /> with a null
-///     <see cref="Other" /> is rejected by the resolve endpoint's validator.
-/// </summary>
+/// <summary>The operator's answer to one <see cref="UserQuestionSpec" />.</summary>
+/// <remarks>
+///     <see cref="Selected" /> carries the chosen option labels and <see cref="Other" /> the free text from the
+///     client-appended "Other" row; both may be populated, for a multi-select answer plus free text. An empty
+///     <see cref="Selected" /> with a null <see cref="Other" /> is rejected by the resolve endpoint's validator.
+/// </remarks>
 public sealed class UserQuestionAnswer
 {
     public required string Question { get; init; }
@@ -47,12 +47,12 @@ public sealed class UserQuestionAnswer
     public required string? Other { get; init; }
 }
 
-/// <summary>
-///     Carries the operator's answers back into the waiting turn. The <see cref="RequestId" /> is the opaque per-question
-///     key the runner registered and the browser echoed back — the same correlation contract
-///     <see cref="ApprovalResolvedEvent" /> uses for a tool approval. Dispatching an unknown or already-resolved id is a
-///     no-op, never a fault, so a duplicate or stale post can never disturb the turn.
-/// </summary>
+/// <summary>Carries the operator's answers back into the waiting turn.</summary>
+/// <remarks>
+///     <see cref="RequestId" /> is the opaque per-question key the runner registered and the browser echoed back — the
+///     same correlation contract <see cref="ApprovalResolvedEvent" /> uses for a tool approval. Dispatching an unknown
+///     or already-resolved id is a no-op, never a fault, so a duplicate or stale post cannot disturb the turn.
+/// </remarks>
 public sealed class UserQuestionAnsweredEvent
 {
     public required string RequestId { get; init; }

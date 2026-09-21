@@ -30,9 +30,8 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
             Name = model.ReadModelName(),
             Digest = model.Digest ?? string.Empty,
             SizeBytes = model.Size,
-            // Explicit ctor (MA0132) with the same semantics the endpoint mapper applied per call
-            // site before this type existed: the daemon reports UTC, so stamp the kind rather than
-            // letting the local-time conversion shift the instant.
+            // Explicit ctor (MA0132): the daemon reports UTC, so stamp the kind rather than letting the
+            // local-time conversion shift the instant.
             ModifiedAtUtc = new DateTimeOffset(DateTime.SpecifyKind(model.ModifiedAt, DateTimeKind.Utc)),
             Family = model.Details?.Family,
             ParameterSize = model.Details?.ParameterSize,
@@ -101,9 +100,8 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
-        // keep_alive=0 sets the requested model's expiry timer to zero. Per Ollama's scheduler, an in-flight generation
-        // completes before the model is evicted, so this is graceful. Unloading a model the runtime does not currently
-        // hold is a harmless no-op, which keeps the eject action idempotent.
+        // keep_alive=0 sets the model's expiry timer to zero, and Ollama's scheduler lets an in-flight generation
+        // finish first, so this is graceful. Unloading a model the runtime does not hold is a harmless no-op.
         return OllamaModelUnloader.UnloadAsync(_ollamaClient, modelName, ct);
     }
 
@@ -123,9 +121,8 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
     /// <inheritdoc />
     public async Task<bool> IsLoopbackModelInstalledAsync(string modelName, CancellationToken ct = default)
     {
-        // Uri.IsLoopback is the same fact the composition-time SSRF guard enforces, read without throwing. A remote
-        // endpoint makes every Ollama model ineligible. (A disabled runtime never reaches this implementation at all:
-        // the gate-off composition root registers UnavailableOllamaModelService, which answers false outright.)
+        // Uri.IsLoopback is the same fact the composition-time SSRF guard enforces, read without throwing; a remote
+        // endpoint makes every model ineligible. A disabled runtime never reaches here at all.
         if (!_ollamaClient.Uri.IsLoopback)
         {
             return false;
@@ -134,9 +131,8 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
         try
         {
             var models = await _ollamaClient.ListLocalModelsAsync(ct).ConfigureAwait(false);
-            // ReadModelName, not model.Name: current daemons fill "model" and older ones "name", and the sibling
-            // ListLocalModelsAsync already reads it that way. Reading only Name made every model on a current daemon
-            // look uninstalled.
+            // ReadModelName, not model.Name: current daemons fill "model" and older ones "name". Reading only Name
+            // made every model on a current daemon look uninstalled.
             return models.Any(model => string.Equals(model.ReadModelName(), modelName, StringComparison.OrdinalIgnoreCase));
         }
         catch (HttpRequestException)

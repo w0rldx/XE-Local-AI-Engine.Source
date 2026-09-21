@@ -6,8 +6,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Wraps the minted embedding generator so an OllamaSharp transport failure surfaces as the provider-owned
-///     <see cref="OllamaUnavailableException" /> instead of an SDK type. Keeps <c>OllamaSharp</c> out of the
-///     application layer's catch filters (pattern precedent: <c>AzureFoundryErrorTranslatingChatClient</c>).
+///     <see cref="OllamaUnavailableException" /> instead of an SDK type.
 /// </summary>
 /// <remarks>
 ///     <see cref="HttpRequestException" /> and <see cref="OllamaException" /> are the two shapes OllamaSharp's

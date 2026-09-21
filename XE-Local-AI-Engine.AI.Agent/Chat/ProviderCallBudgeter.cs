@@ -5,14 +5,14 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 
 /// <summary>
 ///     Deterministic, LLM-free reducer that fits a SINGLE raw provider round's message set into the effective context
-///     window, used by the provider-boundary budget middleware. Policy: always keep system messages, the most recent
-///     <see cref="ProviderCallBudgetOptions.RecentMessagesToKeep" /> messages, and the very last message (the pending
-///     tool result the model must see next); when the estimate exceeds the window it first excerpts oversized tool
-///     results anywhere — including a recent/pending one — to a marked excerpt (so the pending result is bounded, never
-///     dropped), then drops the oldest non-protected, non-system messages whole. This is the innermost analogue of the
-///     application layer's turn-grouped budgeter, operating on the flat message list MAF hands the raw
-///     <see cref="IChatClient" /> after appending inner tool results.
+///     window, used by the provider-boundary budget middleware.
 /// </summary>
+/// <remarks>
+///     Always keeps system messages, the most recent <see cref="ProviderCallBudgetOptions.RecentMessagesToKeep" />
+///     messages and the very last message (the pending tool result the model must see next); over the window it first
+///     excerpts oversized tool results anywhere, so the pending result is bounded rather than dropped, then drops the
+///     oldest non-protected messages whole. See docs/wiki/04-agent-mode.md ("What the per-round reducer keeps").
+/// </remarks>
 internal static class ProviderCallBudgeter
 {
     public static ProviderBudgetResult Budget(IReadOnlyList<ChatMessage> messages,
@@ -67,14 +67,8 @@ internal static class ProviderCallBudgeter
             charsTruncated += omitted;
         }
 
-        // Pass 2: drop the oldest droppable messages whole, in atomic tool-call/result UNITS. A message is droppable only
-        // if it is not a system message, not within the recent-keep window, and not the very last message (the pending
-        // tool result is never dropped). A tool-call message and every message carrying one of its results (matched by
-        // CallId) form one unit that is dropped all-or-nothing: dropping only the call would orphan its result (and
-        // dropping only the result would orphan the call) — either shape makes OpenAI/Azure reject the round with a 400.
-        // A message with no function-call/result content is its own singleton unit, so plain history trims exactly as
-        // before. When any member of a unit is protected (system / recent-keep / last), the whole unit is kept and
-        // trimming continues with older units.
+        // Pass 2: drop the oldest droppable messages whole, in atomic tool-call/result UNITS — dropping half a pair
+        // orphans the other half, which makes OpenAI/Azure reject the round with a 400. One protected member pins a unit.
         var unitRoot = BuildToolCallUnits(working, count);
         var messagesDropped = 0;
         var processedUnits = new HashSet<int>();
@@ -147,11 +141,8 @@ internal static class ProviderCallBudgeter
         };
     }
 
-    // Groups messages into atomic tool-call/result units via union-find over shared CallIds: the assistant message that
-    // PRODUCES a FunctionCallContent and every message that CONSUMES it via a matching-CallId FunctionResultContent are
-    // unioned into one component. A message that chains two CallIds (a multi-call assistant turn, or a tool message
-    // carrying results for several calls) transitively merges their components. Messages with no function content stay
-    // singletons. Returns the parent array; resolve a message's unit with <see cref="Find" />.
+    // Groups messages into atomic tool-call/result units via union-find over shared CallIds; a message chaining two
+    // CallIds transitively merges their components. Returns the parent array; resolve a message's unit with Find.
     private static int[] BuildToolCallUnits(IReadOnlyList<ChatMessage> messages, int count)
     {
         var parent = new int[count];
@@ -294,9 +285,8 @@ internal static class ProviderCallBudgeter
             return false;
         }
 
-        // Clone-PRESERVING: id, author, provider raw representation and additional properties carry over. This hop can
-        // re-excerpt a message the OUTER budgeter already excerpted, so a rewrite that reconstructed from role + contents
-        // alone would strip a message's identity on the way to the provider — and would do it twice on a long tool loop.
+        // Clone-PRESERVING: id, author, provider raw representation and additional properties carry over, because a
+        // rewrite from role + contents alone would strip a re-excerpted message's identity on the way to the provider.
         truncated = new ChatMessage(message.Role, rewritten)
         {
             AuthorName = message.AuthorName,

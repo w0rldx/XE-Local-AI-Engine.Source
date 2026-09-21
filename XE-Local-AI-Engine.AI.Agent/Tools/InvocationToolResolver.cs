@@ -5,30 +5,20 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 
 /// <summary>
-///     Shared offer-list → executable resolution used by both the single-agent
-///     <see cref="Invocation.Implementation.InvocationAgentFactory" /> and the multi-agent orchestration factory.
-///     Intersects the offered tools a definition carries with the executable catalogs, matched by name: built-in
-///     catalog tools resolve from <see cref="IAgentToolRegistry" /> (Option A); offered names it does not satisfy
-///     are then tried against <see cref="IClientLocalToolRegistry" /> (ClientLocal — server-driven <c>ClientLocal</c>
-///     tools, returned already approval-wrapped when the handler opts in) and finally against
-///     <see cref="IMcpToolRegistry" /> (MCP — node-local MCP tools). Names matched by none are skipped so a
-///     stale or unhandled offer can never reach the agent.
-///     <para>
-///         Approval policy is TIGHTEN-ONLY, most-restrictive-wins, fail closed. The effective policy for a
-///         resolved tool is <c>handler/registry policy OR per-agent offer policy</c>: when the offer
-///         (<see cref="OfferPlaceholderAIFunction" />) requires approval, the resolved executable is wrapped in
-///         <c>ApprovalRequiredAIFunction</c> unless it already is one — so a per-agent tightening of a ClientLocal,
-///         built-in (spawn_subagent), or MCP tool is honored. Because the wrap is only ever ADDED and never removed, a
-///         per-agent flag can never strip a handler- or MCP-enforced approval (an attempted loosen is a no-op). A
-///         resolved tool whose offer carries no policy metadata (a name collision or a non-placeholder offer) fails
-///         closed to requiring approval.
-///     </para>
+///     Shared offer-list to executable resolution, used by both the single-agent
+///     <see cref="Invocation.Implementation.InvocationAgentFactory" /> and the orchestration factory.
 /// </summary>
+/// <remarks>
+///     Intersects a definition's offered tools with the executable catalogs by name, trying
+///     <see cref="IAgentToolRegistry" />, then <see cref="IClientLocalToolRegistry" />, then
+///     <see cref="IMcpToolRegistry" />; a name matched by none is skipped, so a stale offer never reaches the agent.
+///     Approval is TIGHTEN-ONLY, most-restrictive-wins and fail-closed: the effective policy is the registry's OR the
+///     per-agent offer's, the wrap is only ever ADDED, and an offer with no policy metadata requires approval.
+/// </remarks>
 internal static class InvocationToolResolver
 {
-    // The reserved custom-tool name prefix (mirrors CustomToolValidation.ToolNamePrefix, which lives in Client.Application
-    // and cannot be referenced from this AI.Agent-layer resolver). Only offered names carrying it are ever put to the
-    // custom-tool catalog, so a non-custom offer never triggers a store read. Keep the two literals in sync.
+    // The reserved custom-tool name prefix, mirroring CustomToolValidation.ToolNamePrefix in Client.Application, which
+    // this layer cannot reference; only names carrying it reach the catalog, so a non-custom offer reads no store.
     private const string CustomToolNamePrefix = "custom__";
 
     public static IList<AITool> Resolve(IReadOnlyList<AITool> offeredTools,
@@ -47,14 +37,15 @@ internal static class InvocationToolResolver
     }
 
     /// <summary>
-    ///     The offer → executable resolution EXTENDED with the node-local custom tool catalog. Used by the single-agent and
-    ///     orchestration invocation factories and by the explicitly trusted agentic MCP root path. Delegate MCP and
-    ///     spawned-child paths stay on <see cref="Resolve" /> and cannot resolve custom tools. The custom names are pre-resolved through
-    ///     <paramref name="customToolCatalog" /> (a DbContext-backed, async store read) BEFORE the synchronous core runs, so
-    ///     no <c>.Result</c>/<c>.Wait()</c> ever blocks the thread pool. Each custom executable the catalog returns is ALREADY
-    ///     wrapped in <c>ApprovalRequiredAIFunction</c> (its authoritative approval floor), so the core's tighten-only wrap
-    ///     is a no-op on it.
+    ///     The offer-to-executable resolution EXTENDED with the node-local custom tool catalog.
     /// </summary>
+    /// <remarks>
+    ///     Used by the single-agent and orchestration factories and by the explicitly trusted agentic MCP root path;
+    ///     delegate MCP and spawned-child paths stay on <see cref="Resolve" /> and cannot resolve custom tools. Custom
+    ///     names are pre-resolved through <paramref name="customToolCatalog" />, a DbContext-backed async store read,
+    ///     BEFORE the synchronous core runs, so nothing ever blocks the thread pool. Each custom executable arrives
+    ///     ALREADY wrapped in <c>ApprovalRequiredAIFunction</c>, so the core's tighten-only wrap is a no-op on it.
+    /// </remarks>
     public static async Task<IList<AITool>> ResolveAsync(IReadOnlyList<AITool> offeredTools,
         IAgentToolRegistry toolRegistry,
         IClientLocalToolRegistry clientLocalToolRegistry,
@@ -75,9 +66,8 @@ internal static class InvocationToolResolver
             return [];
         }
 
-        // Pre-resolve the offered custom__ names via the async catalog. A disabled node kill-switch or an unknown name
-        // leaves the name out of the returned dictionary and it simply stays unresolved (the core then skips + warns it,
-        // like any other unmatched offer).
+        // Pre-resolve the offered custom names via the async catalog. A disabled kill-switch or an unknown name leaves
+        // it out of the dictionary and unresolved, so the core skips and warns it like any other unmatched offer.
         var customNames = offeredTools
                           .Select(static offer => offer.Name)
                           .Where(static name => !string.IsNullOrWhiteSpace(name)
@@ -85,9 +75,8 @@ internal static class InvocationToolResolver
                           .Distinct(StringComparer.Ordinal)
                           .ToArray();
 
-        // ONE catalog round trip for the whole offer: the catalog reads the store once and matches every requested name
-        // against that single snapshot. Still a live read per resolution — no cache. Passing null when the offer carries
-        // no custom name keeps the common path free of both a catalog call and an empty-dictionary allocation.
+        // ONE catalog round trip for the whole offer, still a live read per resolution and not a cache. Null when the
+        // offer carries no custom name keeps the common path free of a catalog call and an empty dictionary.
         var preResolvedCustom = customNames.Length == 0
             ? null
             : await customToolCatalog.TryResolveManyAsync(customNames, cancellationToken).ConfigureAwait(false);
@@ -112,9 +101,8 @@ internal static class InvocationToolResolver
                            .Where(static name => !string.IsNullOrWhiteSpace(name))
                            .ToHashSet(StringComparer.Ordinal);
 
-        // Per-agent approval policy carried on the offer placeholders, keyed by name. Most-restrictive-wins: if any
-        // offer for a name requires approval, the name requires approval (covers a duplicate-name collision by tightening
-        // rather than trusting the looser of the two).
+        // Per-agent approval policy carried on the offer placeholders, keyed by name. Most-restrictive-wins, so a
+        // duplicate-name collision tightens rather than trusting the looser of the two.
         var approvalByName = new Dictionary<string, bool>(StringComparer.Ordinal);
         foreach (var offer in offeredTools)
         {
@@ -139,14 +127,13 @@ internal static class InvocationToolResolver
         var skipped = offeredNames.Count - resolved.Count;
         if (skipped > 0)
         {
-            // An offered tool with no in-process catalog match and no client-local or MCP handler is a
-            // misconfiguration: the server or node advertised a tool this node cannot execute. Warn so it is
-            // observable, then drop the offer rather than letting it reach the agent.
+            // An offered tool with no catalog, client-local or MCP match is a misconfiguration: something advertised a
+            // tool this node cannot execute. Warn so it is observable, then drop it rather than pass it to the agent.
             logger.LogWarning("Skipped {SkippedCount} offered tool(s) with no registered executable (no catalog, client-local, or MCP match).", skipped);
         }
 
-        // Apply the tighten-only approval override in place: wrap a resolved executable when the per-agent offer requires
-        // approval and it is not already approval-wrapped. Missing policy metadata fails closed (require approval).
+        // Apply the tighten-only approval override in place: wrap a resolved executable when the per-agent offer
+        // requires approval and it is not already wrapped. Missing policy metadata fails closed.
         for (var index = 0; index < resolved.Count; index++)
         {
             var tool = resolved[index];
@@ -159,10 +146,8 @@ internal static class InvocationToolResolver
 
         return resolved;
 
-        // Try ClientLocal (server-driven ClientLocal) first, then MCP (node-local MCP), then the pre-resolved node-local
-        // custom tools. The three name spaces are disjoint (custom names carry the reserved custom__ prefix), so the first
-        // match wins. The custom executable is already approval-wrapped by the catalog, so the tighten-only wrap above sees
-        // an ApprovalRequiredAIFunction and leaves it as-is.
+        // ClientLocal first, then MCP, then the pre-resolved custom tools; the three name spaces are disjoint, so the
+        // first match wins. A custom executable is already approval-wrapped, so the wrap above leaves it as-is.
         AITool? ResolveDynamicTool(string name)
         {
             if (clientLocalToolRegistry.TryResolve(name, out var clientLocalTool))

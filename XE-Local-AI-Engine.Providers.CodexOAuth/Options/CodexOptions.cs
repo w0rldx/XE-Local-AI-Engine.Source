@@ -28,15 +28,12 @@ public sealed class CodexOptions
     [Required]
     public Uri BaseUrl { get; set; } = new("https://chatgpt.com/backend-api/codex", UriKind.Absolute);
 
-    /// <summary>
-    ///     OAuth authorize endpoint (PKCE S256 browser flow).
-    ///     <para>
-    ///         LIVE-CORRECTNESS: the authorize host is the OAuth ISSUER (<c>auth.openai.com</c>), NOT
-    ///         <c>chatgpt.com</c> — verified against the working opencode reference client (ISSUER =
-    ///         <c>https://auth.openai.com</c>). Using <c>chatgpt.com/oauth/authorize</c> makes live sign-in fail.
-    ///         Configurable.
-    ///     </para>
-    /// </summary>
+    /// <summary>OAuth authorize endpoint (PKCE S256 browser flow). Configurable.</summary>
+    /// <remarks>
+    ///     LIVE-CORRECTNESS: the authorize host is the OAuth ISSUER (<c>auth.openai.com</c>), NOT <c>chatgpt.com</c>,
+    ///     verified against the working opencode reference client. Using <c>chatgpt.com/oauth/authorize</c> makes live
+    ///     sign-in fail.
+    /// </remarks>
     [Required]
     public Uri AuthorizeUrl { get; set; } = new("https://auth.openai.com/oauth/authorize", UriKind.Absolute);
 
@@ -48,65 +45,56 @@ public sealed class CodexOptions
     [Required]
     public string ClientId { get; set; } = "app_EMoamEEZ73f0CkXaXp7hrann";
 
-    /// <summary>
-    ///     Loopback port the local PKCE callback listener binds to. Codex uses 1455.
-    ///     The listener is loopback-only.
-    /// </summary>
+    /// <summary>Loopback port the local PKCE callback listener binds to; Codex uses 1455.</summary>
+    /// <remarks>The listener is loopback-only.</remarks>
     public int CallbackPort { get; set; } = 1455;
 
-    /// <summary>
-    ///     Loopback redirect path the authorization server calls back to. LIVE-CORRECTNESS: must be
-    ///     <c>/auth/callback</c> — the registered Codex client (<see cref="ClientId" />) only permits the exact
-    ///     redirect URI <c>http://localhost:1455/auth/callback</c> (matches the Codex CLI / opencode). A different
-    ///     path makes the authorize request fail with OpenAI <c>unknown_error</c>.
-    /// </summary>
+    /// <summary>Loopback redirect path the authorization server calls back to.</summary>
+    /// <remarks>
+    ///     LIVE-CORRECTNESS: must be <c>/auth/callback</c>, because the registered Codex client
+    ///     (<see cref="ClientId" />) permits only the exact redirect URI
+    ///     <c>http://localhost:1455/auth/callback</c>, matching the Codex CLI and opencode. A different path makes the
+    ///     authorize request fail with OpenAI <c>unknown_error</c>.
+    /// </remarks>
     public string CallbackPath { get; set; } = "/auth/callback";
 
-    /// <summary>
-    ///     OAuth scope requested during the authorize step. LIVE-CORRECTNESS: matches the working opencode
-    ///     reference client's exact scope (<c>openid profile email offline_access</c>) — <c>offline_access</c>
-    ///     is what yields a refresh token. Configurable.
-    /// </summary>
+    /// <summary>OAuth scope requested during the authorize step. Configurable.</summary>
+    /// <remarks>
+    ///     LIVE-CORRECTNESS: matches the working opencode reference client's exact scope
+    ///     (<c>openid profile email offline_access</c>), and <c>offline_access</c> is what yields a refresh token.
+    /// </remarks>
     public string Scope { get; set; } = "openid profile email offline_access";
 
-    /// <summary>
-    ///     Codex <c>originator</c> header value identifying the client family to OpenAI.
-    ///     <para>
-    ///         Identifies this client to OpenAI. The default is honest and product-specific (<c>xe-local-ai-engine</c>);
-    ///         the operator chose this over impersonating the official Codex CLI (ToS). It is bound from the
-    ///         <c>CodexOAuth</c> config section, so it is operator-overridable at runtime without a recompile.
-    ///         NOTE: the ChatGPT-subscription Responses endpoint MAY require a Codex-compatible originator to accept
-    ///         OAuth-subscription calls; if live sign-in returns 4xx on chat, override this (and <see cref="UserAgent" />)
-    ///         via config.
-    ///     </para>
-    /// </summary>
+    /// <summary>Codex <c>originator</c> header value identifying the client family to OpenAI.</summary>
+    /// <remarks>
+    ///     The default is honest and product-specific (<c>xe-local-ai-engine</c>); the operator chose this over
+    ///     impersonating the official Codex CLI, on ToS grounds. Bound from the <c>CodexOAuth</c> config section, so it
+    ///     is operator-overridable without a recompile. NOTE: the subscription Responses endpoint MAY require a
+    ///     Codex-compatible originator; if live sign-in returns 4xx on chat, override this and
+    ///     <see cref="UserAgent" />.
+    /// </remarks>
     public string Originator { get; set; } = ProductOriginator;
 
-    /// <summary>
-    ///     <c>User-Agent</c> header value sent on the SSE Responses path.
-    ///     <para>
-    ///         Identifies this client to OpenAI. The default is honest and product-specific
-    ///         (<c>XE-Local-AI-Engine/&lt;asm-version&gt;</c>); the operator chose this over impersonating the official
-    ///         Codex CLI (ToS). It is bound from the <c>CodexOAuth</c> config section, so it is operator-overridable at
-    ///         runtime without a recompile. NOTE: the ChatGPT-subscription Responses endpoint MAY require a
-    ///         Codex-compatible User-Agent to accept OAuth-subscription calls; if live sign-in returns 4xx on chat,
-    ///         override this (and <see cref="Originator" />) via config.
-    ///     </para>
-    /// </summary>
+    /// <summary><c>User-Agent</c> header value sent on the SSE Responses path, identifying this client to OpenAI.</summary>
+    /// <remarks>
+    ///     The default is honest and product-specific (<c>XE-Local-AI-Engine/&lt;asm-version&gt;</c>); the operator
+    ///     chose this over impersonating the official Codex CLI, on ToS grounds. Bound from the <c>CodexOAuth</c>
+    ///     config section, so it is operator-overridable without a recompile. NOTE: the subscription Responses endpoint
+    ///     MAY require a Codex-compatible User-Agent; if live sign-in returns 4xx on chat, override this and
+    ///     <see cref="Originator" />.
+    /// </remarks>
     public string UserAgent { get; set; } = ProductUserAgent;
 
     /// <summary>
-    ///     Default / selected Codex model id (account-scoped <c>gpt-5.x</c> family). The non-secret selected model is
-    ///     persisted by the node's selection store; this is the fallback default.
-    ///     <para>
-    ///         LIVE-CORRECTNESS: must be a model the ChatGPT-subscription Responses backend accepts. The offered set
-    ///         (<see cref="Implementation.CodexModelCatalog.ModelIds" />) is
-    ///         <c>gpt-5.6-sol / gpt-5.6-terra / gpt-5.6-luna / gpt-5.5 / gpt-5.4 / gpt-5.4-mini / gpt-5.3-codex-spark</c>;
-    ///         any id outside that set (e.g. the earlier default <c>gpt-5-codex</c>) is rejected with HTTP 400 (unknown
-    ///         model). <c>gpt-5.6-sol</c> is the frontier (strongest) model and leads the catalog, but the chosen
-    ///         default is <c>gpt-5.6-terra</c>; operators can override either via the <c>CodexOAuth</c> config section.
-    ///     </para>
+    ///     Default Codex model id (account-scoped <c>gpt-5.x</c> family); the node's selection store persists the
+    ///     non-secret selected model, and this is the fallback.
     /// </summary>
+    /// <remarks>
+    ///     LIVE-CORRECTNESS: must be a model the subscription Responses backend accepts. Any id outside
+    ///     <see cref="Implementation.CodexModelCatalog.ModelIds" /> — the earlier default <c>gpt-5-codex</c>, for
+    ///     instance — is rejected with HTTP 400. <c>gpt-5.6-sol</c> is the frontier model and leads the catalog, but
+    ///     the chosen default is <c>gpt-5.6-terra</c>; operators can override either via the <c>CodexOAuth</c> section.
+    /// </remarks>
     public string DefaultModel { get; set; } = "gpt-5.6-terra";
 
     /// <summary>Maximum time to wait for the user to complete the browser authorization.</summary>
@@ -116,8 +104,8 @@ public sealed class CodexOptions
     public TimeSpan TokenRequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    ///     Skew applied when deciding whether the access token is expired, so a near-expiry token
-    ///     is refreshed proactively rather than failing mid-request.
+    ///     Skew applied when deciding whether the access token is expired, so a near-expiry token is refreshed
+    ///     proactively rather than failing mid-request.
     /// </summary>
     public TimeSpan ExpirySkew { get; set; } = TimeSpan.FromMinutes(2);
 
@@ -127,10 +115,13 @@ public sealed class CodexOptions
     public Uri RedirectUri => new($"http://localhost:{CallbackPort}{CallbackPath}", UriKind.Absolute);
 
     /// <summary>
-    ///     Builds the honest product User-Agent token (<c>XE-Local-AI-Engine/&lt;version&gt;</c>). Prefers the
-    ///     assembly's informational version (stripping any build metadata after a '+'), then the assembly version,
-    ///     then a static fallback. The result is a valid User-Agent product/version token.
+    ///     Builds the honest product User-Agent token (<c>XE-Local-AI-Engine/&lt;version&gt;</c>), a valid
+    ///     product/version token.
     /// </summary>
+    /// <remarks>
+    ///     Prefers the assembly's informational version, stripping any build metadata after a '+', then the assembly
+    ///     version, then a static default.
+    /// </remarks>
     private static string BuildProductUserAgent()
     {
         var assembly = typeof(CodexOptions).Assembly;

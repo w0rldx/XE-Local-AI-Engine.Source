@@ -8,11 +8,13 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 
 /// <summary>
-///     Encrypted token store mirroring <c>CloudCredentialStore</c>: DataProtection at rest,
-///     user-only file permissions via <see cref="SecureFilePermissions" />. Uses a dedicated protector purpose and a
-///     separate <c>.enc</c> file so it cannot collide with the API-key-shaped cloud credential store.
-///     Never logs token values.
+///     Encrypted token store mirroring <c>CloudCredentialStore</c>: DataProtection at rest and user-only file
+///     permissions via <see cref="SecureFilePermissions" />. Never logs token values.
 /// </summary>
+/// <remarks>
+///     Uses a dedicated protector purpose and a separate <c>.enc</c> file, so it cannot collide with the
+///     API-key-shaped cloud credential store.
+/// </remarks>
 public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
 {
     private const string TokensFileName = "codex-oauth-tokens.enc";

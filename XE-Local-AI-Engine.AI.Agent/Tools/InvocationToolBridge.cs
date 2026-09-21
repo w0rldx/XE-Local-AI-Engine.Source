@@ -17,11 +17,12 @@ internal static class InvocationToolBridge
 
     /// <summary>
     ///     Creates a bridged tool that advertises the server-provided <paramref name="description" /> and
-    ///     <paramref name="parameterSchema" /> to the model (via <see cref="MetadataToolFunction" />) while keeping a
-    ///     JSON-in / JSON-out handler body and forwarding the AI runtime cancellation token. Falls back to the
-    ///     schema-less <see cref="Create(string, Func{string, CancellationToken, Task{string}})" /> when no schema is
-    ///     supplied, preserving the legacy single-argument contract.
+    ///     <paramref name="parameterSchema" /> to the model via <see cref="MetadataToolFunction" />.
     /// </summary>
+    /// <remarks>
+    ///     The handler body stays JSON-in / JSON-out and forwards the AI runtime cancellation token. With no schema it
+    ///     falls back to the schema-less overload, preserving the single-argument contract.
+    /// </remarks>
     public static AITool Create(string toolName,
         string? description,
         string? parameterSchema,
@@ -39,14 +40,15 @@ internal static class InvocationToolBridge
     }
 
     /// <summary>
-    ///     Creates a name-only offer placeholder for a tool whose executable lives in a resolution registry. The runtime
-    ///     package only carries the offer list (name + schema + approval flag); the executable is resolved by the
-    ///     invocation factory, which substitutes this placeholder for the matching registry function before the agent
-    ///     runs. The placeholder throws if it is ever invoked, because an offered local tool with no registry match must
-    ///     be dropped rather than executed. <paramref name="requiresApproval" /> carries the resolved per-agent approval
-    ///     policy through to <see cref="InvocationToolResolver" /> so a tightening override is honored (tighten-only) —
-    ///     see <see cref="OfferPlaceholderAIFunction" />.
+    ///     Creates a name-only offer placeholder for a tool whose executable lives in a resolution registry.
     /// </summary>
+    /// <remarks>
+    ///     The runtime package carries only the offer list; the invocation factory resolves the executable and
+    ///     substitutes it for this placeholder before the agent runs. The placeholder THROWS if it is ever invoked,
+    ///     because an offered local tool with no registry match must be dropped rather than executed.
+    ///     <paramref name="requiresApproval" /> carries the resolved per-agent policy through to
+    ///     <see cref="InvocationToolResolver" />, so a tightening override is honored.
+    /// </remarks>
     public static AITool CreateOfferPlaceholder(string toolName, bool requiresApproval = false)
     {
         return new OfferPlaceholderAIFunction(toolName, requiresApproval);

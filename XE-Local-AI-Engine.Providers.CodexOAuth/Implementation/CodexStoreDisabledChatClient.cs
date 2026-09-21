@@ -3,30 +3,16 @@ namespace XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     Wraps the inner Responses <see cref="IChatClient" /> to enforce <c>store=false</c> on every call,
-///     pin the request to a VALID Codex model id, and protect the factory's shared <see cref="HttpClient" /> from
-///     disposal.
-///     <para>
-///         store=false is mandatory for the transport-only boundary, so it is applied unconditionally: each call's
-///         <see cref="ChatOptions.RawRepresentationFactory" /> is set to the store-disabling factory
-///         (<see cref="CodexResponseStoreDisabling" />), which MEAI's Responses mapper uses as the base request options.
-///     </para>
-///     <para>
-///         <b>Model pinning (400 fix):</b> the agent send path sets <see cref="ChatOptions.ModelId" /> to the node's
-///         LOCALLY-selected model (e.g. an Ollama model name such as <c>qwen3:8b</c>) because the local/Ollama transport
-///         needs it. MEAI's Responses adapter uses that per-call <see cref="ChatOptions.ModelId" /> in preference to the
-///         model the client was constructed with, so a leaked local name would reach the Codex backend as the request
-///         model and be rejected with HTTP 400 (unknown model). This wrapper therefore OVERWRITES
-///         <see cref="ChatOptions.ModelId" /> with the resolved Codex model id on every call, so only a valid Codex model
-///         id can ever reach <c>chatgpt.com/backend-api/codex/responses</c> — regardless of what the upstream agent
-///         forwarded. The local/Ollama path is unaffected because it does not go through this Codex-only wrapper.
-///     </para>
-///     <para>
-///         Disposal is left to the base <see cref="DelegatingChatClient" />: the factory's shared <see cref="HttpClient" />
-///         and <c>CodexAuthHandler</c> are owned by the factory and are not torn down by disposing this wrapper, because
-///         <c>HttpClientPipelineTransport</c> does not take ownership of the supplied client.
-///     </para>
+///     Wraps the inner Responses <see cref="IChatClient" /> to enforce <c>store=false</c> on every call, pin the
+///     request to a VALID Codex model id, and protect the factory's shared <see cref="HttpClient" /> from disposal.
 /// </summary>
+/// <remarks>
+///     store=false is mandatory for the transport-only boundary, so each call's
+///     <see cref="ChatOptions.RawRepresentationFactory" /> is set unconditionally. MEAI's Responses adapter prefers the
+///     per-call <see cref="ChatOptions.ModelId" /> over the one the client was built with, so a locally-selected model
+///     name leaking through would be rejected with HTTP 400 — hence the OVERWRITE. Disposal is left to the base
+///     <see cref="DelegatingChatClient" />, since <c>HttpClientPipelineTransport</c> takes no ownership of the client.
+/// </remarks>
 internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
 {
     private readonly string _modelId;
@@ -56,9 +42,8 @@ internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
 
     private ChatOptions ApplyStoreDisabled(ChatOptions? options)
     {
-        // Resolve the per-send reasoning effort from the INCOMING options' AdditionalProperties (the Codex side channel,
-        // falling back to the Ollama-shaped think value) so the store-disabling base options also request reasoning
-        // summaries at that effort. Codex-only: the local/Ollama path does not pass through this wrapper.
+        // Resolve the per-send effort from the INCOMING options so the store-disabling base options request reasoning
+        // summaries at it. Codex-only: the local/Ollama path does not pass through this wrapper.
         var reasoningEffort = CodexResponseStoreDisabling.ResolveReasoningEffort(options);
 
         var result = CodexResponseStoreDisabling.WithStoredOutputDisabled(options?.Clone(), reasoningEffort);
@@ -66,27 +51,23 @@ internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
         // Pin to a valid Codex model id, overwriting any local model name the agent send path forwarded (400 fix).
         result.ModelId = _modelId;
 
-        // The ChatGPT-subscription Codex backend matches the Codex CLI, which sends NO max_output_tokens (the
-        // opencode reference strips it: output.maxOutputTokens = undefined). A developer-gated MaxOutputTokens
-        // override that rode in from the local sampling path could be rejected here, so it is cleared on the
-        // Codex-only boundary. The local/Ollama path keeps its MaxOutputTokens (it does not pass through here).
+        // The subscription Codex backend matches the Codex CLI, which sends NO max_output_tokens (the opencode
+        // reference strips it), so a local sampling override is cleared here rather than risk a rejection.
         result.MaxOutputTokens = null;
         return result;
     }
 
     /// <summary>
-    ///     Builds the Codex-safe (messages, options) pair. Applies the store-disabled + model-pin + max-tokens options
-    ///     (<see cref="ApplyStoreDisabled" />), then moves any system-role messages into the top-level Responses
-    ///     <c>instructions</c> field.
-    ///     <para>
-    ///         <b>System-message 400 fix:</b> the ChatGPT-subscription Codex backend rejects system-role messages in the
-    ///         request input (<c>{"detail":"System messages are not allowed"}</c>). The Codex CLI / opencode reference pass
-    ///         the system prompt via the top-level <c>instructions</c> field instead. So every <see cref="ChatRole.System" />
-    ///         message's text is appended to <see cref="ChatOptions.Instructions" /> (which MEAI's Responses adapter maps to
-    ///         <c>instructions</c>) and the system messages are removed from the input. Codex-side only — the local/Ollama
-    ///         path does not go through this wrapper and keeps its system messages.
-    ///     </para>
+    ///     Builds the Codex-safe messages-and-options pair: applies <see cref="ApplyStoreDisabled" />, then moves any
+    ///     system-role messages into the top-level Responses <c>instructions</c> field.
     /// </summary>
+    /// <remarks>
+    ///     The subscription Codex backend REJECTS system-role messages in the request input, and the Codex CLI and
+    ///     opencode reference pass the system prompt through <c>instructions</c> instead, so every
+    ///     <see cref="ChatRole.System" /> message's text is appended to <see cref="ChatOptions.Instructions" /> — which
+    ///     MEAI's Responses adapter maps to that field — and removed from the input. Codex-side only: the local and
+    ///     Ollama path does not go through this wrapper and keeps its system messages.
+    /// </remarks>
     private CodexRequest PrepareCodexRequest(IEnumerable<ChatMessage> messages,
         ChatOptions? options)
     {
@@ -118,7 +99,6 @@ internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
     /// <summary>The Codex-safe request pair: the input messages with system roles lifted out, and the adjusted options.</summary>
     private sealed record CodexRequest(IEnumerable<ChatMessage> Messages, ChatOptions Options);
 
-    // Dispose is left to the base DelegatingChatClient: the inner MEAI/Responses client does NOT own the
-    // factory's shared HttpClient (HttpClientPipelineTransport does not take ownership), so the shared
-    // client/handler the factory owns is never torn down by disposing this wrapper.
+    // Dispose is left to the base DelegatingChatClient: the inner client does NOT own the factory's shared HttpClient,
+    // so the shared client and handler are never torn down by disposing this wrapper.
 }

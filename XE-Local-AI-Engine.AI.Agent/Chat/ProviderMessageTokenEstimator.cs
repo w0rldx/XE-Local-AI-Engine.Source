@@ -7,27 +7,16 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
 ///     Conservative, allocation-light token estimator for the provider-boundary budget middleware: ~1 token per
-///     <see cref="CharsPerToken" /> weighted characters plus a small fixed per-message framing overhead, never calling
-///     the provider. Non-ASCII characters are weighted <see cref="NonAsciiCharWeight" />× because byte-pair tokenizers
-///     emit far more tokens per character for CJK / structured / emoji content than the chars/4 English heuristic
-///     assumes — the plain divisor badly UNDER-counts there, which would let an over-window round through.
-///     <para>
-///         This is the AI.Agent-layer twin of <c>HeuristicTokenEstimator</c> in the application layer (which the outer
-///         budgeter uses). The two live in separate assemblies by the layer arrow (Application → AI.Agent), so the
-///         entry points remain intentionally mirrored: a change to divisor selection here MUST be mirrored there, and
-///         vice versa. Script-category weighting is shared through <see cref="TokenCharacterProfile" />.
-///     </para>
-///     <para>
-///         Per-message script-category profiles are memoized by message instance in a
-///         <see cref="ConditionalWeakTable{TKey,TValue}" /> (no leak — the entry dies with the message). This hop
-///         re-estimates the full message list on EVERY inner tool-loop round, and those rounds reuse the same
-///         <see cref="ChatMessage" /> instances (the function-invocation loop appends but never mutates prior messages),
-///         so the memo collapses repeated full-content scans to dictionary lookups. Correct only because a
-///         <see cref="ChatMessage" /> is immutable-after-construction on these paths; the memoized value equals a fresh
-///         computation. The final division is deliberately not memoized, so a later per-model calibration affects the
-///         same message instance without rescanning its content.
-///     </para>
+///     <see cref="CharsPerToken" /> weighted characters plus a fixed per-message framing overhead, never calling the
+///     provider.
 /// </summary>
+/// <remarks>
+///     The AI.Agent-layer twin of <c>HeuristicTokenEstimator</c> in the application layer; the two sit in separate
+///     assemblies by the layer arrow (Application → AI.Agent), so a change to divisor selection or the per-image charge
+///     here MUST be mirrored there, and vice versa. Script-category weighting is shared through
+///     <see cref="TokenCharacterProfile" />; profiles are memoized per instance in a
+///     <see cref="ConditionalWeakTable{TKey,TValue}" />. See docs/wiki/04-agent-mode.md ("The token estimator").
+/// </remarks>
 internal static class ProviderMessageTokenEstimator
 {
     private static readonly ConditionalWeakTable<ChatMessage, TokenCharacterProfile> PerMessageCharacterProfileCache = new();
@@ -37,10 +26,8 @@ internal static class ProviderMessageTokenEstimator
     private const int CharsPerToken = TokenEstimatorCalibrationStore.DefaultCharsPerToken;
     private const int PerMessageOverheadTokens = 4;
 
-    // ponytail: flat per-image charge. llama.cpp vision costs a few hundred to ~1-2k tokens per image depending on
-    // resolution and the projector's patch grid; a fixed conservative heuristic keeps images from being counted as
-    // zero-cost (which would let a vision round overrun the window). Mirrored in HeuristicTokenEstimator (Application) —
-    // change both.
+    // ponytail: flat per-image charge — llama.cpp vision costs a few hundred to ~1-2k tokens per image by resolution and
+    // patch grid, and zero-cost would overrun the window. Mirrored in HeuristicTokenEstimator (Application) — change both.
     private const int EstimatedTokensPerImage = 512;
 
     public static int EstimateTokens(ChatMessage message, int charsPerToken = CharsPerToken)
@@ -108,21 +95,16 @@ internal static class ProviderMessageTokenEstimator
     }
 
     /// <summary>
-    ///     Conservative token estimate for the tool definitions serialized into the request: each tool's name,
-    ///     description and JSON schema all count against the input window, so a tool-heavy agent must reserve room for
-    ///     them. Ignored entirely, they under-count the round and let an over-window request through. Uses the same
-    ///     weighted-char divisor and per-item framing overhead as message content.
-    ///     <para>
-    ///         Memoized by tool instance in the same shape as the per-message memo, because the tool list is strictly
-    ///         immutable for the life of an invocation (the agent's <c>ChatOptions.Tools</c> is built once by the
-    ///         invocation factory and the function-invocation loop re-sends the SAME instances every round) while this
-    ///         hop runs on EVERY round. Without it each round paid a full <c>GetRawText()</c> materialization plus a
-    ///         char scan of every tool's schema. Correct for the same reason the message memo is: an
-    ///         <see cref="AIFunction" />'s name, description and schema do not change after construction, so the
-    ///         memoized profile equals a fresh computation. The divisor is applied outside the memo so a per-model
-    ///         calibration change re-divides without rescanning.
-    ///     </para>
+    ///     Conservative token estimate for the tool definitions serialized into the request, on the same weighted-char
+    ///     divisor and per-item framing overhead as message content.
     /// </summary>
+    /// <remarks>
+    ///     Each tool's name, description and JSON schema counts against the input window; ignored entirely they
+    ///     under-count the round and let an over-window request through. Memoized by tool instance because the tool list
+    ///     is immutable for the life of an invocation while this hop runs on EVERY round — without it each round paid a
+    ///     full <c>GetRawText()</c> materialization plus a char scan of every schema. The divisor is applied outside the
+    ///     memo, so a per-model calibration change re-divides without rescanning.
+    /// </remarks>
     public static int EstimateTools(IEnumerable<AITool>? tools, int charsPerToken = CharsPerToken)
     {
         if (tools is null)

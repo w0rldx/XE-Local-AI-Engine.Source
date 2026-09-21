@@ -1,25 +1,25 @@
 namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 
 /// <summary>
-///     Builds the scrubbed, allow-listed environments the training subprocesses run under. ONLY the keys named here pass
-///     through; everything else — <c>LD_PRELOAD</c>, <c>LD_LIBRARY_PATH</c>, proxy and credential variables, and every
-///     node secret — is dropped by construction, and <see cref="LinuxTrainingProcessRunner" /> clears the inherited
-///     environment before applying the result.
-///     <para>
-///         Public for <see cref="BuildUvEnvironment" /> alone, which is not training-specific: it is the environment any
-///         uv install must run under (isolated HOME/TMPDIR, no user <c>uv.toml</c>, managed interpreter only), so the
-///         compute tool's venv provision shares it rather than restating those four flags a second time.
-///     </para>
+///     Builds the scrubbed, allow-listed environments the training subprocesses run under: ONLY the keys named here
+///     pass through, and everything else is dropped by construction.
 /// </summary>
+/// <remarks>
+///     <see cref="LinuxTrainingProcessRunner" /> clears the inherited environment before applying the result. Public
+///     for <see cref="BuildUvEnvironment" /> alone, which is not training-specific — it is the environment any uv
+///     install must run under. See docs/wiki/18-training.md ("The scrubbed environments, and the uv pipeline the
+///     compute tool shares").
+/// </remarks>
 public static class TrainingRuntimeEnvironment
 {
     private static readonly string[] Allowlist = ["PATH", "LANG", "LC_ALL", "CUDA_HOME", "CUDA_PATH"];
 
-    /// <summary>
-    ///     The environment for uv itself. uv is pointed at isolated HOME/TMPDIR and cache/interpreter directories under
-    ///     the training cache root, so the install neither reads the operator's <c>~/.config/uv</c> (which could redirect
-    ///     an index) nor scatters gigabytes into the user's home.
-    /// </summary>
+    /// <summary>The environment for uv itself.</summary>
+    /// <remarks>
+    ///     uv is pointed at isolated HOME/TMPDIR and cache/interpreter directories under the training cache root, so
+    ///     the install neither reads the operator's <c>~/.config/uv</c> — which could redirect an index — nor scatters
+    ///     gigabytes into the user's home.
+    /// </remarks>
     public static Dictionary<string, string> BuildUvEnvironment(string isolatedHome, string isolatedTmp, string uvCacheDirectory, string pythonInstallDirectory)
     {
         var scrubbed = BuildAllowlisted();
@@ -58,17 +58,15 @@ public static class TrainingRuntimeEnvironment
     }
 
     /// <summary>
-    ///     The environment for a training run. Every library on this stack writes caches somewhere by default —
-    ///     <c>~/.cache/huggingface</c>, <c>/tmp/torchinductor_&lt;user&gt;</c>, a CWD-relative
-    ///     <c>unsloth_compiled_cache</c> — and none of those defaults are writable or wanted under the scrubbed
-    ///     environment, so each one is pointed somewhere this node owns.
+    ///     The environment for a training run: every default cache this stack writes to is pointed somewhere this node
+    ///     owns, none of those defaults being writable or wanted under a scrubbed environment.
     /// </summary>
     /// <remarks>
-    ///     The split is deliberate: run-scoped state (HOME, TMPDIR, the HF cache) lives under
-    ///     <paramref name="workDirectory" /> and dies with the run's <c>work/</c> sweep, while compiled Triton/Inductor
-    ///     kernels live under the machine-global <paramref name="cacheRoot" /> so the second run on a box does not pay
-    ///     the compile cost again. The three offline flags are what actually guarantee no network call: several
-    ///     <c>huggingface_hub</c> paths inside unsloth never thread <c>local_files_only</c> through.
+    ///     Run-scoped state lives under <paramref name="workDirectory" /> and dies with the run's <c>work/</c> sweep,
+    ///     while compiled Triton and Inductor kernels live under the machine-global <paramref name="cacheRoot" />. The
+    ///     three offline flags are what actually guarantee no network call: several <c>huggingface_hub</c> paths inside
+    ///     unsloth never thread <c>local_files_only</c> through. See docs/wiki/18-training.md ("The scrubbed
+    ///     environments, and the uv pipeline the compute tool shares").
     /// </remarks>
     public static Dictionary<string, string> BuildTrainEnvironment(string cacheRoot, string workDirectory)
     {
@@ -105,11 +103,14 @@ public static class TrainingRuntimeEnvironment
     }
 
     /// <summary>
-    ///     The environment for an export subprocess — the merge step and the llama.cpp conversion scripts alike. Same
-    ///     containment as <see cref="BuildTrainEnvironment" />, plus the vendored <c>gguf-py</c> on
-    ///     <c>PYTHONPATH</c>: the conversion scripts resolve that package relative to the llama.cpp repository they
-    ///     normally live in, which the provisioned script tree deliberately is not.
+    ///     The environment for an export subprocess — the merge step and the llama.cpp conversion scripts alike: the
+    ///     same containment as <see cref="BuildTrainEnvironment" />, plus the vendored <c>gguf-py</c> on
+    ///     <c>PYTHONPATH</c>.
     /// </summary>
+    /// <remarks>
+    ///     The conversion scripts resolve that package relative to the llama.cpp repository they normally live in,
+    ///     which the provisioned script tree deliberately is not.
+    /// </remarks>
     public static Dictionary<string, string> BuildExportEnvironment(string cacheRoot, string workDirectory, string ggufPyDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ggufPyDirectory);

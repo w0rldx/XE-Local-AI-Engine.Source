@@ -10,6 +10,16 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Sessions;
 
+/// <summary>
+///     Outermost agent-pipeline hop: pairs each <c>FunctionCallContent</c> with its <c>FunctionResultContent</c> and
+///     emits a requested span/log and a completion span/log per tool call.
+/// </summary>
+/// <remarks>
+///     Sits above <c>UseFunctionInvocation</c>, so a requested span measures call DISCOVERY, not run time. Neither span
+///     sets <c>gen_ai.operation.name</c>: MEAI's function-invocation hop owns the conventional <c>execute_tool</c> span
+///     for every call, and claiming it again would show a convention-aware backend two executions per call. The pair
+///     correlates to it by <c>gen_ai.tool.call.id</c>. See docs/wiki/04-agent-mode.md ("The tool-call observation pair").
+/// </remarks>
 internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClient
 {
     private readonly ILogger<ToolInvocationObservabilityChatClient> _logger;
@@ -24,10 +34,8 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
     {
         var response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
 
-        // A completed response carries the whole function-calling turn in order — the assistant's FunctionCallContent
-        // then the tool's FunctionResultContent — so pairing them here yields an outcome span per call. (Non-streaming
-        // durations are near-zero: the tool already executed below this hop before the response returned; the
-        // outcome/name/result-hash are still accurate. Request-to-result latency comes from the streaming path.)
+        // A completed response carries the whole function-calling turn in order, so pairing yields an outcome span per
+        // call; its duration is near-zero (the tool already ran below this hop) but outcome/name/result-hash are exact.
         var pending = new Dictionary<string, RequestedCall>(StringComparer.Ordinal);
         var offered = OfferedToolNames(options);
         foreach (var message in response.Messages)
@@ -43,11 +51,8 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        // Streaming is the real chat path. A logical tool call streams across many updates (its argument fragments share
-        // one CallId), the tool executes below this hop, then its FunctionResultContent update flows back. One pending
-        // entry per CallId keeps
-        // each call to exactly one requested span/log and one completion span. The interval is deliberately named
-        // request-to-result latency: it can include remaining argument generation and middleware work before execution.
+        // Streaming is the real chat path: one logical call streams across many updates sharing a CallId, so one pending
+        // entry per CallId keeps it to exactly one requested span and one completion span.
         var pending = new Dictionary<string, RequestedCall>(StringComparer.Ordinal);
         var offered = OfferedToolNames(options);
 
@@ -95,23 +100,13 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
             return;
         }
 
-        // The NAME is recorded only when it resolves against the tools this request offered. A model can emit any
-        // string here, and what the budget's name set feeds is durable: the persisted step detail, and from there a
-        // work-session event detail and a node-run column. A name nothing offered would be recorded as a tool this run
-        // reached for, which it is not — so the call is still counted (null records the count alone) and the identifier
-        // is dropped. The span and the log below keep it, because an attempted call nobody offered is exactly the thing
-        // an operator reading the trace needs to see.
+        // The NAME reaches the budget only when it resolves against the tools this request offered, because that set is
+        // durable; an unoffered call is still counted (null records the count alone), and span and log below keep it.
         var resolved = offered is not null && offered.Contains(functionCall.Name);
         ProviderCallBudget.Current?.RecordToolCallRequested(resolved ? functionCall.Name : null);
 
-        // Names the model's REQUEST to call a tool (a FunctionCallContent observed on the response), NOT the tool's
-        // execution: this hop sits above UseFunctionInvocation, so the delegate has not run yet and this span's
-        // duration measures call DISCOVERY, not run time. Named accordingly for honesty. The paired
-        // ObserveCompleted span carries the execution outcome + request-to-result latency; the two are correlated by
-        // gen_ai.tool.call.id. Neither sets gen_ai.operation.name: MEAI's function-invocation hop owns the
-        // "execute_tool" span for every call (FunctionInvokingChatClient starts it on the ActivitySource it takes from
-        // the inner client — here the OpenTelemetryChatClient's "Microsoft.Extensions.AI"), so claiming that value
-        // again would show a convention-aware backend two executions per call.
+        // Names the model's REQUEST to call a tool, not the tool's execution — the delegate has not run yet, so this
+        // span's duration measures call discovery. The paired ObserveCompleted span carries the outcome and latency.
         using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallRequested");
         activity?.SetTag("gen_ai.tool.call.id", functionCall.CallId);
         activity?.SetTag("gen_ai.tool.name", functionCall.Name);
@@ -119,10 +114,8 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         var (argumentsLength, argumentsHash) = SummarizePayload(functionCall.Arguments);
         activity?.SetTag("tool.arguments_length", argumentsLength);
 
-        // gen_ai.tool.call.arguments carries the redacted length+SHA-256-prefix digest, never the raw arguments.
-        // The convention defines this attribute as the payload itself; the bend is deliberate and recorded in
-        // docs/agent-knowledge.md §4, "The four gen_ai.tool.* attribute names track MEAI, and two of them carry a
-        // digest rather than the payload".
+        // Carries the redacted length+SHA-256-prefix digest, never the raw arguments. The convention defines this
+        // attribute as the payload itself; the bend is recorded in docs/agent-knowledge.md §4 ("The four gen_ai.tool.*").
         activity?.SetTag("gen_ai.tool.call.arguments", argumentsHash);
 
         _logger.LogInformation("AgentRunToolInvoked {ToolName} {CallId} ArgsLength={ArgumentsLength} ArgsHash={ArgumentsHash}",
@@ -144,13 +137,8 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         var (resultLength, resultHash) = SummarizePayload(functionResult.Result);
         ProviderCallBudget.Current?.RecordToolCallCompleted(duration, resultLength, functionResult.Exception is not null);
 
-        // The completion span sits at the same hop but fires when the FunctionResultContent flows back, so it records
-        // the actual execution outcome + request-to-result latency. Like its Requested twin it deliberately does NOT
-        // set gen_ai.operation.name: MEAI's function-invocation hop already emits the conventional "execute_tool" span
-        // for the same call, and a second one carrying that value would be counted as a second execution. The pair is
-        // this repo's own request/completion observation, correlated to MEAI's span by gen_ai.tool.call.id. Only the
-        // result length + hash are captured — never the raw result value (docs/agent-knowledge.md §4: tool telemetry
-        // must never log raw arguments or results).
+        // Fires when the FunctionResultContent flows back, so it records the real execution outcome and the
+        // request-to-result latency. Length and hash only, never the raw result (docs/agent-knowledge.md §4).
         using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallCompleted");
         activity?.SetTag("gen_ai.tool.call.id", functionResult.CallId);
         activity?.SetTag("gen_ai.tool.name", requested.Name);
@@ -158,9 +146,8 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         activity?.SetTag("tool.duration_ms", durationMs);
         activity?.SetTag("tool.result_length", resultLength);
 
-        // gen_ai.tool.call.result carries the redacted length+SHA-256-prefix digest, never the raw result — the same
-        // deliberate bend recorded in docs/agent-knowledge.md §4, "The four gen_ai.tool.* attribute names track MEAI,
-        // and two of them carry a digest rather than the payload".
+        // Carries the redacted length+SHA-256-prefix digest, never the raw result — the same deliberate bend recorded
+        // in docs/agent-knowledge.md §4 ("The four gen_ai.tool.* attribute names track MEAI").
         activity?.SetTag("gen_ai.tool.call.result", resultHash);
 
         _logger.LogInformation("AgentRunToolCompleted {ToolName} {CallId} Outcome={Outcome} DurationMs={DurationMs} ResultLength={ResultLength} ResultHash={ResultHash}",
@@ -168,11 +155,14 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
     }
 
     /// <summary>
-    ///     Reduces a tool-call payload (arguments or result — potentially raw model-supplied PII/file contents) to a
-    ///     safe correlation summary: the serialized UTF-8 byte length plus a truncated SHA-256 hash prefix. Never returns
-    ///     or logs the value itself. A non-serializable graph yields the sentinel <c>Length = -1</c> with the
-    ///     <c>"unserializable"</c> marker rather than faulting the response stream.
+    ///     Reduces a tool-call payload — arguments or result, potentially raw model-supplied PII or file contents — to
+    ///     a safe correlation summary, never returning or logging the value itself.
     /// </summary>
+    /// <remarks>
+    ///     The summary is the serialized UTF-8 byte length plus a truncated SHA-256 hash prefix. A non-serializable
+    ///     graph yields the sentinel length -1 with the <c>"unserializable"</c> marker rather than faulting the
+    ///     response stream.
+    /// </remarks>
     private static PayloadSummary SummarizePayload(object? value)
     {
         string serialized;

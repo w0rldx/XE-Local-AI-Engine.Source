@@ -5,12 +5,14 @@ using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 
 /// <summary>
 ///     Shared AI.Agent-layer counters for the workflow idle watchdog, emitted by both the orchestration and the Preview
-///     run sessions and distinguished by a <c>surface</c> tag rather than by separate instruments (keeps the instrument
-///     count low and the convention uniform). Emitted here rather than on the application layer's <c>NodeMetrics</c>
-///     because these sessions live below that layer (the layer arrow forbids the reference); they sit on the existing
-///     exported <c>XE.LocalAiEngine.AI.Agent</c> meter. Content-free — counts only. Note a Preview run has no inter-event
-///     idle deadline, so it only ever emits the abandonment counter, never the watchdog-timeout one.
+///     run sessions and distinguished by a <c>surface</c> tag rather than by separate instruments.
 /// </summary>
+/// <remarks>
+///     One tag keeps the instrument count low and the convention uniform. Emitted here rather than on the application
+///     layer's <c>NodeMetrics</c> because these sessions live below that layer, on the exported
+///     <c>XE.LocalAiEngine.AI.Agent</c> meter; content-free, counts only. A Preview run has no inter-event idle
+///     deadline, so it only ever emits the abandonment counter, never the watchdog-timeout one.
+/// </remarks>
 internal static class WorkflowWatchdogMetrics
 {
     /// <summary><c>surface</c> tag value for the handoff orchestration run session.</summary>

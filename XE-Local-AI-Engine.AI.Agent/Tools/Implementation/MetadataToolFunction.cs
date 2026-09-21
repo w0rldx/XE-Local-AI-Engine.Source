@@ -4,16 +4,16 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     An executable <see cref="AIFunction" /> that carries an explicit, model-visible JSON schema and description
-///     while keeping a JSON-in / JSON-out handler body.
-///     <para>
-///         <see cref="AIFunctionFactory" /> cannot attach an arbitrary raw schema to an executable (its options only
-///         tune auto-generation from the delegate signature), so this type overrides the schema/name/description
-///         surface directly and serializes the raw invocation arguments back to JSON for the handler. That lets a
-///         single-string handler advertise the real multi-property schema without the factory mis-binding the
-///         model's argument object onto a lone <c>arguments</c> parameter.
-///     </para>
+///     An executable <see cref="AIFunction" /> carrying an explicit, model-visible JSON schema and description, while
+///     keeping a JSON-in / JSON-out handler body.
 /// </summary>
+/// <remarks>
+///     <see cref="AIFunctionFactory" /> cannot attach an arbitrary raw schema to an executable — its options only tune
+///     auto-generation from the delegate signature — so this type overrides the schema, name and description surface
+///     directly and serializes the raw invocation arguments back to JSON for the handler. That lets a single-string
+///     handler advertise the real multi-property schema without the factory mis-binding the model's argument object
+///     onto a lone <c>arguments</c> parameter.
+/// </remarks>
 internal sealed class MetadataToolFunction : AIFunction
 {
     private readonly Func<string, CancellationToken, Task<string>> _handler;

@@ -31,12 +31,12 @@ public enum OrchestrationUpdateKind
     Failure = 4
 }
 
-/// <summary>
-///     One normalized item from a handoff orchestration run. A flat record over a <see cref="Kind" /> discriminator
-///     keeps it trivially switchable by the runner; only the fields relevant to the kind are populated. Every update
-///     optionally carries the emitting participant (<see cref="ParticipantKey" /> / <see cref="ParticipantName" />)
-///     so the chat UI can attribute deltas to an agent.
-/// </summary>
+/// <summary>One normalized item from a handoff orchestration run.</summary>
+/// <remarks>
+///     A flat record over a <see cref="Kind" /> discriminator keeps it trivially switchable by the runner, and only
+///     the fields relevant to the kind are populated. Every update optionally carries the emitting participant
+///     (<see cref="ParticipantKey" />, <see cref="ParticipantName" />) so the chat UI can attribute deltas to an agent.
+/// </remarks>
 public sealed record OrchestrationUpdate
 {
     public required OrchestrationUpdateKind Kind { get; init; }

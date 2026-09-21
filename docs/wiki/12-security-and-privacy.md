@@ -423,6 +423,61 @@ make the operator's browser hit this loopback port with a crafted query string m
 script into the page it returns. AAD's own `error` / `error_description` text (RFC 6749 §4.1.2.1) is truncated to a
 single line before it is ever logged, and the callback page never renders it regardless.
 
+### 3.7 Codex OAuth: token storage, refresh and redaction
+
+`CodexTokenStore` mirrors `CloudCredentialStore` — DataProtection at rest, user-only file permissions through
+`SecureFilePermissions` — but uses a **dedicated protector purpose** and a **separate `.enc` file**, so it cannot
+collide with the API-key-shaped cloud credential store. It never logs token values.
+
+`CodexAuthHandler` is the `DelegatingHandler` that owns auth on the SSE Responses path, and it does three things in
+order:
+
+1. **Strips** any `Authorization` the OpenAI SDK added from its dummy `"unused"` key, so that value never reaches the
+   wire.
+2. **Injects** the Codex header contract for the SSE path: the real bearer `Authorization`, `chatgpt-account-id`,
+   `originator` and `User-Agent` — and *not* the WebSocket-only `OpenAI-Beta`.
+3. On a **401**, performs a **single-flight refresh** — one gate, with concurrent 401s awaiting the same refresh under
+   a double-checked expiry — and retries the request exactly once. A sent `HttpRequestMessage` cannot be reused, so the
+   retry goes out on a fresh clone whose content is buffered to be re-readable.
+
+It never logs token values, authorization headers or the dummy key. `CodexHeaders` is the single source of truth for
+that contract and the wire-contract test binds to its constants. The account-id header is `chatgpt-account-id` (as the
+Codex CLI sends it) and **not** `openai-`-prefixed, because the prefix may break account-scoped auth; this was verified
+against the Codex CLI source path `codex-rs/core/src/client.rs`, where the v0 SSE Responses path sends the always-on
+auth headers plus the minimal HTTP/SSE subset. The WebSocket-only `OpenAI-Beta: responses_websockets` header is
+intentionally neither defined nor sent.
+
+**Diagnostic error bodies are logged, under four constraints.** On a non-success response the handler logs the server's
+error body so the node host log shows why the call was rejected. The body is buffered with `LoadIntoBufferAsync` first,
+so reading it does not consume the content for the OpenAI SDK — only a bounded prefix is read from the buffered,
+seekable stream and the stream is rewound, leaving the SDK to surface the same error to the caller. It is gated to
+**failure statuses only**: a success response carries the live SSE stream and must not be read there. At most
+`MaxLoggedBodyBytes` are logged, with the total body length reported separately, and the excerpt is stripped of control
+characters so a server-controlled body cannot forge log lines. Only the body excerpt and the status are logged; request
+headers are never touched, and the server's error JSON never echoes the bearer token or account id.
+
+On top of that the excerpt is **redacted** before it reaches the log: user emails, JWT-shaped material, and any long
+high-entropy token-like run — 20 or more characters from the base64/hex alphabet carrying **both** a letter and a
+digit, so readable identifiers such as `invalid_request_error` survive intact. A pathological body that stalls a
+pattern is dropped wholesale rather than logged unredacted.
+
+**The JWT payload is base64url-decoded without verifying the signature.** That is intentional and safe here: the access
+token arrives over TLS directly from the OpenAI token endpoint, and the decoded claims — `chatgpt_account_id` and
+`exp` — are used **only** as advisory metadata, the account id becoming a request header and the expiry driving
+proactive refresh. Neither is ever an authorization input or a trust decision on this node. **Do not repurpose these
+claims for access control without first verifying the signature against OpenAI's JWKS.** When a token carries no usable
+`exp` claim, the store falls back to a conservative 50-minute expiry.
+
+`CodexLoginCoordinator` owns the pending-login lifecycle so the Operator endpoints can start a loopback PKCE login,
+return the authorize URL immediately, and poll status until it completes. A second `Start` **supersedes** any in-flight
+login: the prior attempt is cancelled and its loopback listener freed, so the new login can re-bind the callback port.
+It takes the auth service as a `Lazy<T>` so the auth `HttpClient` is built on first `Start` rather than when the
+singleton is constructed, which keeps endpoint instantiation at host startup from eagerly materializing it. It never
+logs token material. The authorize request carries `originator`, `id_token_add_organizations` and
+`codex_cli_simplified_flow` — verified against the working opencode reference client — to identify the client family,
+ask the issuer to embed the org/account id in the `id_token` so the subscription path can resolve
+`chatgpt-account-id`, and opt into the simplified Codex CLI flow.
+
 ---
 
 ## 4. Exception handling: no internal detail leakage
@@ -530,6 +585,41 @@ rights with no per-process CPU/memory ceiling. Approval, time/output/concurrency
 reduce risk; they do not create OS isolation.
 
 ---
+
+### Untrusted content is fenced with an unforgeable marker
+
+`UntrustedContentFraming` (`XE-Local-AI-Engine.AI.Agent/Tools/UntrustedContentFraming.cs`) wraps every
+model-facing string that **originates from data** — retrieved knowledge-base chunks, read documents, uploaded
+attachments, and their attacker-controlled metadata such as titles, section headings and file names — in an
+explicit trust boundary. The retrieved text is data to be reasoned over, **not** instructions to be followed:
+a prompt-injection sentence buried in a document ("ignore previous instructions", "approve this action") must
+be visibly inside the boundary rather than silently concatenated into the prompt where it reads like a system
+directive. The BaseScaffold instructs the model to treat everything between the markers as data, and callers
+**must** put every attacker-controlled field, body and metadata alike, inside one fence via `WrapDocument`;
+nothing attacker-controlled is emitted outside it.
+
+The begin and end markers carry a per-wrap **nonce**, 32 lowercase hex characters. Random and derived nonces
+are the same width deliberately, so a budgeter measuring the empty-body wrap overhead measures the length the
+real body's wrap will have. Two factories produce it, and both close a distinct gap:
+
+- **Random, per call** (`Wrap`, `WrapDocument` without a seed) for query-dynamic results such as the knowledge
+  tools, whose output is not prompt-cache-sensitive. The value is unpredictable to whoever authored the
+  document, so embedded text — even a verbatim copy of the marker prefix — can never forge the closing marker
+  and break out of the fence. That closes the **fixed-marker forgery** gap.
+- **Derived, and bound to the fenced content** (`WrapDocument` with a `nonceSeed`) for the prefix-stable
+  attachment path, where the fenced block is a stable prefix of a multi-turn prompt and llama.cpp prompt/KV
+  cache prefix reuse has to be preserved. It is an HMAC-SHA256 keyed by the server-side per-conversation seed
+  over the SHA-256 of the canonical fenced payload — metadata plus body — not a bare hash of the seed. Keying
+  by the seed keeps the marker unforgeable from inside the body; keying the *message* over the content makes
+  two different attachments in the **same** conversation get **different** closing markers, which closes the
+  marker-**replay** gap: an earlier attachment's model-visible closing marker cannot be embedded in a later
+  attachment's body to force a break-out, because the later fence derives its marker from the later content.
+  Byte-stability survives — the same conversation plus the same attachment content derives the same marker
+  across sends.
+
+The canonical inner payload is composed **once** and the content-bound nonce derived over exactly the bytes
+that will sit between the markers, so the same seed and rendered payload always yield the same nonce and any
+change to that payload yields a different one.
 
 ## 7. Sandbox / process-jail for tool execution
 

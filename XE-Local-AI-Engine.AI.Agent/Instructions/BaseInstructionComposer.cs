@@ -1,10 +1,11 @@
 namespace XE_Local_AI_Engine.AI.Agent.Instructions;
 
-/// <summary>
-///     Joins the versioned base instruction scaffold ahead of a persona/task prompt. Shared by every composition site
-///     (<c>AgentDefinitionResolver</c>, the sub-agent spawn default, the null-definition chat fallback) so the join
-///     rule — a single blank line, defensively skipped when the scaffold is blank — lives in exactly one place.
-/// </summary>
+/// <summary>Joins the versioned base instruction scaffold ahead of a persona or task prompt.</summary>
+/// <remarks>
+///     Shared by every composition site — <c>AgentDefinitionResolver</c>, the sub-agent spawn default, the
+///     null-definition chat fallback — so the join rule (a single blank line, defensively skipped when the scaffold is
+///     blank) lives in exactly one place.
+/// </remarks>
 internal static class BaseInstructionComposer
 {
     public static string Compose(string scaffold, string body)

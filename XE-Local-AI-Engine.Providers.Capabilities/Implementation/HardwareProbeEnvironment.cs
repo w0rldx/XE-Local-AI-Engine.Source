@@ -108,9 +108,8 @@ internal sealed class HardwareProbeEnvironment : IHardwareProbeEnvironment
         {
             return FreeSpace.GetAvailableFreeBytes(path);
         }
-        // An unmeasurable path is this probe's 0, never a throw: the profiler falls through to its CPU-mode floor.
-        // InvalidOperationException is the shared probe's "nothing exists at or above the path"; a drive that is not
-        // ready arrives as an IOException out of DriveInfo, which is the same 0 the old IsReady gate answered.
+        // An unmeasurable path is this probe's 0, never a throw, so the profiler falls through to its CPU-mode floor.
+        // InvalidOperationException means nothing exists at or above the path; a not-ready drive arrives as IOException.
         catch (Exception exception)
             when (exception is IOException or ArgumentException or UnauthorizedAccessException or InvalidOperationException)
         {

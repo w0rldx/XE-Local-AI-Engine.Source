@@ -3,14 +3,15 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     A <see cref="DelegatingAIFunction" /> backstop that bounds the textual size of a tool result before it enters
-///     (and is re-sent on every subsequent turn of) the chat history. It wraps any executable tool — ClientLocal
-///     handlers and MCP tools alike — and truncates an over-budget result via <see cref="ToolResultBudget" /> with an
-///     explicit marker so the model can tell the output was clipped. Smaller per-tool caps that run inside the handler
-///     still apply first; this is only the shared ceiling for the pathological case they miss. The wrapper is transparent
-///     to name/description/schema (delegated to the inner function), so it composes underneath the approval wrapper
-///     without changing what the model is offered.
+///     A <see cref="DelegatingAIFunction" /> backstop that bounds the textual size of a tool result before it enters —
+///     and is re-sent on every later turn of — the chat history.
 /// </summary>
+/// <remarks>
+///     Wraps any executable tool, ClientLocal handlers and MCP tools alike, and truncates an over-budget result via
+///     <see cref="ToolResultBudget" /> with an explicit marker. Smaller per-tool caps inside the handler still apply
+///     first; this is only the shared ceiling for the pathological case they miss. Transparent to name, description and
+///     schema, so it composes underneath the approval wrapper without changing what the model is offered.
+/// </remarks>
 internal sealed class BudgetedToolResultAIFunction : DelegatingAIFunction
 {
     private readonly int _maxResultCharacters;
@@ -26,10 +27,8 @@ internal sealed class BudgetedToolResultAIFunction : DelegatingAIFunction
     {
         var result = await base.InvokeCoreAsync(arguments, cancellationToken).ConfigureAwait(false);
 
-        // The configured budget is read once when the registries are built, so it is a node-wide constant. A run that
-        // needs a tighter ceiling for itself seeds one ambiently (ToolResultBudgetScope); the resolve is tighten-only,
-        // so a run can never raise the node's ceiling and an unseeded flow is byte-identical to before. This wrapper is
-        // the single choke point for ClientLocal, Custom and MCP tools alike, which is why the override lives here.
+        // The configured budget is a node-wide constant; a run needing a tighter ceiling seeds ToolResultBudgetScope,
+        // and the tighten-only resolve lives here because this wrapper is the choke point for every tool kind.
         return ToolResultBudget.Apply(result, ToolResultBudgetScope.Resolve(_maxResultCharacters));
     }
 }

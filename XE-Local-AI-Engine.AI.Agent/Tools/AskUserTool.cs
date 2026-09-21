@@ -1,29 +1,26 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     The shared, single-source definition of the <c>ask_user</c> tool: its name, model-visible description, and
-///     parameter schema. Lives in the agent layer because three seams need the identical strings — the ClientLocal
-///     handler that executes it, the offer providers that advertise it, and the resolvers that union it into every
-///     interactive turn's tool set.
-///     <para>
-///         GRAMMAR NOTE: llama.cpp compiles every offered tool's JSON schema into one combined GBNF grammar with a hard
-///         repetition ceiling, and the budget is spent ACROSS the whole <c>tools</c> array (see docs/agent-knowledge.md
-///         §3). This schema therefore deliberately carries no <c>maxLength</c> and no <c>pattern</c>, and keeps
-///         <c>minItems</c>/<c>maxItems</c> tiny. The free-text "Other" choice is appended by the CLIENT rather than
-///         declared here, precisely so the schema stays small. Do not add string bounds to this schema without
-///         re-running <c>scripts/run-tool-grammar-smoke-local.sh</c>.
-///     </para>
+///     The shared, single-source definition of the <c>ask_user</c> tool: its name, model-visible description and
+///     parameter schema.
 /// </summary>
+/// <remarks>
+///     Lives in the agent layer because the ClientLocal handler, the offer providers and the resolvers all need the
+///     identical strings. GRAMMAR: llama.cpp compiles every offered schema into one combined GBNF grammar whose
+///     repetition ceiling is spent ACROSS the whole <c>tools</c> array (docs/agent-knowledge.md §3), so this schema
+///     carries no <c>maxLength</c> and no <c>pattern</c>, keeps item bounds tiny and leaves the "Other" choice to the
+///     CLIENT. Never add string bounds without re-running <c>scripts/run-tool-grammar-smoke-local.sh</c>.
+/// </remarks>
 public static class AskUserTool
 {
     /// <summary>The tool name, matched by name at every offer and resolution seam.</summary>
     public const string ToolName = "ask_user";
 
-    /// <summary>
-    ///     Model-visible description. Deliberately prescriptive about WHEN to call it: an unguided model either never
-    ///     asks (and guesses) or asks constantly. The "do not ask what you can determine yourself" clause is the one
-    ///     that keeps it from degenerating into a confirmation prompt on every step.
-    /// </summary>
+    /// <summary>Model-visible description, deliberately prescriptive about WHEN to call the tool.</summary>
+    /// <remarks>
+    ///     An unguided model either never asks and guesses, or asks constantly. The "do not ask what you can determine
+    ///     yourself" clause is the one that keeps it from degenerating into a confirmation prompt on every step.
+    /// </remarks>
     public const string Description =
         "Asks the user a multiple-choice question and waits for their answer before continuing. Use this when a "
         + "decision is genuinely the user's to make and different answers would lead to materially different work — "

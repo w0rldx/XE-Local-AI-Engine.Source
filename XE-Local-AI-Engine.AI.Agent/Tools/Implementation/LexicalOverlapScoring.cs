@@ -4,21 +4,26 @@ using System.Collections.Frozen;
 
 /// <summary>
 ///     The one lexical scoring shape shared by <see cref="LexicalToolRelevanceSelector" /> and
-///     <c>LexicalPlaybookRetrievalRanker</c> (in <c>Client.Application</c>, which sees this type through
-///     <c>InternalsVisibleTo</c>). Both rank free text against short candidate texts with no model and no external
-///     state, so they must tokenise and score identically: uppercase-normalise (CA1308-safe), split on non-alphanumeric
-///     runs, drop function words, compare ordinally, and divide the overlap by the square root of the candidate's
-///     length. Two copies of this drifted once already; one copy is the fix.
+///     <c>LexicalPlaybookRetrievalRanker</c>, which sees this type through <c>InternalsVisibleTo</c>.
 /// </summary>
+/// <remarks>
+///     Both rank free text against short candidate texts with no model and no external state, so they must tokenise
+///     and score identically: uppercase-normalise (CA1308-safe), split on non-alphanumeric runs, drop function words,
+///     compare ordinally, and divide the overlap by the square root of the candidate's length. Two copies of this
+///     drifted once already; one copy is the fix. See docs/wiki/04-agent-mode.md ("The lexical ranker and the
+///     `list_tools` escape hatch").
+/// </remarks>
 internal static class LexicalOverlapScoring
 {
     /// <summary>
-    ///     Function words — English and German articles, prepositions, conjunctions, pronouns and auxiliaries — carry no
-    ///     retrieval signal but occur in nearly every candidate text, so a raw overlap count is dominated by them.
-    ///     Dropped from BOTH the query and the candidate: from the query so they can never match, and from the candidate
-    ///     so they do not inflate the length divisor of a text that is merely wordy. Uppercase, because
-    ///     <see cref="Tokenize" /> normalises before this set is consulted.
+    ///     Function words — English and German articles, prepositions, conjunctions, pronouns and auxiliaries — which
+    ///     carry no retrieval signal but occur in nearly every candidate text.
     /// </summary>
+    /// <remarks>
+    ///     Dropped from BOTH sides: from the query so they can never match, and from the candidate so they do not
+    ///     inflate the length divisor of a text that is merely wordy. Uppercase, because <see cref="Tokenize" />
+    ///     normalises before this set is consulted.
+    /// </remarks>
     private static readonly FrozenSet<string> StopWords = new[]
     {
         // English
@@ -188,12 +193,12 @@ internal static class LexicalOverlapScoring
         "ZUR"
     }.ToFrozenSet(StringComparer.Ordinal);
 
-    /// <summary>
-    ///     Content-word overlap, normalised by the square root of the candidate's length. Square root rather than a
-    ///     plain division because a full division over-corrects: it makes a one-word name beat a three-word match in a
-    ///     paragraph, which is the opposite failure. Both token sets are expected to come from <see cref="Tokenize" />,
-    ///     so both are already stopword-filtered. Deterministic: the same inputs give the same double on every run.
-    /// </summary>
+    /// <summary>Content-word overlap, normalised by the square root of the candidate's length.</summary>
+    /// <remarks>
+    ///     Square root rather than a plain division, because a full division over-corrects and makes a one-word name
+    ///     beat a three-word match in a paragraph. Both token sets are expected to come from <see cref="Tokenize" />,
+    ///     so both are already stopword-filtered, and the same inputs give the same double on every run.
+    /// </remarks>
     internal static double ScoreOverlap(IReadOnlySet<string> queryTokens, IReadOnlySet<string> candidateTokens)
     {
         ArgumentNullException.ThrowIfNull(queryTokens);

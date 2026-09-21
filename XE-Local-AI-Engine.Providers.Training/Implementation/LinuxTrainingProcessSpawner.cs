@@ -6,12 +6,13 @@ using System.Threading.Channels;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
-/// <summary>
-///     Spawn-and-return trainer launcher. <see cref="LinuxTrainingProcessRunner" /> is run-to-completion and serves the
-///     installer; a training run instead needs the child's identity the instant it exists, because the launch receipt
-///     has to be durable before the first byte of output arrives — a host that dies between spawn and receipt leaves an
-///     unreapable orphan holding the whole GPU.
-/// </summary>
+/// <summary>Spawn-and-return trainer launcher.</summary>
+/// <remarks>
+///     <see cref="LinuxTrainingProcessRunner" /> is run-to-completion and serves the installer; a training run instead
+///     needs the child's identity the instant it exists, because the launch receipt has to be durable before the first
+///     byte of output arrives — a host that dies between spawn and receipt leaves an unreapable orphan holding the
+///     whole GPU.
+/// </remarks>
 internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 {
     private readonly string _cacheRoot;
@@ -50,9 +51,8 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 
         var startInfo = new ProcessStartInfo
         {
-            // setsid puts the child in its own session and process group, so kill(-pgid) reaps the trainer plus every
-            // dataloader worker and compile subprocess it forked. It does not change the child's PPID, so the child
-            // stays inside dev-stop's parent-chain descendant closure.
+            // setsid puts the child in its own session and process group, so kill(-pgid) reaps every dataloader worker
+            // and compile subprocess too. It leaves PPID alone, so the child stays in dev-stop's descendant closure.
             FileName = SetsidLocator.ResolveAbsolutePath(),
             WorkingDirectory = request.WorkingDirectory,
             RedirectStandardOutput = true,
@@ -94,9 +94,8 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
 #pragma warning restore CA2000
         try
         {
-            // Identity is read from /proc rather than assumed: setsid execs in place in the common case (pgid == pid)
-            // but forks when this host already leads a session, and every guarantee the reaper makes rests on the
-            // recorded pgid being the one that will actually be signalled.
+            // Identity is read from /proc, not assumed: setsid execs in place when pgid == pid but forks when this host
+            // already leads a session, and the reaper's guarantees rest on the recorded pgid being the signalled one.
             var stat = LinuxTrainingProcessInspector.TryReadStat(process.Id);
             var receipt = new TrainingLaunchReceipt
             {

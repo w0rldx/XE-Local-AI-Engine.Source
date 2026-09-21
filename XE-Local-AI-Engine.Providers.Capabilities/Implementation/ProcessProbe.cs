@@ -5,12 +5,15 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 
 /// <summary>
-///     Live <see cref="IProcessProbe" />: shells out to a lightweight, ubiquitous tool (e.g. <c>nvidia-smi</c>) and
-///     captures its stdout under a wall-clock deadline. A missing tool / spawn failure degrades to <see langword="null" />
-///     — never fatal — so the profiler can fall through to the next detection branch. A probe that overruns its timeout
-///     is killed (process tree, so no orphaned <c>nvidia-smi</c> survives) and returns a
-///     <see cref="ProcessProbeResult.TimedOut" /> result rather than hanging provisioning forever.
+///     Live <see cref="IProcessProbe" />: shells out to a lightweight, ubiquitous tool such as <c>nvidia-smi</c> and
+///     captures its stdout under a wall-clock deadline.
 /// </summary>
+/// <remarks>
+///     A missing tool or spawn failure degrades to <see langword="null" />, never a fault, so the profiler falls
+///     through to the next detection branch. A probe that overruns is killed as a process TREE, so no orphaned
+///     <c>nvidia-smi</c> survives, and returns a <see cref="ProcessProbeResult.TimedOut" /> result rather than hanging
+///     provisioning forever.
+/// </remarks>
 internal sealed class ProcessProbe : IProcessProbe
 {
     private readonly ILogger<ProcessProbe> _logger;

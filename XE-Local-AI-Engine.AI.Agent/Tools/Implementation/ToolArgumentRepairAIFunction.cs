@@ -8,18 +8,15 @@ using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 
 /// <summary>
 ///     A <see cref="DelegatingAIFunction" /> that guards the inner executable with uniform argument validation and a
-///     model-actionable repair loop. Before the handler runs it coerces and validates the model's arguments against the
-///     tool's own schema (via <see cref="ToolArgumentValidator" />); a failing call — or a handler that cannot parse
-///     otherwise valid-looking arguments — returns a structured repair result (via <see cref="ToolArgumentRepairResult" />)
-///     instead of throwing, so the framework's function-invocation loop becomes the repair loop. A per-request cap
-///     (<see cref="ToolArgumentRepairScope" />) stops a looping model: after the configured number of consecutive invalid
-///     calls the tool returns a terminal "disabled for this run" result so it cannot burn the whole iteration budget.
-///     The wrapper is transparent to name/description/schema (delegated to the inner function), so it composes beneath the
-///     result-budget and approval wrappers without changing what the model is offered. The <c>rejectUnknownProperties</c>
-///     constructor flag selects the validator's strictness: the app's own tools pass <c>true</c> (undeclared keys are hallucinations to
-///     reject); third-party MCP tools pass <c>false</c> so an under-declared server schema never bounces a key the tool
-///     actually needs (required/type checks still apply).
+///     model-actionable repair loop.
 /// </summary>
+/// <remarks>
+///     A failing call — or a handler that cannot parse otherwise valid-looking arguments — returns a structured repair
+///     result instead of throwing, so the function-invocation loop becomes the repair loop, and
+///     <see cref="ToolArgumentRepairScope" />'s per-request cap disables a looping tool before it burns the iteration
+///     budget. Transparent to name, description and schema. <c>rejectUnknownProperties</c> is <c>true</c> for the
+///     app's own tools and <c>false</c> for third-party MCP schemas that may under-declare their inputs.
+/// </remarks>
 internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
 {
     private static readonly Meter Meter = new(TelemetrySourceNames.Agent, "1.0.0");
@@ -70,9 +67,8 @@ internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
         }
         catch (JsonException)
         {
-            // The arguments passed structural validation but the handler could not deserialize them into the shape it
-            // needs. Surface it as a model-actionable repair (without echoing the raw payload) rather than letting the
-            // throw become an opaque framework error that counts toward the run's abort threshold.
+            // Structural validation passed but the handler could not deserialize the shape it needs: surface a
+            // model-actionable repair, without echoing the payload, rather than an opaque framework error.
             RecordRepair("handler_json");
             return RecordInvalidAndBuildResult(scope, "The tool could not parse the supplied arguments; they do not match the expected shape.");
         }

@@ -9,29 +9,19 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 ///     <c>reasoning_effort</c> body field.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The typed route is deliberate and verified against the pinned SDKs (Microsoft.Extensions.AI.Abstractions
-///         10.9.0 + Microsoft.Extensions.AI.OpenAI 10.9.0 + OpenAI 2.12.0): setting
-///         <c>ChatOptions.Reasoning.Effort</c> emits <c>"reasoning_effort":"low"|"medium"|"high"</c> on the wire, so the
-///         raw body patch the llama.cpp path needs for its non-standard fields is NOT required here. Fewer moving parts,
-///         no experimental-API suppression, and the value round-trips through MEAI's own option cloning.
-///     </para>
-///     <para>
-///         Clamping: the node's effort vocabulary has seven values, but <c>reasoning_effort</c> is only meaningfully
-///         interoperable at <c>low|medium|high</c> across OpenAI, vLLM, llama.cpp and Groq. <c>minimal</c> therefore
-///         sends <c>low</c> and <c>xhigh</c> sends <c>high</c> rather than a level a given server may reject outright.
-///         <c>none</c> and the binary <c>on</c> sentinel send NOTHING: "off" and "reason by default" are both states
-///         where a graded field would misrepresent the request — and MEAI's <c>ReasoningEffort.None</c> would put a
-///         literal <c>"none"</c> on the wire, which is not the same as omitting the field.
-///     </para>
+///     The typed route is verified against the pinned Microsoft.Extensions.AI.Abstractions 10.9.0,
+///     Microsoft.Extensions.AI.OpenAI 10.9.0 and OpenAI 2.12.0, so the raw body patch the llama.cpp path needs is NOT
+///     required. Clamping: <c>reasoning_effort</c> is only interoperable at <c>low|medium|high</c> across OpenAI,
+///     vLLM, llama.cpp and Groq, so <c>minimal</c> sends <c>low</c> and <c>xhigh</c> sends <c>high</c>, while
+///     <c>none</c> and the binary <c>on</c> sentinel send NOTHING — MEAI's <c>None</c> would put a literal on the wire.
 /// </remarks>
 internal static class ExternalReasoningEffort
 {
     /// <summary>
     ///     Returns <paramref name="options" /> with the effective reasoning effort applied, or unchanged when the model
-    ///     declares no effort support, when neither a selected nor a default effort resolves, or when the resolved
-    ///     effort is one that must send no field. The caller's instance is never mutated.
+    ///     declares no effort support, no effort resolves, or the resolved effort must send no field.
     /// </summary>
+    /// <remarks>The caller's instance is never mutated.</remarks>
     /// <param name="options">The turn's options; may be <see langword="null" />.</param>
     /// <param name="model">The registered model's declarations.</param>
     public static ChatOptions? Apply(ChatOptions? options, ExternalProviderModelDescriptor model)

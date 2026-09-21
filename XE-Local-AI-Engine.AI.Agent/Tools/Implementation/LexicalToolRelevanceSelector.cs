@@ -5,36 +5,24 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 
 /// <summary>
 ///     Deterministic, model-free <see cref="IToolRelevanceSelector" /> — the shipped default, and the fallback every
-///     other implementation degrades to. Scores each non-core candidate by token overlap between the query and
-///     <c>name + " " + description</c>, in the same shape as <c>LexicalPlaybookRetrievalRanker</c>: uppercase-normalise
-///     (CA1308-safe), split on non-alphanumeric runs, compare ordinally. Ties — including the all-zero case — break by
-///     the candidate's INDEX in the input list, so the outcome is reproducible with no dependence on a model or on
-///     external state, and CI stays deterministic without an embedding process.
-///     <para>
-///         Two corrections to that raw shape, both forced by a live round (2026-09-03), where "Convert 100 euros
-///         to dollars, then give me a stock quote" hid the ONE tool that could answer and offered four that could not:
-///         function words are dropped from both sides, so a description cannot win a slot for containing "a", "to" or
-///         "then"; and the overlap is divided by the square root of the candidate's token count, so a long description
-///         cannot win by sheer volume. The divisor is what makes the score a <see langword="double" /> rather than a
-///         count; it is computed the same way on every run, so the ordering stays bit-for-bit reproducible. Both rules
-///         live in <see cref="LexicalOverlapScoring" />, shared with the playbook ranker so the two cannot drift.
-///     </para>
-///     <para>
-///         The core set is never ranked and never trimmed, and the fill is floored at
-///         <see cref="ToolRelevanceOptions.MinimumRankedSlots" />, so a skills-heavy agent whose core alone approaches
-///         the threshold still gets a meaningful set to choose among. The offered array may therefore exceed the
-///         threshold: the threshold triggers filtering, <c>core + rankedSlots</c> caps it.
-///     </para>
+///     other implementation degrades to.
 /// </summary>
+/// <remarks>
+///     Scores each non-core candidate by token overlap between the query and <c>name + " " + description</c> through
+///     <see cref="LexicalOverlapScoring" />, shared with the playbook ranker so the two cannot drift. Ties, the
+///     all-zero case included, break by the candidate's INDEX, so the outcome needs no model and no external state. The
+///     core set is never ranked, and the fill is floored at <see cref="ToolRelevanceOptions.MinimumRankedSlots" />. See
+///     docs/wiki/04-agent-mode.md ("The lexical ranker and the `list_tools` escape hatch").
+/// </remarks>
 public sealed class LexicalToolRelevanceSelector : IToolRelevanceSelector
 {
     private readonly int _minimumRankedSlots;
 
-    /// <summary>
-    ///     Constructs the selector. <paramref name="options" /> is optional so the pipeline's defensive, re-entrant
-    ///     resolution (<c>GetService&lt;IToolRelevanceSelector&gt;() ?? new LexicalToolRelevanceSelector()</c>) can
-    ///     always fall back to the pinned defaults rather than throwing during a partial re-decoration.
-    /// </summary>
+    /// <summary>Constructs the selector.</summary>
+    /// <remarks>
+    ///     <paramref name="options" /> is optional so the pipeline's defensive, re-entrant resolution can always fall
+    ///     back to the pinned defaults rather than throwing during a partial re-decoration.
+    /// </remarks>
     public LexicalToolRelevanceSelector(IOptions<ToolRelevanceOptions>? options = null)
     {
         _minimumRankedSlots = options?.Value.MinimumRankedSlots ?? new ToolRelevanceOptions().MinimumRankedSlots;
@@ -52,9 +40,7 @@ public sealed class LexicalToolRelevanceSelector : IToolRelevanceSelector
         var queryTokens = LexicalOverlapScoring.Tokenize(query);
 
         // Fast path: at or below the threshold, or with nothing to rank WITH, the whole array is offered and the ranker
-        // is never touched — the byte-identical case. A query that is blank, and a query that is nothing but function
-        // words ("what about it, then?"), are the same case: every score would be zero and the "ranking" would be the
-        // input order, which is a worse answer than simply offering everything.
+        // is never touched. A blank query and an all-function-word query are the same case — every score is zero.
         if (candidates.Count <= threshold || queryTokens.Count == 0)
         {
             return Task.FromResult(new ToolRelevanceSelection { OfferedNames = [.. candidates.Select(static candidate => candidate.Name)], HiddenNames = [] });

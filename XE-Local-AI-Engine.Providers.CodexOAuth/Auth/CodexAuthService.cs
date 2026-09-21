@@ -237,9 +237,8 @@ public sealed class CodexAuthService : ICodexAuthService
             ["code_challenge"] = challenge,
             ["code_challenge_method"] = "S256",
             ["state"] = state,
-            // LIVE-CORRECTNESS (verified against the working opencode reference client): identify the client
-            // family on the authorize step, ask the issuer to embed the org/account id in the id_token (so the
-            // subscription path can resolve chatgpt-account-id), and opt into the simplified Codex CLI flow.
+            // LIVE-CORRECTNESS, verified against the working opencode reference client: identify the client family,
+            // ask the issuer to embed the org/account id in the id_token, and opt into the simplified Codex CLI flow.
             ["originator"] = _options.Originator,
             ["id_token_add_organizations"] = "true",
             ["codex_cli_simplified_flow"] = "true"
@@ -317,12 +316,8 @@ public sealed class CodexAuthService : ICodexAuthService
         return _timeProvider.GetUtcNow().AddMinutes(50);
     }
 
-    // SECURITY: the JWT payload is base64url-decoded WITHOUT verifying the token signature. This is
-    // intentional and safe here: the access token is received over TLS directly from the OpenAI token endpoint,
-    // and the decoded claims (chatgpt_account_id, exp) are used ONLY as advisory metadata — the account id becomes
-    // a request header and the expiry drives proactive refresh. NEITHER is ever used as an authorization input or
-    // a trust decision on THIS node, so no signature validation is required. Do not repurpose these claims for
-    // access control without first verifying the signature against OpenAI's JWKS.
+    // SECURITY: decoded WITHOUT verifying the signature, which is safe only because the token arrives over TLS from the
+    // OpenAI endpoint and its claims are advisory metadata. Do not repurpose them for access control without JWKS.
     private static JsonElement DecodeJwtPayload(string jwt)
     {
         var segments = jwt.Split('.');

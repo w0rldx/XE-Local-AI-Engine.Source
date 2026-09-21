@@ -35,11 +35,13 @@ public sealed class CodexLoginStatus
 }
 
 /// <summary>
-///     Owns the pending-login lifecycle so the Operator endpoints can start a loopback PKCE login, return the
-///     authorize URL immediately, and poll status until it completes. A second <see cref="Start" />
-///     <em>supersedes</em> any in-flight login: the prior attempt is cancelled and its loopback listener freed,
-///     so the new login can re-bind the callback port. Never logs token material.
+///     Owns the pending-login lifecycle, so the Operator endpoints can start a loopback PKCE login, return the
+///     authorize URL immediately, and poll status until it completes. Never logs token material.
 /// </summary>
+/// <remarks>
+///     A second <see cref="Start" /> <em>supersedes</em> any in-flight login: the prior attempt is cancelled and its
+///     loopback listener freed, so the new login can re-bind the callback port.
+/// </remarks>
 public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
 {
     private readonly Lazy<ICodexAuthService> _authService;
@@ -55,11 +57,11 @@ public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
     ///     is built only on first <see cref="Start" />, not when this singleton is constructed. This keeps endpoint
     ///     instantiation at host startup from eagerly materializing the auth HttpClient.
     /// </summary>
-    /// <param name="onLoginSucceeded">
-    ///     Optional callback invoked once a login completes and a session is persisted (the background exchange's
-    ///     success path). The host wires this to invalidate the active-cloud selection snapshot so a sign-in takes
-    ///     effect on the very next send — the provider layer stays decoupled from the Application-layer selector.
-    /// </param>
+    /// <remarks>
+    ///     <paramref name="onLoginSucceeded" /> is a bare <see cref="Action" /> so the provider layer stays decoupled
+    ///     from the Application-layer selector the host wires it to.
+    /// </remarks>
+    /// <param name="onLoginSucceeded">Invoked once a login completes and a session is persisted; the host invalidates its cloud-selection snapshot.</param>
     public CodexLoginCoordinator(Lazy<ICodexAuthService> authService,
         ILogger<CodexLoginCoordinator> logger,
         Action? onLoginSucceeded = null)

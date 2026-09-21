@@ -6,28 +6,15 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
-///     Default <see cref="ITrainingRuntimeService" />. Orchestrates a single-flight, cancellable, background provision
-///     of the uv-managed Python training runtime and adopts the result. Modelled on
-///     <c>LlamaCppSourceBuildService</c>: a serialized start transaction, a detached worker, a bounded log ring streamed
-///     to a hub, and a staged→atomic adopt that parks the previous runtime in a backup so a failed re-provision never
-///     loses a working one.
+///     Default <see cref="ITrainingRuntimeService" />: a single-flight, cancellable, background provision of the
+///     uv-managed Python training runtime, which then adopts the result.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Every subprocess runs under a scrubbed, allow-listed environment in an owner-only (0700) work directory
-///         inside the cache root — never <c>/tmp</c>. The install is strictly lockfile-driven (<c>uv sync --locked</c>):
-///         if the committed <c>uv.lock</c> does not match <c>pyproject.toml</c>, uv fails rather than resolving
-///         something new, which is the whole point of ADR 0005's "no floating resolves".
-///     </para>
-///     <para>
-///         <strong>The adopt is one rollback boundary spanning the directory swap AND the state write</strong>, and the
-///         backup is deleted only once both have succeeded. Splitting them loses a working runtime: a cancellation
-///         between the swap and the write leaves the new venv active and the previous one parked in a backup that the
-///         next install's <see cref="Recover" /> deletes as garbage. For the same reason, a failure that leaves a
-///         previous runtime intact terminalizes as <see cref="TrainingRuntimePhase.Ready" /> carrying the failure as the
-///         sanitized error — <c>Failed</c> is what the training and export gates read, so reporting it would retire a
-///         runtime that still works.
-///     </para>
+///     Modelled on <c>LlamaCppSourceBuildService</c> — serialized start transaction, detached worker, bounded log ring
+///     streamed to a hub, and a staged-then-atomic adopt that parks the previous runtime in a backup. Every subprocess
+///     runs under a scrubbed, allow-listed environment in an owner-only (0700) work directory inside the cache root,
+///     never <c>/tmp</c>, and the install is strictly lockfile-driven, which is ADR 0005's "no floating resolves". See
+///     docs/wiki/18-training.md ("The Python runtime (uv, pinned, machine-global)").
 /// </remarks>
 public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposable
 {
@@ -315,11 +302,12 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         await FlushPublisherAsync().WaitAsync(ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    ///     Drops leftovers from an interrupted install. A <c>.staging</c> venv is by definition unadopted, and the work
-    ///     tree holds nothing durable, so both are removed unconditionally; a <c>.backup</c> present without an
-    ///     <c>active</c> means the swap died between the two moves, so the backup is restored rather than discarded.
-    /// </summary>
+    /// <summary>Drops leftovers from an interrupted install.</summary>
+    /// <remarks>
+    ///     A <c>.staging</c> venv is by definition unadopted and the work tree holds nothing durable, so both go
+    ///     unconditionally; a <c>.backup</c> present without an <c>active</c> means the swap died between the two
+    ///     moves, so that backup is restored rather than discarded.
+    /// </remarks>
     internal void Recover()
     {
         TryDeleteDirectory(WorkDirectory);
@@ -370,9 +358,8 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             SetPhase(TrainingRuntimePhase.AcquiringUv);
             var uv = await _acquirer.EnsureUvAsync(_cacheRoot, AppendLog, ct).ConfigureAwait(false);
 
-            // 2. Stage the project files. uv resolves the environment beside the pyproject it is pointed at, so the
-            //    committed pair is copied into staging rather than the shipped (read-only) scripts directory being used
-            //    as a working tree.
+            // 2. Stage the project files: uv resolves beside the pyproject it is pointed at, so the committed pair is
+            //    copied into staging rather than using the shipped read-only scripts directory as a working tree.
             SetPhase(TrainingRuntimePhase.ProvisioningPython);
             CreateOwnerOnlyDirectory(TrainingRuntimeLayout.VenvRoot(_cacheRoot));
             CreateOwnerOnlyDirectory(staging);
@@ -397,9 +384,8 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             SetPhase(TrainingRuntimePhase.Verifying);
             var probeReport = await RunProbeAsync(staging, ct).ConfigureAwait(false);
 
-            // 5. Adopt. The rollback boundary covers the directory swap AND the state write, because the two together
-            //    are what makes a runtime adopted: a failure between them leaves the new venv active, the previous one
-            //    parked in a backup the next Recover() deletes, and a state record describing neither.
+            // 5. Adopt. ONE rollback boundary covers the directory swap AND the state write, because together they are
+            //    what makes a runtime adopted; the backup is deleted only once both have succeeded.
             var previousState = ReadInstalledState();
             var hadPrevious = Directory.Exists(active);
             var parked = false;
@@ -462,12 +448,14 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
 
     /// <summary>
     ///     Undoes as much of the adopt as actually happened, in reverse: drop the staging tree, drop the half-adopted
-    ///     new runtime, restore the parked previous one, and put its state record back. The state restore is
-    ///     unconditional once the swap succeeded because <see cref="InstalledTrainingRuntimeStore.WriteAsync" /> is
-    ///     atomic (temp file + move) and there is no way to tell a write that never landed from one that did.
-    ///     Best-effort throughout: the caller rethrows the original failure, and a backup left behind by a failed
-    ///     restore is picked up by <see cref="Recover" /> on the next install.
+    ///     new runtime, restore the parked previous one, and put its state record back.
     /// </summary>
+    /// <remarks>
+    ///     The state restore is unconditional once the swap succeeded, because
+    ///     <see cref="InstalledTrainingRuntimeStore.WriteAsync" /> is atomic and there is no way to tell a write that
+    ///     never landed from one that did. Best-effort throughout: the caller rethrows the original failure, and a
+    ///     backup left by a failed restore is picked up by <see cref="Recover" /> on the next install.
+    /// </remarks>
     private async Task RollbackAdoptAsync(bool parked,
         bool swapped,
         InstalledTrainingRuntimeState? previousState,
@@ -509,12 +497,13 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         }
     }
 
-    /// <summary>
-    ///     Terminalizes a failed install. A reprovision that left the previous runtime intact ends <c>Ready</c> with the
-    ///     failure carried in the sanitized error: training and export gate on <see cref="TrainingRuntimePhase.Ready" />,
-    ///     so reporting <c>Failed</c> there would take a perfectly good runtime out of service until some later install
-    ///     happened to succeed. Only a failure with no surviving runtime ends <c>Failed</c>.
-    /// </summary>
+    /// <summary>Terminalizes a failed install.</summary>
+    /// <remarks>
+    ///     A reprovision that left the previous runtime intact ends <c>Ready</c> with the failure carried in the
+    ///     sanitized error, because training and export gate on <see cref="TrainingRuntimePhase.Ready" /> and reporting
+    ///     <c>Failed</c> would take a working runtime out of service until some later install happened to succeed. Only
+    ///     a failure with no surviving runtime ends <c>Failed</c>.
+    /// </remarks>
     private async Task TerminalizeFailureAsync(string sanitizedError)
     {
         var surviving = ReadInstalledState();

@@ -88,9 +88,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
         catch (OllamaException exception)
         {
             // OllamaSharp parses HTTP 400 into OllamaException; every other status, and an unreachable daemon, stays an
-            // HttpRequestException, which the ILocalModelProvider consumers catch by name and must keep seeing. Only
-            // the SDK-typed shape is translated, which is exactly the coverage those catch filters had before the SDK
-            // was confined to this project.
+            // HttpRequestException the ILocalModelProvider consumers catch by name. Only the SDK shape is translated.
             throw new OllamaUnavailableException("The Ollama daemon could not serve the model listing.", exception);
         }
 
@@ -170,9 +168,8 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
             Stream = false
         };
 
-        // Fully enumerate the (single, non-stream) response so the request is actually dispatched — GenerateAsync is a
-        // streaming method and sends no HTTP call until the enumerator is drained. Mirrors OllamaModelUnloader, which
-        // uses the same request shape with keep_alive=0 for the inverse (eviction) side effect.
+        // Fully enumerate the single non-stream response so the request is dispatched: GenerateAsync is a streaming
+        // method and sends no HTTP call until drained. OllamaModelUnloader uses the same shape for the inverse effect.
         await foreach (var chunk in _ollamaClient.GenerateAsync(request, ct).ConfigureAwait(false))
         {
             _ = chunk;
@@ -211,6 +208,13 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     The generator is minted over the shared hardened transport and given a metadata-only gen_ai span under the
+    ///     source name the agent pipeline pins, because MEAI's own default is never exported by the ServiceDefaults
+    ///     wildcard. <c>EnableSensitiveData</c> is hard-coded false and deliberately does NOT read
+    ///     <c>AgentTelemetryOptions</c> — embeddings carry conversation, memory and knowledge-base text this node keeps
+    ///     on-box — which also beats the ambient capture variable Aspire injects as true.
+    /// </remarks>
     public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);
@@ -229,18 +233,8 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
             throw new ArgumentException($"Provider selection '{selection.ProviderName}' does not match '{ProviderName}'.", nameof(selection));
         }
 
-        // Mint over the shared hardened transport (see CreateChatClient) so embedding calls fail fast against an absent
-        // daemon instead of hanging on the default connect timeout.
-        // Metadata-only gen_ai span (model id, input/token counts, latency, dimension count) on every embedding call.
-        // The source name is pinned to the one the agent DI pipeline uses: MEAI's own default
-        // ("Experimental.Microsoft.Extensions.AI") does NOT match the ServiceDefaults wildcard
-        // AddSource("Microsoft.Extensions.AI*"), so a span emitted under it is never exported. EnableSensitiveData is
-        // hard-coded false and deliberately does not read AgentTelemetryOptions.CaptureSensitiveContent: embeddings
-        // carry conversation, memory and knowledge-base text that this node keeps on-box, and the operator's
-        // interactive-pipeline opt-in must never widen to it. Setting it explicitly also beats the ambient
-        // OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT, which Aspire injects as true.
-        // The translating decorator sits outermost so an OllamaSharp transport failure never escapes this project:
-        // callers catch OllamaUnavailableException, not the SDK's own exception type.
+        // The translating decorator sits OUTERMOST, so callers catch OllamaUnavailableException and never the SDK's
+        // own exception type. Telemetry and transport rationale: see this member's remarks.
 #pragma warning disable CA2000 // Ownership of the minted client transfers to the returned generator, which disposes it with itself.
         var instrumentedGenerator = _clientFactory.CreateClient(selection.ModelName)
                                                   .AsBuilder<string, Embedding<float>>()

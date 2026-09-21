@@ -5,18 +5,19 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     Per-request state that tracks how many consecutive invalid-argument calls each tool has made so a looping model
-///     can be cut off before it exhausts the iteration budget. State is scoped to a single agent request, never global:
-///     in production it is anchored to the function-invocation run's shared <see cref="ChatMessage" /> list (the same
-///     instance the framework threads through every tool call of one request), so two concurrent requests get two
-///     independent scopes and the entry is reclaimed by GC when the request's message list is. A test-only
-///     <see cref="BeginScope" /> override lets the cap be exercised without driving a full chat pipeline.
+///     Per-request state tracking how many consecutive invalid-argument calls each tool has made, so a looping model
+///     can be cut off before it exhausts the iteration budget.
 /// </summary>
+/// <remarks>
+///     Scoped to a single agent request, never global: in production it is anchored to the function-invocation run's
+///     shared <see cref="ChatMessage" /> list, the instance the framework threads through every tool call of one
+///     request, so two concurrent requests get two independent scopes and the entry is reclaimed by GC with the message
+///     list. A test-only <see cref="BeginScope" /> override exercises the cap without a full chat pipeline.
+/// </remarks>
 internal sealed class ToolArgumentRepairScope
 {
-    // Keyed on the run's shared message-list instance. The framework builds one FunctionInvocationContext per tool call
-    // but they all reference the same working-message list for the request, so it is a stable per-request anchor. Weak
-    // keys mean a completed request's scope is collected with its messages — no manual cleanup, no leak.
+    // Keyed on the run's shared message-list instance: the framework builds one context per tool call but they all
+    // reference one working list, and weak keys collect a completed request's scope with its messages.
     private static readonly ConditionalWeakTable<IList<ChatMessage>, ToolArgumentRepairScope> RunScopes = new();
     private static readonly AsyncLocal<ToolArgumentRepairScope?> ScopeOverride = new();
 
@@ -24,10 +25,10 @@ internal sealed class ToolArgumentRepairScope
     private readonly ConcurrentDictionary<string, byte> _disabled = new(StringComparer.Ordinal);
 
     /// <summary>
-    ///     The scope for the in-flight request, or <see langword="null" /> when the caller is not inside a
-    ///     function-invocation run (in which case the per-tool cap is simply not enforced — validation and repair still
-    ///     apply). Prefers an explicit <see cref="BeginScope" /> override when one is active on the current async flow.
+    ///     The scope for the in-flight request, or <see langword="null" /> outside a function-invocation run, where the
+    ///     per-tool cap is simply not enforced and validation and repair still apply.
     /// </summary>
+    /// <remarks>Prefers an explicit <see cref="BeginScope" /> override when one is active on the current async flow.</remarks>
     public static ToolArgumentRepairScope? Current
     {
         get
@@ -44,9 +45,12 @@ internal sealed class ToolArgumentRepairScope
 
     /// <summary>
     ///     Establishes an explicit scope for the current async flow, overriding the framework-anchored resolution until
-    ///     the returned handle is disposed. Intended for tests and any caller that drives tool invocations outside the
-    ///     function-invocation pipeline; production relies on the framework anchor instead.
+    ///     the returned handle is disposed.
     /// </summary>
+    /// <remarks>
+    ///     Intended for tests and any caller driving tool invocations outside the function-invocation pipeline;
+    ///     production relies on the framework anchor instead.
+    /// </remarks>
     public static IDisposable BeginScope()
     {
         ScopeOverride.Value = new ToolArgumentRepairScope();

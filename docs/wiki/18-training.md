@@ -73,6 +73,44 @@ Operator (React /training, /training/datasets, /training/comparisons)
 
 **The shipped manifest is `tools/training/pyproject.toml` + `uv.lock` and nothing else.** The app copies exactly those two files into staging and runs `uv sync --locked` (no `--no-dev`), so a dev dependency group added there would install linters into every user's training venv. Repo-wide Python tooling lives in the **root** `pyproject.toml` instead (see §7).
 
+### The scrubbed environments, and the uv pipeline the compute tool shares
+
+`TrainingRuntimeEnvironment` builds the environments every training subprocess runs under, as an **allow-list**:
+only `PATH`, `LANG`, `LC_ALL`, `CUDA_HOME` and `CUDA_PATH` pass through. Everything else — `LD_PRELOAD`,
+`LD_LIBRARY_PATH`, proxy and credential variables, every node secret — is dropped by construction, and
+`LinuxTrainingProcessRunner` clears the inherited environment before applying the result.
+
+- **The uv environment** points uv at an isolated `HOME`/`TMPDIR` and at cache and interpreter directories
+  under the training cache root, so an install neither reads the operator's `~/.config/uv` — which could
+  redirect an index — nor scatters gigabytes into the user's home.
+- **The train environment** redirects every default cache this stack writes to (`~/.cache/huggingface`,
+  `/tmp/torchinductor_<user>`, a CWD-relative `unsloth_compiled_cache`), none of which is writable or wanted
+  under a scrubbed environment. The split is deliberate: run-scoped state — `HOME`, `TMPDIR`, the HF cache —
+  lives under the run's work directory and dies with its `work/` sweep, while compiled Triton and Inductor
+  kernels live under the machine-global cache root so the second run on a box does not pay the compile cost
+  again. The three **offline flags are what actually guarantee no network call**, because several
+  `huggingface_hub` paths inside unsloth never thread `local_files_only` through.
+- **The export environment** is the train environment plus the vendored `gguf-py` on `PYTHONPATH`, because the
+  conversion scripts resolve that package relative to the llama.cpp repository they normally live in, which
+  the provisioned script tree deliberately is not.
+
+Three of these types are **public on purpose, and are not training-specific**. `UvBinaryAcquirer` is the shared
+uv acquisition for every uv-managed venv the engine provisions — the sandboxed compute tool provisions its own
+numpy/scipy/sympy closure through the same pipeline under its own cache root, and the caller supplies the
+cache root — so a second digest-pinned downloader would duplicate this one rather than add a capability. Its
+pipeline is download → SHA-256 verify → atomic extract into a version-keyed directory, mirroring
+`LlamaCppBinaryManager`, including the extract-to-sibling-then-move step that stops a partial extract
+masquerading as a warm cache. The digest is checked **before** anything is unpacked, never after, so an
+archive that fails verification is never written where a later step could find it, and a cache hit
+short-circuits the whole thing so a re-install performs no network I/O. `ITrainingProcessRunner` is public for
+the same reason: every uv-managed venv runs its `uv sync` through that one scrubbed, tree-killed spawn. So is
+`TrainingRuntimeEnvironment.BuildUvEnvironment`, which is the environment any uv install must run under.
+
+`TrainingRuntimeException` carries a message that is user-safe **by contract**: every construction site
+phrases it for an operator and names no path, URL, token or environment value. The phase machine surfaces
+these verbatim as the sanitized error and collapses every other exception to a generic reason, so widening
+that guarantee silently widens what leaks to the UI.
+
 ---
 
 ## 2. Dataset generation

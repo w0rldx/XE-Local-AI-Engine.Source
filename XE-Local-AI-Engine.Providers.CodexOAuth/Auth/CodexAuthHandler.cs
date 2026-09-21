@@ -10,24 +10,14 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 
 /// <summary>
-///     <see cref="DelegatingHandler" /> that owns Codex auth on the SSE Responses path:
-///     <list type="number">
-///         <item>
-///             Strips any <c>Authorization</c> the OpenAI SDK added from its dummy "unused" key, so it never
-///             reaches the wire.
-///         </item>
-///         <item>
-///             Injects the Codex header contract for the SSE path: real bearer <c>Authorization</c>,
-///             <c>chatgpt-account-id</c>, <c>originator</c>, <c>User-Agent</c> — and NOT the WebSocket-only
-///             <c>OpenAI-Beta</c>.
-///         </item>
-///         <item>
-///             On <c>401</c>, performs a single-flight refresh (one gate; concurrent 401s await the same refresh
-///             with double-checked expiry) and retries the request exactly once.
-///         </item>
-///     </list>
-///     Never logs token values, authorization headers, or the dummy key.
+///     <see cref="DelegatingHandler" /> that owns Codex auth on the SSE Responses path: it strips the SDK's dummy
+///     <c>Authorization</c>, injects the real Codex header contract, and single-flight-refreshes on a 401.
 /// </summary>
+/// <remarks>
+///     Concurrent 401s await the same refresh under one gate with a double-checked expiry, and the request is retried
+///     exactly once. Never logs token values, authorization headers or the dummy key. See
+///     docs/wiki/12-security-and-privacy.md ("Codex OAuth: token storage, refresh and redaction").
+/// </remarks>
 public sealed class CodexAuthHandler : DelegatingHandler
 {
     private const string BearerScheme = "Bearer";
@@ -80,9 +70,8 @@ public sealed class CodexAuthHandler : DelegatingHandler
             return response;
         }
 
-        // Single retry after a single-flight refresh. The original request was already sent — an
-        // HttpRequestMessage cannot be resent (its content stream is consumed / it is marked used), so the retry
-        // MUST go on a fresh CLONE of the request, not the original.
+        // Single retry after a single-flight refresh. An HttpRequestMessage cannot be resent once its content stream
+        // is consumed, so the retry MUST go on a fresh CLONE of the request, not the original.
         response.Dispose();
         var refreshed = await GetValidTokensAsync(forceRefresh: true, cancellationToken).ConfigureAwait(false);
 
@@ -94,20 +83,15 @@ public sealed class CodexAuthHandler : DelegatingHandler
     }
 
     /// <summary>
-    ///     DIAGNOSTIC: on a non-success response from the Codex backend, log the error body so the node host log shows
-    ///     the exact reason the call was rejected (e.g. <c>{"error":{"message","type","param":"model"}}</c>). The body
-    ///     is buffered with <see cref="HttpContent.LoadIntoBufferAsync()" /> first, so reading it here does NOT consume
-    ///     the content for the OpenAI SDK — only a bounded prefix is read from the buffered (seekable) stream and the
-    ///     stream is rewound afterwards, so the SDK still surfaces the same error to the caller. This is gated to
-    ///     failure statuses ONLY: a success response carries the live SSE stream and must NOT be read here.
-    ///     <para>
-    ///         Bounded + sanitized: at most <see cref="MaxLoggedBodyBytes" /> bytes are logged (with the total body
-    ///         length reported separately), and the excerpt is stripped of control characters so a server-controlled
-    ///         body cannot forge log lines. The response body is the server's error JSON and never echoes request auth
-    ///         headers, so logging it does not leak the bearer token / account id. Only the body excerpt and the status
-    ///         are logged — request headers are never touched.
-    ///     </para>
+    ///     DIAGNOSTIC: on a non-success response from the Codex backend, logs a bounded, sanitized excerpt of the error
+    ///     body so the node host log shows the exact reason the call was rejected.
     /// </summary>
+    /// <remarks>
+    ///     Gated to failure statuses ONLY — a success response carries the live SSE stream and must NOT be read here.
+    ///     The body is buffered with <see cref="HttpContent.LoadIntoBufferAsync()" /> first, so reading a bounded prefix
+    ///     from the seekable stream and rewinding leaves the SDK surfacing the same error. See
+    ///     docs/wiki/12-security-and-privacy.md ("Codex OAuth: token storage, refresh and redaction").
+    /// </remarks>
     private async Task LogFailureBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode || response.Content is null)
@@ -214,9 +198,8 @@ public sealed class CodexAuthHandler : DelegatingHandler
         RegexOptions.Compiled | RegexOptions.CultureInvariant,
         RedactTimeout);
 
-    // Masks secrets the server may echo back into an error body (user emails, leaked bearer/JWT/key material) before it
-    // reaches the log. Applied after control-char sanitization; a pathological body that stalls a pattern is dropped
-    // wholesale rather than logged unredacted.
+    // Masks secrets the server may echo into an error body — emails, leaked bearer/JWT/key material — after control-char
+    // sanitization. A pathological body that stalls a pattern is dropped wholesale rather than logged unredacted.
     private static string RedactSensitive(string value)
     {
         if (string.IsNullOrEmpty(value))
@@ -238,10 +221,12 @@ public sealed class CodexAuthHandler : DelegatingHandler
 
     /// <summary>
     ///     Builds a fresh, unsent copy of <paramref name="request" /> for the 401 retry: method, URI, version, options,
-    ///     content (buffered so it can be re-read), and content headers. Request headers are re-applied by
-    ///     <see cref="ApplyHeaders" /> after cloning. A sent <see cref="HttpRequestMessage" /> cannot be reused, so the
-    ///     retry requires this clone.
+    ///     buffered re-readable content, and content headers.
     /// </summary>
+    /// <remarks>
+    ///     Request headers are re-applied by <see cref="ApplyHeaders" /> after cloning. A sent
+    ///     <see cref="HttpRequestMessage" /> cannot be reused, so the retry requires this clone.
+    /// </remarks>
     private static async Task<HttpRequestMessage> CloneRequestAsync(HttpRequestMessage request,
         CancellationToken cancellationToken)
     {

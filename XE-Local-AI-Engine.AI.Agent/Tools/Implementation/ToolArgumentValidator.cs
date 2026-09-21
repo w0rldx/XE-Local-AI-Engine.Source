@@ -20,27 +20,28 @@ internal readonly record struct ToolArgumentValidation(bool IsValid, bool WasCoe
 
 /// <summary>
 ///     Applies tolerant coercion and then structural validation to the arguments a model supplied for a tool call,
-///     using the tool's own model-visible JSON schema. Coercion first fixes the mistakes small local models make most
-///     often — a number sent as a string, a boolean sent as <c>"true"</c>/<c>"false"</c>, or a lone value where an array
-///     is expected — by rewriting the argument in place so a well-intentioned call is not bounced on a formatting nit.
-///     Validation then checks the request is answerable at all: required properties present, declared property types
-///     roughly matched, and — for the app's own tools — no unknown properties the schema does not describe. The check is
-///     deliberately permissive where the schema is loose (no declared properties, or <c>additionalProperties</c>
-///     allowed) so it never rejects a call a correct handler would have accepted; the undeclared-property check is
-///     opt-out (see the <c>rejectUnknownProperties</c> switch) so a third-party MCP tool with an under-declared schema
-///     is never bounced on a key it actually needs.
+///     using the tool's own model-visible JSON schema.
 /// </summary>
+/// <remarks>
+///     Coercion first fixes what small local models get wrong most often — a number sent as a string, a boolean sent as
+///     text, a lone value where an array is expected — rewriting in place so a well-intentioned call is not bounced on
+///     a formatting nit. Validation then checks the request is answerable: required properties present, declared types
+///     roughly matched, and, for the app's own tools, no undeclared properties. It stays permissive where the schema is
+///     loose, so it never rejects a call a correct handler would have accepted.
+/// </remarks>
 internal static class ToolArgumentValidator
 {
     /// <summary>
     ///     Coerces common small-model argument mistakes in <paramref name="arguments" /> in place, then validates the
-    ///     (post-coercion) arguments against <paramref name="schema" />. Returns the first structural problem found, or
-    ///     <see cref="ToolArgumentValidation.Valid" /> when the arguments are acceptable. When
-    ///     <paramref name="rejectUnknownProperties" /> is false the undeclared-property check is skipped (extra keys pass
-    ///     through) — used for third-party MCP tools whose published schemas may under-declare their inputs; the required
-    ///     and type checks still apply. When true (the app's own tools, whose schemas fully enumerate their inputs) an
-    ///     undeclared key is treated as a hallucinated property and rejected.
+    ///     post-coercion arguments against <paramref name="schema" />.
     /// </summary>
+    /// <remarks>
+    ///     Returns the first structural problem found, or <see cref="ToolArgumentValidation.Valid" />. With
+    ///     <paramref name="rejectUnknownProperties" /> false the undeclared-property check is skipped and extra keys
+    ///     pass through — for third-party MCP tools whose published schemas may under-declare their inputs — while the
+    ///     required and type checks still apply. With it true, for the app's own tools whose schemas fully enumerate
+    ///     their inputs, an undeclared key is treated as a hallucinated property and rejected.
+    /// </remarks>
     public static ToolArgumentValidation CoerceAndValidate(JsonElement schema,
         IDictionary<string, object?> arguments,
         bool rejectUnknownProperties = true)
@@ -222,10 +223,8 @@ internal static class ToolArgumentValidator
     {
         reason = string.Empty;
 
-        // Reached only when the caller opted into strict validation (the app's own tools, whose schemas fully enumerate
-        // their inputs). Honor an explicit opt-in to extra properties; otherwise an argument the schema does not describe
-        // is treated as a hallucinated key and rejected so the model gets told to drop it. (Stricter than JSON Schema's
-        // additionalProperties-defaults-true.)
+        // Reached only under strict validation. An explicit opt-in to extra properties is honored; otherwise an
+        // undescribed argument is a hallucinated key and is rejected — stricter than JSON Schema's own default.
         if (schema.TryGetProperty("additionalProperties", out var additional)
             && additional.ValueKind is JsonValueKind.True or JsonValueKind.Object)
         {

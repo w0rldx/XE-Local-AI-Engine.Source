@@ -7,10 +7,13 @@ using System.Threading.Channels;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
-///     A running trainer. Signals target the process GROUP so the dataloader workers and compile subprocesses the
-///     trainer forked die with it; <see cref="RequestStop" /> stops at SIGTERM because <c>train.py</c> handles it
-///     cooperatively and a SIGKILL there would turn every operator cancel into a failure.
+///     A running trainer. Signals target the process GROUP, so the dataloader workers and compile subprocesses the
+///     trainer forked die with it.
 /// </summary>
+/// <remarks>
+///     <see cref="RequestStop" /> stops at SIGTERM because <c>train.py</c> handles it cooperatively, and a SIGKILL
+///     there would turn every operator cancel into a failure.
+/// </remarks>
 [SupportedOSPlatform("linux")]
 internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandle
 {

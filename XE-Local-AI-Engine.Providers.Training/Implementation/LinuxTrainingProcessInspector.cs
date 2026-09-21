@@ -9,11 +9,12 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 [StructLayout(LayoutKind.Auto)]
 internal readonly record struct TrainingProcessStat(int Pgid, long StartTicks);
 
-/// <summary>
-///     Reads trainer-process identity out of <c>/proc</c> and signals process groups. The receipt-validation half of the
-///     <c>SandboxOrphanReaper</c> model: identity is proven from several independent fields before anything is
-///     signalled, never from an executable-path match alone the way <c>StaleLlamaServerReaper</c> does it.
-/// </summary>
+/// <summary>Reads trainer-process identity out of <c>/proc</c> and signals process groups.</summary>
+/// <remarks>
+///     The receipt-validation half of the <c>SandboxOrphanReaper</c> model: identity is proven from several
+///     independent fields before anything is signalled, never from an executable-path match alone the way
+///     <c>StaleLlamaServerReaper</c> does it.
+/// </remarks>
 internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessInspector
 {
     /// <summary>The variable the run token travels to the child in, and is read back from, in <c>/proc/[pid]/environ</c>.</summary>
@@ -88,9 +89,8 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
             return null;
         }
 
-        // Field 2 (comm) is parenthesized and may itself contain spaces and parentheses, so everything after it is
-        // located from the LAST ')'. The remaining tokens start at field 3 (state), putting pgrp (field 5) at index 2
-        // and starttime (field 22) at index 19.
+        // Field 2 (comm) is parenthesized and may contain spaces and parentheses, so the rest is located from the LAST
+        // ')'. Tokens then start at field 3 (state), putting pgrp at index 2 and starttime at index 19.
         var commEnd = raw.LastIndexOf(')');
         if (commEnd < 0 || commEnd + 2 >= raw.Length)
         {

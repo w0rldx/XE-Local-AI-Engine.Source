@@ -11,23 +11,11 @@ using StreamingChatCompletionUpdate = OpenAI.Chat.StreamingChatCompletionUpdate;
 ///     understand — and does NOTHING when it does.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Three shapes exist in the wild. <c>reasoning_content</c> (llama.cpp / DeepSeek) is already mapped to
-///         <see cref="TextReasoningContent" /> by the pinned Microsoft.Extensions.AI.OpenAI 10.9.0 adapter, streaming
-///         and non-streaming alike — verified against the real adapter — so this client passes it straight through and
-///         must never re-derive it, or the same thinking would surface twice.
-///     </para>
-///     <para>
-///         The two it does handle: (a) newer vLLM builds send a bare <c>reasoning</c> field, which the adapter drops
-///         because the typed OpenAI schema has no such property — it is recovered from the SDK model's JSON patch,
-///         where the raw payload survives deserialization; and (b) servers that inline the thinking as leading
-///         <c>&lt;think&gt;…&lt;/think&gt;</c> text, handled by <see cref="ThinkTagReasoningSplitter" />.
-///     </para>
-///     <para>
-///         Both fallbacks are gated on having seen NO reasoning content yet: once a response has produced reasoning
-///         through any channel, its content is left completely alone. That keeps the common (already-correct) path
-///         byte-identical and makes a double conversion impossible.
-///     </para>
+///     Three shapes exist in the wild. <c>reasoning_content</c> (llama.cpp, DeepSeek) is already mapped to
+///     <see cref="TextReasoningContent" /> by the pinned Microsoft.Extensions.AI.OpenAI 10.9.0 adapter, verified
+///     against the real adapter, so it passes through and must never be re-derived. Handled here: a bare
+///     <c>reasoning</c> field newer vLLM builds send, which the typed schema drops and the SDK's JSON patch preserves;
+///     and inline leading <c>&lt;think&gt;</c> text. Both are gated on having seen NO reasoning content yet.
 /// </remarks>
 internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClient
 {
@@ -75,11 +63,8 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
     {
         var splitter = new ThinkTagReasoningSplitter();
 
-        // Two distinct flags, and the distinction is load-bearing. `sawAdapterReasoning` gates only the raw-payload
-        // recovery: once the adapter has mapped a reasoning field itself, reading the raw one too would double it.
-        // `sawAnyReasoning` gates the <think> fallback, which is the last resort for a server that surfaced no reasoning
-        // channel at all. Collapsing them into one flag silently drops every reasoning delta after the first, because a
-        // server streams `reasoning` in as many pieces as it streams content.
+        // Two distinct flags, load-bearing: sawAdapterReasoning gates the raw-payload recovery, sawAnyReasoning gates
+        // the <think> fallback. Collapsing them drops every reasoning delta after the first, since reasoning streams.
         var sawAdapterReasoning = false;
         var sawAnyReasoning = false;
         ChatResponseUpdate? lastUpdate = null;
@@ -134,11 +119,11 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
         };
     }
 
-    /// <summary>
-    ///     Rewrites a completed message's contents ONLY when a leading think block was actually found. Leaving the
-    ///     original content items in place otherwise matters: rebuilding them would drop anything the adapter attached
-    ///     to a <see cref="TextContent" /> for a response that never needed rewriting at all.
-    /// </summary>
+    /// <summary>Rewrites a completed message's contents ONLY when a leading think block was actually found.</summary>
+    /// <remarks>
+    ///     Leaving the original content items in place otherwise matters: rebuilding them would drop anything the
+    ///     adapter attached to a <see cref="TextContent" /> for a response that never needed rewriting at all.
+    /// </remarks>
     private static void RewriteInlineThinking(IList<AIContent> contents)
     {
         var splitter = new ThinkTagReasoningSplitter();
@@ -185,9 +170,8 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
             return null;
         }
 
-        // SCME0001: the SDK model's JsonPatch is [Experimental]. It is the only place a server's unmapped fields survive
-        // deserialization, and reading it is strictly additive — the same scoped-suppression pattern the outbound
-        // request-body patch uses. Suppression is scoped to the single call.
+        // SCME0001: the SDK model's JsonPatch is [Experimental], but it is the only place a server's unmapped fields
+        // survive deserialization and reading it is strictly additive, so the suppression is scoped to this one call.
 #pragma warning disable SCME0001
         return completion.Patch.TryGetJson(NonStreamingReasoningPath, out var raw) ? ReadJsonString(raw) : null;
 #pragma warning restore SCME0001

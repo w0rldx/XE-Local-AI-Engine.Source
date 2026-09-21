@@ -6,13 +6,14 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 
 /// <summary>
-///     Microsoft Agent Framework (MAF) implementation of <see cref="IPlaybookEvalAgentRunner" />. Builds a
-///     <see cref="ChatClientAgent" /> over the supplied (node-local) chat client with an empty tool set and runs
-///     it threadless — mirroring the verified worker loop's prompt assembly
-///     (<c>InvocationAgentFactory.BuildSeedMessages</c>): the agent carries NO instructions and the system
-///     instructions are delivered exactly once as the leading <see cref="ChatRole.System" /> seed message, so the
-///     eval reproduces the real loop's outbound prompt.
+///     Microsoft Agent Framework (MAF) implementation of <see cref="IPlaybookEvalAgentRunner" />: a
+///     <see cref="ChatClientAgent" /> over the supplied node-local chat client, empty tool set, run threadless.
 /// </summary>
+/// <remarks>
+///     Mirrors the verified worker loop's prompt assembly (<c>InvocationAgentFactory.BuildSeedMessages</c>) — the
+///     agent carries NO instructions, and the system instructions are delivered exactly once as the leading
+///     <see cref="ChatRole.System" /> seed message — so the eval reproduces the real loop's outbound prompt.
+/// </remarks>
 internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
 {
     private const string AgentName = "playbook-eval";
@@ -38,12 +39,8 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
         ArgumentNullException.ThrowIfNull(inputTurns);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Empty tool set: the eval gate measures the injected prompt's effect, not tool behaviour, so the loop runs
-        // with no executable tools (no real side effects, no approval pauses). The chatClient is owned by the caller
-        // (a node-local client) and is intentionally NOT disposed here. Instructions are NULL on the agent — like the
-        // production loop, they are delivered once by the seed system message below. The ctor argument order is
-        // (chatClient, instructions, name, description, tools, loggerFactory, services) — verified at
-        // Microsoft.Agents.AI 1.20.0; named arguments pin it against a positional-order change at a bump.
+        // Empty tool set, instructions NULL (the seed system message below delivers them), caller-owned chatClient NOT
+        // disposed here. Named arguments pin the ctor order verified at Microsoft.Agents.AI 1.20.0 against a bump.
         var agent = new ChatClientAgent(chatClient,
             instructions: null,
             name: AgentName,
@@ -60,20 +57,15 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
             .. inputTurns
         ];
 
-        // Threadless run (no AgentSession — the second argument's null value runs without persisted state, per the
-        // Microsoft.Agents.AI API re-verified at the pin, see Directory.Packages.props). The generation IS
-        // pinned via run options: Temperature=0 makes the sampled text deterministic so the eval gate's pass/fail
-        // reflects the injected prompt, not decoding noise — the judge (DefaultPlaybookEvalJudge) already pins its
-        // own Temperature=0 independently. ChatClientAgentRunOptions.ChatOptions is the same shape
-        // InvocationAgentFactory uses to carry per-request ChatOptions through to the model.
+        // Threadless: a null session runs without persisted state, per the Microsoft.Agents.AI API re-verified at the
+        // pin. Zero temperature keeps the gate's pass/fail on the prompt, not decoding noise; the judge pins its own.
         var chatOptions = new ChatOptions
         {
             Temperature = 0f
         };
 
-        // An effort is translated through the SAME matrix both production paths use, so what the eval sends a model is
-        // what a real turn at that effort would send. Assigned only when one was supplied: a null effort leaves
-        // AdditionalProperties null, which is what keeps every existing caller's request byte-identical.
+        // Translated through the SAME matrix both production paths use, so the eval sends what a real turn at that
+        // effort would. Assigned only when supplied: a null effort leaves AdditionalProperties null, hence unchanged.
         if (reasoningEffort is not null)
         {
             chatOptions.AdditionalProperties = ParticipantReasoningOptions.Build(reasoningEffort, supportsThinking: true);

@@ -32,11 +32,12 @@ public sealed class TrainingRuntimeInstallResult
     public TrainingRuntimePrerequisiteReport? Prerequisites { get; init; }
 }
 
-/// <summary>
-///     What <c>probe.py</c> reported from inside the provisioned venv. Every version field is optional because the probe
-///     is deliberately written to emit a partial report when an import fails rather than to die with a traceback — a
-///     runtime that is merely missing a package must produce an actionable message, not an empty one.
-/// </summary>
+/// <summary>What <c>probe.py</c> reported from inside the provisioned venv.</summary>
+/// <remarks>
+///     Every version field is optional because the probe deliberately emits a partial report when an import fails
+///     rather than dying with a traceback: a runtime that is merely missing a package must produce an actionable
+///     message, not an empty one.
+/// </remarks>
 public sealed class TrainingRuntimeProbeReport
 {
     public required int ContractVersion { get; init; }
@@ -94,10 +95,13 @@ public sealed class TrainingRuntimeStatus
 }
 
 /// <summary>
-///     Single-flight provisioning of the uv-managed Python training runtime (ADR 0005 decision 1). Linux-only, machine
-///     -global, and strictly lockfile-driven: there is no floating resolve and no fallback to a system interpreter, so a
-///     failed install means the Training feature is unavailable rather than silently degraded.
+///     Single-flight provisioning of the uv-managed Python training runtime (ADR 0005 decision 1): Linux-only,
+///     machine-global and strictly lockfile-driven.
 /// </summary>
+/// <remarks>
+///     There is no floating resolve and no fallback to a system interpreter, so a failed install means the Training
+///     feature is unavailable rather than silently degraded.
+/// </remarks>
 public interface ITrainingRuntimeService
 {
     Task<TrainingRuntimeInstallResult> InstallAsync(CancellationToken ct);

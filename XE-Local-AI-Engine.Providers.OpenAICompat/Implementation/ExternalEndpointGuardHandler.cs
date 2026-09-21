@@ -5,19 +5,11 @@ namespace XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 ///     refuses anything else.
 /// </summary>
 /// <remarks>
-///     <para>
-///         WHY: the base URL is the only thing the operator reviewed when they declared the connection Local or Cloud,
-///         and that declaration is what unlocks workspace tools, the knowledge base and <c>run_python</c> for models on
-///         it. Anything that could move the actual destination away from the reviewed address — an SDK path quirk, a
-///         <c>301</c>/<c>302</c> to another host, a future call site that builds its own URI — would let a
-///         declared-Local connection silently exfiltrate to somewhere the operator never saw. This handler makes that
-///         structurally impossible rather than relying on every caller being careful.
-///     </para>
-///     <para>
-///         Redirects are refused rather than followed: auto-redirect is off on the inner handler, so a 3xx surfaces as
-///         a response the SDK reports instead of a transparent hop. Following one would defeat the pin, and no
-///         OpenAI-compatible chat API legitimately needs a redirect to serve <c>/chat/completions</c>.
-///     </para>
+///     The base URL is the only thing the operator reviewed when declaring the connection Local or Cloud, and that
+///     declaration is what unlocks workspace tools, the knowledge base and <c>run_python</c> for its models. Anything
+///     moving the destination away from the reviewed address — an SDK path quirk, a 3xx to another host, a future call
+///     site building its own URI — would let a declared-Local connection exfiltrate somewhere the operator never saw,
+///     so redirects are REFUSED rather than followed and the pin is structural rather than a rule callers must follow.
 /// </remarks>
 internal sealed class ExternalEndpointGuardHandler : DelegatingHandler
 {
@@ -53,12 +45,12 @@ internal sealed class ExternalEndpointGuardHandler : DelegatingHandler
         return base.SendAsync(request, cancellationToken);
     }
 
-    /// <summary>
-    ///     True when <paramref name="target" /> is the pinned base address or a path beneath it. Scheme, host and port
-    ///     must all match exactly (an https base never admits an http target, and a port change is a different service),
-    ///     and the path must be a SEGMENT-wise descendant — the base always ends in <c>/</c>, so a sibling prefix such
-    ///     as <c>/v1x/…</c> cannot pass as a child of <c>/v1/</c>.
-    /// </summary>
+    /// <summary>True when <paramref name="target" /> is the pinned base address or a path beneath it.</summary>
+    /// <remarks>
+    ///     Scheme, host and port must all match exactly — an https base never admits an http target, and a port change
+    ///     is a different service — and the path must be a SEGMENT-wise descendant: the base always ends in <c>/</c>,
+    ///     so a sibling prefix such as <c>/v1x/…</c> cannot pass as a child of <c>/v1/</c>.
+    /// </remarks>
     internal bool IsWithinPinnedEndpoint(Uri? target)
     {
         return target is not null

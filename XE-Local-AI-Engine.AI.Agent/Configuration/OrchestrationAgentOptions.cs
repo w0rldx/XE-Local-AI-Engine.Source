@@ -2,12 +2,12 @@ namespace XE_Local_AI_Engine.AI.Agent.Configuration;
 
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>
-///     Options for the multi-agent handoff orchestration runtime. A handoff run goes IDLE (rather than halting)
-///     after it yields its terminal output, so the drive session bounds each watch with an idle timeout; this is
-///     the per-quiescence ceiling, not a wall-clock cap on the whole run (the runner's invocation cancellation
-///     token still governs overall lifetime).
-/// </summary>
+/// <summary>Options for the multi-agent handoff orchestration runtime.</summary>
+/// <remarks>
+///     A handoff run goes IDLE rather than halting after it yields its terminal output, so the drive session bounds
+///     each watch with an idle timeout. That is a per-quiescence ceiling, not a wall-clock cap on the whole run: the
+///     runner's invocation cancellation token still governs overall lifetime.
+/// </remarks>
 public sealed class OrchestrationAgentOptions
 {
     public const string Section = "Agent:Orchestration";

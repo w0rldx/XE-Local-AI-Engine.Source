@@ -1,15 +1,13 @@
 namespace XE_Local_AI_Engine.Providers.Training.Contracts;
 
-/// <summary>
-///     Run-to-completion subprocess seam for the runtime installer. Exists as an interface only so the phase machine can
-///     be driven end to end in tests without provisioning a real multi-gigabyte venv; production has exactly one
-///     implementation.
-///     <para>
-///         Public alongside <see cref="Implementation.UvBinaryAcquirer" />: every uv-managed venv the engine provisions runs its
-///         <c>uv sync</c> through this same scrubbed, tree-killed spawn, so the compute tool's own (much smaller)
-///         provision reuses it rather than growing a second subprocess path with its own environment-scrubbing rules.
-///     </para>
-/// </summary>
+/// <summary>Run-to-completion subprocess seam for the runtime installer.</summary>
+/// <remarks>
+///     An interface only so the phase machine can be driven end to end in tests without provisioning a real
+///     multi-gigabyte venv; production has exactly one implementation. Public alongside
+///     <see cref="Implementation.UvBinaryAcquirer" />, because every uv-managed venv the engine provisions runs its
+///     <c>uv sync</c> through this same scrubbed, tree-killed spawn rather than growing a second subprocess path with
+///     its own environment-scrubbing rules.
+/// </remarks>
 public interface ITrainingProcessRunner
 {
     /// <summary>

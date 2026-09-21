@@ -14,11 +14,14 @@ using XE_Local_AI_Engine.Providers.Capabilities.Options;
 public static class CapabilitiesServiceCollectionExtensions
 {
     /// <summary>
-    ///     Registers <see cref="IHardwareProfiler" /> → <see cref="HardwareProfiler" /> as a singleton (the profile is
-    ///     cached in-memory and re-probed only on <c>forceRefresh:true</c>), along with the live process/environment
-    ///     probe seams. <paramref name="modelsVolumePath" /> is the models/content-root path whose volume the free-disk
-    ///     figure is reported for; when <see langword="null" /> the process working directory is used.
+    ///     Registers <see cref="IHardwareProfiler" /> as a singleton, along with the live process and environment probe
+    ///     seams.
     /// </summary>
+    /// <remarks>
+    ///     The profile is cached in-memory and re-probed only on <c>forceRefresh:true</c>.
+    ///     <paramref name="modelsVolumePath" /> is the models or content-root path whose volume the free-disk figure is
+    ///     reported for; <see langword="null" /> uses the process working directory.
+    /// </remarks>
     public static IServiceCollection AddHardwareProfiler(this IServiceCollection services,
         string? modelsVolumePath = null)
     {

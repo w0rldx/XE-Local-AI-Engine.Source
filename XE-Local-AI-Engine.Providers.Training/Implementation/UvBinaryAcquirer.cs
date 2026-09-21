@@ -5,22 +5,15 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 
 /// <summary>
-///     Acquires the pinned <c>uv</c> release as a managed binary: download → SHA-256 verify → atomic extract into a
-///     version-keyed directory. Mirrors <c>LlamaCppBinaryManager</c>'s acquisition pipeline, including the
-///     extract-to-sibling-then-move step that stops a partial extract from masquerading as a warm cache.
+///     Acquires the pinned <c>uv</c> release as a managed binary: download, SHA-256 verify, atomic extract into a
+///     version-keyed directory.
 /// </summary>
 /// <remarks>
-///     <para>
-///         A cache hit short-circuits the whole thing, so a re-install on a box that already fetched uv performs no
-///         network I/O. The digest is checked before anything is unpacked, never after — an archive that fails
-///         verification is never written anywhere a later step could find it.
-///     </para>
-///     <para>
-///         Public because it is the SHARED uv acquisition for every uv-managed venv the engine provisions, not the
-///         training runtime's private detail: the sandboxed compute tool provisions its own (numpy/scipy/sympy) closure
-///         through this same pipeline under its own cache root. Nothing here is training-specific — the caller supplies
-///         the cache root — so a second digest-pinned downloader would be a duplicate of this one, not a new capability.
-///     </para>
+///     Mirrors <c>LlamaCppBinaryManager</c>'s pipeline, including the extract-to-sibling-then-move step that stops a
+///     partial extract masquerading as a warm cache. The digest is checked BEFORE anything is unpacked, never after.
+///     Public because it is the SHARED uv acquisition for every uv-managed venv the engine provisions, not the training
+///     runtime's private detail. See docs/wiki/18-training.md ("The scrubbed environments, and the uv pipeline the
+///     compute tool shares").
 /// </remarks>
 public sealed class UvBinaryAcquirer
 {

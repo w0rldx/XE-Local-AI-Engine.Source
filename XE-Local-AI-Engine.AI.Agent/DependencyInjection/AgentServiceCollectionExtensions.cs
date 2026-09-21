@@ -59,24 +59,21 @@ public static class AgentServiceCollectionExtensions
                     .ValidateDataAnnotations()
                     .ValidateOnStart();
 
-        // Code-owned gen_ai telemetry policy: CaptureSensitiveContent defaults false and is set EXPLICITLY on
-        // the OpenTelemetry chat client below, so the ambient OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT that
-        // Aspire injects cannot silently turn prompt/completion capture on.
+        // Code-owned gen_ai telemetry policy: CaptureSensitiveContent defaults false and is set EXPLICITLY below, so the
+        // ambient OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT Aspire injects cannot silently turn capture on.
         _ = services.AddOptions<AgentTelemetryOptions>()
                     .Bind(configuration.GetSection(AgentTelemetryOptions.Section))
                     .ValidateOnStart();
 
-        // Provider-boundary budgeting: per-round input budgeting + cumulative provider-call ceilings applied
-        // by the innermost pipeline hop so the inner tool loop and MAF participant rounds are bounded, not just the two
-        // outer history-growth points.
+        // Provider-boundary budgeting: per-round input budgets plus cumulative ceilings applied by the innermost hop, so
+        // the inner tool loop and MAF participant rounds are bounded, not just the two outer history-growth points.
         _ = services.AddOptions<ProviderCallBudgetOptions>()
                     .Bind(configuration.GetSection(ProviderCallBudgetOptions.Section))
                     .ValidateDataAnnotations()
                     .ValidateOnStart();
 
-        // Per-round tool-relevance offer: thresholds and the embedding knobs only. Whether it engages at all is the
-        // node setting ToolRelevanceEnabled, read live per turn; off by default, in which case the pipeline hop below
-        // is a reference-equality pass-through and list_tools is never appended, so the offer stays byte-identical.
+        // Per-round tool-relevance offer: thresholds and embedding knobs only. Whether it engages is the node setting
+        // ToolRelevanceEnabled, read live per turn and off by default, leaving the hop a reference-equality passthrough.
         _ = services.AddOptions<ToolRelevanceOptions>()
                     .Bind(configuration.GetSection(ToolRelevanceOptions.Section))
                     .ValidateDataAnnotations()
@@ -98,13 +95,11 @@ public static class AgentServiceCollectionExtensions
         // Node-local MCP tools. This registry is MCP-agnostic (holds only AITool); the application layer's
         // connection manager owns the MCP client lifecycle and pushes an immutable snapshot into it as servers connect.
         _ = services.AddSingleton<IMcpToolRegistry, McpToolRegistry>();
-        // Tool-approval policy floor: the identity no-op, so a host that has not registered the real,
-        // node-configured NodeToolApprovalPolicy still resolves a policy and behaves exactly as before. TryAddSingleton
-        // so the composition root's plain AddSingleton<IToolApprovalPolicy, NodeToolApprovalPolicy> wins (last-wins).
+        // Tool-approval policy floor: the identity no-op, so a host without the node-configured NodeToolApprovalPolicy
+        // still resolves one. TryAddSingleton, so the composition root's plain AddSingleton wins under last-wins.
         services.TryAddSingleton<IToolApprovalPolicy, PermissiveToolApprovalPolicy>();
-        // Tool-relevance ranker. The deterministic, model-free lexical selector is the shipped default and the
-        // fallback every other implementation degrades to; the node composition root Replaces it with the
-        // embedding-backed selector when one is configured, so agent-only tests keep the lexical registration.
+        // Tool-relevance ranker: the deterministic, model-free lexical selector is the shipped default and the fallback
+        // every other implementation degrades to; the node composition root Replaces it with the embedding-backed one.
         services.TryAddSingleton<IToolRelevanceSelector, LexicalToolRelevanceSelector>();
         _ = services.AddSingleton<IInvocationAgentFactory, InvocationAgentFactory>();
         // Multi-agent handoff orchestration. Reuses the same IChatClient + tool registries as the single-agent
@@ -117,15 +112,14 @@ public static class AgentServiceCollectionExtensions
     }
 
     /// <summary>
-    ///     Decorates the registered <see cref="IChatClient" /> with the agent pipeline:
-    ///     <see cref="ToolInvocationObservabilityChatClient" /> (tool-call lifecycle events) +
-    ///     <c>UseFunctionInvocation</c> (automatic tool execution).
-    ///     <para>
-    ///         Exposed as a public method so test harnesses that replace the base
-    ///         <see cref="IChatClient" /> with a fake (e.g. FakeOllama) can reapply
-    ///         the full pipeline decoration after their <c>RemoveAll</c> + <c>AddSingleton</c>.
-    ///     </para>
+    ///     Decorates the registered <see cref="IChatClient" /> with the agent pipeline, outermost first: tool
+    ///     observability, function invocation, tool relevance, provider-call budgeting, OpenTelemetry.
     /// </summary>
+    /// <remarks>
+    ///     Exposed as a public method so test harnesses that replace the base <see cref="IChatClient" /> with a fake
+    ///     can reapply the full decoration after their <c>RemoveAll</c> + <c>AddSingleton</c>. The order is
+    ///     load-bearing; see docs/wiki/04-agent-mode.md ("Why each hop sits where it does, and what it may mutate").
+    /// </remarks>
     public static IServiceCollection DecorateChatClientPipeline(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -133,9 +127,8 @@ public static class AgentServiceCollectionExtensions
 
         _ = services.Decorate<IChatClient>((inner, serviceProvider) =>
         {
-            // Resolve defensively: this method is re-entrant (test harnesses re-apply the pipeline after swapping the
-            // base client), and the decoration factory runs lazily at IChatClient resolution. A missing registration
-            // falls back to the pinned defaults rather than throwing during a partial re-decoration.
+            // Resolve defensively: this method is re-entrant and the factory runs lazily at IChatClient resolution, so a
+            // missing registration falls back to the pinned defaults rather than throwing mid re-decoration.
             var pipelineOptions = serviceProvider.GetService<IOptions<AgentToolPipelineOptions>>()?.Value ?? new AgentToolPipelineOptions();
             var telemetryOptions = serviceProvider.GetService<IOptions<AgentTelemetryOptions>>()?.Value ?? new AgentTelemetryOptions();
             var toolRelevanceOptions = serviceProvider.GetService<IOptions<ToolRelevanceOptions>>()?.Value ?? new ToolRelevanceOptions();
@@ -152,13 +145,8 @@ public static class AgentServiceCollectionExtensions
                                    nameof(AgentTelemetryOptions.CaptureSensitiveContent));
             }
 
-            // First .Use is outermost. OpenTelemetry sits INNERMOST (below function invocation) so each provider round
-            // in a tool-calling loop emits its own gen_ai span — the documented MEAI ordering. The source name is pinned
-            // explicitly because MEAI's default ("Experimental.Microsoft.Extensions.AI") does NOT match the ServiceDefaults
-            // wildcard AddSource/AddMeter("Microsoft.Extensions.AI*"). EnableSensitiveData is set EXPLICITLY from the
-            // code-owned AgentTelemetryOptions (default false) rather than left unset: an unset value defers to the
-            // ambient OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT, which Aspire injects as true — so leaving it
-            // unset silently emits full prompts/completions. Setting it here makes the code the single source of truth.
+            // First .Use is outermost, OpenTelemetry INNERMOST so each provider round emits its own gen_ai span. Source
+            // name and EnableSensitiveData are pinned; see docs/wiki/04-agent-mode.md, "The chat-client decorator pipeline".
             return inner.AsBuilder()
                         .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
                         .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>(),
@@ -171,17 +159,14 @@ public static class AgentServiceCollectionExtensions
                                 functionInvokingChatClient.AllowConcurrentInvocation = false;
                                 functionInvokingChatClient.TerminateOnUnknownCalls = false;
                             })
-                        // Below UseFunctionInvocation so the layer above keeps the WHOLE executable list (a revealed
-                        // tool is immediately callable), and ABOVE the budgeter so its EstimateTools measures the array
-                        // actually sent. Gated on an ambient ToolRelevanceScope the invocation runner seeds; without
-                        // one — or with the feature off — it returns the caller's options instance unchanged.
+                        // Below UseFunctionInvocation so the layer above keeps the WHOLE executable list, and ABOVE the
+                        // budgeter so its EstimateTools measures the array actually sent. Gated on ToolRelevanceScope.
                         .Use(chatClient => new ToolRelevanceChatClient(chatClient,
                             toolRelevanceSelector,
                             toolRelevanceOptions,
                             serviceProvider.GetRequiredService<ILogger<ToolRelevanceChatClient>>()))
-                        // Below UseFunctionInvocation so it re-budgets EVERY inner tool-loop round (and MAF participant
-                        // round), and above UseOpenTelemetry so the recorded gen_ai span reflects the budgeted message
-                        // set actually sent. Gated on an ambient ProviderCallBudget scope the invocation runner seeds.
+                        // Below UseFunctionInvocation so it re-budgets EVERY inner tool-loop and MAF participant round,
+                        // above UseOpenTelemetry so the span reflects what was sent. Gated on a ProviderCallBudget scope.
                         .Use(chatClient => new ProviderCallBudgetChatClient(chatClient,
                             serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>(),
                             serviceProvider.GetRequiredService<ITokenEstimatorCalibrationStore>()))

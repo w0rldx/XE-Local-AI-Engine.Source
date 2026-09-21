@@ -5,13 +5,13 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
-/// <summary>
-///     Lock-free dynamic registry of MCP tools backed by a single immutable snapshot. The connection manager rebuilds
-///     the entire tool set on each refresh and calls <see cref="ReplaceSnapshot" />, which swaps the
-///     <see langword="volatile" /> snapshot reference in one assignment. Readers (<see cref="TryResolve" /> /
-///     <see cref="GetDescriptors" />) capture the reference once and read from the immutable instance, so they observe a
-///     consistent point-in-time view without locking and a refresh can never tear a concurrent read.
-/// </summary>
+/// <summary>Lock-free dynamic registry of MCP tools, backed by a single immutable snapshot.</summary>
+/// <remarks>
+///     The connection manager rebuilds the entire tool set on each refresh and calls <see cref="ReplaceSnapshot" />,
+///     which swaps the <see langword="volatile" /> snapshot reference in one assignment. Readers capture the reference
+///     once and read the immutable instance, so they see a consistent point-in-time view without locking and a refresh
+///     can never tear a concurrent read.
+/// </remarks>
 internal sealed class McpToolRegistry : IMcpToolRegistry
 {
     private readonly ILogger<McpToolRegistry> _logger;
@@ -43,10 +43,8 @@ internal sealed class McpToolRegistry : IMcpToolRegistry
 
         foreach (var tool in tools)
         {
-            // A duplicate qualified name should never reach here (server slugs are unique and MCP guarantees unique
-            // tool names within a server). Guard defensively in LOCKSTEP: add the descriptor only when the executable
-            // key is new, so the offered descriptor list can never advertise a tool whose executable a later duplicate
-            // overwrote (which would leave N descriptors against N-1 executables). First write wins for both.
+            // A duplicate qualified name should never reach here. Guard defensively in LOCKSTEP — descriptor only when
+            // the executable key is new — so the list can never advertise N descriptors against N-1 executables.
             if (executables.ContainsKey(tool.Name))
             {
                 _logger.LogWarning("Duplicate MCP tool name {ToolName} in snapshot; keeping the first and dropping the duplicate descriptor.", tool.Name);

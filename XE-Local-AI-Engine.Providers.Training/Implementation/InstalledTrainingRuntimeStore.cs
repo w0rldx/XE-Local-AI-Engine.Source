@@ -4,14 +4,14 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
-///     Reads and writes <c>installed-training-runtime.json</c>, the sibling-to-the-venv state record describing what is
-///     currently provisioned. Mirrors <c>InstalledRuntimeStore</c>'s role for llama.cpp: it records what was adopted, it
-///     does not perform the adoption.
+///     Reads and writes <c>installed-training-runtime.json</c>, the sibling-to-the-venv state record describing what
+///     is currently provisioned.
 /// </summary>
 /// <remarks>
-///     Writes go to a temp sibling and are then moved into place, so a crash mid-write leaves the previous record intact
-///     rather than a truncated file that would make an installed runtime look absent. A record that cannot be parsed is
-///     treated as absent for the same reason a half-written one is: the only safe reading of an unreadable state file is
+///     Mirrors <c>InstalledRuntimeStore</c>'s role for llama.cpp: it records what was adopted, it does not perform the
+///     adoption. Writes go to a temp sibling and are then moved into place, so a crash mid-write leaves the previous
+///     record intact rather than a truncated file that would make an installed runtime look absent. A record that
+///     cannot be parsed is treated as absent for the same reason: the only safe reading of an unreadable state file is
 ///     "nothing is installed", which makes the next install rebuild rather than trust it.
 /// </remarks>
 internal sealed class InstalledTrainingRuntimeStore

@@ -10,15 +10,16 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 
 /// <summary>
-///     Builds the Codex OAuth inner <see cref="IChatClient" /> over the OpenAI Responses transport,
-///     the cloud-factory analogue of <c>AzureFoundryChatClientFactory</c>.
-///     <para>
-///         Owns ONE shared <see cref="SocketsHttpHandler" /> → <see cref="CodexAuthHandler" /> → <see cref="HttpClient" />
-///         chain for the provider's lifetime. The returned <see cref="IChatClient" /> shares this client and does
-///         not dispose it. The SDK <c>RetryPolicy</c> is disabled so the only retry layer is the auth handler's
-///         refresh-on-401. SDK transport logging stays OFF (plain <see cref="HttpClientPipelineTransport" /> ctor).
-///     </para>
+///     Builds the Codex OAuth inner <see cref="IChatClient" /> over the OpenAI Responses transport, the cloud-factory
+///     analogue of <c>AzureFoundryChatClientFactory</c>.
 /// </summary>
+/// <remarks>
+///     Owns ONE shared <see cref="SocketsHttpHandler" /> to <see cref="CodexAuthHandler" /> to
+///     <see cref="HttpClient" /> chain for the provider's lifetime, and the returned <see cref="IChatClient" /> shares
+///     that client without disposing it. The SDK <c>RetryPolicy</c> is disabled, so the only retry layer is the auth
+///     handler's refresh-on-401, and SDK transport logging stays OFF via the plain
+///     <see cref="HttpClientPipelineTransport" /> constructor.
+/// </remarks>
 public sealed class CodexOAuthChatClientFactory : ICodexOAuthChatClientFactory, IDisposable
 {
     private readonly CodexAuthHandler _authHandler;

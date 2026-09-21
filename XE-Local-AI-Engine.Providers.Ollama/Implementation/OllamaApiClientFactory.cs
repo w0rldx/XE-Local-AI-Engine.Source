@@ -3,18 +3,15 @@ namespace XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using OllamaSharp;
 
 /// <summary>
-///     Owns the single hardened <see cref="HttpClient" /> (short <see cref="SocketsHttpHandler.ConnectTimeout" /> plus
-///     <see cref="OllamaConnectFailureHandler" /> normalization) and mints every Ollama client over it. The singleton
-///     management client and each per-model chat/embedding client resolve through the SAME transport, so a routed send
-///     gets the identical fail-fast connect bound and "Ollama unreachable" normalization as the base client — instead of
-///     the raw, unbounded default transport a bare <c>new OllamaApiClient(uri, model)</c> would allocate per model.
+///     Owns the single hardened <see cref="HttpClient" /> — short <see cref="SocketsHttpHandler.ConnectTimeout" /> plus
+///     <see cref="OllamaConnectFailureHandler" /> normalization — and mints every Ollama client over it.
 /// </summary>
 /// <remarks>
-///     Reusing one <see cref="HttpClient" /> (and its handler chain) across all clients also avoids per-model handler
-///     churn: <see cref="OllamaApiClient" />'s HttpClient-accepting constructor leaves the client's internal
-///     <c>_disposeHttpClient</c> flag false, so a caller disposing a per-model client never tears down the shared
-///     transport. The transport lives for the application lifetime and is released here when the DI container disposes
-///     this singleton.
+///     The singleton management client and each per-model client resolve through the SAME transport, so a routed send
+///     gets the identical fail-fast connect bound and "Ollama unreachable" normalization, instead of the raw default
+///     transport a bare <c>new OllamaApiClient(uri, model)</c> allocates per model. It also avoids per-model handler
+///     churn: <see cref="OllamaApiClient" />'s HttpClient-accepting constructor leaves <c>_disposeHttpClient</c>
+///     false, so disposing a per-model client never tears down the shared transport, which this singleton owns.
 /// </remarks>
 public sealed class OllamaApiClientFactory : IDisposable
 {

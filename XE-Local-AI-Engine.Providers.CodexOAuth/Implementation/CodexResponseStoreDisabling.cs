@@ -3,68 +3,48 @@ namespace XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using Microsoft.Extensions.AI;
 using OpenAI.Responses;
 
-/// <summary>
-///     Forces <c>store=false</c> on the Codex Responses transport.
-///     <para>
-///         <b>store=false mechanism:</b> rather than a dedicated stored-output-disabling client (the
-///         <c>Microsoft.Agents.AI.OpenAI</c> package that offers one is not in the repo's package graph — the repo pins
-///         <c>Microsoft.Agents.AI.Hosting.OpenAI</c>, a different package), this uses the local
-///         <see cref="ChatOptions.RawRepresentationFactory" /> mechanism. This carries no extra dependency and is verified to
-///         compile against the pinned OpenAI 2.10.0 / Microsoft.Extensions.AI.OpenAI 10.6.0.
-///     </para>
-///     <para>
-///         MEAI's Responses mapper uses the object returned by <see cref="ChatOptions.RawRepresentationFactory" /> as
-///         the base <see cref="CreateResponseOptions" />. Setting <see cref="CreateResponseOptions.StoredOutputEnabled" />
-///         to <see langword="false" /> and leaving <see cref="CreateResponseOptions.PreviousResponseId" /> /
-///         <see cref="CreateResponseOptions.ConversationOptions" /> unset yields a request body that omits service-side
-///         state.
-///     </para>
-///     <para>
-///         <b>Reasoning summaries:</b> the same base options also opt the request into OpenAI Responses
-///         reasoning summaries — <see cref="CreateResponseOptions.ReasoningOptions" /> with
-///         <see cref="ResponseReasoningSummaryVerbosity.Auto" /> (fixed) and the per-send
-///         <see cref="ResponseReasoningEffortLevel" /> mapped from the chat reasoning effort. Summaries ride the response
-///         output and do NOT require <c>store=true</c>, so the store=false invariant above is preserved. When no effort is
-///         resolvable the request still asks for summaries at the model's default effort (effort omitted).
-///     </para>
-///     <para>
-///         <b>Encrypted reasoning include (tool calling):</b> because reasoning is always requested on the Codex boundary,
-///         the same base options also add
-///         <see cref="IncludedResponseProperty.ReasoningEncryptedContent" /> to
-///         <see cref="CreateResponseOptions.IncludedProperties" /> (serializes to <c>include:[reasoning.encrypted_content]</c>).
-///         This is REQUIRED for the stateless tool loop: with <c>store=false</c> each follow-up turn must replay the prior
-///         reasoning item with its <c>encrypted_content</c> immediately before the <c>function_call</c> it produced. The
-///         include makes the backend emit that encrypted blob; MEAI then round-trips it verbatim. It is harmless when no tool
-///         is offered, so it rides whenever reasoning is on. Tools themselves are NOT stripped on this boundary.
-///     </para>
-/// </summary>
+/// <summary>Forces <c>store=false</c> on the Codex Responses transport.</summary>
+/// <remarks>
+///     The mechanism is the local <see cref="ChatOptions.RawRepresentationFactory" /> rather than a dedicated
+///     stored-output-disabling client: the <c>Microsoft.Agents.AI.OpenAI</c> package offering one is not in the repo's
+///     package graph, which pins the different <c>Microsoft.Agents.AI.Hosting.OpenAI</c>. This carries no extra
+///     dependency and is verified to compile against the pinned OpenAI 2.10.0 / Microsoft.Extensions.AI.OpenAI 10.6.0.
+/// </remarks>
 public static class CodexResponseStoreDisabling
 {
     /// <summary>
-    ///     The AdditionalProperties key the agent factory uses to carry the RAW normalized reasoning effort
-    ///     (minimal/low/medium/high/xhigh/none) for a thinking-capable model on the Codex boundary. Kept in sync with
-    ///     <c>ReasoningOptionsResolver.CodexReasoningEffortKey</c> by value — the provider is a dependency-free leaf and
-    ///     deliberately does not reference the AI.Agent project, so the literal is duplicated, not shared.
+    ///     The AdditionalProperties key carrying the RAW normalized reasoning effort for a thinking-capable model on
+    ///     the Codex boundary.
     /// </summary>
+    /// <remarks>
+    ///     Kept in sync with <c>ReasoningOptionsResolver.CodexReasoningEffortKey</c> BY VALUE: the provider is a
+    ///     dependency-free leaf and deliberately does not reference the AI.Agent project, so the literal is duplicated
+    ///     rather than shared.
+    /// </remarks>
     private const string CodexReasoningEffortKey = "codex_reasoning_effort";
 
-    /// <summary>
-    ///     The Ollama-shaped reasoning gate key (shared with the local path). On the Codex boundary it is the FALLBACK
-    ///     source for effort when the richer <see cref="CodexReasoningEffortKey" /> side channel is absent: a string value
-    ///     is a graded level (low/medium/high), <c>false</c> means off, and <c>true</c> means reason at the default effort.
-    /// </summary>
+    /// <summary>The Ollama-shaped reasoning gate key, shared with the local path.</summary>
+    /// <remarks>
+    ///     On the Codex boundary it is the FALLBACK source for effort when the richer
+    ///     <see cref="CodexReasoningEffortKey" /> side channel is absent: a string value is a graded level,
+    ///     <c>false</c> means off, and <c>true</c> means reason at the default effort.
+    /// </remarks>
     private const string OllamaThinkKey = "think";
 
     /// <summary>
-    ///     Returns <paramref name="options" /> (or a new instance) with a <see cref="ChatOptions.RawRepresentationFactory" />
-    ///     that disables service-side stored output AND requests reasoning summaries (verbosity Auto) at the supplied
-    ///     <paramref name="reasoningEffort" /> for the Codex Responses path.
+    ///     Returns <paramref name="options" />, or a new instance, with a
+    ///     <see cref="ChatOptions.RawRepresentationFactory" /> that disables service-side stored output AND requests
+    ///     reasoning summaries at the supplied <paramref name="reasoningEffort" />.
     /// </summary>
+    /// <remarks>
+    ///     MEAI's Responses mapper uses the returned object as the base <see cref="CreateResponseOptions" />, so
+    ///     <see cref="CreateResponseOptions.StoredOutputEnabled" /> false, with
+    ///     <see cref="CreateResponseOptions.PreviousResponseId" /> and <c>ConversationOptions</c> left unset, yields a
+    ///     body that omits service-side state. Summaries ride the response output and do NOT require
+    ///     <c>store=true</c>, so that invariant holds.
+    /// </remarks>
     /// <param name="options">The per-call options to decorate (cloned upstream); a new instance when null.</param>
-    /// <param name="reasoningEffort">
-    ///     The resolved per-send <see cref="ResponseReasoningEffortLevel" />, or <see langword="null" /> to omit the effort
-    ///     (the model's default effort applies, summaries still requested).
-    /// </param>
+    /// <param name="reasoningEffort">The resolved per-send effort, or <see langword="null" /> to omit it and use the model's default.</param>
     public static ChatOptions WithStoredOutputDisabled(ChatOptions? options = null,
         ResponseReasoningEffortLevel? reasoningEffort = null)
     {
@@ -80,18 +60,15 @@ public static class CodexResponseStoreDisabling
                     // makes reasoning text flow back as TextReasoningContent for the React reasoning pipeline.
                     ReasoningSummaryVerbosity = ResponseReasoningSummaryVerbosity.Auto
                 },
-                // Reasoning is always on here, so always ask the backend to emit the encrypted reasoning blob
-                // (include:[reasoning.encrypted_content]). Required for the stateless (store=false) tool loop — each
-                // follow-up turn replays the prior reasoning item with its encrypted_content before its function_call.
-                // Harmless when no tool is offered.
+                // include:[reasoning.encrypted_content], REQUIRED for the stateless store=false tool loop: each
+                // follow-up turn replays the prior reasoning item with its blob before its function_call.
                 IncludedProperties =
                 {
                     IncludedResponseProperty.ReasoningEncryptedContent
                 },
 
-                // Disable parallel tool calls on the wire (serializes parallel_tool_calls:false). The Codex capability
-                // matrix declares SupportsParallelToolCalls=false; this is the request-level enforcement so the model
-                // emits at most one tool call per turn. Harmless when no tool is offered.
+                // parallel_tool_calls:false on the wire — the request-level enforcement of the capability matrix's
+                // SupportsParallelToolCalls=false, so the model emits at most one tool call per turn.
                 ParallelToolCallsEnabled = false
             };
 
@@ -107,14 +84,15 @@ public static class CodexResponseStoreDisabling
 
     /// <summary>
     ///     Resolves the per-send <see cref="ResponseReasoningEffortLevel" /> from the call's
-    ///     <see cref="ChatOptions.AdditionalProperties" />. Prefers the Codex side-channel (full fidelity, incl.
-    ///     minimal/xhigh) and falls back to the Ollama <c>think</c> value. Returns <see langword="null" /> when the effort
-    ///     is unspecified/"on"/think:true (the model's default effort applies, summaries still requested).
-    ///     <para>
-    ///         <b>xhigh fallback:</b> the pinned OpenAI .NET SDK 2.10.0 exposes None/Minimal/Low/Medium/High but has no
-    ///         <c>XHigh</c> member, so <c>xhigh</c> maps to the nearest supported level, <see cref="ResponseReasoningEffortLevel.High" />.
-    ///     </para>
+    ///     <see cref="ChatOptions.AdditionalProperties" />.
     /// </summary>
+    /// <remarks>
+    ///     Prefers the Codex side channel, which carries full fidelity including minimal and xhigh, and falls back to
+    ///     the Ollama <c>think</c> value; <see langword="null" /> when the effort is unspecified, "on" or think:true,
+    ///     where the model's default effort applies and summaries are still requested. The pinned OpenAI .NET SDK
+    ///     2.10.0 has no <c>XHigh</c> member, so <c>xhigh</c> maps to the nearest supported
+    ///     <see cref="ResponseReasoningEffortLevel.High" />.
+    /// </remarks>
     public static ResponseReasoningEffortLevel? ResolveReasoningEffort(ChatOptions? options)
     {
         var properties = options?.AdditionalProperties;
@@ -132,9 +110,8 @@ public static class CodexResponseStoreDisabling
 
         if (properties.TryGetValue(OllamaThinkKey, out var think))
         {
-            // think:true ≡ reason at the model's default effort (omit effort → null). think:false ≡ off (None). A string
-            // value is a graded level. The None arm is cast to the nullable struct so the other arms don't coerce a null
-            // through ResponseReasoningEffortLevel's implicit string operator (which throws on a null string).
+            // think:true is the model's default effort (null), think:false is off (None), a string is a graded level.
+            // The None arm is cast so the other arms cannot coerce null through the implicit string operator.
             return think switch
             {
                 bool enabled => enabled ? null : (ResponseReasoningEffortLevel?)ResponseReasoningEffortLevel.None,

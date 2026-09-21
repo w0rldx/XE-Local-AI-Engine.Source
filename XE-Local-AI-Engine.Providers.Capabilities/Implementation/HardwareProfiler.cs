@@ -13,26 +13,11 @@ using XE_Local_AI_Engine.Providers.Capabilities.Options;
 ///     on Linux and Windows. The provider remains independent of any runtime implementation.
 /// </summary>
 /// <remarks>
-///     Probe order:
-///     <list type="bullet">
-///         <item>RAM — Linux <c>/proc/meminfo</c> (MemTotal/MemAvailable); Windows OS query.</item>
-///         <item>
-///             VRAM — a SINGLE <c>nvidia-smi --query-gpu=name,memory.total,memory.free</c> invocation for NVIDIA across
-///             both OSes. Otherwise Windows adapter names or Linux <c>/sys/class/drm</c> identify the vendor, but
-///             non-NVIDIA VRAM remains unknown and <see cref="HardwareProfile.VramKnown" /> is
-///             <see langword="false" />.
-///         </item>
-///     </list>
-///     <para>
-///         <b>Every process probe is bounded.</b> The <c>nvidia-smi</c> call runs under a wall-clock deadline
-///         (<see cref="HardwareProfilerOptions.HardwareProbeTimeoutSeconds" />); on overrun the process tree is killed and
-///         the profiler degrades to the most recent cached profile — or, when none exists, the CPU-safe default (VRAM
-///         unknown ⇒ CPU mode). This closes the already-paid-for trap where a hung <c>nvidia-smi</c> stalled first-run
-///         provisioning (and, via the capacity gate, an admission decision) indefinitely.
-///     </para>
-///     Degrade rule: <see cref="HardwareProfile.VramKnown" /> <see langword="false" /> ⇒
-///     <see cref="HardwareProfile.GpuAccelAvailable" /> <see langword="false" />. The profile is cached in memory and
-///     re-probed only on <c>forceRefresh:true</c>; registered as a singleton.
+///     RAM comes from Linux <c>/proc/meminfo</c> or a Windows OS query; VRAM from a SINGLE <c>nvidia-smi</c>
+///     invocation, with Windows adapter names or Linux <c>/sys/class/drm</c> naming a non-NVIDIA vendor whose VRAM
+///     stays unknown. <b>Every probe is bounded</b> by
+///     <see cref="HardwareProfilerOptions.HardwareProbeTimeoutSeconds" />, degrading to the cached profile or the
+///     CPU-safe default (a hung <c>nvidia-smi</c> once stalled provisioning); unknown VRAM means no GPU acceleration.
 /// </remarks>
 internal sealed class HardwareProfiler : IHardwareProfiler
 {
@@ -240,10 +225,8 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         return TimeSpan.FromSeconds(_options.HardwareProbeTimeoutSeconds);
     }
 
-    // Parses the consolidated nvidia-smi output: one comma-separated device row per GPU carrying the name then the total
-    // and free VRAM in MiB. Multi-GPU yields several rows and the first usable GPU wins (matching the prior per-field
-    // probes, which each took the first parseable figure). A leading warning banner is skipped — a row with no comma is
-    // not a device row — and a named row whose total does not parse still marks an NVIDIA GPU present with VRAM unknown.
+    // Parses the consolidated nvidia-smi output: one comma-separated row per GPU carrying name, total and free VRAM in
+    // MiB, first usable GPU wins. A row with no comma is a banner, not a device; an unparseable total means VRAM unknown.
     private static NvidiaProbe ParseNvidiaCsv(string stdout)
     {
         var present = false;
@@ -300,10 +283,10 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     }
 
     /// <summary>
-    ///     Windows AMD/Intel VRAM probing is not implemented because no vendor-neutral probe has been validated on
-    ///     Windows. It returns <see langword="null" /> (VRAM unknown ⇒ CPU mode), the fail-safe result. NVIDIA on
-    ///     Windows is unaffected because the shared <c>nvidia-smi</c> branch handles it.
+    ///     Windows AMD and Intel VRAM probing is not implemented, because no vendor-neutral probe has been validated on
+    ///     Windows; it returns the fail-safe <see langword="null" />, meaning VRAM unknown and so CPU mode.
     /// </summary>
+    /// <remarks>NVIDIA on Windows is unaffected, because the shared <c>nvidia-smi</c> branch handles it.</remarks>
     private static Task<long?> ProbeWindowsNonNvidiaVramAsync(GpuVendor vendor, CancellationToken ct)
     {
         _ = vendor;
@@ -316,30 +299,14 @@ internal sealed class HardwareProfiler : IHardwareProfiler
 
     /// <summary>
     ///     Windows GPU-vendor name, read from the adapter descriptions <c>Win32_VideoController</c> reports.
-    ///     <para>
-    ///         This used to be a hardcoded <see cref="GpuVendor.Unknown" /> stub, so an AMD or Intel Windows box
-    ///         reported <c>gpuVendor: "unknown"</c> on the hardware-profile card while the runtime selector — reading a
-    ///         different probe entirely — could be selecting the Vulkan binary for the same machine. The two detectors
-    ///         disagreeing is the reason this is implemented rather than left deferred: the profile is what the operator
-    ///         is shown.
-    ///     </para>
-    ///     <para>
-    ///         The query goes through <see cref="IProcessProbe" /> under the same wall-clock deadline as
-    ///         <c>nvidia-smi</c>, so a wedged WMI repository degrades to <see cref="GpuVendor.Unknown" /> instead of
-    ///         stalling the profile — and the OS decision is the injected
-    ///         <see cref="IHardwareProbeEnvironment.IsWindows" />, not an inline platform call, so both branches are
-    ///         exercisable without a Windows host.
-    ///     </para>
-    ///     <para>
-    ///         <b>This does NOT make the CPU-fallback alert reachable on such a box, and must not be read as if it
-    ///         did.</b> That alert needs <c>gpuExpected</c>, which is
-    ///         <c>vendor ∈ {nvidia, amd, intel} &amp;&amp; vramBytes &gt; 0</c>, and the VRAM half is still the
-    ///         deferred seam below. A vendor without bytes still degrades to CPU mode by the profile's own rule
-    ///         (<see cref="HardwareProfile.VramKnown" /> false ⇒ <see cref="HardwareProfile.GpuAccelAvailable" />
-    ///         false); what changes is that the profile now names the adapter truthfully instead of saying it does not
-    ///         know what it is.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Implemented, not deferred: the profile is what the operator is shown, and a stub vendor contradicted the
+    ///     runtime selector's own probe. It runs through <see cref="IProcessProbe" /> under the <c>nvidia-smi</c>
+    ///     deadline, and the OS test is the injected <see cref="IHardwareProbeEnvironment.IsWindows" />. It does NOT
+    ///     make the CPU-fallback alert reachable: that needs <c>gpuExpected</c>, a known vendor AND
+    ///     <c>vramBytes &gt; 0</c>, whose VRAM half is still the deferred seam below.
+    /// </remarks>
     private async Task<GpuVendor> ProbeWindowsAdapterVendorAsync(CancellationToken ct)
     {
         foreach (var (fileName, arguments) in WindowsAdapterListCommands())
@@ -385,16 +352,14 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         return adapterNames.Contains("intel", StringComparison.OrdinalIgnoreCase) ? GpuVendor.Intel : null;
     }
 
-    /// <summary>
-    ///     The Windows adapter-description sources, in the order they are tried.
-    ///     <para>
-    ///         <c>wmic</c> is LAST and is no longer the only source: it is a deprecated Feature-on-Demand that is not
-    ///         installed by default on current Windows 11, and depending on it is what left this detector blind. Windows
-    ///         PowerShell 5.1 is in-box on every Windows 11 install and <c>Get-CimInstance</c> is what Microsoft's own
-    ///         deprecation notice points at. The absolute System32 path is preferred so a <c>powershell.exe</c> planted
-    ///         earlier on <c>PATH</c> cannot answer for it.
-    ///     </para>
-    /// </summary>
+    /// <summary>The Windows adapter-description sources, in the order they are tried.</summary>
+    /// <remarks>
+    ///     <c>wmic</c> is LAST and not the only source: it is a deprecated Feature-on-Demand not installed by default
+    ///     on current Windows 11, and depending on it is what left this detector blind. Windows PowerShell 5.1 is
+    ///     in-box on every Windows 11 install and <c>Get-CimInstance</c> is what Microsoft's own deprecation notice
+    ///     points at. The absolute System32 path is preferred, so a <c>powershell.exe</c> planted earlier on
+    ///     <c>PATH</c> cannot answer for it.
+    /// </remarks>
     private static IEnumerable<AdapterListCommand> WindowsAdapterListCommands()
     {
         string[] cimArguments =
@@ -445,9 +410,6 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         return false;
     }
 
-    // The single consolidated nvidia-smi read, projected: whether an NVIDIA GPU is present (vendor signal), its total /
-    // free VRAM in bytes (first GPU wins; null when unparseable), and whether the probe was killed for overrunning its
-    // deadline (the caller then degrades to the cached/CPU-safe profile).
     // The host's physical memory in bytes as the probe read it: the installed total and the currently available slice.
     [StructLayout(LayoutKind.Auto)]
     private readonly record struct RamSnapshot(long TotalRamBytes, long AvailableRamBytes);
@@ -455,6 +417,8 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     // One Windows adapter-description source: the executable to run and its argument vector.
     private sealed record AdapterListCommand(string FileName, IReadOnlyList<string> Arguments);
 
+    // The single consolidated nvidia-smi read, projected: NVIDIA presence, total and free VRAM in bytes (first GPU
+    // wins, null when unparseable), and whether the probe overran its deadline and was killed.
     private readonly record struct NvidiaProbe(bool Present, long? TotalVramBytes, long? FreeVramBytes, bool TimedOut)
     {
         public static NvidiaProbe Absent { get; } = new(Present: false, TotalVramBytes: null, FreeVramBytes: null, TimedOut: false);
