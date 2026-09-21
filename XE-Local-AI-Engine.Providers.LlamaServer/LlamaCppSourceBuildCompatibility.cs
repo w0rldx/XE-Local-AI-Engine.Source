@@ -3,10 +3,13 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Strict legacy CUDA compatibility predicate. It recognizes an <c>installed-runtime.json</c> record written by the
-///     original pre-generalization CUDA adopt path — one whose source-provenance fields are all null — so startup
-///     recovery can re-validate and keep it instead of stranding an adopted build after an upgrade.
+///     Strict CUDA compatibility predicate for an <c>installed-runtime.json</c> record whose source-provenance fields
+///     are all null.
 /// </summary>
+/// <remarks>
+///     Such a record comes from the CUDA-only adopt path, and recognizing it lets startup recovery re-validate and
+///     keep the build instead of stranding it after an upgrade.
+/// </remarks>
 public static class LlamaCppSourceBuildCompatibility
 {
     public static bool IsLegacyPinnedCuda(this InstalledRuntimeState? state, string cacheRoot)

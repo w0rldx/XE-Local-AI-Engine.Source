@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
-///     Spawn half of <see cref="LlamaServerProcessSupervisor" />: the restart-with-backoff loop, the single launch
-///     attempt that resolves the binary, builds the launch plan and starts the child, the readiness wait, and the
-///     load-telemetry and layer-placement bookkeeping recorded from a successful start.
+///     Spawn half of <see cref="LlamaServerProcessSupervisor" />: the restart-with-backoff loop, the launch attempt
+///     that resolves the binary, builds the plan and starts the child, the readiness wait, and the load and
+///     layer-placement bookkeeping.
 /// </summary>
 public sealed partial class LlamaServerProcessSupervisor
 {
@@ -47,10 +47,8 @@ public sealed partial class LlamaServerProcessSupervisor
             }
             catch (LlamaRuntimeException ex) when (ex.Data.Contains(ReadinessTimeoutMarker))
             {
-                // A readiness TIMEOUT (process alive but slow to load) is not a transient crash: retrying it many times
-                // just multiplies the kill/reload thrash (the audited ~6 min stall). Retry it at most
-                // MaxReadinessTimeoutRetries times — independent of MaxRestartAttempts — then surface the classified
-                // "did not become ready" failure.
+                // A readiness TIMEOUT (process alive but slow to load) is not a transient crash: retrying it many times multiplies the kill/reload thrash (a measured
+                // ~6 min stall). Retry at most MaxReadinessTimeoutRetries times, independent of MaxRestartAttempts, then surface the classified "not ready" failure.
                 lastError = ex;
                 readinessTimeoutRetries++;
                 _logger.LogWarning(ex, "llama-server readiness timed out for model {ModelName} role {Role} (readiness-timeout attempt {ReadinessAttempt}; {MaxReadinessRetries} retry(ies) allowed).",
@@ -65,9 +63,8 @@ public sealed partial class LlamaServerProcessSupervisor
             }
             catch (GpuModelLoadAdmissionTimeoutException ex)
             {
-                // A bounded GPU-load admission wait elapsed (another model load did not become ready in time). It is not
-                // a transient crash, so surface its sanitized message immediately rather than burning restart attempts
-                // re-queuing behind a still-contended gate.
+                // A bounded GPU-load admission wait elapsed (another model load did not become ready in time): not a transient crash, so surface its sanitized
+                // message immediately rather than burning restart attempts re-queuing behind a still-contended gate.
                 _logger.LogError(ex, "llama-server spawn for model {ModelName} role {Role} could not acquire GPU-load admission in time.",
                     key.ModelName, key.Role);
                 throw;
@@ -98,9 +95,8 @@ public sealed partial class LlamaServerProcessSupervisor
         ProcessLaunchAdmission? admission,
         CancellationToken ct)
     {
-        // The resolver is awaited inside the core (after variant selection, before admission) exactly as before — a
-        // slow profile read never stalls admission for other keys. No startup capture, no forced --metrics. The launch
-        // policy (deterministic -c, GPU KV/FA, CPU threads) applies to this normal serving path.
+        // The resolver is awaited inside the core, after variant selection and before admission, so a slow profile read never stalls admission for other keys.
+        // No startup capture and no forced diagnostic metrics; the launch policy (deterministic context, GPU KV/FA, CPU threads) applies to this serving path.
         return SpawnCoreAsync(key,
             (variant, c) => _profileResolver.ResolveAsync(key.ModelName, key.Role, variant, c),
             startupCapture: null,
@@ -112,16 +108,16 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Shared spawn core for both the resolver-driven normal path and the explicit-args operator profiling path:
-    ///     resolve the model file + variant + binary, obtain the launch args via <paramref name="resolveArgs" /> BEFORE
-    ///     taking the admission gate, then admit under the cap, allocate a port, launch, health-probe, and register.
+    ///     Shared spawn core for the resolver-driven normal path and the explicit-args operator profiling path: resolve
+    ///     the model file, variant and binary, obtain the launch args, then admit, allocate a port, launch, probe and
+    ///     register.
     /// </summary>
     /// <remarks>
-    ///     The <paramref name="resolveArgs" /> delegate is awaited at the same point the profile resolver used to be, so
-    ///     admission ordering and the "a slow profile read never stalls admission" invariant are unchanged. When
-    ///     <paramref name="startupCapture" />, <paramref name="fitParamsCapture" />, and
-    ///     <paramref name="ensureMetrics" /> are their normal-path defaults (<see langword="null" />,
-    ///     <see langword="null" />, <see langword="false" />), the built spec is identical to the legacy spawn.
+    ///     <paramref name="resolveArgs" /> is awaited BEFORE the admission gate is taken, so a slow profile read never
+    ///     stalls admission for other keys. With <paramref name="startupCapture" /> and
+    ///     <paramref name="fitParamsCapture" /> <see langword="null" /> and <paramref name="ensureMetrics" />
+    ///     <see langword="false" /> — the normal-path defaults — the built spec carries no profiling additions.
+    ///     Candidate sequencing: docs/wiki/03-local-runtime-and-providers.md, "Spawn attempt sequencing, startup capture and one-shot fallbacks".
     /// </remarks>
     private async Task<RunningProcess> SpawnCoreAsync(ProcessKey key,
         Func<GpuVariant, CancellationToken, Task<ResolvedLaunchArguments>> resolveArgs,
@@ -140,9 +136,8 @@ public sealed partial class LlamaServerProcessSupervisor
             throw NonRetryable("The requested model is not installed.");
         }
 
-        // A LoRA-adapter model has no weights of its own: llama-server loads the installed BASE model and applies this
-        // entry's file as --lora. Resolving it here (rather than inside the spec builder) keeps every size-derived
-        // decision below — the readiness deadline in particular — accounting for the bytes actually loaded.
+        // A LoRA-adapter model has no weights of its own: llama-server loads the installed BASE model and applies this entry's file as the adapter. Resolving it
+        // here, not inside the spec builder, keeps every size-derived decision below — the readiness deadline above all — accounting for the bytes actually loaded.
         string? adapterFilePath = null;
         var adapterSizeBytes = 0L;
         try
@@ -165,18 +160,12 @@ public sealed partial class LlamaServerProcessSupervisor
             ? await _modelStore.ResolveProjectorFilePathAsync(key.ModelName, ct).ConfigureAwait(false)
             : null;
 
-        // The cold-start readiness deadline scales with the on-disk model size — a large model loads
-        // proportionally slower, so a fixed constant would kill and retry it before it can finish (the audited hang). A
-        // missing/unreadable size (0) falls back to the base timeout.
+        // The cold-start readiness deadline scales with the on-disk model size: a large model loads proportionally slower, and a fixed constant would kill and
+        // retry it before it can finish (a measured hang). A missing or unreadable size (0) falls back to the base timeout.
         var readinessTimeout = _options.ResolveReadinessTimeout(TryGetFileSizeBytes(modelFilePath) + adapterSizeBytes);
 
-        // A chat-role EXTERNAL-DRAFT speculative mode needs its draft GGUF present before launch — a missing file would
-        // otherwise start a server that dies cryptically. Deterministic misconfiguration → non-retryable (mirrors the
-        // model-not-installed guard above). draft-mtp, ngram-*, and disabled modes never reach this: MTP drafts from
-        // heads inside the main model, so there is no second GGUF to find (RequiresExternalDraftModel is false).
-        // The operator selects a draft model by NAME (installed chat model); resolve it to its on-disk GGUF the same way
-        // the target model is resolved above so the effective launch args carry a real path. An explicit path override
-        // (SpeculativeDraftModelPath), when set, wins and skips resolution.
+        // A chat-role EXTERNAL-DRAFT speculative mode must find its draft GGUF before launch, or llama-server dies cryptically: a deterministic misconfiguration,
+        // so non-retryable like the model-not-installed guard above. The operator names an installed chat model; an explicit SpeculativeDraftModelPath wins.
         var launchTuning = LlamaServerLaunchArgumentComposer.ResolveChatLaunchTuning(benchmarkPolicy, _options);
         var speculative = launchTuning.Speculative;
         if (key.Role == ModelRole.Chat && speculative.RequiresExternalDraftModel)
@@ -200,9 +189,8 @@ public sealed partial class LlamaServerProcessSupervisor
                  && speculative.ModeClass is SpeculativeModeClass.MainModelHeads
                  && (!string.IsNullOrWhiteSpace(speculative.DraftModelPath) || !string.IsNullOrWhiteSpace(_options.SpeculativeDraftModelName)))
         {
-            // Ignored, not rejected: settings saved before this contract was corrected were REQUIRED to name a draft
-            // model for draft-mtp, so rejecting would turn every such install into a non-retryable launch failure on
-            // upgrade. Clearing the path keeps the launch spec honest — nothing downstream can emit a stale draft flag.
+            // Ignored, not rejected: a stored setting can still name a draft model for draft-mtp (older releases required one), and rejecting it would turn every
+            // such install into a non-retryable launch failure. Clearing the path keeps the launch spec honest — nothing downstream can emit a stale draft flag.
             speculative = speculative with
             {
                 DraftModelPath = null
@@ -230,13 +218,8 @@ public sealed partial class LlamaServerProcessSupervisor
 
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
 
-        // Everything below keys off `variant`: the VRAM admission gate, the placement sniffer, the launch policy and,
-        // through LlamaServerLaunchProjection, every GPU argument (it gates -ngl/--fit/-ctk on `variant != Cpu`). A
-        // serve can hand back a build of a DIFFERENT variant than was asked for — the managed source-build record is
-        // authoritative and wins when the selector's cached signal has not been seeded yet — so follow the binary that
-        // is actually being launched. Selecting Cpu and serving a CUDA build would otherwise spawn it with no offload
-        // at all. The admission identity check above deliberately stays on the SELECTED variant: that is the variant
-        // the admission was granted against.
+        // Follow the binary actually launched: the manager can serve a DIFFERENT variant than was selected, and everything below keys off this one. The admission
+        // identity check above stays on the SELECTED variant. On following the served binary, see wiki 03, section Spawn attempt sequencing, startup capture and one-shot fallbacks.
         variant = binary.Variant;
         var capabilityManifest = await _capabilityManifestProbe.GetManifestAsync(binary, ct).ConfigureAwait(false);
         if (!capabilityManifest.ProbeSucceeded)
@@ -244,50 +227,25 @@ public sealed partial class LlamaServerProcessSupervisor
             throw NonRetryable("The selected llama.cpp runtime could not report its supported server options. Reinstall or rebuild the runtime and try again.");
         }
 
-        // Resolve the launch args (frozen-profile replay or explore-mode auto-fit, or operator-supplied profiling args)
-        // for this (model, role, backend) BEFORE taking the admission gate, so a slow profile read never stalls
-        // admission for other keys.
-        // The ticket describes the variant it was granted against, which the override above can have moved off. Once it
-        // has, NOTHING the ticket carries applies to this spawn: its arguments were resolved for another backend, and
-        // its allocation was sized for one — a CPU admission carries no GPU bytes, so spending it on a GPU load would
-        // put that load outside VRAM capacity accounting and let concurrent spawns oversubscribe the device. Drop it
-        // and take the unadmitted path, which resolves both against the variant actually being launched.
+        // Resolve the launch args (frozen-profile replay, explore-mode auto-fit or operator-supplied profiling args) BEFORE the admission gate, so a slow profile
+        // read never stalls admission for other keys. A ticket whose variant the override moved off carries NOTHING that applies here, so drop it. See wiki 03.
         var admitted = admission?.Variant == variant ? admission : null;
         var resolved = admitted?.ResolvedArguments ?? await resolveArgs(variant, ct).ConfigureAwait(false);
 
-        // Per-model developer/advanced override: extra llama-server flags the operator typed. Resolved here (alongside
-        // the profile args, BEFORE the admission gate) so a slow store read never stalls admission for other keys, and
-        // ONLY on the normal serving path — a benchmark/profiling spawn (applyLaunchPolicy false) must stay a pure
-        // measurement, so the operator's experimentation flags never perturb it. The app-managed flags are already
-        // stripped by the resolver: reachability (-m/--model/--host/--port) AND the memory-fit placement family
-        // (-c/-ngl/-ts/-ot/-ctk/-ctv/-fa/--parallel/-b/-ub), whose values the allocation + policy above already decided
-        // and recorded in the ledger — so what remains is sampling/decoding tuning only. Those are appended after the
-        // built spec below, where a later scalar flag overrides the bundled tuning default (llama.cpp is last-wins).
-        // Never throws.
+        // Per-model operator flags, resolved alongside the profile args and BEFORE the admission gate, and ONLY on the normal serving path so a benchmark or
+        // profiling spawn stays a pure measurement. Never throws. See wiki 03, "Spawn attempt sequencing…" (operator extra launch arguments) for what is stripped.
         var extraLaunchArgs = applyLaunchPolicy
             ? await _extraArgumentsResolver.ResolveAsync(key.ModelName, key.Role, ct).ConfigureAwait(false)
             : [];
 
-        // Serialize the spawn-through-readiness window of GPU-backed loads process-wide (shared with the image
-        // supervisor) so two --fit loads never read the same free-VRAM snapshot at once and oversubscribe the device.
-        // CPU loads bypass — they do not contend for VRAM. The gate is acquired here (after variant selection + arg
-        // resolution, immediately before the admission cap decision that may evict an idle process to free VRAM) so the
-        // freed VRAM is seen only by THIS load's --fit; the ticket releases on ready OR any failure via the using scope,
-        // and the next waiter then proceeds with a fresh free-VRAM read (the re-evaluation). Because this core runs
-        // under the detached-spawn/shutdown token (not the first caller's), a caller cancelling its wait never leaves
-        // the gate held. The ticket deliberately spans BOTH launch-plan attempts below (optimized + safe retry) — the
-        // retry is part of the same load window, and another load interleaving between the attempts would re-race the
-        // free-VRAM read the gate exists to serialize.
+        // Serializes the spawn-through-readiness window of GPU-backed loads process-wide; CPU loads bypass. Acquired HERE, immediately before the cap decision that
+        // may evict, and spanning BOTH plan attempts below. On the GPU load-admission gate, see wiki 03, section Spawn attempt sequencing.
         using var admissionTicket = variant == GpuVariant.Cpu
             ? null
             : await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
 
-        // The central launch policy fills in the deterministic context (-c), the GPU KV-cache
-        // quantization + flash-attention optimization, and the CPU thread policy the audited launch defaults omitted.
-        // Replay profiling bypasses it so the supplied frozen args ARE the experiment. Explore profiling applies the
-        // production policy because the helper and server must observe the same concrete context/KV/FA vector as normal
-        // serving; otherwise the fit helper (behavior observed on b9692) can report unchanged `-c 0 -ngl -1` defaults
-        // that are not replayable placement.
+        // The central launch policy fills in the deterministic context, the GPU KV-quant + flash-attention optimization and the CPU thread policy. Replay profiling
+        // bypasses it, the frozen args BEING the experiment; explore applies it, or the fit helper reports its automatic non-replayable defaults, as seen on b9692.
         var planSet = await BuildLaunchPlanCandidatesAsync(key,
                 variant,
                 resolved,
@@ -309,14 +267,12 @@ public sealed partial class LlamaServerProcessSupervisor
             var readinessRecorded = false;
             var automaticCapture = applyLaunchPolicy ? new LlamaServerBoundedStartupCapture() : null;
 
-            // Latches llama.cpp's layer-placement banner out of the streamed startup output. It is deliberately NOT
-            // read off automaticCapture: that buffer is bounded, and at the verbosity the banner requires it is
-            // printed around line 155 — outside any small window.
+            // Latches llama.cpp's layer-placement banner out of the streamed startup output. Deliberately NOT read off automaticCapture: that buffer is bounded and
+            // at the verbosity the banner requires it is printed around line 155, outside any small window.
             var placementSniffer = variant == GpuVariant.Cpu ? null : new LlamaServerLayerPlacementSniffer();
 
-            // Flipped once this child is serving, to demote its (raised-verbosity) request chatter to Debug. It stays
-            // false for the whole load, and forever on a spawn that never reaches readiness, so the placement banner
-            // and every failure message are still logged at Information.
+            // Flipped once this child is serving, to demote its raised-verbosity request chatter to Debug. It stays false for the whole load, and forever on a spawn
+            // that never reaches readiness, so the placement banner and every failure message are still logged at Information.
             var servingWindow = new LlamaServerDiagnosticVerbosityWindow();
             try
             {
@@ -328,9 +284,8 @@ public sealed partial class LlamaServerProcessSupervisor
                     projectorFilePath,
                     adapterFilePath);
 
-                // Append the operator's per-model extra flags LAST so they win over the bundled tuning defaults
-                // (llama.cpp is last-wins for scalar flags). Placed BEFORE the diagnostic --metrics / -lv fill-ins below
-                // so those checks see an operator-supplied --metrics/-lv and do not duplicate it.
+                // Appended LAST so the operator's flags win over the bundled tuning defaults (llama.cpp is last-wins for scalar flags), but BEFORE the diagnostic
+                // metrics/verbosity fill-ins below, so those checks see an operator-supplied flag of the same name and do not duplicate it.
                 if (extraLaunchArgs.Count > 0)
                 {
                     spec = spec with
@@ -349,21 +304,8 @@ public sealed partial class LlamaServerProcessSupervisor
                     };
                 }
 
-                // Raise log verbosity just enough to make llama.cpp print how many layers actually landed on the GPU.
-                // At the server default the whole startup is 11 lines and says nothing about placement, so a model
-                // whose weights spilled into system RAM is indistinguishable from one that fully fit.
-                //
-                // EVERY GPU spawn pays this, deliberately. Placement under auto-fit is decided against the FREE VRAM at
-                // load time, so the same model can be fully resident when loaded alone and partly resident when loaded
-                // beside two others — measuring once and reusing the answer would report a number that is no longer
-                // true. Each spawn is a fresh process, so each gets a fresh reading. The sink cost is paid back by
-                // demoting this child's request chatter to Debug once it is serving (see servingWindow).
-                //
-                // The operator-profiling EXPLORE path is skipped because it already raises verbosity to maximum below.
-                // A benchmark spawn is the exception among profiling spawns: it takes a fit-params capture like every
-                // other profiling spawn, but it never reaches the explore `-v` branch (its args are a replay), so
-                // without this it was the one measurement that could not say where its own layers landed — exactly the
-                // spawn whose placement a later reader most needs. It pays the same servingWindow demotion.
+                // Raise log verbosity just enough to make llama.cpp print how many layers actually landed on the GPU. EVERY GPU spawn pays this, deliberately; the
+                // explore path is skipped (already at maximum) and a benchmark spawn is the exception among profiling spawns. Why: wiki 03, "Spawn attempt sequencing…".
                 if ((fitParamsCapture is null || benchmarkPolicy is not null)
                     && placementSniffer is not null
                     && variant != GpuVariant.Cpu
@@ -379,11 +321,8 @@ public sealed partial class LlamaServerProcessSupervisor
                 // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
                 if (startupCapture is not null || automaticCapture is not null || placementSniffer is not null)
                 {
-                    // The sink is wired for the process's LIFETIME, but the two automatic buffers behind it are
-                    // startup-only: the placement banner is read at readiness and the failure-classifier window is only
-                    // ever read from this attempt's catch block, which readiness has ruled out. Detaching them at
-                    // readiness turns every serving-time forwarded line from a Lock + string copy into one volatile
-                    // read. The operator profiling sink is NOT detached — that output was explicitly requested.
+                    // The sink is wired for the process's LIFETIME, but the two automatic buffers behind it are startup-only and detach at readiness; the operator
+                    // profiling sink is NOT detached, since that output was explicitly requested. On why, see wiki 03, section Spawn attempt sequencing, under startup capture.
                     var isServing = servingWindow.IsServing;
                     spec = spec with
                     {
@@ -407,10 +346,8 @@ public sealed partial class LlamaServerProcessSupervisor
                     && !spec.Arguments.Contains("-v", StringComparer.Ordinal)
                     && !spec.Arguments.Contains("--verbose", StringComparer.Ordinal))
                 {
-                    // The fit helper (observed on b9692) leaves -ngl at its automatic sentinel when the initial
-                    // placement already fits. Verbose
-                    // load_tensors output is the authoritative proof that automatic placement meant every layer was
-                    // offloaded; the fit parser uses that proof to normalize replay to explicit all-layers (-2).
+                    // The fit helper (observed on b9692) leaves the layer count at its automatic sentinel when the initial placement already fits. Verbose tensor-load
+                    // output is the authoritative proof that automatic placement offloaded every layer; the fit parser uses it to normalize replay to explicit all-layers.
                     spec = spec with
                     {
                         Arguments = [.. spec.Arguments, "-v"]
@@ -462,11 +399,8 @@ public sealed partial class LlamaServerProcessSupervisor
 
                 var placement = RecordObservedLayerPlacement(key, variant, placementSniffer);
 
-                // Assembled here (the RunningProcess below carries it) but NOT published yet: post-readiness
-                // bookkeeping still runs, and anything that throws there tree-kills the child. A Ready observation
-                // raised before that point would tell the host — and its last-load VRAM cache — that a process which
-                // never served had loaded. It is published just before the successful return instead, so
-                // readinessRecorded stays false until then and the catch path records the failed outcome exactly once.
+                // Assembled here (the RunningProcess below carries it) but NOT published yet: post-readiness bookkeeping can still throw and tree-kill the child, and
+                // readinessRecorded stays false until the publish so a catch path records the failed outcome exactly once. Why: wiki 03, "Spawn attempt sequencing…".
                 var loadObservation = BuildLoadObservation(key,
                     variant,
                     capabilityManifest.Version ?? binary.Version,
@@ -478,11 +412,8 @@ public sealed partial class LlamaServerProcessSupervisor
                     speculative,
                     admitted);
 
-                // The load window is over and the banner has been read. From here the child's raised-verbosity output is
-                // per-request chatter nobody asked to persist: drop it to Debug AND detach the automatic startup
-                // capture (same latch, see the StartupCapture wiring above). Deliberately after
-                // RecordObservedLayerPlacement, and never reached on a spawn that failed to become ready — both
-                // buffers must stay live for the whole load window.
+                // The load window is over and the banner has been read: drop the child's raised-verbosity chatter to Debug AND detach the automatic startup capture
+                // (same latch as the StartupCapture wiring above). Deliberately after RecordObservedLayerPlacement, and never reached on a spawn that failed to be ready.
                 servingWindow.MarkServing();
 
                 // Publish helper output only for the candidate that actually reached readiness. If the optimized
@@ -499,14 +430,8 @@ public sealed partial class LlamaServerProcessSupervisor
                 // budgeters and the UI meter size against the REAL window rather than the requested/advertised one.
                 var effectiveContext = await TryReadEffectiveContextAsync(spec.BaseAddress, ct).ConfigureAwait(false);
 
-                // A benchmark spawn — and only a benchmark spawn — records what it actually launched, once the process is
-                // genuinely serving. Assembly is non-throwing by construction (every unreadable fact becomes null), so
-                // a receipt can never turn a healthy measurement into a failed run.
-                //
-                // The projection is read back out of the FINAL argv rather than recomputed from (variant, resolved,
-                // plan, role, tuning): the capability gate above can drop an optional flag the intended projection
-                // still claims, and the operator's extra arguments were appended after it. An unparseable vector falls
-                // back to the intended shape — a describable launch is worth more than no receipt at all.
+                // A benchmark spawn — and only a benchmark spawn — records what it actually launched, once the process is genuinely serving. The projection is read
+                // back out of the FINAL argv, not recomputed. On why, and why assembly is non-throwing, see wiki 03, section Spawn attempt sequencing, under the benchmark launch receipt.
                 var launchReceipt = benchmarkPolicy is null
                     ? null
                     : await BuildBenchmarkLaunchReceiptAsync(variant,
@@ -541,20 +466,12 @@ public sealed partial class LlamaServerProcessSupervisor
 
                 if (isSafeRetry)
                 {
-                    // The safe config reached readiness where the optimized (KV-quant + flash-attention) config could
-                    // not — so the optimized config is the culprit for THIS backend (not a broken model, which would
-                    // fail the safe config too). Record it so subsequent spawns skip the known-bad optimized config.
-                    // WithoutKvCacheQuantization() leaves the plan's KvCacheType intact, so the verdict is keyed on
-                    // the node's CURRENT selection. On the replay branch that is not read off the frozen profile: it
-                    // coincides with the profile's frozen type only because the node's selected KV-cache type is part
-                    // of a profile's launch-policy fingerprint, so a profile frozen under a different type is already
-                    // stale and re-explores rather than replaying — a mismatching pair never reaches this line.
+                    // The safe config reached readiness where the optimized (KV-quant + flash-attention) one could not, so the optimized config is the culprit for
+                    // THIS backend; record it, keyed on the node's CURRENT KV selection. On why, see wiki 03, section Spawn attempt sequencing, under the safe-retry verdict.
                     if (candidate.Plan is { CpuMoe: true })
                     {
-                        // An expert-offload spawn is the most VRAM-marginal launch on the box, so a one-shot success
-                        // without KV quantization proves nothing about KV: the primary may have failed on placement or
-                        // transient pressure. Recording it would disable the optimized config for EVERY model on this
-                        // backend from one model's failure, so it is logged as inconclusive instead.
+                        // An expert-offload spawn is the most VRAM-marginal launch on the box, so a one-shot success without KV quantization proves nothing about KV
+                        // (placement or transient pressure could have failed the primary), and recording it would disable the optimized config for EVERY model here.
                         _logger.LogInformation(
                             "Safe-retry readiness for expert-offload model {ModelName} role {Role} is inconclusive about the optimized KV config; nothing recorded for backend {Variant}.",
                             key.ModelName,
@@ -563,10 +480,8 @@ public sealed partial class LlamaServerProcessSupervisor
                     }
                     else if (candidate.Plan is { } safeRetryPlan)
                     {
-                        // Deliberately after the _processes registration above, and safe there because the policy
-                        // absorbs a verdict it cannot persist (see ILlamaServerLaunchPolicy). The endpoint is already
-                        // reachable by a concurrent EnsureRunningAsync, so an exception out of this line would
-                        // tree-kill a process another caller holds — to save a cache entry the next spawn re-records.
+                        // Deliberately after the _processes registration above, and safe there because the policy absorbs a verdict it cannot persist (see
+                        // ILlamaServerLaunchPolicy): the endpoint is already reachable, so throwing here would tree-kill a process another caller holds.
                         await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, safeRetryPlan.KvCacheType, ct).ConfigureAwait(false);
                     }
                     else
@@ -602,9 +517,8 @@ public sealed partial class LlamaServerProcessSupervisor
                 handle?.Dispose();
                 await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
 
-                // A capability rejection is known before process launch, so retrying an optimized/safe candidate cannot
-                // change the outcome. Other non-retryable errors can still be caused by the optimized child exiting
-                // during load; preserve the paid-for one-shot safe KV/FA fallback for that case.
+                // A capability rejection is known before process launch, so retrying an optimized or safe candidate cannot change the outcome. Other non-retryable
+                // errors can still come from the optimized child exiting during load, so the paid-for one-shot safe KV/FA fallback is preserved for that case.
                 if (ex.Data.Contains(CapabilityIncompatibleMarker))
                 {
                     if (ex.Data.Contains(CapabilitySafeFallbackMarker)
@@ -622,9 +536,8 @@ public sealed partial class LlamaServerProcessSupervisor
                     throw;
                 }
 
-                // The OPTIMIZED attempt failed and a safe candidate remains: remember the error and retry ONCE with the
-                // safe (KV/FA off) config. Any other failure (the safe attempt, or a spawn with no fallback candidate)
-                // propagates exactly as before — including the readiness-timeout marker the restart loop keys on.
+                // The OPTIMIZED attempt failed and a safe candidate remains: remember the error and retry ONCE with the safe (KV/FA off) config. Any other failure —
+                // the safe attempt, or a spawn with no fallback candidate — propagates, including the readiness-timeout marker the restart loop keys on.
                 if (!isSafeRetry && attempt + 1 < planCandidates.Count)
                 {
                     optimizedFailure = ex;
@@ -695,12 +608,14 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Publishes a sniffed layer-placement observation once the process is genuinely serving. Recording only after
-    ///     readiness keeps a candidate that printed a banner and then failed to start out of the operator-facing report.
-    ///     A partial or zero offload is logged as a warning: the model serves, but a share of its layers — or all of
-    ///     them — run from system RAM. The raw counts travel with the class so a reader sees 38/49 rather than only
-    ///     "partial".
+    ///     Publishes a sniffed layer-placement observation once the process is genuinely serving.
     /// </summary>
+    /// <remarks>
+    ///     Recording only after readiness keeps a candidate that printed a banner and then failed to start out of the
+    ///     operator-facing report. A partial or zero offload is logged as a warning: the model serves, but a share of
+    ///     its layers — or all of them — run from system RAM. The raw counts travel with the returned placement, so a
+    ///     reader sees 38/49 rather than only "partial".
+    /// </remarks>
     private LlamaServerLaunchPlacement RecordObservedLayerPlacement(ProcessKey key,
         GpuVariant variant,
         LlamaServerLayerPlacementSniffer? sniffer)
@@ -736,10 +651,13 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Assembles the benchmark launch receipt. Non-throwing by construction: the only fact that can fail to be read
-    ///     is the running image digest, and <see cref="TryComputeRunningImageSha256Async" /> reports that failure as
-    ///     <see langword="null" /> rather than as an exception, so a receipt never costs a run its measurement.
+    ///     Assembles the benchmark launch receipt, non-throwing by construction.
     /// </summary>
+    /// <remarks>
+    ///     The only fact that can fail to be read is the running image digest, and
+    ///     <see cref="TryComputeRunningImageSha256Async" /> reports that failure as <see langword="null" /> rather than
+    ///     as an exception, so a receipt never costs a run its measurement.
+    /// </remarks>
     internal static async Task<LlamaServerLaunchReceipt> BuildBenchmarkLaunchReceiptAsync(GpuVariant variant,
         string? executableVersion,
         string? manifestSha256,
@@ -769,11 +687,13 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Hashes the image the LIVE process is running, rather than the executable path the launch resolved — those two
-    ///     disagree exactly when it matters, because a runtime can be replaced on disk between launch and readiness.
-    ///     Returns <see langword="null" /> whenever the running image cannot be read; an unreadable digest is a fact
-    ///     worth recording as absent, never a reason to fail a benchmark.
+    ///     Hashes the image the LIVE process is running, not the executable path the launch resolved.
     /// </summary>
+    /// <remarks>
+    ///     The two disagree exactly when it matters, because a runtime can be replaced on disk between launch and
+    ///     readiness. Returns <see langword="null" /> whenever the running image cannot be read: an unreadable digest is
+    ///     a fact worth recording as absent, never a reason to fail a benchmark.
+    /// </remarks>
     internal static async Task<string?> TryComputeRunningImageSha256Async(int processId)
     {
         if (processId <= 0)
@@ -801,9 +721,8 @@ public sealed partial class LlamaServerProcessSupervisor
                 return null;
             }
 
-            // CancellationToken.None: a bounded local-file hash the caller cannot usefully abandon, and cancelling it
-            // would turn recorded evidence into a failure. Matches BenchmarkFidelityExecutor.TryHashFileAsync, and
-            // means the catch below never has to absorb a cancellation it did not ask for.
+            // CancellationToken.None: a bounded local-file hash the caller cannot usefully abandon, and cancelling it would turn recorded evidence into a
+            // failure. Matches BenchmarkFidelityExecutor.TryHashFileAsync, and means the catch below never absorbs a cancellation it did not ask for.
             await using var stream = File.OpenRead(imagePath);
             return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, CancellationToken.None).ConfigureAwait(false));
         }
@@ -846,9 +765,9 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Assembles the observation without raising it. Split from <see cref="RecordLoadTelemetry" /> so the Ready
-    ///     path can fill <c>RunningProcess.LoadObservation</c> while the PUBLISH waits until the post-readiness
-    ///     bookkeeping has actually succeeded — a Ready load must never be announced for a process that gets killed.
+    ///     Assembles the observation without raising it, so the Ready path can fill <c>RunningProcess.LoadObservation</c>
+    ///     while the PUBLISH waits for the post-readiness bookkeeping — a Ready load must never be announced for a
+    ///     process that then gets killed.
     /// </summary>
     private static LlamaServerLoadObservation BuildLoadObservation(ProcessKey key,
         GpuVariant variant,
@@ -865,10 +784,8 @@ public sealed partial class LlamaServerProcessSupervisor
             ? speculative.ModeClass ?? SpeculativeModeClass.Disabled
             : SpeculativeModeClass.Disabled;
 
-        // Both byte figures are whatever the admission ALREADY knew — the free-VRAM reading the capacity gate took
-        // under its decision gate, and the GPU bytes it reserved. Nothing is probed here: a load must not pay for a
-        // second nvidia-smi call, and a figure measured after the weights landed would answer a different question.
-        // An unadmitted spawn (direct, profiling, test) or one whose variant moved off the admission reports neither.
+        // Both byte figures are whatever the admission ALREADY knew: the free-VRAM reading the capacity gate took under its decision gate, and the GPU bytes it
+        // reserved. Nothing is probed here (no second device query, and a post-load figure answers a different question); an unadmitted spawn reports neither.
         var observation = new LlamaServerLoadObservation
         {
             Role = key.Role,
@@ -917,11 +834,14 @@ public sealed partial class LlamaServerProcessSupervisor
 
     /// <summary>
     ///     Waits for a freshly launched process to pass its readiness probe, racing that wait against the process
-    ///     exiting. A child that dies during load (an incompatible model, or a context that will not fit in the
-    ///     available memory) is detected the instant it exits and surfaced as a NON-RETRYABLE failure — instead of
-    ///     polling <c>/health</c> against a dead endpoint for the full readiness budget and then retrying. A
-    ///     crash-on-load is deterministic, so retrying it only multiplies the stall by <c>MaxRestartAttempts</c>.
+    ///     exiting.
     /// </summary>
+    /// <remarks>
+    ///     A child that dies during load (an incompatible model, or a context that will not fit in the available
+    ///     memory) is detected the instant it exits and surfaced as a NON-RETRYABLE failure, instead of polling
+    ///     <c>/health</c> against a dead endpoint for the full readiness budget and then retrying: a crash-on-load is
+    ///     deterministic, so retrying it only multiplies the stall by <c>MaxRestartAttempts</c>.
+    /// </remarks>
     private async Task WaitForReadyOrExitAsync(ILlamaServerProcessHandle handle, Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
     {
         // Cancel the losing side the instant the other wins, so neither the /health poll nor the exit-watcher is left

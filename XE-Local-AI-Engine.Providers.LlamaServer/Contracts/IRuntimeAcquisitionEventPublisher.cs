@@ -1,22 +1,15 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Publishes first-run llama.cpp runtime acquisition progress (GPU probe → download → verify → extract) to connected
-///     operator clients. The default implementation
-///     (<see cref="Implementation.NullRuntimeAcquisitionEventPublisher" />) is a no-op; the Client host swaps in a
-///     hub-backed publisher (<c>RuntimeAcquisitionEventPublisher</c> over the <c>RuntimeAcquisitionHub</c>), mirroring
-///     the GGUF download and CUDA build hubs.
+///     Publishes first-run llama.cpp runtime acquisition progress — GPU probe, download, verify, extract — to connected
+///     operator clients.
 /// </summary>
 /// <remarks>
-///     <para>
-///         This exists because the acquisition happens off the startup path while a fully-rendered, idle-looking UI is
-///         already on screen: without a push channel a slow first-run download is indistinguishable from a broken one.
-///     </para>
-///     <para>
-///         Payloads are sanitized at the boundary — never an absolute path, a download URL, or a token. Failure text
-///         comes from <see cref="LlamaRuntimeException" />, whose messages are user-safe by contract; any other
-///         exception is collapsed to a generic reason rather than surfaced verbatim.
-///     </para>
+///     The default <see cref="Implementation.NullRuntimeAcquisitionEventPublisher" /> is a no-op and the Client host
+///     swaps in a hub-backed one, mirroring the GGUF download and CUDA build hubs. It exists because acquisition
+///     happens off the startup path while a fully-rendered, idle-looking UI is already on screen, so without a push
+///     channel a slow first-run download is indistinguishable from a broken one. Payloads are SANITIZED at the
+///     boundary: never an absolute path, a download URL or a token.
 /// </remarks>
 public interface IRuntimeAcquisitionEventPublisher
 {
@@ -34,12 +27,12 @@ public static class RuntimeAcquisitionHubEvents
     public const string StatusChanged = "runtimeAcquisition.statusChanged";
 }
 
-/// <summary>
-///     The lifecycle stage of a llama.cpp runtime acquisition. Byte progress alone is not enough to explain the wait:
-///     verification and extraction of a few-hundred-MB archive are not instant, and the Windows-CUDA path downloads two
-///     archives back to back — so the phase (plus the step counter on the payload) keeps the UI honest instead of
-///     running 0→100 % twice with no explanation.
-/// </summary>
+/// <summary>The lifecycle stage of a llama.cpp runtime acquisition.</summary>
+/// <remarks>
+///     Byte progress alone cannot explain the wait: verifying and extracting a few-hundred-MB archive is not instant,
+///     and the Windows-CUDA path downloads two archives back to back — so the phase, plus the step counter on the
+///     payload, keeps the UI honest instead of running 0 to 100 % twice with no explanation.
+/// </remarks>
 public enum RuntimeAcquisitionPhase
 {
     /// <summary>No acquisition has been attempted in this process lifetime. The initial registry state.</summary>
@@ -74,10 +67,13 @@ public enum RuntimeAcquisitionPhase
 public sealed class RuntimeAcquisitionStatusHubEvent
 {
     /// <summary>
-    ///     Monotonic counter stamped by <see cref="IRuntimeAcquisitionStatusRegistry" /> on every status write, never reset
-    ///     within a process lifetime. Hydrate and push travel different paths and race in BOTH directions, so the client
-    ///     drops any update whose sequence is not greater than the one it already holds. Timestamps are not sufficient.
+    ///     Monotonic counter stamped by <see cref="IRuntimeAcquisitionStatusRegistry" /> on every status write, never
+    ///     reset within a process lifetime.
     /// </summary>
+    /// <remarks>
+    ///     Hydrate and push travel different paths and race in BOTH directions, so the client drops any update whose
+    ///     sequence is not greater than the one it already holds. Timestamps are not sufficient.
+    /// </remarks>
     public required long Sequence { get; init; }
 
     /// <summary>The <see cref="RuntimeAcquisitionPhase" /> name.</summary>
@@ -105,5 +101,9 @@ public sealed class RuntimeAcquisitionStatusHubEvent
     public required int StepCount { get; init; }
 
     /// <summary>A user-safe reason when <see cref="Phase" /> is Failed; otherwise <see langword="null" />.</summary>
+    /// <remarks>
+    ///     The text comes from <see cref="LlamaRuntimeException" />, whose messages are user-safe by contract; any
+    ///     other exception is collapsed to a generic reason rather than surfaced verbatim.
+    /// </remarks>
     public required string? SanitizedError { get; init; }
 }

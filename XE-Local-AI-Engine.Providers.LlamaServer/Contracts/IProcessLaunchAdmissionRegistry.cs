@@ -14,11 +14,14 @@ public sealed record ProcessLaunchAdmission
     public required ProcessContextAllocation Allocation { get; init; }
 
     /// <summary>
-    ///     Report-only: machine-global free VRAM as the capacity gate read it under its decision gate while approving this
-    ///     launch, so the supervisor can put it on the load observation without a second probe. Null when the gate had no
-    ///     readable figure (a non-NVIDIA or CPU-only host), and null on every admission built outside that gate. NOTHING
-    ///     may branch on it — the registry ignores it, and admission arithmetic stays in the capacity service.
+    ///     Report-only: machine-global free VRAM as the capacity gate read it under its decision gate while approving
+    ///     this launch, so the supervisor can put it on the load observation without a second probe.
     /// </summary>
+    /// <remarks>
+    ///     Null when the gate had no readable figure (a non-NVIDIA or CPU-only host), and null on every admission built
+    ///     outside that gate. NOTHING may branch on it: the registry ignores it, and admission arithmetic stays in the
+    ///     capacity service.
+    /// </remarks>
     public long? GlobalFreeVramBytesAtAdmission { get; init; }
 }
 

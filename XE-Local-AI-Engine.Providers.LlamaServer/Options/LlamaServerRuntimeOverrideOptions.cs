@@ -1,27 +1,15 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
-///     Operator "bring-your-own" llama-server override. When active it points the runtime at a locally-built
-///     <c>llama-server</c> (for example a Linux CUDA build, for which no prebuilt asset is shipped) instead of the
-///     pinned download-and-verify acquisition path. Off by default — when <see cref="ServerPath" /> is unset the
-///     selector and binary manager behave byte-identically to today.
+///     Operator "bring-your-own" llama-server override, pointing the runtime at a locally-built <c>llama-server</c>
+///     instead of the pinned download-and-verify acquisition path. Off by default.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Trust-channel containment.</b> The override is <em>operator-trust only</em>: it is built exclusively from
-///         process environment variables (<see cref="ServerPathEnvironmentVariable" /> /
-///         <see cref="VariantEnvironmentVariable" />) via <see cref="FromEnvironment" />, the same trust level as the app
-///         binary itself. It is NEVER bound from <c>IConfiguration</c> sections, the user-editable node settings store, or
-///         any request DTO — a lower-trust write to the override path would otherwise become arbitrary-binary execution at
-///         app privilege. Skipping the network-oriented SHA256 pin is sound only under this containment.
-///     </para>
-///     <para>
-///         The options type is intentionally dumb: it carries the resolved values and a computed
-///         <see cref="IsActive" /> flag and performs no I/O or path validation in its members. Validating the path on disk
-///         (regular-file, exec bit, ownership/permissions, smoke test, GPU-device presence) is the binary manager's job at
-///         acquisition time — this type only decides <em>whether</em> an override is configured and <em>which</em> variant
-///         it claims.
-///     </para>
+///     Operator-trust ONLY — the same trust level as the app binary itself: built exclusively from process environment
+///     variables via <see cref="FromEnvironment" />, NEVER from an <c>IConfiguration</c> section, the user-editable node
+///     settings store or a request DTO. Intentionally dumb besides, deciding only WHETHER an override is configured and
+///     WHICH variant it claims and doing no I/O; the binary manager validates the path at acquisition. Why the
+///     containment licenses skipping the SHA256 pin: docs/wiki/03-local-runtime-and-providers.md, "Binary manager + dynamic updater".
 /// </remarks>
 public sealed class LlamaServerRuntimeOverrideOptions
 {

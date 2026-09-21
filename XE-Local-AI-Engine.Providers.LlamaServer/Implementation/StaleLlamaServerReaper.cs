@@ -6,24 +6,15 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Startup <see cref="IHostedService" /> that reaps stale <c>llama-server</c> orphans left by a previous run of THIS
-///     app. The supervisor launches llama-server detached (Linux <c>setsid</c> / Windows Job Object) and tears it down
-///     only via graceful DI shutdown (<see cref="LlamaServerProcessSupervisor" />.<c>DisposeAsync</c>); a hard kill of the
-///     host (e.g. <c>aspire stop</c>) skips that path, orphaning the server while it still holds its loopback port and GPU
-///     VRAM. Reaping on the next start makes restart reliable regardless of how the previous run died.
+///     Startup <see cref="IHostedService" /> that reaps stale <c>llama-server</c> orphans left by a previous run of
+///     THIS app, so restart is reliable regardless of how that run died.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Strict matching:</b> a process is reaped ONLY when its executable path is under the app's own llama.cpp
-///         binaries root (<see cref="LlamaCppBinaryManager.DefaultLlamaCppBinariesRoot" />), so an unrelated
-///         <c>llama-server</c> — e.g. Ollama's at <c>/usr/lib/ollama/llama-server</c> — is never touched. When the root
-///         cannot be resolved the reaper logs and no-ops.
-///     </para>
-///     <para>
-///         The whole reap is best-effort and wrapped so a reaper failure can never block app start. It runs before the
-///         supervisor spawns any process — hosted services start during host startup, before requests are served — so it
-///         only ever observes orphans from a previous run, never this run's own children.
-///     </para>
+///     The supervisor launches llama-server detached (Linux <c>setsid</c>, Windows Job Object) and tears it down only
+///     through graceful DI shutdown, so a hard kill of the host orphans a server still holding its loopback port and
+///     GPU VRAM. STRICT MATCHING: a process is reaped ONLY when its executable path is under the app's own binaries
+///     root (<see cref="LlamaCppBinaryManager.DefaultLlamaCppBinariesRoot" />), so an unrelated <c>llama-server</c> —
+///     Ollama's, say — is never touched; an unresolvable root logs and no-ops.
 /// </remarks>
 internal sealed class StaleLlamaServerReaper : IHostedService
 {
@@ -48,6 +39,11 @@ internal sealed class StaleLlamaServerReaper : IHostedService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     Best-effort and wrapped, so a reaper failure can never block app start. Hosted services start during host
+    ///     startup, before the supervisor spawns anything, so it only ever observes orphans from a previous run and
+    ///     never this run's own children.
+    /// </remarks>
     public Task StartAsync(CancellationToken cancellationToken)
     {
         // The whole body is guarded: a reaper failure must NEVER block application start. The synchronous OS process

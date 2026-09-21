@@ -8,26 +8,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     throttled fire-and-forget broadcast through <see cref="IRuntimeAcquisitionEventPublisher" />.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Throttle rule — deliberately NOT a port of <c>GgufDownloadCoordinator.SetStatus</c>.</b> That rule bypasses
-///         the throttle only for the initial and terminal pushes, which is sufficient there because a GGUF download has
-///         exactly one non-terminal phase. This lifecycle has several (Downloading → Verifying → Extracting), and
-///         porting the GGUF rule literally would swallow every transition that landed inside the throttle interval after
-///         a byte update: connected clients would sit on <c>Downloading</c> until completion, which is the precise
-///         staleness this channel exists to remove.
-///     </para>
-///     <para>
-///         The rule here is instead: <b>throttle only repeated byte updates within the same
-///         (<see cref="RuntimeAcquisitionUpdate.Phase" />, <see cref="RuntimeAcquisitionUpdate.StepIndex" />)</b>. Any
-///         phase change, any step change, and every terminal status pushes immediately. Throttling is still mandatory
-///         for the byte case: the download loop uses an 81 920-byte buffer, so an unthrottled callback fires roughly
-///         every 80 KB and would flood the socket.
-///     </para>
-///     <para>
-///         <b>Non-blocking.</b> <see cref="Report" /> is called from the download byte loop and from the startup path.
-///         The publish is fire-and-forget with its failure swallowed to a debug log, exactly as
-///         <c>GgufDownloadCoordinator.BroadcastStatus</c> does — the hydrate endpoint remains authoritative either way.
-///     </para>
+///     THROTTLE RULE: only repeated byte updates within one
+///     (<see cref="RuntimeAcquisitionUpdate.Phase" />, <see cref="RuntimeAcquisitionUpdate.StepIndex" />) pair are
+///     throttled, while any phase change, any step change and every terminal status pushes immediately. It is
+///     deliberately NOT a port of <c>GgufDownloadCoordinator.SetStatus</c>, which bypasses the throttle for the initial
+///     and terminal pushes only. See docs/wiki/03-local-runtime-and-providers.md, "The acquisition throttle rule".
 /// </remarks>
 public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatusRegistry
 {

@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Probes a just-spawned (or running) <c>llama-server</c> endpoint for readiness. Separated from the supervisor so
-///     unit tests can drive readiness deterministically without a real HTTP server; the production implementation
-///     (<see cref="LlamaServerHealthProbe" />) polls the server's <c>/health</c> endpoint until it reports ready.
+///     Probes a just-spawned, or running, <c>llama-server</c> endpoint for readiness.
 /// </summary>
+/// <remarks>
+///     Separated from the supervisor so unit tests can drive readiness deterministically without a real HTTP server;
+///     <see cref="LlamaServerHealthProbe" /> polls the server's <c>/health</c> endpoint until it reports ready.
+/// </remarks>
 internal interface ILlamaServerHealthProbe
 {
     /// <summary>
@@ -37,9 +39,12 @@ internal interface ILlamaServerHealthProbe
 
     /// <summary>
     ///     Reads the effective per-slot context window (<c>default_generation_settings.n_ctx</c>) the running server at
-    ///     <paramref name="baseAddress" /> actually loaded, via its <c>/props</c> endpoint. Returns <see langword="null" />
-    ///     when <c>/props</c> is unreachable, the value is absent/unparseable, or non-positive — a best-effort read the
-    ///     caller degrades from (it is never fatal to a spawn). Bounded like the readiness probe; issues one request.
+    ///     <paramref name="baseAddress" /> actually loaded, via its <c>/props</c> endpoint.
     /// </summary>
+    /// <remarks>
+    ///     Returns <see langword="null" /> when <c>/props</c> is unreachable, or the value is absent, unparseable or
+    ///     non-positive: a best-effort read the caller degrades from, never fatal to a spawn. Bounded like the
+    ///     readiness probe, and issues one request.
+    /// </remarks>
     Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct);
 }

@@ -2,23 +2,14 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     The resolved llama-server launch-argument decision for one <c>(model, role, backend)</c> spawn, produced by an
-///     <see cref="IInferenceProfileResolver" /> and consumed by the supervisor's single launch-spec builder. Two modes:
-///     <see cref="ExploreMode" /> (let llama.cpp auto-fit choose placement) versus replay
-///     (a frozen/explored profile whose explicit <c>-c/-ngl/-ts/-ot/-ctk/-ctv</c> args are emitted verbatim).
+///     <see cref="IInferenceProfileResolver" /> and consumed by the supervisor's single launch-spec builder.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The two modes are mutually exclusive per run because any explicit fit-arg DISABLES llama.cpp auto-fit
-///         (verified against release <c>b9692</c>; the pinned <c>b10201</c> <c>--help</c> confirms <c>--fit</c> adjusts
-///         only UNSET arguments): explore writes no explicit args so auto-fit runs; replay writes the
-///         frozen args and omits <c>--fit</c>. Re-exploring is the only path back to auto-fit.
-///     </para>
-///     <para>
-///         Replay invariants (enforced by <see cref="Replay" />): the KV cache types are both set or both null
-///         <strong>and identical</strong> (the fused flash-attention path requires matching K/V types), and
-///         <see cref="FlashAttn" /> must be enabled whenever the KV cache types are set (quantized/explicit KV
-///         requires flash attention).
-///     </para>
+///     Two mutually exclusive modes: <see cref="ExploreMode" />, which writes no explicit args so llama.cpp auto-fit
+///     chooses placement, and replay, which emits a frozen profile's <c>-c/-ngl/-ts/-ot/-ctk/-ctv</c> verbatim and
+///     omits <c>--fit</c>, because any explicit fit-arg DISABLES auto-fit (verified against <c>b9692</c>; the pinned
+///     <c>b10201</c> <c>--help</c> confirms <c>--fit</c> adjusts only UNSET arguments). Re-exploring is the only path
+///     back to auto-fit. Replay invariants are enforced by <see cref="Replay" />.
 /// </remarks>
 public sealed record ResolvedLaunchArguments
 {
@@ -37,10 +28,12 @@ public sealed record ResolvedLaunchArguments
 
     /// <summary>
     ///     Explore mode: an optional request-scoped context-window override that pins this explore spawn's <c>-c</c>.
-    ///     <see langword="null" /> (the default, and always the case for a replay) leaves the allocation resolver's
-    ///     hardware-tier choice untouched, so a null carries exactly the behaviour that existed before this field.
-    ///     Never persisted and never bound from configuration; it lives for the one spawn it was passed to.
+    ///     <see langword="null" />, the default and always the case for a replay, leaves the allocation resolver's
+    ///     hardware-tier choice untouched.
     /// </summary>
+    /// <remarks>
+    ///     Never persisted and never bound from configuration; it lives for the one spawn it was passed to.
+    /// </remarks>
     public int? ExploreContextTokensOverride { get; private init; }
 
     /// <summary>Frozen GPU layer count (<c>--n-gpu-layers</c>); <see langword="null" /> leaves it unset. Replay only.</summary>
@@ -128,10 +121,13 @@ public sealed record ResolvedLaunchArguments
     }
 
     /// <summary>
-    ///     This replay with its explicit KV cache types stripped (and flash attention with them, since the two are
-    ///     coupled by the invariants above) — the safe retry candidate for a frozen profile whose quantized-KV config
-    ///     cannot reach readiness on the current backend. Placement (<c>-c/-ngl/-ts/-ot</c>) is untouched.
+    ///     This replay with its explicit KV cache types stripped, and flash attention with them since the two are
+    ///     coupled, leaving placement (<c>-c/-ngl/-ts/-ot</c>) untouched.
     /// </summary>
+    /// <remarks>
+    ///     It is the safe-retry candidate for a frozen profile whose quantized-KV config cannot reach readiness on the
+    ///     current backend.
+    /// </remarks>
     public ResolvedLaunchArguments WithoutKvCacheQuantization()
     {
         return this with

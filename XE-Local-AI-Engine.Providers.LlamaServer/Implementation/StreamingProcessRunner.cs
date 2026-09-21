@@ -5,17 +5,15 @@ using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Run-to-completion streaming process runner for the in-app CUDA build (NEW code — the supervised
-///     <see cref="LlamaServerProcessLauncher" /> is a long-lived-handle launcher, not this shape). Spawns a tool by argv
-///     (no shell) under <c>setsid -w</c> so the child runs in a NEW session/process group (<c>kill(-pgid)</c> reaps the
-///     whole tree); streams stdout+stderr line-by-line to a sink as the build runs; awaits exit; and tree-kills the
-///     whole process group (reusing <see cref="LinuxProcessGroupHandle" />) on cancellation or timeout. <c>[archMED-3]</c>
+///     Run-to-completion streaming process runner for the in-app CUDA build, a different shape from the supervised
+///     <see cref="LlamaServerProcessLauncher" />, which is a long-lived-handle launcher. <c>[archMED-3]</c>
 /// </summary>
 /// <remarks>
-///     The child's environment is the SCRUBBED, allowlisted dictionary the caller supplies — the runner replaces the
-///     inherited environment entirely (<see cref="ProcessStartInfo.Environment" /> cleared, then the allowlist applied),
-///     so the build never inherits <c>LD_PRELOAD</c>, compiler-launcher, git-transport, or app-secret variables.
-///     <c>[secHIGH-2]</c> Linux-only (the in-app build targets Linux).
+///     It spawns a tool by argv, with no shell, under <c>setsid -w</c> so the child runs in a NEW session and process
+///     group; streams stdout and stderr line by line to a sink; awaits exit; and tree-kills the whole process group,
+///     reusing <see cref="LinuxProcessGroupHandle" />, on cancellation or timeout. The child's environment is the
+///     SCRUBBED allowlist the caller supplies — <see cref="ProcessStartInfo.Environment" /> is cleared first — so the
+///     build never inherits <c>LD_PRELOAD</c>, compiler-launcher, git-transport or app-secret variables. Linux-only.
 /// </remarks>
 [SupportedOSPlatform("linux")]
 internal static class StreamingProcessRunner
@@ -43,10 +41,8 @@ internal static class StreamingProcessRunner
 
         var startInfo = new ProcessStartInfo
         {
-            // setsid runs the child in a NEW session/process group (pgid == child pid), so kill(-pgid) reaps the whole
-            // build tree. setsid execs the program in place — it only forks when this process is already a group
-            // leader — and -w makes it wait for and propagate the program's exit status in that edge case. Behavior
-            // is otherwise unchanged.
+            // setsid runs the child in a NEW session and process group, its pgid being the child pid, so kill(-pgid) reaps the whole build tree. setsid execs the
+            // program in place and forks only when this process is already a group leader; -w makes it wait for and propagate the exit status in that edge case.
             FileName = SetsidLocator.ResolveAbsolutePath(),
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,

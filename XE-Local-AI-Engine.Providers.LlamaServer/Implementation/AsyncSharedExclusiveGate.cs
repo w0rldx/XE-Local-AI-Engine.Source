@@ -2,33 +2,14 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 /// <summary>
 ///     The smallest async shared/exclusive gate the supervisor needs: any number of callers may hold it SHARED at
-///     once, an EXCLUSIVE holder runs alone. The BCL has no async reader/writer lock, and nothing here justifies a
-///     general one — the exclusive side is a rare operator action (runtime install/remove, source build, exclusive
-///     profiling) while the shared side is on every inference request's ensure path.
+///     once, and an EXCLUSIVE holder runs alone.
 /// </summary>
 /// <remarks>
-///     <para>INVARIANTS</para>
-///     <list type="number">
-///         <item>
-///             Exclusion is mutual and complete in both directions: no shared holder is admitted while an exclusive
-///             holder runs, and <see cref="EnterExclusiveAsync" /> does not return until every shared holder admitted
-///             before it has called <see cref="ExitShared" />.
-///         </item>
-///         <item>Shared holders never exclude each other, so one caller's slow work cannot head-of-line block another.</item>
-///         <item>
-///             Admission is FIFO (<see cref="SemaphoreSlim" />'s own ordering), so a pending exclusive acquire cannot
-///             be starved by a continuous stream of shared acquires: it is served ahead of every shared acquire that
-///             arrives after it.
-///         </item>
-///         <item>
-///             A shared acquire holds the underlying semaphore only for an O(1) counter update, never for the caller's
-///             work — that is the whole point of the type.
-///         </item>
-///     </list>
-///     <para>
-///         Neither side is re-entrant, and an exit must be paired with a successful enter (a cancelled or faulted
-///         enter has already undone itself).
-///     </para>
+///     The BCL has no async reader/writer lock and nothing here justifies a general one — the exclusive side is a rare
+///     operator action (runtime install or remove, source build, exclusive profiling) while the shared side is on every
+///     inference request's ensure path. Neither side is re-entrant, and an exit must be paired with a successful enter,
+///     a cancelled or faulted enter having already undone itself. Its four invariants:
+///     docs/wiki/03-local-runtime-and-providers.md, "The runtime-mutation gate".
 /// </remarks>
 internal sealed class AsyncSharedExclusiveGate : IDisposable
 {
@@ -77,10 +58,12 @@ internal sealed class AsyncSharedExclusiveGate : IDisposable
     }
 
     /// <summary>
-    ///     Admits the exclusive holder: takes the semaphore (so no further shared holder can be admitted) and then
-    ///     waits for the shared holders already inside to drain. A cancelled wait releases the semaphore, so a
-    ///     cancelled exclusive acquire never leaves the gate closed.
+    ///     Admits the exclusive holder: it takes the semaphore, so no further shared holder can be admitted, then
+    ///     waits for the shared holders already inside to drain.
     /// </summary>
+    /// <remarks>
+    ///     A cancelled wait releases the semaphore, so a cancelled exclusive acquire never leaves the gate closed.
+    /// </remarks>
     public async Task EnterExclusiveAsync(CancellationToken ct)
     {
         await _exclusive.WaitAsync(ct).ConfigureAwait(false);

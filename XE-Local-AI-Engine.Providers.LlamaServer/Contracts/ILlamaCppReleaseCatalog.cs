@@ -21,10 +21,13 @@ public sealed class LlamaCppReleaseAsset
 }
 
 /// <summary>
-///     A resolved release-catalog lookup. Carries either a successful payload (a resolved tag and/or asset) or a
-///     graceful no-live-data signal (<see cref="IsOffline" /> / <see cref="IsRateLimited" />) — the catalog NEVER throws
-///     into a caller's happy path so the 3-tier resolve can fall through to the disk cache and the pinned floor.
+///     A resolved release-catalog lookup: either a successful payload — a resolved tag and/or asset — or a graceful
+///     no-live-data signal (<see cref="IsOffline" />/<see cref="IsRateLimited" />).
 /// </summary>
+/// <remarks>
+///     The catalog NEVER throws into a caller's happy path, so the 3-tier resolve can fall through to the disk cache
+///     and the pinned floor.
+/// </remarks>
 public sealed class LlamaCppReleaseResult
 {
     /// <summary>The resolved release tag, when a tag was requested/resolved; otherwise <see langword="null" />.</summary>
@@ -79,15 +82,11 @@ public sealed class LlamaCppReleaseResult
 ///     offline floor.
 /// </summary>
 /// <remarks>
-///     <para>
-///         All methods fail gracefully: an unreachable API, a rate-limit response, or a missing release returns a
-///         no-live-data <see cref="LlamaCppReleaseResult" /> rather than throwing into the caller's happy path, so the
-///         3-tier resolve (live → cached <c>installed-runtime.json</c> → pins) can fall through.
-///     </para>
-///     <para>
-///         Conditional <c>If-None-Match</c> requests are used (a <c>304</c> reuses the cached parse and is free against
-///         the unauthenticated rate limit); <c>Retry-After</c> / <c>x-ratelimit-reset</c> are honored on rate-limit.
-///     </para>
+///     All methods fail gracefully: an unreachable API, a rate-limit response or a missing release returns a
+///     no-live-data <see cref="LlamaCppReleaseResult" /> rather than throwing into the caller's happy path, so the
+///     3-tier resolve (live, then cached <c>installed-runtime.json</c>, then pins) can fall through. Conditional
+///     <c>If-None-Match</c> requests are used, a <c>304</c> reusing the cached parse for free against the
+///     unauthenticated rate limit, and <c>Retry-After</c>/<c>x-ratelimit-reset</c> are honoured on a rate limit.
 /// </remarks>
 public interface ILlamaCppReleaseCatalog
 {
@@ -105,18 +104,24 @@ public interface ILlamaCppReleaseCatalog
     Task<LlamaCppReleaseResult> ResolveUpstreamLatestAsync(CancellationToken ct);
 
     /// <summary>
-    ///     Resolves the asset for a concrete <paramref name="tag" /> and the host <paramref name="os" />/
-    ///     <paramref name="arch" />/<paramref name="variant" /> by templating the expected name from the pin scheme and
-    ///     matching it against the live <c>assets[]</c> to read the publisher digest. Returns a tag+asset result, or a
-    ///     no-live-data result when unreachable/rate-limited, the tag is malformed/absent, or no asset matches.
+    ///     Resolves the asset for a concrete <paramref name="tag" /> and the host <paramref name="os" />,
+    ///     <paramref name="arch" /> and <paramref name="variant" />, reading its publisher digest.
     /// </summary>
+    /// <remarks>
+    ///     The expected name is templated from the pin scheme and matched against the live <c>assets[]</c>. Returns a
+    ///     tag-plus-asset result, or a no-live-data result when unreachable or rate-limited, when the tag is malformed
+    ///     or absent, or when no asset matches.
+    /// </remarks>
     Task<LlamaCppReleaseResult> ResolveAssetAsync(string tag, OSPlatform os, Architecture arch, GpuVariant variant, CancellationToken ct);
 
     /// <summary>
-    ///     Resolves a named companion asset (an exact <paramref name="assetName" /> match) within a concrete
-    ///     <paramref name="tag" /> and reads its publisher digest — used to verify the Windows-CUDA <c>cudart-…</c> runtime
-    ///     archive the SAME way the main asset's live digest is resolved. Returns a tag+asset result, or a no-live-data
-    ///     result when unreachable/rate-limited, the tag/name is malformed/absent, or the asset's digest is unusable.
+    ///     Resolves a named companion asset — an exact <paramref name="assetName" /> match — within a concrete
+    ///     <paramref name="tag" /> and reads its publisher digest.
     /// </summary>
+    /// <remarks>
+    ///     This verifies the Windows-CUDA <c>cudart-…</c> runtime archive the SAME way the main asset's live digest is
+    ///     resolved. Returns a tag-plus-asset result, or a no-live-data result when unreachable or rate-limited, when
+    ///     the tag or name is malformed or absent, or when the asset's digest is unusable.
+    /// </remarks>
     Task<LlamaCppReleaseResult> ResolveCompanionAssetAsync(string tag, string assetName, CancellationToken ct);
 }

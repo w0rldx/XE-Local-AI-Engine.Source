@@ -23,34 +23,39 @@ public sealed class LlamaServerSupervisorOptions
     public int MaxRestartAttempts { get; init; } = 3;
 
     /// <summary>
-    ///     llama-server chat-role prompt-cache prefix-reuse window in tokens (<c>--cache-reuse N</c>). Lets the server
-    ///     reuse an unchanged prompt prefix via KV cache shifting even when a later part of the prompt changes, so a
-    ///     multi-turn chat/agent conversation — which resends the full selected-path history every turn — skips
-    ///     reprocessing the prefix and returns the first token sooner. Applies to the chat role only; an embedding
-    ///     server does one-shot forward passes with no shared prefix to reuse. <c>0</c> disables it (upstream default);
-    ///     <c>256</c> is the recommended chat/agent value. The flag is emitted regardless of profile source (explore or
-    ///     frozen replay) and is not part of any frozen-profile identity, so changing it never invalidates a stored
-    ///     profile — it only takes effect on the next natural (re)spawn of the process.
+    ///     llama-server chat-role prompt-cache prefix-reuse window in tokens (<c>--cache-reuse N</c>). <c>0</c> disables
+    ///     it (the upstream default); <c>256</c> is the recommended chat/agent value.
     /// </summary>
+    /// <remarks>
+    ///     Chat role only — an embedding server does one-shot forward passes with no shared prefix to reuse. The flag is
+    ///     emitted whatever the profile source (explore or frozen replay) and is not part of any frozen-profile
+    ///     identity, so changing it never invalidates a stored profile; it takes effect on the next natural (re)spawn.
+    ///     What the reuse buys: docs/wiki/03-local-runtime-and-providers.md, "Per-role launch flags and the pooled
+    ///     batch-size rule".
+    /// </remarks>
     public int ChatCacheReuse { get; init; } = 256;
 
     /// <summary>
-    ///     llama-server chat-role host-RAM prompt-cache budget in MiB (<c>--cache-ram N</c>). The pinned build's
-    ///     upstream default is 8192 MiB — half the physical RAM of a 16 GB machine — inherited silently when the flag
-    ///     is omitted, and its eviction is known-ineffective on Linux under default overcommit (the OOM killer fires
-    ///     before <c>std::bad_alloc</c> does; upstream issue #22629). The supervisor therefore always emits the flag
-    ///     explicitly: this budget for chat, <c>0</c> (disabled) for pooled embedding/rerank roles, which do one-shot
-    ///     forward passes with no prompt state worth caching. Defaults to a detected-RAM-proportional value via
-    ///     <see cref="ComputeDefaultChatCacheRamMiB" />; <c>0</c> disables the host prompt cache entirely. Like
-    ///     <see cref="ChatCacheReuse" />, it is a launch flag outside any frozen-profile identity.
+    ///     llama-server chat-role host-RAM prompt-cache budget in MiB (<c>--cache-ram N</c>); <c>0</c> disables the host
+    ///     prompt cache. Must be non-negative. Defaults via <see cref="ComputeDefaultChatCacheRamMiB" />.
     /// </summary>
+    /// <remarks>
+    ///     The supervisor always emits the flag explicitly rather than inherit the pinned build's implicit 8192 MiB
+    ///     default, whose eviction is known-ineffective on Linux under default overcommit (upstream issue #22629). This
+    ///     budget goes to chat; the pooled embedding/rerank roles get <c>0</c>, having no prompt state worth caching.
+    ///     Like <see cref="ChatCacheReuse" /> it is a launch flag outside any frozen-profile identity. See
+    ///     docs/wiki/03-local-runtime-and-providers.md, "Per-role launch flags and the pooled batch-size rule".
+    /// </remarks>
     public int ChatCacheRamMiB { get; init; } = ComputeDefaultChatCacheRamMiB(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes);
 
     /// <summary>
     ///     Detected-RAM default for <see cref="ChatCacheRamMiB" />: one eighth of total available memory, clamped to
-    ///     [512, 8192] MiB — 2048 on a 16 GB machine, 4096 on 32 GB, the upstream default 8192 only at 64 GB+. An
-    ///     unknown/non-positive total yields the conservative floor.
+    ///     [512, 8192] MiB.
     /// </summary>
+    /// <remarks>
+    ///     That is 2048 MiB on a 16 GB machine, 4096 on 32 GB, and upstream's 8192 default only at 64 GB and above. An
+    ///     unknown or non-positive total yields the conservative floor.
+    /// </remarks>
     public static int ComputeDefaultChatCacheRamMiB(long totalAvailableMemoryBytes)
     {
         const int FloorMiB = 512;
@@ -65,33 +70,42 @@ public sealed class LlamaServerSupervisorOptions
     }
 
     /// <summary>
-    ///     Chat-role speculative-decoding <c>--spec-type</c>. Ships <see cref="SpeculativeDecodingSettings.DisabledMode" />
-    ///     (<c>none</c>, off) — operator opt-in. Validated against the pinned build's accepted set; only the external-draft
-    ///     modes (see <see cref="SpeculativeModeClass" />) also need <see cref="SpeculativeDraftModelPath" />, while
-    ///     <c>draft-mtp</c> drafts from heads in the main model and <c>ngram-*</c> modes self-speculate from context.
-    ///     Applies to the chat role only (embedding servers have nothing to draft) and, like <see cref="ChatCacheReuse" />,
-    ///     is a launch flag independent of any frozen inference profile — changing it never invalidates a stored profile.
+    ///     Chat-role speculative-decoding <c>--spec-type</c>, shipping
+    ///     <see cref="SpeculativeDecodingSettings.DisabledMode" /> (<c>none</c>) — operator opt-in. Validated against the
+    ///     pinned build's accepted set.
     /// </summary>
+    /// <remarks>
+    ///     Only the external-draft modes (see <see cref="SpeculativeModeClass" />) also need a draft model;
+    ///     <c>draft-mtp</c> drafts from heads in the main model and <c>ngram-*</c> modes self-speculate from context.
+    ///     Chat role only — an embedding server has nothing to draft — and, like <see cref="ChatCacheReuse" />, a launch
+    ///     flag independent of any frozen inference profile. Per-mode flags:
+    ///     docs/wiki/03-local-runtime-and-providers.md, "Per-role launch flags and the pooled batch-size rule".
+    /// </remarks>
     public string SpeculativeMode { get; init; } = SpeculativeDecodingSettings.DisabledMode;
 
     /// <summary>
-    ///     Installed draft model NAME for external-draft speculative modes, resolved to its on-disk GGUF on the spawn path
-    ///     via <see cref="XE_Local_AI_Engine.Providers.Abstractions.Gguf.IGgufModelStore.ResolveModelFilePathAsync" /> —
-    ///     the same resolution the target model uses — so the operator UI can offer installed model names without knowing
-    ///     file paths. Ignored by every other <see cref="SpeculativeModeClass" />, including <c>draft-mtp</c>. When
-    ///     <see cref="SpeculativeDraftModelPath" /> is also set, the explicit path wins and this name is not resolved.
+    ///     Installed draft model NAME for external-draft speculative modes, so the operator UI can offer installed model
+    ///     names without knowing file paths. Ignored by every other <see cref="SpeculativeModeClass" />.
     /// </summary>
+    /// <remarks>
+    ///     Resolved to its on-disk GGUF on the spawn path via
+    ///     <see cref="XE_Local_AI_Engine.Providers.Abstractions.Gguf.IGgufModelStore.ResolveModelFilePathAsync" /> — the
+    ///     same resolution the target model uses. When <see cref="SpeculativeDraftModelPath" /> is also set, the explicit
+    ///     path wins and this name is not resolved.
+    /// </remarks>
     public string? SpeculativeDraftModelName { get; init; }
 
     /// <summary>
-    ///     Explicit path to the draft GGUF for external-draft speculative modes (must share the target model's tokenizer
-    ///     family). An escape hatch that takes precedence over <see cref="SpeculativeDraftModelName" /> when set; normally
-    ///     left unset so the name is resolved on the spawn path. Ignored by every other
-    ///     <see cref="SpeculativeModeClass" />, including <c>draft-mtp</c>. The draft model loads
-    ///     inside the chat process and is never separately ledgered or footprint-estimated; on the primary NVIDIA path its
-    ///     resident VRAM is reflected in <c>CapacityService</c>'s free-VRAM baseline (<c>nvidia-smi memory.free</c>).
-    ///     A non-NVIDIA profile without a free-VRAM reading therefore rejects this mode rather than undercounting it.
+    ///     Explicit path to the draft GGUF for external-draft speculative modes (it must share the target model's
+    ///     tokenizer family). An escape hatch taking precedence over <see cref="SpeculativeDraftModelName" />.
     /// </summary>
+    /// <remarks>
+    ///     Normally left unset so the name is resolved on the spawn path; ignored by every other
+    ///     <see cref="SpeculativeModeClass" />. The draft model loads inside the chat process and is never separately
+    ///     ledgered or footprint-estimated, which is why a non-NVIDIA profile with no free-VRAM reading rejects an
+    ///     external-draft admission rather than undercount it. See docs/wiki/03-local-runtime-and-providers.md,
+    ///     "Per-role launch flags and the pooled batch-size rule".
+    /// </remarks>
     public string? SpeculativeDraftModelPath { get; init; }
 
     /// <summary>
@@ -112,16 +126,15 @@ public sealed class LlamaServerSupervisorOptions
     public SpeculativeDecodingSettings Speculative => new(SpeculativeMode, SpeculativeDraftModelPath, SpeculativeDraftMaxTokens, SpeculativeDraftGpuLayers);
 
     /// <summary>
-    ///     Minimum interval between reuse-path liveness probes for a single process. A reuse is handed out immediately
-    ///     (no HTTP) unless at least this long has passed since the last probe of that process, so the hot path stays
-    ///     cheap: at most one <c>/health</c> probe per process per interval, not one per request.
+    ///     Minimum interval between reuse-path <c>/health</c> liveness probes of one process: a reuse inside the window
+    ///     is handed out with no HTTP call at all, so the hot path costs at most one probe per process per interval.
     /// </summary>
     public TimeSpan ReuseLivenessProbeInterval { get; init; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    ///     Number of <em>consecutive</em> failed reuse-path liveness probes after which a still-alive-but-unresponsive
-    ///     (wedged) process is torn down and respawned instead of being handed out again. A single transient failure never
-    ///     evicts a busy server; one successful probe resets the count.
+    ///     Number of <em>consecutive</em> failed reuse-path liveness probes after which a wedged (alive but
+    ///     unresponsive) process is torn down and respawned. One successful probe resets the count, so a single
+    ///     transient failure never evicts a busy server.
     /// </summary>
     public int MaxReuseLivenessFailures { get; init; } = 3;
 
@@ -133,10 +146,8 @@ public sealed class LlamaServerSupervisorOptions
     public TimeSpan ReuseLivenessProbeTimeout { get; init; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    ///     Base cold-start readiness budget for a freshly spawned process before its first request (the floor of the
-    ///     size-aware readiness deadline). A small model gets exactly this; a larger one gets this plus a size-aware
-    ///     extension (see <see cref="ReadinessTimeoutSecondsPerGiB" />), so a deterministically slow big model is not
-    ///     killed and retried before it can finish loading. Must be positive.
+    ///     Base cold-start readiness budget for a freshly spawned process — the FLOOR of the size-aware readiness
+    ///     deadline, which a larger model extends via <see cref="ReadinessTimeoutSecondsPerGiB" />. Must be positive.
     /// </summary>
     public TimeSpan ReadinessBaseTimeout { get; init; } = TimeSpan.FromSeconds(DefaultReadinessBaseTimeoutSeconds);
 
@@ -149,56 +160,60 @@ public sealed class LlamaServerSupervisorOptions
 
     /// <summary>
     ///     Seconds of readiness budget added per GiB of on-disk model size ABOVE
-    ///     <see cref="ReadinessTimeoutModelSizeThresholdGiB" />. A large model on a cold cache/slow disk loads
-    ///     proportionally slower, so its readiness deadline scales with its size instead of a one-size-fits-all constant.
-    ///     Must be non-negative.
+    ///     <see cref="ReadinessTimeoutModelSizeThresholdGiB" />, so a deterministically slow large model on a cold
+    ///     cache is not killed and retried before it can finish loading. Must be non-negative.
     /// </summary>
     public double ReadinessTimeoutSecondsPerGiB { get; init; } = DefaultReadinessSecondsPerGiB;
 
     /// <summary>
-    ///     Hard ceiling on the size-aware readiness deadline: no matter how large the model, a spawn is never given more
-    ///     than this to become ready before it is treated as a readiness timeout. Bounds the worst-case stall. Must be
-    ///     positive and at least <see cref="ReadinessBaseTimeout" />.
+    ///     Hard ceiling on the size-aware readiness deadline, bounding the worst-case stall: however large the model, a
+    ///     spawn never gets more than this. Must be positive and at least <see cref="ReadinessBaseTimeout" />.
     /// </summary>
     public TimeSpan ReadinessTimeoutCap { get; init; } = TimeSpan.FromSeconds(DefaultReadinessCapSeconds);
 
     /// <summary>
-    ///     How many times a spawn that TIMED OUT waiting for readiness (the process is alive but slow) is retried before
-    ///     the failure is surfaced. A readiness timeout on a deterministically slow/large model is not a transient crash,
-    ///     so retrying it many times only multiplies the kill/reload thrash; the default retries it at most once. A
-    ///     process-exit-during-load (a deterministic crash) stays non-retryable regardless of this value, and a transient
-    ///     start failure is still retried up to <see cref="MaxRestartAttempts" />. Must be non-negative.
+    ///     How many times a spawn that TIMED OUT waiting for readiness (alive but slow) is retried before the failure is
+    ///     surfaced. Must be non-negative.
     /// </summary>
+    /// <remarks>
+    ///     A readiness timeout on a deterministically slow or large model is not a transient crash, so retrying it many
+    ///     times only multiplies the kill/reload thrash; the default retries it at most once. A process exit during load
+    ///     — a deterministic crash — stays non-retryable regardless of this value, and a transient start failure is
+    ///     still retried up to <see cref="MaxRestartAttempts" />.
+    /// </remarks>
     public int MaxReadinessTimeoutRetries { get; init; } = DefaultMaxReadinessTimeoutRetries;
 
     /// <summary>
-    ///     Bounded time an operator eject waits for in-flight inference to drain before it reports back. A graceful eject
-    ///     marks the process evicting (no new leases), waits up to this for active requests to finish, then tears the
-    ///     process down; if the wait elapses the eject reports it could not complete safely (unless forced). Must be
-    ///     positive.
+    ///     Bounded time a graceful operator eject — which marks the process evicting, taking no new leases — waits for
+    ///     in-flight inference to drain before tearing the process down. Must be positive.
     /// </summary>
+    /// <remarks>
+    ///     If the wait elapses the eject reports that it could not complete safely, unless the caller forced it.
+    /// </remarks>
     public TimeSpan EjectDrainTimeout { get; init; } = TimeSpan.FromSeconds(DefaultEjectDrainTimeoutSeconds);
 
     /// <summary>
-    ///     Network timeout for a single <em>chat</em> call to the llama-server OpenAI-compatible surface.
-    ///     Set EXPLICITLY on the built OpenAI client so it never inherits System.ClientModel's 100 s
-    ///     <c>NetworkTimeout</c> default (which would abort a legitimately long local generation). Deliberately GENEROUS:
-    ///     streaming inter-token stalls are already bounded by the invocation's stream-idle watchdog and a non-streaming
-    ///     sub-agent completion is bounded by the per-request invocation deadline, so this is only the outermost floor
-    ///     against a wedged socket and must not pre-empt a slow-but-progressing local model. The SDK retry layer is pinned
-    ///     OFF independently of this value (a local chat completion is non-idempotent and must never be re-issued). Must be
+    ///     Network timeout for a single <em>chat</em> call to the llama-server OpenAI-compatible surface. Must be
     ///     positive.
     /// </summary>
+    /// <remarks>
+    ///     Set EXPLICITLY so it never inherits System.ClientModel's 100 s <c>NetworkTimeout</c> default, and GENEROUS on
+    ///     purpose: the stream-idle watchdog and the invocation deadline already bound a turn, so this is only the
+    ///     outermost floor against a wedged socket and must not pre-empt a slow-but-progressing local model. The SDK
+    ///     retry layer is pinned OFF independently of it. See docs/wiki/03-local-runtime-and-providers.md,
+    ///     "Reuse-path liveness, retry classes and the two HTTP network floors".
+    /// </remarks>
     public TimeSpan HttpNetworkTimeout { get; init; } = TimeSpan.FromSeconds(DefaultHttpNetworkTimeoutSeconds);
 
     /// <summary>
     ///     Network timeout for a single <em>embedding</em> call to the same surface. Deliberately SHORTER than
-    ///     <see cref="HttpNetworkTimeout" /> (600 s vs 3600 s) because the two have different inner bounds: a chat call
-    ///     carries the invocation deadline's cancellation token, so its HTTP timeout is only a last-resort wedged-socket
-    ///     floor and may be generous. An embedding call (knowledge ingestion, memory extraction) carries no such
-    ///     per-request deadline — this value IS its only bound, so a wedged embedding request must fail in minutes, not
-    ///     an hour. Must be positive.
+    ///     <see cref="HttpNetworkTimeout" /> (600 s vs 3600 s). Must be positive.
     /// </summary>
+    /// <remarks>
+    ///     A chat call carries the invocation deadline's cancellation token, so its HTTP timeout may be generous. An
+    ///     embedding call (knowledge ingestion, memory extraction) carries no such per-request deadline — this value IS
+    ///     its only bound, so a wedged embedding request must fail in minutes, not an hour.
+    /// </remarks>
     public TimeSpan EmbeddingHttpNetworkTimeout { get; init; } = TimeSpan.FromSeconds(DefaultEmbeddingHttpNetworkTimeoutSeconds);
 
     private const double DefaultReadinessBaseTimeoutSeconds = 120d;
@@ -209,16 +224,12 @@ public sealed class LlamaServerSupervisorOptions
 
     private const double DefaultEjectDrainTimeoutSeconds = 30d;
 
-    // COUPLING: the ceiling of the node-level "Maximum message request timeout"
-    // (XE-Local-AI-Engine.Client.Application StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds = 3600). This project
-    // only references Providers.Abstractions, so that constant cannot be referenced here — keep the two in step. A
-    // shorter default would silently pre-empt the operator's setting: an operator who raised the message timeout above
-    // this got a socket abort from the inner HTTP timeout first. The real per-turn bound is the invocation deadline's
-    // cancellation token; this stays the outermost wedged-socket floor.
+    // COUPLING, kept in step by hand: StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds (3600d) is the ceiling of the node-level "Maximum
+    // message request timeout" and unreachable from here; a shorter default hands an operator who raised it an inner socket abort first.
     private const double DefaultHttpNetworkTimeoutSeconds = 3600d;
 
-    // The pre-2026-08-16 value of DefaultHttpNetworkTimeoutSeconds, kept for the embedding path: only the chat path
-    // gained the invocation-deadline token that makes a 1 h floor safe.
+    // Shorter than the chat floor on purpose: only the chat path carries the invocation-deadline token that makes a
+    // one-hour floor safe, so the embedding floor stays the value that bounds a wedged request in minutes.
     private const double DefaultEmbeddingHttpNetworkTimeoutSeconds = 600d;
 
     /// <summary>

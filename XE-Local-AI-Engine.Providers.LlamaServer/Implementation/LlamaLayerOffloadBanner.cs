@@ -4,15 +4,14 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 
 /// <summary>
-///     The single grammar for llama.cpp's model-load layer-placement banner
-///     (<c>load_tensors: offloaded 25/25 layers to GPU</c>) — the ONLY place llama.cpp reports how many of a model's
-///     layers actually landed on the GPU. <c>/props</c> exposes no device, backend, or <c>n_gpu_layers</c> field, so
-///     stdout is the sole source.
+///     The single grammar for llama.cpp's model-load layer-placement banner, the ONLY place llama.cpp reports how many
+///     of a model's layers actually landed on the GPU.
 /// </summary>
 /// <remarks>
-///     The banner is emitted only above the default log verbosity: at llama-server's default (<c>-lv 3</c>) the whole
-///     startup is 11 lines and carries no placement line at all. Callers that need the banner must raise verbosity on
-///     the spawn they want to observe.
+///     It reads <c>load_tensors: offloaded 25/25 layers to GPU</c>. <c>/props</c> exposes no device, backend or
+///     GPU-layer field, so stdout is the sole source. The banner is emitted only above the default log verbosity: at
+///     llama-server's default (<c>-lv 3</c>) the whole startup is 11 lines and carries no placement line at all, so a
+///     caller that needs it must raise verbosity on the spawn it wants to observe.
 /// </remarks>
 internal static partial class LlamaLayerOffloadBanner
 {

@@ -59,17 +59,19 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Profiling's pre-spawn eviction: lease-aware and two-phase, unlike the operator <see cref="EvictCoreAsync" />
-    ///     force path. Every live role for the model is CLAIMED first through
-    ///     <see cref="RunningProcess.TryBeginEvict(out long)" /> — the same atomic check-and-mark cap admission uses —
-    ///     and only a complete set of claims is torn down. A role serving in-flight inference refuses its claim, the
-    ///     claims already taken are released with <see cref="RunningProcess.ReleaseEvictionClaim" /> (an abandoned claim
-    ///     would refuse every future lease on a process nobody is tearing down; an ownership-blind clear would erase an
-    ///     operator eject's own mark instead), and the caller is told which role refused: a measurement
-    ///     is never worth killing a live generation for, and a half-evicted model for a run that never happens is worse
-    ///     than no eviction at all. Returns the refusing role, what it was serving and why, or <see langword="null" />
-    ///     when every role was evicted.
+    ///     Profiling's pre-spawn eviction: lease-aware and two-phase unlike the operator <see cref="EvictCoreAsync" />
+    ///     force path, because a measurement is never worth killing a live generation for.
     /// </summary>
+    /// <returns>
+    ///     The refusing role, what it was serving and why, or <see langword="null" /> when every role was evicted.
+    /// </returns>
+    /// <remarks>
+    ///     Every live role is CLAIMED first through <see cref="RunningProcess.TryBeginEvict(bool, out long)" />, the
+    ///     same atomic check-and-mark cap admission uses, and only a complete set is torn down — a half-evicted model
+    ///     for a run that never happens is worse than no eviction. A role serving in-flight inference refuses its
+    ///     claim, and claims already taken are released through <see cref="RunningProcess.ReleaseEvictionClaim" />: an
+    ///     abandoned claim refuses every future lease, an ownership-blind clear erases an operator eject's own mark.
+    /// </remarks>
     private async Task<(ModelRole Role, int ActiveLeases, LlamaServerProfilingRefusalReason Reason)?> TryEvictAllRolesForProfilingAsync(string modelName)
     {
         var claimed = new List<(ProcessKey Key, RunningProcess Process, long Claim)>();
@@ -148,9 +150,8 @@ public sealed partial class LlamaServerProcessSupervisor
             return LlamaServerEjectOutcome.NotRunning;
         }
 
-        // Mark evicting: new inference leases are refused (TryAcquireInferenceLease returns null) so the active-lease
-        // count can only fall while we drain. The process stays registered and reusable until we tear it down or give up.
-        // The claim is kept so every release below clears only THIS eject's mark, never one a later teardown took over.
+        // Mark evicting: new inference leases are refused, so the active-lease count can only fall while we drain, and the process stays registered and reusable until
+        // we tear it down or give up. The claim is kept so every release below clears only THIS eject's mark, never one a later teardown took over.
         var evictionClaim = target.MarkEvicting();
         _logger.LogInformation("Operator eject requested for model {ModelName} role {Role} (force: {Force}); draining {ActiveLeases} in-flight request(s).",
             key.ModelName, key.Role, force, target.ActiveLeases);
@@ -205,20 +206,15 @@ public sealed partial class LlamaServerProcessSupervisor
             return LlamaServerLeaseAcquisition.NotRunning;
         }
 
-        // A profiling-owned process is invisible to inference: callers ensure first and look the lease up by key
-        // afterwards, so without this a chat whose own process was replaced in between would lease the transient
-        // profiling process and be killed by its teardown. Reported as its OWN refusal rather than as NotRunning:
-        // "not running" licenses the caller to proceed leaseless against the endpoint it already resolved, and the
-        // port allocator commonly hands the measurement spawn the port the replaced process just freed — so that
-        // caller would reach the profiling process anyway. The caller must re-ensure instead.
+        // A profiling-owned process is invisible to inference: callers ensure first then look the lease up by key, so without this a chat whose process was replaced would lease the
+        // transient one and die with it. Its OWN refusal, not NotRunning, which licenses a leaseless call against the already-resolved endpoint — commonly the port the measurement just took.
         if (running.IsProfilingOwned)
         {
             return LlamaServerLeaseAcquisition.ProfilingOwned;
         }
 
-        // A draining eject refuses new leases — and the refusal REASON is surfaced so the caller fails the request as
-        // operator-ejected instead of running it leaseless under the drain (untracked by the drain, killed mid-flight
-        // by the teardown, and then self-heal-respawning the just-ejected model).
+        // A draining eject refuses new leases, and the refusal REASON is surfaced so the caller fails the request as operator-ejected rather than run it leaseless under the
+        // drain — untracked by it, killed mid-flight by the teardown, and then self-heal-respawning the model just ejected.
         var eviction = running.EvictionOwner;
         if (eviction != 0)
         {
@@ -241,22 +237,28 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Classifies a refusal against a process whose teardown has begun. A profiling pre-spawn eviction is a
-    ///     transient benchmark spawn, not an operator eject: reported as the latter, a chat fails terminally with
-    ///     "the model is being ejected by the operator" for something that clears itself in seconds, and embedding and
-    ///     rerank misreport the same way. Reported as its own refusal the caller lands in the bounded re-ensure arm.
-    ///     Takes the owning claim the caller already read, so the classification cannot straddle two reads.
+    ///     Classifies a refusal against a process whose teardown has begun, taking the owning claim the caller already
+    ///     read so the classification cannot straddle two reads.
     /// </summary>
+    /// <remarks>
+    ///     A profiling pre-spawn eviction is a transient benchmark spawn, not an operator eject: reported as the
+    ///     latter, a chat fails terminally with "the model is being ejected by the operator" for something that clears
+    ///     itself in seconds, and embedding and rerank misreport the same way. Reported as its own refusal, the caller
+    ///     lands in the bounded re-ensure arm instead.
+    /// </remarks>
     private static LlamaServerLeaseAcquisition Refusal(long evictionOwner) =>
         evictionOwner < 0 ? LlamaServerLeaseAcquisition.ProfilingOwned : LlamaServerLeaseAcquisition.Evicting;
 
     /// <summary>
-    ///     Waits (bounded by <see cref="LlamaServerSupervisorOptions.EjectDrainTimeout" />) for a process's active
-    ///     inference leases to drain to zero. Returns <see langword="true" /> when drained within the window (an idle
-    ///     process returns immediately), <see langword="false" /> when the window elapsed with work still in flight. The
-    ///     drain window is real-time bounded (not the injected clock) since it is an actual wall-clock wait; a caller
-    ///     cancellation propagates as an <see cref="OperationCanceledException" />.
+    ///     Waits, bounded by <see cref="LlamaServerSupervisorOptions.EjectDrainTimeout" />, for a process's active
+    ///     inference leases to drain to zero.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="true" /> when drained within the window — an idle process returns immediately —
+    ///     <see langword="false" /> when the window elapsed with work still in flight. The drain window is real-time
+    ///     bounded rather than on the injected clock, being an actual wall-clock wait, and a caller cancellation
+    ///     propagates as an <see cref="OperationCanceledException" />.
+    /// </remarks>
     private async Task<bool> DrainLeasesAsync(RunningProcess running, CancellationToken ct)
     {
         if (running.ActiveLeases == 0)

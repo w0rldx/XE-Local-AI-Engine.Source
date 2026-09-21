@@ -5,15 +5,15 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="ILlamaCppSourceBuildPrerequisiteProbe" />. Reports — never installs — the toolchain an in-app CUDA
-///     <c>llama-server</c> build needs. Each tool item spawns the tool with a version/probe argument (bounded, tree-killed,
-///     degrade-never-throw — modeled on <see cref="ProcessGpuVendorProbe" />); the NVIDIA-GPU item reuses
-///     <see cref="IGpuVendorProbe" />; the free-disk item checks the build cache root's drive. Non-Linux short-circuits to
-///     a single unsatisfied OS item with <see cref="LlamaCppSourceBuildPrerequisiteReport.CanBuild" /> false.
+///     Default <see cref="ILlamaCppSourceBuildPrerequisiteProbe" />: reports — never installs — the toolchain an in-app
+///     CUDA <c>llama-server</c> build needs.
 /// </summary>
 /// <remarks>
-///     The probe touches no command with host-derived data and surfaces only sanitized, user-safe detail strings (a
-///     trimmed first version line or a fixed reason) — never an absolute path, URL, or secret.
+///     Each tool item spawns the tool with a version or probe argument, bounded, tree-killed and degrading rather than
+///     throwing, modelled on <see cref="ProcessGpuVendorProbe" />; the NVIDIA-GPU item reuses
+///     <see cref="IGpuVendorProbe" />; the free-disk item checks the build cache root's drive; non-Linux short-circuits
+///     to one unsatisfied OS item. The probe touches no command with host-derived data and surfaces only sanitized
+///     detail strings — a trimmed first version line or a fixed reason — never an absolute path, URL or secret.
 /// </remarks>
 public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildPrerequisiteProbe
 {
@@ -24,10 +24,13 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
     private static readonly IFreeSpaceProbe FreeSpace = new DriveInfoFreeSpaceProbe();
 
     /// <summary>
-    ///     Conservative free-disk floor for a CUDA source build. The clone + the cmake/CUDA object tree for a single
-    ///     <c>llama-server</c> target comfortably fits in this; the check is a disk-exhaustion guard, not a precise
-    ///     estimate. Re-checked again immediately before the build starts (the probe value can go stale).
+    ///     Conservative free-disk floor for a CUDA source build.
     /// </summary>
+    /// <remarks>
+    ///     The clone plus the cmake and CUDA object tree for a single <c>llama-server</c> target comfortably fits in
+    ///     this; the check is a disk-exhaustion guard, not a precise estimate. Re-checked immediately before the build
+    ///     starts, because the probe value can go stale.
+    /// </remarks>
     internal const long RequiredFreeDiskBytes = 15L * 1024 * 1024 * 1024;
 
     private readonly string _buildCacheRoot;

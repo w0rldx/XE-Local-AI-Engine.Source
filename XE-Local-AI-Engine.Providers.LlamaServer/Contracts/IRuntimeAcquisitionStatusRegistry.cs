@@ -3,17 +3,14 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>
 ///     Holds the current llama.cpp runtime acquisition status for the hydrate endpoint, stamps the monotonic
 ///     <see cref="RuntimeAcquisitionStatusHubEvent.Sequence" /> on every write, and owns the push throttle.
-///     <para>
-///         <b>Why the registry owns publishing.</b> Every status write must be sequenced AND broadcast; splitting those
-///         across two collaborators would let a caller record a status that never reaches a connected client (or push
-///         one that hydrate never sees). So the registry takes the <see cref="IRuntimeAcquisitionEventPublisher" /> as
-///         its dependency and callers talk only to the registry.
-///     </para>
-///     <para>
-///         <b>The registry write is always unconditional</b> — only the push is throttled — so the hydrate endpoint
-///         always serves the freshest bytes even mid-throttle.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <b>The registry owns publishing</b> because every status write must be sequenced AND broadcast: splitting those
+///     across two collaborators would let a caller record a status that never reaches a connected client, or push one
+///     that hydrate never sees. So the registry takes the <see cref="IRuntimeAcquisitionEventPublisher" /> as its
+///     dependency and callers talk only to the registry. <b>The registry write is always unconditional</b> — only the
+///     push is throttled — so the hydrate endpoint always serves the freshest bytes, even mid-throttle.
+/// </remarks>
 public interface IRuntimeAcquisitionStatusRegistry
 {
     /// <summary>
@@ -23,10 +20,13 @@ public interface IRuntimeAcquisitionStatusRegistry
     RuntimeAcquisitionStatusHubEvent Current { get; }
 
     /// <summary>
-    ///     Records <paramref name="update" /> as the current status under a freshly-stamped sequence and broadcasts it
-    ///     (subject to the byte-update throttle). Fire-and-forget and non-throwing: this is called from the download
-    ///     byte loop and from the startup path, neither of which may block or fail on a push.
+    ///     Records <paramref name="update" /> as the current status under a freshly-stamped sequence and broadcasts it,
+    ///     subject to the byte-update throttle.
     /// </summary>
+    /// <remarks>
+    ///     Fire-and-forget and non-throwing: it is called from the download byte loop and from the startup path,
+    ///     neither of which may block or fail on a push.
+    /// </remarks>
     void Report(RuntimeAcquisitionUpdate update);
 }
 

@@ -8,20 +8,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 ///     hot path — so it is fully unit-testable by faking <see cref="IGpuVendorProbe" /> and the cached signal.
 /// </summary>
 /// <remarks>
-///     Rule: NVIDIA → CUDA on Windows; on Linux NVIDIA → CUDA <em>only when a managed source build is signalled</em>
-///     (<see cref="ICudaManagedBuildSignal" />), else Vulkan (llama.cpp ships no prebuilt Linux CUDA asset); AMD/Intel →
-///     Vulkan; none/unknown → CPU.
-///     <para>
-///         When an operator bring-your-own override is active (<see cref="LlamaServerRuntimeOverrideOptions.IsActive" />)
-///         the configured variant short-circuits the vendor probe entirely. The selector keys off
-///         <see cref="LlamaServerRuntimeOverrideOptions.IsActive" /> only and never validates the override path — path
-///         validation is the binary manager's single responsibility.
-///     </para>
-///     <para>
-///         The managed-CUDA decision reads a CACHED flag (set on adopt, cleared on remove, seeded at startup) rather than
-///         a per-call <see cref="IInstalledRuntimeStore" /> read, so selection stays cheap. Disk-presence/perms/SHA
-///         validity is enforced authoritatively by the binary manager at every serve; a stale flag self-heals there.
-///     </para>
+///     The rule: NVIDIA to CUDA on Windows; on Linux NVIDIA to CUDA only when a managed source build is signalled
+///     (<see cref="ICudaManagedBuildSignal" />) and Vulkan otherwise, llama.cpp shipping no prebuilt Linux CUDA asset;
+///     AMD and Intel to Vulkan; none or unknown to CPU. An active operator override short-circuits the vendor probe
+///     entirely, and the override path is never validated here — that is the binary manager's single responsibility,
+///     as is re-validating the cached managed-CUDA flag this reads instead of the installed-runtime store.
 /// </remarks>
 public sealed class GpuVariantSelector : IGpuVariantSelector
 {
@@ -52,9 +43,8 @@ public sealed class GpuVariantSelector : IGpuVariantSelector
     /// <inheritdoc />
     public async Task<GpuVariant> SelectVariantAsync(CancellationToken ct)
     {
-        // Override short-circuit: an operator-supplied binary is served as the configured variant; the vendor probe is
-        // skipped entirely (the live host may report a different/absent GPU). The path is NOT validated here — the binary
-        // manager is the single path-validator. No await reaches the vendor probe on this branch.
+        // Override short-circuit: an operator-supplied binary is served as the configured variant and the vendor probe is skipped entirely, the live host possibly
+        // reporting a different or absent GPU. The path is NOT validated here — the binary manager is the single path-validator — and no await reaches the probe.
         if (_overrideOptions.IsActive)
         {
             return _overrideOptions.Variant;

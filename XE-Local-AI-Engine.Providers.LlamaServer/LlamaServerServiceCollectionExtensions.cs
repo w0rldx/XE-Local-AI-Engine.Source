@@ -20,25 +20,24 @@ public static class LlamaServerServiceCollectionExtensions
 {
     /// <summary>
     ///     Backstop deadline on the rerank client, restoring one that Aspire's standard pipeline takes away (see the
-    ///     reranker registration). Must stay ABOVE <c>LlamaServerRerankerClient.ResolveRequestTimeout</c>'s ceiling or
-    ///     it fires first and the reranker's own degrade-to-fusion-order path never runs.
+    ///     reranker registration).
     /// </summary>
+    /// <remarks>
+    ///     It must stay ABOVE <c>LlamaServerRerankerClient.ResolveRequestTimeout</c>'s ceiling, or it fires first and
+    ///     the reranker's own degrade-to-fusion-order path never runs.
+    /// </remarks>
     private static readonly TimeSpan RerankBackstopTimeout = TimeSpan.FromMinutes(2);
 
     /// <summary>
-    ///     Registers the model-runtime-core services: the GPU vendor probe, the OS-aware
-    ///     variant selector, and the llama.cpp binary manager, plus the supervisor
-    ///     (<see cref="ILlamaServerProcessSupervisor" />) and the provider (<c>ILocalModelProvider</c> for
-    ///     <c>llamacpp</c>) wired into the multi-provider resolver.
+    ///     Registers the model-runtime core — GPU vendor probe, OS-aware variant selector, llama.cpp binary manager —
+    ///     plus <see cref="ILlamaServerProcessSupervisor" /> and the <c>llamacpp</c> <c>ILocalModelProvider</c>, wired
+    ///     into the multi-provider resolver.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         <strong>Caller contract:</strong> the consuming application must register a named/typed
-    ///         <see cref="System.Net.Http.HttpClient" /> for binary downloads via <c>AddHttpClient</c> (the
-    ///         <c>Microsoft.Extensions.Http</c> package is referenced by the Application host, not this provider
-    ///         project) and supply an <see cref="IGgufModelStore" /> — the Hugging Face GGUF store
-    ///         (<c>AddHuggingFaceGgufStore</c>).
-    ///     </para>
+    ///     CALLER CONTRACT: the consuming application must register a named/typed
+    ///     <see cref="System.Net.Http.HttpClient" /> for binary downloads via <c>AddHttpClient</c> — the
+    ///     <c>Microsoft.Extensions.Http</c> package is referenced by the Application host, not this provider project —
+    ///     and supply an <see cref="IGgufModelStore" />, the Hugging Face GGUF store (<c>AddHuggingFaceGgufStore</c>).
     /// </remarks>
     public static IServiceCollection AddLlamaServerLocalModelProvider(this IServiceCollection services)
     {
@@ -53,10 +52,8 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ICudaManagedBuildSignal, CudaManagedBuildSignal>();
         services.TryAddSingleton<IActiveSourceBuildSignal>(static sp => sp.GetRequiredService<ICudaManagedBuildSignal>());
 
-        // Operator bring-your-own llama-server override — operator-trust ONLY. Built once from process env vars
-        // (XE_LLAMACPP_SERVER_PATH / XE_LLAMACPP_VARIANT) via explicit reads, NEVER from IConfiguration sections, the
-        // user-editable node settings store, or a request DTO. Off by default; one instance is shared by the selector and
-        // the binary manager so both key off a single source of override truth.
+        // Operator bring-your-own llama-server override, operator-trust ONLY: built once from process env vars via explicit reads, NEVER from an IConfiguration
+        // section, the user-editable node settings store or a request DTO. Off by default; ONE instance is shared by the selector and the binary manager.
         var overrideOptions = LlamaServerRuntimeOverrideOptions.FromEnvironment();
         services.TryAddSingleton(overrideOptions);
 
@@ -67,13 +64,8 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
                 sp.GetRequiredService<ICudaManagedBuildSignal>()));
 
-        // Dynamic-runtime resolution seams: the live GitHub Releases catalog (tier 1) and the on-disk installed-runtime
-        // state (tier 2). The binary manager consults both, falling back to the pinned floor (tier 3) when both miss.
-        //
-        // These two, and only these two, stay on the host's shared DEFAULT factory client — a deliberate KEEP, not an
-        // oversight. Everything they issue is an idempotent catalog/download GET against GitHub, which is exactly the
-        // shape the Aspire-installed standard pipeline helps: a retried GET costs a second read, never a second side
-        // effect. The reranker's non-idempotent POST used to share this client and is registered on its own below.
+        // Dynamic-runtime resolution seams: the live GitHub Releases catalog (tier 1) and the on-disk installed-runtime state (tier 2), with the pinned floor
+        // behind them. These two ALONE keep the host's shared default factory client — a deliberate KEEP: each issues an idempotent GET, so a retry costs a read, never a side effect.
         services.TryAddSingleton<ILlamaCppReleaseCatalog>(static sp =>
             new GitHubLlamaCppReleaseCatalog(sp.GetRequiredService<HttpClient>(), sp.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IInstalledRuntimeStore>(static _ => new InstalledRuntimeStore());
@@ -82,10 +74,8 @@ public static class LlamaServerServiceCollectionExtensions
         // update install, read by the read-only runtime-status endpoint. Decoupled from any app-package updater channel.
         services.TryAddSingleton<ILlamaCppUpdateState, LlamaCppUpdateState>();
 
-        // First-run runtime-acquisition visibility. The no-op publisher keeps provider-only / headless / CI hosts silent
-        // and byte-behavior-identical; the Client host swaps in a hub-backed one. The manager depends on the REGISTRY,
-        // never on the publisher directly: the registry is what stamps the monotonic sequence the late-join hydrate
-        // reconciles against, so routing every write through it makes "recorded but never broadcast" unrepresentable.
+        // First-run acquisition visibility: the no-op publisher keeps provider-only, headless and CI hosts silent, and the Client host swaps in a hub-backed one.
+        // The manager depends on the REGISTRY, never the publisher: routing every write through what stamps the sequence makes "recorded but never broadcast" unrepresentable.
         services.TryAddSingleton<IRuntimeAcquisitionEventPublisher, NullRuntimeAcquisitionEventPublisher>();
         services.TryAddSingleton<IRuntimeAcquisitionStatusRegistry, RuntimeAcquisitionStatusRegistry>();
 
@@ -100,9 +90,8 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ICudaManagedBuildSignal>(),
                 sp.GetRequiredService<IRuntimeAcquisitionStatusRegistry>()));
 
-        // In-app Linux source build (no upstream prebuilt CUDA asset exists): the per-backend prerequisite probe, the
-        // no-op build-event publisher (the Client host swaps in a hub-backed one), and the single-flight build service.
-        // The startup service cleans a stale work dir + seeds the managed-CUDA signal from the installed-runtime record.
+        // In-app Linux source build (no upstream prebuilt CUDA asset exists): the per-backend prerequisite probe, the no-op build-event publisher (the Client host
+        // swaps in a hub-backed one) and the single-flight build service; the startup service cleans a stale work dir and seeds the managed-CUDA signal from the record.
         services.TryAddSingleton<ILlamaCppSourceBuildPrerequisiteProbe>(static sp =>
             new LlamaCppSourceBuildPrerequisiteProbe(sp.GetRequiredService<IGpuVendorProbe>()));
         services.TryAddSingleton<ILlamaCppSourceBuildEventPublisher, NullLlamaCppSourceBuildEventPublisher>();
@@ -113,32 +102,27 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<IConvertScriptSourceFetcher, GitConvertScriptSourceFetcher>();
         services.TryAddSingleton<IConvertScriptProvisioner, ConvertScriptProvisioner>();
 
-        // Real llama.cpp process-VRAM-budget probe: parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
-        // it WINS over the Application-layer TryAddSingleton<IProcessVramBudgetProbe, UnknownProcessVramBudgetProbe>() floor
-        // regardless of registration order — TryAdd no-ops once a registration exists, and last-wins resolves to this one.
+        // Real llama.cpp process-VRAM-budget probe, parsing `llama-server --list-devices`. PLAIN AddSingleton, not TryAdd, so it WINS over the Application layer's
+        // UnknownProcessVramBudgetProbe floor regardless of registration order: TryAdd no-ops once a registration exists, and last-wins resolves to this one.
         services.AddSingleton<IProcessVramBudgetProbe, LlamaListDevicesProcessVramBudgetProbe>();
 
-        // Device-inventory probe: parses `llama-server --list-devices` into a structured {variant, devices[]}
-        // (sharing the process runner with the VRAM probe), cached per resolved binary. The Application-layer runtime
-        // device audit consumes it to detect a GPU-variant binary that enumerates zero devices (a silent CPU fallback).
+        // Device-inventory probe: parses `llama-server --list-devices` into a structured variant-plus-devices reading, sharing the process runner with the VRAM
+        // probe and cached per resolved binary. The Application-layer runtime device audit uses it to spot a GPU-variant binary enumerating zero devices — a silent CPU fallback.
         services.TryAddSingleton<ILlamaDeviceInventoryProbe, LlamaDeviceInventoryProbe>();
 
-        // Probe the resolved executable rather than inferring flags from a tag. The successful --version/--help result
-        // is cached per requested-version/path/length/mtime/SHA-256 identity and gates every final launch vector,
-        // including BYO/source builds.
+        // Probe the resolved executable rather than infer flags from a tag. The successful --version/--help result is cached per
+        // requested-version/path/length/mtime/SHA-256 identity and gates every final launch vector, including BYO and source builds.
         services.TryAddSingleton<ILlamaServerCapabilityManifestProbe, LlamaServerCapabilityManifestProbe>();
 
-        // The public question-answering seam over that same probe, for callers outside this provider that must settle a
-        // launch vector BEFORE a spawn exists (the benchmark freeze). It exposes neither the manifest nor the resolved
-        // binary, so no path crosses the boundary.
+        // The public question-answering seam over that same probe, for callers outside this provider that must settle a launch vector BEFORE a spawn exists
+        // (the benchmark freeze). It exposes neither the manifest nor the resolved binary, so no path crosses the boundary.
         services.TryAddSingleton<ILlamaServerLaunchCapabilityInspector>(static sp =>
             new LlamaServerLaunchCapabilityInspector(sp.GetRequiredService<IGpuVariantSelector>(),
                 sp.GetRequiredService<ILlamaCppBinaryManager>(),
                 sp.GetRequiredService<ILlamaServerCapabilityManifestProbe>()));
 
-        // GPU-load admission floor: a no-op serializer so a provider-only host resolves the gate even when the
-        // application layer has not registered the real, metric-emitting serializer. The composition root overrides this
-        // with a plain AddSingleton (last-wins) so both the LLM and image supervisors share ONE process-wide gate.
+        // GPU-load admission floor: a no-op serializer so a provider-only host resolves the gate even when the application layer registered no real, metric-emitting
+        // one. The composition root overrides it with a plain AddSingleton (last-wins), so the LLM and image supervisors share ONE process-wide gate.
         services.TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>();
 
         // Options default here so the supervisor is resolvable; the host overrides them from node config.
@@ -162,12 +146,8 @@ public static class LlamaServerServiceCollectionExtensions
         // Process-supervision seams: the OS-aware launcher (tree-kill) + the /health readiness probe.
         services.TryAddSingleton<ILlamaServerProcessLauncher, LlamaServerProcessLauncher>();
 
-        // The readiness/liveness probe gets a DEDICATED HttpClient that bypasses the app's IHttpClientFactory,
-        // so it never inherits the standard resilience handler's exponential retries — the audited cause of a single
-        // logical probe firing at +0.2/2.4/5.1/10.2 s and detecting readiness up to ~5 s late. The probe issues exactly
-        // one bounded request per poll (its own per-attempt timeout), and the supervisor's 250 ms cadence controls
-        // timing. Localhost-only, so factory handler rotation is unnecessary; a modest backstop Timeout sits above the
-        // probe's own per-attempt/reuse bounds. Process-lifetime singleton — intentionally never disposed.
+        // DEDICATED HttpClient bypassing the app's IHttpClientFactory, so the readiness probe never inherits the standard resilience handler's exponential retries,
+        // which detect readiness seconds late. Localhost-only, so handler rotation is unnecessary; the backstop Timeout sits above the probe's own bounds. Never disposed, by design.
         services.TryAddSingleton<ILlamaServerHealthProbe>(static _ =>
             new LlamaServerHealthProbe(new HttpClient
             {
@@ -185,19 +165,16 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ITransientLlamaServerLauncher>(static sp =>
             sp.GetRequiredService<TransientLlamaServerLauncher>());
 
-        // Self-satisfying launch-arg resolver: explore-mode (auto-fit) until the Application host registers its
-        // DB-backed IInferenceProfileResolver last (last registration wins), keeping the layer arrow Application →
-        // Providers (the interface is DEFINED here, implemented in Application).
+        // Self-satisfying launch-arg resolver: explore-mode (auto-fit) until the Application host registers its DB-backed IInferenceProfileResolver last (last
+        // registration wins), which keeps the layer arrow Application → Providers — the interface is DEFINED here and implemented in Application.
         services.TryAddSingleton<IInferenceProfileResolver, DefaultInferenceProfileResolver>();
 
-        // Self-satisfying per-model extra-launch-arg resolver: empty (no override) until the Application host registers
-        // its store-backed resolver last (last registration wins), keeping the layer arrow Application → Providers (the
-        // interface is DEFINED here, implemented in Application).
+        // Self-satisfying per-model extra-launch-arg resolver: empty (no override) until the Application host registers its store-backed resolver last (last
+        // registration wins), which keeps the layer arrow Application → Providers — the interface is DEFINED here and implemented in Application.
         services.TryAddSingleton<ILlamaServerExtraLaunchArgumentsResolver, EmptyLlamaServerExtraLaunchArgumentsResolver>();
 
-        // Measured GPU layer placement for the node: the supervisor writes it as models load, the runtime device audit
-        // reads it for the operator UI. Both must see the SAME instance, so it is registered before the supervisor and
-        // passed in explicitly rather than left to the supervisor's private default.
+        // Measured GPU layer placement for the node: the supervisor writes it as models load and the runtime device audit reads it for the operator UI. Both must
+        // see the SAME instance, so it is registered before the supervisor and passed in explicitly rather than left to the supervisor's private default.
         services.TryAddSingleton<ILlamaLayerPlacementReport, LlamaLayerPlacementReport>();
 
         // Provider-only hosts remain self-satisfying. The application host overrides this report-only seam with its
@@ -251,28 +228,8 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<ICudaManagedBuildSignal>(),
             sp.GetRequiredService<ILogger<CudaBuildStartupService>>()));
 
-        // Local cross-encoder reranker: spawns/reuses a rerank-role llama-server (--rerank + --pooling rank) for the
-        // resolved reranker model and POSTs /v1/rerank. Singleton (stateless); the supervisor owns the underlying
-        // process. Any failure degrades to null so knowledge search keeps its fusion order.
-        //
-        // Its OWN named client with NO resilience pipeline. It used to share the host's default factory client with the
-        // release catalog and the binary manager above, which under Aspire means AddServiceDefaults' standard handler —
-        // installed on every client through ConfigureHttpClientDefaults — applies here too. That is wrong twice over:
-        // /v1/rerank is a non-idempotent POST, so a retry makes a cross-encoder score the whole pool a second time on
-        // the operator's own GPU; and a pool that legitimately outruns the pipeline's per-attempt timeout is severed by
-        // it rather than by the client's own budget. RemoveAllResilienceHandlers strips both, and is a no-op outside
-        // Aspire.
-        //
-        // The explicit timeout is NOT redundant and must not be dropped. AddStandardResilienceHandler sets
-        // HttpClient.Timeout to Timeout.InfiniteTimeSpan — its pipeline owns the deadline instead — and
-        // RemoveAllResilienceHandlers removes the HANDLER, never that mutation. A client that only strips therefore
-        // ends up under Aspire with no pipeline AND no client deadline; putting one back is what keeps a rerank bounded.
-        //
-        // Finite rather than infinite, unlike the proxy and the whisper runtime client: the per-call timeout override
-        // the reranker's constructor accepts is unbounded, so "the caller's own deadline always applies" is not a
-        // property this registration can guarantee. It sits above the client's own ceiling (ResolveRequestTimeout caps
-        // the linked-token budget), so in production that budget is still what fires first and the degrade-to-fusion-
-        // order path stays reachable — LlamaServerRerankerResilienceTests pins that ordering.
+        // Local cross-encoder reranker: a stateless singleton spawning or reusing a rerank-role llama-server and POSTing /v1/rerank; the supervisor owns the process, and a
+        // failure degrades to null so search keeps its fusion order. Its OWN resilience-free client and finite timeout: docs/wiki/03-local-runtime-and-providers.md, "DI wiring".
 #pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental; used deliberately to drop the
         // Aspire-installed standard pipeline, whose blanket retries duplicate GPU
         // compute on a non-idempotent rerank POST.
@@ -286,11 +243,8 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<IHttpClientFactory>().CreateClient(LlamaServerRerankerClient.HttpClientName),
                 sp.GetRequiredService<ILogger<LlamaServerRerankerClient>>()));
 
-        // SEAM: the llamacpp ILocalModelProvider. Registered over the supervisor + the caller-supplied
-        // IGgufModelStore (the Hugging Face GGUF store). Added to the
-        // ILocalModelProvider set alongside Ollama; the per-model→provider resolver dispatches across both
-        // registrations. Singleton — it holds no per-request state; the deferred chat/embedding
-        // clients it hands out own the cold-start.
+        // SEAM: the llamacpp ILocalModelProvider, over the supervisor and the caller-supplied IGgufModelStore (the Hugging Face GGUF store), added to the
+        // ILocalModelProvider set alongside Ollama so the per-model resolver dispatches across both. Singleton — it holds no per-request state, and the deferred clients own the cold-start.
         services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>
             new LlamaServerLocalModelProvider(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
                 sp.GetRequiredService<IGgufModelStore>(),
@@ -301,19 +255,15 @@ public static class LlamaServerServiceCollectionExtensions
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());
 
-        // Startup orphan reaper: kills stale llama-server processes THIS app left behind on a previous run. A hard host
-        // kill (e.g. `aspire stop`) skips the supervisor's graceful DisposeAsync teardown, orphaning the server while it
-        // still holds its loopback port + GPU VRAM and so blocking the next start. The reaper matches ONLY binaries under
-        // our own llama.cpp cache root, so an unrelated llama-server (e.g. Ollama's) is never touched. Best-effort — it
-        // never throws out of StartAsync, so it can never block startup.
+        // Startup orphan reaper: a hard host kill skips the supervisor's graceful DisposeAsync teardown, orphaning a server that still holds its loopback port and VRAM and blocks the next start.
+        // It matches ONLY binaries under our own llama.cpp cache root, so an unrelated llama-server is never touched, and never throws out of StartAsync, so it cannot block startup.
         services.TryAddSingleton<IStaleLlamaServerProcessScanner, OsStaleLlamaServerProcessScanner>();
         services.AddHostedService(static sp => new StaleLlamaServerReaper(sp.GetRequiredService<IStaleLlamaServerProcessScanner>(),
             LlamaCppBinaryManager.DefaultLlamaCppBinariesRoot(),
             sp.GetRequiredService<ILogger<StaleLlamaServerReaper>>()));
 
-        // Startup notice: when the bring-your-own override is active, log it once at Warning so it is obvious that an
-        // unverified operator-supplied binary is in use (integrity hash verification is skipped). Nothing is logged when
-        // the override is unset, so a normal deploy is byte-behavior-unchanged.
+        // Startup notice: an active bring-your-own override is logged once at Warning, so it is obvious that an unverified operator-supplied binary is in use and
+        // integrity hash verification is skipped. Nothing is logged when the override is unset, so a normal deploy is byte-behavior-unchanged.
         services.AddHostedService(static sp => new LlamaServerRuntimeOverrideStartupNotice(sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
             sp.GetRequiredService<ILogger<LlamaServerRuntimeOverrideStartupNotice>>()));
 

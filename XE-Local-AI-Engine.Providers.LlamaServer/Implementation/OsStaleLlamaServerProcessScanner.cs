@@ -7,11 +7,13 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Production <see cref="IStaleLlamaServerProcessScanner" />: reads the OS process table for <c>llama-server</c>
-///     processes and tree-kills by pid via <see cref="Process" />. On Linux the executable path is read from the
-///     <c>/proc/&lt;pid&gt;/exe</c> symlink (the kernel's authoritative pointer to the real binary), which is more reliable
-///     than <see cref="ProcessModule.FileName" /> — that can throw for a foreign-owned or just-exited process. Other
-///     platforms read <see cref="Process.MainModule" />.
+///     processes and tree-kills by pid via <see cref="Process" />.
 /// </summary>
+/// <remarks>
+///     On Linux the executable path is read from the <c>/proc/&lt;pid&gt;/exe</c> symlink, the kernel's authoritative
+///     pointer to the real binary, which is more reliable than <see cref="ProcessModule.FileName" /> — that can throw
+///     for a foreign-owned or just-exited process. Other platforms read <see cref="Process.MainModule" />.
+/// </remarks>
 internal sealed class OsStaleLlamaServerProcessScanner : IStaleLlamaServerProcessScanner
 {
     // The OS process name carries no extension on any platform (Windows reports "llama-server", not "llama-server.exe").

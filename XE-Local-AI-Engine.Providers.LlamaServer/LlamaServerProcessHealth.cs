@@ -19,11 +19,14 @@ public sealed class LlamaServerProcessHealth
     public required string Detail { get; init; }
 
     /// <summary>
-    ///     Whether the OS process behind this entry is GONE. Distinct from <see cref="IsResponsive" />, which is
-    ///     also false for a process that is alive but still loading or wedged: an exited entry holds no VRAM, no port and
-    ///     no loaded-process slot, and lingers in the table only until the idle reaper collects it. Callers that decide
-    ///     capacity or routing from this snapshot must treat it as NOT running; callers that merely report health show it
-    ///     as the exited process it is. Trailing optional so every existing construction is unchanged.
+    ///     Whether the OS process behind this entry is GONE.
     /// </summary>
+    /// <remarks>
+    ///     Distinct from <see cref="IsResponsive" />, which is also false for a process that is alive but still loading
+    ///     or wedged: an exited entry holds no VRAM, no port and no loaded-process slot, and lingers in the table only
+    ///     until the idle reaper collects it. A caller that decides capacity or routing from this snapshot must treat
+    ///     it as NOT running; one that merely reports health shows it as the exited process it is. A trailing optional
+    ///     positional, so an existing construction needs no change.
+    /// </remarks>
     public bool HasExited { get; init; }
 }

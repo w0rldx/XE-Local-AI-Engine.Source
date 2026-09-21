@@ -6,21 +6,16 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="ILlamaServerLaunchFallbackStore" />: persists the set of (GPU backend, KV-cache type) pairs
-///     whose optimized launch config (quantized KV cache + flash attention) has proven unable to reach readiness on this
-///     host to <c>llama-launch-fallback.json</c> under the cache root.
+///     Default <see cref="ILlamaServerLaunchFallbackStore" />: persists to <c>llama-launch-fallback.json</c> under the
+///     cache root the (GPU backend, KV-cache type) pairs whose optimized launch config has proven unable to reach
+///     readiness on this host.
 /// </summary>
 /// <remarks>
-///     Mirrors <see cref="InstalledRuntimeStore" />: tolerant deserialize (absent/corrupt → empty), atomic temp-file
-///     write then move-with-overwrite, owner-only (0600) permissions on non-Windows. An in-memory snapshot backs the
-///     read so <see cref="IsOptimizedConfigDisabledAsync" /> never touches disk on the spawn hot path after the first
-///     load; the snapshot is refreshed under the same lock on every write. The read-merge-replace additionally tries to
-///     hold an OS file lock on a sibling <c>.lock</c> file: WHILE THAT LOCK IS HELD two node processes writing at once
-///     cannot lose each other's verdict. Acquisition is bounded, and a write that could not take it proceeds unlocked
-///     (logged at Warning) with the old in-process-only ceiling, where a sibling write landing inside that window is
-///     still lost.
-///     Legacy backend-only entries (written before the store was keyed by KV type) are ignored on load and dropped from
-///     the file on the first read, so an old un-keyed verdict can no longer make the node's KV-cache-type setting inert.
+///     The optimized config is a quantized KV cache plus flash attention. Storage mirrors
+///     <see cref="InstalledRuntimeStore" />: tolerant deserialize, atomic temp-file write then move-with-overwrite,
+///     owner-only 0600 permissions off Windows. An in-memory snapshot backs the read, so
+///     <see cref="IsOptimizedConfigDisabledAsync" /> never touches disk on the spawn hot path after the first load.
+///     Cross-process merge: docs/wiki/03-local-runtime-and-providers.md, "`LlamaServerProcessSupervisor` — process lifecycle".
 /// </remarks>
 public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackStore, IDisposable
 {
@@ -141,9 +136,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             await using var stream = OpenStateForRead(_statePath);
             var state = await JsonSerializer.DeserializeAsync<LlamaServerLaunchFallbackState>(stream, SerializerOptions, ct).ConfigureAwait(false);
 
-            // Legacy, backend-only entries carry no KV type, so they cannot say which config failed. They are ignored
-            // and the file is rewritten without them rather than being read as "every KV type on this backend", which
-            // made the node's KV-cache-type setting inert on any host that recorded one.
+            // Legacy, backend-only entries carry no KV type, so they cannot say which config failed: they are ignored and the file rewritten without them, rather
+            // than read as "every KV type on this backend", which made the node's KV-cache-type setting inert on any host that recorded one.
             hadLegacy = state?.DisabledOptimizedVariants is { Count: > 0 };
 
             if (state?.DisabledOptimizedConfigs is { } configs)
@@ -167,12 +161,15 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     }
 
     /// <summary>
-    ///     Opens the state file for reading the way every reader must. Shared with writers and deleters, not just with
-    ///     other readers: <see cref="File.OpenRead" /> shares Read only, and on Windows a lock-free sibling read taken
-    ///     that way blocks the <c>File.Move(…, overwrite: true)</c> that ends a write — turning a ready safe-retry
-    ///     spawn into a launch failure. Readers still see whole documents either way, because the replace is atomic.
+    ///     Opens the state file for reading the way every reader must: shared with writers and deleters, not just with
+    ///     other readers.
     /// </summary>
-    /// <remarks>Internal so the share flags can be pinned by a test holding a reader open across a replace.</remarks>
+    /// <remarks>
+    ///     <see cref="File.OpenRead" /> shares Read only, and on Windows a lock-free sibling read taken that way blocks
+    ///     the <c>File.Move(…, overwrite: true)</c> that ends a write — turning a ready safe-retry spawn into a launch
+    ///     failure. Readers still see whole documents either way, because the replace is atomic. Internal so the share
+    ///     flags can be pinned by a test holding a reader open across a replace.
+    /// </remarks>
     internal static FileStream OpenStateForRead(string path) =>
         new(path,
             new FileStreamOptions
@@ -182,19 +179,23 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
                 Share = FileShare.ReadWrite | FileShare.Delete
             });
 
+    /// <summary>
+    ///     Replaces the whole state document, folding whatever is already on disk back in first and refreshing the
+    ///     in-memory snapshot under the same lock.
+    /// </summary>
+    /// <remarks>
+    ///     The file is USER-level, so several node processes share it and each write replaces the whole document:
+    ///     without the fold a sibling process's verdict is silently dropped. The re-read and the replace are one
+    ///     cross-process critical section held on a sibling lock file rather than on the state file itself, an
+    ///     exclusive handle on which would make the atomic <c>File.Move</c> over it fail on Windows; readers take no
+    ///     lock at all, so they keep seeing whole documents throughout.
+    /// </remarks>
     private async Task PersistAsync(HashSet<string> disabled, CancellationToken ct)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
 
-        // The file is USER-level, so several node processes share it and each write replaces the whole document. Fold
-        // whatever is on disk back in first, or a sibling process's verdict is silently dropped. Legacy names are
-        // ignored by the load, so they stay dropped.
-        // The re-read and the replace are one cross-process critical section, held on a sibling .lock file rather than
-        // on the state file itself: an exclusive handle on the state file would make the atomic File.Move over it fail
-        // on Windows, and readers take no lock at all, so they keep seeing whole documents throughout.
-        // ponytail: a lock this process could not acquire (a sibling holding it past the retry budget, or an unwritable
-        // cache root) degrades to the in-process lock alone, which is the old ceiling — a sibling write landing inside
-        // that window is lost. Accepted: it costs one failed spawn that re-records the verdict.
+        // ponytail: a lock this process could not acquire — a sibling holding it past the retry budget, or an unwritable cache root — degrades to the in-process lock
+        // alone, the old ceiling, where a sibling write landing inside that window is lost. Accepted: it costs one failed spawn that re-records the verdict.
         await using var crossProcessLock = await TryAcquireWriteLockAsync(ct).ConfigureAwait(false);
         var (onDisk, _) = await LoadAsync(ct).ConfigureAwait(false);
         disabled.UnionWith(onDisk);
@@ -218,10 +219,13 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     }
 
     /// <summary>
-    ///     Takes the cross-process write lock, or null when it could not be had: a sibling still holding it after the
-    ///     retry budget, or a lock file this process cannot open for writing. Either way the write proceeds unlocked,
-    ///     and both paths are logged at Warning — the degraded merge is the one thing a silent return would hide.
+    ///     Takes the cross-process write lock, or <see langword="null" /> when it could not be had: a sibling still
+    ///     holding it after the retry budget, or a lock file this process cannot open for writing.
     /// </summary>
+    /// <remarks>
+    ///     Either way the write proceeds unlocked, and both paths are logged at Warning — the degraded merge is the one
+    ///     thing a silent return would hide.
+    /// </remarks>
     private async Task<FileStream?> TryAcquireWriteLockAsync(CancellationToken ct)
     {
         for (var attempt = 1; attempt <= LockAttempts; attempt++)
@@ -236,9 +240,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             }
             catch (UnauthorizedAccessException)
             {
-                // The lock file itself could not be opened for writing, and retrying cannot change that. It says
-                // nothing about whether the STATE write below will succeed — that write decides its own writability —
-                // so this only reports the degraded merge rather than predicting the outcome of the launch.
+                // The lock file itself could not be opened for writing and retrying cannot change that. It says nothing about whether the STATE write below will
+                // succeed — that write decides its own writability — so this only reports the degraded merge rather than predicting the outcome of the launch.
                 _logger.LogWarning(
                     "Could not open the llama-server launch-fallback write lock at {LockPath} for writing; merging under the in-process lock only, so a concurrent sibling write may be lost.",
                     _lockPath);
@@ -303,9 +306,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 
 /// <summary>Persisted shape for <see cref="LlamaServerLaunchFallbackStore" />: the launch configs proven unable to reach readiness.</summary>
 /// <param name="DisabledOptimizedVariants">
-///     LEGACY: backend names (<see cref="GpuVariant" />) recorded before the store was keyed by KV type. The property
-///     exists only so an old file still deserializes — the entries are ignored and dropped on the first read, and this
-///     list is always written empty.
+///     LEGACY backend names (<see cref="GpuVariant" />), kept only so an old file still deserializes: ignored, dropped
+///     on the first read, always written empty.
 /// </param>
 /// <param name="DisabledOptimizedConfigs">
 ///     <c>"{Variant}:{kvType}"</c> keys whose KV-quant + flash-attention config failed readiness. A <c>q4_0</c> failure

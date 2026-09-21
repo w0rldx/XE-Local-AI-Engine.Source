@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     The result of an operator eject request against a supervised <c>(model, role)</c> process. An eject is graceful
-///     by default: it waits a bounded window for in-flight inference to drain before tearing the process down, and
-///     reports honestly when it could not complete safely rather than killing a running turn silently.
+///     The result of an operator eject request against a supervised <c>(model, role)</c> process.
 /// </summary>
+/// <remarks>
+///     An eject is graceful by default: it waits a bounded window for in-flight inference to drain before tearing the
+///     process down, and reports honestly when it could not complete safely rather than killing a running turn
+///     silently.
+/// </remarks>
 public enum LlamaServerEjectOutcome
 {
     /// <summary>No process was running for the <c>(model, role)</c>. The eject is an idempotent no-op.</summary>

@@ -8,13 +8,16 @@ using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
-///     Operator bring-your-own llama-server override branch of <see cref="LlamaCppBinaryManager" />. When the override is
-///     active <see cref="EnsureBinaryAsync" /> delegates here instead of running the download → hash-verify → cache
-///     pipeline: the supplied binary is validated and served as-is. The SHA256 pin is intentionally absent (an operator
-///     file has no publisher digest), so this branch enforces the compensating controls — regular-file, ownership +
-///     non-world-writable (TOCTOU-swap hardening), exec bit, a <c>--version</c> smoke test, and, for a GPU variant, a
-///     <c>--list-devices</c> GPU-presence check so a CPU/Vulkan binary mis-tagged as CUDA cannot silently run wrong.
+///     Operator bring-your-own llama-server override branch of <see cref="LlamaCppBinaryManager" />: when the override is
+///     active <see cref="EnsureBinaryAsync" /> delegates here and the supplied binary is validated and served as-is,
+///     never downloaded, hash-verified or cached.
 /// </summary>
+/// <remarks>
+///     The SHA256 pin is intentionally absent (an operator file has no publisher digest), so this branch enforces the
+///     compensating controls: regular-file, ownership and non-world-writable (TOCTOU-swap hardening), exec bit, a
+///     <c>--version</c> smoke test, and — for a GPU variant — a <c>--list-devices</c> GPU-presence check, so a CPU or
+///     Vulkan binary mis-tagged as CUDA cannot silently run wrong.
+/// </remarks>
 public sealed partial class LlamaCppBinaryManager
 {
     // Bounds the override --list-devices backend check; mirrors the VRAM probe / smoke-test timeout. On overrun the child
@@ -28,12 +31,14 @@ public sealed partial class LlamaCppBinaryManager
     private const uint StatRootUid = 0; // root is a trusted owner alongside the running euid
 
     /// <summary>
-    ///     Validates and returns the operator-supplied <c>llama-server</c> without any download/cache/state mutation. Any
-    ///     validation failure throws a sanitized <see cref="LlamaRuntimeException" /> — the override NEVER falls through to
-    ///     acquisition or degrades to a silent CPU run. The returned <see cref="LlamaBinary.Variant" /> is the OVERRIDE's
-    ///     configured variant, not the caller-passed variant, and <see cref="LlamaBinary.Version" /> is the sentinel
-    ///     <c>"override"</c> (surfaced verbatim in the runtime version card).
+    ///     Validates and returns the operator-supplied <c>llama-server</c> without any download, cache or state mutation.
     /// </summary>
+    /// <remarks>
+    ///     Any validation failure throws a sanitized <see cref="LlamaRuntimeException" />: the override NEVER falls
+    ///     through to acquisition or degrades to a silent CPU run. The returned <see cref="LlamaBinary.Variant" /> is
+    ///     the OVERRIDE's configured variant, not the caller-passed one, and <see cref="LlamaBinary.Version" /> is the
+    ///     sentinel <c>"override"</c>, surfaced verbatim in the runtime version card.
+    /// </remarks>
     private static async Task<LlamaBinary> ResolveOverrideBinaryAsync(LlamaServerRuntimeOverrideOptions options, CancellationToken ct)
     {
         // IsActive guarantees a non-blank path; the local is non-null.
@@ -75,12 +80,15 @@ public sealed partial class LlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Unix-only hardening for the override binary and its parent directory: both must be operator-owned (the running
-    ///     euid, or root) and not world-writable, the binary must be a regular file with an exec bit, and the parent must
-    ///     be a directory. These compensate for the absent SHA256 swap-detection on a multi-user host. No-op on Windows,
-    ///     where the regular-file existence check plus the smoke test are the available controls (the override's target
-    ///     platform is Linux).
+    ///     Unix-only hardening for the override binary and its parent directory: both must be operator-owned (the
+    ///     running euid, or root) and not world-writable, the binary must be a regular file with an exec bit, and the
+    ///     parent must be a directory.
     /// </summary>
+    /// <remarks>
+    ///     These compensate for the absent SHA256 swap-detection on a multi-user host. A no-op on Windows, where the
+    ///     regular-file existence check plus the smoke test are the available controls — the override's target platform
+    ///     is Linux.
+    /// </remarks>
     private static void ValidateOverrideFileSecurity(string fullPath)
     {
         if (OperatingSystem.IsWindows())
@@ -101,10 +109,13 @@ public sealed partial class LlamaCppBinaryManager
 
     /// <summary>
     ///     Enforces the per-path Unix controls: not world-writable (managed <see cref="File.GetUnixFileMode(string)" />),
-    ///     an exec bit when required, and — when the platform stat seam is available — operator ownership and the expected
-    ///     file type (regular file vs directory). When stat is unavailable (an unsupported arch/libc), the managed
-    ///     permission checks still apply; the smoke test would reject a non-executable or special-file target regardless.
+    ///     an exec bit when required, and — when the platform stat seam is available — operator ownership and the
+    ///     expected file type, regular file or directory.
     /// </summary>
+    /// <remarks>
+    ///     When stat is unavailable (an unsupported arch or libc) the managed permission checks still apply, and the
+    ///     smoke test would reject a non-executable or special-file target regardless.
+    /// </remarks>
     [UnsupportedOSPlatform("windows")]
     private static void EnsureUnixPathSecure(string path, bool requireExecutable, bool requireRegularFile)
     {
@@ -146,11 +157,14 @@ public sealed partial class LlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Spawns <c>&lt;override&gt; --list-devices</c> (bounded, tree-killed) and reports whether at least one GPU device
-    ///     is enumerated. Mirrors the VRAM probe's spawn/drain/timeout pattern and reuses its proven device-line shape
-    ///     (the "<c>(&lt;total&gt; MiB, &lt;free&gt; MiB free)</c>" column appears only for GPU devices). A launch failure,
-    ///     timeout, or device-less output reports <see langword="false" /> so the caller rejects the override.
+    ///     Spawns <c>&lt;override&gt; --list-devices</c>, bounded and tree-killed, and reports whether at least one GPU
+    ///     device is enumerated.
     /// </summary>
+    /// <remarks>
+    ///     Mirrors the VRAM probe's spawn, drain and timeout pattern and reuses its proven device-line shape (the
+    ///     "<c>(&lt;total&gt; MiB, &lt;free&gt; MiB free)</c>" column appears only for GPU devices). A launch failure,
+    ///     timeout or device-less output reports <see langword="false" />, so the caller rejects the override.
+    /// </remarks>
     private static async Task<bool> OverrideExposesGpuDeviceAsync(string serverPath, CancellationToken ct)
     {
         using var process = new Process
@@ -214,10 +228,12 @@ public sealed partial class LlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Reads the override target's Unix <c>st_mode</c> and <c>st_uid</c> via libc <c>stat</c>. Returns
-    ///     <see langword="false" /> when the seam is unavailable (an unsupported architecture, or <c>stat</c> not exported)
-    ///     so the caller degrades to the managed permission checks rather than failing a valid binary.
+    ///     Reads the override target's Unix <c>st_mode</c> and <c>st_uid</c> via libc <c>stat</c>.
     /// </summary>
+    /// <remarks>
+    ///     Returns <see langword="false" /> when the seam is unavailable (an unsupported architecture, or <c>stat</c>
+    ///     not exported), so the caller degrades to the managed permission checks rather than failing a valid binary.
+    /// </remarks>
     private static bool TryStatUnix(string path, out uint mode, out uint ownerUid)
     {
         mode = 0;

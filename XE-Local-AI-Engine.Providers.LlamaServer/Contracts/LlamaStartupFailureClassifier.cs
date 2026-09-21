@@ -9,25 +9,11 @@ public enum LlamaStartupFailureKind
 
 /// <summary>Classifies bounded startup diagnostics without exposing them beyond the supervisor.</summary>
 /// <remarks>
-///     <para>
-///         Classification is PER LINE and then reduced, never a substring test over the joined capture. Joining first
-///         lets any one line's vocabulary decide the whole diagnosis: llama.cpp raises
-///         <c>failed to allocate buffer for kv cache</c> on a genuine KV-cache allocation failure, so a joined buffer
-///         containing both that line and a <c>cudaMalloc failed: out of memory</c> line matched the compatibility
-///         branch and hid the out-of-memory verdict the supervisor's context down-tier is gated on.
-///     </para>
-///     <para>
-///         Two precedence rules, both deliberate. WITHIN a line, an unambiguous out-of-memory phrase wins, then a
-///         KV/flash-attention compatibility marker, then generic allocation-failure wording — so a line reporting an
-///         unsupported cache type stays a compatibility verdict even though it also says it failed to allocate.
-///         ACROSS lines, out-of-memory outranks compatibility: an allocation failure is hardware evidence that stands
-///         on its own, while another line merely naming the KV cache is not evidence against it.
-///     </para>
-///     <para>
-///         The compatibility markers name a cache TYPE or flash attention, never the KV cache as a component. That is
-///         the distinction the joined buffer erased: failing to allocate the KV cache is an allocation failure, and
-///         only a rejected cache type or a flash-attention requirement is a compatibility problem.
-///     </para>
+///     Classification is PER LINE and then reduced, NEVER a substring test over the joined capture, which would let any
+///     one line's vocabulary decide the whole diagnosis. Two precedence rules: WITHIN a line an unambiguous
+///     out-of-memory phrase wins, then a KV or flash-attention compatibility marker, then generic allocation-failure
+///     wording; ACROSS lines out-of-memory outranks compatibility. The markers name a cache TYPE or flash attention,
+///     never the KV cache as a component. See docs/wiki/03-local-runtime-and-providers.md, "Startup failure classification".
 /// </remarks>
 public static class LlamaStartupFailureClassifier
 {

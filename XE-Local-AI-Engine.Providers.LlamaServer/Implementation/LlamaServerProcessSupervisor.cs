@@ -9,19 +9,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
-///     Default <see cref="ILlamaServerProcessSupervisor" />. Owns every
-///     <c>llama-server</c> child process: reuse-or-spawn per <c>(model, role)</c> with a single-flight gate, health
-///     probe on start, restart-on-crash with a backoff cap, localhost port allocation with collision-retry, shared
-///     idle-TTL + loaded-cap eviction + a background reaper, per-OS tree-kill teardown, and the hybrid
-///     attach-to-external-endpoint path. Singleton; disposes every owned process on shutdown.
+///     Default <see cref="ILlamaServerProcessSupervisor" />: a singleton that owns every <c>llama-server</c> child
+///     process for the node and disposes them all on shutdown.
 /// </summary>
 /// <remarks>
-///     <para>
-///         All process launch / tree-kill / health I/O is delegated to the <see cref="ILlamaServerProcessLauncher" />
-///         and <see cref="ILlamaServerHealthProbe" /> seams so this lifecycle logic is unit-tested without real
-///         processes or network. The launch argument vector — including the mandatory <c>--jinja</c> (chat) and
-///         non-<c>none</c> <c>--pooling</c> (embedding) flags — is built by <see cref="LlamaServerLaunchArgumentComposer.BuildLaunchSpec" />.
-///     </para>
+///     Reuse-or-spawn per <c>(model, role)</c> behind a single-flight gate, restart-on-crash with a backoff cap,
+///     localhost port allocation with collision-retry, idle-TTL and loaded-cap eviction with a background reaper,
+///     per-OS tree-kill teardown, and the hybrid attach-to-external-endpoint path. Launch, tree-kill and health I/O go
+///     through the <see cref="ILlamaServerProcessLauncher" /> and <see cref="ILlamaServerHealthProbe" /> seams; the
+///     argument vector comes from <see cref="LlamaServerLaunchArgumentComposer.BuildLaunchSpec" />. See docs/wiki/03-local-runtime-and-providers.md.
 /// </remarks>
 public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor, IAsyncDisposable
 {
@@ -29,16 +25,12 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     private const string CapabilityIncompatibleMarker = "LlamaServer.CapabilityIncompatible";
     private const string CapabilitySafeFallbackMarker = "LlamaServer.CapabilitySafeFallback";
 
-    // Flags a readiness TIMEOUT (process alive but slow) so the restart loop retries it at most
-    // MaxReadinessTimeoutRetries times instead of the full MaxRestartAttempts — a deterministically slow/large model
-    // is not a transient crash, so retrying it many times only multiplies the kill/reload thrash.
+    // Flags a readiness TIMEOUT (process alive but slow) so the restart loop retries it at most MaxReadinessTimeoutRetries times instead of the full
+    // MaxRestartAttempts: a deterministically slow or large model is not a transient crash, and retrying it many times only multiplies the kill/reload thrash.
     private const string ReadinessTimeoutMarker = "LlamaServer.ReadinessTimeout";
 
-    // The lowest llama.cpp log verbosity (-lv) that emits the model-load layer-placement banner. Measured against the
-    // server default of 3, which prints an 11-line startup carrying no placement information at all. Level 4 adds ~213
-    // startup lines per spawn (logged at Information — that IS the placement evidence) and ~22 lines per request
-    // (demoted to Debug once serving, so the sink absorbs roughly nothing). The next level up is the per-tensor debug
-    // firehose: ~1250 startup lines and ~1650 lines PER REQUEST, which no sink policy makes affordable.
+    // The lowest llama.cpp log verbosity that emits the model-load layer-placement banner: the server default of 3 prints no placement at all, and the next level
+    // up is a per-tensor firehose no sink policy makes affordable. Measured line counts: wiki 03, "Spawn attempt sequencing, startup capture and one-shot fallbacks".
     private const string PlacementProbeLogVerbosity = "4";
 
     /// <summary>Poll cadence for observing that a freshly spawned process exited during its readiness wait.</summary>
@@ -63,11 +55,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     // Set only around the body callback, so it identifies that operation's OWN re-entrant calls and nobody else's.
     private readonly AsyncLocal<ExclusiveProfilingScope?> _exclusiveProfiling = new();
 
-    // The in-flight, DETACHED spawn task per (model, role) key. A caller AWAITS this task but never owns its lifetime:
-    // a caller cancelling its own wait does not abort the model load, which continues under its own readiness deadline
-    // and leaves the model warm for the next send (the deliberate design — a user who cancels before the first token
-    // does not throw away the load everyone behind them is waiting on). Exactly one runs per key at a time; it removes
-    // itself on completion (success or failure) so the next ensure retries fresh.
+    // The in-flight, DETACHED spawn task per (model, role) key: exactly one runs per key, removing itself on completion (success or failure) so the next ensure
+    // retries fresh. A caller awaits it but never owns its lifetime — cancelling its own wait deliberately leaves the load running, warm for the next send.
     private readonly ConcurrentDictionary<ProcessKey, InflightSpawn> _inflightSpawns = new();
     private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
     private readonly ILlamaServerHealthProbe _healthProbe;
@@ -82,9 +71,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     private readonly LlamaServerSupervisorOptions _options;
     private readonly IInferenceProfileResolver _profileResolver;
 
-    // Per-model developer/advanced override: extra llama-server flags the operator typed, appended after the built spec
-    // on the normal serving path. Empty for every model with no override; the composition root injects the store-backed
-    // resolver over the provider's empty default.
+    // Per-model operator override: extra llama-server flags appended after the built spec on the normal serving path, and empty for every model
+    // with no override. The composition root injects the store-backed resolver over the provider's empty default.
     private readonly ILlamaServerExtraLaunchArgumentsResolver _extraArgumentsResolver;
 
     // One running process per (model, role) key.
@@ -191,9 +179,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
         await _runtimeMutationGate.WaitForOperationsDrainedAsync().ConfigureAwait(false);
 
-        // No new operation can enter after the disposed flag is latched, and the separate operation barrier above
-        // proves every admitted operation has finished. Own the runtime gate exclusively through teardown and dispose
-        // it in-place.
+        // No new operation can enter after the disposed flag is latched, and the separate operation barrier above proves every admitted operation has finished:
+        // own the runtime gate exclusively through teardown and dispose it in-place.
         await _runtimeMutationGate.EnterExclusiveForTeardownAsync().ConfigureAwait(false);
         var inflightSpawns = _inflightSpawns.Values.Select(static inflight => inflight.Task).ToArray();
 
@@ -203,8 +190,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         }
         catch (Exception ex)
         {
-            // Cancellation/failure is expected during shutdown. Completion is published only after each detached
-            // spawn has removed its registry entry and released its launch ticket, so reaching here is cleanup-safe.
+            // Cancellation or failure is expected during shutdown, and completion is published only after each detached spawn has removed its registry entry
+            // and released its launch ticket, so reaching here is cleanup-safe.
             _logger.LogDebug(ex, "One or more detached llama-server spawns ended while the supervisor was shutting down.");
         }
 
@@ -235,10 +222,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         {
             EnsureDecision decision;
 
-            // SHARED: this section orders against operator runtime mutations, not against other ensures. Everything it
-            // touches is already safe under concurrency — the reuse probe claim is a CAS, the spawn decision runs under
-            // the per-key _ensureGates single-flight, and the process/spawn tables are concurrent — so two ensures for
-            // different roles run side by side instead of queueing behind each other's liveness probe.
+            // SHARED: this section orders against operator runtime mutations, not against other ensures. Everything it touches is already concurrency-safe — the
+            // reuse probe claim is a CAS, the spawn decision runs under the per-key _ensureGates single-flight, the tables are concurrent — so ensures run side by side.
             await _runtimeMutationGate.EnterSharedAsync(ct).ConfigureAwait(false);
             try
             {
@@ -256,10 +241,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
                 var key = new ProcessKey(modelName, role);
 
-                // Re-entrancy: an exclusive profiling operation holds this key's single-flight gate across its WHOLE
-                // body callback, so the body's own ensure must be answered from the process that operation pinned.
-                // Routed into the profiling-owned exclusion below it would park on a semaphore its own frame holds —
-                // a self-deadlock, not a wait. Every OTHER caller still falls through and queues behind profiling.
+                // Re-entrancy: an exclusive profiling operation holds this key's single-flight gate across its WHOLE body callback, so the body's own ensure must be
+                // answered from the pinned process — routed into the exclusion below it would park on a semaphore its own frame holds. Other callers still queue.
                 var ownProfilingProcess = GetOwnExclusiveProfilingProcess(key, out var isOwnProfilingFlow);
                 if (isOwnProfilingFlow)
                 {
@@ -274,11 +257,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                     return ownProfilingProcess.Endpoint;
                 }
 
-                // Fast path: an already-running, live process is reused without taking the spawn gate — subject to a
-                // rate-limited liveness probe so a wedged (alive but unresponsive) process is respawned instead of handed out.
-                // A profiling-owned process is never handed out: its teardown evicts unconditionally, so a reuse here would
-                // be killed mid-generation. Falling through queues this caller on the per-key gate profiling holds until
-                // teardown, after which it spawns its own process.
+                // Fast path: an already-running, live process is reused without taking the spawn gate, subject to a rate-limited liveness probe so a wedged (alive
+                // but unresponsive) one is respawned. A profiling-owned process is never handed out — its teardown evicts unconditionally and would kill the reuse.
                 if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited && !existing.IsProfilingOwned)
                 {
                     var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
@@ -301,9 +281,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 _runtimeMutationGate.ExitShared();
             }
 
-            // DecideEnsureAsync has now registered the detached task in _inflightSpawns. Release the mutation ordering gate
-            // before readiness completes: a mutation attempt observes the in-flight spawn and returns null instead of waiting
-            // for readiness, while a mutation lease already holding the gate still prevents this ensure from reaching here.
+            // DecideEnsureAsync has registered the detached task in _inflightSpawns, so the mutation ordering gate is released before readiness completes: a mutation
+            // attempt observes the in-flight spawn and returns null instead of waiting, while a lease already holding the gate still keeps this ensure from here.
             var running = await AwaitDetachedSpawnAsync(decision.SpawnTask!, ct).ConfigureAwait(false);
             return running.Endpoint;
         }
@@ -337,12 +316,14 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
     /// <summary>
     ///     The process the CALLER's own exclusive profiling operation pinned for <paramref name="key" />, or
-    ///     <see langword="null" /> when this flow pinned none — or no longer owns what it pinned. Matched on the process
-    ///     INSTANCE as well as the key, so a marker that outlived the process it named can never hand out a replacement
-    ///     this flow never pinned. <paramref name="isOwnFlow" /> reports the KEY match alone: a caller that must not
-    ///     touch the per-key gate, because its own frame holds it, has to know it is inside the body even when the
-    ///     pinned process is gone.
+    ///     <see langword="null" /> when this flow pinned none, or no longer owns what it pinned.
     /// </summary>
+    /// <remarks>
+    ///     Matched on the process INSTANCE as well as the key, so a marker that outlived the process it named can never
+    ///     hand out a replacement this flow never pinned. <paramref name="isOwnFlow" /> reports the KEY match alone: a
+    ///     caller that must not touch the per-key gate, because its own frame holds it, has to know it is inside the
+    ///     body even when the pinned process is gone.
+    /// </remarks>
     private RunningProcess? GetOwnExclusiveProfilingProcess(ProcessKey key, out bool isOwnFlow)
     {
         var scope = _exclusiveProfiling.Value;
@@ -360,10 +341,13 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
     /// <summary>
     ///     The single-flight decision, taken under the per-key gate held only briefly: reuse a now-registered process,
-    ///     or return the shared DETACHED spawn task (creating it if none is in flight). The gate is released before the
-    ///     caller awaits the spawn, so a caller cancelling its wait cannot leave the gate held — and because the spawn is
-    ///     the shared <see cref="_inflightSpawns" /> task, concurrent callers still spawn exactly once.
+    ///     or return the shared DETACHED spawn task, creating it if none is in flight.
     /// </summary>
+    /// <remarks>
+    ///     The gate is released before the caller awaits the spawn, so a caller cancelling its wait cannot leave the
+    ///     gate held; because the spawn is the shared <see cref="_inflightSpawns" /> task, concurrent callers still
+    ///     spawn exactly once.
+    /// </remarks>
     private async Task<EnsureDecision> DecideEnsureAsync(ProcessKey key, CancellationToken ct)
     {
         var gate = _ensureGates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
@@ -374,9 +358,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             // registers into _processes before removing itself from _inflightSpawns, so a reuse here never misses it).
             _processes.TryGetValue(key, out var existing);
 
-            // Profiling holds this same gate through its own teardown, so a profiling-owned entry cannot be seen here
-            // today. The reuse arm is guarded anyway; the reap below is deliberately NOT, so that if the invariant ever
-            // breaks a lingering entry is still torn down rather than orphaning its child process.
+            // Profiling holds this same gate through its own teardown, so a profiling-owned entry cannot be seen here. The reuse arm is guarded anyway; the reap
+            // below deliberately is NOT, so that if the invariant ever breaks a lingering entry is still torn down rather than orphaning its child process.
             var profilingOwned = existing is { IsProfilingOwned: true };
 
             if (existing is not null && !existing.Handle.HasExited && !profilingOwned)
@@ -443,22 +426,23 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     }
 
     /// <summary>
-    ///     Starts the detached spawn for <paramref name="key" /> on its OWN lifetime (the shutdown token, never a
-    ///     caller's), so the load runs to completion regardless of whether a waiting caller cancels. The spawn registers
-    ///     the process into <see cref="_processes" /> (inside <see cref="SpawnCoreAsync" />) BEFORE this task removes
-    ///     itself from <see cref="_inflightSpawns" />, so a concurrent reuse-check never sees "neither in-flight nor
-    ///     registered". On failure the spawn tears down its own half-started child and the in-flight entry is dropped so
-    ///     the next ensure retries fresh.
+    ///     Starts the detached spawn for <paramref name="key" /> on its OWN lifetime — the shutdown token, never a
+    ///     caller's — so the load runs to completion whether or not a waiting caller cancels.
     /// </summary>
+    /// <remarks>
+    ///     The spawn registers the process into <see cref="_processes" /> (inside <see cref="SpawnCoreAsync" />) BEFORE
+    ///     this task removes itself from <see cref="_inflightSpawns" />, so a concurrent reuse-check never sees "neither
+    ///     in-flight nor registered". On failure the spawn tears down its own half-started child and the in-flight entry
+    ///     is dropped, so the next ensure retries fresh.
+    /// </remarks>
     private static InflightSpawn CreateDetachedSpawn(ProcessLaunchAdmission? admission,
         IProcessLaunchTicket launchTicket)
     {
         var completion = new TaskCompletionSource<RunningProcess>(TaskCreationOptions.RunContinuationsAsynchronously);
         var task = completion.Task;
 
-        // Guarantee a faulted detached spawn is observed even if every waiting caller has abandoned its wait (e.g. all
-        // callers cancelled, or the spawn is cancelled on shutdown), so it can never surface as an UnobservedTaskException.
-        // Awaiting callers still receive the exception — this continuation only marks it observed.
+        // Guarantees a faulted detached spawn is observed even when every waiting caller abandoned its wait (all cancelled, or shutdown cancelled the spawn), so it
+        // can never surface as an UnobservedTaskException. Awaiting callers still receive the exception — this continuation only marks it observed.
         _ = task.ContinueWith(static faulted => _ = faulted.Exception,
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
@@ -503,11 +487,13 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     }
 
     /// <summary>
-    ///     Awaits the shared detached spawn with the CALLER's token, but never cancels the spawn itself: a cancelled
-    ///     caller merely abandons its wait (its <see cref="OperationCanceledException" /> propagates) while the load
-    ///     continues in the background and the model becomes warm for the next send. INVARIANT: caller cancellation
-    ///     never aborts an in-flight model load.
+    ///     Awaits the shared detached spawn with the CALLER's token, but never cancels the spawn itself.
     /// </summary>
+    /// <remarks>
+    ///     A cancelled caller merely abandons its wait (its <see cref="OperationCanceledException" /> propagates) while
+    ///     the load continues in the background and the model becomes warm for the next send. INVARIANT: caller
+    ///     cancellation never aborts an in-flight model load.
+    /// </remarks>
     private static Task<RunningProcess> AwaitDetachedSpawnAsync(Task<RunningProcess> spawnTask, CancellationToken ct)
     {
         return spawnTask.WaitAsync(ct);
@@ -518,12 +504,15 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
     /// <summary>
     ///     Marks the caller's flow as the exclusive profiling operation that pinned <see cref="Process" /> for
-    ///     <see cref="Key" />. Carried in an <see cref="AsyncLocal{T}" /> set only around the body callback, so it
-    ///     identifies that operation's OWN re-entrant calls and nobody else's. <see cref="IsActive" /> is cleared
-    ///     before the body's flow unwinds: work the body DETACHED (fire-and-forget, <c>Task.Run</c>) inherited this
-    ///     execution context and would otherwise still resolve as the owning flow after teardown removed the process.
-    ///     Cleared, such work queues on the per-key gate and spawns its own process, exactly as any other caller does.
+    ///     <see cref="Key" />.
     /// </summary>
+    /// <remarks>
+    ///     Carried in an <see cref="AsyncLocal{T}" /> set only around the body callback, so it identifies that
+    ///     operation's OWN re-entrant calls and nobody else's. <see cref="IsActive" /> is cleared before the body's flow
+    ///     unwinds: work the body DETACHED (fire-and-forget, <c>Task.Run</c>) inherited this execution context and would
+    ///     otherwise still resolve as the owning flow after teardown removed the process. Cleared, such work queues on
+    ///     the per-key gate and spawns its own process, exactly as any other caller does.
+    /// </remarks>
     private sealed class ExclusiveProfilingScope
     {
         private int _inactive;
@@ -559,11 +548,14 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
     /// <summary>
     ///     Reuse decision for an already-registered, not-yet-exited process: hands back its endpoint when it is healthy
-    ///     enough, or returns <see langword="null" /> after tearing it down when it is wedged (alive but unresponsive to
-    ///     <see cref="LlamaServerSupervisorOptions.MaxReuseLivenessFailures" /> consecutive liveness probes). The liveness
-    ///     probe is rate-limited to at most one per <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeInterval" />
-    ///     per process, so the hot path stays cheap — between probes the endpoint is reused with no HTTP.
+    ///     enough, or returns <see langword="null" /> after tearing it down when it is wedged.
     /// </summary>
+    /// <remarks>
+    ///     Wedged means alive but unresponsive to
+    ///     <see cref="LlamaServerSupervisorOptions.MaxReuseLivenessFailures" /> consecutive liveness probes. The probe is
+    ///     rate-limited to at most one per <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeInterval" /> per
+    ///     process, so the hot path stays cheap — between probes the endpoint is reused with no HTTP.
+    /// </remarks>
     private async Task<LlamaServerEndpoint?> TryReuseAsync(ProcessKey key, RunningProcess existing, CancellationToken ct)
     {
         var now = _timeProvider.GetUtcNow();
@@ -593,9 +585,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             return existing.Endpoint;
         }
 
-        // Wedged: the process is alive but has failed the liveness probe N consecutive times, so every reuse refreshes
-        // LastUsedUtc and the idle reaper never sees it. Tear it down here so the caller respawns a fresh server instead
-        // of being handed the hung endpoint forever.
+        // Wedged: alive but failing the liveness probe N consecutive times, so every reuse refreshes LastUsedUtc and the idle reaper never sees it. Tear it down
+        // here so the caller respawns a fresh server instead of being handed the hung endpoint forever.
         _logger.LogWarning("llama-server for model {ModelName} role {Role} is wedged ({Failures} consecutive failed liveness probes); tree-killing to respawn.",
             key.ModelName, key.Role, failures);
         await _reaper.RemoveProcessAsync(key, existing).ConfigureAwait(false);
@@ -603,10 +594,11 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     }
 
     /// <summary>
-    ///     Runs one liveness probe bounded by <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeTimeout" /> so a
-    ///     hung server that accepts the socket but never answers cannot stall the reuse hot path for the whole HTTP-client
-    ///     timeout. A probe that times out (the caller's own token is NOT cancelled) counts as not-responsive.
+    ///     Runs one liveness probe bounded by <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeTimeout" />, so a
+    ///     hung server that accepts the socket but never answers cannot stall the reuse hot path for the whole
+    ///     HTTP-client timeout.
     /// </summary>
+    /// <remarks>A probe that times out (the caller's own token is NOT cancelled) counts as unresponsive.</remarks>
     private async Task<bool> ProbeResponsiveWithTimeoutAsync(Uri baseAddress, CancellationToken ct)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -692,10 +684,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 await gate.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
-                    // A sibling-role ensure may already have registered a detached spawn before this profiling operation
-                    // acquired the runtime-mutation gate. No NEW ensure can register while this gate is held, so snapshot and
-                    // await every same-model spawn that is already in flight before evicting. A failed spawn leaves no live
-                    // process to evict and must not block profiling; caller cancellation still aborts the profiling request.
+                    // A sibling-role ensure may have registered a detached spawn before this operation took the runtime-mutation gate, and no NEW ensure can register
+                    // while it is held: await every same-model spawn already in flight. A failed one leaves nothing to evict; caller cancellation still aborts.
                     var siblingSpawns = _inflightSpawns
                                         .Where(pair => string.Equals(pair.Key.ModelName, modelName, StringComparison.OrdinalIgnoreCase))
                                         .Select(static pair => pair.Value.Task)
@@ -716,11 +706,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                         }
                     }
 
-                    // Explicitly evict every warm role for this model before capturing ambient VRAM. Admission only
-                    // auto-evicts an IDLE LRU victim, so a freshly-used sibling role would otherwise survive, contaminate
-                    // the pre-spawn baseline, and make the profiling spawn non-exclusive. The runtime-mutation gate is
-                    // still held here, so no new ensure decision can repopulate any role until after this spawn registers.
-                    // A role serving in-flight inference refuses the eviction and the whole run is skipped, evicting nothing.
+                    // Explicitly evict every warm role for this model before capturing ambient VRAM: admission only auto-evicts an IDLE LRU victim, so a freshly-used
+                    // sibling would survive and contaminate the baseline. The gate held here blocks repopulation; a role serving inference refuses and skips the run.
                     if (await TryEvictAllRolesForProfilingAsync(modelName).ConfigureAwait(false) is { } refusal)
                     {
                         throw new LlamaServerProfilingRefusedException(modelName, refusal.Role, refusal.ActiveLeases, refusal.Reason);
@@ -734,9 +721,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                     var startupOutput = new ConcurrentQueue<string>();
                     var fitParamsOutput = new ConcurrentQueue<string>();
 
-                    // Replay profiling uses the supplied frozen args verbatim. Explore profiling bypasses only the profile
-                    // resolver and applies the same launch policy as normal serving so helper/server placement evidence is
-                    // production-equivalent rather than derived from unset llama.cpp defaults.
+                    // Replay profiling uses the supplied frozen args verbatim; explore profiling bypasses only the profile resolver and applies the same launch policy
+                    // as normal serving, so helper and server placement evidence is production-equivalent rather than derived from unset llama.cpp defaults.
                     IProcessLaunchTicket? profilingTicket = null;
                     try
                     {
@@ -781,10 +767,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                                 LaunchReceipt = running.LaunchReceipt
                             };
 
-                            // Mark THIS flow as the owner of the pinned process for the body's duration, so the body's
-                            // own re-entrant ensure and runtime-info reads for this key are answered from it instead of
-                            // deadlocking on the gate this frame holds. The prior value is RESTORED, not cleared, so a
-                            // nested exclusive operation for another key unwinds to its parent's marker.
+                            // Mark THIS flow as the owner of the pinned process for the body's duration, so the body's own re-entrant ensure and runtime-info reads
+                            // are answered from it instead of deadlocking on the gate this frame holds. The prior value is RESTORED so a nested operation unwinds.
                             var priorScope = _exclusiveProfiling.Value;
                             var scope = new ExclusiveProfilingScope(key, running);
                             _exclusiveProfiling.Value = scope;
@@ -890,10 +874,12 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     }
 
     /// <summary>
-    ///     A reference-counted inference lease over a <see cref="RunningProcess" />. Disposal releases the lease exactly
-    ///     once. <see cref="WasEjected" /> mirrors the underlying process so an in-flight request that fails right after a
-    ///     force-eject classifies the drop as an operator eject rather than a generic provider failure.
+    ///     A reference-counted inference lease over a <see cref="RunningProcess" />; disposal releases it exactly once.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="WasEjected" /> mirrors the underlying process, so an in-flight request that fails right after a
+    ///     force-eject classifies the drop as an operator eject rather than a generic provider failure.
+    /// </remarks>
     private sealed class InferenceLease : ILlamaServerInferenceLease
     {
         private readonly RunningProcess _process;
@@ -930,11 +916,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         private int _profilingPinned;
         private int _activeLeases;
 
-        // WHICH teardown owns this process, not merely THAT one does: two claimants can hold the mark in sequence, and
-        // a rollback that cleared it unconditionally erased the mark the other one was still relying on.
-        // The SIGN carries the origin: negative for a profiling pre-spawn eviction, positive for an operator eject or
-        // a cap-admission reap. One field, so a reader classifies from a single read and can never see the owner and
-        // the origin out of step — which would report a live eject as a transient benchmark spawn.
+        // WHICH teardown owns this process, not merely THAT one does: two claimants hold the mark in sequence, so an unconditional rollback would erase the other's.
+        // The SIGN is the origin — negative: profiling pre-spawn eviction, positive: operator eject or cap reap — in ONE field, so a read never shows a live eject as a benchmark spawn.
         private long _evictionOwner;
         private int _ejected;
 
@@ -970,14 +953,15 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
         /// <summary>
         ///     <see langword="true" /> for the transient process an exclusive profiling run spawned for its own
-        ///     measurement. Set as part of registration, so it holds from the first instant the process is visible in
-        ///     <see cref="LlamaServerProcessSupervisor._processes" /> until profiling's teardown removes it — normal
-        ///     inference never reuses it, and is never killed by that teardown. Deliberately independent of
-        ///     <see cref="IsProfilingPinned" />, which is only set after registration and cleared before removal.
-        ///     A refused chat parks on the per-key single-flight gate while holding only the SHARED runtime-mutation
-        ///     gate, which profiling no longer holds by then, so the wait is bounded by the profiling body and stays
-        ///     cancellable by the caller's token — it cannot invert against the exclusive gate.
+        ///     measurement.
         /// </summary>
+        /// <remarks>
+        ///     Set as part of registration, so it holds from the first instant the process is visible in
+        ///     <see cref="LlamaServerProcessSupervisor._processes" /> until profiling's teardown removes it: normal
+        ///     inference never reuses it and is never killed by that teardown. Deliberately independent of
+        ///     <see cref="IsProfilingPinned" />, which is set only after registration and cleared before removal. A
+        ///     refused chat parks on the per-key gate holding only the SHARED mutation gate, so the bounded, cancellable wait cannot invert against the exclusive gate.
+        /// </remarks>
         public bool IsProfilingOwned { get; init; }
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
@@ -995,10 +979,13 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         public bool IsEvicting => EvictionOwner != 0;
 
         /// <summary>
-        ///     The claim currently owning this process's teardown: 0 when none, negative when it was taken by a
-        ///     profiling pre-spawn eviction, positive otherwise. One read answers both "is a teardown running" and
-        ///     "whose", which is what lets a refusal be classified atomically.
+        ///     The claim currently owning this process's teardown: 0 when none, negative when taken by a profiling
+        ///     pre-spawn eviction, positive otherwise.
         /// </summary>
+        /// <remarks>
+        ///     One read answers both "is a teardown running" and "whose", which is what lets a refusal be classified
+        ///     atomically.
+        /// </remarks>
         public long EvictionOwner => Volatile.Read(ref _evictionOwner);
 
         /// <summary><see langword="true" /> once this process was force-ejected while in-flight work still held a lease.</summary>
@@ -1018,10 +1005,13 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
         /// <summary>
         ///     Marks the process evicting so new leases are refused while an eject drains the in-flight ones, and
-        ///     returns the claim that now owns the mark. Unconditional, unlike <see cref="TryBeginEvict(out long)" />:
-        ///     an operator eject proceeds even over a claim someone else holds, and taking OWNERSHIP is what stops
-        ///     that other claimant's rollback from clearing the mark this eject is draining behind.
+        ///     returns the claim that now owns the mark.
         /// </summary>
+        /// <remarks>
+        ///     Unconditional, unlike <see cref="TryBeginEvict(bool, out long)" />: an operator eject proceeds even over
+        ///     a claim someone else holds, and taking OWNERSHIP is what stops that other claimant's rollback from
+        ///     clearing the mark this eject is draining behind.
+        /// </remarks>
         public long MarkEvicting()
         {
             var claim = NextEvictionClaim(forProfiling: false);
@@ -1030,22 +1020,26 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         }
 
         /// <summary>
-        ///     Atomically claims this process as a cap-admission eviction victim: sets the evicting mark (so
-        ///     <see cref="LlamaServerProcessSupervisor.TryAcquireInferenceLease" />'s post-acquire re-check refuses any
-        ///     racing lease) and then re-checks that no lease slipped in first. Returns <see langword="false" /> —
-        ///     releasing the claim — when a lease won the race, so a process is never torn down under in-flight
-        ///     inference. <paramref name="claim" /> is the token to pass to <see cref="ReleaseEvictionClaim" />, and is
-        ///     0 on any failure.
+        ///     Atomically claims this process as a cap-admission eviction victim.
         /// </summary>
+        /// <remarks>
+        ///     Sets the evicting mark (so <see cref="LlamaServerProcessSupervisor.TryAcquireInferenceLease" />'s
+        ///     post-acquire re-check refuses any racing lease), then re-checks that no lease slipped in first. Returns
+        ///     <see langword="false" />, releasing the claim, when a lease won the race, so a process is never torn down
+        ///     under in-flight inference. <paramref name="claim" /> is the token to pass to
+        ///     <see cref="ReleaseEvictionClaim" />, and is 0 on any failure.
+        /// </remarks>
         public bool TryBeginEvict(bool forProfiling, out long claim) =>
             TryBeginEvict(forProfiling, out claim, out _);
 
         /// <summary>
-        ///     As <see cref="TryBeginEvict(bool, out long)" />, additionally reporting WHICH failure occurred:
-        ///     <paramref name="alreadyEvicting" /> is <see langword="true" /> when another teardown already owned this
-        ///     process (the compare-exchange lost) and <see langword="false" /> when an in-flight lease won the race.
-        ///     A caller that reports the refusal needs the distinction — the lost-exchange case has no lease count.
+        ///     As <see cref="TryBeginEvict(bool, out long)" />, additionally reporting WHICH failure occurred.
         /// </summary>
+        /// <remarks>
+        ///     <paramref name="alreadyEvicting" /> is <see langword="true" /> when another teardown already owned this
+        ///     process (the compare-exchange lost) and <see langword="false" /> when an in-flight lease won the race. A
+        ///     caller that reports the refusal needs the distinction — the lost-exchange case has no lease count.
+        /// </remarks>
         public bool TryBeginEvict(bool forProfiling, out long claim, out bool alreadyEvicting)
         {
             alreadyEvicting = false;
@@ -1069,10 +1063,13 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
         /// <summary>
         ///     Clears the evicting mark, but ONLY while <paramref name="claim" /> still owns it — a graceful eject that
-        ///     timed out, or a profiling pre-spawn eviction rolling its claims back. A claim another teardown has since
-        ///     taken over is left alone: clearing it would re-open leasing on a process that eject is between its drain
-        ///     check and its teardown of, and the new request would be killed by that teardown.
+        ///     timed out, or a profiling pre-spawn eviction rolling its claims back.
         /// </summary>
+        /// <remarks>
+        ///     A claim another teardown has since taken over is left alone: clearing it would re-open leasing on a
+        ///     process that eject is between its drain check and its teardown of, and the new request would then be
+        ///     killed by that teardown.
+        /// </remarks>
         public void ReleaseEvictionClaim(long claim)
         {
             if (claim != 0)
@@ -1100,10 +1097,10 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         }
 
         /// <summary>
-        ///     Atomically claims the right to run the reuse-path liveness probe: succeeds (advancing the probe clock to
-        ///     <paramref name="now" />) only when at least <paramref name="interval" /> has elapsed since the last claim.
-        ///     Serializes probes across concurrent reuses so at most one HTTP probe runs per process per interval.
+        ///     Atomically claims the right to run the reuse-path liveness probe: succeeds, advancing the probe clock to
+        ///     <paramref name="now" />, only when at least <paramref name="interval" /> has elapsed since the last claim.
         /// </summary>
+        /// <remarks>Serializes probes across concurrent reuses, so at most one HTTP probe runs per process per interval.</remarks>
         public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval)
         {
             while (true)

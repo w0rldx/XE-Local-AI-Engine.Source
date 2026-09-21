@@ -7,23 +7,15 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
-///     The allow-listed, content-free projection of ONE llama-server spawn's launch shape: the context window,
-///     placement, KV-cache/flash-attention vector, thread and batch sizes, and the role-derived serving flags. It is the
-///     single canonical description both the argument-vector builder emits from and a caller hashes, so a launch that
-///     was intended and a launch that happened are described by the same values.
+///     The allow-listed, content-free projection of ONE llama-server spawn's launch shape, and the single canonical
+///     description both the argument-vector builder emits from and a caller hashes.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>Nothing addressable appears here.</strong> No model/executable path, no host, no port — a receipt
-///         built around this projection is safe to persist and display. <see cref="TensorSplit" /> and
-///         <see cref="OverrideTensor" /> are llama.cpp placement expressions (for example <c>0.6,0.4</c>,
-///         <c>exps=CPU</c>), not filesystem locations.
-///     </para>
-///     <para>
-///         <strong>Property order is the canonical serialization order</strong> that <see cref="ComputeIdentity" />
-///         hashes. Reordering, renaming, adding or removing a member changes every identity this type has ever
-///         produced; the identity pin test in <c>LlamaServerLaunchProjectionTests</c> fails loudly when that happens.
-///     </para>
+///     It covers the context window, placement, KV-cache and flash-attention vector, thread and batch sizes and the
+///     role-derived serving flags, so an intended and an actual launch are described by the same values. NOTHING
+///     ADDRESSABLE appears here — no model or executable path, no host, no port — so a receipt built around it is safe
+///     to persist and display; <see cref="TensorSplit" />/<see cref="OverrideTensor" /> are llama.cpp placement
+///     expressions, not filesystem locations. Property order is the canonical serialization order.
 /// </remarks>
 public sealed record LlamaServerLaunchProjection
 {
@@ -85,11 +77,13 @@ public sealed record LlamaServerLaunchProjection
     public required string? Pooling { get; init; }
 
     /// <summary>
-    ///     The version of the identity SCHEME this type computes. Governed by the same contract as the member list
-    ///     above: <strong>the two move together</strong>. A hash computed under one scheme says nothing about a hash
-    ///     computed under another, so persisted intents record the scheme they were frozen under and work that
-    ///     straddles a change is failed rather than compared. A persisted <see langword="null" /> reads as <c>1</c>.
+    ///     The version of the identity SCHEME this type computes, governed by the same contract as the member list
+    ///     above: THE TWO MOVE TOGETHER. A persisted <see langword="null" /> reads as <c>1</c>.
     /// </summary>
+    /// <remarks>
+    ///     A hash computed under one scheme says nothing about a hash computed under another, so persisted intents
+    ///     record the scheme they were frozen under and work that straddles a change is failed rather than compared.
+    /// </remarks>
     public const int IdentitySchemeVersion = 2;
 
     /// <summary>Flash-attention left to llama.cpp (no <c>-fa</c> flag emitted) — the f16 KV default.</summary>
@@ -193,21 +187,17 @@ public sealed record LlamaServerLaunchProjection
     ///     The EFFECTIVE launch shape, read back out of the argument vector the process was actually started with.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         <see cref="From" /> describes what a spawn INTENDED before the capability gate ran. The gate can drop
-    ///         optional flags a runtime does not advertise (<c>--cache-reuse</c>, <c>--metrics</c>, <c>-lv</c>), and an
-    ///         operator's per-model extra arguments are appended after it — so the intended shape can name a flag the
-    ///         process never received, or miss one it did. Re-reading the final argv is the only description that is a
-    ///         fact rather than a derivation. Last-wins for a repeated scalar flag, matching llama.cpp itself.
-    ///     </para>
-    ///     <para>
-    ///         Tolerant and pure: an unknown argument is ignored, and a malformed value for an allow-listed numeric flag
-    ///         returns <see langword="null" /> so the caller can fall back rather than record a wrong fact. Only the
-    ///         allow-listed flags below are read; nothing addressable (<c>-m</c>, <c>--host</c>, <c>--port</c>) is.
-    ///     </para>
+    ///     <see cref="From" /> describes what a spawn INTENDED before the capability gate ran; the gate can drop
+    ///     optional flags a runtime does not advertise and an operator's extra arguments are appended after it, so the
+    ///     intended shape can name a flag the process never received, or miss one it did. Re-reading the final argv is
+    ///     the only description that is a fact rather than a derivation, last-wins for a repeated scalar flag as
+    ///     llama.cpp is. Tolerant and pure: unknown arguments and anything addressable are ignored.
     /// </remarks>
     /// <param name="arguments">The final argument vector handed to the process.</param>
-    /// <returns>The effective projection, or <see langword="null" /> when the vector could not be parsed.</returns>
+    /// <returns>
+    ///     The effective projection, or <see langword="null" /> when the vector could not be parsed, a malformed
+    ///     numeric value included, so a caller falls back rather than record a wrong fact.
+    /// </returns>
     public static LlamaServerLaunchProjection? TryFromArguments(IReadOnlyList<string> arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
@@ -390,6 +380,11 @@ public sealed record LlamaServerLaunchProjection
     ///     The deterministic identity of this launch shape: lowercase SHA-256 hex over the canonical JSON above. Two
     ///     projections with equal values always hash equally; any differing field produces a different hash.
     /// </summary>
+    /// <remarks>
+    ///     The type's PROPERTY ORDER is the serialization order this hashes, so reordering, renaming, adding or
+    ///     removing a member changes every identity this type has ever produced. The identity pin test in
+    ///     <c>LlamaServerLaunchProjectionTests</c> fails loudly when that happens.
+    /// </remarks>
     public string ComputeIdentity()
     {
         var canonical = JsonSerializer.Serialize(this, CanonicalOptions);

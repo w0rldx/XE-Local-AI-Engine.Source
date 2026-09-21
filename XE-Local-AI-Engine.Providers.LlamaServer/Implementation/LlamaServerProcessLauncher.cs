@@ -7,18 +7,15 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Production <see cref="ILlamaServerProcessLauncher" />: starts a real <c>llama-server</c> child contained for
-///     orphan-free tree-kill. On Windows the child is assigned to a Job Object with
-///     <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c> so closing the job (handle dispose) terminates the whole tree. On
-///     Linux the child starts a new session/process-group (<c>setsid</c>) so <c>kill(-pgid)</c> on teardown reaps every
-///     descendant. No cross-OS native calls leak: each containment path is reached only under its OS guard.
+///     Production <see cref="ILlamaServerProcessLauncher" />: starts a real <c>llama-server</c> child, contained for
+///     orphan-free tree-kill.
 /// </summary>
 /// <remarks>
-///     The child's stdout/stderr are redirected and forwarded line-by-line to the application logger. llama.cpp prints
-///     its backend/device init banner (e.g. <c>ggml_cuda_init: found N CUDA devices</c> or a CUDA DLL load failure) and
-///     the per-model load/offload summary to these streams, so forwarding them makes GPU-offload behavior diagnosable
-///     from the normal app log instead of requiring the operator to run the server by hand. Draining the pipes also
-///     avoids a full-buffer stall on a chatty server (redirected streams that are never read can block the child).
+///     On Windows the child is assigned to a Job Object with <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c>, so disposing
+///     the job handle terminates the whole tree; on Linux it starts a new session and process group (<c>setsid</c>),
+///     so <c>kill(-pgid)</c> on teardown reaps every descendant, and no cross-OS native call leaks because each path
+///     is reached only under its own OS guard. Its stdout and stderr are redirected and forwarded line by line to the
+///     app logger, which is what makes GPU-offload behaviour diagnosable, and draining them cannot stall the child.
 /// </remarks>
 internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
 {
@@ -54,9 +51,8 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
             return LaunchLinux(BuildStartInfo(spec), label, capture, demote);
         }
 
-        // macOS / other Unix: no Job Object and no setsid wrapper. Supervised GPU inference targets Windows + Linux,
-        // which are the only platforms with a dedicated containment primitive; on the CPU floor elsewhere a plain
-        // process whose own tree-kill tears down the server keeps the launcher functional.
+        // macOS and other Unix: no Job Object and no setsid wrapper, supervised GPU inference targeting Windows and Linux, the only platforms with a dedicated
+        // containment primitive. On the CPU floor elsewhere a plain process whose own tree-kill tears down the server keeps the launcher functional.
         return LaunchPlain(BuildStartInfo(spec), label, capture, demote);
     }
 
@@ -116,9 +112,8 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
             StartInfo = startInfo
         };
 
-        // Forward both streams to the app log (and, for profiling spawns, the optional capture sink). Attached before
-        // Start (per Process API) and pumped via the async begin-read APIs so the pipes are drained continuously and
-        // never stall the child.
+        // Forward both streams to the app log and, for profiling spawns, the optional capture sink. Attached before Start, as the Process API requires, and pumped
+        // through the async begin-read APIs, so the pipes are drained continuously and never stall the child.
         process.OutputDataReceived += (_, e) => ForwardLine(label, e.Data, capture, demote);
         process.ErrorDataReceived += (_, e) => ForwardLine(label, e.Data, capture, demote);
 
@@ -146,15 +141,8 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
         return process;
     }
 
-    // A line is logged at Information so the llama.cpp backend/device banner and model-load summary are visible in the
-    // default app log (the level the desktop console surfaces). The final end-of-stream callback carries null Data.
-    // When set, the capture sink is invoked AFTER logging, in addition to it — both pipes call this concurrently, so
-    // the sink the supervisor supplies is responsible for being thread-safe.
-    //
-    // The one exception is a child whose verbosity the supervisor raised for its own layer-placement measurement: once
-    // that child is serving, its extra per-request chatter is demoted to Debug. The sniffer already read those lines in
-    // process, so persisting them would inflate the serving log for a diagnostic the operator never asked for. The load
-    // window is deliberately NOT demoted, so the placement banner and every failure message still reach Information.
+    // A line is logged at Information, the level the desktop console surfaces, so the llama.cpp backend banner and model-load summary reach the default app log. The
+    // final end-of-stream callback carries null Data, and a capture sink is invoked AFTER logging, both pipes calling this concurrently so the sink must be thread-safe.
     private void ForwardLine(string label, string? line, Action<string>? capture, Func<bool>? demote)
     {
         if (string.IsNullOrWhiteSpace(line))

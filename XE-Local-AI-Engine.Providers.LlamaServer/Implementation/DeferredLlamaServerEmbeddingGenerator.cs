@@ -12,23 +12,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     <see cref="GenerateAsync" /> call, then delegates to the MEAI OpenAI embedding adapter over its endpoint.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>Lexical-fallback contract:</strong>
-///         <see cref="EmbeddingPlaybookRetrievalRanker" /> degrades to its lexical ranker only when this generator
-///         throws <see cref="HttpRequestException" /> / <see cref="IOException" />. Process-unavailable failures
-///         surface as <see cref="LlamaRuntimeException" />, so they are wrapped to <see cref="IOException" /> here to
-///         keep that fallback intact; the inner adapter's own transport <see cref="HttpRequestException" />s already
-///         match the ranker's catch set and flow through unwrapped. A non-2xx HTTP RESPONSE is a third case: the MEAI
-///         OpenAI adapter raises <see cref="ClientResultException" /> for it, which matched no caller's catch set and so
-///         escaped as an unclassified failure — it is translated to a status-carrying
-///         <see cref="HttpRequestException" /> in <see cref="GenerateAsync" />. Every failure this generator can produce
-///         therefore lands in the single <c>HttpRequestException</c>/<c>IOException</c> set callers already handle.
-///     </para>
-///     <para>
-///         The returned generator is <see cref="IDisposable" /> and <strong>caller-owned</strong>
-///         (<see cref="ILocalModelProvider.CreateEmbeddingGenerator" />); disposing it disposes the inner adapter this
-///         wrapper built. The supervisor still owns the underlying process.
-///     </para>
+///     <strong>Lexical-fallback contract:</strong> every failure this generator can produce lands in the single
+///     <see cref="HttpRequestException" /> / <see cref="IOException" /> set callers already handle, which keeps
+///     <see cref="EmbeddingPlaybookRetrievalRanker" />'s degrade-to-lexical path intact (wiki 03). The generator is
+///     <see cref="IDisposable" /> and <strong>caller-owned</strong>
+///     (<see cref="ILocalModelProvider.CreateEmbeddingGenerator" />): disposing it disposes the inner adapter, while the supervisor still owns the process.
 /// </remarks>
 internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
 {
@@ -60,9 +48,8 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         EmbeddingGenerationOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        // Hold an inference lease for the request's lifetime, exactly as the chat path does. Without it this role's
-        // ActiveLeases stayed 0, so a profiling pre-spawn eviction claimed the process and tree-killed the embedding
-        // mid-flight — and an operator eject drained past it for the same reason.
+        // Hold an inference lease for the request's lifetime, exactly as the chat path does: with this role's ActiveLeases at 0, a profiling pre-spawn eviction
+        // claims the process and tree-kills the embedding mid-flight, and an operator eject drains straight past it.
         var (inner, lease) = await EnsureLeasedInnerAsync(cancellationToken).ConfigureAwait(false);
         using var held = lease;
         try
@@ -71,30 +58,15 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         }
         catch (Exception exception) when (exception is ClientResultException or HttpRequestException or IOException)
         {
-            // Self-heal seam, mirroring DeferredLlamaServerChatClient.InvalidateInner: the cached adapter is bound to
-            // ONE endpoint for this generator's whole lifetime, so once the embedding process behind it is gone
-            // (ejected, respawned on a new port, crashed) every later call would retry a dead address forever. Drop the
-            // adapter and the next call re-ensures the process through the supervisor and re-resolves its endpoint.
-            // No caller can reach that state today — all four scope this generator to a single document/search — so
-            // this is latent-only; it exists so a future long-lived caller degrades instead of failing permanently.
-            //
-            // The cancellation guard is the same one, in the same operand order, that both DeferredLlamaServerChatClient
-            // call sites use: a request the CALLER aborted tears its connection down in shapes IsServerGone matches
-            // ("the response ended prematurely", a reset socket), so without it a cancelled embedding is read as a dead
-            // server and throws away a perfectly live adapter. The exception itself is untouched — it still rethrows (or
-            // is translated) exactly as before.
+            // Self-heal seam, mirroring DeferredLlamaServerChatClient.InvalidateInner: the cached adapter is bound to ONE endpoint for this generator's whole
+            // lifetime, and the cancellation guard is the chat client's, in the same operand order. Why both, and why the drop is latent-only today: wiki 03.
             if (!cancellationToken.IsCancellationRequested && DeferredLlamaServerChatClient.IsServerGone(exception))
             {
                 InvalidateInner();
             }
 
-            // The MEAI OpenAI adapter reports a non-2xx from llama-server as System.ClientModel's ClientResultException,
-            // which is in NOBODY's catch set upstream: it escaped the ranker's lexical-fallback set AND the knowledge
-            // ingestion pipeline's, surfacing as a bare "Ingestion failed unexpectedly" whose log line recorded only the
-            // type name. That made a deterministic, fully-reproducible server rejection undiagnosable from logs.
-            // Translate it at the provider boundary — the same job the LlamaRuntimeException wrap below does — so the
-            // SDK type never reaches the application layer and callers keep one transport-failure catch set. The
-            // already-conforming HttpRequestException/IOException shapes rethrow unchanged.
+            // The MEAI OpenAI adapter reports a non-2xx as System.ClientModel's ClientResultException, which is in NOBODY's catch set upstream, so translate it at
+            // the provider boundary and keep one transport-failure catch set. Already-conforming shapes rethrow unchanged. What it cost before: wiki 03.
             if (exception is not ClientResultException clientResult)
             {
                 throw;
@@ -110,15 +82,13 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
 
     /// <summary>
     ///     The adapter to embed through, together with the request-lifetime lease over its process.
-    ///     <para>
-    ///         A profiling/benchmark spawn owning this key is refused and RETRIED rather than embedded around: the
-    ///         cached adapter is bound to an endpoint the measurement process may now answer on (the port allocator
-    ///         commonly re-uses the freed one), so proceeding would contaminate the measurement and then die to its
-    ///         teardown. A draining operator eject is refused outright. Both give up as <see cref="IOException" /> —
-    ///         the transport-failure set every caller of this generator already handles — once the bounded retry is
-    ///         spent, so retrieval degrades to its lexical fallback instead of failing unclassified.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A profiling or benchmark spawn owning this key is refused and RETRIED rather than embedded around; a draining
+    ///     operator eject is refused outright. Both give up as <see cref="IOException" />, the transport-failure set
+    ///     every caller already handles, once the bounded retry is spent, so retrieval degrades to its lexical fallback
+    ///     instead of failing unclassified. Why a retry rather than proceeding: wiki 03.
+    /// </remarks>
     private async Task<(IEmbeddingGenerator<string, Embedding<float>> Inner, ILlamaServerInferenceLease? Lease)> EnsureLeasedInnerAsync(CancellationToken ct)
     {
         var attempt = 0;
@@ -131,11 +101,8 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
                 throw new IOException("The embedding model is being ejected by the operator; this request was not started.");
             }
 
-            // "Not running" read against a CACHED adapter is ambiguous: unlike the chat client, this one can serve a
-            // request without ensuring anything, and "not running" is exactly what profiling's remove-then-register
-            // window looks like from here — with the freed port commonly re-handed to the measurement spawn. Drop the
-            // adapter and take the answer from a process this call actually resolved. A second "not running", now
-            // after a real ensure, means genuinely absent and proceeds leaseless as before.
+            // "Not running" read against a CACHED adapter is ambiguous (wiki 03), so drop the adapter and take the answer from a process this call actually
+            // resolved. A second "not running", now after a real ensure, means genuinely absent and proceeds leaseless.
             var unresolved = acquisition.Lease is null && !acquisition.ProcessProfiling && fromCache;
             if (!acquisition.ProcessProfiling && !unresolved)
             {
@@ -154,9 +121,12 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
 
     /// <summary>
     ///     Drops the cached adapter so the next <see cref="GenerateAsync" /> re-resolves the endpoint and re-ensures the
-    ///     embedding process via the supervisor. Idempotent and safe under concurrency (the loser of the swap disposes
-    ///     nothing). Mirrors <c>DeferredLlamaServerChatClient.InvalidateInner</c>.
+    ///     embedding process via the supervisor.
     /// </summary>
+    /// <remarks>
+    ///     Idempotent and safe under concurrency, the loser of the swap disposing nothing. Mirrors
+    ///     <c>DeferredLlamaServerChatClient.InvalidateInner</c>.
+    /// </remarks>
     private void InvalidateInner()
     {
         Interlocked.Exchange(ref _inner, null)?.Dispose();
@@ -166,16 +136,11 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
     ///     Builds the sanitized transport-failure message for a llama-server non-2xx.
     /// </summary>
     /// <remarks>
-    ///     Includes the HTTP status and the server's own error text. That text is llama-server's diagnostic (e.g.
-    ///     <c>"input (678 tokens) is too large to process. increase the physical batch size (current batch size: 512)"</c>),
-    ///     NOT the caller's input — the endpoint is loopback-bound and never echoes the request body — so surfacing it
-    ///     carries no document/chunk content and does not weaken the repo's no-content-in-logs rule. Omitting it is what
-    ///     turned a one-line fix into an investigation.
-    ///     <para>
-    ///         The body is capped at <see cref="MaxDetailLength" /> characters anyway: this string reaches a log, the
-    ///         response is not under our control, and one unbounded error body should not be able to flood the node log.
-    ///         Every llama-server diagnostic worth reading is far shorter than the cap.
-    ///     </para>
+    ///     Includes the HTTP status and the server's own error text, which is llama-server's diagnostic and NOT the
+    ///     caller's input — the endpoint is loopback-bound and never echoes the request body — so surfacing it carries
+    ///     no document or chunk content and does not weaken the repo's no-content-in-logs rule. The body is capped at
+    ///     <see cref="MaxDetailLength" /> characters anyway, because this string reaches a log and one unbounded error
+    ///     body must not flood the node log; every diagnostic worth reading is far shorter. See wiki 03.
     /// </remarks>
     private static string DescribeFailure(ClientResultException exception)
     {

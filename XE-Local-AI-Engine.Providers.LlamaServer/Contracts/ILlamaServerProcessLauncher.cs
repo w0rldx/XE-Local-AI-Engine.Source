@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Thin process-launch seam isolating the OS-specific <c>Process.Start</c> + tree-kill mechanics from the
-///     supervisor's lifecycle/eviction/single-flight logic. Faked in unit tests so the supervisor's logic is exercised
-///     with no real child processes; the production implementation (<see cref="LlamaServerProcessLauncher" />) starts a
-///     real <c>llama-server</c> contained by a Windows Job Object or a Linux process group.
+///     Thin process-launch seam isolating the OS-specific <c>Process.Start</c> and tree-kill mechanics from the
+///     supervisor's lifecycle, eviction and single-flight logic.
 /// </summary>
+/// <remarks>
+///     Faked in unit tests so the supervisor's logic is exercised with no real child processes;
+///     <see cref="LlamaServerProcessLauncher" /> starts a real <c>llama-server</c> contained by a Windows Job Object or
+///     a Linux process group.
+/// </remarks>
 internal interface ILlamaServerProcessLauncher
 {
     /// <summary>

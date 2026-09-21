@@ -67,10 +67,13 @@ public sealed class TransientLlamaServerEvaluationResult<T>
 }
 
 /// <summary>
-///     Runs one path-addressed training evaluation under the supervisor's exclusive runtime-mutation lease. The harness
-///     refuses to start beside any warm or in-flight supervised model, owns GPU-load admission, pins a frozen benchmark
-///     launch policy, content-addresses the model inputs, and returns teardown evidence after the body completes.
+///     Runs one path-addressed training evaluation under the supervisor's exclusive runtime-mutation lease.
 /// </summary>
+/// <remarks>
+///     The harness refuses to start beside any warm or in-flight supervised model, owns GPU-load admission, pins a
+///     frozen benchmark launch policy, content-addresses the model inputs, and returns teardown evidence after the
+///     body completes.
+/// </remarks>
 public interface ITransientLlamaServerEvaluationHarness
 {
     Task<TransientLlamaServerEvaluationResult<T>> RunAsync<T>(TransientLlamaServerEvaluationRequest request,

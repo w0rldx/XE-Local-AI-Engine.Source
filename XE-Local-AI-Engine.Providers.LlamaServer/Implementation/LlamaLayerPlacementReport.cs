@@ -4,12 +4,15 @@ using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default in-memory <see cref="ILlamaLayerPlacementReport" />. Process-lifetime singleton, shared by the process
-///     supervisor (writer) and the runtime device audit (reader). Deliberately not persisted: placement depends on the
-///     binary, the free VRAM at load time, and the launch plan, so a value carried across a restart could be wrong in
-///     exactly the situation it exists to expose. For the same reason each load overwrites its key rather than being
-///     recorded once — a reload under different VRAM pressure can legitimately place layers differently.
+///     Default in-memory <see cref="ILlamaLayerPlacementReport" />: a process-lifetime singleton shared by the process
+///     supervisor, which writes it, and the runtime device audit, which reads it.
 /// </summary>
+/// <remarks>
+///     Deliberately not persisted, because placement depends on the binary, the free VRAM at load time and the launch
+///     plan, so a value carried across a restart could be wrong in exactly the situation it exists to expose. For the
+///     same reason each load overwrites its key rather than being recorded once — a reload under different VRAM
+///     pressure can legitimately place layers differently.
+/// </remarks>
 internal sealed class LlamaLayerPlacementReport : ILlamaLayerPlacementReport
 {
     private readonly ConcurrentDictionary<ObservationKey, Observation> _observations = new();
@@ -17,17 +20,11 @@ internal sealed class LlamaLayerPlacementReport : ILlamaLayerPlacementReport
 
     /// <inheritdoc />
     /// <remarks>
-    ///     Prefers the newest PARTIAL observation, then the newest observation of any kind. Without the preference,
-    ///     loading a small embedding model after a large chat model that spilled layers would replace the actionable
-    ///     "38/49 on GPU" with a reassuring "13/13 on GPU" for a model nobody is waiting on. The ranking key encodes
-    ///     exactly that priority; sequence numbers are unique, so the maximum is never ambiguous.
-    ///     <para>
-    ///         The preference is absolute — a partial outranks a full reading whatever their sequence numbers — and it
-    ///         is only defensible because <see cref="Remove" /> retires a reading the moment its process is torn down.
-    ///         Ranking cannot substitute for that: the alternative, letting a newer full reading win on sequence, would
-    ///         restore exactly the masking the preference exists to prevent, because two models really can be resident
-    ///         at once with only the older one spilling.
-    ///     </para>
+    ///     Prefers the newest PARTIAL observation, then the newest of any kind: without that, loading a small embedding
+    ///     model after a large chat model that spilled layers would replace the actionable "38/49 on GPU" with a
+    ///     reassuring "13/13 on GPU" for a model nobody is waiting on. The preference is ABSOLUTE — a partial outranks
+    ///     a full reading whatever their sequence numbers — and only defensible because <see cref="Remove" /> retires a
+    ///     reading the moment its process is torn down; two models really can be resident with only the older spilling.
     /// </remarks>
     public LlamaLayerPlacement? Current =>
         _observations.Values

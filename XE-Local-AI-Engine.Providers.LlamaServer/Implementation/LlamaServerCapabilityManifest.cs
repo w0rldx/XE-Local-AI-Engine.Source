@@ -286,9 +286,8 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
             await gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                // A waiter may have observed the old file immediately before a replacement. Re-read identity after
-                // acquiring the key gate and fail this attempt if it changed. A later caller will probe the new identity;
-                // do not recurse while holding the old identity's single-flight gate.
+                // A waiter may have observed the old file immediately before a replacement, so re-read identity after acquiring the key gate and fail this attempt
+                // if it changed. A later caller probes the new identity; never recurse while holding the old identity's single-flight gate.
                 var currentSnapshot = ReadIdentitySnapshot(binary.ServerExecutablePath);
                 var currentSha256 = await ComputeSha256Async(binary.ServerExecutablePath, ct).ConfigureAwait(false);
                 if (snapshot != currentSnapshot || !string.Equals(executableSha256, currentSha256, StringComparison.Ordinal))

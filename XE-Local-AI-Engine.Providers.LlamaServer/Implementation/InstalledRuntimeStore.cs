@@ -46,10 +46,8 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
         var lockPath = _statePath + ".lock";
         Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
 
-        // FileShare.None is a real OS lock on every platform we ship (flock on Unix, a share mode on Windows), and it is
-        // released with the handle — including when a process dies — so a leftover lock FILE never wedges anyone. The
-        // lock is held only across a read-then-write, which is microseconds, so the wait is a formality; exhausting it
-        // means another node is stuck mid-update and overwriting its record blind is the worse outcome.
+        // FileShare.None is a real OS lock on every platform we ship (flock on Unix, a share mode on Windows) and is released with the handle, a dying process included, so a
+        // leftover lock FILE never wedges anyone. Held only across a read-then-write, so exhausting the wait means another node is stuck mid-update: overwriting it blind is worse.
         for (var attempt = 1; attempt < LockAttempts; attempt++)
         {
             try
@@ -108,9 +106,8 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
 
-            // Atomic write: serialize to a temp sibling, then move-with-overwrite into place. The temp file is created
-            // with owner-only (0600) permissions up front on non-Windows so it is never briefly world-readable; the mode
-            // is carried through the same-directory move. Windows relies on the per-user data-directory ACL.
+            // Atomic write: serialize to a temp sibling, then move-with-overwrite into place. On non-Windows the temp file is created owner-only (0600) up front, so it is
+            // never briefly world-readable, and the mode is carried through the same-directory move; Windows relies on the per-user data-directory ACL.
             var tempPath = _statePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
@@ -146,12 +143,12 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
         }
     }
 
-    /// <summary>
-    ///     Opens a truncating write stream for <paramref name="path" />. On non-Windows the file is created with
-    ///     owner-only (0600) permissions atomically via <see cref="FileStreamOptions.UnixCreateMode" />, mirroring the
-    ///     node-settings posture. On Windows <see cref="FileStreamOptions.UnixCreateMode" /> is unsupported, so a plain
-    ///     create is used and the per-user data-directory ACL governs access.
-    /// </summary>
+    /// <summary>Opens a truncating write stream for <paramref name="path" />.</summary>
+    /// <remarks>
+    ///     On non-Windows the file is created owner-only (0600) atomically through
+    ///     <see cref="FileStreamOptions.UnixCreateMode" />, mirroring the node-settings posture. Windows does not
+    ///     support that option, so a plain create is used there and the per-user data-directory ACL governs access.
+    /// </remarks>
     private static FileStream CreateOwnerOnly(string path)
     {
         var options = new FileStreamOptions

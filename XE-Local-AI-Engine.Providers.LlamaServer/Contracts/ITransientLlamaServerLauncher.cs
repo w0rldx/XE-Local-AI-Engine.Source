@@ -18,17 +18,11 @@ public sealed class TransientLlamaServerSession
 ///     applied on top, and tears it down when the body returns.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Every other spawn path in this provider is addressed by installed-model NAME and resolves its file through
-///         the registry. A freshly exported training artifact is staged and deliberately NOT in the registry — a smoke
-///         test has to answer "would this file load and serve at all" BEFORE anything gets promoted, so it needs the
-///         one thing the supervisor cannot offer: a launch by path.
-///     </para>
-///     <para>
-///         The process is owned entirely by this call: it is never registered in the supervisor's process table, never
-///         counts against the loaded cap, and is tree-killed on every exit path including a throw. Callers are
-///         responsible for whatever wider exclusivity they need (GPU load admission, the runtime-mutation lease).
-///     </para>
+///     Every other spawn path here is addressed by installed-model NAME. A freshly exported training artifact is
+///     staged and deliberately NOT in the registry, because a smoke test has to answer "would this file load and serve
+///     at all" BEFORE anything is promoted, so it needs the one thing the supervisor cannot offer: a launch by path.
+///     The process is owned entirely by this call — never registered, never counted against the cap, tree-killed on
+///     every exit path — and wider exclusivity is the caller's (GPU load admission, the runtime-mutation lease).
 /// </remarks>
 public interface ITransientLlamaServerLauncher
 {

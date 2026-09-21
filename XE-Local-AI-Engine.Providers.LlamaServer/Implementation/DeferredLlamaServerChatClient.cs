@@ -7,9 +7,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
-// Aliased rather than a blanket `using OpenAI.Chat` so the wire type never collides with the MEAI
-// ChatResponseFormat every IChatClient signature in this file speaks — the same discipline
-// OpenAICompatibleRequestBody applies to ChatCompletionOptions.
+// Aliased rather than a blanket `using OpenAI.Chat` so the wire type never collides with the MEAI ChatResponseFormat every IChatClient
+// signature in this file speaks — the same discipline OpenAICompatibleRequestBody applies to ChatCompletionOptions.
 using OpenAIChatResponseFormat = OpenAI.Chat.ChatResponseFormat;
 
 /// <summary>
@@ -22,15 +21,9 @@ using OpenAIChatResponseFormat = OpenAI.Chat.ChatResponseFormat;
 /// <remarks>
 ///     The inner MEAI OpenAI adapter is built once, keyed by the resolved endpoint, behind a single-flight gate so
 ///     concurrent first calls ensure-run once. The supervisor owns the underlying process; this wrapper owns only the
-///     inner adapter it constructs and disposes it on <see cref="Dispose" />.
-///     <para>
-///         Self-heal: the cached adapter is bound to a specific llama-server endpoint (host:port). If that process is
-///         gone when a request is sent — the operator ejected the model, the runtime variant was switched, or the
-///         server crashed — the socket is refused. On that connection failure (before any output has streamed) the
-///         cached adapter is dropped and the supervisor is re-asked to ensure a running server (which re-spawns it),
-///         then the request is retried ONCE. Without this a single eject permanently bricked chat for that model until
-///         a full app restart (the adapter never re-resolved its endpoint).
-///     </para>
+///     inner adapter it constructs and disposes it on <see cref="Dispose" />. A request whose endpoint is gone
+///     self-heals ONCE before any output has streamed. Self-heal, leases, refusals and the outbound body patches:
+///     docs/wiki/03-local-runtime-and-providers.md, "Deferred chat / embedding clients".
 /// </remarks>
 internal sealed class DeferredLlamaServerChatClient : IChatClient
 {
@@ -45,38 +38,28 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // re-ensure. Retryable by nature — the measurement ends on its own.
     private const string ModelProfilingMessage = "The model is being profiled by a benchmark right now; this request was not started. Try again shortly.";
 
-    // How many times a request re-ensures around a profiling spawn before giving up. Profiling holds the per-key
-    // single-flight gate through its own teardown, so ONE re-ensure normally suffices: the re-ensure parks on that gate
-    // and returns a process of our own. The extra rounds cover back-to-back measurements; the bound is what stops an
-    // unbroken benchmark queue from parking an interactive request indefinitely.
+    // How many times a request re-ensures around a profiling spawn before giving up. ONE normally suffices; the extra rounds cover back-to-back measurements, and
+    // the bound is what stops an unbroken benchmark queue from parking an interactive request indefinitely.
     private const int MaxProfilingReEnsures = 3;
 
-    // In-process marker (duplicated from InvocationAgentFactory.LlamaDisableThinkingMarkerKey — AI.Agent does not
-    // reference this assembly). When present+true, reasoning is OFF on a thinking-capable model and the outbound
-    // llama-server request must carry chat_template_kwargs.enable_thinking=false so a Qwen3-class chat template stops
-    // emitting a reasoning block. The Ollama `think:false` set alongside it never reaches llama.cpp — the
-    // OpenAI adapter drops unmapped AdditionalProperties — so the switch is injected here instead.
+    // In-process marker, duplicated from InvocationAgentFactory.LlamaDisableThinkingMarkerKey because AI.Agent does not reference this assembly. Present and true means
+    // reasoning is OFF on a thinking-capable model, so the outbound request must carry the enable-thinking switch. See wiki 03, section Deferred chat / embedding clients.
     internal const string DisableThinkingMarkerKey = "xe.llama.disable_thinking";
 
-    // In-process marker (duplicated from ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey — AI.Agent does not
-    // reference this assembly). When present, it carries the turn's thinking budget in tokens, which must ride the
-    // outbound body as reasoning_budget_tokens: llama-server otherwise lets a reasoning model think until the context
-    // window is exhausted, so the turn ends with no final answer at all.
+    // In-process marker, duplicated from ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey because AI.Agent does not reference this assembly. It carries the
+    // turn's thinking budget in tokens, which must ride the outbound body: llama-server otherwise thinks until the window is exhausted and the turn has no answer.
     internal const string ReasoningBudgetMarkerKey = "xe.llama.reasoning_budget_tokens";
 
     // The OpenAI schema wrapper requires a name and llama-server ignores it, so an unnamed MEAI response format needs
     // any valid one rather than a meaningful one.
     private const string DefaultResponseSchemaName = "response";
 
-    // The gen_ai provider name the inner adapter reports once built: MEAI's OpenAI chat-completions adapter hard-codes
-    // new ChatClientMetadata("openai", ...) (Microsoft.Extensions.AI.OpenAI 10.9.0). Pinned here so the pre-init
-    // metadata GetService answers is identical to the post-init one; a drift shows up as a failing metadata test that
-    // compares the two directly.
+    // The gen_ai provider name the inner adapter reports once built: MEAI's OpenAI chat-completions adapter hard-codes a ChatClientMetadata of provider name openai in
+    // Microsoft.Extensions.AI.OpenAI 10.9.0. Pinned so pre-init and post-init metadata match; drift shows up as a failing test that compares the two directly.
     private const string InnerProviderName = "openai";
 
-    // The raw utf8 JSON object written at $.chat_template_kwargs. The OpenAI chat body has no typed field for it, so it
-    // rides the wire through OpenAICompatibleRequestBody — MEAI's OpenAI adapter uses the request body returned by
-    // ChatOptions.RawRepresentationFactory as its serialization base, patch included (verified against MEAI 10.7).
+    // The raw utf8 JSON object written at the chat-template-kwargs path. The OpenAI chat body has no typed field for it, so it rides the wire through
+    // OpenAICompatibleRequestBody: MEAI's adapter uses the body returned by ChatOptions.RawRepresentationFactory as its serialization base, patch included, at MEAI 10.7.
     private static ReadOnlySpan<byte> DisableThinkingKwargs => "{\"enable_thinking\":false}"u8;
 
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
@@ -114,11 +97,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         {
             var resolved = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
 
-            // Hold an inference lease for the duration of the request so a graceful operator eject waits for it to
-            // finish before teardown. A refused lease is classified: an EVICTING process fails the request up front as
-            // operator-ejected (running it leaseless would slip under the eject drain, be killed mid-flight by the
-            // teardown, and then self-heal-respawn the just-ejected model — so eject would never stick); only a
-            // genuinely absent/exited process proceeds leaseless, relying on the self-heal below.
+            // Hold an inference lease for the duration of the request so a graceful operator eject waits for it to finish before teardown. A refused lease is
+            // CLASSIFIED, never ignored; only a genuinely absent or exited process proceeds leaseless. See wiki 03, "Deferred chat / embedding clients".
             ILlamaServerInferenceLease? lease = null;
             if (!resolved.Bound)
             {
@@ -302,13 +282,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             return inner.GetService(serviceType, serviceKey);
         }
 
-        // Before first use there is no inner adapter — but MEAI's OpenTelemetryChatClient snapshots
-        // ChatClientMetadata in ITS constructor and never refreshes it, so a null answered here permanently costs
-        // every span and metric emitted over this client (ProviderChatClientTelemetry.WithProviderTelemetry wraps it
-        // for the summarizer, memory-extraction, playbook-analysis and config-draft jobs, none of which set
-        // ChatOptions.ModelId) its gen_ai.request.model and gen_ai.provider.name. Answer from construction-time
-        // knowledge instead, using the same provider name the built adapter reports so the metadata is consistent
-        // before and after init.
+        // Before first use there is no inner adapter, but MEAI's OpenTelemetryChatClient snapshots ChatClientMetadata in ITS constructor and never refreshes it, so a
+        // null here permanently costs every span over this client its model and provider name. Answer from construction-time knowledge — wiki 03, pre-init metadata.
         if (serviceType == typeof(ChatClientMetadata) && serviceKey is null)
         {
             return new ChatClientMetadata(InnerProviderName,
@@ -326,24 +301,19 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     }
 
     /// <summary>
-    ///     When the turn carries the <see cref="DisableThinkingMarkerKey" /> marker (reasoning OFF on a thinking-capable
-    ///     model), returns a clone of <paramref name="options" /> whose request body carries
-    ///     <c>chat_template_kwargs.enable_thinking=false</c>, so the switch reaches llama-server on the wire. Without the
-    ///     marker the options are returned unchanged, so every other request is byte-identical. A pre-existing
-    ///     <see cref="ChatOptions.RawRepresentationFactory" /> (none is set on the llama.cpp path today) is composed
-    ///     rather than dropped — see <see cref="OpenAICompatibleRequestBody.Chain" />.
+    ///     When the turn carries the <see cref="DisableThinkingMarkerKey" /> marker, returns a clone of
+    ///     <paramref name="options" /> whose request body carries the enable-thinking switch off.
     /// </summary>
+    /// <remarks>
+    ///     Without the marker the options are returned unchanged, so every other request is byte-identical, and a
+    ///     pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> is composed rather than dropped (see
+    ///     <see cref="OpenAICompatibleRequestBody.Chain" />). Why the switch must ride the body, and why the marker's
+    ///     gate is a deliberate superset: wiki 03, "Deferred chat / embedding clients".
+    /// </remarks>
     internal static ChatOptions? ApplyThinkingSwitch(ChatOptions? options)
     {
-        // Gating note: the marker is set upstream whenever reasoning is OFF on a thinking-capable model — by
-        // InvocationAgentFactory for a turn, and by ConversationSummarizer.FoldAsync for a compaction fold, which is a
-        // second producer resting on this same safety argument. That is gating on the model's thinking capability, NOT
-        // on the finer "template advertises the enable_thinking switch" signal. That is a deliberate, safe SUPERSET: injecting
-        // chat_template_kwargs.enable_thinking=false is a no-op for any chat template that does not read that variable
-        // (an unknown kwarg is simply ignored by the jinja renderer), and only reasoning models are thinking-capable, so
-        // at worst the field is inert. The finer gate would require a new capability threaded through the (cross-lane)
-        // classification/resolver chain; if that lands, tighten the marker condition at BOTH producers — this site
-        // needs no change.
+        // Gating: the marker is set upstream by InvocationAgentFactory and by ConversationSummarizer.FoldAsync, both resting on the same safety argument — a
+        // deliberate SUPERSET gate that stays inert on a template ignoring the kwarg. Tighten BOTH producers, never this site; the argument is in wiki 03.
         if (options?.AdditionalProperties is not { } properties
             || !properties.TryGetValue(DisableThinkingMarkerKey, out var raw)
             || raw is not true)
@@ -356,21 +326,16 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     }
 
     /// <summary>
-    ///     When the turn carries the <see cref="ReasoningBudgetMarkerKey" /> marker (an explicit graded reasoning effort
-    ///     on a thinking-capable model), returns a clone of <paramref name="options" /> whose request body carries
-    ///     <c>reasoning_budget_tokens</c>, so llama-server caps the reasoning phase instead of letting it run until the
-    ///     context window is exhausted. Without the marker the options are returned unchanged, so every other request is
-    ///     byte-identical. A pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking switch above
-    ///     sets one) is composed rather than dropped.
-    ///     <para>
-    ///         Semantics at the pinned build b10201 (<c>tools/server/server-common.cpp</c>
-    ///         <c>oaicompat_chat_params_parse</c>): the per-request value overrides the launch-time
-    ///         <c>--reasoning-budget</c> default, and on hitting the budget the server injects its budget message before
-    ///         the end-of-thinking tag and forces the final-answer phase — a capped answer rather than a truncated one.
-    ///         The field is only read for chat templates with explicit think-end tags (the Qwen3/DeepSeek-R1 family),
-    ///         and is a silent no-op otherwise — the same acceptable caveat as the <c>enable_thinking</c> switch above.
-    ///     </para>
+    ///     When the turn carries the <see cref="ReasoningBudgetMarkerKey" /> marker, returns a clone of
+    ///     <paramref name="options" /> whose request body carries the reasoning budget, so llama-server caps the
+    ///     reasoning phase instead of letting it run until the context window is exhausted.
     /// </summary>
+    /// <remarks>
+    ///     Without the marker the options are returned unchanged, so every other request is byte-identical, and a
+    ///     pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking switch above sets one) is
+    ///     composed rather than dropped. Semantics verified against the pinned build b10201, and the templates that
+    ///     read the field at all: wiki 03, "Deferred chat / embedding clients".
+    /// </remarks>
     internal static ChatOptions? ApplyReasoningBudget(ChatOptions? options)
     {
         if (TryReadInt32(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is not { } markerTokens || markerTokens <= 0)
@@ -386,33 +351,14 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     /// <summary>
     ///     Caps the marker's budget at HALF the room this turn can actually generate into, so the reasoning phase can
     ///     never consume everything the model had to answer with.
-    ///     <para>
-    ///         The graded budgets are fixed token counts (<c>ReasoningOptionsResolver.ResolveReasoningBudgetTokens</c>)
-    ///         sized for the 64k windows local runtimes are usually launched with, and neither call site that sets the
-    ///         marker knows the window: the orchestration participant path has no context figure at all, and the
-    ///         single-agent factory resolves its <c>num_ctx</c> after the marker is written. A model launched with a
-    ///         16k window — or a turn carrying an explicit max-output cap — would otherwise be handed a 24576-token
-    ///         budget it can never spend and still answer, reproducing the exact "thought until the window ran out,
-    ///         returned nothing" failure the budget exists to prevent.
-    ///     </para>
-    ///     <para>
-    ///         Room is the launched window the invocation factory carried onto <c>num_ctx</c> (llama-server's own
-    ///         <c>-c</c>, never sent on the wire — see <see cref="ApplySamplingPassthrough" />), narrowed by
-    ///         <see cref="ChatOptions.MaxOutputTokens" /> when the turn sets one, since llama-server counts reasoning
-    ///         tokens against that cap too. Half leaves at least as many tokens for the final answer as the model may
-    ///         spend thinking, and it leaves the common 64k case unchanged (32768 > every graded budget). When neither
-    ///         figure is known the budget is left exactly as the marker carried it.
-    ///     </para>
-    ///     <para>
-    ///         KNOWN GAP, deliberately not closed here: this bounds against the WINDOW, not against the room left after
-    ///         the prompt. On a long conversation the true generation room is smaller than what this sees, so the cap
-    ///         it computes can still exceed it. Closing it needs the round's input-token count, which does not exist at
-    ///         this seam — the estimator lives in the AI.Agent assembly this provider does not reference.
-    ///         <c>ProviderCallBudgetChatClient.NarrowReasoningBudget</c> therefore narrows the marker against the
-    ///         MEASURED input before it reaches here; this clamp is the backstop for the paths that run without an
-    ///         ambient budget scope (the eval and preview-workflow runners), where a coarse bound beats none.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Room is the launched window carried onto <c>num_ctx</c> (llama-server's own context flag, never sent on the
+    ///     wire — see <see cref="ApplySamplingPassthrough" />), narrowed by <see cref="ChatOptions.MaxOutputTokens" />
+    ///     when the turn sets one; with neither figure known the marker's budget stands. KNOWN GAP, deliberately not
+    ///     closed here: this bounds against the WINDOW, not the room left after the prompt, so
+    ///     <c>ProviderCallBudgetChatClient.NarrowReasoningBudget</c> narrows first and this is the backstop. See wiki 03.
+    /// </remarks>
     private static int ClampToGenerationRoom(int budgetTokens, ChatOptions options)
     {
         int? room = null;
@@ -431,29 +377,16 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     /// <summary>
     ///     When the turn sets any sampling knob the MEAI OpenAI adapter does not map — <see cref="ChatOptions.TopK" />,
-    ///     or <see cref="SamplingOptionKeys.MinP" /> / <see cref="SamplingOptionKeys.RepeatPenalty" /> /
-    ///     <see cref="SamplingOptionKeys.RepeatLastN" /> on <see cref="ChatOptions.AdditionalProperties" /> — returns a
-    ///     clone of <paramref name="options" /> whose request body carries those knobs as top-level fields, so they reach
-    ///     llama-server on the wire. With none of them set the options are returned unchanged, so every other request is
-    ///     byte-identical. A pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking switch above
-    ///     sets one) is composed rather than dropped.
-    ///     <para>
-    ///         Why this must exist: <c>Microsoft.Extensions.AI.OpenAI</c>'s <c>ToOpenAIOptions</c> maps only
-    ///         Temperature/TopP/FrequencyPenalty/PresencePenalty/MaxOutputTokens/Seed/StopSequences — <c>TopK</c> has no
-    ///         OpenAI counterpart and unrecognised <c>AdditionalProperties</c> are dropped — so without this the
-    ///         developer-gated per-send sampling overrides silently did nothing on the default (llama.cpp) runtime while
-    ///         appearing to apply.
-    ///     </para>
-    ///     <para>
-    ///         Why the four names are safe: llama-server's OpenAI-compatible handler copies every unrecognised body
-    ///         property straight onto its own request params (verified in the pinned build b10201,
-    ///         <c>tools/server/server-common.cpp</c> <c>oaicompat_chat_params_parse</c> "Copy remaining properties to
-    ///         llama_params"), where <c>tools/server/server-schema.cpp</c> declares <c>top_k</c>, <c>min_p</c>,
-    ///         <c>repeat_penalty</c> and <c>repeat_last_n</c> as first-class sampling fields. <c>num_ctx</c> is
-    ///         deliberately excluded: llama-server's context window is fixed by the <c>--ctx-size</c> it was launched
-    ///         with, so a per-request value is not honoured — that knob stays a client-side history budget.
-    ///     </para>
+    ///     or <see cref="SamplingOptionKeys.MinP" />, <see cref="SamplingOptionKeys.RepeatPenalty" /> and
+    ///     <see cref="SamplingOptionKeys.RepeatLastN" /> — returns a clone carrying them as top-level body fields.
     /// </summary>
+    /// <remarks>
+    ///     With none of them set the options are returned unchanged, so every other request is byte-identical, and a
+    ///     pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> is composed rather than dropped.
+    ///     <c>num_ctx</c> is deliberately EXCLUDED: llama-server's window is fixed by the context size it launched with,
+    ///     so a per-request value is not honoured and that knob stays a client-side history budget. Why the passthrough
+    ///     must exist and why the four names are safe (verified on the pinned build b10201): wiki 03.
+    /// </remarks>
     internal static ChatOptions? ApplySamplingPassthrough(ChatOptions? options)
     {
         if (options is null)
@@ -499,47 +432,16 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     /// <summary>
     ///     When the turn asks for a JSON-schema response format, returns a clone of <paramref name="options" /> whose
-    ///     request body carries the AUTHOR'S schema at <c>$.response_format.json_schema.schema</c> — the only path
-    ///     llama-server reads — sanitised only where llama.cpp's GBNF converter could not compile it. Without a schema
-    ///     the options are returned unchanged, so every other request is byte-identical. A pre-existing
-    ///     <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking switch and the sampling passthrough both
-    ///     set one) is composed rather than dropped.
-    ///     <para>
-    ///         Why this must exist: <c>Microsoft.Extensions.AI.OpenAI</c> maps
-    ///         <see cref="ChatOptions.ResponseFormat" /> through an UNCONDITIONAL strict-schema transform
-    ///         (<c>OpenAIClientExtensions.StrictSchemaTransformCache</c>) that has no opt-out in 10.9.0 or on main. It
-    ///         relocates 22 value keywords — <c>minLength</c>, <c>maxLength</c>, <c>pattern</c>, <c>format</c>,
-    ///         <c>minimum</c>, <c>maximum</c>, the item counts and the rest — into the schema's <c>description</c>
-    ///         PROSE, marks every declared property <c>required</c>, and injects <c>additionalProperties: false</c>
-    ///         into any object that declares <c>properties</c> and omits the key. llama-server compiles what it
-    ///         receives into a real grammar, so the rewrite is the difference between a bound that is enforced and a
-    ///         sentence the model may read: a <c>maxLength: 3</c> schema arrived as
-    ///         <c>{"description":"maxLength: 3","type":"string"}</c> and produced a 1302-character field. See
-    ///         <c>docs/agent-knowledge.md</c> §3. The rewrite is right for the OpenAI API, which refuses those keywords;
-    ///         it is simply wrong for llama.cpp, which honours them.
-    ///     </para>
-    ///     <para>
-    ///         Why patching the body is sufficient: <c>OpenAIChatClient.ToOpenAIOptions</c> takes the
-    ///         <c>ChatCompletionOptions</c> this factory returns as its base and then applies every member with
-    ///         <c>??=</c> — its LAST line being <c>result.ResponseFormat ??= ToOpenAIChatResponseFormat(...)</c>. A
-    ///         response format already set here therefore wins, and the transform is never invoked at all.
-    ///         <see cref="ChatOptions.ResponseFormat" /> is deliberately left in place: it is what the MEAI-level
-    ///         consumers above this client read, and it no longer decides what goes on the wire.
-    ///     </para>
-    ///     <para>
-    ///         Why <c>strict: false</c>: llama-server reads only <c>json_schema.schema</c> and ignores the sibling
-    ///         <c>name</c>/<c>description</c>/<c>strict</c>. Sending <c>strict: true</c> would claim an OpenAI
-    ///         structured-output guarantee llama.cpp does not make, on a body that never left the loopback.
-    ///     </para>
-    ///     <para>
-    ///         Why it is still sanitised: the transform was, by accident, the only thing keeping an over-large
-    ///         repetition bound off this path, and llama.cpp's converter refuses to build a grammar above
-    ///         <see cref="LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound" /> — HTTP 400
-    ///         <c>Failed to initialize samplers</c>, the turn never reaches inference. So the same pass the tools array
-    ///         gets now protects this path ON PURPOSE, and only where it must: a schema whose bounds are all in range
-    ///         travels verbatim.
-    ///     </para>
+    ///     request body carries the AUTHOR'S schema at the json-schema path llama-server reads, sanitised only where
+    ///     llama.cpp's GBNF converter could not compile it.
     /// </summary>
+    /// <remarks>
+    ///     Without a schema the options are returned unchanged, so every other request is byte-identical, and a
+    ///     pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> is composed rather than dropped.
+    ///     <see cref="ChatOptions.ResponseFormat" /> is deliberately LEFT in place — the MEAI-level consumers above
+    ///     this client read it — and no longer decides what goes on the wire. Why MEAI's strict-schema transform must
+    ///     be bypassed, why a body patch suffices, why non-strict, and the bound that still needs sanitising: wiki 03.
+    /// </remarks>
     internal static ChatOptions? ApplyResponseSchemaPassthrough(ChatOptions? options)
     {
         if (options?.ResponseFormat is not ChatResponseFormatJson { Schema: { } schema } jsonFormat)
@@ -570,24 +472,15 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     /// <summary>
     ///     When at least one offered tool carries a JSON-schema bound llama.cpp's GBNF converter cannot compile, returns
     ///     a clone of <paramref name="options" /> in which ONLY those tools are replaced by a
-    ///     <see cref="GrammarSafeSchemaAIFunction" /> advertising the sanitised schema. When every tool is already
-    ///     compilable the options are returned unchanged, so every other request stays byte-identical.
-    ///     <para>
-    ///         Why this must exist: llama-server compiles the whole <c>tools</c> array into one constrained grammar
-    ///         before sampling, and an over-large repetition bound makes it reject the request with HTTP 400
-    ///         <c>Failed to initialize samplers: failed to parse grammar</c> — so an oversized bound does not degrade
-    ///         tool calling, it breaks the turn outright. See <see cref="LlamaGrammarToolSchemaCompatibility" /> for the
-    ///         measured limit.
-    ///     </para>
-    ///     <para>
-    ///         Why it is safe: the caller's <see cref="ChatOptions" /> and its tool list are never mutated — the swap
-    ///         happens on a clone whose only consumer is the inner OpenAI adapter's <c>tools</c> serialization. The
-    ///         function-invocation middleware above this client resolves, approval-gates and executes tools from its own
-    ///         (untouched) list, so <c>ApprovalRequiredAIFunction</c> stays the outermost type there, and argument
-    ///         validation still runs against the unsanitised schema. Only the llama.cpp path is affected; cloud
-    ///         providers never reach this client.
-    ///     </para>
+    ///     <see cref="GrammarSafeSchemaAIFunction" /> advertising the sanitised schema.
     /// </summary>
+    /// <remarks>
+    ///     When every tool is already compilable the options are returned unchanged, so every other request stays
+    ///     byte-identical. An oversized bound does not degrade tool calling, it breaks the turn outright — see
+    ///     <see cref="LlamaGrammarToolSchemaCompatibility" /> for the measured limit. The caller's
+    ///     <see cref="ChatOptions" /> and its tool list are never mutated; only the llama.cpp path is affected. Why the
+    ///     swap is safe for approval gating and argument validation: wiki 03, "Deferred chat / embedding clients".
+    /// </remarks>
     internal static ChatOptions? ApplyToolSchemaCompatibility(ChatOptions? options)
     {
         if (options?.Tools is not { Count: > 0 } tools)
@@ -661,15 +554,12 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     /// <summary>
     ///     The endpoint to talk to, and whether it came from the endpoint BINDING rather than from the supervisor.
-    ///     <para>
-    ///         The distinction decides whether this request takes an inference lease at all. A bound endpoint is a
-    ///         benchmark's own profiling process, handed to it by <c>RunExclusiveBenchmarkAsync</c> for the duration of
-    ///         the measurement: that caller owns the process, so there is nothing to drain and nothing to protect the
-    ///         request from — and asking for a lease would be answered <c>ProfilingOwned</c> and refuse the
-    ///         measurement's own requests. Re-ensuring instead would be worse still: it parks on the per-key gate the
-    ///         benchmark itself is holding.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The distinction decides whether this request takes an inference lease at all: a bound endpoint is a
+    ///     benchmark's own profiling process, handed to it by <c>RunExclusiveBenchmarkAsync</c> for the measurement, so
+    ///     it takes none. See wiki 03, "Deferred chat / embedding clients".
+    /// </remarks>
     private async Task<(LlamaServerEndpoint Endpoint, bool Bound)> ResolveEndpointCoreAsync(CancellationToken ct)
     {
         if (_endpointBinding?.GetBoundEndpoint(_modelName, ModelRole.Chat) is { } bound)
@@ -682,12 +572,13 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     /// <summary>
     ///     Prepares one more attempt around a profiling spawn that owns this model's key, or reports that the bounded
-    ///     budget is spent. The cached adapter is dropped either way: it is bound to the endpoint the measurement
-    ///     process now answers on — the port allocator commonly re-uses the one the replaced process just freed — so
-    ///     reusing it would send this request INTO the measurement, contaminating it and dying to its teardown. The
-    ///     next EnsureInnerAsync parks on the per-key gate profiling holds through teardown and comes back with a
-    ///     process of our own.
+    ///     budget is spent.
     /// </summary>
+    /// <remarks>
+    ///     The cached adapter is dropped either way, because reusing it would send this request INTO the measurement,
+    ///     contaminating it and dying to its teardown. The next <c>EnsureInnerAsync</c> parks on the per-key gate
+    ///     profiling holds through teardown and comes back with a process of our own. See wiki 03.
+    /// </remarks>
     private bool TryBeginProfilingReEnsure(ref int attempts)
     {
         // InvalidateInner already invalidates the calibration target.
@@ -708,10 +599,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     /// <summary><see cref="Bound" /> marks an endpoint that came from the endpoint binding — see ResolveEndpointCoreAsync.</summary>
     private readonly record struct ResolvedChatClient(IChatClient Client, Uri BaseAddress, bool Bound);
 
-    // True when the exception chain indicates the target llama-server is unreachable (refused / connection error) — i.e.
-    // the process is gone — rather than a model/runtime error. Walks the full chain (including AggregateException fan-out
-    // from the OpenAI SDK retry policy, which surfaces the refusal as ClientResultException -> HttpRequestException ->
-    // SocketException ConnectionRefused).
+    // True when the exception chain says the target llama-server is unreachable — the process is gone — rather than reporting a model or runtime error. Walks the
+    // FULL chain, including the AggregateException fan-out from the OpenAI SDK retry policy: ClientResultException, HttpRequestException, a refused SocketException.
     internal static bool IsServerGone(Exception exception)
     {
         var queue = new Queue<Exception>();
@@ -725,10 +614,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                     return true;
                 case HttpRequestException { HttpRequestError: HttpRequestError.ConnectionError }:
                     return true;
-                // A process killed MID-RESPONSE (force-eject, crash while streaming) does not surface as a connect-time
-                // failure: the open body stream terminates as HttpIOException(ResponseEnded) — live-observed as
-                // "The response ended prematurely." during a force-eject. Without this arm the ejected-lease translation
-                // above never fires and the user sees a generic provider failure instead of the operator-eject terminal.
+                // A process killed MID-RESPONSE does not surface as a connect-time failure: the open body stream terminates as HttpIOException(ResponseEnded),
+                // live-observed during a force-eject. Without this arm the ejected-lease translation never fires and the user sees a generic provider failure.
                 case HttpIOException { HttpRequestError: HttpRequestError.ResponseEnded or HttpRequestError.ConnectionError }:
                     return true;
             }

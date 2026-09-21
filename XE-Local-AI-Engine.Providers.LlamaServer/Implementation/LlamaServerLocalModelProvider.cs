@@ -9,24 +9,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
-///     llama-server implementation of the provider-neutral <see cref="ILocalModelProvider" /> boundary.
-///     Maps the 8-member contract onto the process supervisor (chat/embedding runtime, warm/unload, health) and the
-///     GGUF model store (installed-model inventory + file resolution). <see cref="ProviderName" /> is
-///     <c>"llamacpp"</c>.
+///     llama-server implementation of the provider-neutral <see cref="ILocalModelProvider" /> boundary, mapping the
+///     contract onto the process supervisor and the GGUF model store. <see cref="ProviderName" /> is <c>"llamacpp"</c>.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <see cref="CreateChatClient" /> / <see cref="CreateEmbeddingGenerator" /> return <em>deferred</em> clients
-///         (<see cref="DeferredLlamaServerChatClient" /> / <see cref="DeferredLlamaServerEmbeddingGenerator" />) that
-///         ensure-run the right <c>(model, role)</c> process on first use, so cold-start is a normal first-token delay
-///         rather than a blocking sync factory call. The selection's <see cref="LocalModelSelection.ProviderName" />
-///         must equal <see cref="ProviderName" /> (mirror of <c>OllamaLocalModelProvider</c>).
-///     </para>
-///     <para>
-///         <strong>GGUF acquisition (pull/delete) is owned by the GGUF model store (<see cref="IGgufModelStore" />).</strong> The store
-///         contract this provider consumes exposes file resolution + installed-model enumeration (to launch and list), and
-///         <see cref="PullModelAsync" /> / <see cref="DeleteModelAsync" /> route into the store's download/delete surface.
-///     </para>
+///     <see cref="CreateChatClient" />/<see cref="CreateEmbeddingGenerator" /> return DEFERRED clients that ensure-run
+///     the right <c>(model, role)</c> process on first use, so cold start is a normal first-token delay rather than a
+///     blocking sync factory call, and the selection's <see cref="LocalModelSelection.ProviderName" /> must equal
+///     <see cref="ProviderName" />. GGUF acquisition is owned by <see cref="IGgufModelStore" />:
+///     <see cref="PullModelAsync" />/<see cref="DeleteModelAsync" /> route into its download and delete surface.
 /// </remarks>
 public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
 {
@@ -38,12 +29,13 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     private readonly ILlamaServerEndpointBinding? _endpointBinding;
     private readonly TimeProvider _timeProvider;
 
-    /// <summary>
-    ///     Creates the provider over the process supervisor and the GGUF model store. The supervisor options supply the
-    ///     explicit per-call HTTP network timeouts the deferred chat/embedding clients pin on the built OpenAI
-    ///     client; a null options bag falls back to the default policy. Chat and embedding take SEPARATE values on
-    ///     purpose — a chat call also carries the invocation deadline, an embedding call has no other bound.
-    /// </summary>
+    /// <summary>Creates the provider over the process supervisor and the GGUF model store.</summary>
+    /// <remarks>
+    ///     The supervisor options supply the explicit per-call HTTP network timeouts the deferred chat and embedding
+    ///     clients pin on the built OpenAI client, a null options bag falling back to the default policy. Chat and
+    ///     embedding take SEPARATE values on purpose: a chat call also carries the invocation deadline, an embedding
+    ///     call has no other bound.
+    /// </remarks>
     public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor,
         IGgufModelStore modelStore,
         TimeProvider timeProvider,

@@ -48,10 +48,8 @@ public sealed partial class LlamaServerProcessSupervisor
             return null;
         }
 
-        // A profiling-owned process is excluded: its context comes from explore/replay launch args, not from serving
-        // policy, so reporting it would size a chat's context budget off a measurement spawn. The exclusive operation
-        // that pinned it is the exception — that window IS the one its own measurement runs in, and withholding it
-        // leaves a benchmark's context admission nothing to size against, failing the run it just warmed.
+        // A profiling-owned process is excluded: its context comes from explore or replay launch args, not serving policy, so reporting it would size a chat's
+        // context budget off a measurement. The operation that pinned it is the exception — withholding it leaves its own benchmark nothing to size against.
         return !running.IsProfilingOwned || ReferenceEquals(running, GetOwnExclusiveProfilingProcess(key, out _))
             ? new LlamaServerRuntimeInfo { EffectiveContextTokens = effectiveContext }
             : null;

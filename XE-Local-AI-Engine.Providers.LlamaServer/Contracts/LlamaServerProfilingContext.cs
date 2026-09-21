@@ -2,23 +2,18 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     The per-spawn context handed to an operator profiling body by
-///     <see cref="ILlamaServerProcessSupervisor.RunExclusiveProfilingAsync{T}" />: the localhost endpoint of the
-///     exclusively-spawned, reaper-pinned <c>llama-server</c> process plus a snapshot of the startup output captured
-///     from both process pipes and the separate machine-readable stdout acquired from <c>llama-fit-params</c> before
-///     launch. The endpoint is valid only for the duration of the body — the supervisor evicts the transient profiling
-///     process when the body returns or throws.
+///     <see cref="ILlamaServerProcessSupervisor.RunExclusiveProfilingAsync{T}" />.
 /// </summary>
+/// <remarks>
+///     Its endpoint is valid only for the duration of the body: the supervisor evicts the transient, reaper-pinned
+///     profiling process when the body returns or throws.
+/// </remarks>
 /// <param name="Endpoint">The localhost OpenAI-compatible endpoint of the exclusive profiling process.</param>
-/// <param name="StartupOutput">
-///     A snapshot of the forwarded stdout + stderr lines captured up to the point the process became ready.
-/// </param>
-/// <param name="FitParamsOutput">
-///     The stdout lines emitted by the co-located <c>llama-fit-params</c> capability before the profiling server was
-///     launched. Empty when the capability is missing or acquisition failed.
-/// </param>
+/// <param name="StartupOutput">Forwarded stdout and stderr lines captured up to the point the process became ready.</param>
+/// <param name="FitParamsOutput">What <c>llama-fit-params</c> printed before launch; empty when it is missing or failed.</param>
 /// <param name="ProcessId">
-///     OS process id of the transient profiling server. Supplied only for operator benchmark resource sampling; callers
-///     must treat it as ephemeral and never persist or expose it.
+///     OS process id of the transient profiling server, for benchmark resource sampling only: ephemeral, never
+///     persisted or exposed.
 /// </param>
 public sealed record LlamaServerProfilingContext(
     LlamaServerEndpoint Endpoint,
@@ -39,17 +34,22 @@ public sealed record LlamaServerProfilingContext(
     public IReadOnlyList<string> SuccessfulLaunchArguments { get; init; } = [];
 
     /// <summary>
-    ///     Sanitized, content-free observation of the exact candidate that reached readiness. Carries runtime identity,
-    ///     spawn-through-readiness duration, measured placement class, primary/safe-retry kind, and speculation class for benchmark
-    ///     correlation. It is report-only and never participates in admission.
+    ///     Sanitized, content-free observation of the exact candidate that reached readiness. Report-only: it never
+    ///     participates in admission.
     /// </summary>
+    /// <remarks>
+    ///     It carries runtime identity, spawn-through-readiness duration, measured placement class, primary or
+    ///     safe-retry kind, and speculation class, for benchmark correlation.
+    /// </remarks>
     public LlamaServerLoadObservation? LoadObservation { get; init; }
 
     /// <summary>
-    ///     What this spawn actually launched, assembled after readiness. Populated for a BENCHMARK spawn only — the one
-    ///     spawn shape whose whole purpose is a measurement someone will later compare — and <see langword="null" /> for
-    ///     every other profiling spawn, or when the facts could not be assembled.
+    ///     What this spawn actually launched, assembled after readiness. Populated for a BENCHMARK spawn only, and
+    ///     <see langword="null" /> for every other profiling spawn or when the facts could not be assembled.
     /// </summary>
+    /// <remarks>
+    ///     A benchmark is the one spawn shape whose whole purpose is a measurement someone will later compare.
+    /// </remarks>
     public LlamaServerLaunchReceipt? LaunchReceipt { get; init; }
 
     /// <summary>Creates a profiling context without machine-readable fit output (replay/benchmark callers).</summary>

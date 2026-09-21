@@ -6,10 +6,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Startup <see cref="IHostedService" /> that emits a single prominent <see cref="LogLevel.Warning" /> when the
-///     operator bring-your-own llama-server override is active. The path is operator-owned and therefore safe to log (no
-///     secret-hygiene violation). Nothing is logged when the override is unset, so a normal (pinned-acquisition) deploy is
-///     byte-behavior-unchanged.
+///     operator bring-your-own llama-server override is active.
 /// </summary>
+/// <remarks>
+///     The path is operator-owned and therefore safe to log, with no secret-hygiene violation. Nothing is logged when
+///     the override is unset, so a normal pinned-acquisition deploy stays byte-behaviour-unchanged.
+/// </remarks>
 internal sealed class LlamaServerRuntimeOverrideStartupNotice : IHostedService
 {
     private readonly ILogger<LlamaServerRuntimeOverrideStartupNotice> _logger;

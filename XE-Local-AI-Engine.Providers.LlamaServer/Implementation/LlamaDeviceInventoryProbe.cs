@@ -7,19 +7,16 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="ILlamaDeviceInventoryProbe" />. Resolves an ALREADY-AVAILABLE hash-verified llama.cpp binary
-///     for the requested variant (<see cref="ILlamaCppBinaryManager.TryGetInstalledBinaryAsync" /> — it never acquires
-///     one), runs a short-lived <c>--list-devices</c> probe (via <see cref="LlamaListDevicesProcessRunner" />), and
-///     parses each device line's <c>&lt;name&gt; (&lt;total&gt; MiB, &lt;free&gt; MiB free)</c> column into a structured
-///     inventory. The answer is a pure function of the resolved binary, so a SUCCESSFUL probe is cached per
-///     (variant, binary path, binary mtime) — it only changes when the binary changes (an operator installing a CUDA
-///     build, or a bring-your-own override). A CPU variant short-circuits to a determinate empty list without spawning.
+///     Default <see cref="ILlamaDeviceInventoryProbe" />: it resolves an ALREADY-AVAILABLE hash-verified binary through
+///     <see cref="ILlamaCppBinaryManager.TryGetInstalledBinaryAsync" />, never acquiring one, runs a short-lived
+///     <c>--list-devices</c> probe and parses the result into a structured inventory.
 /// </summary>
 /// <remarks>
-///     Degrade, never throw: a spawn failure or the per-probe timeout yields <see cref="LlamaDeviceInventory.Unknown" />,
-///     and no installed runtime at all yields <see cref="LlamaDeviceInventory.RuntimeNotInstalled" />; the audit treats
-///     both as "don't know" (never a false CPU-fallback alarm). Neither is cached, so a transient glitch — and a node
-///     that acquires its runtime a moment later — self-heals on the next demand; only a determinate result is memoized.
+///     The answer is a pure function of the resolved binary, so a SUCCESSFUL probe is cached per (variant, binary path,
+///     binary mtime) and changes only when the binary does. A CPU variant short-circuits to a determinate empty list
+///     without spawning. Degrade, never throw: a spawn failure or the per-probe timeout yields
+///     <see cref="LlamaDeviceInventory.Unknown" /> and no installed runtime yields
+///     <see cref="LlamaDeviceInventory.RuntimeNotInstalled" />; neither is cached, so both self-heal on the next demand.
 /// </remarks>
 public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryProbe
 {
@@ -53,10 +50,8 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
 
         try
         {
-            // NEVER EnsureBinaryAsync here. This probe answers a read-only diagnostic (the hardware-profile GET the app
-            // shell fires on every authenticated page), and Ensure would DOWNLOAD a multi-hundred-megabyte runtime as a
-            // side effect of a page load — on an Offline / Manual node too, which is the defect this replaces. The
-            // runtime is reported on only once something else has installed it; until then the answer is "unknown".
+            // NEVER EnsureBinaryAsync here: this probe answers a read-only diagnostic — the hardware-profile GET the app shell fires on every authenticated page — and
+            // Ensure would DOWNLOAD a multi-hundred-megabyte runtime as a side effect of a page load, on an Offline or Manual node too. Until something else installs one, "unknown".
             var binary = await _binaryManager.TryGetInstalledBinaryAsync(variant, ct).ConfigureAwait(false);
             if (binary is null)
             {
@@ -94,12 +89,8 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
         }
         catch (LlamaRuntimeException ex)
         {
-            // The binary manager REFUSED to hand over a binary — most reachably, a bring-your-own
-            // XE_LLAMACPP_SERVER_PATH override rejected by the no-silent-CPU invariant because it enumerates no GPU
-            // device. That is a deliberate, operator-actionable decision, not a transient glitch, and it is the whole
-            // explanation for the "backend undetermined" state the operator then sees on the hardware card. At Debug it
-            // was invisible at the shipped log level, so the card's advice to check the log led nowhere — measured on
-            // Windows 11 2026-08-03. Warn, so the real reason is in the log the card points at.
+            // The binary manager REFUSED a binary — most reachably an XE_LLAMACPP_SERVER_PATH override rejected by the no-silent-CPU invariant for enumerating no GPU device. A
+            // deliberate, operator-actionable decision and the whole explanation for the "backend undetermined" card, so: Warning, since at Debug the card's advice leads nowhere.
             _logger.LogWarning(ex,
                 "Device-inventory probe could not resolve a {Variant} llama.cpp binary; the inference backend will be reported as undetermined.",
                 variant);
@@ -114,10 +105,13 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
 
     /// <summary>
     ///     Parses <c>--list-devices</c> output into one <see cref="LlamaGpuDevice" /> per line carrying the
-    ///     <c>(&lt;total&gt; MiB, &lt;free&gt; MiB free)</c> memory column — the device signature every GPU-backend build
-    ///     prints. Pure and side-effect-free so it is unit-testable without spawning a process. Header/banner lines
-    ///     (no memory column) do not match and are ignored, so an empty result means "the binary enumerated no GPU".
+    ///     <c>(&lt;total&gt; MiB, &lt;free&gt; MiB free)</c> memory column, the signature every GPU-backend build prints.
     /// </summary>
+    /// <remarks>
+    ///     Header and banner lines carry no memory column, so they do not match and are ignored, and an empty result
+    ///     therefore means the binary enumerated no GPU. Pure and side-effect-free, so it is unit-testable without
+    ///     spawning a process.
+    /// </remarks>
     internal static IReadOnlyList<LlamaGpuDevice> ParseDevices(string output)
     {
         if (string.IsNullOrWhiteSpace(output))
@@ -169,9 +163,8 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
         return string.Create(CultureInfo.InvariantCulture, $"{(int)variant}|{executablePath}|{mtimeTicks}");
     }
 
-    // A device line: some leading name text (no newline, up to the '('), then the "(<total> MiB, <free> MiB free)"
-    // memory column. Case-insensitive and space-tolerant because spacing/casing varies across builds. A 1s match
-    // timeout bounds the parse against pathological input.
+    // A device line: leading name text with no newline, up to the '(', then the "(<total> MiB, <free> MiB free)" memory column. Case-insensitive and space-tolerant
+    // because spacing and casing vary across builds; a 1s match timeout bounds the parse against pathological input.
     [GeneratedRegex(@"(?<name>[^\r\n(]*)\(\s*(?<total>[0-9]+)\s*MiB\s*,\s*(?<free>[0-9]+)\s*MiB\s*free\s*\)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]

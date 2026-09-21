@@ -5,18 +5,11 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Options;
 ///     whether a token is one of them.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The allow-list is <c>f16 | q8_0 | q4_0</c>, symmetric by construction (K == V). <c>f16</c> emits no
-///         <c>-ctk/-ctv</c> at all and leaves flash attention at the runtime's own default; a quantized type sets both
-///         cache types and requires <c>-fa on</c>.
-///     </para>
-///     <para>
-///         <strong>This type answers exactly one question — "is this token a valid KV-cache type".</strong> A blank
-///         value means two different things to the two callers and neither may read the other's meaning out of
-///         <see cref="TryNormalize" />: for the node setting it means "use the node default" (resolved to
-///         <see cref="Q8_0" /> by the settings accessor), and for a benchmark run it means "Auto, decided at freeze".
-///         Each caller resolves blank itself.
-///     </para>
+///     The allow-list is <c>f16 | q8_0 | q4_0</c>, symmetric by construction so that the key and value types always
+///     match. It answers exactly one question — is this token a valid KV-cache type — because a BLANK value means two
+///     different things to its two callers and neither may read the other's meaning out of
+///     <see cref="TryNormalize" />: for the node setting blank is "use the node default", resolved to
+///     <see cref="Q8_0" /> by the settings accessor, and for a benchmark run it is "Auto, decided at freeze".
 /// </remarks>
 public static class LlamaServerKvCacheTypes
 {

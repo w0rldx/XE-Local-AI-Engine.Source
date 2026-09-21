@@ -4,40 +4,20 @@ using System.Diagnostics;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default GPU-vendor probe. Prefers a non-shelling driver-presence signal (the NVML runtime library that ships
-///     with the NVIDIA display driver), and only shells out to lightweight, ubiquitous tools when that fast signal is
-///     absent. Detection failure degrades to <see cref="DetectedGpuVendor.None" /> (CPU floor) — never throws.
+///     Default GPU-vendor probe: it prefers a non-shelling driver-presence signal (the NVML runtime library that ships
+///     with the NVIDIA display driver) and shells out to lightweight, ubiquitous tools only when that signal is absent.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>NVIDIA fast path (no shelling).</b> The NVML runtime library — <c>nvml.dll</c> on Windows,
-///         <c>libnvidia-ml.so</c>/<c>libnvidia-ml.so.1</c> on Linux — ships with the NVIDIA <em>display driver</em>
-///         (not the CUDA toolkit), so its presence is a valid "an NVIDIA driver is installed" signal. When present we
-///         report <see cref="DetectedGpuVendor.Nvidia" /> immediately, never spawning a process. Because newer Windows
-///         drivers may place <c>nvml.dll</c> only under <c>Program Files\NVIDIA\NVSMI</c> (not <c>System32</c>), its
-///         <em>absence</em> is NOT proof of "no NVIDIA" — so we still fall through to <c>nvidia-smi</c> as confirmation.
-///     </para>
-///     <para>
-///         <b>Process reaping &amp; the single timeout model.</b> Every child process the probe spawns is owned by a
-///         <c>using</c> block and is always killed (entire tree) + disposed before <see cref="TryRunAsync" /> returns —
-///         on the happy path, on the per-tool <see cref="DefaultProbeTimeout" /> overrun, and on caller cancellation. The probe
-///         therefore never leaves a live child behind for the caller to abandon. The only timeout the probe enforces is
-///         the per-tool <see cref="DefaultProbeTimeout" />; the caller bounds the <em>whole</em> probe by passing a cancellation
-///         token (e.g. <c>CancellationTokenSource.CancelAfter</c>), and cancellation flows into the same reaping path.
-///         There is no second, redundant wall-clock race — see <c>FirstRunModelProvisioningService</c>.
-///     </para>
-///     <para>
-///         Probe order: NVML driver-presence (NVIDIA, no shelling) → <c>nvidia-smi</c> (NVIDIA confirmation/fallback) →
-///         a platform adapter list for AMD/Intel — <c>lspci</c> on Linux, and on Windows a <c>Win32_VideoController</c>
-///         CIM query with <c>wmic</c> only as a last resort (see <see cref="ReadWindowsAdapterListAsync" />).
-///     </para>
+///     Detection failure degrades to <see cref="DetectedGpuVendor.None" />, the CPU floor, and never throws. Probe
+///     order is NVML driver presence (NVIDIA, no process spawned), then <c>nvidia-smi</c> as confirmation, then a
+///     platform adapter list for AMD/Intel — <c>lspci</c> on Linux, a <c>Win32_VideoController</c> CIM query on
+///     Windows (<see cref="ReadWindowsAdapterListAsync" />). Rationale and the single-timeout model:
+///     docs/wiki/03-local-runtime-and-providers.md, "Vendor detection: probe order, the Windows adapter list and the single timeout model".
 /// </remarks>
 public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
 {
-    // Hard cap per probe tool. Without it a hung tool blocks until the caller's token fires: nvidia-smi can stall
-    // indefinitely under some Windows driver/WMI states, and a CIM/WMI query against a wedged WMI repository can too.
-    // A hung GPU probe would otherwise freeze first-run model provisioning. On timeout we kill the tool (entire tree)
-    // and treat the vendor as undetected — degrading to the CPU runtime, which always works.
+    // Hard cap per probe tool: without it a hung tool blocks until the caller's token fires — nvidia-smi can stall indefinitely under some Windows driver/WMI states,
+    // and so can a CIM/WMI query against a wedged repository — freezing first-run provisioning. On timeout the tool's whole tree is killed and the vendor reads as undetected.
     private static readonly TimeSpan DefaultProbeTimeout = TimeSpan.FromSeconds(8);
 
     private readonly Func<bool> _nvidiaDriverPresent;
@@ -52,13 +32,15 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     }
 
     /// <summary>
-    ///     Test seam: lets a unit test simulate the NVML driver-presence signal, shorten the per-tool timeout, swap the
-    ///     process factory for a fake that overruns/records-kill, and choose which platform's adapter-list branch runs —
-    ///     so the no-shelling fast path, the overrun reaping path AND the Windows adapter enumeration are all
+    ///     Test seam: simulates the NVML driver-presence signal, shortens the per-tool timeout, swaps the process
+    ///     factory for a fake that overruns or records a kill, and chooses which platform's adapter-list branch runs.
+    /// </summary>
+    /// <remarks>
+    ///     That makes the no-shelling fast path, the overrun reaping path AND the Windows adapter enumeration all
     ///     exercisable on any host without a real GPU. The platform is a parameter rather than an
     ///     <c>OperatingSystem.IsWindows()</c> call buried in the branch precisely because the Windows branch is the one
     ///     that was wrong and there is no Windows machine to verify it on.
-    /// </summary>
+    /// </remarks>
     internal ProcessGpuVendorProbe(Func<bool> nvidiaDriverPresent,
         TimeSpan probeTimeout,
         Func<string, string, IProbeProcess> processFactory,
@@ -98,9 +80,8 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
             return DetectedGpuVendor.Nvidia;
         }
 
-        // NVML was not found at a known location (or this is a non-NVIDIA / driver-only-elsewhere host). nvml.dll on
-        // newer Windows drivers may live only under Program Files\NVIDIA\NVSMI, so a miss is inconclusive — confirm with
-        // nvidia-smi (timeout-bounded) before giving up on NVIDIA.
+        // A miss is inconclusive: nvml.dll on newer Windows drivers may live only under Program Files\NVIDIA\NVSMI, so confirm
+        // with a timeout-bounded nvidia-smi before giving up on NVIDIA.
         if (await NvidiaPresentAsync(ct).ConfigureAwait(false))
         {
             return DetectedGpuVendor.Nvidia;
@@ -122,9 +103,8 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
         return DetectedGpuVendor.None;
     }
 
-    // Detects the NVML runtime library (shipped with the NVIDIA display driver, not the CUDA toolkit) at its canonical
-    // OS-specific locations. Pure filesystem probe — no process spawned, no I/O beyond File.Exists. Any failure is
-    // swallowed to a "not present" so detection degrades to the shelling fallback rather than throwing.
+    // Detects the NVML runtime library (shipped with the NVIDIA display driver, not the CUDA toolkit) at its canonical OS-specific locations: a pure filesystem
+    // probe, no process spawned and no I/O beyond File.Exists. Any failure is swallowed to "not present", so detection degrades to the shelling fallback rather than throwing.
     private static bool DefaultNvidiaDriverPresent()
     {
         try
@@ -196,34 +176,16 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     }
 
     /// <summary>
-    ///     Enumerates Windows display adapters, trying each source in turn until one answers.
-    ///     <para>
-    ///         <b>Why this is not just <c>wmic</c> any more.</b> <c>wmic</c> is a deprecated Feature-on-Demand that is
-    ///         NOT installed by default on current Windows 11. Its absence was swallowed here into "no adapter list",
-    ///         which collapsed the vendor to <see cref="DetectedGpuVendor.None" /> and therefore selected
-    ///         <c>GpuVariant.Cpu</c> — so a perfectly Vulkan-capable AMD or Intel box ran inference on the CPU, at a
-    ///         fraction of the speed, and said nothing about it. The failure was silent in both places it could have
-    ///         been noticed: the probe treats a missing tool as a legitimate "not detected", and the CPU-fallback alert
-    ///         needs a positive VRAM figure that this class does not produce.
-    ///     </para>
-    ///     <para>
-    ///         The CIM query is what Microsoft's own <c>wmic</c> deprecation notice points at, and Windows PowerShell
-    ///         5.1 is in-box on every Windows 11 install. It is preferred by absolute path so a <c>powershell.exe</c>
-    ///         planted earlier on <c>PATH</c> cannot answer for it, with the bare name behind that for a host whose
-    ///         layout differs. <c>wmic</c> stays LAST rather than being deleted: it still exists on boxes where the
-    ///         Feature-on-Demand is installed, and it costs nothing on the ones where it is not — a missing executable
-    ///         fails to start immediately rather than burning the per-tool timeout.
-    ///     </para>
-    ///     <para>
-    ///         Worst case is one timeout, not one per candidate: only a tool that STARTS can overrun, and a host that
-    ///         has both PowerShell and <c>wmic</c> gets its answer from the first. That keeps this inside the caller's
-    ///         own ceiling (<c>FirstRunModelProvisioningService</c>, 25 s).
-    ///     </para>
-    ///     <para>
-    ///         NVIDIA never reaches here — NVML and <c>nvidia-smi</c> answer first — so nothing on this path can change
-    ///         what an NVIDIA box selects.
-    ///     </para>
+    ///     Enumerates Windows display adapters, trying each source in turn until one answers: the CIM query by
+    ///     absolute path, then by bare name, then <c>wmic</c> last.
     /// </summary>
+    /// <remarks>
+    ///     <c>wmic</c> alone is not enough — it is a deprecated Feature-on-Demand absent by default on current Windows
+    ///     11, and swallowing that absence made a Vulkan-capable AMD or Intel box run on the CPU silently. NVIDIA never
+    ///     reaches here, NVML and <c>nvidia-smi</c> answering first, so nothing on this path changes what an NVIDIA box
+    ///     selects. Why each candidate sits where it does, and why the worst case is one timeout rather than one per
+    ///     candidate: docs/wiki/03-local-runtime-and-providers.md, "Vendor detection: probe order, the Windows adapter list and the single timeout model".
+    /// </remarks>
     private async Task<string> ReadWindowsAdapterListAsync(CancellationToken ct)
     {
         foreach (var (fileName, arguments) in WindowsAdapterListCommands(Environment.SystemDirectory))
@@ -245,9 +207,8 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     /// </summary>
     internal static IEnumerable<AdapterListCommand> WindowsAdapterListCommands(string? systemDirectory)
     {
-        // -NoProfile so a user profile script cannot slow the probe or change its output; -NonInteractive so nothing
-        // can prompt on a headless start. A cmdlet failure (a broken WMI repository) leaves stdout empty, which reads
-        // as "this source has no answer" and falls through to the next candidate.
+        // -NoProfile so a user profile script cannot slow the probe or change its output, -NonInteractive so nothing can prompt on a headless start. A cmdlet failure
+        // against a broken WMI repository leaves stdout empty, which reads as "this source has no answer" and falls through to the next candidate.
         const string CimArguments = "-NoProfile -NonInteractive -Command \"Get-CimInstance -ClassName Win32_VideoController | Select-Object -ExpandProperty Name\"";
 
         if (!string.IsNullOrEmpty(systemDirectory))
@@ -282,10 +243,8 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
             }
             catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
             {
-                // Either the tool overran ProbeTimeout (e.g. nvidia-smi hanging) or the caller's token fired. In BOTH
-                // cases the child is killed+disposed in the finally below, so no orphan survives; report "vendor not
-                // detected" so detection degrades to the CPU floor instead of freezing provisioning. When the caller's
-                // own token (not just our timeout) was cancelled, surface that as cancellation to honor the contract.
+                // The tool overran ProbeTimeout or the caller's token fired; either way the child is killed and disposed in the finally below, so no orphan survives and
+                // "vendor not detected" degrades to the CPU floor rather than freezing provisioning. A cancelled CALLER token, not just ours, is surfaced as cancellation per contract.
                 if (ct.IsCancellationRequested)
                 {
                     throw;
@@ -305,9 +264,8 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
         }
         finally
         {
-            // Guarantee no orphaned child on EVERY exit path (success, timeout, caller-cancel, or tool error): kill the
-            // whole process tree if it is still alive, then dispose. This is the single reaping point — the caller never
-            // needs to abandon a live process.
+            // The single reaping point: on EVERY exit path — success, timeout, caller-cancel or tool error — the whole process tree
+            // is killed if still alive, then disposed, so the caller never needs to abandon a live process.
             if (process is not null)
             {
                 TryKill(process);

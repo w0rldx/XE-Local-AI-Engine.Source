@@ -12,9 +12,8 @@ internal sealed class LlamaServerHealthProbe : ILlamaServerHealthProbe
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
-    // A hard per-attempt bound so ONE probe can never stall the poll loop for the whole readiness budget when
-    // the server accepts the socket but never answers. Combined with a dedicated resilience-free HttpClient (see the DI
-    // registration), the supervisor's poll cadence — not a hung/retried request — controls readiness-detection timing.
+    // A hard per-attempt bound so ONE probe can never stall the poll loop for the whole readiness budget when the server accepts the socket but never answers.
+    // With the dedicated resilience-free HttpClient of the DI registration, the poll cadence — not a hung or retried request — controls readiness timing.
     private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(1);
 
     private readonly HttpClient _httpClient;
@@ -144,9 +143,8 @@ internal sealed class LlamaServerHealthProbe : ILlamaServerHealthProbe
 
     private async Task<bool> TryProbeAsync(Uri healthUri, CancellationToken ct)
     {
-        // Bound THIS single attempt independently of the caller's (readiness-budget or liveness) token so a wedged
-        // server that never answers is treated as "not ready yet" and the loop keeps its cadence, rather than blocking
-        // for the whole budget on one request. One request per attempt — no retries.
+        // Bound THIS single attempt independently of the caller's readiness-budget or liveness token, so a wedged server that never answers reads as "not ready
+        // yet" and the loop keeps its cadence rather than blocking for the whole budget on one request. One request per attempt, no retries.
         using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         attemptCts.CancelAfter(PerAttemptTimeout);
         try

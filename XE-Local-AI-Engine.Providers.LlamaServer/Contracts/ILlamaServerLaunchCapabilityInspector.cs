@@ -57,12 +57,13 @@ public sealed class LlamaServerLaunchCapabilities
 
 /// <summary>
 ///     Read-only capability question about the llama-server binary this node would launch, for callers that must decide
-///     a launch vector BEFORE spawning anything — the benchmark freeze in particular, which has to reject a KV cache
-///     type the selected binary cannot accept rather than discover it as a failed spawn.
+///     a launch vector BEFORE spawning anything.
 /// </summary>
 /// <remarks>
-///     This is the public seam over the provider's internal capability manifest: it answers questions, and deliberately
-///     exposes neither the manifest type nor the resolved binary (which carries a filesystem path).
+///     The benchmark freeze in particular has to reject a KV cache type the selected binary cannot accept, rather than
+///     discover it as a failed spawn. This is the public seam over the provider's internal capability manifest: it
+///     answers questions, and deliberately exposes neither the manifest type nor the resolved binary, which carries a
+///     filesystem path.
 /// </remarks>
 public interface ILlamaServerLaunchCapabilityInspector
 {

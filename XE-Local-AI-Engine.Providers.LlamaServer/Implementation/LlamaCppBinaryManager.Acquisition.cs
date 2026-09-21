@@ -3,12 +3,13 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Acquisition-visibility branch of <see cref="LlamaCppBinaryManager" />. The manager runs off the startup path while
-///     a fully-rendered, idle-looking UI is already on screen, so without a progress channel a slow first-run download is
-///     indistinguishable from a broken one. This partial owns the reporting side-channel: a small per-acquisition
-///     reporter that stamps the (variant, tag, step-count) context onto every status write so the call sites stay
-///     one-liners.
+///     Acquisition-visibility branch of <see cref="LlamaCppBinaryManager" />: a per-acquisition reporter that stamps the
+///     <c>(variant, tag, step-count)</c> context onto every status write, so the call sites stay one-liners.
 /// </summary>
+/// <remarks>
+///     The manager runs off the startup path while a fully-rendered, idle-looking UI is already on screen, so without
+///     this side-channel a slow first-run download is indistinguishable from a broken one.
+/// </remarks>
 public sealed partial class LlamaCppBinaryManager
 {
     /// <summary>
@@ -23,18 +24,11 @@ public sealed partial class LlamaCppBinaryManager
     ///     counters.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         <b>Silence is the default.</b> A cache-hit serve happens on EVERY model spawn, so an acquisition that
-    ///         acquired nothing must emit nothing: <see cref="Complete" /> and <see cref="Fail" /> are suppressed unless
-    ///         at least one non-terminal <see cref="Report" /> already went out. Without that guard the hub would carry a
-    ///         <c>Completed</c> per spawn and the banner would flicker on a warm cache.
-    ///     </para>
-    ///     <para>
-    ///         <b>Sanitization.</b> <see cref="LlamaRuntimeException" /> messages are user-safe by contract (the manager
-    ///         constructs them precisely so no path, URL, or token leaks). Any other exception — an
-    ///         <see cref="IOException" /> naming the temp file, an <see cref="HttpRequestException" /> naming the host —
-    ///         is collapsed to a generic reason rather than surfaced verbatim.
-    ///     </para>
+    ///     <b>Silence is the default.</b> A cache-hit serve happens on EVERY model spawn, so an acquisition that acquired
+    ///     nothing emits nothing: <see cref="Complete" /> and <see cref="Fail" /> are suppressed unless at least one
+    ///     non-terminal <see cref="Report" /> already went out, or the hub would carry a <c>Completed</c> per spawn and
+    ///     the banner would flicker on a warm cache. <b>Sanitization:</b> <see cref="LlamaRuntimeException" /> messages
+    ///     are user-safe by contract; any other exception is collapsed to a generic reason, never surfaced verbatim.
     /// </remarks>
     private sealed class AcquisitionReporter
     {

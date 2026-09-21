@@ -7,28 +7,16 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Real <see cref="IProcessVramBudgetProbe" /> backed by <c>llama-server --list-devices</c>. Resolves (or reuses) the
-///     hash-verified llama.cpp binary for the requested backend, runs a short-lived <c>--list-devices</c> process, and
-///     parses the per-device "<c>(&lt;total&gt; MiB, &lt;free&gt; MiB free)</c>" column, returning the LARGEST reported
-///     process budget across devices in bytes. Vendor-agnostic — it reads llama.cpp's own device report (CUDA / Vulkan /
-///     SYCL), never <c>nvidia-smi</c>, so a single code path serves every GPU backend llama.cpp supports. On WDDM the
-///     value is deliberately NOT described as global free VRAM; that separate semantic comes from
-///     <see cref="HardwareProfile.AvailableVramBytes" />.
+///     Real <see cref="IProcessVramBudgetProbe" /> backed by <c>llama-server --list-devices</c>: it resolves or reuses
+///     the hash-verified binary for the requested backend, runs the probe and returns the LARGEST reported per-device
+///     process budget in bytes.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Degrade, never throw.</b> The process-budget figure feeds placement decisions and benchmark provenance on a
-///         hot path that must keep working when no GPU is present (WSL, CPU-only, headless CI). Every
-///         failure mode — a <c>cpu</c>/unknown/blank backend token (no process is even spawned), an empty device list,
-///         a non-zero exit with no parseable devices, the per-probe timeout, or any unexpected exception — degrades to
-///         <see langword="null" /> ("unknown") rather than throwing or reporting a misleading zero. Only genuine caller
-///         cancellation is surfaced (the token is honored), per the <see cref="IProcessVramBudgetProbe" /> contract.
-///     </para>
-///     <para>
-///         <b>Process model.</b> Unlike the supervised server, <c>--list-devices</c> is a run-to-exit probe, so the
-///         shared <see cref="LlamaListDevicesProcessRunner" /> (used by both this VRAM probe and the device-inventory
-///         probe) launches it with both pipes drained and a bounded wait — no Job Object / setsid containment.
-///     </para>
+///     Vendor-agnostic — it reads llama.cpp's own device report (CUDA, Vulkan, SYCL), never <c>nvidia-smi</c>, so one
+///     code path serves every GPU backend. On WDDM the value is deliberately NOT global free VRAM; that separate
+///     semantic comes from <see cref="HardwareProfile.AvailableVramBytes" />. Every failure mode degrades to
+///     <see langword="null" />, "unknown", rather than throwing or reporting a misleading zero; only genuine caller
+///     cancellation is surfaced, per the <see cref="IProcessVramBudgetProbe" /> contract.
 /// </remarks>
 public sealed partial class LlamaListDevicesProcessVramBudgetProbe : IProcessVramBudgetProbe
 {
@@ -48,6 +36,12 @@ public sealed partial class LlamaListDevicesProcessVramBudgetProbe : IProcessVra
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     The figure feeds placement decisions and benchmark provenance on a hot path that must keep working with no
+    ///     GPU present (WSL, CPU-only, headless CI). A <c>cpu</c>, unknown or blank backend token spawns no process at
+    ///     all; an empty device list, a non-zero exit with no parseable devices, the per-probe timeout and any
+    ///     unexpected exception all read as "unknown".
+    /// </remarks>
     public async Task<long?> TryGetProcessBudgetBytesAsync(string backend, CancellationToken ct)
     {
         var variant = MapBackendToVariant(backend);
@@ -78,12 +72,14 @@ public sealed partial class LlamaListDevicesProcessVramBudgetProbe : IProcessVra
     }
 
     /// <summary>
-    ///     Parses llama.cpp <c>--list-devices</c> output and returns the LARGEST free VRAM across all reported devices in
-    ///     bytes, or <see langword="null" /> when no device line carries a parseable "<c>&lt;free&gt; MiB free</c>"
-    ///     column (header-only output, an empty list, or unrelated text). Pure and side-effect-free so the parse is
-    ///     unit-testable without spawning a process. The max is chosen deliberately: llama.cpp offloads the model to a
-    ///     single device, so the device with the most free VRAM is the one most likely able to host it.
+    ///     Parses llama.cpp <c>--list-devices</c> output for the LARGEST free VRAM across all reported devices in
+    ///     bytes, or <see langword="null" /> when no device line carries a parseable free-MiB column.
     /// </summary>
+    /// <remarks>
+    ///     Header-only output, an empty list and unrelated text all read as null. The MAX is chosen deliberately:
+    ///     llama.cpp offloads the model to a single device, so the device with the most free VRAM is the one most
+    ///     likely able to host it. Pure and side-effect-free, so the parse is unit-testable without spawning a process.
+    /// </remarks>
     internal static long? TryParseMaxFreeVramBytes(string output)
     {
         if (string.IsNullOrWhiteSpace(output))
@@ -133,17 +129,15 @@ public sealed partial class LlamaListDevicesProcessVramBudgetProbe : IProcessVra
         return null;
     }
 
-    // Trailing "(<total> MiB, <free> MiB free)" device column. Case-insensitive and tolerant of extra spaces because the
-    // exact spacing/casing varies across llama.cpp builds; the named "free" group captures the free MiB (the total is a
-    // non-capturing group). A 1s match timeout bounds the parse against pathological input.
+    // Trailing "(<total> MiB, <free> MiB free)" device column, case-insensitive and tolerant of extra spaces because the exact spacing and casing vary across
+    // llama.cpp builds; the named "free" group captures the free MiB, the total being non-capturing. A 1s match timeout bounds the parse against pathological input.
     [GeneratedRegex(@"[0-9]+\s*MiB\s*,\s*(?<free>[0-9]+)\s*MiB\s*free",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex FreeVramRegex();
 
-    // The process launch + pipe draining + bounded kill is shared with the device-inventory probe (both run the same
-    // `--list-devices` command against the same binary) via LlamaListDevicesProcessRunner. A null result (spawn failure
-    // or timeout overrun) degrades to "unknown" free VRAM at the caller.
+    // Launch, pipe draining and bounded kill are shared with the device-inventory probe through LlamaListDevicesProcessRunner, both running the same `--list-devices`
+    // command. Being run-to-exit rather than supervised, it needs no Job Object or setsid containment; a null result (spawn failure or timeout) reads as unknown free VRAM.
     private Task<string?> RunListDevicesAsync(LlamaBinary binary, CancellationToken ct)
     {
         return LlamaListDevicesProcessRunner.RunAsync(binary.ServerExecutablePath, ProbeTimeout, _logger, ct);

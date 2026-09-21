@@ -3,10 +3,12 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     No-op <see cref="IRuntimeAcquisitionEventPublisher" /> registered by default in the provider stack. The Client
-///     host replaces it with a hub-backed publisher; without a host (tests / headless / Aspire / CI) acquisition
-///     progress is simply not broadcast, so those hosts stay byte-behavior-identical.
+///     No-op <see cref="IRuntimeAcquisitionEventPublisher" /> registered by default in the provider stack.
 /// </summary>
+/// <remarks>
+///     The Client host replaces it with a hub-backed publisher; without a host (tests, headless, Aspire, CI)
+///     acquisition progress is simply not broadcast, so those hosts stay byte-behaviour-identical.
+/// </remarks>
 public sealed class NullRuntimeAcquisitionEventPublisher : IRuntimeAcquisitionEventPublisher
 {
     /// <inheritdoc />

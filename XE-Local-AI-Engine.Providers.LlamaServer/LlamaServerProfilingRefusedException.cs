@@ -11,13 +11,13 @@ public enum LlamaServerProfilingRefusalReason
 }
 
 /// <summary>
-///     Thrown when an exclusive profiling run refuses to start because a warm role for the model could not be claimed:
-///     profiling's pre-spawn eviction claims its targets through <c>RunningProcess.TryBeginEvict</c> and never tears
-///     down a leased process, so a measurement is skipped rather than taken by killing a live generation.
+///     Thrown when an exclusive profiling run refuses to start because a warm role for the model could not be claimed.
 /// </summary>
 /// <remarks>
-///     Callers surface this as a distinct SKIPPED outcome, not a failure. <see cref="Exception.Message" /> is the
-///     sanitized, operator-facing sentence — a model name, a role, a request count, and what to do next.
+///     Profiling's pre-spawn eviction claims its targets through <c>RunningProcess.TryBeginEvict</c> and never tears
+///     down a leased process, so a measurement is skipped rather than taken by killing a live generation. Callers
+///     surface this as a distinct SKIPPED outcome, not a failure, and <see cref="Exception.Message" /> is the
+///     sanitized, operator-facing sentence: a model name, a role, a request count and what to do next.
 /// </remarks>
 public sealed class LlamaServerProfilingRefusedException : Exception
 {

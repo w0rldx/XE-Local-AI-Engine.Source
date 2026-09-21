@@ -6,24 +6,17 @@ using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Managed source-built CUDA runtime branch of <see cref="LlamaCppBinaryManager" />. Upstream ships no prebuilt Linux
-///     CUDA asset, so an in-app build (<see cref="Contracts.ILlamaCppSourceBuildService" />) produces a <c>llama-server</c> the
-///     engine adopts as a managed runtime. This partial owns the runtime-record side of that: adoption validation +
-///     recording (<see cref="AdoptCudaSourceBuildAsync" />) and the every-serve re-validation
-///     (<see cref="TryServeManagedCudaBinaryAsync" />).
+///     Managed source-built CUDA runtime branch of <see cref="LlamaCppBinaryManager" />: adoption validation and
+///     recording (<see cref="AdoptCudaSourceBuildAsync" />) plus the every-serve re-validation
+///     (<see cref="TryServeManagedSourceBinaryAsync" />), for the <c>llama-server</c> an in-app build
+///     (<see cref="Contracts.ILlamaCppSourceBuildService" />) produces because upstream ships no prebuilt Linux CUDA asset.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The built binary carries no publisher SHA256 (it was produced locally), so adoption records the SHA256 of the
-///         on-disk binary and every serve recomputes + recompares it, alongside a FULL path-chain perms/ownership walk
-///         (every ancestor from the cache root down is non-world-writable + owner-trusted). Together these close the
-///         deep-tree binary-swap and the adopt→restart→serve TOCTOU windows. <c>[secHIGH-3]</c> <c>[secMED-2]</c>
-///     </para>
-///     <para>
-///         No-silent-CPU invariant: a recorded build that is missing or fails validation at serve time clears the record +
-///         the cached signal and falls through to the normal acquisition path — which, for a Cuda request on Linux (no
-///         prebuilt), throws the sanitized "no prebuilt for this OS/arch" rather than serving CPU as if it were CUDA.
-///     </para>
+///     The built binary carries no publisher SHA256, so adoption records the SHA256 of the on-disk binary and every
+///     serve recomputes and recompares it alongside a FULL path-chain perms and ownership walk (every ancestor from the
+///     cache root down non-world-writable and owner-trusted), closing the deep-tree binary-swap and the
+///     adopt-restart-serve TOCTOU windows. <c>[secHIGH-3]</c> <c>[secMED-2]</c> No-silent-CPU invariant: a recorded build
+///     missing or failing validation clears the record and cached signal and falls through to the normal acquisition path.
 /// </remarks>
 public sealed partial class LlamaCppBinaryManager
 {
@@ -34,16 +27,18 @@ public sealed partial class LlamaCppBinaryManager
     private const string ManagedCudaServerFileName = "llama-server";
 
     /// <summary>
-    ///     Serve-time resolution of a recorded managed CUDA build. Re-validates the full path chain + recorded SHA256 (no
-    ///     smoke/device check on the serve hot path — those run once at adoption). Returns the validated binary, or
-    ///     <see langword="null" /> when the recorded build is missing/invalid — in which case the record + cached signal are
-    ///     cleared so the caller falls through to the normal path (graceful self-heal; never a silent CPU serve).
+    ///     Serve-time resolution of a recorded managed CUDA build, or <see langword="null" /> when that build is missing
+    ///     or invalid.
     /// </summary>
+    /// <remarks>
+    ///     Re-validates the full path chain and the recorded SHA256; there is no smoke or device check on the serve hot
+    ///     path, since those run once at adoption. On an invalid build the record and cached signal are cleared so the
+    ///     caller falls through to the normal path — a graceful self-heal, never a silent CPU serve.
+    /// </remarks>
     /// <param name="discardInvalidRecord">
     ///     <see langword="false" /> suppresses that self-heal write for the read-only
-    ///     <see cref="TryGetInstalledBinaryAsync" /> lookup, which must leave <c>installed-runtime.json</c> untouched. The
-    ///     validation itself is identical either way, so a stale record still reads as "not resolvable"; the next
-    ///     <see cref="EnsureBinaryAsync(GpuVariant,CancellationToken)" /> performs the discard.
+    ///     <see cref="TryGetInstalledBinaryAsync" /> lookup, which must leave <c>installed-runtime.json</c> untouched,
+    ///     so the next <see cref="EnsureBinaryAsync(GpuVariant,CancellationToken)" /> performs the discard instead.
     /// </param>
     private async Task<LlamaBinary?> TryServeManagedSourceBinaryAsync(InstalledRuntimeState installed, bool discardInvalidRecord, CancellationToken ct)
     {
@@ -237,11 +232,8 @@ public sealed partial class LlamaCppBinaryManager
                 return;
             }
 
-            // Both managed source-build layouts are recognized here. `active` is where every build since the
-            // generalized source-build service lands; the `source-cuda/{PinnedTag}` tree is what the original
-            // CUDA-only adopt path wrote, and a node upgraded across that change still has one on disk. Recognizing
-            // only `active` left such a tree orphaned — record cleared, hundreds of MB to GBs stranded with nothing
-            // left to sweep them once the CUDA-only remove route was retired.
+            // Both managed source-build layouts are recognized: `active` is where the generalized source-build service lands every build, and an upgraded node can
+            // still hold the CUDA-only adopt path's `source-cuda/{PinnedTag}` tree. Recognizing only `active` strands that tree — record cleared, GBs unsweepable.
             var fullRecordedPath = Path.GetFullPath(sourceBuildPath);
             var activeTree = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-build", "active"));
             var activeBin = Path.Combine(activeTree, "build", "bin");
@@ -366,11 +358,13 @@ public sealed partial class LlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Generalized full path-chain security walk (override's immediate-parent check extended to the whole chain): the
-    ///     binary must be a regular, executable, non-world-writable, owner-trusted file, and EVERY ancestor directory from
-    ///     the cache root down must be a non-world-writable, owner-trusted directory. The binary must also be a normalized
-    ///     child of the cache root. No-op on Windows (the managed build is Linux-only). <c>[secHIGH-3]</c>
+    ///     Generalized full path-chain security walk, the override's immediate-parent check extended to the whole chain.
     /// </summary>
+    /// <remarks>
+    ///     The binary must be a regular, executable, non-world-writable, owner-trusted file and a normalized child of
+    ///     the cache root, and EVERY ancestor directory from the cache root down must be a non-world-writable,
+    ///     owner-trusted directory. A no-op on Windows, the managed build being Linux-only. <c>[secHIGH-3]</c>
+    /// </remarks>
     private void EnsureManagedPathChainSecure(string serverPath)
     {
         if (OperatingSystem.IsWindows())

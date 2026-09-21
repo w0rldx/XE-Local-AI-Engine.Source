@@ -59,10 +59,8 @@ internal sealed class LlamaServerLaunchCandidateBuilder
 
         var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, allocation, ct).ConfigureAwait(false);
 
-        // INVARIANT: the only optimization a safe candidate may drop is KV-cache quantization. --cpu-moe is carried
-        // through untouched, because dropping it would launch the over-subscription the capability gate refuses; and a
-        // plan carrying ONLY --cpu-moe therefore gets no retry at all — there is nothing safe left to drop. That is
-        // what keeps every safe retry a KV retry, which is what makes the supervisor's fallback attribution sound.
+        // INVARIANT: the only optimization a safe candidate may drop is KV-cache quantization. Expert offload is carried through untouched (dropping it would
+        // launch the over-subscription the capability gate refuses), so a plan carrying only that gets no retry — which is what keeps fallback attribution sound.
         if (plan.UseKvCacheQuantization)
         {
             return new LlamaServerLaunchPlanSet

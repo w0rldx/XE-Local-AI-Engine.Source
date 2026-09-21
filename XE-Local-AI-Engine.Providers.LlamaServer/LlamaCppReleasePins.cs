@@ -17,11 +17,14 @@ public sealed class LlamaCppAssetPin
     public required string ServerRelativePath { get; init; }
 
     /// <summary>
-    ///     The companion CUDA-runtime archive name, set ONLY on the Windows x64 CUDA pin. llama.cpp ships the CUDA runtime
-    ///     DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>, <c>cublasLt64_*.dll</c>) in a SEPARATE archive from the main
-    ///     build; without them next to <c>llama-server.exe</c> the ggml-cuda backend fails to load and the server silently
-    ///     runs CPU-only. <see langword="null" /> for every non-Windows-CUDA pin (no second archive to fetch).
+    ///     The companion CUDA-runtime archive name, set ONLY on the Windows x64 CUDA pin and <see langword="null" /> on
+    ///     every other pin, which has no second archive to fetch.
     /// </summary>
+    /// <remarks>
+    ///     llama.cpp ships the CUDA runtime DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>,
+    ///     <c>cublasLt64_*.dll</c>) in a SEPARATE archive from the main build; without them next to
+    ///     <c>llama-server.exe</c> the ggml-cuda backend fails to load and the server silently runs CPU-only.
+    /// </remarks>
     public string? CudartAssetName { get; init; }
 
     /// <summary>Lowercase hex SHA256 the companion CUDA-runtime archive must match. <see langword="null" /> when <see cref="CudartAssetName" /> is.</summary>
@@ -33,22 +36,11 @@ public sealed class LlamaCppAssetPin
 ///     <see cref="LlamaCppBinaryManager" />. No source-build, ever.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>Pinned tag <c>b10201</c></strong> (published 2026-07-31). SHA256 digests are taken from the GitHub
-///         release-assets API <c>digest</c> field — llama.cpp publishes NO <c>.sha256</c> sidecar files, so the digest
-///         API is the source of truth. Re-pin (tag + every hash) when bumping the recommended version.
-///     </para>
-///     <para>
-///         <strong>Asset scheme:</strong> <c>llama-{tag}-bin-{os}-{variant}-{arch}.{ext}</c>; download URL
-///         <c>https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset}</c>.
-///     </para>
-///     <para>
-///         <strong>Constraint:</strong> llama.cpp ships NO prebuilt Linux CUDA asset — a Linux NVIDIA box selects
-///         Vulkan (enforced by <see cref="GpuVariantSelector" />). Windows CUDA also needs the separate
-///         <c>cudart-…</c> runtime archive; the Windows-CUDA pin row carries it as
-///         <see cref="LlamaCppAssetPin.CudartAssetName" />/<see cref="LlamaCppAssetPin.CudartSha256" /> and
-///         <see cref="LlamaCppBinaryManager" /> fetches it alongside the main archive.
-///     </para>
+///     SHA256 digests come from the GitHub release-assets API <c>digest</c> field, because llama.cpp publishes NO
+///     <c>.sha256</c> sidecar files; re-pin <see cref="PinnedTag" /> and every hash together when bumping the
+///     recommended version. Assets are named <c>llama-{tag}-bin-{os}-{variant}-{arch}.{ext}</c> and downloaded from
+///     <c>https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{asset}</c>. Upstream ships NO prebuilt Linux
+///     CUDA asset, so a Linux NVIDIA box selects Vulkan — enforced by <see cref="GpuVariantSelector" />.
 /// </remarks>
 public static class LlamaCppReleasePins
 {
@@ -56,12 +48,15 @@ public static class LlamaCppReleasePins
     public const string PinnedTag = "b10201";
 
     /// <summary>
-    ///     The exact upstream commit SHA the <see cref="PinnedTag" /> tag (<c>b10201</c>) resolves to on
-    ///     <c>ggml-org/llama.cpp</c>. The in-app CUDA source build verifies the freshly-cloned tree's checked-out
-    ///     <c>HEAD</c> equals this and HARD-FAILS before any cmake runs, so a moved tag / hijacked ref can never be built.
-    ///     Re-pin this alongside <see cref="PinnedTag" /> when bumping the recommended version
-    ///     (<c>git ls-remote https://github.com/ggml-org/llama.cpp refs/tags/&lt;tag&gt;</c>). <c>[secHIGH-1]</c>
+    ///     The exact upstream commit SHA <see cref="PinnedTag" /> resolves to on <c>ggml-org/llama.cpp</c>.
+    ///     <c>[secHIGH-1]</c>
     /// </summary>
+    /// <remarks>
+    ///     The in-app CUDA source build verifies the freshly-cloned tree's checked-out <c>HEAD</c> equals this and
+    ///     HARD-FAILS before any cmake runs, so a moved tag or hijacked ref can never be built. Re-pin it alongside
+    ///     <see cref="PinnedTag" /> when bumping the recommended version
+    ///     (<c>git ls-remote https://github.com/ggml-org/llama.cpp refs/tags/&lt;tag&gt;</c>).
+    /// </remarks>
     public const string PinnedCudaSourceCommitSha = "8f4646a63ee29f2e0ab971b0290b141938769762";
 
     /// <summary>Backend-neutral alias for the exact source commit behind <see cref="PinnedTag" />.</summary>
@@ -74,9 +69,8 @@ public static class LlamaCppReleasePins
     private static readonly IReadOnlyDictionary<PinKey, LlamaCppAssetPin> Pins =
         new Dictionary<PinKey, LlamaCppAssetPin>
         {
-            // Windows x64 — the CUDA pin also carries its companion runtime archive (cudart-…); both digests are from
-            // the b10201 release-assets digest API. The cudart asset name is NOT tag-prefixed upstream, and its digest is
-            // unchanged from b9692 because upstream ships the same CUDA 12.4 runtime archive across those releases.
+            // Windows x64 — the CUDA pin also carries its companion runtime archive; both digests come from the release-assets digest API. The cudart asset name is NOT
+            // tag-prefixed upstream, and its digest is unchanged from b9692, upstream shipping the same CUDA 12.4 runtime archive across those releases.
             [new PinKey(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda)] =
                 new()
                 {
@@ -121,11 +115,14 @@ public static class LlamaCppReleasePins
     }
 
     /// <summary>
-    ///     Derives the companion CUDA-runtime archive name from a Windows-CUDA main asset name. The main asset is
-    ///     <c>llama-{tag}-bin-win-cuda-{ver}-x64.zip</c>; its cudart companion is <c>cudart-llama-bin-win-cuda-{ver}-x64.zip</c>
-    ///     (the cudart name is NOT tag-prefixed). Returns <see langword="null" /> for any name that is not a Windows-CUDA
-    ///     main asset, so only the Windows-CUDA acquisition path ever pairs a second archive.
+    ///     Derives the companion CUDA-runtime archive name from a Windows-CUDA main asset name, or
+    ///     <see langword="null" /> for any name that is not one.
     /// </summary>
+    /// <remarks>
+    ///     The main asset is <c>llama-{tag}-bin-win-cuda-{ver}-x64.zip</c> and its cudart companion
+    ///     <c>cudart-llama-bin-win-cuda-{ver}-x64.zip</c> — the cudart name is NOT tag-prefixed. Returning null for
+    ///     anything else is what keeps a second archive on the Windows-CUDA acquisition path alone.
+    /// </remarks>
     public static string? DeriveCudartAssetName(string? mainAssetName)
     {
         if (string.IsNullOrWhiteSpace(mainAssetName))
@@ -150,14 +147,14 @@ public static class LlamaCppReleasePins
 
     /// <summary>
     ///     Resolves the pinned asset for the given OS/arch/variant, falling back to the CPU floor when no GPU prebuilt
-    ///     exists for the host. Returns <see langword="null" /> only when even the CPU floor is unavailable.
-    ///     <para>
-    ///         <b>Caution:</b> a GPU-variant request whose (os, arch, variant) has no prebuilt (e.g. Linux CUDA) returns
-    ///         the CPU floor pin here — a non-null CPU archive. Serving that as a GPU-variant binary would mislabel a CPU
-    ///         build (the supervisor then emits GPU placement flags against it). A caller acquiring a GPU variant must use
-    ///         <see cref="TryResolveExact" /> and treat a null result as "no prebuilt", never fall through to this floor.
-    ///     </para>
+    ///     exists for the host; <see langword="null" /> only when even the CPU floor is unavailable.
     /// </summary>
+    /// <remarks>
+    ///     CAUTION: a GPU-variant request whose (os, arch, variant) has no prebuilt — Linux CUDA — returns the CPU
+    ///     floor pin here, a non-null CPU archive, and serving that as a GPU-variant binary would mislabel a CPU build
+    ///     the supervisor then emits GPU placement flags against. A caller acquiring a GPU variant must use
+    ///     <see cref="TryResolveExact" /> and treat null as "no prebuilt", never fall through to this floor.
+    /// </remarks>
     public static LlamaCppAssetPin? Resolve(OSPlatform os, Architecture arch, GpuVariant variant)
     {
         if (Pins.TryGetValue(new PinKey(os, arch, variant), out var pin))
@@ -170,12 +167,14 @@ public static class LlamaCppReleasePins
     }
 
     /// <summary>
-    ///     Resolves the pin for EXACTLY the given (os, arch, variant) with NO CPU-floor fallback — returns
-    ///     <see langword="null" /> when no genuine prebuilt asset exists for that precise combination. This is the
-    ///     acquisition path for a GPU variant: unlike <see cref="Resolve" />, it never substitutes the CPU
-    ///     archive, so a Linux CUDA request (which has no upstream prebuilt) resolves to null and the binary manager fails
-    ///     with the sanitized "no prebuilt" error instead of serving a CPU build stamped as CUDA.
+    ///     Resolves the pin for EXACTLY the given (os, arch, variant) with NO CPU-floor fallback, returning
+    ///     <see langword="null" /> when no genuine prebuilt asset exists for that precise combination.
     /// </summary>
+    /// <remarks>
+    ///     This is the acquisition path for a GPU variant: unlike <see cref="Resolve" /> it never substitutes the CPU
+    ///     archive, so a Linux CUDA request — which has no upstream prebuilt — resolves to null and the binary manager
+    ///     fails with the sanitized "no prebuilt" error instead of serving a CPU build stamped as CUDA.
+    /// </remarks>
     public static LlamaCppAssetPin? TryResolveExact(OSPlatform os, Architecture arch, GpuVariant variant)
     {
         return Pins.TryGetValue(new PinKey(os, arch, variant), out var pin) ? pin : null;

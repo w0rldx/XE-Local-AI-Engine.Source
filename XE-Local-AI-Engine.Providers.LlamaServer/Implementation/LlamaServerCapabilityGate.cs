@@ -66,10 +66,8 @@ internal static class LlamaServerCapabilityGate
                 canTrySafeFallback: true);
         }
 
-        // --cpu-moe is deliberately NOT in OptionalOptions. The flag is the placement: ProcessContextAllocationResolver
-        // reserved (GpuBytes, max(CpuBytes, fileSize)) on the premise that the whole expert share sits in system RAM,
-        // so a runtime that cannot take the flag cannot honour that admission. Refuse rather than degrade — and never
-        // with canTrySafeFallback, which would drop the flag and launch the very over-subscription this prevents.
+        // The expert-offload flag is deliberately NOT in OptionalOptions: it IS the placement, since ProcessContextAllocationResolver reserved on the premise that
+        // the whole expert share sits in system RAM. Refuse rather than degrade, and never with canTrySafeFallback, which would launch that over-subscription.
         if (arguments.Contains("--cpu-moe") && !SupportsLaunchOption(manifest, "--cpu-moe"))
         {
             return Incompatible(spec,

@@ -6,10 +6,13 @@ using System.Diagnostics;
 internal sealed record ProcessCaptureResult(int ExitCode, string Stdout);
 
 /// <summary>
-///     Captures (rather than streams) a short command's stdout under a caller-supplied scrubbed environment, bounded by
-///     a timeout and tree-killed on timeout or cancellation. The counterpart to <see cref="StreamingProcessRunner" />,
-///     which is for the long-running build steps whose output has to reach the log as it happens.
+///     Captures, rather than streams, a short command's stdout under a caller-supplied scrubbed environment, bounded by
+///     a timeout and tree-killed on timeout or cancellation.
 /// </summary>
+/// <remarks>
+///     The counterpart to <see cref="StreamingProcessRunner" />, which is for the long-running build steps whose output
+///     has to reach the log as it happens.
+/// </remarks>
 internal static class ProcessCaptureRunner
 {
     /// <summary>

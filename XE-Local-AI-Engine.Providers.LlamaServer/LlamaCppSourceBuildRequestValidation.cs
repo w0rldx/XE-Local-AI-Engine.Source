@@ -23,9 +23,8 @@ public static partial class LlamaCppSourceBuildRequestValidation
 
         if (request.Source == LlamaCppSourceSelection.Official)
         {
-            // Only the server-selected canonical repository may accompany the official source — anything else is a
-            // client attempt to override it and is rejected. Echoing the canonical value back is what keeps this
-            // method idempotent (see the type remarks), because the first pass writes exactly that value.
+            // Only the server-selected canonical repository may accompany the official source; anything else is a client attempt to override it and is rejected.
+            // Echoing the canonical value back is what keeps this method idempotent (see the type remarks), because the first pass writes exactly that value.
             if (!string.IsNullOrWhiteSpace(request.Repository)
                 && !string.Equals(request.Repository, OfficialRepository, StringComparison.Ordinal))
             {

@@ -52,9 +52,8 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
 
-        // The serve can hand back a build of a different variant than was asked for (a recorded source build outranks a
-        // request made against a signal that is not seeded yet), and the spec below gates every GPU argument on the
-        // variant. Follow the binary being launched, as the supervisor does.
+        // The serve can hand back a build of a different variant than was asked for (a recorded source build outranks a request made against an unseeded signal),
+        // and the spec below gates every GPU argument on the variant. Follow the binary being launched, as the supervisor does.
         variant = binary.Variant;
         var modelId = Path.GetFileName(request.ModelFilePath);
 
@@ -283,11 +282,13 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
     private readonly record struct FileIdentity(long SizeBytes, string Sha256);
 
     /// <summary>
-    ///     A port the OS just told us is free. There is a window between the probe and llama-server's own bind, which
-    ///     is the same window the supervisor's allocator lives with. Evaluation launches close that ownership gap by
-    ///     verifying a unique <c>--alias</c> through <c>/v1/models</c> before exposing the endpoint; the legacy export
-    ///     smoke path retains its original readiness-only behavior.
+    ///     A port the OS just reported free.
     /// </summary>
+    /// <remarks>
+    ///     There is a window between the probe and llama-server's own bind, the same window the supervisor's allocator
+    ///     lives with. Evaluation launches close that ownership gap by verifying a unique <c>--alias</c> through
+    ///     <c>/v1/models</c> before exposing the endpoint; the export smoke path stays readiness-only.
+    /// </remarks>
     private static int AllocatePort()
     {
         using var probe = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);

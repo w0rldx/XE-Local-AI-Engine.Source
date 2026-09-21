@@ -2,10 +2,13 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     The last-computed llama.cpp runtime update snapshot, shared between the one-shot startup check
-///     (<c>LlamaCppUpdateCheckService</c>) and the read-only runtime-status endpoint. Holds the installed tag, the
-///     recommended tag, the optional upstream-latest tag, and whether a newer recommended runtime is available — so the
-///     status endpoint can answer "is there an update?" without re-hitting the live catalog on every poll.
+///     (<c>LlamaCppUpdateCheckService</c>) and the read-only runtime-status endpoint.
 /// </summary>
+/// <remarks>
+///     It holds the installed tag, the recommended tag, the optional upstream-latest tag and whether a newer
+///     recommended runtime is available, so the status endpoint answers "is there an update?" without re-hitting the
+///     live catalog on every poll.
+/// </remarks>
 public sealed class LlamaCppUpdateSnapshot
 {
     /// <summary>The currently-installed release tag, or <see langword="null" /> on a fresh node.</summary>

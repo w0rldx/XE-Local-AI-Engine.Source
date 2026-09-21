@@ -3,25 +3,16 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Orders ordinary ensures against the rare operator runtime MUTATION (runtime install/remove, source build,
-///     exclusive profiling) for <see cref="LlamaServerProcessSupervisor" />. Ensures take it SHARED and proceed
-///     concurrently; a mutation takes it EXCLUSIVE. What an exclusive holder relies on is unchanged from the single
-///     semaphore this replaces — a mutation waits for every in-flight ensure DECISION, and no new decision starts
-///     while it holds the gate — but an ensure no longer head-of-line blocks an unrelated role behind its liveness
-///     probe (up to <c>ReuseLivenessProbeTimeout</c>, 2 s). Single-flight per process is NOT this gate's job: the
-///     supervisor's per-(model, role) ensure gates already provide it.
+///     Orders ordinary ensures against the rare operator runtime MUTATION for
+///     <see cref="LlamaServerProcessSupervisor" />: ensures take it SHARED and proceed concurrently, a mutation takes
+///     it EXCLUSIVE.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Two independent counters live here. The shared/exclusive <see cref="AsyncSharedExclusiveGate" /> orders
-///         ensures against mutations. The separate OPERATION barrier
-///         (<see cref="BeginOperation" />/<see cref="EndOperation" />) spans a whole public supervisor call, gate
-///         entries included, so teardown can prove every admitted operation has finished before it disposes anything.
-///     </para>
-///     <para>
-///         <paramref name="ownerType" /> is the type reported by every <see cref="ObjectDisposedException" /> this
-///         gate throws: callers see the supervisor's name, not this internal helper's.
-///     </para>
+///     Single-flight per process is NOT this gate's job — the supervisor's per-(model, role) ensure gates provide it.
+///     Two independent counters live here: <see cref="AsyncSharedExclusiveGate" /> orders ensures against mutations,
+///     and a separate OPERATION barrier (<see cref="BeginOperation" />/<see cref="EndOperation" />) spans a whole
+///     public supervisor call, gate entries included, so teardown can prove every admitted operation finished. What an
+///     exclusive holder is guaranteed: docs/wiki/03-local-runtime-and-providers.md, "The runtime-mutation gate".
 /// </remarks>
 internal sealed class LlamaServerRuntimeMutationGate : IDisposable
 {
@@ -34,6 +25,11 @@ internal sealed class LlamaServerRuntimeMutationGate : IDisposable
     private TaskCompletionSource? _operationsDrained;
     private int _operationCount;
 
+    /// <param name="ownerType">
+    ///     The type every <see cref="ObjectDisposedException" /> this gate throws reports, so callers see the
+    ///     supervisor's name rather than this internal helper's.
+    /// </param>
+    /// <param name="shutdownToken">Linked into every gate wait, so a waiter is released on host shutdown.</param>
     public LlamaServerRuntimeMutationGate(Type ownerType, CancellationToken shutdownToken)
     {
         ArgumentNullException.ThrowIfNull(ownerType);
@@ -144,10 +140,12 @@ internal sealed class LlamaServerRuntimeMutationGate : IDisposable
 
     /// <summary>
     ///     Takes the gate EXCLUSIVE on behalf of an operator runtime mutation and hands back the lease that holds it.
+    /// </summary>
+    /// <remarks>
     ///     <paramref name="mutationBlocked" /> is evaluated under the gate: when it reports live or in-flight
     ///     processes the gate is released again and no lease is issued, because a runtime swap under a loaded model
     ///     would pull the binaries out from under it.
-    /// </summary>
+    /// </remarks>
     public async Task<ILlamaServerRuntimeMutationLease?> TryAcquireLeaseAsync(Func<bool> mutationBlocked, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(mutationBlocked);

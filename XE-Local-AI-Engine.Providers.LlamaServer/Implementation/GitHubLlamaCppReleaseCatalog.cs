@@ -13,17 +13,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     <see cref="ILlamaCppReleaseCatalog" /> over the live <c>ggml-org/llama.cpp</c> GitHub Releases REST API.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Singleton. Holds an in-memory ETag cache keyed by request URL: each entry stores the last <c>ETag</c> and the
-///         parsed release payload. Conditional <c>If-None-Match</c> requests turn a <c>304 Not Modified</c> into a free
-///         (uncounted) reuse of the cached parse; any other 2xx refreshes the cache.
-///     </para>
-///     <para>
-///         GitHub requires a <c>User-Agent</c> header; one is sent on every request. Calls are unauthenticated (60/hr
-///         per IP). A <c>403</c>/<c>429</c> with a rate-limit marker is treated as a sanitized "rate-limited" result and
-///         the reset hint (<c>Retry-After</c> / <c>x-ratelimit-reset</c>) is recorded so a caller can back off; the
-///         catalog never blocks or throws on it. Any network failure (DNS/connect/timeout) is an "offline" result.
-///     </para>
+///     A singleton holding an in-memory ETag cache keyed by request URL, each entry storing the last <c>ETag</c> and
+///     the parsed release payload: conditional <c>If-None-Match</c> requests turn a <c>304 Not Modified</c> into a free,
+///     uncounted reuse of that parse, and any other 2xx refreshes it. GitHub requires a <c>User-Agent</c>, sent on every
+///     request; calls are unauthenticated, so 60 per hour per IP. A <c>403</c>/<c>429</c> carrying a rate-limit marker
+///     reads as a sanitized "rate-limited" and a network failure as "offline" — the catalog never blocks or throws.
 /// </remarks>
 public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatalog
 {
@@ -152,10 +146,13 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
 
     /// <summary>
     ///     Templates the expected asset name from the pin scheme for the live tag, then matches it against the live
-    ///     <c>assets[]</c>. A direct name match wins; otherwise it falls back to a token-based match (os/variant/arch
-    ///     substrings) so a drifting CUDA version number does not break resolution. Returns the normalized asset (digest
-    ///     stripped of its <c>sha256:</c> prefix) or <see langword="null" /> when nothing usable matches.
+    ///     <c>assets[]</c>.
     /// </summary>
+    /// <remarks>
+    ///     A direct name match wins; otherwise a token-based match on the os/variant/arch substrings takes over, so a
+    ///     drifting CUDA version number does not break resolution. Returns the normalized asset, its digest stripped
+    ///     of the <c>sha256:</c> prefix, or <see langword="null" /> when nothing usable matches.
+    /// </remarks>
     private static LlamaCppReleaseAsset? MatchAsset(IReadOnlyList<GitHubAsset> assets, string tag, OSPlatform os, Architecture arch, GpuVariant variant)
     {
         var pin = LlamaCppReleasePins.Resolve(os, arch, variant);
@@ -194,10 +191,12 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
 
     /// <summary>
     ///     Token match tolerant of CUDA-version drift: the candidate must carry the same archive extension and every
-    ///     distinguishing token of the expected name except any purely-numeric version token (for example <c>12.4</c>).
-    ///     Only the main asset is matched here; the Windows-CUDA <c>cudart-…</c> companion is resolved separately via
-    ///     <see cref="ResolveCompanionAssetAsync" />.
+    ///     distinguishing token of the expected name except a purely-numeric version token such as <c>12.4</c>.
     /// </summary>
+    /// <remarks>
+    ///     Only the main asset is matched here; the Windows-CUDA <c>cudart-…</c> companion is resolved separately
+    ///     through <see cref="ResolveCompanionAssetAsync" />.
+    /// </remarks>
     private static bool MatchesByTokens(string candidate, string expectedName)
     {
         var (expectedStem, expectedExt) = SplitArchive(expectedName);
@@ -268,10 +267,14 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     }
 
     /// <summary>
-    ///     Conditional GET against the Releases API with the ETag cache. Returns the parsed release on success, or a
-    ///     no-live-data signal (offline / rate-limited) the caller should propagate. A <c>304</c> reuses the cached
-    ///     parse; a <c>404</c> returns <c>(null, null)</c> so the caller treats it as "not found" and falls through.
+    ///     Conditional GET against the Releases API with the ETag cache: the parsed release on success, or a
+    ///     no-live-data signal — offline or rate-limited — the caller should propagate.
     /// </summary>
+    /// <remarks>
+    ///     A <c>304</c> reuses the cached parse; a <c>404</c> returns <c>(null, null)</c> so the caller treats it as
+    ///     "not found" and falls through. On a rate-limited answer the reset hint (<c>Retry-After</c> or
+    ///     <c>x-ratelimit-reset</c>) is recorded, so a caller can back off.
+    /// </remarks>
     private async Task<ReleaseLookup> GetReleaseAsync(string requestUrl, CancellationToken ct)
     {
         try

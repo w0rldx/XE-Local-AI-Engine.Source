@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
-///     Optional hybrid attach-to-external-endpoint configuration. When a model name maps to an external
-///     base URL here, the supervisor attaches to that endpoint instead of spawning + supervising a local child for it.
-///     Empty by default (pure spawn-and-supervise). Bound from node config at DI time.
+///     Optional hybrid attach-to-external-endpoint configuration: a model name mapped here makes the supervisor attach
+///     to that external base URL instead of spawning and supervising a local child for it.
 /// </summary>
+/// <remarks>Empty by default — pure spawn-and-supervise. Bound from node config at DI time.</remarks>
 public sealed class LlamaServerExternalEndpointOptions
 {
     /// <summary>

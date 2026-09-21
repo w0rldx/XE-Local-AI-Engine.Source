@@ -38,9 +38,8 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
 
         var (cpuThreads, cpuThreadsBatch) = ResolveCpuThreads(variant);
 
-        // A CPU build never replays a frozen GPU profile (its -ngl/-ts/-ot/-ctk are GPU-specific), so the CPU spawn
-        // always gets the deterministic policy context plus the CPU thread policy — regardless of
-        // whether a profile exists.
+        // A CPU build never replays a frozen GPU profile, whose -ngl/-ts/-ot/-ctk are GPU-specific, so a CPU spawn always gets the
+        // deterministic policy context plus the CPU thread policy, whether or not a profile exists.
         if (variant == GpuVariant.Cpu)
         {
             return new LlamaServerLaunchPlan(allocation.ProcessContextTokens,
@@ -66,9 +65,8 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         var useKvQuant = _options.EnableGpuKvCacheQuantization
                          && !await _fallbackStore.IsOptimizedConfigDisabledAsync(variant, _options.KvCacheType, ct).ConfigureAwait(false);
 
-        // --cpu-moe is emitted from the ADMITTED placement, never from an architecture name: only
-        // MoeFitVerdict.FitsWithExpertOffload produces ExpertOffload, and that needs a positive expert_count in the
-        // GGUF header. The flag makes the placement the ledger already booked true — see LlamaServerLaunchPlan.CpuMoe.
+        // --cpu-moe is emitted from the ADMITTED placement, never from an architecture name: only MoeFitVerdict.FitsWithExpertOffload produces ExpertOffload, and that
+        // needs a positive expert_count in the GGUF header. The flag makes the placement the ledger already booked true — see LlamaServerLaunchPlan.CpuMoe.
         return new LlamaServerLaunchPlan(allocation.ProcessContextTokens,
             useKvQuant,
             _options.KvCacheType,
@@ -109,12 +107,8 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // The verdict is BOOKKEEPING, and this is the one owner of what a lost one costs: the store's own ponytail
-            // note already prices it at one failed spawn. The only caller is a safe retry that has ALREADY reached
-            // readiness, so letting an unwritable cache root or a contended file out of here would tree-kill a serving
-            // process — and one a concurrent EnsureRunningAsync may already have been handed — to save a cache entry.
-            // (The store handles lock contention itself and swallows the read path's legacy rewrite; what still
-            // escapes is the state write.)
+            // The verdict is BOOKKEEPING and a lost one costs one failed spawn, as the store's own note prices it. The only caller is a safe retry that has ALREADY reached readiness,
+            // so letting an unwritable cache root escape here would tree-kill a serving process — one a concurrent EnsureRunningAsync may hold — to save a cache entry.
             _logger.LogWarning(exception,
                 "Could not persist the optimized-config failure for backend {Variant} at KV-cache type {KvCacheType}; the spawn keeps its process and the next spawn will retry the optimized config once.",
                 variant,

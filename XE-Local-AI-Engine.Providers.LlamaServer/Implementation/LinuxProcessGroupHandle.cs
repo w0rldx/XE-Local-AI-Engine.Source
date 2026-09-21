@@ -6,10 +6,12 @@ using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Linux process handle whose tree-kill signals the child's whole process group. The child is started under
-///     <c>setsid</c> (see <see cref="LlamaServerProcessLauncher" />), so its pid is also its process-group id and
-///     <c>kill(-pid, SIGKILL)</c> reaps the server plus any descendants it forked — no orphans.
+///     Linux process handle whose tree-kill signals the child's whole process group.
 /// </summary>
+/// <remarks>
+///     The child is started under <c>setsid</c> (see <see cref="LlamaServerProcessLauncher" />), so its pid is also its
+///     process-group id and <c>kill(-pid, SIGKILL)</c> reaps the server plus any descendants it forked — no orphans.
+/// </remarks>
 [SupportedOSPlatform("linux")]
 internal sealed partial class LinuxProcessGroupHandle : ILlamaServerProcessHandle
 {

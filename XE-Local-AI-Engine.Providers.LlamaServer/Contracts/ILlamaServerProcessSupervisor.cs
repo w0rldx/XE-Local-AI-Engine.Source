@@ -2,20 +2,14 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Owns the lifecycle of every <c>llama-server</c> child process: reuse-or-spawn per <c>(model, role)</c>, health
-///     aggregation, idle-TTL + loaded-cap eviction + reaper (shared eviction policy), restart-backoff, port
-///     allocation, and tree-kill teardown. All processes are same-user, unprivileged, localhost-bound.
+///     aggregation, eviction and reaping, restart-backoff, port allocation and tree-kill teardown.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>This is the contract only; the implementation supplies the body.</strong> Implementations are
-///         singleton — the supervisor owns all processes and disposes them on shutdown. Every async member flows a
-///         <see cref="CancellationToken" />.
-///     </para>
-///     <para>
-///         Mandatory launch flags: a chat process is launched with <c>--jinja</c>; an embedding process is launched
-///         with a non-<c>none</c> pooling type. Each distinct <c>(model, role)</c> is a distinct process and counts
-///         against the loaded-cap.
-///     </para>
+///     All processes are same-user, unprivileged and localhost-bound. An implementation is a singleton — the supervisor
+///     owns every process and disposes them on shutdown — and every async member flows a
+///     <see cref="CancellationToken" />. Mandatory launch flags: a chat process carries <c>--jinja</c> and an embedding
+///     process a non-<c>none</c> pooling type. Each distinct <c>(model, role)</c> is a distinct process and counts
+///     against the loaded-cap.
 /// </remarks>
 public interface ILlamaServerProcessSupervisor
 {
@@ -76,13 +70,15 @@ public interface ILlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Operator eject for a supervised <c>(model, role)</c> process. Marks the process evicting (no new leases), then
-    ///     waits up to the configured bounded drain window for in-flight inference (tracked via
-    ///     <see cref="TryAcquireInferenceLease" />) to finish before tearing it down. An idle process (no active leases)
-    ///     is torn down immediately. When the drain window elapses with work still in flight, the process is left running
-    ///     and the outcome reports it could not complete safely — unless <paramref name="force" /> is set, in which case
-    ///     the process is torn down anyway and the interrupted run is marked as operator-ejected (not a generic failure).
+    ///     Operator eject for a supervised <c>(model, role)</c> process: it marks the process evicting, taking no new
+    ///     leases, then waits out the bounded drain window before tearing it down.
     /// </summary>
+    /// <remarks>
+    ///     In-flight inference is tracked through <see cref="TryAcquireInferenceLease" />, and an idle process is torn
+    ///     down immediately. When the window elapses with work still in flight the process is left RUNNING and the
+    ///     outcome reports that it could not complete safely — unless <paramref name="force" /> is set, in which case
+    ///     it is torn down anyway and the interrupted run is marked operator-ejected rather than a generic failure.
+    /// </remarks>
     /// <param name="modelName">Model whose process to eject.</param>
     /// <param name="role">Role of the process to eject (chat / embedding / reranker).</param>
     /// <param name="force">When set, tear the process down even if in-flight work has not drained.</param>
@@ -91,42 +87,32 @@ public interface ILlamaServerProcessSupervisor
     Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct);
 
     /// <summary>
-    ///     Acquires a reference-counted inference lease against the currently-running <c>(model, role)</c> process so a
-    ///     graceful <see cref="EjectAsync" /> waits for the request to finish before teardown. The result distinguishes
-    ///     the three outcomes atomically (sampled at acquire time): a granted lease (live, non-evicting process);
-    ///     refused because an operator eject is draining the process
-    ///     (<see cref="LlamaServerLeaseAcquisition.ProcessEvicting" /> — the caller must fail the request as
-    ///     operator-ejected instead of running it untracked under the drain, where the teardown would kill it mid-flight
-    ///     and the self-heal would respawn the just-ejected model); or refused because no live process backs the key
-    ///     (the caller then proceeds without a lease — the deferred client self-heals on the resulting connection
-    ///     failure). The caller MUST dispose a granted lease when the request completes (success, failure, or
-    ///     cancellation).
+    ///     Acquires a reference-counted inference lease against the running <c>(model, role)</c> process, so a graceful
+    ///     <see cref="EjectAsync" /> waits for the request to finish before teardown.
     /// </summary>
+    /// <remarks>
+    ///     The result distinguishes the outcomes atomically, sampled at acquire time: a granted lease, which the caller
+    ///     MUST dispose on completion, failure or cancellation; <see cref="LlamaServerLeaseAcquisition.ProcessEvicting" />,
+    ///     where the caller must fail the request as operator-ejected rather than run it untracked under the drain, to
+    ///     be killed mid-flight and self-heal-respawned; or no live process behind the key, where the caller proceeds
+    ///     leaseless and the deferred client self-heals on the resulting connection failure.
+    /// </remarks>
     LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role);
 
-    /// <summary>
-    ///     The operator profiling entry point (explore + benchmark). Acquires the SAME single-flight gate the normal
-    ///     ensure-running path uses for this <c>(model, role)</c> — so concurrent user <see cref="EnsureRunningAsync" />
-    ///     calls for the key queue behind it — then evicts any warm process for the key and spawns exactly ONE
-    ///     <c>llama-server</c>, bypassing the profile resolver. Explore applies the production launch policy to
-    ///     <see cref="ResolvedLaunchArguments.Explore" /> so fitted evidence reflects normal serving; benchmark applies
-    ///     the drafted <see cref="ResolvedLaunchArguments.Replay" /> verbatim. When <paramref name="enableMetrics" /> is
-    ///     set and the built
-    ///     args do not already carry <c>--metrics</c>, it is appended so the benchmark can read <c>/metrics</c>. The
-    ///     spawned process is pinned against idle eviction for the duration of <paramref name="body" />; on completion,
-    ///     throw, or cancellation the pin is dropped and the transient profiling process is evicted (tree-killed) and
-    ///     the gate released.
-    /// </summary>
-    /// <typeparam name="T">The result the profiling body produces (for example a captured benchmark measurement).</typeparam>
-    /// <param name="modelName">Model to profile.</param>
-    /// <param name="role">Role to profile (chat vs embedding).</param>
+    /// <summary>The operator profiling entry point, explore and benchmark: it evicts any warm process for the key, then spawns exactly ONE process.</summary>
+    /// <remarks>
+    ///     It bypasses the profile resolver and takes the SAME single-flight gate the ensure-running path uses, so
+    ///     concurrent <see cref="EnsureRunningAsync" /> calls for this <c>(model, role)</c> queue behind it, and the
+    ///     token flows through spawn, body and teardown. Explore applies the production launch policy to
+    ///     <see cref="ResolvedLaunchArguments.Explore" /> so fitted evidence reflects normal serving, benchmark the
+    ///     drafted <see cref="ResolvedLaunchArguments.Replay" /> verbatim. On return, throw or cancellation alike the spawn is tree-killed and the gate released.
+    /// </remarks>
+    /// <typeparam name="T">What the profiling body produces, for example a captured benchmark measurement.</typeparam>
     /// <param name="launchArgs">Explore mode or the exact drafted replay arguments to spawn with.</param>
     /// <param name="enableMetrics">Append <c>--metrics</c> when the built args do not already include it.</param>
-    /// <param name="body">The profiling work to run against the exclusive process and its captured startup output.</param>
-    /// <param name="ct">Cancellation token flowed through spawn, body, and teardown.</param>
+    /// <param name="body">The profiling work run against the exclusive process and its captured startup output, which is pinned against idle eviction for its duration.</param>
     /// <param name="captureVramBeforeSpawn">
-    ///     Optional ambient-VRAM capture invoked after same-key eviction and before the transient process is spawned.
-    ///     Its result is propagated through <see cref="LlamaServerProfilingContext.PreSpawnVram" />.
+    ///     Optional ambient-VRAM capture run after same-key eviction and before the spawn, propagated as <see cref="LlamaServerProfilingContext.PreSpawnVram" />.
     /// </param>
     Task<T> RunExclusiveProfilingAsync<T>(string modelName,
         ModelRole role,
@@ -152,24 +138,32 @@ public interface ILlamaServerProcessSupervisor
 
     /// <summary>
     ///     Aggregates every running process's health into one snapshot — operational iff the supervisor can serve
-    ///     requests; per-process detail is surfaced for diagnostics. This performs a live responsiveness probe per
-    ///     process, so it is for the diagnostics surface — NOT a hot path. For a cheap running-count read use
-    ///     <see cref="CountRunningProcesses" />.
+    ///     requests — with per-process detail surfaced for diagnostics.
     /// </summary>
+    /// <remarks>
+    ///     It performs a live responsiveness probe per process, so it belongs on the diagnostics surface and NOT on a
+    ///     hot path; for a cheap running-count read use <see cref="CountRunningProcesses" />.
+    /// </remarks>
     Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct);
 
     /// <summary>
     ///     The number of currently-running <c>(model, role)</c> processes the supervisor owns, counting only handles
-    ///     that have not exited. This is a synchronous in-memory read of the process table — NO health/HTTP probe — so it
-    ///     is safe on hot paths (runtime-status GET, the pre-update safety gate). Ollama is an external provider the
-    ///     supervisor does not own, so it is never counted.
+    ///     that have not exited.
     /// </summary>
+    /// <remarks>
+    ///     A synchronous in-memory read of the process table with NO health or HTTP probe, so it is safe on hot paths
+    ///     such as the runtime-status GET and the pre-update safety gate. Ollama is an external provider the supervisor
+    ///     does not own, so it is never counted.
+    /// </remarks>
     int CountRunningProcesses();
 
     /// <summary>
     ///     Live runtime facts for the running <c>(model, role)</c> process — currently the effective context window it
-    ///     loaded (from <c>/props</c>, captured after readiness). Returns <see langword="null" /> when the process is not
-    ///     running, has exited, or its effective context could not be read. Synchronous in-memory read — no HTTP.
+    ///     loaded, read from <c>/props</c> after readiness. A synchronous in-memory read with no HTTP.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> when the process is not running, has exited, or its effective context could not be
+    ///     read.
+    /// </remarks>
     LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role);
 }

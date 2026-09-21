@@ -8,23 +8,16 @@ using ProcessKey = LlamaServerProcessSupervisor.ProcessKey;
 using RunningProcess = LlamaServerProcessSupervisor.RunningProcess;
 
 /// <summary>
-///     Owns the loaded-model population for <see cref="LlamaServerProcessSupervisor" />: cap admission (with
-///     LRU eviction), the background idle reaper, exited-process pruning, and the detach + tree-kill teardown every
-///     removal path funnels through. Holds the supervisor's LIVE process table — never a snapshot — so a reaper pass
-///     and a spawn admission always decide over the same <c>RunningProcess</c> set.
+///     Owns the loaded-model population for <see cref="LlamaServerProcessSupervisor" />: cap admission with LRU
+///     eviction, the background idle reaper, exited-process pruning, and the detach plus tree-kill teardown every
+///     removal path funnels through.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The admission semaphore serializes exactly three things: the cap decision + port allocation, the release
-///         of a reservation for a spawn that never registered, and the detach half of a removal. Tree-kills always
-///         happen OUTSIDE it, because killing a multi-GB model is slow enough to serialize every unrelated model's
-///         admission behind it.
-///     </para>
-///     <para>
-///         INVARIANT: a live process holding an active inference lease is never torn down here, not by the idle
-///         reaper past the TTL and not as a cap-admission victim. <c>LastUsedUtc</c> is stamped per ensure/reuse, not
-///         per token, so a single long generation looks idle while a request is mid-flight.
-///     </para>
+///     Holds the supervisor's LIVE process table, never a snapshot, so a reaper pass and a spawn admission always
+///     decide over the same <c>RunningProcess</c> set. INVARIANT: a live process holding an active inference lease is
+///     never torn down here, not by the idle reaper past the TTL and not as a cap-admission victim, because
+///     <c>LastUsedUtc</c> is stamped per ensure or reuse, not per token, so a long generation looks idle while a
+///     request is mid-flight. Gate scope, victim ranking and the detach invariants: wiki 03, "Eviction &amp; reaper".
 /// </remarks>
 internal sealed class LlamaServerIdleReaper : IDisposable
 {
@@ -65,11 +58,8 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     ///     a free localhost port. The admission gate serializes the cap decision so it can never be raced past.
     /// </summary>
     /// <remarks>
-    ///     The cap is measured by the <em>reserved-port</em> count, not the registered-process count. A port is
-    ///     allocated here (under the gate) and held until the process registers, fails, or is evicted — so the count
-    ///     already includes in-flight spawns. Counting registered processes instead would let two concurrent distinct
-    ///     <c>(model, role)</c> spawns (which take distinct ensure-gates) both pass the check at count <c>N</c> before
-    ///     either registers, overrunning the cap.
+    ///     The cap is measured by the <em>reserved-port</em> count, not the registered-process count, so it already
+    ///     includes in-flight spawns — see wiki 03, "Eviction &amp; reaper".
     /// </remarks>
     internal async Task<int> AdmitAndAllocatePortAsync(CancellationToken ct)
     {
@@ -92,9 +82,8 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         {
             _admissionGate.Release();
 
-            // The gate is free BEFORE any child is killed: tree-killing a multi-GB model is slow, and under the gate it
-            // serialized every unrelated model's port allocation and release behind it. This spawn still waits for its
-            // own victim to die before it proceeds to launch, so the VRAM the victim held is genuinely released first.
+            // The gate is free BEFORE any child is killed, because a multi-GB tree-kill under it serializes every unrelated model's port allocation and release.
+            // This spawn still waits for its own victim to die before it launches, so the VRAM the victim held is genuinely released first.
             KillDetachedProcesses(detached);
         }
     }
@@ -123,18 +112,15 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         var now = _timeProvider.GetUtcNow();
         foreach (var (key, running) in _processes.ToArray())
         {
-            // A live profiling process is never idle-evicted mid-benchmark; an EXITED one is still reaped below so a
-            // dead handle never leaks. IsProfilingOwned covers the registration-to-Pin() window, where the pin alone
-            // does not yet protect it.
+            // A live profiling process is never idle-evicted mid-benchmark; an EXITED one is still reaped below so a dead handle never leaks. IsProfilingOwned
+            // covers the registration-to-Pin() window, where the pin alone does not yet protect it.
             if ((running.IsProfilingPinned || running.IsProfilingOwned) && !running.Handle.HasExited)
             {
                 continue;
             }
 
-            // A live process with in-flight inference (an active lease) is never reaped, even past the TTL:
-            // LastUsedUtc is stamped per ensure/reuse, not per token, so a single generation that legitimately outruns
-            // the idle window (a raised invocation timeout on a slow CPU box) looks idle here while a request is
-            // mid-flight — tree-killing it would cut a running turn off.
+            // A live process with in-flight inference (an active lease) is never reaped, even past the TTL: LastUsedUtc is stamped per ensure or reuse, not per
+            // token, so a generation that legitimately outruns the idle window (a raised invocation timeout on a slow CPU box) looks idle while mid-flight.
             if (running.ActiveLeases > 0 && !running.Handle.HasExited)
             {
                 continue;
@@ -154,10 +140,13 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     }
 
     /// <summary>
-    ///     Evicts the least-recently-used process that is currently idle (caller holds the admission gate). The victim
-    ///     is detached here — its slot and port are free the moment this returns <see langword="true" /> — and appended
-    ///     to <paramref name="detached" /> for the caller to tree-kill once the gate is released.
+    ///     Evicts the least-recently-used process that is currently idle; the caller holds the admission gate.
     /// </summary>
+    /// <remarks>
+    ///     The victim is detached here — its slot and port are free the moment this returns <see langword="true" /> —
+    ///     and appended to <paramref name="detached" /> for the caller to tree-kill once the gate is released. The
+    ///     ranking it applies is in wiki 03, "Eviction &amp; reaper".
+    /// </remarks>
     private bool TryEvictIdleLeastRecentlyUsed(List<RunningProcess> detached)
     {
         var now = _timeProvider.GetUtcNow();
@@ -166,32 +155,22 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         var victimRank = int.MaxValue;
         foreach (var (key, running) in _processes)
         {
-            // A live profiling process is reserved for its benchmark — never select it as a cap-admission victim (an
-            // EXITED one is a dead handle and stays eligible so its slot/port is reclaimed). IsProfilingOwned covers
-            // the registration-to-Pin() window, where a pooled-role profiling process would otherwise be LRU-eligible.
+            // A live profiling process is reserved for its benchmark and is never a cap-admission victim; an EXITED one is a dead handle and stays eligible so its
+            // slot and port are reclaimed. IsProfilingOwned covers the registration-to-Pin() window, where a pooled-role profiling process would be LRU-eligible.
             if ((running.IsProfilingPinned || running.IsProfilingOwned) && !running.Handle.HasExited)
             {
                 continue;
             }
 
-            // In-flight inference disqualifies a live process as a capacity-eviction victim for the same reason the
-            // idle reaper skips it: past-TTL only means "no new request started", not "not mid-generation". This is a
-            // best-effort heuristic read; the atomic claim is TryBeginEvict on the chosen victim below.
+            // In-flight inference disqualifies a live process for the same reason the idle reaper skips it: past-TTL only means "no new request started", not
+            // "not mid-generation". This is a best-effort heuristic read; the atomic claim is TryBeginEvict on the chosen victim below.
             if (running.ActiveLeases > 0 && !running.Handle.HasExited)
             {
                 continue;
             }
 
-            // Victim preference, best first:
-            //   0 — exited or idle past the TTL (any role): the reaper would take it anyway.
-            //   1 — in-window but unleased POOLED role (embedding/reranker). Background indexing/search touches these
-            //       continuously, so on the default cap (3 = the number of roles) they otherwise pin all slots and a
-            //       foreground chat model switch hard-fails for up to a full TTL window ("maximum number of local
-            //       models are already loaded") — the most likely user-visible runtime failure on consumer hardware.
-            //       A pooled reload costs ~1s against a chat reload's tens of seconds, so the pooled process yields.
-            //   An in-window CHAT process is never a victim: keep-warm recency protection is deliberate there (the
-            //   cheap error beats silently evicting a multi-GB model the user is about to reuse), and admission
-            //   rejects as before when no rank qualifies.
+            // Victim preference, best first: rank 0 is exited or idle past the TTL in any role, rank 1 an in-window but unleased POOLED role. An in-window CHAT
+            // process is never a victim. Why the pooled roles yield and the chat role does not: wiki 03, "Eviction and reaper".
             var isIdlePastTtl = running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive;
             var isPooledRole = key.Role is ModelRole.Embedding or ModelRole.Reranker;
             if (!isIdlePastTtl && !isPooledRole)
@@ -217,18 +196,15 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             return false;
         }
 
-        // Atomically latch the chosen victim before tearing it down. If a request acquired a lease on it between the
-        // heuristic scan and here, TryBeginEvict fails and no victim is admitted this round — the caller surfaces the
-        // cap error rather than tree-killing a process under an active lease. An EXITED victim holds no real lease,
-        // so it is torn down regardless.
+        // Atomically latch the chosen victim before tearing it down: if a request took a lease between the heuristic scan and here, TryBeginEvict fails and no
+        // victim is admitted this round, so the caller surfaces the cap error. An EXITED victim holds no real lease and is torn down regardless.
         if (!victim.Handle.HasExited && !victim.TryBeginEvict(forProfiling: false, out _))
         {
             return false;
         }
 
-        // Free the slot/port under the gate so the new admission proceeds immediately; the kill follows outside it.
-        // A lost removal race (a concurrent eject/reap already detached this victim) frees no slot of OUR doing, so
-        // report no admission rather than letting the cap be overrun on someone else's teardown.
+        // Free the slot and port under the gate so the new admission proceeds immediately; the kill follows outside it. A lost removal race (a concurrent eject or
+        // reap already detached this victim) frees no slot of OUR doing, so report no admission rather than let the cap be overrun on someone else's teardown.
         if (DetachProcess(victimKey.Value, victim) is not { } evicted)
         {
             return false;
@@ -266,9 +242,8 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             _admissionGate.Release();
         }
 
-        // Killed OUTSIDE the gate so a multi-GB tree-kill does not serialize unrelated admissions — but still awaited
-        // by this caller, because callers (notably the profiling path's ambient-VRAM baseline) rely on the child being
-        // gone when this returns.
+        // Killed OUTSIDE the gate so a multi-GB tree-kill does not serialize unrelated admissions, but still awaited by this caller: callers, notably the profiling
+        // path's ambient-VRAM baseline, rely on the child being gone when this returns.
         if (detached is not null)
         {
             KillDetachedProcess(detached);
@@ -276,32 +251,15 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     }
 
     /// <summary>
-    ///     Removes a process from the table, retires its measured layer placement, and releases its port reservation —
-    ///     everything that makes the slot available to the next admission — WITHOUT touching the child. Caller holds
-    ///     the admission gate. Returns the process when this call won the removal race (the caller then owes it a
-    ///     <see cref="KillDetachedProcess" />), or <see langword="null" /> when a concurrent path already removed it.
+    ///     Removes a process from the table, retires its measured layer placement and releases its port reservation —
+    ///     everything that makes the slot available to the next admission — WITHOUT touching the child.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         This is the ONLY place a process leaves <see cref="_processes" />, so it is also the only place the layer
-    ///         placement has to be retired: cap-admission eviction, the idle reaper, exited-process pruning, operator
-    ///         eject (drained and forced), wedged-process respawn, the pre-respawn reap of a dead entry, the profiling
-    ///         teardown, and shutdown all funnel through here.
-    ///     </para>
-    ///     <para>
-    ///         The measured placement described THIS process. Once it is gone the reading is history — and because the
-    ///         report ranks any partial reading above every full one, leaving it behind would keep telling an operator
-    ///         that a model they unloaded is running partly from system RAM, for the rest of the app's lifetime and
-    ///         even while the model actually loaded is fully GPU-resident.
-    ///     </para>
-    ///     <para>
-    ///         INVARIANT: the port reservation is dropped here, before the child is killed, so the reservation set
-    ///         (which is what bounds the loaded-model CAP) never counts a process that is on its way out. That does not
-    ///         hand the next spawn a port the dying child still holds: <see cref="LlamaServerPortAllocator.Allocate" />
-    ///         bind-probes every candidate and skips one that is still bound. The bind probe was always the
-    ///         real guard — <c>TreeKill</c> (<c>kill(-pgid)</c> / closing the Windows job) returns before the OS
-    ///         reclaims the socket, so releasing the port after the kill never proved availability either.
-    ///     </para>
+    ///     The caller holds the admission gate. Returns the process when this call won the removal race, the caller
+    ///     then owing it a <see cref="KillDetachedProcess" />, or <see langword="null" /> when a concurrent path already
+    ///     removed it. This is the ONLY place a process leaves <see cref="_processes" />, and INVARIANT: the port
+    ///     reservation is dropped here, BEFORE the child is killed, so the reservation set that bounds the cap never
+    ///     counts a process on its way out. Why both, and why that is still safe: wiki 03, "Eviction &amp; reaper".
     /// </remarks>
     internal RunningProcess? DetachProcess(ProcessKey key, RunningProcess running)
     {
@@ -329,10 +287,13 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     }
 
     /// <summary>
-    ///     Tree-kills every process detached during an admission decision. A teardown failure is logged, never
-    ///     rethrown: the admission it trails has already succeeded (or failed with its own cap error), and turning a
-    ///     kill failure into the caller's exception would both mask that error and skip the remaining victims.
+    ///     Tree-kills every process detached during an admission decision.
     /// </summary>
+    /// <remarks>
+    ///     A teardown failure is logged, never rethrown: the admission it trails has already succeeded, or failed with
+    ///     its own cap error, and turning a kill failure into the caller's exception would both mask that error and
+    ///     skip the remaining victims.
+    /// </remarks>
     private void KillDetachedProcesses(List<RunningProcess> detached)
     {
         foreach (var running in detached)

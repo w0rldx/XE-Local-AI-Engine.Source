@@ -8,12 +8,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     auto-fit (<c>--fit on</c>) driving placement.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The real DB-backed resolver lives in <c>Client.Application</c> and replaces this one via DI registration
-///         order — <c>AddLlamaServerLocalModelProvider</c> registers this default with <c>TryAddSingleton</c>, and the
-///         Application host registers its own implementation last so the last registration wins. This default keeps the
-///         supervisor resolvable (and the explore path working) until then, without inverting the layer dependency.
-///     </para>
+///     The real DB-backed resolver lives in <c>Client.Application</c> and replaces this one by DI registration order:
+///     <c>AddLlamaServerLocalModelProvider</c> registers this default with <c>TryAddSingleton</c>, and the Application
+///     host registers its own implementation last, so the last registration wins. This default keeps the supervisor
+///     resolvable, and the explore path working, until then, without inverting the layer dependency.
 /// </remarks>
 internal sealed class DefaultInferenceProfileResolver : IInferenceProfileResolver
 {

@@ -10,13 +10,16 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="ILlamaCppSourceBuildService" />. Orchestrates a single-flight, cancellable, background source
-///     <c>llama-server</c> build and adopts the result as a managed runtime. Every subprocess runs under a scrubbed,
-///     allowlisted environment (<c>[secHIGH-2]</c>) in an owner-only (0700) work directory inside the cache root — never
-///     <c>/tmp</c> (<c>[secHIGH-3]</c>). The clone source URL + tag are constants and the checked-out commit is
-///     verified == the pinned SHA before any cmake runs (<c>[secHIGH-1]</c>). On any failure the partial tree is deleted
-///     and nothing is recorded (no silent CPU fallback).
+///     Default <see cref="ILlamaCppSourceBuildService" />: orchestrates a single-flight, cancellable, background source
+///     <c>llama-server</c> build and adopts the result as a managed runtime.
 /// </summary>
+/// <remarks>
+///     Every subprocess runs under a scrubbed, allowlisted environment (<c>[secHIGH-2]</c>) in an owner-only (0700)
+///     work directory inside the cache root, never <c>/tmp</c> (<c>[secHIGH-3]</c>). The clone source URL and tag are
+///     constants, and the checked-out commit is verified equal to the pinned SHA before any cmake runs
+///     (<c>[secHIGH-1]</c>). On any failure the partial tree is deleted and nothing is recorded, so there is no silent
+///     CPU fallback.
+/// </remarks>
 public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildService, IDisposable
 {
     private const string ManagedFitParamsFileName = "llama-fit-params";
@@ -459,9 +462,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 throw new LlamaRuntimeException("The build did not produce the expected fit-params helper.");
             }
 
-            // Recorded, never enforced: the quantizer is off the inference path (only a training export needs it), so a
-            // build that somehow produced everything else stays a perfectly good serving runtime. Failing adoption here
-            // would trade a working runtime for a capability the operator may never use.
+            // Recorded, never enforced: the quantizer is off the inference path — only a training export needs it — so a build that produced everything else is still a
+            // perfectly good serving runtime, and failing adoption here would trade a working runtime for a capability the operator may never use.
             if (LlamaCppToolBinaries.TryResolveQuantizer(builtBin) is null)
             {
                 AppendLog("The build produced no llama-quantize helper; training exports will not be able to quantize with this runtime.");
@@ -651,12 +653,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             : installed!;
         var backupMatches = recordTargetsActive && await TreeMatchesRecordAsync(backup, backupState, ct).ConfigureAwait(false);
 
-        // Reconciliation keeps the installed-runtime record and the tree that record NAMES consistent. A record that
-        // does not name the active tree — a prebuilt record carrying no source path at all, or one pointing somewhere
-        // else — says nothing about this tree and is therefore not authority to delete it. Reading it as authority
-        // destroyed an operator's managed CUDA build on 2026-09-02: a node started against a fresh database wrote a
-        // Vulkan prebuilt record over the shared user-level installed-runtime.json, and the next start deleted the
-        // active and .backup trees because the record "did not match" them.
+        // Reconciliation keeps the installed-runtime record and the tree it NAMES consistent. A record not naming the active tree — a prebuilt record with no source path, or
+        // one pointing elsewhere — is NOT authority to delete it: read as authority, a fresh-database node's prebuilt record over the shared installed-runtime.json deletes both trees.
         if (!Directory.Exists(active) && !Directory.Exists(backup))
         {
             // Only a record that NAMES the active tree is self-healed away by its absence. A record pointing elsewhere
@@ -1034,9 +1032,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         return StreamingProcessRunner.RunAsync(file, args, environment, workDir, AppendLog, timeout, ct);
     }
 
-    // Scrubbed, allowlisted build environment: ONLY these keys pass through; everything else (LD_PRELOAD, LD_LIBRARY_PATH,
-    // CC, CXX, CUDAHOSTCXX, CMAKE_*_LAUNCHER, GIT_SSH_COMMAND, GIT_PROXY_COMMAND, GIT_EXTERNAL_DIFF, app secrets) is
-    // dropped by construction. [secHIGH-2]
+    // Scrubbed, allowlisted build environment: ONLY these keys pass through, everything else — LD_PRELOAD, LD_LIBRARY_PATH, CC, CXX, CUDAHOSTCXX, CMAKE_*_LAUNCHER,
+    // GIT_SSH_COMMAND, GIT_PROXY_COMMAND, GIT_EXTERNAL_DIFF, app secrets — being dropped by construction. [secHIGH-2]
     private static Dictionary<string, string> BuildScrubbedEnvironment(string isolatedHome, string isolatedTmp)
     {
         string[] allowlist = ["PATH", "LANG", "LC_ALL", "CUDA_HOME", "CUDA_PATH"];
@@ -1050,9 +1047,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             }
         }
 
-        // The checklist answers "CUDA compiler" from a conventional install that is not on PATH (see
-        // CudaToolkitLocator); pin CMake to that same nvcc so a green prerequisite can never be followed by a build
-        // that looks for the toolkit somewhere else. Child environment only — the host's is never touched.
+        // The checklist answers "CUDA compiler" from a conventional install that is not on PATH (see CudaToolkitLocator), so CMake is pinned to that same nvcc: a green
+        // prerequisite can then never be followed by a build looking for the toolkit somewhere else. Child environment only — the host's is never touched.
         if (CudaToolkitLocator.FindNvccOutsidePath() is { } nvcc)
         {
             scrubbed["CUDACXX"] = nvcc;

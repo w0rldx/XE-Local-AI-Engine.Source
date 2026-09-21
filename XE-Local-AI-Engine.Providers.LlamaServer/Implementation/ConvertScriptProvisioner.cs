@@ -9,26 +9,24 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     commit-named directory with a single atomic move.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Adoption is commit-addressed (<c>convert-scripts/{commit}/</c>), so re-pinning the runtime provisions a new
-///         directory rather than mutating the one an in-flight export is reading from.
-///     </para>
-///     <para>
-///         Only the three needed paths are copied. The rest of the fetched tree — the whole C++ source, tests, and
-///         vendored dependencies — is discarded with the work directory, so an adopted tree is small and contains
-///         nothing executable beyond the two scripts.
-///     </para>
+///     Adoption is commit-addressed (<c>convert-scripts/{commit}/</c>), so re-pinning the runtime provisions a new
+///     directory rather than mutating the one an in-flight export is reading from. Only the three needed paths are
+///     copied: the rest of the fetched tree — the whole C++ source, tests and vendored dependencies — is discarded with
+///     the work directory, so an adopted tree is small and contains nothing executable beyond the two scripts.
 /// </remarks>
 public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDisposable
 {
     private const string GgufPyDirectoryName = "gguf-py";
 
     /// <summary>
-    ///     The per-architecture converter package both scripts import (<c>from conversion import …</c>) since
-    ///     upstream split it out of the monolithic script. Live-found at b10201: without it the adapter conversion
-    ///     dies with <c>ModuleNotFoundError: No module named 'conversion'</c>. Kept beside the scripts exactly as
-    ///     upstream lays it out, so their own <c>sys.path.insert(…/'gguf-py')</c> and package-relative imports resolve.
+    ///     The per-architecture converter package both scripts import (<c>from conversion import …</c>) since upstream
+    ///     split it out of the monolithic script.
     /// </summary>
+    /// <remarks>
+    ///     Live-found at b10201: without it the adapter conversion dies with
+    ///     <c>ModuleNotFoundError: No module named 'conversion'</c>. It is kept beside the scripts exactly as upstream
+    ///     lays it out, so their own <c>sys.path.insert(…/'gguf-py')</c> and package-relative imports resolve.
+    /// </remarks>
     private const string ConversionPackageDirectoryName = "conversion";
 
     private const string HfToGgufScriptName = "convert_hf_to_gguf.py";

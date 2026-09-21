@@ -13,10 +13,12 @@ public sealed class ConvertScriptPaths
     public required string LoraToGgufScriptPath { get; init; }
 
     /// <summary>
-    ///     Absolute path to the <c>gguf-py</c> package directory both scripts import. Put this on <c>PYTHONPATH</c> for the
-    ///     conversion subprocess — the scripts resolve the package relative to the repository they normally live in, which
-    ///     this provisioned tree deliberately is not.
+    ///     Absolute path to the <c>gguf-py</c> package directory both scripts import.
     /// </summary>
+    /// <remarks>
+    ///     Put this on <c>PYTHONPATH</c> for the conversion subprocess: the scripts resolve the package relative to the
+    ///     repository they normally live in, which this provisioned tree deliberately is not.
+    /// </remarks>
     public required string GgufPyDirectory { get; init; }
 
     /// <summary>The verified upstream commit the three paths were taken from.</summary>

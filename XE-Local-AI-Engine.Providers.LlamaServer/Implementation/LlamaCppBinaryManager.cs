@@ -16,15 +16,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 ///     directory, and returns the resolved <c>llama-server</c> path. Never source-builds.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Cache layout: <c>{cacheRoot}/llama.cpp/{tag}/{variant}/</c> holds the extracted archive; a hash-valid
-///         cached binary is reused without re-download (offline path). A user-selected upgrade is cached under its own
-///         <c>{tag}</c> directory, so the recommended-pinned fallback is never deleted by an upgrade.
-///     </para>
-///     <para>
-///         On SHA256 mismatch the partial download is discarded and retried <em>once</em>; a second mismatch surfaces
-///         a sanitized <see cref="LlamaRuntimeException" /> (no internal paths/URLs in the message).
-///     </para>
+///     Cache layout <c>{cacheRoot}/llama.cpp/{tag}/{variant}/</c> holds the extracted archive: a hash-valid cached
+///     binary is reused without re-download (the offline path), and a user-selected upgrade caches under its own
+///     <c>{tag}</c> directory so it never deletes the recommended-pinned fallback. On SHA256 mismatch the partial
+///     download is discarded and retried <em>once</em>; a second mismatch surfaces a sanitized
+///     <see cref="LlamaRuntimeException" /> carrying no internal paths or URLs.
 /// </remarks>
 [SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
     Justification = "The semaphore is a process-lifetime singleton coordination primitive and is never disposed while provider operations may still be active.")]
@@ -33,10 +29,13 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private static readonly TimeSpan SmokeTestTimeout = TimeSpan.FromSeconds(15);
 
     /// <summary>
-    ///     Absolute hard ceiling on a single runtime download. A prebuilt llama.cpp asset is well under this; the cap is a
-    ///     disk-exhaustion guard against a hostile/buggy server streaming an unbounded body. Enforced on every download
-    ///     path; the size-aware <see cref="InstallTagAsync" /> path tightens it further with the catalog-reported size.
+    ///     Absolute hard ceiling on a single runtime download: a disk-exhaustion guard against a hostile or buggy server
+    ///     streaming an unbounded body.
     /// </summary>
+    /// <remarks>
+    ///     A prebuilt llama.cpp asset is well under this. Enforced on every download path; the size-aware
+    ///     <see cref="InstallTagAsync" /> path tightens it further with the catalog-reported size.
+    /// </remarks>
     private const long MaxDownloadBytes = 2L * 1024 * 1024 * 1024;
 
     /// <summary>Slack added to the catalog-reported size before aborting an oversized stream (still capped at the ceiling).</summary>
@@ -60,18 +59,16 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
-    ///     Creates a binary manager that downloads through <paramref name="httpClient" /> and caches under
-    ///     <paramref name="cacheRoot" />, reading the clock from <paramref name="timeProvider" />. <paramref name="activeTag" /> selects the recommended-pinned release by
-    ///     default; pass a different tag to model a user-selected upgrade (the pinned tag's cache is never touched).
-    ///     The optional <paramref name="catalog" /> + <paramref name="installedRuntimeStore" /> drive the 3-tier resolve
-    ///     (live API → <c>installed-runtime.json</c> → pinned floor); when omitted (the test seam) only the pinned floor
-    ///     is used, preserving the original behavior. The optional <paramref name="overrideOptions" /> carries the
-    ///     operator bring-your-own override; when active, <see cref="EnsureBinaryAsync" /> validates and serves the
-    ///     supplied binary instead of acquiring one. The optional <paramref name="acquisitionStatus" /> is the
-    ///     progress side-channel: when supplied, the download → verify → extract lifecycle is reported to connected
-    ///     operator clients; when omitted (provider-only / test hosts) acquisition is byte-behavior-identical and silent.
-    ///     It is a TRAILING optional parameter precisely so every existing positional construction keeps compiling.
+    ///     Creates a binary manager that downloads through <paramref name="httpClient" />, caches under
+    ///     <paramref name="cacheRoot" /> and reads the clock from <paramref name="timeProvider" />.
     /// </summary>
+    /// <remarks>
+    ///     <paramref name="activeTag" /> selects the recommended-pinned release by default; a different tag models a
+    ///     user-selected upgrade, and the pinned tag's cache is never touched. <paramref name="catalog" /> and
+    ///     <paramref name="installedRuntimeStore" /> drive the 3-tier resolve; omitted (the test seam), only the pinned
+    ///     floor is used. An active <paramref name="overrideOptions" /> makes <see cref="EnsureBinaryAsync" /> validate
+    ///     and serve the operator's own binary. <paramref name="acquisitionStatus" /> is the optional TRAILING progress side-channel; without it acquisition is identical and silent.
+    /// </remarks>
     public LlamaCppBinaryManager(HttpClient httpClient,
         TimeProvider timeProvider,
         string? cacheRoot = null,
@@ -126,39 +123,25 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// <inheritdoc />
     public async Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
-        // Operator bring-your-own override: an active override short-circuits ALL acquisition (no download, no cache write,
-        // no installed-runtime.json mutation). The supplied binary is validated and served as the override's OWN variant —
-        // never the caller-passed variant. A configured-but-broken override throws a sanitized failure rather than falling
-        // through to acquisition or a silent CPU run. This precedes the pinned-floor resolve below, which would otherwise
-        // throw for a (Linux, X64, Cuda) request that has no prebuilt asset.
+        // An active operator bring-your-own override short-circuits ALL acquisition and is served as the override's OWN variant, never the caller's; broken, it
+        // throws rather than run silently on CPU. It precedes the pinned-floor resolve, which would throw for a (Linux, X64, Cuda) request that has no prebuilt.
         if (_overrideOptions?.IsActive == true)
         {
             return await ResolveOverrideBinaryAsync(_overrideOptions, ct).ConfigureAwait(false);
         }
 
-        // Tier 1: a live-resolvable recommended runtime takes precedence. The installed-runtime state (tier 2) records
-        // which tag is actually on disk; the pinned floor (tier 3) is the offline last-resort and the asset-name
-        // template source. A catalog/state-store absence (test seam) collapses straight to the pinned floor.
+        // Tier 1 is a live-resolvable recommended runtime; the installed-runtime state (tier 2) records which tag is actually on disk; the pinned floor (tier 3) is
+        // the offline last-resort and the asset-name template source. A catalog or state-store absence (test seam) collapses straight to the pinned floor.
         var installed = _installedRuntimeStore is null
             ? null
             : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
 
-        // A recorded source build is authoritative: it must match the requested variant and validate successfully. Never
-        // fall through to a prebuilt acquisition while source provenance is recorded, because that would silently replace
-        // the operator-selected runtime after corruption, deletion, or a variant-selection race.
-        // Re-validated on EVERY serve (full path-chain perms + recorded-SHA256 recompare) so an adopt→restart→serve TOCTOU
-        // or a deep-tree swap is caught. A recorded-but-missing/invalid build clears the record + signal and falls through
-        // to the normal path (which throws the sanitized "no prebuilt for this OS/arch" for a Cuda request — never a
-        // silent CPU serve). Reuses the already-read `installed`, so no extra store I/O.
+        // A recorded source build is AUTHORITATIVE and re-validated on EVERY serve (path-chain perms plus a recorded-SHA256 recompare), reusing the already-read record.
+        // It catches an adopt-restart-serve TOCTOU or a deep-tree swap; never fall through to a prebuilt while one is recorded, or a race silently replaces the runtime.
         if (installed?.SourceBuildPath is { Length: > 0 })
         {
-            // A variant disagreement is evidence about the CALLER's selection, never about the build. The selector reads
-            // a per-process cached signal that is empty until the startup seed runs and that no other process can set,
-            // so a spawn beating startup — or one running while a second checkout adopts a build — asks for Vulkan while
-            // a valid CUDA source build is recorded. The record is authoritative here (see this method's contract), so
-            // seed the signal from it and serve the recorded build: every later selection then agrees. Discarding the
-            // record instead is what let the next acquisition write a prebuilt over the operator's source build, and the
-            // following start's reconcile then deleted the tree.
+            // A variant disagreement is evidence about the CALLER's selection, never about the build, so seed the signal from the authoritative record and serve the
+            // recorded build; every later selection then agrees. Why not discard the record: wiki 03, "GPU variant selection".
             if (installed.Variant != variant)
             {
                 _managedCudaSignal?.SetActive(installed.Variant);
@@ -175,13 +158,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         var resolvedTag = await ResolveActiveTagAsync(variant, installed, ct).ConfigureAwait(false);
 
-        // Resolve the pin for the requested variant. A GPU variant (Cuda/Vulkan) MUST resolve to a GENUINE
-        // (os, arch, variant) asset via TryResolveExact — Resolve() would substitute the CPU floor when no GPU prebuilt
-        // exists (e.g. Linux CUDA has none upstream), and serving that CPU archive as a GPU LlamaBinary would make the
-        // supervisor emit GPU placement flags against a CPU build. A missing GPU prebuilt therefore throws
-        // the sanitized no-prebuilt error rather than falling through to CPU. The managed source-built CUDA short-circuit
-        // above already served any valid local CUDA build, so reaching here for a Cuda request means none was usable. The
-        // CPU variant keeps the plain Resolve (its exact pin IS the CPU floor).
+        // A GPU variant MUST resolve a GENUINE (os, arch, variant) asset via TryResolveExact: Resolve() would substitute the CPU floor where no GPU prebuilt exists
+        // — Linux CUDA has none upstream — and the supervisor would emit GPU placement flags against a CPU build. CPU keeps the plain Resolve, its exact pin BEING the floor.
         var pin = (variant == GpuVariant.Cpu
                       ? LlamaCppReleasePins.Resolve(_os, _arch, variant)
                       : LlamaCppReleasePins.TryResolveExact(_os, _arch, variant))
@@ -190,10 +168,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var isPinnedFallback = string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal);
         var variantDir = Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant));
 
-        // Progress side-channel, armed now that the variant/tag context is known. Windows CUDA fetches TWO archives (the
-        // build plus its cudart companion), so the step count keeps the UI from running 0→100 % twice unexplained. The
-        // cached-serve branch is inside the reported segment because it can still top up a missing cudart companion; the
-        // override and managed-source short-circuits above are NOT, because they acquire nothing.
+        // Progress side-channel, armed now that the variant and tag are known. Windows CUDA fetches TWO archives (build plus cudart companion), so the step count
+        // keeps the UI from running 0→100 % twice. The cached-serve branch is inside the segment (it can top up a missing cudart); the short-circuits above are not.
         var reporter = new AcquisitionReporter(_acquisitionStatus,
             variant,
             resolvedTag,
@@ -235,10 +211,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // A cancelled acquisition is not a failed one. The supervisor passes a REQUEST-scoped token here
-            // (SpawnCoreAsync), so a user who abandons a chat mid-download — or a host shutdown firing the first-run
-            // service's stoppingToken — would otherwise persist a terminal Failed carrying a network diagnosis for
-            // something that never broke, leaving the banner stuck behind a retry attached to a non-failure.
+            // A cancelled acquisition is not a failed one: SpawnCoreAsync passes a REQUEST-scoped token here, so a chat abandoned mid-download — or a shutdown firing
+            // the first-run service's stopping token — would otherwise persist a terminal Failed and leave the banner stuck behind a retry attached to a non-failure.
             throw;
         }
         catch (Exception exception)
@@ -261,14 +235,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// <inheritdoc />
     /// <remarks>
     ///     Mirrors <see cref="EnsureBinaryAsync(GpuVariant,CancellationToken)" />'s RESOLVE order — override, recorded
-    ///     source build, cached prebuilt — and stops where that method would start acquiring. Concretely, this method
-    ///     issues no HTTP request, creates no directory (the cache tree is only probed for existence), and never writes
-    ///     <c>installed-runtime.json</c>: neither <c>RecordResolvedRuntimeAsync</c> nor the source-record discard runs
-    ///     here. It also skips the live-catalog tier of the tag resolve, which is a network call that can only pick a tag
-    ///     to acquire — so the answer describes what is installed now and may lag a later explicit ensure. The one thing
-    ///     it DOES spawn is the bring-your-own override's own validation (<c>--version</c>, plus <c>--list-devices</c> for
-    ///     a GPU variant), both bounded and tree-killed, because serving an unvalidated override would break the
-    ///     no-silent-CPU invariant.
+    ///     source build, cached prebuilt — and stops where that method would start acquiring: no HTTP request, no
+    ///     directory created (the cache tree is only probed), no <c>installed-runtime.json</c> write (neither
+    ///     <c>RecordResolvedRuntimeAsync</c> nor the source-record discard runs), and the live-catalog tier skipped, so
+    ///     the answer describes what is installed NOW and can lag a later ensure. It DOES spawn the override's own bounded, tree-killed validation.
     /// </remarks>
     public async Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
@@ -305,9 +275,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         var variantDir = Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant));
 
-        // ResolveServerPath only probes the filesystem (File.Exists, then an enumerate guarded by Directory.Exists) — it
-        // creates nothing. A cached CUDA dir missing its cudart companion is NOT topped up here (that downloads); it
-        // reads as installed, exactly as the supervisor's own ensure will find it before it spawns anything.
+        // ResolveServerPath only probes the filesystem (File.Exists, then an enumerate guarded by Directory.Exists) and creates nothing. A cached CUDA dir missing
+        // its cudart companion is NOT topped up here (that downloads); it reads as installed, exactly as the supervisor's own ensure will find it before spawning.
         var cachedServer = ResolveServerPath(variantDir, pin);
         return cachedServer is null
             ? null
@@ -315,22 +284,17 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Records the runtime that <see cref="EnsureBinaryAsync" /> actually resolved on disk into
-    ///     <see cref="IInstalledRuntimeStore" /> so a pin-bootstrapped / cached binary surfaces as "Installed" on first
-    ///     load — without ever having gone through an explicit <see cref="InstallTagAsync" />.
-    ///     <para>
-    ///         <b>Record-integrity invariant:</b> the asset name and SHA256 written here come from <paramref name="pin" />,
-    ///         which is resolved purely by OS/arch/<paramref name="variant" /> — it carries the PINNED-floor asset/digest,
-    ///         NOT the asset/digest of an arbitrary <paramref name="resolvedTag" />. They are therefore truthful ONLY when
-    ///         the resolve actually landed on the pinned floor. So this records exclusively when
-    ///         <c>resolvedTag == PinnedTag</c>: that is the one bootstrap case where no <see cref="InstallTagAsync" /> ever
-    ///         ran yet the binary is on disk. A non-pinned <paramref name="resolvedTag" /> necessarily originated from an
-    ///         existing <see cref="InstallTagAsync" /> record (the only writer of a non-pinned tag) — that record already
-    ///         holds the correct asset/digest, so there is nothing to fill and writing the pin's values would corrupt it.
-    ///     </para>
-    ///     Cheap on the hot path: a write happens only on the first pinned-floor ensure with no matching record; a record
-    ///     that already pins the same (tag, variant) is left untouched, so a steady-state ensure never rewrites.
+    ///     Records the runtime <see cref="EnsureBinaryAsync" /> actually resolved on disk into
+    ///     <see cref="IInstalledRuntimeStore" />, so a pin-bootstrapped or cached binary surfaces as "Installed" on
+    ///     first load without ever having gone through an explicit <see cref="InstallTagAsync" />.
     /// </summary>
+    /// <remarks>
+    ///     <b>Record-integrity invariant:</b> the asset name and SHA256 written here come from <paramref name="pin" />,
+    ///     resolved purely by OS, arch and <paramref name="variant" />, so they carry the PINNED-floor asset and digest
+    ///     and are truthful ONLY when the resolve landed on that floor — hence the write happens exclusively for the
+    ///     pinned tag, the one bootstrap case where the binary is on disk yet no <see cref="InstallTagAsync" /> ever ran.
+    ///     A non-pinned tag came from an existing install record, the only writer of one, whose values the pin would corrupt.
+    /// </remarks>
     private async Task RecordResolvedRuntimeAsync(string resolvedTag, LlamaCppAssetPin pin, GpuVariant variant, CancellationToken ct)
     {
         if (_installedRuntimeStore is null)
@@ -341,9 +305,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            // The gate above only orders THIS process. installed-runtime.json is under the shared user-level cache root,
-            // so the read below and the write at the end of this method are one cross-process critical section too:
-            // without it a second node adopting a source build between them lands under this prebuilt write.
+            // The gate above only orders THIS process, and installed-runtime.json sits under the shared user-level cache root: the read below and the write at the end
+            // of this method are one cross-process critical section too, or a second node adopting a source build between them lands under this prebuilt write.
             using var recordLock = await _installedRuntimeStore.AcquireAsync(ct).ConfigureAwait(false);
 
             var current = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
@@ -359,8 +322,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 return;
             }
 
-            // A record already exists for this variant. Whether it pins the same tag (steady state) or a newer
-            // explicitly-installed tag, the pinned floor must not overwrite it.
+            // A record already exists for this variant, pinning either the same tag (steady state) or a newer explicitly-installed one, and the pinned floor must not
+            // overwrite it — so a write happens only on a first pinned-floor ensure with no matching record, and a steady-state ensure never rewrites.
             if (current is { } existing && existing.Variant == variant)
             {
                 return;
@@ -376,10 +339,13 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     3-tier resolve of the tag to acquire: the ctor's <c>_activeTag</c> is the floor (pinned). When a catalog is
-    ///     present, a live-confirmed recommended tag wins; otherwise the on-disk installed tag (tier 2) is used when
-    ///     present. Offline/rate-limited live lookups fall through silently — acquisition never depends on the network.
+    ///     3-tier resolve of the tag to acquire, with the ctor's <c>_activeTag</c> (the pinned floor) as tier 3.
     /// </summary>
+    /// <remarks>
+    ///     When a catalog is present a live-confirmed recommended tag wins; otherwise the on-disk installed tag (tier 2)
+    ///     is used when present. Offline or rate-limited live lookups fall through silently — acquisition never depends
+    ///     on the network.
+    /// </remarks>
     private async Task<string> ResolveActiveTagAsync(GpuVariant variant, InstalledRuntimeState? installed, CancellationToken ct)
     {
         if (_catalog is not null && IsValidTag(_activeTag))
@@ -465,9 +431,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var variantDir = Path.Combine(_cacheRoot, "llama.cpp", tag, VariantSlug(variant));
         var url = LlamaCppReleasePins.DownloadUri(tag, assetName);
 
-        // The operator-initiated upgrade path reports through the same channel as the first-run acquisition: it downloads
-        // the same archives and takes the same time, and the banner is the only place either becomes visible. Armed after
-        // the request validation above, which acquires nothing and so must stay silent.
+        // The operator-initiated upgrade reports through the same channel as the first-run acquisition: same archives, same time, and the banner is the only place
+        // either becomes visible. Armed after the request validation above, which acquires nothing and so must stay silent.
         var reporter = new AcquisitionReporter(_acquisitionStatus,
             variant,
             tag,
@@ -486,14 +451,12 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
             }
 
-            // Pair the CUDA runtime DLLs (live companion) BEFORE the smoke test so the self-check exercises a complete CUDA
-            // install. The companion name is derived from the resolved main asset and its digest is resolved live the same
-            // way the main asset's was. A cudart failure deletes the half-CUDA variant dir and throws (never install blind).
+            // Pair the CUDA runtime DLLs (live companion) BEFORE the smoke test so the self-check exercises a complete CUDA install. The companion name derives from
+            // the resolved main asset and its digest resolves live the same way; a cudart failure deletes the half-CUDA variant dir and throws, never installs blind.
             await EnsureCudartRuntimeAsync(tag, pin, cudartAsset: assetName, variant, variantDir, serverPath, reporter, ct).ConfigureAwait(false);
 
-            // Smoke test BEFORE recording the install: a binary that cannot even report its version is not made active. A
-            // failed self-check must not leave a half-validated variant dir on disk where a later EnsureBinaryAsync tier-1
-            // resolve could serve it unverified — best-effort delete it before surfacing the failure.
+            // Smoke test BEFORE recording the install: a binary that cannot even report its version is not made active, and a failed self-check must not leave a
+            // half-validated variant dir where a later EnsureBinaryAsync tier-1 resolve could serve it unverified — best-effort delete it before surfacing.
             if (!await SmokeTestAsync(serverPath, ct).ConfigureAwait(false))
             {
                 TryDeleteDirectory(variantDir);
@@ -502,11 +465,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
             if (_installedRuntimeStore is not null)
             {
-                // The guard at the top of InstallTagAsync ran BEFORE a download that takes minutes, so re-check it here
-                // under the record lock, immediately before the write. The lock is deliberately not held across the
-                // download — that would block every other node for the whole transfer — so this is the window where
-                // another node's adopt lands. The binary stays on disk under its own versioned directory; only the
-                // record is refused, and the operator is told why rather than silently getting a prebuilt record.
+                // InstallTagAsync's top guard ran BEFORE a minutes-long download, and the lock is deliberately not held across it (that would block every other node
+                // for the transfer), so re-check here under the record lock. The binary stays under its own versioned dir; only the record is refused, with a reason.
                 using var recordLock = await _installedRuntimeStore.AcquireAsync(ct).ConfigureAwait(false);
                 if ((await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false))?.SourceBuildPath is { Length: > 0 })
                 {
@@ -533,24 +493,16 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Pairs the Windows-CUDA runtime DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>, <c>cublasLt64_*.dll</c>) next
-    ///     to <c>llama-server.exe</c>. llama.cpp ships these in a SEPARATE archive from the main CUDA build; without them
-    ///     the ggml-cuda backend fails to load and the server silently runs CPU-only. No-op for every non-Windows-CUDA
-    ///     acquisition. Idempotent: if the DLLs already sit next to the server (cached-dir reuse) nothing is downloaded.
-    ///     <para>
-    ///         <paramref name="cudartAsset" /> selects the digest source: <see langword="null" /> (the pinned/cached path)
-    ///         uses the pin's companion name + sha; a non-null value (the live <see cref="InstallTagAsync" /> path) is the
-    ///         resolved MAIN asset name from which the cudart name is derived and whose digest is resolved live the SAME
-    ///         way the main asset's was. When the live digest cannot be resolved this throws rather than installing a CUDA
-    ///         build without its runtime (which reproduces the silent-CPU bug). A fetch/verify failure deletes the
-    ///         half-CUDA <paramref name="variantDir" /> so a later resolve cannot serve it as a valid CUDA install.
-    ///     </para>
-    ///     <para>
-    ///         This is step 2 of 2 for a Windows-CUDA acquisition, so <paramref name="reporter" /> reports under that step
-    ///         index. Both early returns (non-Windows-CUDA, and the idempotent already-present case) leave the reporter
-    ///         untouched — nothing is acquired, so nothing may be announced.
-    ///     </para>
+    ///     Pairs the Windows-CUDA runtime DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>, <c>cublasLt64_*.dll</c>)
+    ///     next to <c>llama-server.exe</c>; a no-op for every non-Windows-CUDA acquisition, and idempotent.
     /// </summary>
+    /// <remarks>
+    ///     llama.cpp ships these in a SEPARATE archive from the main CUDA build; without them the ggml-cuda backend
+    ///     fails to load and the server silently runs CPU-only. <paramref name="cudartAsset" /> selects the digest
+    ///     source: <see langword="null" /> (the pinned or cached path) uses the pin's companion name and sha, a non-null
+    ///     value (the live <see cref="InstallTagAsync" /> path) is the resolved MAIN asset name the cudart name derives
+    ///     from, whose digest resolves live the SAME way; an unresolvable live digest throws rather than reproduce the silent-CPU bug.
+    /// </remarks>
     private async Task EnsureCudartRuntimeAsync(string tag, LlamaCppAssetPin? pin, string? cudartAsset, GpuVariant variant, string variantDir, string serverPath, AcquisitionReporter? reporter,
         CancellationToken ct)
     {
@@ -566,7 +518,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             throw new LlamaRuntimeException("The llama.cpp CUDA runtime could not be installed (server directory is unresolved).");
         }
 
-        // Idempotency: the cudart core DLL already next to the server means a hash-valid CUDA dir is being reused — skip.
+        // Idempotency: the cudart core DLL already next to the server means a hash-valid CUDA dir is being reused — skip. Like the non-Windows-CUDA return above it
+        // leaves the reporter untouched (nothing is acquired, so nothing may be announced); this method is step 2 of 2 and reports under CudartStepIndex.
         if (CudartRuntimePresent(serverDir))
         {
             return;
@@ -641,10 +594,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Download → size-check → SHA256-verify the cudart archive, then FLATTEN its DLLs into the server's bin dir
-    ///     (regardless of their internal nesting) so the OS loader finds them next to <c>llama-server.exe</c>. Retried
-    ///     exactly once on a transient failure / hash mismatch, mirroring the main archive pipeline.
+    ///     Downloads, size-checks and SHA256-verifies the cudart archive, then FLATTENS its DLLs into the server's bin
+    ///     dir, whatever their internal nesting, so the OS loader finds them next to <c>llama-server.exe</c>.
     /// </summary>
+    /// <remarks>Retried exactly once on a transient failure or hash mismatch, mirroring the main archive pipeline.</remarks>
     private async Task DownloadVerifyFlattenCudartAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string serverDir, AcquisitionReporter? reporter, CancellationToken ct)
     {
         var firstError = await TryDownloadVerifyFlattenCudartAsync(url, assetName, expectedSha256, expectedSize, serverDir, reporter, ct).ConfigureAwait(false);
@@ -720,10 +673,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Spawns the resolved <c>llama-server</c> with <c>--version</c> and a short timeout. A clean exit (or any
-    ///     version banner output) is a pass; a non-zero hard failure, a launch failure, or a timeout is a fail. The
-    ///     process is tree-killed on timeout so no orphan lingers.
+    ///     Spawns the resolved <c>llama-server</c> with <c>--version</c> and a short timeout: a clean exit is a pass, a
+    ///     non-zero exit, a launch failure or a timeout is a fail.
     /// </summary>
+    /// <remarks>The process is tree-killed on timeout so no orphan lingers.</remarks>
     private static async Task<bool> SmokeTestAsync(string serverPath, CancellationToken ct)
     {
         try
@@ -789,22 +742,25 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Locates the <c>llama-server</c> executable inside an extracted variant directory. The pinned relative path
-    ///     is tried first (fast path); if the upstream archive layout differs from the pin — llama.cpp release archives
-    ///     have shipped the binary under both <c>build/bin/</c> and a top-level <c>llama-{tag}/</c> folder — fall back
-    ///     to a recursive search by file name so an upstream layout change does not silently break acquisition. Returns
-    ///     <see langword="null" /> when no executable of that name exists under the directory.
+    ///     Locates the <c>llama-server</c> executable inside an extracted variant directory, or <see langword="null" />
+    ///     when no executable of that name exists under it.
     /// </summary>
+    /// <remarks>
+    ///     The pinned relative path is tried first (the fast path); if the upstream archive layout differs from the pin
+    ///     — llama.cpp release archives have shipped the binary under both <c>build/bin/</c> and a top-level
+    ///     <c>llama-{tag}/</c> folder — a recursive search by file name follows, so an upstream layout change does not
+    ///     silently break acquisition.
+    /// </remarks>
     private static string? ResolveServerPath(string variantDir, LlamaCppAssetPin pin)
     {
         return ResolveServerPathByName(variantDir, pin.ServerRelativePath);
     }
 
     /// <summary>
-    ///     Locates the server executable for a dynamically-installed asset. When a pin for the host exists its relative
-    ///     path/name is used; otherwise the OS-appropriate default server name is searched for. Tolerant of upstream
-    ///     archive layout drift via the recursive tree search.
+    ///     Locates the server executable for a dynamically-installed asset: a pin for the host supplies the relative
+    ///     path or name, otherwise the OS-appropriate default server name is searched for.
     /// </summary>
+    /// <remarks>Tolerant of upstream archive layout drift via the recursive tree search.</remarks>
     private string? ResolveServerPathForAsset(string variantDir, LlamaCppAssetPin? pin)
     {
         var relative = pin?.ServerRelativePath
@@ -832,11 +788,14 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Shared download → SHA256-verify → atomic-extract pipeline. The expected digest is supplied by the caller —
-    ///     the pinned hash (<see cref="EnsureBinaryAsync" />) or the live publisher digest
-    ///     (<see cref="InstallTagAsync" />) — so both acquisition paths run identical verification logic. A transient
-    ///     failure or a hash mismatch is discarded and retried exactly once.
+    ///     Shared download, SHA256-verify and atomic-extract pipeline; a transient failure or a hash mismatch is
+    ///     discarded and retried exactly once.
     /// </summary>
+    /// <remarks>
+    ///     The expected digest is supplied by the caller — the pinned hash (<see cref="EnsureBinaryAsync" />) or the
+    ///     live publisher digest (<see cref="InstallTagAsync" />) — so both acquisition paths run identical
+    ///     verification logic.
+    /// </remarks>
     private async Task DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
         CancellationToken ct)
     {
@@ -1105,10 +1064,12 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
     /// <summary>
     ///     The directory every acquired llama.cpp runtime is cached under for the default app-data root
-    ///     (<c>{cacheRoot}/llama.cpp</c>, the same layout <see cref="EnsureBinaryAsync" /> writes its variant dirs into).
+    ///     (<c>{cacheRoot}/llama.cpp</c>, the layout <see cref="EnsureBinaryAsync" /> writes its variant dirs into).
+    /// </summary>
+    /// <remarks>
     ///     Exposed so the startup orphan reaper matches ONLY <c>llama-server</c> binaries this app acquired, never an
     ///     unrelated install.
-    /// </summary>
+    /// </remarks>
     internal static string DefaultLlamaCppBinariesRoot()
     {
         return Path.Combine(DefaultCacheRoot(), "llama.cpp");

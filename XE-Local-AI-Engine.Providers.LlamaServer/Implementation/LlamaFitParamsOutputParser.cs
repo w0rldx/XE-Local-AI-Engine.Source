@@ -9,16 +9,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     <see cref="ResolvedLaunchArguments.Replay" /> draft.
 /// </summary>
 /// <remarks>
-///     The grammar is emitted by llama.cpp's dedicated tool, not scraped from variable startup logs:
-///     <c>-c N -ngl N [-ts N0,N1,...] [-ot "pattern=buffer,..."]</c>. Both <c>-c</c> and <c>-ngl</c> are required.
-///     A missing placement field therefore fails the parse instead of silently producing a context-only profile.
-///     The helper can return unchanged defaults when the initial parameters already fit (observed on b9692; the
-///     parser tolerates it on any pin): <c>-c 0</c> means the
-///     model-trained context and <c>-ngl -1</c> means automatic placement. Context zero is never concrete. Automatic
-///     placement is normalized to explicit all-layers (<c>-2</c>) only when verbose startup output proves full offload.
-///     Expert placement is preserved the same way KV/flash-attention policy is — from the successful argv: a spawn that
-///     carried <c>--cpu-moe</c> must yield an <c>-ot</c>, because the helper turns that flag into the equivalent tensor
-///     override and echoes it. A fit line without one is not a replayable placement and fails the parse.
+///     The grammar comes from llama.cpp's dedicated tool, not from scraped startup logs —
+///     <c>-c N -ngl N [-ts N0,N1,...] [-ot "pattern=buffer,..."]</c> — with <c>-c</c> and <c>-ngl</c> both required, so
+///     a missing placement field fails the parse rather than silently produce a context-only profile. When the initial
+///     parameters already fit, the helper can return unchanged defaults instead (observed on b9692, tolerated on any
+///     pin), and neither of those defaults is a concrete replay.
 /// </remarks>
 internal static partial class LlamaFitParamsOutputParser
 {
@@ -63,6 +58,8 @@ internal static partial class LlamaFitParamsOutputParser
                 continue;
             }
 
+            // -ngl -1 is the helper's "automatic placement", which is not a concrete replay: it is normalized to explicit all-layers (-2) only
+            // when verbose startup output proves full offload, and otherwise rejected. Likewise -c 0 (model-trained context) never passes the guard above.
             if (gpuLayers == -1)
             {
                 if (!HasFullGpuOffloadEvidence(startupOutput))
@@ -76,9 +73,8 @@ internal static partial class LlamaFitParamsOutputParser
             var tensorSplit = OptionalValue(match, "ts");
             var overrideTensor = OptionalValue(match, "ot");
 
-            // The spawn kept the experts in system RAM, so the replay MUST carry that placement or it would launch
-            // outside the footprint admission booked for it. The helper echoes --cpu-moe back as -ot, so a missing
-            // -ot here means the helper never saw the flag (or dropped it): no concrete replay can be proven.
+            // The spawn kept the experts in system RAM, so the replay MUST carry that placement or launch outside the footprint admission booked for it. The helper
+            // echoes --cpu-moe back as -ot, so a missing -ot here means it never saw the flag, or dropped it: no concrete replay can be proven.
             if (expertOffload && overrideTensor is null)
             {
                 continue;

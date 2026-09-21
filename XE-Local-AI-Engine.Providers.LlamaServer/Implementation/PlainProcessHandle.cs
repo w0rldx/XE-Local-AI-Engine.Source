@@ -4,10 +4,12 @@ using System.Diagnostics;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Fallback process handle for platforms without a dedicated containment primitive (macOS / other Unix). Tree-kill
-///     terminates the process and its descendants via <see cref="Process.Kill(bool)" /> with <c>entireProcessTree</c>.
-///     The supervised GPU paths are Windows + Linux; this keeps the launcher functional elsewhere on the CPU floor.
+///     Fallback process handle for platforms without a dedicated containment primitive (macOS and other Unix), whose
+///     tree-kill terminates the process and its descendants via <see cref="Process.Kill(bool)" />.
 /// </summary>
+/// <remarks>
+///     The supervised GPU paths are Windows and Linux; this keeps the launcher functional elsewhere on the CPU floor.
+/// </remarks>
 internal sealed class PlainProcessHandle : ILlamaServerProcessHandle
 {
     private readonly Process _process;

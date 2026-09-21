@@ -9,17 +9,15 @@ using Microsoft.Win32.SafeHandles;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Windows process handle that contains the child (and any process it spawns) in a Job Object configured with
-///     <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c>. Closing the job handle — on <see cref="TreeKill" /> or
-///     <see cref="Dispose" /> — terminates the entire tree, so no orphan survives a supervisor stop or crash. All
-///     native calls are reached only on Windows (the launcher guards with <see cref="OperatingSystem.IsWindows" />).
+///     Windows process handle that contains the child, and any process it spawns, in a Job Object configured with
+///     <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c>.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>Operator-verification flag:</strong> this WSL2/Linux build cannot exercise the Win32 path. The
-///         signatures, struct layout, and SafeHandle ownership follow the global <c>dotnet-pinvoke</c> standard and the
-///         logic is unit-tested through the launcher seam, but real tree-kill behavior MUST be verified on Windows 11.
-///     </para>
+///     Closing the job handle — on <see cref="TreeKill" /> or <see cref="Dispose" /> — terminates the entire tree, so
+///     no orphan survives a supervisor stop or crash. Every native call is reached only on Windows, the launcher
+///     guarding with <see cref="OperatingSystem.IsWindows" />. <strong>Operator-verification flag:</strong> a
+///     Linux build cannot exercise the Win32 path, and the logic is unit-tested through the launcher seam, but real
+///     tree-kill behaviour MUST be verified on Windows 11.
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProcessHandle
