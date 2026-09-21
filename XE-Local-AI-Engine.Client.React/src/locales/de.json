@@ -3098,6 +3098,7 @@
 			"loadError": "Die Lauf-Historie konnte nicht geladen werden.",
 			"empty": "Dieser Node hat noch keine Agent-Aufgabe ausgeführt.",
 			"review": "Änderungen prüfen",
+			"openConversation": "Konversation öffnen",
 			"noPatch": "Keine Änderungen exportiert",
 			"files": "{{value}} Datei(en)",
 			"filesUnknown": "Patch exportiert",
@@ -3120,6 +3121,26 @@
 			"applyState": {
 				"applied": "Angewendet",
 				"rejected": "Anwendung abgelehnt"
+			},
+			"delete": {
+				"action": "Löschen",
+				"title": "Diesen Lauf löschen?",
+				"confirm": "Lauf löschen",
+				"body": "Das Protokoll dieses Laufs und sein exportierter Patch werden von diesem Computer entfernt.",
+				"appliedNote": "Bereits angewendete Änderungen bleiben in Ihren Ordnern. Das Löschen entfernt die Historie des Laufs, nicht seine Ergebnisse.",
+				"error": "Dieser Lauf konnte nicht gelöscht werden. Möglicherweise läuft gerade ein Lauf; versuchen Sie es gleich noch einmal."
+			},
+			"viewer": {
+				"open": "Protokoll und Patch",
+				"title": "Inhalt des Laufs",
+				"logTab": "Protokoll",
+				"patchTab": "Patch",
+				"loading": "Wird gelesen…",
+				"logEmpty": "Dieser Lauf hat kein Protokoll aufgezeichnet.",
+				"patchEmpty": "Dieser Lauf hat keinen Patch exportiert.",
+				"logError": "Das Protokoll des Laufs konnte nicht gelesen werden.",
+				"patchError": "Der Patch des Laufs konnte nicht gelesen werden.",
+				"truncated": "Diese Datei ist länger als das, was hier angezeigt wird; ein Teil wurde ausgelassen."
 			}
 		},
 		"mcp": {

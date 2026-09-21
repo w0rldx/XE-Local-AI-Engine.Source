@@ -308,6 +308,162 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
         AssertEx.Equal(expected: 1, page.TotalCount, "only directories the node minted are runs.");
     }
 
+    [Test]
+    public async Task ReadLogAsync_AnswersTheRunsOwnLogLines()
+    {
+        var run = SeedRun(Now.AddDays(-1));
+        WriteEvent(run, "run_completed", "status=Completed");
+
+        var text = AssertEx.NotNull(await Service().ReadLogAsync(Path.GetFileName(run)));
+
+        AssertEx.False(text.Truncated, "a small log is served whole.");
+        AssertEx.True(text.Text.Contains("\"eventName\":\"started\"", StringComparison.Ordinal));
+        AssertEx.True(text.Text.Contains("\"eventName\":\"run_completed\"", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task ReadLogAsync_WithALogPastTheWindows_ReportsItselfTruncated()
+    {
+        var run = SeedRun(Now.AddDays(-1));
+        var filler = new string('x', count: 4000);
+        for (var index = 0; index < 100; index++)
+        {
+            WriteEvent(run, "tool_call", filler);
+        }
+
+        var text = AssertEx.NotNull(await Service().ReadLogAsync(Path.GetFileName(run)));
+
+        AssertEx.True(text.Truncated,
+            "text with a gap in it and no note would read as the whole run; the flag is part of the answer.");
+        AssertEx.True(text.Text.Contains("\"eventName\":\"started\"", StringComparison.Ordinal), "the head window still carries the opening.");
+    }
+
+    [Test]
+    public async Task ReadLogAsync_ForARunWithNoLog_AnswersEmptyTextRatherThanAnUnknownRun()
+    {
+        var run = SeedRun(Now.AddDays(-1));
+        File.Delete(EventsPath(run));
+
+        var text = AssertEx.NotNull(await Service().ReadLogAsync(Path.GetFileName(run)),
+            "the run exists, so the answer is about the run, not about whether it exists.");
+
+        AssertEx.Equal(string.Empty, text.Text);
+        AssertEx.False(text.Truncated);
+    }
+
+    [Test]
+    public async Task ReadLogAsync_WithALinkedLog_RefusesRatherThanFollowingIt()
+    {
+        SymlinkSupport.EnsureSupported();
+        var outside = Path.Combine(_dataRoot.Path, "outside-log");
+        Directory.CreateDirectory(outside);
+        var target = Path.Combine(outside, "planted.jsonl");
+        await File.WriteAllTextAsync(target, Marker);
+
+        var run = SeedRun(Now.AddDays(-1));
+        File.Delete(EventsPath(run));
+        File.CreateSymbolicLink(EventsPath(run), target);
+
+        var text = AssertEx.NotNull(await Service().ReadLogAsync(Path.GetFileName(run)));
+
+        AssertEx.False(text.Text.Contains(Marker, StringComparison.Ordinal),
+            "a linked log points outside the run; its content must never be served as the run's.");
+        AssertEx.True(File.Exists(target), "the link's target is read-only collateral.");
+    }
+
+    [Test]
+    public async Task ReadPatchAsync_AnswersTheExportedPatchText()
+    {
+        var run = SeedRun(Now.AddDays(-1));
+        WritePatch(run, changedFiles: 1);
+
+        var text = AssertEx.NotNull(await Service().ReadPatchAsync(Path.GetFileName(run)));
+
+        AssertEx.Equal("diff --git a/x b/x\n", text.Text);
+        AssertEx.False(text.Truncated);
+    }
+
+    [Test]
+    public async Task ReadPatchAsync_WithAPatchPastTheDisplayCap_TruncatesAtALineBreak()
+    {
+        var run = SeedRun(Now.AddDays(-1));
+        var patches = Path.Combine(run, "patches");
+        Directory.CreateDirectory(patches);
+        // One line per 100 bytes, well past the 1 MiB display cap.
+        await File.WriteAllTextAsync(Path.Combine(patches, "changes.patch"),
+            string.Concat(Enumerable.Repeat($"+{new string('y', count: 98)}\n", count: 20000)));
+
+        var text = AssertEx.NotNull(await Service().ReadPatchAsync(Path.GetFileName(run)));
+
+        AssertEx.True(text.Truncated, "an oversized patch is capped for display, never refused.");
+        AssertEx.True(text.Text.Length is > 0 and <= 1048576);
+        AssertEx.True(text.Text.EndsWith('\n'),
+            "the cut lands on a line break, so no half-written line — and no split UTF-8 sequence — reaches a viewer.");
+    }
+
+    [Test]
+    public async Task ReadPatchAsync_ForARunThatExportedNothing_AnswersEmptyText()
+    {
+        var run = SeedRun(Now.AddDays(-1));
+
+        var text = AssertEx.NotNull(await Service().ReadPatchAsync(Path.GetFileName(run)));
+
+        AssertEx.Equal(string.Empty, text.Text, "the run exists and exported nothing; that is the answer.");
+    }
+
+    [Test]
+    public async Task ReadPatchAsync_WithALinkedPatch_RefusesRatherThanFollowingIt()
+    {
+        SymlinkSupport.EnsureSupported();
+        var outside = Path.Combine(_dataRoot.Path, "outside-patch");
+        Directory.CreateDirectory(outside);
+        var target = Path.Combine(outside, "planted.patch");
+        await File.WriteAllTextAsync(target, Marker);
+
+        var run = SeedRun(Now.AddDays(-1));
+        var patches = Path.Combine(run, "patches");
+        Directory.CreateDirectory(patches);
+        File.CreateSymbolicLink(Path.Combine(patches, "changes.patch"), target);
+
+        var text = AssertEx.NotNull(await Service().ReadPatchAsync(Path.GetFileName(run)));
+
+        AssertEx.False(text.Text.Contains(Marker, StringComparison.Ordinal), "a linked patch is refused before it is opened.");
+        AssertEx.True(File.Exists(target));
+    }
+
+    [Test]
+    public async Task ReadPatchAsync_WithANonRegularPatchFile_RefusesWithoutBlocking()
+    {
+        var run = SeedRun(Now.AddDays(-1));
+        var patches = Path.Combine(run, "patches");
+        Directory.CreateDirectory(patches);
+        if (!TryCreateFifo(Path.Combine(patches, "changes.patch")))
+        {
+            Skip.Test("BLOCKED: this host has no usable mkfifo, so the non-regular-file refusal cannot be built here.");
+            return;
+        }
+
+        var read = Service().ReadPatchAsync(Path.GetFileName(run));
+        var finished = await Task.WhenAny(read, Task.Delay(TestBudgets.Contended));
+
+        AssertEx.True(ReferenceEquals(finished, read),
+            "the read opened a FIFO and blocked; the refusal must happen from the stat, before any open.");
+        AssertEx.Equal(string.Empty, AssertEx.NotNull(await read).Text);
+    }
+
+    [Test]
+    [Arguments("run-1758300000000-999", "a run id nothing on disk answers to")]
+    [Arguments("..", "a bare parent reference")]
+    [Arguments("run-1758300000000-1/../../escape", "a traversal hidden behind a well-formed prefix")]
+    [Arguments("not-a-run", "a name the node never minted")]
+    public async Task ReadLogAndPatchAsync_WithAnUnservableRunId_AnswerUnknown(string runId, string why)
+    {
+        SeedRun(Now.AddDays(-1));
+
+        AssertEx.Null(await Service().ReadLogAsync(runId), why);
+        AssertEx.Null(await Service().ReadPatchAsync(runId), why);
+    }
+
     private AgentHomeRunListService Service() =>
         new(Options.Create(new AgentHomeOptions { Enabled = true, RootPath = Path.Combine(_dataRoot.Path, "agent-home-state") }),
             new FakeNodeDataDirectory(_dataRoot.Path));

@@ -246,6 +246,9 @@ import type {
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionErrors,
 	DeleteAgentDefinitionResponses,
+	DeleteAgentHomeRunData,
+	DeleteAgentHomeRunErrors,
+	DeleteAgentHomeRunResponses,
 	DeleteBaseArtifactData,
 	DeleteBaseArtifactErrors,
 	DeleteBaseArtifactResponses,
@@ -429,6 +432,12 @@ import type {
 	GetAgentFeedbackInsightsData,
 	GetAgentFeedbackInsightsErrors,
 	GetAgentFeedbackInsightsResponses,
+	GetAgentHomeRunLogData,
+	GetAgentHomeRunLogErrors,
+	GetAgentHomeRunLogResponses,
+	GetAgentHomeRunPatchData,
+	GetAgentHomeRunPatchErrors,
+	GetAgentHomeRunPatchResponses,
 	GetAgentPlaybookMonitorData,
 	GetAgentPlaybookMonitorErrors,
 	GetAgentPlaybookMonitorResponses,
@@ -1490,6 +1499,8 @@ import {
 	zDecideTrainingArtifactQualityResponse,
 	zDeleteAgentDefinitionPath,
 	zDeleteAgentDefinitionResponse,
+	zDeleteAgentHomeRunPath,
+	zDeleteAgentHomeRunResponse,
 	zDeleteBaseArtifactPath,
 	zDeleteBaseArtifactResponse,
 	zDeleteBenchmarkProjectBody,
@@ -1619,6 +1630,10 @@ import {
 	zGetAgentDefinitionResponse,
 	zGetAgentFeedbackInsightsPath,
 	zGetAgentFeedbackInsightsResponse,
+	zGetAgentHomeRunLogPath,
+	zGetAgentHomeRunLogResponse,
+	zGetAgentHomeRunPatchPath,
+	zGetAgentHomeRunPatchResponse,
 	zGetAgentPlaybookMonitorPath,
 	zGetAgentPlaybookMonitorResponse,
 	zGetAgentUsageSummaryQuery,
@@ -15913,6 +15928,95 @@ export const applyAgentHomePatch = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const deleteAgentHomeRun = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteAgentHomeRunData, ThrowOnError>,
+): RequestResult<DeleteAgentHomeRunResponses, DeleteAgentHomeRunErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteAgentHomeRunResponses, DeleteAgentHomeRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteAgentHomeRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteAgentHomeRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/agent-home/runs/{runId}",
+		...options,
+	});
+
+export const getAgentHomeRunLog = <ThrowOnError extends boolean = false>(
+	options: Options<GetAgentHomeRunLogData, ThrowOnError>,
+): RequestResult<GetAgentHomeRunLogResponses, GetAgentHomeRunLogErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetAgentHomeRunLogResponses, GetAgentHomeRunLogErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetAgentHomeRunLogPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetAgentHomeRunLogResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/agent-home/runs/{runId}/log",
+		...options,
+	});
+
+export const getAgentHomeRunPatch = <ThrowOnError extends boolean = false>(
+	options: Options<GetAgentHomeRunPatchData, ThrowOnError>,
+): RequestResult<GetAgentHomeRunPatchResponses, GetAgentHomeRunPatchErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetAgentHomeRunPatchResponses, GetAgentHomeRunPatchErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetAgentHomeRunPatchPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetAgentHomeRunPatchResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/agent-home/runs/{runId}/patch",
+		...options,
 	});
 
 export const listAgentHomeRuns = <ThrowOnError extends boolean = false>(

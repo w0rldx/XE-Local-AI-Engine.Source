@@ -8,6 +8,34 @@ public sealed class ListAgentHomeRunsRequest
     public int? Offset { get; init; }
 }
 
+/// <summary>
+///     The route-only request the per-run routes share: delete, log and patch text each take nothing but the id.
+/// </summary>
+/// <remarks>
+///     One type rather than three identical ones, and no body on any of them — the id is the whole request, and a
+///     body on a DELETE or a GET would be a shape the API foundation guard refuses anyway.
+/// </remarks>
+public sealed class AgentHomeRunByIdRequest
+{
+    public required string RunId { get; init; }
+}
+
+/// <summary>
+///     Capped text read out of one run's own files.
+/// </summary>
+/// <remarks>
+///     Unlike the run summaries, this IS the model-influenced content: it is what the run wrote, served for an
+///     operator to read and never parsed by anything. <see cref="Truncated" /> is part of the answer rather than a
+///     detail — text with a gap in it and no note would read as the whole story.
+/// </remarks>
+public sealed class AgentHomeRunTextResponse
+{
+    public required string Text { get; init; }
+
+    /// <summary>Whether the file went on past what this route will serve.</summary>
+    public required bool Truncated { get; init; }
+}
+
 /// <summary>Response envelope for <c>GET agent-home/runs</c>, newest first, with the unpaged total.</summary>
 public sealed class ListAgentHomeRunsResponse
 {

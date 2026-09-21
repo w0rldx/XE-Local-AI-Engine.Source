@@ -19,6 +19,20 @@ internal static class AgentHomeRunContractMapper
         };
     }
 
+    /// <summary>The capped text read, renamed onto the wire.</summary>
+    /// <remarks>
+    ///     Deliberately NOT sanitised: this is the one AgentHome contract whose payload is the run's own bytes, and
+    ///     rewriting them would hand the operator a document that is not what the run wrote. What keeps it honest is
+    ///     where it is rendered — a read-only Monaco surface with its default unicode highlighting on, which flags
+    ///     invisible, ambiguous and control characters in place.
+    /// </remarks>
+    public static AgentHomeRunTextResponse ToResponse(this AgentHomeRunText text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        return new AgentHomeRunTextResponse { Text = text.Text, Truncated = text.Truncated };
+    }
+
     private static AgentHomeRunDto ToDto(AgentHomeRunSummary summary)
     {
         return new AgentHomeRunDto

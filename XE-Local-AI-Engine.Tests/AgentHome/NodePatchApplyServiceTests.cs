@@ -27,6 +27,12 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     private static readonly string[] PatchDiffArgs =
         ["diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."];
 
+    /// <summary>
+    ///     A run id in the <c>run-{unixMs}-{counter}</c> shape the node mints. The apply accepts any identifier-shaped
+    ///     name, but the delete resolves only a minted one, so a test that exercises both needs this spelling.
+    /// </summary>
+    private const string MintedRunId = "run-1758400000000-7";
+
     private readonly List<string> _tempDirs = [];
 
     public void Dispose()
@@ -366,6 +372,155 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         AssertEx.False(events.Contains(hostRoot, StringComparison.Ordinal), "the log must not leak a host path");
     }
 
+    /// <summary>
+    ///     The delete-versus-apply race. A mid-flight apply has read its patch bytes already, so removing the run
+    ///     cannot corrupt the host — but the run-log append writes NOTHING once the directory is gone.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WhileItRuns_RefusesADeleteOfTheSameRunAndStillRecordsTheOutcome()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        var runDirectory = SeedRunDirectory(harness, MintedRunId);
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await WritePatchAsync(harness, MintedRunId, patch);
+
+        // The apply parks inside the section it guards: the resolver is reached from BuildPlanAsync, after the guard
+        // is taken and well before the run-log append a delete would swallow. A gate the test releases, never a sleep.
+        harness.Resolver.BlockUntilReleased();
+        var apply = harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = MintedRunId
+        });
+        await AssertEx.EventuallyAsync(() => harness.Resolver.EnteredCount > 0,
+            TestBudgets.Contended,
+            "the apply never reached the resolver, so there was no in-flight apply for the delete to race.");
+
+        var refused = await DeleteService(harness).DeleteAsync(MintedRunId);
+
+        AssertEx.Equal(AgentHomeRunDeleteOutcome.Conflict, refused,
+            "a run whose patch is being applied right now must refuse the delete, not race it.");
+        AssertEx.True(Directory.Exists(runDirectory), "the refused delete must leave the run standing.");
+
+        harness.Resolver.Release();
+        var result = await apply;
+
+        AssertEx.True(result.Applied, $"rejections: {Describe(result.Rejections)}");
+        var events = await File.ReadAllTextAsync(Path.Combine(runDirectory, "logs", "events.jsonl"));
+        AssertEx.Contains(events, "patch_applied");
+
+        // And the guard is released on the way out: the same delete that was refused now succeeds.
+        AssertEx.Equal(AgentHomeRunDeleteOutcome.Deleted, await DeleteService(harness).DeleteAsync(MintedRunId),
+            "a finished apply must leave the run deletable, or the guard has become a leak.");
+    }
+
+    /// <summary>
+    ///     The other direction: a delete holds the guard across its removal, so an apply arriving mid-delete waits
+    ///     and finds an empty run. It must answer the refusal it already has for a run with nothing exported.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_OnARunThatWasJustDeleted_AnswersTheMissingPatchRefusal()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        SeedRunDirectory(harness, MintedRunId);
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await WritePatchAsync(harness, MintedRunId, patch);
+        AssertEx.Equal(AgentHomeRunDeleteOutcome.Deleted, await DeleteService(harness).DeleteAsync(MintedRunId));
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = MintedRunId
+        });
+
+        AssertEx.False(result.Applied);
+        AssertEx.True(result.PatchMissing,
+            "a run whose directory is gone has no exported patch, which is an answer the contract already carries.");
+        AssertEx.Contains(result.Rejections,
+            rejection => rejection.Reason.Contains("no exported patch is available", StringComparison.Ordinal));
+        AssertEx.Equal("alpha\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")),
+            "a refused apply writes nothing to the host.");
+    }
+
+    /// <summary>
+    ///     An apply that refuses still held the guard, so it still has to hand it back. The exit paths are asserted
+    ///     one by one because each returns through a different statement.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_AfterARefusedApply_LeavesTheRunDeletable()
+    {
+        var harness = NewHarness();
+        harness.AddFolder("repo-01");
+        SeedRunDirectory(harness, MintedRunId);
+
+        await WritePatchAsync(harness,
+            MintedRunId,
+            "diff --git a/repo-01/../escape.txt b/repo-01/../escape.txt\n"
+            + "new file mode 100644\n"
+            + "--- /dev/null\n"
+            + "+++ b/repo-01/../escape.txt\n"
+            + "@@ -0,0 +1 @@\n"
+            + "+pwned\n");
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = MintedRunId
+        });
+
+        AssertEx.False(result.Applied, "a traversing patch is refused, which is the exit path under test.");
+        AssertEx.Equal(AgentHomeRunDeleteOutcome.Deleted, await DeleteService(harness).DeleteAsync(MintedRunId));
+    }
+
+    [Test]
+    public async Task ApplyApprovedAsync_AfterItThrows_LeavesTheRunDeletable()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        SeedRunDirectory(harness, MintedRunId);
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await WritePatchAsync(harness, MintedRunId, patch);
+        harness.Resolver.ThrowOnList = new InvalidOperationException("the folder resolver fell over mid-apply.");
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = MintedRunId
+        }));
+
+        AssertEx.Equal(AgentHomeRunDeleteOutcome.Deleted, await DeleteService(harness).DeleteAsync(MintedRunId),
+            "an apply that failed in a way it never planned for must not lock the run forever.");
+    }
+
+    [Test]
+    public async Task ApplyApprovedAsync_AfterCancellation_LeavesTheRunDeletable()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        SeedRunDirectory(harness, MintedRunId);
+
+        var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
+        await WritePatchAsync(harness, MintedRunId, patch);
+
+        harness.Resolver.BlockUntilReleased();
+        using var cancellation = new CancellationTokenSource();
+        var apply = harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+            {
+                RunId = MintedRunId
+            },
+            cancellation.Token);
+        await AssertEx.EventuallyAsync(() => harness.Resolver.EnteredCount > 0,
+            TestBudgets.Contended,
+            "the apply never reached the point where it can be cancelled in flight.");
+
+        await cancellation.CancelAsync();
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => apply);
+
+        AssertEx.Equal(AgentHomeRunDeleteOutcome.Deleted, await DeleteService(harness).DeleteAsync(MintedRunId),
+            "a cancelled apply must hand the guard back like any other exit.");
+    }
+
     [Test]
     public async Task PreviewAsync_RedactsHostPathFromRejections()
     {
@@ -515,6 +670,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             runtimeSettings,
             new FakeNodeDataDirectory(agentHomeStateRoot),
             new StubIdentityProvider(),
+            new AgentHomeRunApplyGuard(),
             scopeFactory.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<NodePatchApplyService>.Instance);
 
@@ -1622,6 +1778,9 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var scopeFactory = new ServiceCollection()
                            .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(TimeProvider.System))
                            .BuildServiceProvider();
+        // One guard for the whole harness, as the singleton registration gives the node: a fresh one per service
+        // would be a guard per request, which guards nothing.
+        var applyGuard = new AgentHomeRunApplyGuard();
 
         NodePatchApplyService NewService() =>
             new(resolver,
@@ -1629,10 +1788,11 @@ public sealed class NodePatchApplyServiceTests : IDisposable
                 runtimeSettings,
                 new FakeNodeDataDirectory(agentHomeStateRoot),
                 new StubIdentityProvider(),
+                applyGuard,
                 scopeFactory.GetRequiredService<IServiceScopeFactory>(),
                 NullLogger<NodePatchApplyService>.Instance);
 
-        return new TestHarness(NewService, resolver, agentHomeRoot, () => NewTempDir());
+        return new TestHarness(NewService, resolver, agentHomeStateRoot, agentHomeRoot, applyGuard, () => NewTempDir());
     }
 
 
@@ -1754,6 +1914,30 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(patchesDir, "changes.patch"), patchText);
     }
 
+    /// <summary>
+    ///     A run directory with the <c>logs/</c> the run logger writes into, mirroring the real layout. Returns the
+    ///     run directory itself, which is what a delete removes.
+    /// </summary>
+    private static string SeedRunDirectory(TestHarness harness, string runId)
+    {
+        var runDirectory = Path.Combine(harness.AgentHomeRoot, "runs", runId);
+        Directory.CreateDirectory(Path.Combine(runDirectory, "logs"));
+        return runDirectory;
+    }
+
+    /// <summary>The operator delete over the same tree and apply guard the harness's apply service holds.</summary>
+    /// <remarks>
+    ///     The pairing the node's singleton registrations produce. The execution lease is the REAL manager, never
+    ///     acquired here, so the only thing that can refuse a delete in these tests is the apply guard.
+    /// </remarks>
+    private static AgentHomeRunDeleteService DeleteService(TestHarness harness) =>
+        new(Options.Create(new AgentHomeOptions { RootPath = harness.StateRoot }),
+            new FakeNodeDataDirectory(harness.StateRoot),
+            new StubIdentityProvider(),
+            new AgentHomeExecutionLeaseManager(),
+            harness.ApplyGuard,
+            NullLogger<AgentHomeRunDeleteService>.Instance);
+
     private static async Task GitOkAsync(string repoRoot, params string[] args)
     {
         var (exitCode, _, standardError) = await GitAsync(repoRoot, args);
@@ -1802,12 +1986,19 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         private readonly Func<NodePatchApplyService> _newService;
         private readonly FakeResolver _resolver;
 
-        public TestHarness(Func<NodePatchApplyService> newService, FakeResolver resolver, string agentHomeRoot, Func<string> newFolder)
+        public TestHarness(Func<NodePatchApplyService> newService,
+            FakeResolver resolver,
+            string stateRoot,
+            string agentHomeRoot,
+            AgentHomeRunApplyGuard applyGuard,
+            Func<string> newFolder)
         {
             _newService = newService;
             Service = newService();
             _resolver = resolver;
+            StateRoot = stateRoot;
             AgentHomeRoot = agentHomeRoot;
+            ApplyGuard = applyGuard;
             _newFolder = newFolder;
         }
 
@@ -1818,7 +2009,13 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         public NodePatchApplyService NewService() =>
             _newService();
 
+        /// <summary>The <c>RootPath</c> the options carry — what a service sharing this tree is configured with.</summary>
+        public string StateRoot { get; }
+
         public string AgentHomeRoot { get; }
+
+        /// <summary>The same instance the apply service holds, so a delete can be gated against a live apply.</summary>
+        public AgentHomeRunApplyGuard ApplyGuard { get; }
 
         public FakeResolver Resolver => _resolver;
 
@@ -1866,6 +2063,13 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             }
         }
 
+        /// <summary>
+        ///     Thrown out of the next resolve instead of answering. An unexpected exception type on purpose: the
+        ///     apply catches <see cref="SelectedFolderValidationException" />, so only something else proves what
+        ///     happens to state the apply holds when it fails in a way it never planned for.
+        /// </summary>
+        public Exception? ThrowOnList { get; set; }
+
         /// <summary>Makes every subsequent resolve wait inside the gate until <see cref="Release" />.</summary>
         public void BlockUntilReleased()
         {
@@ -1896,6 +2100,11 @@ public sealed class NodePatchApplyServiceTests : IDisposable
                 if (_release is { } release)
                 {
                     await release.Task.WaitAsync(cancellationToken);
+                }
+
+                if (ThrowOnList is { } failure)
+                {
+                    throw failure;
                 }
 
                 IReadOnlyList<SelectedFolderReference> references =

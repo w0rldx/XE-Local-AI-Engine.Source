@@ -46,6 +46,9 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddSingleton<IAgentHomeGoalExecutor, AgentHomeGoalExecutor>();
         // Run-scoped JSONL logger. The AgentHome gateway constructs one per run; the logger owns redacted event output.
         builder.Services.AddTransient<IAgentHomeRunLogger, AgentHomeRunLogger>();
+        // Which runs are mid-apply, shared by the scoped apply service, the operator delete and the retention sweep.
+        // Singleton or it guards nothing: a per-request instance is a separate idea of what is in flight.
+        builder.Services.AddSingleton<AgentHomeRunApplyGuard>();
         // Host patch-apply service: approval-gated landing of exported changes.patch onto selected host folders.
         builder.Services.AddScoped<INodePatchApplyService, NodePatchApplyService>();
         builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();
@@ -106,6 +109,8 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddSingleton<IAgentHomeManifestService, AgentHomeManifestService>();
         // Read-only projection of the on-disk run history; no database row exists for a run.
         builder.Services.AddSingleton<IAgentHomeRunListService, AgentHomeRunListService>();
+        // Operator-initiated removal of one run; its own seam so the list service stays read-only by construction.
+        builder.Services.AddSingleton<IAgentHomeRunDeleteService, AgentHomeRunDeleteService>();
         // Run-directory retention; nothing else ever deletes a run. Registered LAST on purpose: the sweep's first act
         // is a filesystem walk, which must not start ahead of the orphan reaper's process gates.
         builder.Services.AddOptions<AgentHomeRunRetentionOptions>()

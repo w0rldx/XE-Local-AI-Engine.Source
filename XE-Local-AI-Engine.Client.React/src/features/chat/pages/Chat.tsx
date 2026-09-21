@@ -1,13 +1,14 @@
 import { Alert, Anchor, Button, Center, Loader, Stack, Text, VisuallyHidden } from "@mantine/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatConversationStore";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { isNodeChatReadOnlyConflict } from "@/features/chat/api/NodeChatConflict";
 import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatConnectionReadiness";
@@ -76,6 +77,17 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		},
 		[isScoped, setSelectedConversationIdPreference],
 	);
+	// A deep link from another surface (an agent run naming the conversation it ran in) arrives through the core
+	// hand-off store rather than the URL, and is consumed once — a remount must never re-select it over whatever the
+	// operator has picked since. Consuming it under scope without acting is deliberate: an owner-pinned conversation
+	// ignores a `/chat` deep link, and leaving the id pending would make it fire at some later, unrelated mount.
+	const consumePendingConversationId = usePendingChatConversationStore((state) => state.actions.consume);
+	useEffect(() => {
+		const pendingConversationId = consumePendingConversationId();
+		if (pendingConversationId.length > 0) {
+			setRequestedConversationId(pendingConversationId);
+		}
+	}, [consumePendingConversationId, setRequestedConversationId]);
 	// Voice runtime: the node setting drives showVoiceControls; the playback tap mirrors the stream into Web Speech.
 	// Only the streaming loops call the tap, but it is instantiated here: `src/features/voice` is another feature and
 	// this page is the sole chat module dependency-cruiser carries that edge for.

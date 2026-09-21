@@ -1,10 +1,13 @@
 import { Badge, Button, Code, Group, Loader, Stack, Table, Text } from "@mantine/core";
-import { IconHistory } from "@tabler/icons-react";
+import { IconFileText, IconHistory, IconMessage, IconTrash } from "@tabler/icons-react";
+import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { AgentHomePatchApplyDialog } from "@/core/ui/components/AgentHomePatchApplyDialog/AgentHomePatchApplyDialog";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -12,6 +15,9 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useServerTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
+import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatConversationStore";
+import { AgentRunDeleteDialog } from "@/features/agentRuns/components/AgentRunDeleteDialog";
+import { AgentRunViewerDialog } from "@/features/agentRuns/components/AgentRunViewerDialog";
 import {
 	type AgentRunView,
 	agentRunOutcomeColor,
@@ -20,21 +26,37 @@ import {
 	formatAgentRunSize,
 } from "@/features/agentRuns/models/AgentRunModels";
 import { useAgentRuns } from "@/features/agentRuns/queries/useAgentRuns";
-import { AgentHomePatchApplyDialog } from "@/features/chat/components/AgentHomePatchApplyDialog";
 
 /**
  * The node's AgentHome run history: what the agent did on this computer, and which of those runs still has a patch
  * an operator can review and land.
  *
- * Read-only by design. The row action is the EXISTING review-and-apply dialog, opened for that run id — the same
- * one the chat tool card opens, so there is one apply flow and one hash binding, not two. Deleting a run, deep
- * links to the conversation and reading a run's logs are later slices.
+ * The row actions are the EXISTING review-and-apply dialog, opened for that run id — the same one the chat tool card
+ * opens, so there is one apply flow and one hash binding, not two — a deep link to the conversation the run happened
+ * in, a viewer over what the run wrote, and a confirmed delete.
+ *
+ * One dialog at a time by construction: each kind has its own `runId | null` slot and opening one closes the others,
+ * so no dialog ever has to be raised over another.
  */
 export function AgentRunsPage() {
 	const { t } = useTranslation();
+	const navigate = useNavigate();
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(agentRunPageSize);
 	const [reviewRunId, setReviewRunId] = useState<string | null>(null);
+	const [viewRunId, setViewRunId] = useState<string | null>(null);
+	const [deleteRunId, setDeleteRunId] = useState<string | null>(null);
+	// The conversation travels through the core hand-off store rather than a search param: `/chat` has no search
+	// schema and reads its thread from the chat preferences, which this store is what lets another feature reach
+	// without importing chat's own store.
+	const setPendingConversationId = usePendingChatConversationStore((state) => state.actions.setPendingConversationId);
+	const handleOpenConversation = useCallback(
+		(conversationId: string) => {
+			setPendingConversationId(conversationId);
+			navigate({ to: nodeRoutePaths.chat });
+		},
+		[navigate, setPendingConversationId],
+	);
 
 	// A new page size renumbers the pages, so the old page number means nothing against it.
 	const handlePageSizeChange = useCallback((next: number) => {
@@ -85,12 +107,20 @@ export function AgentRunsPage() {
 				) : null}
 				{runs.length > 0 ? (
 					<Stack gap="md">
-						<AgentRunTable runs={runs} onReview={setReviewRunId} />
+						<AgentRunTable
+							runs={runs}
+							onReview={setReviewRunId}
+							onOpenConversation={handleOpenConversation}
+							onView={setViewRunId}
+							onDelete={setDeleteRunId}
+						/>
 						<TablePaginationFooter {...pagination} data-testid="agent-runs-pagination" />
 					</Stack>
 				) : null}
 			</SectionCard>
 			{reviewRunId === null ? null : <AgentHomePatchApplyDialog runId={reviewRunId} onClose={() => setReviewRunId(null)} />}
+			{viewRunId === null ? null : <AgentRunViewerDialog runId={viewRunId} onClose={() => setViewRunId(null)} />}
+			{deleteRunId === null ? null : <AgentRunDeleteDialog runId={deleteRunId} onClose={() => setDeleteRunId(null)} />}
 		</PageShell>
 	);
 }
@@ -98,9 +128,15 @@ export function AgentRunsPage() {
 function AgentRunTable({
 	runs,
 	onReview,
+	onOpenConversation,
+	onView,
+	onDelete,
 }: {
 	readonly runs: readonly AgentRunView[];
 	readonly onReview: (runId: string) => void;
+	readonly onOpenConversation: (conversationId: string) => void;
+	readonly onView: (runId: string) => void;
+	readonly onDelete: (runId: string) => void;
 }) {
 	const { t } = useTranslation();
 
@@ -134,22 +170,85 @@ function AgentRunTable({
 							</Table.Td>
 							<Table.Td>{formatAgentRunSize(run.sizeBytes)}</Table.Td>
 							<Table.Td>
-								{run.patchExported ? (
-									<Button
-										size="xs"
-										variant="light"
-										onClick={() => onReview(run.runId)}
-										data-testid={`agent-run-review-${run.runId}`}
-									>
-										{t("pages.agentRuns.review", "Review changes")}
-									</Button>
-								) : null}
+								<RunActionsCell
+									run={run}
+									onReview={onReview}
+									onOpenConversation={onOpenConversation}
+									onView={onView}
+									onDelete={onDelete}
+								/>
 							</Table.Td>
 						</Table.Tr>
 					))}
 				</Table.Tbody>
 			</Table>
 		</Table.ScrollContainer>
+	);
+}
+
+/**
+ * What an operator can still do with this run: review its patch, open the conversation it ran in, read what it
+ * wrote, and delete it.
+ *
+ * An action is absent rather than disabled when the run has nothing to offer it — a run older than the `started`
+ * event that carries the conversation id, or one whose log could not be parsed, reports `conversationId: null`, and a
+ * disabled button explaining that to every such row would cost a tooltip a keyboard cannot reach for no gain. View
+ * and delete are always offered: every run has a directory, even an empty one, and the viewer says so honestly.
+ */
+function RunActionsCell({
+	run,
+	onReview,
+	onOpenConversation,
+	onView,
+	onDelete,
+}: {
+	readonly run: AgentRunView;
+	readonly onReview: (runId: string) => void;
+	readonly onOpenConversation: (conversationId: string) => void;
+	readonly onView: (runId: string) => void;
+	readonly onDelete: (runId: string) => void;
+}) {
+	const { t } = useTranslation();
+	const conversationId = run.conversationId;
+
+	return (
+		<Group gap="xs" wrap="nowrap">
+			{run.patchExported ? (
+				<Button size="xs" variant="light" onClick={() => onReview(run.runId)} data-testid={`agent-run-review-${run.runId}`}>
+					{t("pages.agentRuns.review", "Review changes")}
+				</Button>
+			) : null}
+			<Button
+				size="xs"
+				variant="subtle"
+				leftSection={<IconFileText size={14} />}
+				onClick={() => onView(run.runId)}
+				data-testid={`agent-run-view-${run.runId}`}
+			>
+				{t("pages.agentRuns.viewer.open", "Log and patch")}
+			</Button>
+			{conversationId === null ? null : (
+				<Button
+					size="xs"
+					variant="subtle"
+					leftSection={<IconMessage size={14} />}
+					onClick={() => onOpenConversation(conversationId)}
+					data-testid={`agent-run-conversation-${run.runId}`}
+				>
+					{t("pages.agentRuns.openConversation", "Open conversation")}
+				</Button>
+			)}
+			<Button
+				size="xs"
+				variant="subtle"
+				color="red"
+				leftSection={<IconTrash size={14} />}
+				onClick={() => onDelete(run.runId)}
+				data-testid={`agent-run-delete-${run.runId}`}
+			>
+				{t("pages.agentRuns.delete.action", "Delete")}
+			</Button>
+		</Group>
 	);
 }
 

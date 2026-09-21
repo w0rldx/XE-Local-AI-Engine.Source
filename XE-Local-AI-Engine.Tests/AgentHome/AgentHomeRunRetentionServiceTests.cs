@@ -113,6 +113,36 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
             "a run may be in flight while the lease is held, so the sweep waits rather than racing it.");
     }
 
+    /// <summary>
+    ///     The grace window is a margin, not a guard: an apply can start on a run of any age. The sweep must skip
+    ///     exactly that run — and only it, since the guard is keyed per run — and take it on a later tick.
+    /// </summary>
+    [Test]
+    public async Task Sweep_WhileARunsPatchIsBeingApplied_LeavesThatRunForTheNextTick()
+    {
+        var applying = SeedRun(Now.AddDays(-40));
+        var otherOld = SeedRun(Now.AddDays(-39));
+        SeedRun(Now.AddHours(-1));
+        var guard = new AgentHomeRunApplyGuard();
+        var logger = new RecordingLogger<AgentHomeRunRetentionService>();
+
+        using (guard.BeginApply(Path.GetFileName(applying)))
+        {
+            await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 }, logger: logger, applyGuard: guard);
+
+            AssertEx.True(Directory.Exists(applying),
+                "the apply writes its outcome into this directory when it finishes; the sweep must not take it first.");
+            AssertEx.False(Directory.Exists(otherOld),
+                "one run being applied must not stop the sweep — the guard is per run, unlike the execution lease.");
+            AssertEx.True(logger.HasEntry(LogLevel.Debug, "being applied right now"),
+                "a run the sweep skipped for a reason other than its limits says so, or the skip is invisible.");
+        }
+
+        await SweepAsync(new AgentHomeRunRetentionOptions { RetentionDays = 30 }, applyGuard: guard);
+
+        AssertEx.False(Directory.Exists(applying), "the next sweep after the apply finishes takes it like any other.");
+    }
+
     [Test]
     public async Task Sweep_LeavesARunInsideTheGracePeriodAlone()
     {
@@ -225,6 +255,7 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
             new FakeNodeDataDirectory(_dataRoot.Path),
             new ThrowOnceIdentityProvider(),
             new StubLeaseManager(held: false),
+            new AgentHomeRunApplyGuard(),
             clock,
             logger);
 
@@ -254,13 +285,15 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
     private async Task SweepAsync(AgentHomeRunRetentionOptions options,
         bool leaseHeld = false,
         string? rootPath = null,
-        RecordingLogger<AgentHomeRunRetentionService>? logger = null)
+        RecordingLogger<AgentHomeRunRetentionService>? logger = null,
+        AgentHomeRunApplyGuard? applyGuard = null)
     {
         using var service = CreateService(options,
             new AgentHomeOptions { Enabled = true, RootPath = rootPath ?? Path.Combine(_dataRoot.Path, "agent-home-state") },
             leaseHeld,
             logger ?? new RecordingLogger<AgentHomeRunRetentionService>(),
-            new ManualTimeProvider(Now));
+            new ManualTimeProvider(Now),
+            applyGuard);
         await service.SweepAsync(CancellationToken.None);
     }
 
@@ -268,12 +301,14 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         AgentHomeOptions agentHomeOptions,
         bool leaseHeld,
         ILogger<AgentHomeRunRetentionService> logger,
-        TimeProvider timeProvider) =>
+        TimeProvider timeProvider,
+        AgentHomeRunApplyGuard? applyGuard = null) =>
         new(Options.Create(options),
             Options.Create(agentHomeOptions),
             new FakeNodeDataDirectory(_dataRoot.Path),
             new StaticIdentityProvider(),
             new StubLeaseManager(leaseHeld),
+            applyGuard ?? new AgentHomeRunApplyGuard(),
             timeProvider,
             logger);
 

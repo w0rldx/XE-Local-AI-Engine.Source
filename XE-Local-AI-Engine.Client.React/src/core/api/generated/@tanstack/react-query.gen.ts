@@ -89,6 +89,7 @@ import {
 	decideGraphWorkflowNodeRun,
 	decideTrainingArtifactQuality,
 	deleteAgentDefinition,
+	deleteAgentHomeRun,
 	deleteBaseArtifact,
 	deleteBenchmarkProject,
 	deleteBenchmarkRun,
@@ -150,6 +151,8 @@ import {
 	generateTrainingDataset,
 	getAgentDefinition,
 	getAgentFeedbackInsights,
+	getAgentHomeRunLog,
+	getAgentHomeRunPatch,
 	getAgentPlaybookMonitor,
 	getAgentUsageSummary,
 	getAppUpdateStatus,
@@ -648,6 +651,9 @@ import type {
 	DecideTrainingArtifactQualityResponse,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionResponse,
+	DeleteAgentHomeRunData,
+	DeleteAgentHomeRunError,
+	DeleteAgentHomeRunResponse,
 	DeleteBaseArtifactData,
 	DeleteBaseArtifactError,
 	DeleteBaseArtifactResponse,
@@ -797,6 +803,12 @@ import type {
 	GetAgentDefinitionResponse,
 	GetAgentFeedbackInsightsData,
 	GetAgentFeedbackInsightsResponse,
+	GetAgentHomeRunLogData,
+	GetAgentHomeRunLogError,
+	GetAgentHomeRunLogResponse,
+	GetAgentHomeRunPatchData,
+	GetAgentHomeRunPatchError,
+	GetAgentHomeRunPatchResponse,
 	GetAgentPlaybookMonitorData,
 	GetAgentPlaybookMonitorResponse,
 	GetAgentUsageSummaryData,
@@ -11177,6 +11189,70 @@ export const applyAgentHomePatchMutation = (
 	};
 	return mutationOptions;
 };
+
+export const deleteAgentHomeRunMutation = (
+	options?: Partial<Options<DeleteAgentHomeRunData>>,
+): UseMutationOptions<DeleteAgentHomeRunResponse, AxiosError<DeleteAgentHomeRunError>, Options<DeleteAgentHomeRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteAgentHomeRunResponse,
+		AxiosError<DeleteAgentHomeRunError>,
+		Options<DeleteAgentHomeRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteAgentHomeRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getAgentHomeRunLogQueryKey = (options: Options<GetAgentHomeRunLogData>) =>
+	createQueryKey("getAgentHomeRunLog", options);
+
+export const getAgentHomeRunLogOptions = (options: Options<GetAgentHomeRunLogData>) =>
+	queryOptions<
+		GetAgentHomeRunLogResponse,
+		AxiosError<GetAgentHomeRunLogError>,
+		GetAgentHomeRunLogResponse,
+		ReturnType<typeof getAgentHomeRunLogQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAgentHomeRunLog({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAgentHomeRunLogQueryKey(options),
+	});
+
+export const getAgentHomeRunPatchQueryKey = (options: Options<GetAgentHomeRunPatchData>) =>
+	createQueryKey("getAgentHomeRunPatch", options);
+
+export const getAgentHomeRunPatchOptions = (options: Options<GetAgentHomeRunPatchData>) =>
+	queryOptions<
+		GetAgentHomeRunPatchResponse,
+		AxiosError<GetAgentHomeRunPatchError>,
+		GetAgentHomeRunPatchResponse,
+		ReturnType<typeof getAgentHomeRunPatchQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAgentHomeRunPatch({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAgentHomeRunPatchQueryKey(options),
+	});
 
 export const listAgentHomeRunsQueryKey = (options?: Options<ListAgentHomeRunsData>) =>
 	createQueryKey("listAgentHomeRuns", options);

@@ -38,6 +38,16 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
     /// <summary>Longest line the reader will hand to the JSON parser; a longer one is skipped, not truncated.</summary>
     private const int MaxLogLineChars = 65536;
 
+    /// <summary>
+    ///     Bytes of <c>changes.patch</c> a viewer is handed, independent of the apply budget.
+    /// </summary>
+    /// <remarks>
+    ///     A display cap, not a policy one: the apply budget is a runtime setting about what may be LANDED, and a
+    ///     patch well inside it is still more than a browser tab should be asked to render. Nothing is refused for
+    ///     being over this — the read reports <c>truncated</c> and the operator still sees the beginning.
+    /// </remarks>
+    private const int PatchDisplayMaxBytes = 1048576;
+
     private readonly string _dataDirectoryRoot;
     private readonly AgentHomeOptions _options;
 
@@ -58,16 +68,13 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
             return new AgentHomeRunPage { Items = [], TotalCount = 0 };
         }
 
-        var runs = new List<(string Path, string RunId, DateTimeOffset StartedAt)>();
+        var runs = new List<AgentHomeRunLocation>();
         foreach (var path in Directory.EnumerateDirectories(runsRoot))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var name = Path.GetFileName(path);
-            if (AgentHomeRunPaths.TryParseStartedAt(name) is { } startedAt
-                && PathContainment.IsUnderRoot(path, runsRoot)
-                && !AgentHomeRunPaths.IsLink(path))
+            if (AgentHomeRunPaths.TryResolveRun(runsRoot, Path.GetFileName(path)) is { } run)
             {
-                runs.Add((path, name, startedAt));
+                runs.Add(run);
             }
         }
 
@@ -83,6 +90,69 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
         }
 
         return new AgentHomeRunPage { Items = items, TotalCount = runs.Count };
+    }
+
+    /// <inheritdoc />
+    public async Task<AgentHomeRunText?> ReadLogAsync(string runId, CancellationToken cancellationToken = default)
+    {
+        if (ResolveRun(runId) is not { } run)
+        {
+            return null;
+        }
+
+        // The same two windows the page is built from: an operator reading a run wants its opening and its end, and
+        // the middle of a multi-gigabyte log is neither.
+        var (lines, truncated) = await ReadBoundedLinesAsync(Path.Combine(run.Path, "logs", "events.jsonl"), cancellationToken);
+        return new AgentHomeRunText { Text = string.Join('\n', lines), Truncated = truncated };
+    }
+
+    /// <inheritdoc />
+    public async Task<AgentHomeRunText?> ReadPatchAsync(string runId, CancellationToken cancellationToken = default)
+    {
+        return ResolveRun(runId) is { } run
+            ? await ReadCappedTextAsync(Path.Combine(run.Path, "patches", "changes.patch"), PatchDisplayMaxBytes, cancellationToken)
+            : null;
+    }
+
+    private AgentHomeRunLocation? ResolveRun(string runId)
+    {
+        var runsRoot = AgentHomeRunPaths.ResolveRunsRoot(_options, _dataDirectoryRoot);
+        return AgentHomeRunPaths.TryResolveRun(runsRoot, runId);
+    }
+
+    /// <summary>
+    ///     The head of one run file as text, with whether the file went on past the cap.
+    /// </summary>
+    /// <remarks>
+    ///     A run that exists but whose file is missing, linked, non-regular or unreadable reads as empty rather than
+    ///     as unknown: the question "what did this run leave here" was answered, and "nothing this node will show you"
+    ///     is the answer. The cut is made at the last complete line so a split UTF-8 sequence never reaches a viewer
+    ///     as replacement characters dressed as content.
+    /// </remarks>
+    private static async Task<AgentHomeRunText> ReadCappedTextAsync(string path, int maxBytes, CancellationToken cancellationToken)
+    {
+        await using var stream = TryOpenRunFile(path, long.MaxValue);
+        if (stream is null)
+        {
+            return new AgentHomeRunText { Text = string.Empty, Truncated = false };
+        }
+
+        try
+        {
+            var truncated = stream.Length > maxBytes;
+            var text = Encoding.UTF8.GetString(await ReadSegmentAsync(stream, offset: 0, (int)Math.Min(stream.Length, maxBytes), cancellationToken));
+            if (truncated)
+            {
+                var lastBreak = text.LastIndexOf('\n');
+                text = lastBreak < 0 ? string.Empty : text[..(lastBreak + 1)];
+            }
+
+            return new AgentHomeRunText { Text = text, Truncated = truncated };
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return new AgentHomeRunText { Text = string.Empty, Truncated = false };
+        }
     }
 
     private static async Task<AgentHomeRunSummary> SummarizeAsync(string runDirectory,
@@ -110,7 +180,7 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
     private static async Task<EventSummary> ReadEventsAsync(string eventsPath, CancellationToken cancellationToken)
     {
         var summary = new EventSummary();
-        foreach (var line in await ReadBoundedLinesAsync(eventsPath, cancellationToken))
+        foreach (var line in (await ReadBoundedLinesAsync(eventsPath, cancellationToken)).Lines)
         {
             if (line.Length <= MaxLogLineChars)
             {
@@ -254,18 +324,21 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
     }
 
     /// <summary>
-    ///     Complete lines from the head and tail of a JSONL file, never the middle of a large one.
+    ///     Complete lines from the head and tail of a JSONL file, never the middle of a large one, plus whether a
+    ///     middle was skipped at all.
     /// </summary>
     /// <remarks>
     ///     The <c>started</c> event is the first line and the outcome and apply events are the last few, so two capped
     ///     windows answer everything the list asks. A partial line at a window's edge is dropped rather than parsed.
+    ///     The flag exists for the reader that SHOWS these lines: joined text with a gap in it and no note would read
+    ///     as a complete log that simply says nothing about the middle of the run.
     /// </remarks>
-    private static async Task<IReadOnlyList<string>> ReadBoundedLinesAsync(string path, CancellationToken cancellationToken)
+    private static async Task<(IReadOnlyList<string> Lines, bool Truncated)> ReadBoundedLinesAsync(string path, CancellationToken cancellationToken)
     {
         await using var stream = TryOpenRunFile(path, EventsMaxBytes);
         if (stream is null)
         {
-            return [];
+            return ([], false);
         }
 
         byte[] head;
@@ -288,16 +361,16 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return [];
+            return ([], false);
         }
 
         // Each window drops the edge line it cannot have in full: the head ends mid-line when it hit its cap, and a
         // tail taken at all starts mid-line.
         return
-        [
+        ([
             .. SplitLines(head, dropFirst: false, dropLast: tail.Length > 0),
             .. SplitLines(tail, dropFirst: true, dropLast: false)
-        ];
+        ], tail.Length > 0);
     }
 
     private static async Task<byte[]> ReadSegmentAsync(FileStream stream, long offset, int count, CancellationToken cancellationToken)

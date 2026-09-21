@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
+import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatConversationStore";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import type { ChatConversationModel, ChatScope } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
@@ -163,6 +164,7 @@ describe("Chat scope seam", () => {
 		adapter.resumeConversation.mockImplementation(() => emptyResumeStream());
 		useNodeChatPreferencesStore.getState().actions.setSelectedConversationId("chat-1");
 		useNodeChatPreferencesStore.getState().actions.setSelectedModel("qwen3:8b");
+		usePendingChatConversationStore.setState({ pendingConversationId: "" });
 	});
 
 	afterEach(() => {
@@ -272,6 +274,28 @@ describe("Chat scope seam", () => {
 		await waitFor(() => expect(adapter.resumeConversation).toHaveBeenCalledTimes(1));
 		rerender({ conversationId: "session-conversation", resumeNonce: 1, embedded: true });
 		await waitFor(() => expect(adapter.resumeConversation).toHaveBeenCalledTimes(2));
+	});
+
+	// A deep link from another surface (an agent run) hands its conversation over through the core store; `/chat`
+	// turns that into the selection it already persists, and empties the hand-off so a remount cannot re-apply it.
+	it("opens the conversation a deep link handed over, and consumes it once", async () => {
+		usePendingChatConversationStore.getState().actions.setPendingConversationId("chat-2");
+
+		renderChat();
+
+		await waitFor(() => expect(useNodeChatPreferencesStore.getState().selectedConversationId).toBe("chat-2"));
+		expect(usePendingChatConversationStore.getState().pendingConversationId).toBe("");
+	});
+
+	// An owner-pinned conversation ignores a `/chat` deep link, but must still swallow it: an id left pending would
+	// fire at some later, unrelated mount.
+	it("consumes a deep link under scope without writing the global preference", async () => {
+		usePendingChatConversationStore.getState().actions.setPendingConversationId("chat-2");
+
+		renderChat({ conversationId: "session-conversation", embedded: true });
+
+		await waitFor(() => expect(usePendingChatConversationStore.getState().pendingConversationId).toBe(""));
+		expect(useNodeChatPreferencesStore.getState().selectedConversationId).toBe("chat-1");
 	});
 
 	it("never writes the global conversation preference under scope", async () => {

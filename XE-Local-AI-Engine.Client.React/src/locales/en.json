@@ -3098,6 +3098,7 @@
 			"loadError": "The run history could not be loaded.",
 			"empty": "This node has not run an agent task yet.",
 			"review": "Review changes",
+			"openConversation": "Open conversation",
 			"noPatch": "No changes exported",
 			"files": "{{value}} file(s)",
 			"filesUnknown": "Patch exported",
@@ -3120,6 +3121,26 @@
 			"applyState": {
 				"applied": "Applied",
 				"rejected": "Apply refused"
+			},
+			"delete": {
+				"action": "Delete",
+				"title": "Delete this run?",
+				"confirm": "Delete run",
+				"body": "This run's log and its exported patch are removed from this computer.",
+				"appliedNote": "Changes that were already applied stay in your folders. Deleting the run removes its history, not its results.",
+				"error": "This run could not be deleted. A run may be in flight; try again in a moment."
+			},
+			"viewer": {
+				"open": "Log and patch",
+				"title": "Run contents",
+				"logTab": "Log",
+				"patchTab": "Patch",
+				"loading": "Reading…",
+				"logEmpty": "This run recorded no log.",
+				"patchEmpty": "This run exported no patch.",
+				"logError": "The run's log could not be read.",
+				"patchError": "The run's patch could not be read.",
+				"truncated": "This file is longer than what is shown here; part of it was left out."
 			}
 		},
 		"mcp": {

@@ -7,6 +7,27 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 public interface IAgentHomeRunListService
 {
     Task<AgentHomeRunPage> ListAsync(int limit, int offset, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     One run's event log as text, or <see langword="null" /> when the run is not one this node will serve.
+    /// </summary>
+    /// <remarks>
+    ///     Unlike every other value this service returns, the text is the run's own bytes rather than a closed token,
+    ///     so it is capped, cut at a line break, and carries whether anything was left out. A run that exists with no
+    ///     log reads as empty text, not as an unknown run: the two answers are different questions.
+    /// </remarks>
+    Task<AgentHomeRunText?> ReadLogAsync(string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>One run's exported <c>changes.patch</c> as text, under the same gates and cap as the log.</summary>
+    Task<AgentHomeRunText?> ReadPatchAsync(string runId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Capped text read out of one run's own files, with whether the file went on past the cap.</summary>
+public sealed record AgentHomeRunText
+{
+    public required string Text { get; init; }
+
+    public required bool Truncated { get; init; }
 }
 
 /// <summary>One page of run summaries plus the unpaged total, so a client can render a real pager.</summary>

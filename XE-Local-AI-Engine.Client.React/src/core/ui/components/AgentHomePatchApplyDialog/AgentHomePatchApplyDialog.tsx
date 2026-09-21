@@ -5,10 +5,13 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import {
+	useApplyAgentHomePatch,
+	usePreviewAgentHomePatch,
+} from "@/core/ui/components/AgentHomePatchApplyDialog/useAgentHomePatch";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { useApplyAgentHomePatch, usePreviewAgentHomePatch } from "@/features/chat/queries/useAgentHomePatch";
 
 interface AgentHomePatchApplyDialogProps {
 	runId: string;

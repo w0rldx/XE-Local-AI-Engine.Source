@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AgentHomePatchApplyDialog } from "@/features/chat/components/AgentHomePatchApplyDialog";
+import { AgentHomePatchApplyDialog } from "@/core/ui/components/AgentHomePatchApplyDialog/AgentHomePatchApplyDialog";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";

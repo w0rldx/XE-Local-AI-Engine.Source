@@ -36,6 +36,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     /// </summary>
     private static readonly SemaphoreSlim ApplyGate = new(initialCount: 1, maxCount: 1);
 
+    private readonly AgentHomeRunApplyGuard _applyGuard;
     private readonly string _dataDirectoryRoot;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly ILogger<NodePatchApplyService> _logger;
@@ -49,6 +50,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         INodeRuntimeSettings runtimeSettings,
         INodeDataDirectory dataDirectory,
         IAgentHomeIdentityProvider identityProvider,
+        AgentHomeRunApplyGuard applyGuard,
         IServiceScopeFactory scopeFactory,
         ILogger<NodePatchApplyService> logger)
     {
@@ -59,6 +61,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _dataDirectoryRoot = dataDirectory.Root;
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
+        _applyGuard = applyGuard ?? throw new ArgumentNullException(nameof(applyGuard));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -129,6 +132,9 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         await ApplyGate.WaitAsync(cancellationToken);
         try
         {
+            // Held from before the plan is built past the final run-log append, which a concurrent removal of this
+            // run would otherwise swallow. `using` covers every exit, or the run could never be deleted again.
+            using var applying = _applyGuard.BeginApply(request.RunId);
             return await ApplyApprovedCoreAsync(request, cancellationToken);
         }
         finally

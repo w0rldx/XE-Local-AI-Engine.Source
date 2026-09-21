@@ -7718,6 +7718,13 @@ export const zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyReques
 	patchSha256: z.string().regex(/^[0-9a-fA-F]{64}$/),
 });
 
+export const zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomeRunByIdRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomeRunTextResponse = z.object({
+	text: z.string(),
+	truncated: z.boolean(),
+});
+
 export const zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomeRunDto = z.object({
 	runId: z.string(),
 	startedAtUtc: z.iso.datetime({ offset: true }),
@@ -11673,6 +11680,33 @@ export const zApplyAgentHomePatchPath = z.object({
  * Success
  */
 export const zApplyAgentHomePatchResponse = zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyResponse;
+
+export const zDeleteAgentHomeRunPath = z.object({
+	runId: z.string(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteAgentHomeRunResponse = z.void();
+
+export const zGetAgentHomeRunLogPath = z.object({
+	runId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetAgentHomeRunLogResponse = zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomeRunTextResponse;
+
+export const zGetAgentHomeRunPatchPath = z.object({
+	runId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetAgentHomeRunPatchResponse = zXeLocalAiEngineClientEndpointsAgentHomeV1AgentHomeRunTextResponse;
 
 export const zListAgentHomeRunsQuery = z.object({
 	limit: z

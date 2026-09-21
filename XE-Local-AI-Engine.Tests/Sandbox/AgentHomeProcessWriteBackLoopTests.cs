@@ -163,6 +163,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             runtimeSettings,
             new FakeNodeDataDirectory(options.Value.RootPath ?? string.Empty),
             new StaticIdentityProvider("owner-a", "node-1"),
+            new AgentHomeRunApplyGuard(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<NodePatchApplyService>.Instance);
     }

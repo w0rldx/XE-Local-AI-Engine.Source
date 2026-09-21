@@ -9,8 +9,9 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// <remarks>
 ///     A startup sweep runs before the periodic loop, so a node down past a run's window does not keep it until the
 ///     first tick. Three limits apply oldest-first — age, run count, total bytes — and every deletion passes the same
-///     four gates: the directory name is one the node minted, the path resolves under the runs root, the directory is
-///     not a link, and the execution lease is not held. A sweep failure is logged and never stops the service.
+///     five gates: the directory name is one the node minted, the path resolves under the runs root, the directory is
+///     not a link, the execution lease is not held, and no apply of that run's patch is in flight. A sweep failure is
+///     logged and never stops the service.
 /// </remarks>
 internal sealed partial class AgentHomeRunRetentionService : BackgroundService
 {
@@ -28,6 +29,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     /// <summary>Ceiling on entries one run's size walk visits, so a pathological tree cannot stall the sweep.</summary>
     private const int MaxMeasuredEntriesPerRun = 20000;
 
+    private readonly AgentHomeRunApplyGuard _applyGuard;
     private readonly string _dataDirectoryRoot;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly IAgentHomeExecutionLeaseManager _leaseManager;
@@ -41,6 +43,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
         INodeDataDirectory dataDirectory,
         IAgentHomeIdentityProvider identityProvider,
         IAgentHomeExecutionLeaseManager leaseManager,
+        AgentHomeRunApplyGuard applyGuard,
         TimeProvider timeProvider,
         ILogger<AgentHomeRunRetentionService> logger)
     {
@@ -52,6 +55,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
         _dataDirectoryRoot = dataDirectory.Root;
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
         _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
+        _applyGuard = applyGuard ?? throw new ArgumentNullException(nameof(applyGuard));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -231,24 +235,15 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
 
         foreach (var path in Directory.EnumerateDirectories(runsRoot))
         {
-            var name = Path.GetFileName(path);
-            if (AgentHomeRunPaths.TryParseStartedAt(name) is not { } startedAt)
-            {
-                // A name the node did not mint is never deleted: the sweep cannot say how old it is, and a directory
-                // it cannot classify is one it must leave alone.
-                unclassified++;
-                continue;
-            }
-
-            // Lexical containment, then the link check: the first keeps a "..", a rooted name or a trailing-separator
-            // root out, and the second keeps the sweep from ever treating a link as the tree it points at.
-            if (!PathContainment.IsUnderRoot(path, runsRoot) || AgentHomeRunPaths.IsLink(path))
+            // The same gate the operator-initiated delete passes: an unminted name, one that resolves outside the
+            // runs root, or a link is not a run this sweep can classify — and it leaves what it cannot classify.
+            if (AgentHomeRunPaths.TryResolveRun(runsRoot, Path.GetFileName(path)) is not { } run)
             {
                 unclassified++;
                 continue;
             }
 
-            runs.Add(new RunCandidate(path, name, startedAt, AgentHomeRunPaths.MeasureBytes(path, MaxMeasuredEntriesPerRun)));
+            runs.Add(new RunCandidate(run.Path, run.RunId, run.StartedAt, AgentHomeRunPaths.MeasureBytes(run.Path, MaxMeasuredEntriesPerRun)));
         }
 
         return runs;
@@ -258,10 +253,15 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     {
         try
         {
-            // Recursive delete never follows a link out of the tree — it removes the link itself — and the directory
-            // the sweep was handed is already proven not to be one.
-            Directory.Delete(candidate.Path, recursive: true);
-            return true;
+            // Recursive delete never follows a link out of the tree, and the gate already proved this is not one.
+            // Inside the apply guard, so a run being applied right now is left for the next tick.
+            if (_applyGuard.TryRemove(candidate.RunId, () => Directory.Delete(candidate.Path, recursive: true)))
+            {
+                return true;
+            }
+
+            SweepSkippedApplyInFlight(_logger, candidate.RunId);
+            return false;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -291,6 +291,10 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     [LoggerMessage(EventId = 4812, Level = LogLevel.Debug,
         Message = "AgentHome run retention stopped after {DeletedCount} deletion(s): a run took the execution lease.")]
     private static partial void SweepYieldedToRun(ILogger logger, int deletedCount);
+
+    [LoggerMessage(EventId = 4815, Level = LogLevel.Debug,
+        Message = "AgentHome run retention left run {RunId} alone: its exported patch is being applied right now.")]
+    private static partial void SweepSkippedApplyInFlight(ILogger logger, string runId);
 
     [LoggerMessage(EventId = 4813, Level = LogLevel.Debug, Message = "AgentHome run retention could not delete run {RunId}.")]
     private static partial void DeleteFailed(ILogger logger, string runId, Exception exception);

@@ -19,7 +19,6 @@
   "[\"no-cross-feature\",\"src/features/about/components/AboutDialog/AboutDialog.tsx\",\"src/features/app-update/components/AppUpdateSection.tsx\"]",
   "[\"no-cross-feature\",\"src/features/about/components/AboutDialog/AboutDialog.tsx\",\"src/features/onboarding/context/OnboardingContext.ts\"]",
   "[\"no-cross-feature\",\"src/features/about/components/AboutDialog/AboutDialog.tsx\",\"src/features/onboarding/data/TutorialRegistry.ts\"]",
-  "[\"no-cross-feature\",\"src/features/agentRuns/pages/AgentRunsPage.tsx\",\"src/features/chat/components/AgentHomePatchApplyDialog.tsx\"]",
   "[\"no-cross-feature\",\"src/features/agents/components/AgentDefinitionBasicFields.tsx\",\"src/features/assist/components/AssistActions.tsx\"]",
   "[\"no-cross-feature\",\"src/features/agents/components/AgentDefinitionBasicFields.tsx\",\"src/features/assist/models/AssistModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/agents/components/AgentSkillSelector.tsx\",\"src/features/skills/models/SkillModels.ts\"]",

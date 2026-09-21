@@ -291,3 +291,10 @@ internal sealed class HostGitResult
 
     public required string StandardError { get; init; }
 }
+
+/// <summary>
+///     One run directory that has passed <see cref="AgentHomeRunPaths.TryResolveRun" />: proven to be a name the node
+///     minted, to sit under the runs root, and not to be a link. Holding the three together is what stops a caller
+///     from re-deriving the path from the id after the gate ran.
+/// </summary>
+internal readonly record struct AgentHomeRunLocation(string Path, string RunId, DateTimeOffset StartedAt);

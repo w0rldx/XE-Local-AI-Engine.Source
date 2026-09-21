@@ -766,6 +766,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             StubNodeRuntimeSettings.Create().Build(),
             new FakeNodeDataDirectory(fixture.StateRoot),
             new StaticIdentityProvider(),
+            new AgentHomeRunApplyGuard(),
             scopeFactory.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<NodePatchApplyService>.Instance);
     }

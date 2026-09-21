@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 using System.Globalization;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Where the agent-home layout and a run's artifacts live, and how a run directory name maps back to the
@@ -77,6 +78,30 @@ internal static class AgentHomeRunPaths
             // A digit string long enough to overflow the epoch range is not a run this node minted.
             return null;
         }
+    }
+
+    /// <summary>
+    ///     The one gate every caller that reaches into a named run directory passes, or <see langword="null" /> when
+    ///     the name is not a run this node can serve.
+    /// </summary>
+    /// <remarks>
+    ///     Each check only means something after the one before it: an unminted name is unknowable, so it is never
+    ///     touched (it also cannot carry a separator, a <c>..</c> or a root, which keeps
+    ///     <see cref="Path.Combine(string, string)" /> from composing anything but a child); lexical containment is
+    ///     the belt on that; the link check keeps a planted link from being treated as the tree it points at. A run
+    ///     that does not exist reads the same as one refused, so a probe learns nothing from the difference.
+    /// </remarks>
+    public static AgentHomeRunLocation? TryResolveRun(string runsRoot, string runDirectoryName)
+    {
+        if (TryParseStartedAt(runDirectoryName) is not { } startedAt)
+        {
+            return null;
+        }
+
+        var path = Path.Combine(runsRoot, runDirectoryName);
+        return Directory.Exists(path) && PathContainment.IsUnderRoot(path, runsRoot) && !IsLink(path)
+            ? new AgentHomeRunLocation(path, runDirectoryName, startedAt)
+            : null;
     }
 
     /// <summary>Bytes a run occupies, walking its own tree only — a link is counted as itself, never followed.</summary>

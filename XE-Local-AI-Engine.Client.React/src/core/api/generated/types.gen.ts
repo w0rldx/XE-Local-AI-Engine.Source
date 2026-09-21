@@ -6279,6 +6279,15 @@ export type XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomePatchApplyRequest 
 	patchSha256: string;
 };
 
+export type XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomeRunByIdRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomeRunTextResponse = {
+	text: string;
+	truncated: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsAgentHomeV1ListAgentHomeRunsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomeRunDto>;
 	totalCount: number;
@@ -20373,6 +20382,124 @@ export type ApplyAgentHomePatchResponses = {
 };
 
 export type ApplyAgentHomePatchResponse = ApplyAgentHomePatchResponses[keyof ApplyAgentHomePatchResponses];
+
+export type DeleteAgentHomeRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agent-home/runs/{runId}";
+};
+
+export type DeleteAgentHomeRunErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
+};
+
+export type DeleteAgentHomeRunError = DeleteAgentHomeRunErrors[keyof DeleteAgentHomeRunErrors];
+
+export type DeleteAgentHomeRunResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteAgentHomeRunResponse = DeleteAgentHomeRunResponses[keyof DeleteAgentHomeRunResponses];
+
+export type GetAgentHomeRunLogData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agent-home/runs/{runId}/log";
+};
+
+export type GetAgentHomeRunLogErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetAgentHomeRunLogError = GetAgentHomeRunLogErrors[keyof GetAgentHomeRunLogErrors];
+
+export type GetAgentHomeRunLogResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomeRunTextResponse;
+};
+
+export type GetAgentHomeRunLogResponse = GetAgentHomeRunLogResponses[keyof GetAgentHomeRunLogResponses];
+
+export type GetAgentHomeRunPatchData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/agent-home/runs/{runId}/patch";
+};
+
+export type GetAgentHomeRunPatchErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetAgentHomeRunPatchError = GetAgentHomeRunPatchErrors[keyof GetAgentHomeRunPatchErrors];
+
+export type GetAgentHomeRunPatchResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentHomeV1AgentHomeRunTextResponse;
+};
+
+export type GetAgentHomeRunPatchResponse = GetAgentHomeRunPatchResponses[keyof GetAgentHomeRunPatchResponses];
 
 export type ListAgentHomeRunsData = {
 	body?: never;
