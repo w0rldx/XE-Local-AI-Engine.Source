@@ -450,7 +450,7 @@ XE-Local-AI-Engine.Tests/Architecture/EndpointAuthorizationPolicyTests.cs|run|4
 XE-Local-AI-Engine.Tests/Architecture/EndpointAuthorizationPolicyTests.cs|summary|3
 XE-Local-AI-Engine.Tests/Architecture/EndpointConventionTests.cs|block|1
 XE-Local-AI-Engine.Tests/Architecture/EndpointConventionTests.cs|run|4
-XE-Local-AI-Engine.Tests/Architecture/EndpointConventionTests.cs|summary|4
+XE-Local-AI-Engine.Tests/Architecture/EndpointConventionTests.cs|summary|3
 XE-Local-AI-Engine.Tests/Architecture/EndpointDependencyTests.cs|block|1
 XE-Local-AI-Engine.Tests/Architecture/EndpointDependencyTests.cs|remarks|1
 XE-Local-AI-Engine.Tests/Architecture/EndpointDependencyTests.cs|run|1

@@ -32,7 +32,7 @@ whole rule.
 **The retry arm is NOT SQL.** `dev_workflow_run_events.detail_json` is encrypted at rest
 (`NodeEncryptionSaveChangesInterceptor.cs:716-719`), so `json_extract` over it returns ciphertext. Read it through
 the existing events endpoint, which returns the decrypted `DetailJson`
-(`DevWorkflowRunEndpoints.cs:171-182`, route bound at `:177`; DTO `DevWorkflowContracts.cs`) — no new endpoint, no
+(`ListDevWorkflowRunEventsEndpoint`, DTO `DevWorkflowContracts.cs`) — no new endpoint, no
 new column.
 
 ```bash

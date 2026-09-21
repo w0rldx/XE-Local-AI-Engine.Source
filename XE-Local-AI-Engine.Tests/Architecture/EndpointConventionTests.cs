@@ -17,8 +17,8 @@ using Assembly = System.Reflection.Assembly;
 /// <summary>
 ///     Freezes the endpoint conventions the host already follows, so the next endpoint cannot quietly break them.
 ///     <para>
-///         R1/R2 — one endpoint type per file, and the file is named after it. R3 — the thirty-four grouping files
-///         that predate the rule are named, and nothing else may be plural. R4 — every endpoint is sealed. R5 — a
+///         R1/R2 — one endpoint type per file, and the file is named after it. R3 — no plural grouping file may
+///         declare an endpoint; the allowlist that held thirty-four of them is empty. R4 — every endpoint is sealed. R5 — a
 ///         route is never a string literal; it comes from <c>LocalApiRoutes</c>, which is what keeps the SPA client,
 ///         the MCP surface and the endpoint in agreement about a path.
 ///     </para>
@@ -53,49 +53,13 @@ public sealed class EndpointConventionTests
 
     private const string EndpointsPrefix = "XE-Local-AI-Engine.Client/Endpoints/";
 
-    /// <summary>
-    ///     Files that group several endpoints under one plural name. They predate R1/R2 and are grandfathered by
-    ///     path, not by a rule: §3a of the slice plan measured every mechanical "the filename is the resource noun"
-    ///     heuristic against them and eighty-five of roughly one hundred and forty member types fail it, so an
-    ///     allowlist is the only honest mechanism. A file leaves this list by being split, never by being renamed.
-    /// </summary>
-    private static readonly string[] PluralEndpointFiles =
-    [
-        "Auth/V1/NodeAuthEndpoints.cs",
-        "Automation/V1/SlashCommandEndpoints.cs",
-        "Benchmarks/V1/BenchmarkCatalogEndpoints.cs",
-        "Benchmarks/V1/BenchmarkExportEndpoints.cs",
-        "Benchmarks/V1/BenchmarkFidelityEndpoints.cs",
-        "Benchmarks/V1/BenchmarkPairwiseEndpoints.cs",
-        "Benchmarks/V1/BenchmarkProjectEndpoints.cs",
-        "Benchmarks/V1/BenchmarkRunEndpoints.cs",
-        "Benchmarks/V1/BenchmarkTaskItemEndpoints.cs",
-        "Development/V1/ArtifactDevelopmentEndpoints.cs",
-        "Development/V1/CapabilityDevelopmentEndpoints.cs",
-        "Development/V1/PatchDevelopmentEndpoints.cs",
-        "Development/V1/ProjectDevelopmentEndpoints.cs",
-        "Development/V1/RepositoryDevelopmentEndpoints.cs",
-        "Development/V1/TaskDevelopmentEndpoints.cs",
-        "Development/V1/TemplateDevelopmentEndpoints.cs",
-        "DevelopmentWorkflows/V1/DevWorkflowDefinitionEndpoints.cs",
-        "DevelopmentWorkflows/V1/DevWorkflowNodeRunEndpoints.cs",
-        "DevelopmentWorkflows/V1/DevWorkflowRuleSetEndpoints.cs",
-        "DevelopmentWorkflows/V1/DevWorkflowRunEndpoints.cs",
-        "DevelopmentWorkflows/V1/DevWorkflowWorkItemEndpoints.cs",
-        "LocalChat/V1/ManageNodeChatConversationEndpoints.cs",
-        "LocalChat/V1/ManageNodeChatMessageEndpoints.cs",
-        "Training/Comparisons/V1/TrainingComparisonEndpoints.cs",
-        "Training/Datasets/V1/TrainingDatasetEndpoints.cs",
-        "Training/Definitions/V1/TrainingDefinitionEndpoints.cs",
-        "Training/Evaluations/V1/TrainingEvaluationEndpoints.cs",
-        "Training/Exports/V1/TrainingExportEndpoints.cs",
-        "Training/Mocks/V1/ToolMockEndpoints.cs",
-        "Training/Runs/V1/TrainingRunEndpoints.cs",
-        "TutorialState/V1/TutorialStateEndpoints.cs",
-        "WorkSessions/V1/WorkSessionCrudEndpoints.cs",
-        "WorkSessions/V1/WorkSessionFeedEndpoints.cs",
-        "WorkSessions/V1/WorkSessionLifecycleEndpoints.cs"
-    ];
+    /// <summary>Files that group several endpoints under one plural name. Empty: R1/R2 hold with no exception.</summary>
+    /// <remarks>
+    ///     The thirty-four files that predated R1/R2 were split one file per endpoint class in S7f-1, so the rule
+    ///     no longer has an allowlist to outlive it. The list stays as the mechanism because it is also what refuses
+    ///     a NEW plural file; anything added to it is a grouping somebody chose to keep, and needs a reason.
+    /// </remarks>
+    private static readonly string[] PluralEndpointFiles = [];
 
     private static readonly Assembly ClientAssembly = typeof(LocalApiRoutes).Assembly;
 
@@ -235,7 +199,7 @@ public sealed class EndpointConventionTests
 
         AssertEx.Empty(unlisted,
             "A new plural '*Endpoints.cs' file declares endpoints. The rule is one endpoint per file named after its type; "
-            + "the listed thirty-four are grandfathered and the list does not grow: "
+            + "the grandfathered groupings were all split, so PluralEndpointFiles is empty and does not grow: "
             + string.Join(", ", unlisted));
 
         var stale = PluralEndpointFiles

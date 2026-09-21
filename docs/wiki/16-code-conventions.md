@@ -34,10 +34,10 @@ they drift, so a reviewer (human or agent) has to know them.
 
 ### Endpoints: FastEndpoints, one per file — **not** MediatR/CQRS
 
-The API layer is **FastEndpoints**. The dominant shape is **one endpoint class per `*Endpoint.cs` file**
-under `Endpoints/{Area}/V1/`; a small number of areas group several into a plural `*Endpoints.cs`
-(for example `NodeAuthEndpoints.cs`). Both are acceptable — **match the area you are editing**, don't
-mass-convert either way. There is **no MediatR / `ISender` / CQRS vertical-slice layer** anywhere; an
+The API layer is **FastEndpoints**. The shape is **one endpoint class per `*Endpoint.cs` file**
+under `Endpoints/{Area}/V1/`, and the file is named after the class. The plural `*Endpoints.cs` groupings that
+predated the rule were split in S7f-1, so `EndpointConventionTests` now enforces it with an empty allowlist: a
+new plural file fails the gate. There is **no MediatR / `ISender` / CQRS vertical-slice layer** anywhere; an
 endpoint injects and calls `Client.Application` services directly and stays **orchestration-only**
 (no business logic, no persistence). It returns a **DTO, never an EF entity** — and a DTO is a `sealed class`
 with `required`/`init` members (see [DTOs, records and type choice](#dtos-records-and-type-choice)).
@@ -131,15 +131,26 @@ endpoint infrastructure, not a category worth a folder of one. An endpoint's **o
 
 ### One top-level type per file — the family files are the exception
 
-A `.cs` file declares one top-level type, named after the file. The documented exceptions are the DTO/contract
-and service-model **family files** below (`*Dtos.cs`, `*Contracts.cs`, `*ServiceModels.cs`/`*Models.cs`), which
-group a related family on purpose. Everything else is drift in one of two directions: a DTO inlined in an
-`*Endpoint.cs`, or a stray type riding along in a `*Service.cs`. Both move out — the DTO to the area's `Dtos/`
-family file (the namespace stays flat, so this is a pure move), the stray type to the service's sibling
-`*ServiceModels.cs`.
+A `.cs` file declares one top-level type, named after the file. Four shapes are exceptions, and nothing else is:
 
-*Migration status:* slice **S7f** moves the DTOs still inline in endpoint files and triages the remaining
-multi-type files; `ServiceModelColocationTests` already fails the gate for the `Services/` folders it covers.
+- a **family file** — `*Dtos.cs`, `*Contracts.cs`, `*ServiceModels.cs`, `*Models.cs` — which groups a related
+  family on purpose (see the section below);
+- an **interface beside its single implementation**, `IFoo` and `Foo`;
+- one **primary type beside only enums and delegates**, the vocabulary it takes or returns;
+- an **`I*Store.cs` / `I*Service.cs`** declaring that interface plus its own command, snapshot, result and
+  exception types — functionally a family file named after its contract, which a split would scatter.
+
+Everything else is drift in one of two directions: a DTO inlined in an `*Endpoint.cs`, or a stray type riding
+along in a `*Service.cs`. Both move out — the DTO to the area's `Dtos/` folder (the namespace stays flat, so
+this is a pure move), the stray type to the service's sibling `*ServiceModels.cs`.
+
+`FilePlacementConventionTests` fails the gate on any production file that declares more than one top-level type
+without one of those four shapes, against `XE-Local-AI-Engine.Tests/Architecture/FilePlacementAllowlist.txt` —
+one `file|count` line per file still carrying inherited debt, shrink-only in both directions, so the commit that
+splits a file lowers or deletes its line and the room cannot be spent twice. It reads source, because IL carries
+no file identity, and counts brace depth so a nested type is never mistaken for a top-level one.
+`ServiceModelColocationTests` keeps its narrower rule over the `Services/` folders it covers, and
+`EndpointConventionTests` owns the endpoint half by reflection (below).
 
 ### DTO families still aggregate in one `*Dtos.cs` / `*Contracts.cs` — on purpose
 
@@ -346,7 +357,7 @@ flows the referenced project's package compile assets by default.
 ### Placement is pinned by architecture tests, not by review
 
 IDE0130 checks that a file's namespace matches the folder the file **already** sits in; it cannot tell you the
-file is in the wrong folder. Three rules in `XE-Local-AI-Engine.Tests/Architecture/` close that gap and fail the
+file is in the wrong folder. These rules in `XE-Local-AI-Engine.Tests/Architecture/` close that gap and fail the
 build's test gate, not the reviewer's memory:
 
 | Convention | Enforced by |
@@ -355,12 +366,16 @@ build's test gate, not the reviewer's memory:
 | A public **`*Options`** class in a `Providers.*` project lives in `…Providers.<Name>.Options`. | `PlacementConventionTests.ProviderOptionsClasses_ResideInTheProviderOptionsNamespace` |
 | In the host: a FastEndpoints endpoint lives in a `.V1` namespace, a `*Mapper` in `.V1.Mappers`, an `IValidator` in `.V1.Validators`. | `PlacementConventionTests.ClientEndpointsMappersAndValidators_ResideInTheirVersionedNamespaces` |
 | A service implementation file under `Client.Application/Services/{AgentHome,Benchmarks,Development,Integrations,Training,WorkSessions}/` declares the service and nothing else — its records and enums go in a sibling `*Models` / `*ServiceModels` / `*Contracts` / `*Dtos` file. | `ServiceModelColocationTests.ServiceImplementationFiles_DoNotAlsoDeclareContractTypes` |
+| A production `.cs` file declares one top-level type, unless it is a family file, an `IFoo`+`Foo` pair, one type beside only enums and delegates, or an `I*Store.cs`/`I*Service.cs` contract bundle. | `FilePlacementConventionTests.ProductionProjects_DeclareOneTopLevelTypePerFile` |
+| An endpoint class is alone in a file named after it; no plural `*Endpoints.cs` may declare one. | `EndpointConventionTests.EveryEndpointTypeIsDeclaredInExactlyOneFileNamedAfterIt`, `…PluralEndpointFilesAreOnlyTheNamedGroupingExceptions` |
 
-The first three are **ArchUnitNET** (`TngTech.ArchUnitNET`, test-project only) over compiled IL; it sits
-alongside NetArchTest, which pins dependency *direction* between assemblies rather than placement inside one.
-The fourth is a source-text scan, because IL records no source file and file co-location is the whole point of
-that rule; the `Services/` folders outside that list still hold pre-existing co-located declarations and are
-deliberately out of scope.
+`PlacementConventionTests` is **ArchUnitNET** (`TngTech.ArchUnitNET`, test-project only) over compiled IL; it
+sits alongside NetArchTest, which pins dependency *direction* between assemblies rather than placement inside
+one. The rest read source, because IL records no source file and file identity is the whole point of those
+rules. `ServiceModelColocationTests` covers the `Services/` folders it names and nothing else;
+`FilePlacementConventionTests` covers every production project against a shrink-only allowlist of the debt it
+inherited; `EndpointConventionTests` takes reflection over the compiled host as ground truth for which types are
+endpoints, and has no allowlist at all.
 
 Concrete implementations are **not** required to sit under `Implementation/`: providers legitimately keep
 root-level DTOs, enums, exceptions and value records (`LlamaBinary`, `GpuVariant`, `LlamaRuntimeException`, …),

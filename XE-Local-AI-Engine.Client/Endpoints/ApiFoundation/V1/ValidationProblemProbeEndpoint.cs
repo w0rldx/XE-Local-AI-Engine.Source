@@ -4,16 +4,6 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class ValidationProblemProbeRequest
-{
-    public string? Name { get; init; }
-}
-
-public sealed class ValidationProblemProbeResponse
-{
-    public required string Name { get; init; }
-}
-
 public sealed class ValidationProblemProbeEndpoint : Endpoint<ValidationProblemProbeRequest, ValidationProblemProbeResponse>
 {
     public override void Configure()

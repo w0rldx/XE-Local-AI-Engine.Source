@@ -219,7 +219,7 @@ abolish it.
 Authorization is **deny-by-default, in two layers**. At the FastEndpoints layer a global configurator applies
 the `NodeOperator` policy to every discovered endpoint whether or not that endpoint's own `Configure()` asked
 for it, so a forgotten `Policies()` call cannot ship an anonymous route; an endpoint that deliberately opted
-out with `AllowAnonymous()` still wins, and the four pre-authentication endpoints in `NodeAuthEndpoints`
+out with `AllowAnonymous()` still wins, and the four pre-authentication endpoints under `Endpoints/Auth/V1/` (status, setup, login, refresh)
 (`auth/status`, `auth/setup`, `auth/login`, `auth/refresh`) are the entire anonymous set. Behind it,
 `AuthorizationOptions.FallbackPolicy` requires JWT bearer and an authenticated user for every routed surface
 carrying no authorization metadata of its own, and it is evaluated even when routing matches no endpoint at
