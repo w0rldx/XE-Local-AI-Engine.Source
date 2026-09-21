@@ -241,7 +241,10 @@ public static class ConfigureServices
             // refused by that app-level check with a legible message rather than by SignalR's opaque frame-size error. Raise the two together.
             options.MaximumReceiveMessageSize = 512 * 1024;
             options.StreamBufferCapacity = 1;
-        });
+        })
+               // Hub frames carry the SAME JSON policy as the REST surface. On SignalR's own defaults a CLR enum member reaches the browser as a NUMBER while
+               // the generated TS type for that field is a string union, so a handler comparing names matches nothing, silently. See docs/wiki/09-api-and-hubs.md.
+               .AddJsonProtocol(options => ConfigureJsonSerializerOptions(options.PayloadSerializerOptions));
         // Seed the FastEndpoints serializer global HERE, at registration time, or the OpenAPI generator snapshots a PascalCase copy. The global is
         // process-wide, so a read-only one has been served with already. See docs/wiki/09-api-and-hubs.md ("Why the FastEndpoints serializer global is seeded at registration time").
         var fastEndpointsSerializerOptions = new Config().Serializer.Options;

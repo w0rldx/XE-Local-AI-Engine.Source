@@ -215,6 +215,7 @@ public sealed class DevelopmentAttemptHubTests
                 options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
                 options.Headers.Add("Origin", "http://localhost");
             })
+            .WithNodeJsonProtocol()
             .Build();
 
     private static DevelopmentAttemptSnapshot Attempt(Guid attemptId, DevelopmentAttemptStatus status) =>

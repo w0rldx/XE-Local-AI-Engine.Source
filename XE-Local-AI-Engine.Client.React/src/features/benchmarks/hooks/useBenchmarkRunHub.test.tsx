@@ -218,4 +218,37 @@ describe("useBenchmarkRunHub", () => {
 
 		await waitFor(() => expect(result.current.overlay.judgeState).toBeNull());
 	});
+
+	// The WIRE-CONTRACT pin. These two frames are the literal JSON text the hub emits, parsed with JSON.parse rather
+	// than written as objects, so the `kind` spelling and the all-members-present payload are what is asserted.
+	it("renders a frame whose kind is the enum name and drops one carrying a raw enum number", async () => {
+		const refetch = vi.fn(async () => run());
+		const { result } = renderHook(() => useBenchmarkRunHub({ run: run(), refetch }));
+		await waitFor(() => expect(invoke).toHaveBeenCalledWith("Subscribe", "run-1", 0));
+
+		act(() => handlers.get(benchmarkHubEvents.event)?.(JSON.parse(outputDeltaWire(1, "hello"))));
+		expect(result.current.parts).toEqual([{ kind: "output", content: "hello" }]);
+
+		// BenchmarkRunStreamEventKind.OutputDelta as its ordinal — every frame looked like this before this slice, so the
+		// whole live pane stayed empty until the terminal HTTP snapshot landed.
+		act(() => handlers.get(benchmarkHubEvents.event)?.(JSON.parse(numericKindWire(2))));
+
+		expect(result.current.parts).toEqual([{ kind: "output", content: "hello" }]);
+		expect(result.current.lastSequence).toBe(1);
+		expect(refetch).not.toHaveBeenCalled();
+	});
 });
+
+// The payload as the server writes it: DefaultIgnoreCondition.Never sends every nullable member, so a realistic frame
+// carries the nulls too rather than only the field under test.
+function outputDeltaWire(sequence: number, content: string): string {
+	return `{"runId":"run-1","sequence":${sequence},"kind":"OutputDelta","payload":${payloadWire(content)}}`;
+}
+
+function numericKindWire(sequence: number): string {
+	return `{"runId":"run-1","sequence":${sequence},"kind":0,"payload":${payloadWire("dropped")}}`;
+}
+
+function payloadWire(content: string): string {
+	return `{"content":"${content}","state":null,"toolCallId":null,"toolName":null,"arguments":null,"result":null,"isError":null,"effectiveContextTokens":null,"durationMs":null,"totalTokens":null,"tokensPerSecond":null,"runVersion":null,"ttftMs":null,"promptTokens":null,"promptTokensPerSecond":null,"generationTokens":null,"generationTokensPerSecond":null,"cachedPromptTokens":null,"segmentCount":null}`;
+}

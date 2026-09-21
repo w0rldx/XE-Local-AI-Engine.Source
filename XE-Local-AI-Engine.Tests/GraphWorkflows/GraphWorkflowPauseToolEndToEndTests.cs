@@ -159,6 +159,7 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
                                          options.AccessTokenProvider = () => Task.FromResult<string?>(Host.Factory.CreateNodeAccessToken());
                                          options.Headers.Add("Origin", "http://localhost");
                                      })
+                                     .WithNodeJsonProtocol()
                                      .Build();
         _ = connection.On<GraphWorkflowChanged>(GraphWorkflowHubEvents.Changed, changed =>
         {

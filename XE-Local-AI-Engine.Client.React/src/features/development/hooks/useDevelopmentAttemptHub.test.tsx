@@ -166,4 +166,35 @@ describe("useDevelopmentAttemptHub", () => {
 			queryKey: developmentInvalidationKey(developmentQueryIds.getProject),
 		});
 	});
+
+	// The WIRE-CONTRACT pin. This hook has no zod schema, so a numeric `kind` is not rejected — it simply matches no
+	// branch, which is why the terminal invalidation was silently dead. Both wire forms go in as literal JSON text.
+	it("invalidates on a terminal frame whose kind is the enum name and not on one carrying a raw enum number", async () => {
+		hubMock.connection.invoke.mockResolvedValue(snapshot(1));
+		const { queryClient, wrapper } = harness();
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+		const { result } = renderHook(() => useDevelopmentAttemptHub(projectId, taskId, attemptId), { wrapper });
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+
+		// DevelopmentAttemptLiveUpdateKind.Terminal / DevelopmentAttemptStatus.Succeeded as their ordinals.
+		emitWire(terminalWire(2, "7", "2"));
+		expect(invalidate).not.toHaveBeenCalled();
+		expect(result.current.latest?.kind).not.toBe("Terminal");
+
+		emitWire(terminalWire(3, '"Terminal"', '"Succeeded"'));
+
+		expect(invalidate).toHaveBeenCalledTimes(1);
+		expect(result.current.latest?.kind).toBe("Terminal");
+		expect(result.current.latest?.status).toBe("Succeeded");
+	});
 });
+
+// A server frame verbatim: camelCase members, every nullable present, `kind` and `status` substituted so the same text
+// serves both the pre-fix ordinal shape and the name the hub emits now.
+function terminalWire(sequence: number, kind: string, status: string): string {
+	return `{"projectId":"${projectId}","taskId":"${taskId}","attemptId":"${attemptId}","sequence":${sequence},"occurredAtUtc":${sequence},"kind":${kind},"role":"Coder","status":${status},"modelId":"coder-model","provider":"local","outputDelta":null,"currentActivity":null,"inputTokens":null,"outputTokens":null,"reasoningTokens":null,"outputTokensPerSecond":null,"providerRoundCount":1,"toolCallCount":0,"commandCount":0,"currentToolId":null,"currentCommandId":null,"currentOperationElapsedMilliseconds":null,"changedFileCount":0,"patchByteCount":0,"subjectHash":null,"contextUsagePercent":null,"contextHeadroomPercent":null,"secondsSinceMeaningfulProgress":0,"warningCategory":null,"warningMessage":null}`;
+}
+
+function emitWire(wireText: string): void {
+	act(() => hubMock.handlers.get("developmentAttemptUpdate")?.(JSON.parse(wireText) as DevelopmentAttemptLiveUpdate));
+}

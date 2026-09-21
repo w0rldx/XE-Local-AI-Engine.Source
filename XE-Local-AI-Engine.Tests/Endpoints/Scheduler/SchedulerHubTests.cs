@@ -48,6 +48,7 @@ public sealed class SchedulerHubTests
                                          options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
                                          options.Headers.Add("Origin", "http://localhost");
                                      })
+                                     .WithNodeJsonProtocol()
                                      .Build();
 
         var received = new TaskCompletionSource<SchedulerDefinitionHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);

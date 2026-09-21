@@ -186,6 +186,7 @@ public sealed class TranscriptionHubBinaryFrameTransportTests
                     options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
                     options.Headers.Add("Origin", "http://localhost");
                 })
+            .WithNodeJsonProtocol()
             .Build();
 
     private static async Task<Guid> CreateSessionAsync(HttpClient client, TestServerWebAppFactory factory)

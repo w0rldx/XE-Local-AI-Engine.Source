@@ -1,4 +1,13 @@
-import { checkSignalrProxySync, compareProxyPaths, extractMappedHubPaths } from "./CheckSignalrProxySync.mjs";
+import {
+	checkHubPayloadEnums,
+	checkSignalrProxySync,
+	compareEnumMembers,
+	compareProxyPaths,
+	extractCSharpEnumMembers,
+	extractMappedHubPaths,
+	extractQuotedNames,
+	hubPayloadEnums,
+} from "./CheckSignalrProxySync.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -91,4 +100,36 @@ test("rejects unmatched active MapHub invocations", () => {
 		() => extractMappedHubPaths("app.MapHub<ChatHub>(LocalApiRoutes.Chat.Hub;", ""),
 		/Unmatched \( in active MapHub invocation/,
 	);
+});
+
+test("holds every hub payload enum to its hand-written client member list", () => {
+	assert.equal(checkHubPayloadEnums(), hubPayloadEnums.length);
+	assert.ok(hubPayloadEnums.length > 0);
+});
+
+test("reads C# enum members through the trivia mask, ignoring doc comments and explicit values", () => {
+	const source = `public enum Kind
+{
+    /// <summary>A "quoted" doc comment naming Decoy.</summary>
+    State = 0,
+
+    // Decoy in a line comment.
+    Progress = 1,
+    Export
+}`;
+	assert.deepEqual(extractCSharpEnumMembers(source, "Kind"), ["State", "Progress", "Export"]);
+});
+
+test("reads a client member list from a z.enum array, an as-const array and a string-literal union alike", () => {
+	assert.deepEqual(extractQuotedNames('kind: z.enum(["State", "Export"]),', "kind: z.enum([", "]"), ["State", "Export"]);
+	assert.deepEqual(extractQuotedNames('const kinds = ["A", "B"] as const;', "const kinds = [", "]"), ["A", "B"]);
+	assert.deepEqual(extractQuotedNames('export type K =\n\t| "A"\n\t| "B";', "export type K =", ";"), ["A", "B"]);
+});
+
+test("reports a member the server can send that the client omits, and one the client kept after a rename", () => {
+	assert.deepEqual(compareEnumMembers(["State", "Export", "EvaluationState"], ["State", "Export"]), {
+		missing: ["EvaluationState"],
+		stale: [],
+	});
+	assert.deepEqual(compareEnumMembers(["State"], ["State", "Removed"]), { missing: [], stale: ["Removed"] });
 });

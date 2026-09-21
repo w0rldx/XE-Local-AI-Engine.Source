@@ -416,7 +416,18 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
 
         await using var stream = new FileStream(_manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var manifest = await JsonSerializer.DeserializeAsync<ManifestDocument>(stream, SerializerOptions, ct).ConfigureAwait(false);
+        ManifestDocument? manifest;
+        try
+        {
+            manifest = await JsonSerializer.DeserializeAsync<ManifestDocument>(stream, SerializerOptions, ct).ConfigureAwait(false);
+        }
+        catch (JsonException exception)
+        {
+            // Deliberately NOT the read path's rescan-and-persist self-heal: the caller writes the manifest back, so recovering a corrupt or
+            // partially-readable document as "the entries I could parse" would delete every row this build could not read.
+            throw new IOException("The GGUF registry manifest is invalid.", exception);
+        }
+
         if (manifest?.Models is null)
         {
             throw new IOException("The GGUF registry manifest is invalid.");

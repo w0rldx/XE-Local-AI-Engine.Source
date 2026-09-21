@@ -85,9 +85,10 @@ export interface TrainingRunDefaultsView {
 export const trainingRunEventSchema = z.object({
 	runId: z.string(),
 	sequence: z.number(),
-	// "Export" rides the same stream as training progress: the run's own status never moves for an export, so this
-	// is the only live signal that one is happening.
-	kind: z.enum(["State", "Phase", "Progress", "Artifact", "Export", "Error"]),
+	// Every member of the server's TrainingRunEventKind, or the frame is dropped: "Export" rides this stream because the
+	// run's own status never moves for an export, and the two Evaluation kinds because an evaluation rides its run's
+	// group rather than one of its own. scripts/CheckSignalrProxySync.mjs holds this list to the C# enum.
+	kind: z.enum(["State", "Phase", "Progress", "Artifact", "Error", "EvaluationState", "EvaluationProgress", "Export"]),
 	payload: z.object({
 		state: z.string().nullish(),
 		phase: z.string().nullish(),
@@ -204,6 +205,14 @@ export function toTrainingRunDefaultsView(response: TrainingRunDefaultsResponse)
 
 /** Folds one hub event into the running progress view. */
 export function applyRunEvent(current: TrainingRunLiveProgress, event: TrainingRunEvent): TrainingRunLiveProgress {
+	// An evaluation's frames ride this stream but describe the EVALUATION, not the run: its `state` is an evaluation
+	// status and its step/totalSteps are samples scored/total. Folding them here would overwrite the run's own status and
+	// drive the training progress bar off the wrong counters, so the run view ignores them and the evaluations list —
+	// refreshed by the resync in useTrainingRunHub — is what renders them.
+	if (event.kind === "EvaluationState" || event.kind === "EvaluationProgress") {
+		return current;
+	}
+
 	const next = { ...current };
 	if (event.payload.state != null) {
 		next.status = event.payload.state as TrainingRunStatusValue;

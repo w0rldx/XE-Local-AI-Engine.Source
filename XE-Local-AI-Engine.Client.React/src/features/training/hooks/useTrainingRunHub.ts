@@ -54,8 +54,9 @@ export function useTrainingRunHub(runId: string | null, onResync: () => void): T
 			}
 			cursorRef.current = parsed.data.sequence;
 			setProgress((current) => applyRunEvent(current, parsed.data));
-			if (parsed.data.kind === "State") {
-				// A status change moves the run row itself, which only the HTTP snapshot is authoritative for.
+			// A status change moves a row only the HTTP snapshot is authoritative for — the run's own for "State", and an
+			// evaluation's for "EvaluationState", which rides this stream because evaluations share their run's group.
+			if (parsed.data.kind === "State" || parsed.data.kind === "EvaluationState") {
 				resyncRef.current();
 			}
 		};

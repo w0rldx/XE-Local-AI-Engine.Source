@@ -169,6 +169,109 @@ export function compareProxyPaths(mappedPaths, proxyPaths) {
 	return { missing, stale };
 }
 
+/**
+ * Every hub payload enum the client keeps its OWN member list for. The generated OpenAPI unions are covered by
+ * `openapi:check`; these are hand-written, so nothing but this check couples them to the C# enum. A member the server
+ * can send and the client's list omits is not a type error anywhere — a zod `z.enum` silently rejects the whole frame
+ * and the feature goes quiet, which is how `EvaluationState`/`EvaluationProgress` were dropped for the whole life of
+ * the training evaluation stream.
+ */
+export const hubPayloadEnums = [
+	{
+		name: "TrainingRunEventKind",
+		csharpPath: "XE-Local-AI-Engine.Client.Application/Services/Training/Runs/TrainingRunEvents.cs",
+		clientPath: "src/features/training/models/TrainingRunModels.ts",
+		anchor: "kind: z.enum([",
+		terminator: "]",
+	},
+	{
+		name: "DatasetGenerationEventKind",
+		csharpPath: "XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetGenerationEvents.cs",
+		clientPath: "src/features/training/models/TrainingDatasetModels.ts",
+		anchor: "kind: z.enum([",
+		terminator: "]",
+	},
+	{
+		name: "BenchmarkRunStreamEventKind",
+		csharpPath: "XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkExecutionContracts.cs",
+		clientPath: "src/features/benchmarks/models/BenchmarkLiveStreamModels.ts",
+		anchor: "const benchmarkRunEventKinds = [",
+		terminator: "]",
+	},
+	{
+		name: "DevelopmentAttemptLiveUpdateKind",
+		csharpPath: "XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentAttemptLiveUpdate.cs",
+		clientPath: "src/features/development/models/DevelopmentModels.ts",
+		anchor: "export type DevelopmentLiveUpdateKind =",
+		terminator: ";",
+	},
+	{
+		name: "ScheduledRunStatus",
+		csharpPath: "XE-Local-AI-Engine.Client.Persistence/Entities/ScheduledRunStatus.cs",
+		clientPath: "src/features/scheduler/models/SchedulerModels.ts",
+		anchor: "export const scheduledRunStatuses: readonly ScheduledRunStatus[] = [",
+		terminator: "]",
+	},
+];
+
+export function extractCSharpEnumMembers(source, enumName) {
+	const structuralSource = maskCSharpTrivia(source);
+	const declaration = new RegExp(`\\benum\\s+${enumName}\\s*(?::\\s*\\w+\\s*)?\\{`).exec(structuralSource);
+	if (!declaration) {
+		throw new Error(`Could not find the C# enum ${enumName}.`);
+	}
+	const openingBrace = structuralSource.indexOf("{", declaration.index);
+	const closingBrace = findMatching(structuralSource, openingBrace, "{", "}", `enum ${enumName}`);
+	return structuralSource
+		.slice(openingBrace + 1, closingBrace)
+		.split(",")
+		.map((member) => /^\s*([A-Za-z_]\w*)/.exec(member)?.[1])
+		.filter((member) => member !== undefined);
+}
+
+export function extractQuotedNames(source, anchor, terminator) {
+	const start = source.indexOf(anchor);
+	if (start < 0) {
+		throw new Error(`Could not find the client member list anchored at ${anchor}.`);
+	}
+	const from = start + anchor.length;
+	const end = source.indexOf(terminator, from);
+	if (end < 0) {
+		throw new Error(`Client member list anchored at ${anchor} is not terminated by ${terminator}.`);
+	}
+	return [...source.slice(from, end).matchAll(/"([^"\r\n]+)"/g)].map((match) => match[1]);
+}
+
+export function compareEnumMembers(serverMembers, clientMembers) {
+	return {
+		missing: serverMembers.filter((member) => !clientMembers.includes(member)),
+		stale: clientMembers.filter((member) => !serverMembers.includes(member)),
+	};
+}
+
+export function checkHubPayloadEnums({ repositoryRoot: root = repositoryRoot, frontendRoot: frontend = frontendRoot } = {}) {
+	const failures = [];
+	for (const pair of hubPayloadEnums) {
+		const serverMembers = extractCSharpEnumMembers(readFileSync(resolve(root, pair.csharpPath), "utf8"), pair.name);
+		const clientMembers = extractQuotedNames(
+			readFileSync(resolve(frontend, pair.clientPath), "utf8"),
+			pair.anchor,
+			pair.terminator,
+		);
+		const { missing, stale } = compareEnumMembers(serverMembers, clientMembers);
+		if (missing.length > 0) {
+			failures.push(`${pair.name}: the server can send ${missing.join(", ")} but ${pair.clientPath} does not list them.`);
+		}
+		if (stale.length > 0) {
+			failures.push(`${pair.name}: ${pair.clientPath} lists ${stale.join(", ")}, which the C# enum no longer declares.`);
+		}
+	}
+	if (failures.length > 0) {
+		throw new Error(["Hub payload enums drifted from their client member lists.", ...failures].join("\n"));
+	}
+	return hubPayloadEnums.length;
+}
+
 export function checkSignalrProxySync({
 	programPath = resolve(repositoryRoot, "XE-Local-AI-Engine.Client/Program.cs"),
 	routesPath = resolve(repositoryRoot, "XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs"),
@@ -193,7 +296,10 @@ const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(pro
 if (isMain) {
 	try {
 		const count = checkSignalrProxySync();
-		process.stdout.write(`SignalR proxy paths match all ${count} Program.cs hub registrations.\n`);
+		const enumCount = checkHubPayloadEnums();
+		process.stdout.write(
+			`SignalR proxy paths match all ${count} Program.cs hub registrations; ${enumCount} hub payload enums match their client member lists.\n`,
+		);
 	} catch (error) {
 		process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
 		process.exitCode = 1;

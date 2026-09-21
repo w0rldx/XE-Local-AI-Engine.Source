@@ -68,6 +68,7 @@ public sealed class NodeChatHubTests
                                          options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
                                          options.Headers.Add("Origin", "http://localhost");
                                      })
+                                     .WithNodeJsonProtocol()
                                      .Build();
 
         await connection.StartAsync();
@@ -222,6 +223,7 @@ public sealed class NodeChatHubTests
                    options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
                    options.Headers.Add("Origin", "http://localhost");
                })
+               .WithNodeJsonProtocol()
                .Build();
     }
 
