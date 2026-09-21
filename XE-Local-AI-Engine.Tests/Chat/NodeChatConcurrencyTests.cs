@@ -130,7 +130,7 @@ public sealed class NodeChatConcurrencyTests : IDisposable
         var databasePath = Path.Combine(_rootPath, fileName);
         var services = new ServiceCollection();
         services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
+        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite(NodeChatTestDatabase.ConnectionString(databasePath)));
         services.AddSingleton<NodeChatPersistenceWriter>();
 
         var provider = services.BuildServiceProvider(true);

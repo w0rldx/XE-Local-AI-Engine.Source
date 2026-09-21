@@ -22,7 +22,7 @@ internal static class SqliteFileProbe
     public static async Task<byte[]> ReadAllBytesAsync(string databasePath)
     {
         // Scoped to THIS database, never the process-global ClearAllPools that closes every parallel sibling's pooled
-        // handles too. Every caller opens the file with this same bare connection string.
+        // handles too. A no-op for a caller whose fixture already opts out of pooling via NodeChatTestDatabase.
         using (var poolKey = new SqliteConnection($"Data Source={databasePath}"))
         {
             SqliteConnection.ClearPool(poolKey);

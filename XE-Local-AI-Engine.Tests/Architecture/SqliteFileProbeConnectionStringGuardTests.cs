@@ -54,6 +54,9 @@ public sealed class SqliteFileProbeConnectionStringGuardTests
             "Pins the production posture explicitly, after this fixture once ran with enforcement off."),
         ("XE-Local-AI-Engine.Tests/HealthChecks/NodeSqliteHealthCheckTests.cs", "{dbPath};Pooling=False",
             "Subject of the test: each probe must open a fresh handle rather than reuse a pooled one."),
+        ("XE-Local-AI-Engine.Tests/Testing/NodeChatTestDatabase.cs", "{databasePath};Pooling=False",
+            "Pooling off satisfies this rule more strongly than the bare key: with no pool to return to, disposing the "
+            + "connection CLOSES the handle, and the last close checkpoints the WAL into the main file the scan reads."),
         ("XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeDowngradeSafetyServiceTests.cs", "{databasePath};Mode=ReadOnly",
             "Read-only by design: the count must not be able to alter what it counts."),
         ("XE-Local-AI-Engine.Client.Persistence.Tests/NativeSqliteVersionTests.cs", ":memory:",

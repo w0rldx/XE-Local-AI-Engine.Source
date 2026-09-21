@@ -1370,9 +1370,9 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         }
 
         // Genuine restart: fresh connections against the same on-disk DB, blocker released, zero candidates remaining.
-        // Clear only THIS database's pooled connections (scoped by connection string — NOT the process-global
-        // ClearAllPools, which would disrupt other tests running in parallel) so the restart truly reconnects and no idle
-        // pooled reader left over from the failed run contends with the retry's VACUUM.
+        // BuildProviderAsync opts out of connection pooling, so no idle pooled reader from the failed run can contend
+        // with the retry's VACUUM; this clear stays as belt and braces, scoped to THIS database's connection string —
+        // never the process-global ClearAllPools, which would disrupt other tests running in parallel.
         using (var poolKey = new SqliteConnection($"Data Source={databasePath}"))
         {
             SqliteConnection.ClearPool(poolKey);
@@ -2130,7 +2130,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var databasePath = GetDatabasePath(fileName);
         var services = new ServiceCollection();
         services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
+        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite(NodeChatTestDatabase.ConnectionString(databasePath)));
         services.AddSingleton<NodeChatPersistenceWriter>();
 
         var provider = services.BuildServiceProvider(true);
