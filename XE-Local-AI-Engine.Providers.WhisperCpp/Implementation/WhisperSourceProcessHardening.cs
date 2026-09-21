@@ -37,9 +37,8 @@ internal static class WhisperSourceProcessHardening
         CopyIfPresent(startInfo, preserved, "CUDA_HOME");
         CopyIfPresent(startInfo, preserved, "CUDA_PATH");
 
-        // The checklist answers "CUDA compiler" from a conventional install that is not on PATH (see
-        // CudaToolkitLocator); pin CMake to that same nvcc so a green prerequisite can never be followed by a build
-        // that looks for the toolkit somewhere else. Child environment only — the host's is never touched.
+        // The checklist answers "CUDA compiler" from a conventional install that is not on PATH (see CudaToolkitLocator); pin CMake to that same nvcc so a green prerequisite can never be followed by
+        // a build that looks for the toolkit somewhere else. Child environment only — the host's is never touched.
         if (CudaToolkitLocator.FindNvccOutsidePath() is { } nvcc)
         {
             startInfo.Environment["CUDACXX"] = nvcc;

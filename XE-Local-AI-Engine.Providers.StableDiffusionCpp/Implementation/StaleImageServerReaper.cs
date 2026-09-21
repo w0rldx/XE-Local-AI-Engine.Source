@@ -6,25 +6,15 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
-///     Startup <see cref="IHostedService" /> that reaps stale <c>sd-server</c> orphans left by a previous run of THIS app.
-///     The supervisor launches sd-server detached (Linux <c>setsid</c> / Windows Job Object) and tears it down only via
-///     graceful DI shutdown (<see cref="ImageServerProcessSupervisor" />.<c>DisposeAsync</c>); a hard kill of the host
-///     (e.g. <c>aspire stop</c>) skips that path, orphaning the daemon while it still holds its loopback port and GPU VRAM.
-///     Reaping on the next start makes restart reliable regardless of how the previous run died. Mirrors
-///     <c>StaleLlamaServerReaper</c>.
+///     Startup <see cref="IHostedService" /> that reaps stale <c>sd-server</c> orphans left by a previous run of THIS
+///     app, mirroring <c>StaleLlamaServerReaper</c>.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Strict matching:</b> a process is reaped ONLY when its executable path is under the app's own
-///         stable-diffusion.cpp binaries root
-///         (<see cref="StableDiffusionCppBinaryManager.DefaultStableDiffusionBinariesRoot" />), so an unrelated
-///         <c>sd-server</c> is never touched. When the root cannot be resolved the reaper logs and no-ops.
-///     </para>
-///     <para>
-///         The whole reap is best-effort and wrapped so a reaper failure can never block app start. It runs before the
-///         supervisor spawns any process — hosted services start during host startup, before requests are served — so it
-///         only ever observes orphans from a previous run, never this run's own children.
-///     </para>
+///     The supervisor launches sd-server detached (Linux <c>setsid</c> / Windows Job Object) and tears it down only via graceful DI
+///     shutdown; a hard kill of the host skips that path, orphaning the daemon while it still holds its loopback port and GPU VRAM, so
+///     reaping on the next start makes restart reliable however the previous run died. <b>Strict matching:</b> a process is reaped ONLY
+///     when its executable path is under <see cref="StableDiffusionCppBinaryManager.DefaultStableDiffusionBinariesRoot" />, and an
+///     unresolvable root logs and no-ops. Best-effort throughout, and it runs before the supervisor spawns anything.
 /// </remarks>
 internal sealed class StaleImageServerReaper : IHostedService
 {

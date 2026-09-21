@@ -58,9 +58,8 @@ internal sealed class WhisperServerReadinessProbe : IWhisperServerReadinessProbe
             return false;
         }
 
-        // The loop can also end because the CALLER's token fired, and the two must not be confused: the supervisor
-        // turns a false into "the runtime did not become ready in time", so reporting a shutdown that way would
-        // misclassify it as a product failure. Only the deadline returns false.
+        // The loop can also end because the CALLER's token fired, and the two must not be confused: the supervisor turns a false into "the runtime did not become ready in time", so reporting a
+        // shutdown that way would misclassify it as a product failure. Only the deadline returns false.
         ct.ThrowIfCancellationRequested();
         return false;
     }
@@ -74,9 +73,8 @@ internal sealed class WhisperServerReadinessProbe : IWhisperServerReadinessProbe
 
     private async Task<bool> TryProbeAsync(Uri healthUri, CancellationToken ct)
     {
-        // Each probe owns its own short deadline. The runtime HttpClient carries an infinite timeout on purpose (one
-        // client serves requests whose right budgets differ by four orders of magnitude), so without this a daemon
-        // that accepts the socket and never answers would hang the poll rather than failing this attempt.
+        // Each probe owns its own short deadline. The runtime HttpClient carries an infinite timeout on purpose (one client serves requests whose right budgets differ by four orders of magnitude), so
+        // without this a daemon that accepts the socket and never answers would hang the poll rather than failing this attempt.
         using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         probeCts.CancelAfter(_options.HealthProbeTimeout);
 

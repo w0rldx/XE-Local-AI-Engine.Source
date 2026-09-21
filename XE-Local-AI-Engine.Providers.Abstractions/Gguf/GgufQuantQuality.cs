@@ -2,15 +2,14 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Pure, hardware-free classifier mapping a GGUF quant token to a coarse <see cref="GgufQuantTier" /> quality grade.
-///     Total: every input yields a tier and it never throws — an Unsloth Dynamic (<c>UD-</c>) token is priced off its
-///     stripped base (via <see cref="GgufQuantParser.StripDynamicPrefix" />) and an unrecognized token defaults to
-///     <see cref="GgufQuantTier.Balanced" /> (the safe middle) rather than the lowest grade.
-///     <para>
-///         The core quant tokens' tiers live in <see cref="QuantLadder" /> (the single source of truth it shares with the
-///         advisor's fine quality rank); this classifier delegates to it and only adds the off-ladder aliases (the
-///         <c>_L</c> variants and float aliases) plus the family fallback for tokens neither table enumerates.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Total: every input yields a tier and it never throws — an Unsloth Dynamic (<c>UD-</c>) token is priced off its stripped base (via
+///     <see cref="GgufQuantParser.StripDynamicPrefix" />) and an unrecognized token defaults to
+///     <see cref="GgufQuantTier.Balanced" /> (the safe middle) rather than the lowest grade. The core quant tokens' tiers live in
+///     <see cref="QuantLadder" /> (the single source of truth it shares with the advisor's fine quality rank); this classifier
+///     delegates to it and only adds the off-ladder aliases (<c>_L</c> variants, float aliases) plus the family fallback.
+/// </remarks>
 public static class GgufQuantQuality
 {
     /// <summary>

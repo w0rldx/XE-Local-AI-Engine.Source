@@ -7,20 +7,15 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
-///     <see cref="IHuggingFaceGgufDiscovery" /> over <see cref="HfHubClient" /> + <see cref="GgufHeaderReader" />:
-///     searches GGUF repos by the requested order (trending by default; filtering out repos with no usable <c>.gguf</c>)
-///     and inspects a single repo's actual files, populating per-file quant/size/integrity + GGUF header metadata. Each
-///     summary is tagged with a soft <see cref="GgufPublisherTrust" /> publisher-trust flag (never an exclusion gate).
-///     Two companion families are handled: an <c>mmproj</c> projector is dropped outright (<see cref="IsProjectorFile" />),
-///     while a speculative-decoding drafter is KEPT but re-identified (<see cref="GgufDraftModel" />) — it is a real,
-///     downloadable file the <c>draft-*</c> speculative modes need, it just is not a base-model quant.
+///     <see cref="IHuggingFaceGgufDiscovery" /> over <see cref="HfHubClient" /> + <see cref="GgufHeaderReader" />: searches GGUF repos
+///     by the requested order (trending by default; filtering out repos with no usable <c>.gguf</c>) and inspects a single repo's actual
+///     files, populating per-file quant/size/integrity + GGUF header metadata.
 /// </summary>
 /// <remarks>
-///     Header reads remain eager because the model-fit advisor's quant-ladder walk
-///     (<c>GgufFileSelector.SelectBestFit</c>) needs header-only fields such as block/head counts and embedding length
-///     for <c>MemoryFitEstimator.Estimate</c>. Ranking from file name and size alone would change fits-the-budget verdicts
-///     and could select a different quant. Bounded concurrency in this class plus TTL caching in
-///     <see cref="HfHubClient" /> and <see cref="GgufHeaderReader" /> reduce inspection latency without changing selection.
+///     Each summary is tagged with a soft <see cref="GgufPublisherTrust" /> publisher-trust flag (never an exclusion gate). Two companion
+///     families are handled: an <c>mmproj</c> projector is dropped outright (<see cref="IsProjectorFile" />), while a speculative-decoding
+///     drafter is KEPT but re-identified (<see cref="GgufDraftModel" />) — a real, downloadable file the <c>draft-*</c> modes need that is
+///     just not a base-model quant.
 /// </remarks>
 internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
 {
@@ -81,6 +76,13 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     Header reads remain eager because the model-fit advisor's quant-ladder walk (<c>GgufFileSelector.SelectBestFit</c>) needs
+    ///     header-only fields such as block/head counts and embedding length for <c>MemoryFitEstimator.Estimate</c>. Ranking from file
+    ///     name and size alone would change fits-the-budget verdicts and could select a different quant. Bounded concurrency in this
+    ///     class plus TTL caching in <see cref="HfHubClient" /> and <see cref="GgufHeaderReader" /> reduce inspection latency without
+    ///     changing selection.
+    /// </remarks>
     public Task<GgufRepoDetail> InspectRepoAsync(string repoId, CancellationToken ct)
     {
         return InspectCoreAsync(repoId, includeHeaderMetadata: true, ct);
@@ -92,11 +94,15 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
         return InspectCoreAsync(repoId, includeHeaderMetadata: false, ct);
     }
 
-    // Shared enumeration: lists a repo's usable, non-projector .gguf files; reads each file's GGUF header (a per-file
-    // HTTP range request) only when includeHeaderMetadata is set. The header-free path backs interactive surfaces
-    // (the quant picker) that need only quant + size, avoiding N range reads. When headers ARE requested, they are
-    // fetched with bounded concurrency (ReadHeadersAsync) rather than one at a time — a repo can ship 10-25 quant
-    // variants, and the header reads are independent per-file range requests with no ordering dependency.
+    /// <summary>
+    ///     Shared enumeration: lists a repo's usable, non-projector <c>.gguf</c> files, reading each file's GGUF header
+    ///     (a per-file HTTP range request) only when <paramref name="includeHeaderMetadata" /> is set.
+    /// </summary>
+    /// <remarks>
+    ///     The header-free path backs interactive surfaces (the quant picker) that need only quant + size, avoiding N range reads. When
+    ///     headers ARE requested they are fetched with bounded concurrency (<see cref="ReadHeadersAsync" />) rather than one at a time —
+    ///     a repo can ship 10-25 quant variants, and the header reads are independent per-file range requests with no ordering dependency.
+    /// </remarks>
     private async Task<GgufRepoDetail> InspectCoreAsync(string repoId, bool includeHeaderMetadata, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
@@ -110,19 +116,16 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
         var usable = new List<UsableFile>();
         foreach (var file in detail.Files)
         {
-            // Single source of truth for "selectable model file": a real .gguf, not an mmproj projector companion, with
-            // a containment-safe path and a recognizable quant token. Gating on the same predicate browse uses keeps the
-            // picker from drifting from search/fit (a single unusable file is skipped, never repo-dropping).
+            // Single source of truth for "selectable model file": a real .gguf, not an mmproj projector companion, with a containment-safe path and a recognizable quant token. Gating on the same
+            // predicate browse uses keeps the picker from drifting from search/fit (a single unusable file is skipped, never repo-dropping).
             if (!IsUsableGgufFile(file.FileName))
             {
                 _logger.LogDebug("Skipping a non-usable .gguf file during repo inspection.");
                 continue;
             }
 
-            // Non-null by IsUsableGgufFile (which requires a parseable quant); re-parsed here to capture the token. A
-            // speculative-decoding drafter (an "MTP/" companion) parses to the SAME token as the base weights it drafts
-            // for, so its quant is marked (Q8_0 → MTP-Q8_0) — otherwise the repo's quant list carries the label twice,
-            // once for a 0.4 GB drafter and once for the 11.8 GB real model, and both map to the same registry key.
+            // Non-null by IsUsableGgufFile (which requires a parseable quant); re-parsed here to capture the token. A drafter (an "MTP/" companion) parses to the SAME token as the base weights it
+            // drafts for, so its quant is marked (Q8_0 → MTP-Q8_0): otherwise the quant list carries the label twice, for a 0.4 GB drafter and the 11.8 GB model, both mapping to one key.
             var quant = GgufQuantParser.TryParse(file.FileName)!;
             usable.Add(new UsableFile(file, GgufDraftModel.IsDraftFile(file.FileName) ? GgufDraftModel.MarkQuant(quant) : quant));
         }
@@ -179,9 +182,8 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
             return null;
         }
 
-        // A vision repo ships one or more mmproj projector companions (excluded from the selectable-file listings). Pick
-        // the highest-precision one — F32 over F16/BF16 — tie-broken by the larger file (higher precision is larger), so
-        // an image is encoded at the best fidelity the repo offers. Path safety is enforced before the store downloads it.
+        // A vision repo ships one or more mmproj projector companions (excluded from the selectable-file listings). Pick the highest-precision one — F32 over F16/BF16 — tie-broken by the larger file
+        // (higher precision is larger), so an image is encoded at the best fidelity the repo offers. Path safety is enforced before the store downloads it.
         var projector = detail.Files
                               .Where(file => IsProjectorFile(file.FileName)
                                              && IsGgufFileName(file.FileName)
@@ -195,9 +197,8 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
             : new GgufProjectorFile { FileName = projector.FileName, SizeBytes = projector.SizeBytes, Sha256 = projector.Sha256, Revision = detail.Revision };
     }
 
-    // Ranks a projector filename by encoder precision (higher = preferred): F32 > F16/BF16 > everything else. The markers
-    // are matched case-insensitively anywhere in the name (mmproj-F16.gguf, mmproj-model-f32.gguf, …). Ties fall through
-    // to size in FindProjectorAsync.
+    // Ranks a projector filename by encoder precision (higher = preferred): F32 > F16/BF16 > everything else. The markers are matched case-insensitively anywhere in the name (mmproj-F16.gguf,
+    // mmproj-model-f32.gguf, …). Ties fall through to size in FindProjectorAsync.
     private static int ProjectorPrecisionRank(string fileName)
     {
         var name = Path.GetFileName(fileName);
@@ -242,23 +243,31 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
         return results;
     }
 
-    // llama.cpp's split-GGUF naming convention for a model too large for one file: "<base>-00001-of-00003.gguf".
-    // Only the FIRST split carries the full GGUF metadata header (architecture, context length, etc.); later
-    // splits are raw tensor-data continuations with no header of their own and are never independently loadable.
-    // Verified live 2026-07-10: Qwen/Qwen2.5-Coder-14B-Instruct-GGUF ships Q4_K_M as two splits (8.0GB + 0.99GB) —
-    // treating them as independent candidates let the advisor pick the 0.99GB second split alone and under-estimate
-    // a 14B model's footprint at ~1.8GB.
+    /// <summary>
+    ///     llama.cpp's split-GGUF naming convention for a model too large for one file:
+    ///     <c>&lt;base&gt;-00001-of-00003.gguf</c>.
+    /// </summary>
+    /// <remarks>
+    ///     Only the FIRST split carries the full GGUF metadata header (architecture, context length, etc.); later splits are raw
+    ///     tensor-data continuations with no header of their own and are never independently loadable. Verified against
+    ///     Qwen/Qwen2.5-Coder-14B-Instruct-GGUF, which ships Q4_K_M as two splits (8.0GB + 0.99GB): treating them as independent
+    ///     candidates lets the advisor pick the 0.99GB second split alone and under-estimate a 14B model's footprint at ~1.8GB.
+    /// </remarks>
     [GeneratedRegex(@"^(?<base>.+)-(?<part>\d{5})-of-(?<total>\d{5})\.gguf$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         matchTimeoutMilliseconds: 2000)]
     private static partial Regex ShardSuffixRegex();
 
-    // Collapses each split-GGUF group into ONE candidate (representative = the lowest-numbered split, size = the
-    // sum of every split in the group) and drops a split group entirely when a merged single-file variant of the
-    // same quant is also present (dedupe by quant, prefer the non-sharded file). Non-split files pass through
-    // untouched. Applied once, right after usability filtering, so every consumer of GgufRepoFile
-    // (ListRepoFilesAsync, InspectRepoAsync, and — through them — the advisor and the model catalog) sees one
-    // candidate per logical model+quant, never a bare, unloadable split fragment.
+    /// <summary>
+    ///     Collapses each split-GGUF group into ONE candidate — representative the lowest-numbered split, size the sum
+    ///     of every split in the group — leaving non-split files untouched.
+    /// </summary>
+    /// <remarks>
+    ///     A split group is dropped entirely when a merged single-file variant of the same quant is also present (dedupe by quant, prefer
+    ///     the non-sharded file). Applied once, right after usability filtering, so every consumer of <see cref="GgufRepoFile" /> —
+    ///     <see cref="ListRepoFilesAsync" />, <see cref="InspectRepoAsync" />, and through them the advisor and the model catalog — sees
+    ///     one candidate per logical model+quant, never a bare, unloadable split fragment.
+    /// </remarks>
     private static List<UsableFile> GroupShards(List<UsableFile> usable)
     {
         var plain = new List<UsableFile>();

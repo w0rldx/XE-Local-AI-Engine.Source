@@ -49,35 +49,38 @@ public sealed record LocalModelDescriptor
 
     /// <summary>
     ///     Whether the model reasons NATIVELY: its chat template bakes reasoning onto its own channel with no graded
-    ///     <c>think:&lt;level&gt;</c> switch (the OpenAI harmony family, e.g. gpt-oss). Distinct from — and mutually
-    ///     exclusive with — <see cref="IsReasoningCapable" />: a native model must NOT be routed into the graded path,
-    ///     which would send a <c>think</c> field its template ignores and an <c>enable_thinking</c> kwarg it does not
-    ///     have. Defaults to <see langword="false" />.
+    ///     <c>think:&lt;level&gt;</c> switch (the OpenAI harmony family, e.g. gpt-oss). Defaults to
+    ///     <see langword="false" />.
     /// </summary>
+    /// <remarks>
+    ///     Distinct from — and mutually exclusive with — <see cref="IsReasoningCapable" />: a native model must NOT be
+    ///     routed into the graded path, which would send a <c>think</c> field its template ignores and an
+    ///     <c>enable_thinking</c> kwarg it does not have.
+    /// </remarks>
     public bool IsNativeReasoningCapable { get; init; }
 
     /// <summary>
     ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this model — that is,
     ///     whether its chat template renders a literal reasoning END marker (<c>&lt;/think&gt;</c>, gemma-4's
-    ///     <c>&lt;channel|&gt;</c>, …). llama.cpp writes the budget onto the sampler only when its chat-template
-    ///     classification produced a non-empty think-end-tag set; with an empty set the field is accepted and then
-    ///     silently ignored, so the model still free-runs its reasoning until the context window is gone.
-    ///     <para>
-    ///         Read ONLY alongside <see cref="IsReasoningCapable" /> — the budget is sent exclusively on the graded
-    ///         branch. Defaults to <see langword="true" />, the inert safe default: a descriptor whose template could
-    ///         not be read (or that comes from a runtime with no template detection at all) still gets the budget sent,
-    ///         which llama.cpp ignores harmlessly, rather than silently losing the cap that stops a reasoning model
-    ///         consuming its whole window and answering nothing.
-    ///     </para>
+    ///     <c>&lt;channel|&gt;</c>, …).
     /// </summary>
+    /// <remarks>
+    ///     llama.cpp writes the budget onto the sampler only when its chat-template classification produced a non-empty think-end-tag set;
+    ///     with an empty set the field is accepted and silently ignored, and the model free-runs until the context window is gone. Read
+    ///     ONLY alongside <see cref="IsReasoningCapable" />: the budget is sent exclusively on the graded branch. Defaults to
+    ///     <see langword="true" />, the inert safe default — an unreadable template, or a runtime with no template detection, still gets
+    ///     the budget sent, harmlessly ignored, rather than losing the cap that stops a reasoning model consuming its whole window.
+    /// </remarks>
     public bool ReasoningBudgetEnforceable { get; init; } = true;
 
     /// <summary>
-    ///     Whether the model can accept image input (vision / multimodal). True only when a multimodal projector
-    ///     (<c>mmproj</c>) companion is present locally for this model — the same file that gates the llama-server
-    ///     <c>--mmproj</c> launch argument, so this flag never claims a vision capability the runtime cannot serve.
-    ///     Defaults to <see langword="false" />.
+    ///     Whether the model can accept image input (vision / multimodal). Defaults to <see langword="false" />.
     /// </summary>
+    /// <remarks>
+    ///     True only when a multimodal projector (<c>mmproj</c>) companion is present locally for this model — the same
+    ///     file that gates the llama-server <c>--mmproj</c> launch argument, so this flag never claims a vision
+    ///     capability the runtime cannot serve.
+    /// </remarks>
     public bool IsMultimodalCapable { get; init; }
 
     /// <summary>

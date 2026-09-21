@@ -10,10 +10,12 @@ using Microsoft.Win32.SafeHandles;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     Holds the exact validated source handle used for inspection and copying. Linux uses atomic O_NOFOLLOW plus
-///     mount/inode identity; Windows uses handle identity. Other platforms retain the ancestor/reparse walk and stable
-///     length/write-time checks as documented best effort.
+///     Holds the exact validated source handle used for inspection and copying.
 /// </summary>
+/// <remarks>
+///     Linux uses atomic <c>O_NOFOLLOW</c> plus mount/inode identity; Windows uses handle identity. Other platforms
+///     retain the ancestor/reparse walk and stable length/write-time checks as documented best effort.
+/// </remarks>
 internal sealed class ValidatedGgufImportSource : IAsyncDisposable
 {
     private const int LinuxReadOnlyNoFollowNonBlockingCloseOnExec = 0x0 | 0x800 | 0x20000 | 0x80000;

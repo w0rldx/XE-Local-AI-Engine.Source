@@ -5,14 +5,14 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
 ///     Atomic owner-only state store for the managed whisper.cpp runtime record, with a redundant desired-selection
-///     record so a corrupt primary still fails CLOSED — it degrades to a tombstone naming the operator's selection
-///     rather than to "no managed runtime", which would silently hand back a prebuilt that contradicts the UI.
+///     record so a corrupt primary still fails CLOSED.
 /// </summary>
 /// <remarks>
-///     Writes land under <c>{cacheRoot}/whisper.cpp/</c>. The file names deliberately match the llama.cpp and
-///     stable-diffusion.cpp stores: collision is impossible by the PARENT segment (llama writes at the bare cache root,
-///     stable-diffusion.cpp under <c>stable-diffusion.cpp/</c>), and keeping the names identical is what makes the
-///     three stores recognisable as the same thing.
+///     It degrades to a tombstone naming the operator's selection rather than to "no managed runtime", which would silently hand back a
+///     prebuilt that contradicts the UI. Writes land under <c>{cacheRoot}/whisper.cpp/</c>, and the file names deliberately match the
+///     llama.cpp and stable-diffusion.cpp stores: collision is impossible by the PARENT segment (llama writes at the bare cache root,
+///     stable-diffusion.cpp under <c>stable-diffusion.cpp/</c>), and identical names are what make the three stores recognisable as the
+///     same thing.
 /// </remarks>
 public sealed class WhisperInstalledRuntimeStore : IWhisperInstalledRuntimeStore, IDisposable
 {

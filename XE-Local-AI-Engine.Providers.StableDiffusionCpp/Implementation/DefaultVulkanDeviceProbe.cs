@@ -8,19 +8,11 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     process lifetime via a thread-safe <see cref="Lazy{T}" />.
 /// </summary>
 /// <remarks>
-///     Decision (evaluated in order):
-///     <list type="number">
-///         <item><c>VK_ICD_FILENAMES</c> set → present. An explicit ICD path is how Vulkan is configured on any Linux,
-///         WSL included (the WSL Vulkan ICD is enabled precisely this way), so it is trusted unconditionally.</item>
-///         <item>Running under WSL with no explicit ICD → absent. The GPU is exposed via CUDA/dxcore, not Vulkan, so
-///         <c>sd-server --backend vulkan0</c> would hard-fail; a standard-directory ICD manifest is NOT a reliable proxy
-///         here, hence the WSL branch is checked before it.</item>
-///         <item>Bare-metal Linux → present iff a Vulkan ICD manifest (<c>*.json</c>) exists under
-///         <c>/usr/share/vulkan/icd.d</c> or <c>/etc/vulkan/icd.d</c> — a reasonable proxy that a driver is installed and
-///         a device will enumerate.</item>
-///     </list>
-///     Any IO/permission error while inspecting the filesystem is treated as "unknown" and resolves to absent, because a
-///     wrong Vulkan pick makes the image server fail to start whereas CPU always works.
+///     Decided in order. <c>VK_ICD_FILENAMES</c> set → present, trusted unconditionally, because an explicit ICD path is how Vulkan is
+///     configured on any Linux, WSL included (the WSL Vulkan ICD is enabled precisely this way). WSL with no explicit ICD → absent, and
+///     that branch is checked BEFORE the manifest one because a standard-directory ICD manifest is not a reliable proxy there.
+///     Bare-metal Linux → present iff a Vulkan ICD manifest (<c>*.json</c>) exists under <c>/usr/share/vulkan/icd.d</c> or
+///     <c>/etc/vulkan/icd.d</c>. Any IO/permission error while inspecting the filesystem reads as "unknown" and resolves to absent.
 /// </remarks>
 public sealed class DefaultVulkanDeviceProbe : IVulkanDeviceProbe
 {

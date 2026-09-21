@@ -7,21 +7,15 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
-///     Default <see cref="IStableDiffusionBinaryManager" />: validates and resolves the selected managed runtime or,
-///     when none is selected, downloads the exact pinned prebuilt asset for the host/backend, verifies its SHA256
-///     against <see cref="StableDiffusionReleasePins" />, extracts it under a stable cache directory, and returns the
-///     resolved <c>sd-server</c> path. Source compilation is delegated to
-///     <see cref="StableDiffusionCppSourceBuildService" />.
+///     Default <see cref="IStableDiffusionBinaryManager" />: resolves the selected managed runtime or, when none is
+///     selected, acquires the pinned prebuilt for the host/backend and returns the resolved <c>sd-server</c> path.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Cache layout: <c>{cacheRoot}/stable-diffusion.cpp/{tag}/{backend}/</c> holds the extracted archive; a cached
-///         binary is reused without re-download (offline path).
-///     </para>
-///     <para>
-///         On SHA256 mismatch the partial download is discarded and retried <em>once</em>; a second mismatch surfaces a
-///         sanitized <see cref="StableDiffusionRuntimeException" /> (no internal paths/URLs in the message).
-///     </para>
+///     Acquisition verifies the asset's SHA256 against <see cref="StableDiffusionReleasePins" /> and extracts it under a stable cache
+///     directory; source compilation is delegated to <see cref="StableDiffusionCppSourceBuildService" />. Cache layout:
+///     <c>{cacheRoot}/stable-diffusion.cpp/{tag}/{backend}/</c> holds the extracted archive, and a cached binary is reused without
+///     re-download (the offline path). On SHA256 mismatch the partial download is discarded and retried <em>once</em>; a second mismatch
+///     surfaces a sanitized <see cref="StableDiffusionRuntimeException" /> carrying no internal paths or URLs.
 /// </remarks>
 public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryManager
 {
@@ -89,9 +83,8 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     /// <inheritdoc />
     public async Task<SdBinary> EnsureBinaryAsync(SdGpuBackend backend, CancellationToken ct)
     {
-        // Operator bring-your-own override: an active override short-circuits ALL acquisition (no download, no cache
-        // write). The supplied binary is validated and served as the override's OWN backend — never the caller-passed
-        // backend. A configured-but-broken override throws a sanitized failure rather than falling through to acquisition.
+        // Operator bring-your-own override: an active override short-circuits ALL acquisition (no download, no cache write). The supplied binary is validated and served as the override's OWN backend
+        // — never the caller-passed backend. A configured-but-broken override throws a sanitized failure rather than falling through to acquisition.
         if (_overrideOptions?.IsActive == true)
         {
             return ResolveOverrideBinary(_overrideOptions);
@@ -200,9 +193,8 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
             }, ct).ConfigureAwait(false);
         }
 
-        // A tombstone remains authoritative and fail-closed in the installed-runtime store, but it must no longer
-        // advertise an active managed source backend to the selector. Otherwise the stale in-memory signal keeps
-        // steering selection toward a runtime that this method has just proven unusable.
+        // A tombstone remains authoritative and fail-closed in the installed-runtime store, but it must no longer advertise an active managed source backend to the selector. Otherwise the stale
+        // in-memory signal keeps steering selection toward a runtime that this method has just proven unusable.
         _managedSourceSignal?.Clear();
     }
 
@@ -250,10 +242,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     }
 
     /// <summary>
-    ///     Validates and serves the operator bring-your-own <c>sd-server</c>. Operator-trust channel (env var only): the
-    ///     path is checked to be a present regular file — full smoke/GPU validation happens when the runtime spawns it.
-    ///     A missing/invalid path throws a sanitized failure rather than silently degrading to acquisition.
+    ///     Validates and serves the operator bring-your-own <c>sd-server</c>.
     /// </summary>
+    /// <remarks>
+    ///     Operator-trust channel (env var only): the path is checked to be a present regular file — full smoke/GPU
+    ///     validation happens when the runtime spawns it. A missing or invalid path throws a sanitized failure rather
+    ///     than silently degrading to acquisition.
+    /// </remarks>
     private static SdBinary ResolveOverrideBinary(StableDiffusionServerRuntimeOverrideOptions overrideOptions)
     {
         var serverPath = overrideOptions.ServerPath;
@@ -267,10 +262,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
 
     /// <summary>
     ///     Pairs the Windows-CUDA runtime DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>, …) next to
-    ///     <c>sd-server.exe</c>. stable-diffusion.cpp ships these in a SEPARATE archive from the main CUDA build; without
-    ///     them the CUDA backend fails to load and the server silently runs CPU-only. No-op for every non-Windows-CUDA
-    ///     acquisition. Idempotent: if the DLLs already sit next to the server nothing is downloaded.
+    ///     <c>sd-server.exe</c>.
     /// </summary>
+    /// <remarks>
+    ///     stable-diffusion.cpp ships these in a SEPARATE archive from the main CUDA build; without them the CUDA
+    ///     backend fails to load and the server silently runs CPU-only. A no-op for every non-Windows-CUDA acquisition,
+    ///     and idempotent: if the DLLs already sit next to the server nothing is downloaded.
+    /// </remarks>
     private async Task EnsureCudartRuntimeAsync(StableDiffusionAssetPin pin, SdGpuBackend backend, string backendDir, string serverPath, CancellationToken ct)
     {
         if (backend != SdGpuBackend.Cuda || _os != OSPlatform.Windows)
@@ -384,10 +382,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     }
 
     /// <summary>
-    ///     Locates the <c>sd-server</c> executable inside an extracted backend directory. The pinned relative path (a
-    ///     bare file name at the archive root) is tried first; a recursive fall-back search by file name tolerates an
-    ///     upstream layout change. Returns <see langword="null" /> when no executable of that name exists.
+    ///     Locates the <c>sd-server</c> executable inside an extracted backend directory, or <see langword="null" />
+    ///     when no executable of that name exists.
     /// </summary>
+    /// <remarks>
+    ///     The pinned relative path — a bare file name at the archive root — is tried first; a recursive search by file
+    ///     name then tolerates an upstream layout change.
+    /// </remarks>
     private static string? ResolveServerPath(string backendDir, StableDiffusionAssetPin pin)
     {
         var pinned = Path.GetFullPath(Path.Combine(backendDir, pin.ServerRelativePath));
@@ -580,11 +581,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     }
 
     /// <summary>
-    ///     The directory every acquired stable-diffusion.cpp runtime is cached under for the default app-data root
-    ///     (<c>{cacheRoot}/stable-diffusion.cpp</c>, the same layout <see cref="EnsureBinaryAsync" /> writes its backend
-    ///     dirs into). Exposed so the startup orphan reaper matches ONLY <c>sd-server</c> binaries this app acquired,
-    ///     never an unrelated install.
+    ///     The directory every acquired stable-diffusion.cpp runtime is cached under for the default app-data root:
+    ///     <c>{cacheRoot}/stable-diffusion.cpp</c>, the layout <see cref="EnsureBinaryAsync" /> writes backend dirs into.
     /// </summary>
+    /// <remarks>
+    ///     Exposed so the startup orphan reaper matches ONLY <c>sd-server</c> binaries this app acquired, never an
+    ///     unrelated install.
+    /// </remarks>
     internal static string DefaultStableDiffusionBinariesRoot()
     {
         return Path.Combine(DefaultCacheRoot(), "stable-diffusion.cpp");

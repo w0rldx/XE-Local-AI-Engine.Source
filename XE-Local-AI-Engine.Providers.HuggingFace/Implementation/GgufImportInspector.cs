@@ -109,9 +109,8 @@ internal sealed class GgufImportInspector : IGgufImportInspector
             rejections.Add(GgufImportRejectionCode.UnsupportedModelType);
         }
 
-        // The display-name substring checks are a public-surface heuristic against a mislabelled upload. An in-process
-        // commit is a file the engine just wrote and whose type it read directly, so the name carries no evidence —
-        // notably, a merged fine-tune of a model whose own name contains "adapter" must not be rejected for it.
+        // The display-name substring checks are a public-surface heuristic against a mislabelled upload. An in-process commit is a file the engine just wrote and whose type it read directly, so the
+        // name carries no evidence — notably, a merged fine-tune of a model whose own name contains "adapter" must not be rejected for it.
         var architecture = NormalizeArchitecture(header.GetString("general.architecture"));
         if (architecture is null || !CausalArchitectures.Contains(architecture)
                                  || !inProcess && IsRejectedArchitecture(architecture, displayName)
@@ -132,12 +131,8 @@ internal sealed class GgufImportInspector : IGgufImportInspector
             and not GgufImportRejectionCode.UnsupportedQuantization);
         var workload = isAdapter ? GgufImportWorkload.LoraAdapter : GgufImportWorkload.CausalChat;
 
-        // Reasoning-budget enforceability, computed HERE — on the strict header the classification already read — so the
-        // answer exists before the file is copied, not only once the model shows up in lazy discovery. It is deliberately
-        // NOT persisted onto the registry entry or the sidecar: the installed-model descriptor recomputes it from the
-        // very same header key (HuggingFaceGgufStore.ResolveHeaderFactsAsync), so a second stored copy could only ever
-        // drift away from the template it describes. What import adds is the OPERATOR-facing half — a warning that this
-        // model's graded thinking cap will not stick — which no later list refresh would surface.
+        // Enforceability is computed HERE, on the strict header the classification already read, so the answer exists before the copy, not only at lazy discovery. Deliberately NOT persisted onto the
+        // entry or sidecar — HuggingFaceGgufStore.ResolveHeaderFactsAsync recomputes it from the same header key, so a stored copy could only drift. Import adds the OPERATOR warning.
         var capabilities = GgufCapabilityDetector.Detect(header.GetString("tokenizer.chat_template"));
         string[] warnings = capabilities.ReasoningBudgetEnforceable
             ? []

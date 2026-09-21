@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     The MoE/param/quant/context inputs the Inference Optimizer needs from a local GGUF file's header. A public seam so
-///     the Application-layer orchestrator can read them without depending on the Hugging Face provider's INTERNAL GGUF
-///     header reader. Unlike <see cref="GgufModelFootprintFacts" /> (which the capacity advisor consumes and which omits
-///     the Mixture-of-Experts fields), this projection surfaces <see cref="ExpertCount" /> / <see cref="IsMoe" /> so a
-///     persisted inference profile records whether the optimizer must measure MoE throughput empirically.
+///     The MoE/param/quant/context inputs the Inference Optimizer needs from a local GGUF file's header.
 /// </summary>
+/// <remarks>
+///     A public seam so the Application-layer orchestrator can read them without depending on the Hugging Face
+///     provider's INTERNAL GGUF header reader. Unlike <see cref="GgufModelFootprintFacts" /> (which the capacity advisor
+///     consumes and which omits the Mixture-of-Experts fields), this projection surfaces <see cref="ExpertCount" /> /
+///     <see cref="IsMoe" /> so a persisted inference profile records whether the optimizer must measure MoE throughput
+///     empirically.
+/// </remarks>
 public sealed class GgufModelMetadata
 {
     /// <summary>Total parameter count from <c>general.parameter_count</c>, or <see langword="null" /> when absent.</summary>

@@ -11,13 +11,16 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
-///     Default <see cref="IImageServerSupervisor" />. Owns every resident <c>sd-server</c> child process: reuse-or-spawn
-///     one daemon per model behind a single-flight gate, readiness-gate on start (poll
-///     <c>/sdcpp/v1/capabilities</c>), loopback port allocation with collision-retry, idle-TTL eviction with a
-///     background reaper, per-OS tree-kill teardown, and a tree-kill + restart abort path. Singleton; disposes every
-///     owned process on shutdown. Mirrors <c>LlamaServerProcessSupervisor</c> (reduced: no role split, no benchmark
-///     profiling, no external-endpoint attach — the image runtime is one resident daemon per model).
+///     Default <see cref="IImageServerSupervisor" />, owning every resident <c>sd-server</c> child process. Singleton;
+///     disposes every owned process on shutdown.
 /// </summary>
+/// <remarks>
+///     Reuse-or-spawn one daemon per model behind a single-flight gate, readiness-gate on start (poll
+///     <c>/sdcpp/v1/capabilities</c>), loopback port allocation with collision-retry, idle-TTL eviction with a
+///     background reaper, per-OS tree-kill teardown, and a tree-kill + restart abort path. Mirrors
+///     <c>LlamaServerProcessSupervisor</c>, reduced: no role split, no benchmark profiling, no external-endpoint
+///     attach — the image runtime is one resident daemon per model.
+/// </remarks>
 internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAsyncDisposable
 {
     /// <summary>Poll cadence for observing that a freshly spawned process exited during its readiness wait.</summary>
@@ -204,12 +207,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             return null;
         }
 
-        // Atomically register the lease, refusing if an idle reaper / cap evictor has already latched this daemon for
-        // eviction (lease acquisition and idle eviction transition one atomic word, so a teardown
-        // decision and a new lease can never both win — the previous plain increment could be granted after the reaper
-        // read "no active jobs" but before it tree-killed the daemon). Then confirm the daemon is still the registered,
-        // live one: a forced teardown (restart/evict/dispose) that removed it between the lookup and here means the lease
-        // would guard a dead handle, so release and return null (leaseless).
+        // Atomically register the lease, refusing if an idle reaper / cap evictor has already latched this daemon for eviction, then confirm the daemon is still the registered, live one: a forced
+        // teardown between the lookup and here would leave the lease guarding a dead handle, so release and return null (leaseless).
         if (!running.TryAcquireJob())
         {
             return null;
@@ -227,11 +226,14 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
     /// <summary>
     ///     Reuse decision for an already-registered, not-yet-exited daemon: hands back its endpoint when it is healthy
-    ///     enough, or returns <see langword="null" /> after tearing it down when it is wedged (alive but unresponsive to
-    ///     <see cref="StableDiffusionRuntimeOptions.MaxReuseLivenessFailures" /> consecutive liveness probes). The probe is
-    ///     rate-limited to at most one per <see cref="StableDiffusionRuntimeOptions.ReuseLivenessProbeInterval" /> per
-    ///     daemon, so the hot path stays cheap — between probes the endpoint is reused with no HTTP.
+    ///     enough, or returns <see langword="null" /> after tearing it down when it is wedged.
     /// </summary>
+    /// <remarks>
+    ///     Wedged means alive but unresponsive to <see cref="StableDiffusionRuntimeOptions.MaxReuseLivenessFailures" />
+    ///     consecutive liveness probes. The probe is rate-limited to at most one per
+    ///     <see cref="StableDiffusionRuntimeOptions.ReuseLivenessProbeInterval" /> per daemon, so the hot path stays
+    ///     cheap — between probes the endpoint is reused with no HTTP.
+    /// </remarks>
     private async Task<ImageServerEndpoint?> TryReuseAsync(string modelName, RunningServer existing, CancellationToken ct)
     {
         var now = _timeProvider.GetUtcNow();
@@ -261,9 +263,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             return existing.Endpoint;
         }
 
-        // Wedged: the daemon is alive but has failed the liveness probe N consecutive times, so every reuse refreshes
-        // LastUsedUtc and the idle reaper never sees it. Tear it down here so the caller respawns a fresh daemon instead
-        // of being handed the hung endpoint forever.
+        // Wedged: the daemon is alive but has failed the liveness probe N consecutive times, so every reuse refreshes LastUsedUtc and the idle reaper never sees it. Tear it down here so the caller
+        // respawns a fresh daemon instead of being handed the hung endpoint forever.
         _logger.LogWarning("sd-server for model {ModelName} is wedged ({Failures} consecutive failed liveness probes); tree-killing to respawn.",
             modelName, failures);
         await RemoveProcessAsync(modelName, existing).ConfigureAwait(false);
@@ -271,10 +272,13 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     }
 
     /// <summary>
-    ///     Runs one liveness probe bounded by <see cref="StableDiffusionRuntimeOptions.ReuseLivenessProbeTimeout" /> so a
-    ///     hung daemon that accepts the socket but never answers cannot stall the reuse hot path for the whole HTTP-client
-    ///     timeout. A probe that times out (the caller's own token is NOT cancelled) counts as not-responsive.
+    ///     Runs one liveness probe bounded by <see cref="StableDiffusionRuntimeOptions.ReuseLivenessProbeTimeout" />.
     /// </summary>
+    /// <remarks>
+    ///     The bound stops a hung daemon that accepts the socket but never answers from stalling the reuse hot path for
+    ///     the whole HTTP-client timeout. A probe that times out — the caller's own token is NOT cancelled — counts as
+    ///     not-responsive.
+    /// </remarks>
     private async Task<bool> ProbeResponsiveWithTimeoutAsync(Uri baseAddress, CancellationToken ct)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -324,10 +328,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             }
             catch (ObjectDisposedException)
             {
-                // DisposeAsync disposes the per-model ensure gates. When a dispose races a spawn that is
-                // unwinding on the shutdown-linked token (this spawn holds this gate), the gate can already be disposed
-                // here — the release is moot at teardown. Swallow it so the real unwind cause (the OperationCanceledException
-                // from the cancelled readiness wait) surfaces to the caller instead of a leaked ObjectDisposedException.
+                // DisposeAsync disposes the per-model ensure gates, so a spawn unwinding on the shutdown-linked token can find its gate already disposed; the release is moot at teardown. Swallow it
+                // so the real unwind cause — the OperationCanceledException from the cancelled readiness wait — surfaces to the caller.
             }
         }
     }
@@ -344,18 +346,13 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         var backend = await _backendSelector.SelectBackendAsync(ct).ConfigureAwait(false);
         var binary = await _binaryManager.EnsureBinaryAsync(backend, ct).ConfigureAwait(false);
 
-        // Link the spawn/readiness window to the supervisor's shutdown token so a DisposeAsync racing this
-        // spawn cancels the readiness wait — the catch below then tree-kills the launched handle instead of leaving it
-        // orphaned (DisposeAsync tears down only the _processes snapshot it sees, and this spawn registers into _processes
-        // only after readiness). A caller cancellation (ct) still aborts too; either source unwinds through the catch.
+        // Link the spawn/readiness window to the supervisor shutdown token, so a DisposeAsync racing this spawn cancels the readiness wait and the catch below tree-kills the launched handle instead
+        // of orphaning it. A caller cancellation unwinds through the same catch.
         using var spawnCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
         var spawnCt = spawnCts.Token;
 
-        // Serialize the spawn-through-readiness window of a GPU-backed image load through the SAME process-wide
-        // gate the llama-server supervisor uses, so an image load and an LLM load never race two --fit / free-VRAM reads.
-        // The binary's OWN backend decides (a bring-your-own override may serve a different backend than the host probe
-        // selected); a CPU backend bypasses. The ticket releases on ready OR any failure via the using scope. sd-server
-        // has no restart loop, so an admission timeout surfaces straight to the caller.
+        // Serialize the spawn-through-readiness window of a GPU-backed image load through the SAME process-wide gate the llama-server supervisor uses, so an image and an LLM load never race two --fit
+        // / free-VRAM reads. See docs/wiki/14-image-generation.md ("Daemon leases and the teardown races").
         using var admissionTicket = binary.Backend == SdGpuBackend.Cpu
             ? null
             : await _loadAdmission.AcquireAsync(spawnCt).ConfigureAwait(false);
@@ -393,11 +390,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             var running = new RunningServer(handle, endpoint, port, _timeProvider.GetUtcNow(), residentLease);
             _processes[modelName] = running;
 
-            // A DisposeAsync that ran while this spawn was in flight tore down only the daemons present in its
-            // teardown snapshot; this one registered AFTER that snapshot, so if disposal is now observed it would be left
-            // resident (orphaned). Tear it down here. The detach/kill pair (or, on a lost removal race, the concurrent
-            // path that won it) owns the kill/dispose/port-release, so null the handle to keep the catch below from
-            // acting on it again; the ObjectDisposedException is excluded from the error log.
+            // A DisposeAsync that ran while this spawn was in flight tore down only the daemons in its teardown snapshot; this one registered AFTER it, so tear it down here rather than leave it
+            // resident. The detach/kill pair, or whichever concurrent path won a lost removal race, owns kill/dispose/port-release, so null the handle.
             if (Volatile.Read(ref _disposed) != 0)
             {
                 if (DetachProcess(modelName, running) is { } detached)
@@ -428,10 +422,13 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     }
 
     /// <summary>
-    ///     Waits for the freshly launched daemon to answer <c>/sdcpp/v1/capabilities</c>, racing that against the process
-    ///     exiting. sd-server binds its socket only after a successful model load, so an exit-before-ready is a
-    ///     deterministic load failure: surface it immediately instead of polling a dead endpoint for the full budget.
+    ///     Waits for the freshly launched daemon to answer <c>/sdcpp/v1/capabilities</c>, racing that against the
+    ///     process exiting.
     /// </summary>
+    /// <remarks>
+    ///     sd-server binds its socket only after a successful model load, so an exit-before-ready is a deterministic
+    ///     load failure: surface it immediately instead of polling a dead endpoint for the full budget.
+    /// </remarks>
     private async Task WaitForReadyOrExitAsync(IImageServerProcessHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -518,10 +515,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
                 continue;
             }
 
-            // Idle past the TTL. TryBeginEvict atomically latches the daemon for eviction ONLY when no job lease is held,
-            // and once latched no new lease can attach — so a generation that starts concurrently with this reap either
-            // wins the lease first (TryBeginEvict then fails and we skip, reaping on a later pass) or is refused, but we
-            // can never tree-kill a daemon under an active lease.
+            // Idle past the TTL. TryBeginEvict latches for eviction ONLY when no job lease is held, and once latched no new lease can attach, so a daemon under an active lease is never tree-killed; a
+            // generation racing this reap either wins the lease first (reaped on a later pass) or is refused.
             if (running.TryBeginEvict())
             {
                 _logger.LogInformation("Evicting idle sd-server for model {ModelName} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
@@ -532,10 +527,13 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     }
 
     /// <summary>
-    ///     Reserves a slot under the loaded cap (evicting an idle LRU daemon to make room when possible) and allocates a
-    ///     free loopback port. The admission gate serializes the cap decision so it can never be raced past. The cap is
-    ///     measured by the reserved-port count (which already includes in-flight spawns), mirroring the llama supervisor.
+    ///     Reserves a slot under the loaded cap — evicting an idle LRU daemon to make room when possible — and
+    ///     allocates a free loopback port.
     /// </summary>
+    /// <remarks>
+    ///     The admission gate serializes the cap decision so it can never be raced past. The cap is measured by the
+    ///     reserved-port count, which already includes in-flight spawns, mirroring the llama supervisor.
+    /// </remarks>
     private async Task<int> AllocatePortAsync(CancellationToken ct)
     {
         // Daemons detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
@@ -557,30 +555,23 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         {
             _admissionGate.Release();
 
-            // The gate is free BEFORE any child is killed: tree-killing a multi-GB image model is slow, and under the
-            // gate it serialized every unrelated model's port allocation and release behind it. This spawn still waits
-            // for its own victim to die before it returns to launch, so the VRAM the victim held is genuinely released
-            // before the incoming model loads.
+            // The gate is free BEFORE any child is killed: tree-killing a multi-GB image model is slow, and under the gate it serialized every unrelated model's port allocation and release behind it.
+            // This spawn still waits for its own victim to die before it returns to launch, so the VRAM the victim held is genuinely released before the incoming model loads.
             KillDetachedProcesses(detached);
         }
     }
 
     /// <summary>
-    ///     Frees a slot for a new admission by evicting the least-recently-used daemon that is not mid-generation
-    ///     (caller holds the admission gate).
-    ///     <para>
-    ///         A daemon past its idle TTL is always preferred. When none is, an in-window but <b>unleased</b> daemon is
-    ///         evicted anyway. That fallback exists because the image cap is <c>1</c>: without it the TTL — a reaper
-    ///         threshold, not an admission rule — becomes a fifteen-minute lockout in which switching image models fails
-    ///         outright with "the maximum number of local image models are already loaded", and the app offers no way
-    ///         out. An unleased daemon has no request in flight, so evicting it costs a reload and nothing else, whereas
-    ///         refusing costs the operator the feature. A leased daemon is still never a victim.
-    ///     </para>
-    ///     <para>
-    ///         The victim is detached here — its slot and port are free the moment this returns <see langword="true" /> —
-    ///         and appended to <paramref name="detached" /> for the caller to tree-kill once the gate is released.
-    ///     </para>
+    ///     Frees a slot for a new admission by evicting the least-recently-used daemon that is not mid-generation; the
+    ///     caller holds the admission gate.
     /// </summary>
+    /// <remarks>
+    ///     A daemon past its idle TTL is always preferred; when none is, an in-window but <b>unleased</b> daemon is evicted anyway,
+    ///     because the image cap is <c>1</c> and without that the TTL — a reaper threshold, not an admission rule — becomes a lockout in
+    ///     which switching image models fails outright with "the maximum number of local image models are already loaded". An unleased
+    ///     daemon has no request in flight, so evicting it costs a reload; a leased one is never a victim. The victim is detached here —
+    ///     slot and port free the moment this returns true — and appended to <paramref name="detached" /> for the caller to tree-kill.
+    /// </remarks>
     private bool TryEvictIdleLeastRecentlyUsed(List<RunningServer> detached)
     {
         var now = _timeProvider.GetUtcNow();
@@ -590,9 +581,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         foreach (var (key, running) in _processes)
         {
-            // In-flight generation disqualifies a live daemon as a cap-eviction victim for the same reason the idle
-            // reaper skips it: past-TTL only means "no new job started", not "not mid-generation". This is a
-            // best-effort heuristic read; the atomic claim is TryBeginEvict on the chosen victim below.
+            // In-flight generation disqualifies a live daemon as a cap-eviction victim for the same reason the idle reaper skips it: past-TTL only means "no new job started", not "not
+            // mid-generation". This is a best-effort heuristic read; the atomic claim is TryBeginEvict on the chosen victim below.
             if (running.IsLeased && !running.Handle.HasExited)
             {
                 continue;
@@ -618,18 +608,15 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             return false;
         }
 
-        // Atomically latch the chosen victim before tearing it down. If a generation acquired a lease on it between the
-        // heuristic scan and here, TryBeginEvict fails and we admit no victim this round — the caller surfaces a
-        // retryable cap error rather than tree-killing a daemon under an active lease. An EXITED victim
-        // holds no real lease, so it is torn down regardless.
+        // Atomically latch the chosen victim before tearing it down. If a generation acquired a lease on it between the heuristic scan and here, TryBeginEvict fails and we admit no victim this round
+        // — the caller surfaces a retryable cap error rather than tree-killing a daemon under an active lease. An EXITED victim holds no real lease, so it is torn down regardless.
         if (!victim.Handle.HasExited && !victim.TryBeginEvict())
         {
             return false;
         }
 
-        // Free the slot/port under the gate so the new admission proceeds immediately; the kill follows outside it.
-        // A lost removal race (a concurrent evict/reap already detached this victim) frees no slot of OUR doing, so
-        // report no admission rather than letting the cap be overrun on someone else's teardown.
+        // Free the slot/port under the gate so the new admission proceeds immediately; the kill follows outside it. A lost removal race (a concurrent evict/reap already detached this victim) frees no
+        // slot of OUR doing, so report no admission rather than letting the cap be overrun on someone else's teardown.
         if (DetachProcess(victimKey, victim) is not { } evicted)
         {
             return false;
@@ -672,11 +659,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             _admissionGate.Release();
         }
 
-        // Killed OUTSIDE the gate so a multi-GB tree-kill does not serialize unrelated admissions — but still completed
-        // before this returns, because every caller here depends on the child actually being gone: the ensure/restart
-        // path reaps the outgoing daemon through this call and then immediately respawns under the same key (at the
-        // default cap of one, the replacement's load must not overlap the outgoing model's VRAM), and the wedged-daemon
-        // and idle-reaper paths must not leave a second child alive against the same model files.
+        // Killed OUTSIDE the gate so a multi-GB tree-kill does not serialize unrelated admissions, but still completed before this returns: every caller here depends on the child actually being gone.
+        // See docs/wiki/14-image-generation.md ("Daemon leases and the teardown races").
         if (detached is not null)
         {
             KillDetachedProcess(detached);
@@ -685,26 +669,18 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
     /// <summary>
     ///     Removes a daemon from the table and releases its port reservation — everything that makes the slot available
-    ///     to the next admission — WITHOUT touching the child. Caller holds the admission gate. Returns the daemon when
-    ///     this call won the removal race (the caller then owes it a <see cref="KillDetachedProcess" />), or
-    ///     <see langword="null" /> when a concurrent path already removed it.
+    ///     to the next admission — WITHOUT touching the child; the caller holds the admission gate.
     /// </summary>
+    /// <returns>
+    ///     The daemon when this call won the removal race (the caller then owes it a
+    ///     <see cref="KillDetachedProcess" />), or <see langword="null" /> when a concurrent path already removed it.
+    /// </returns>
     /// <remarks>
-    ///     <para>
-    ///         INVARIANT: the port reservation is dropped here, before the child is killed, so the reservation set
-    ///         (which is what bounds the loaded-model CAP) never counts a daemon that is on its way out. That does not
-    ///         hand the next spawn a port the dying child still holds: <see cref="ReserveFreePort" /> bind-probes every
-    ///         candidate (<see cref="IsPortFree" />) and skips one that is still bound. The bind probe was always the
-    ///         real guard — <c>TreeKill</c> returns before the OS reclaims the socket, so releasing the port after the
-    ///         kill never proved availability either.
-    ///     </para>
-    ///     <para>
-    ///         The resident-process lease is deliberately NOT released here. Unlike the slot and the port it has no
-    ///         equivalent of the bind probe behind it: it is what holds off an exclusive runtime mutation
-    ///         (<see cref="IImageRuntimeActivityGate.TryAcquireMutationReservation" /> admits only at zero resident
-    ///         processes), and a child that has been detached but not yet killed still has the model files open. It is
-    ///         released in <see cref="KillDetachedProcess" /> instead, once the child is actually down.
-    ///     </para>
+    ///     INVARIANT: the port reservation is dropped here, before the child is killed, so the reservation set that bounds the
+    ///     loaded-model CAP never counts a daemon on its way out. That cannot hand the next spawn a port the dying child still holds,
+    ///     because <see cref="ReserveFreePort" /> bind-probes every candidate (<see cref="IsPortFree" />) and skips one still bound — the
+    ///     bind probe was always the real guard, since <c>TreeKill</c> returns before the OS reclaims the socket. See
+    ///     docs/wiki/14-image-generation.md ("Daemon leases and the teardown races") for why the resident lease is NOT released here.
     /// </remarks>
     private RunningServer? DetachProcess(string key, RunningServer running)
     {
@@ -735,10 +711,13 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     }
 
     /// <summary>
-    ///     Tree-kills every daemon detached during an admission decision. A teardown failure is logged, never rethrown:
-    ///     the admission it trails has already succeeded (or failed with its own cap error), and turning a kill failure
-    ///     into the caller's exception would both mask that error and skip the remaining victims.
+    ///     Tree-kills every daemon detached during an admission decision.
     /// </summary>
+    /// <remarks>
+    ///     A teardown failure is logged, never rethrown: the admission it trails has already succeeded (or failed with
+    ///     its own cap error), and turning a kill failure into the caller's exception would both mask that error and
+    ///     skip the remaining victims.
+    /// </remarks>
     private void KillDetachedProcesses(List<RunningServer> detached)
     {
         foreach (var running in detached)
@@ -784,10 +763,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
         catch (ObjectDisposedException)
         {
-            // A spawn cancelled by DisposeAsync (its readiness is linked to the shutdown token) unwinds
-            // through here to release its reserved port, but DisposeAsync may already have disposed the admission gate.
-            // The disposal teardown reaps every registered daemon's port anyway, and no concurrent allocator remains, so
-            // dropping this release is safe — never surface an ObjectDisposedException from the shutdown unwind.
+            // A spawn cancelled by DisposeAsync unwinds through here to release its reserved port, but the admission gate may already be disposed. The disposal teardown reaps every registered daemon
+            // port anyway and no concurrent allocator remains, so dropping this release is safe — never surface an ObjectDisposedException from the shutdown unwind.
             return;
         }
 
@@ -824,11 +801,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         private long _lastLivenessProbeTicks;
         private int _consecutiveLivenessFailures;
 
-        // Lease/eviction state, mutated only by atomic CAS: >= 0 is the count of in-flight generations
-        // holding this daemon; -1 is a terminal "evicting" latch set by the idle reaper / cap evictor. A new lease
-        // (TryAcquireJob) and an eviction decision (TryBeginEvict) therefore transition the SAME word, so they can never
-        // both win — closing the window where the old plain increment could be granted after the reaper had read
-        // "no active jobs" but before it tree-killed the daemon.
+        // Lease/eviction state, mutated only by atomic CAS: >= 0 counts the in-flight generations holding this daemon, -1 is the terminal "evicting" latch the idle reaper / cap evictor sets. A lease
+        // and an eviction decision transition the SAME word, so they can never both win. See docs/wiki/14-image-generation.md ("Daemon leases and the teardown races").
         private int _leaseState;
 
         public RunningServer(
@@ -865,10 +839,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
 
         /// <summary>
-        ///     Atomically claims the right to run the reuse-path liveness probe: succeeds (advancing the probe clock to
-        ///     <paramref name="now" />) only when at least <paramref name="interval" /> has elapsed since the last claim.
-        ///     Serializes probes across concurrent reuses so at most one HTTP probe runs per daemon per interval.
+        ///     Atomically claims the right to run the reuse-path liveness probe: it succeeds, advancing the probe clock
+        ///     to <paramref name="now" />, only when at least <paramref name="interval" /> has elapsed since the last claim.
         /// </summary>
+        /// <remarks>
+        ///     Serializes probes across concurrent reuses so at most one HTTP probe runs per daemon per interval.
+        /// </remarks>
         public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval)
         {
             while (true)
@@ -900,9 +876,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         /// <summary>
         ///     Atomically registers an in-flight generation against this daemon, unless it is already latched for
-        ///     eviction. Returns <see langword="false" /> when an idle reaper / cap evictor has begun tearing it down,
-        ///     in which case the caller must proceed leaseless rather than over a to-be-killed daemon.
+        ///     eviction.
         /// </summary>
+        /// <remarks>
+        ///     Returns <see langword="false" /> when an idle reaper / cap evictor has begun tearing it down, in which
+        ///     case the caller must proceed leaseless rather than over a to-be-killed daemon.
+        /// </remarks>
         public bool TryAcquireJob()
         {
             while (true)
@@ -929,11 +908,13 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
 
         /// <summary>
-        ///     Atomically latches this daemon as evicting, but only when no job lease is currently held. Once latched,
-        ///     <see cref="TryAcquireJob" /> refuses, so the caller may tear the daemon down without cutting off a
-        ///     generation that began after a plain "no active jobs" read. Returns <see langword="false" />
-        ///     when a lease is active — the daemon must then be left alone and reaped on a later pass.
+        ///     Atomically latches this daemon as evicting, but only when no job lease is currently held.
         /// </summary>
+        /// <remarks>
+        ///     Once latched, <see cref="TryAcquireJob" /> refuses, so the caller may tear the daemon down without
+        ///     cutting off a generation that began after a plain "no active jobs" read. Returns <see langword="false" />
+        ///     when a lease is active — the daemon must then be left alone and reaped on a later pass.
+        /// </remarks>
         public bool TryBeginEvict()
         {
             return Interlocked.CompareExchange(ref _leaseState, value: -1, comparand: 0) == 0;

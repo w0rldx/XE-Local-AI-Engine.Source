@@ -8,16 +8,15 @@ using System.Runtime.InteropServices;
 internal readonly record struct ImageDimensions(int Width, int Height);
 
 /// <summary>
-///     Reads the pixel dimensions out of a PNG's IHDR header. stable-diffusion.cpp silently rounds a requested latent
-///     grid up to a multiple of 64, so the produced image is frequently NOT the size that was asked for (a requested
-///     100x512 comes back 128x512). The runtime must therefore report the dimensions of the bytes it actually received,
-///     never the ones the caller requested — otherwise the app states a false fact about its own output.
-///     <para>
-///         Header-only, allocation-free, and total: the fixed PNG layout puts width/height at byte offsets 16 and 20 as
-///         big-endian uint32s, so no image-decoding dependency is needed. A payload that is not a well-formed PNG (or a
-///         future non-PNG format) yields <see langword="null" /> and the caller falls back.
-///     </para>
+///     Reads the pixel dimensions out of a PNG's IHDR header.
 /// </summary>
+/// <remarks>
+///     stable-diffusion.cpp silently rounds a requested latent grid up to a multiple of 64, so the produced image is frequently NOT the
+///     size asked for — a requested 100x512 comes back 128x512 — and the runtime must report the dimensions of the bytes it actually
+///     received, or the app states a false fact about its own output. Header-only, allocation-free and total: the fixed PNG layout puts
+///     width/height at byte offsets 16 and 20 as big-endian uint32s, so no image-decoding dependency is needed, and a payload that is
+///     not a well-formed PNG yields <see langword="null" /> for the caller to degrade on.
+/// </remarks>
 internal static class PngImageDimensions
 {
     // The 8-byte PNG signature every PNG stream starts with.

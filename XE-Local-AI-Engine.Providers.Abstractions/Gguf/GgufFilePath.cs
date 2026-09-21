@@ -1,11 +1,12 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
-/// <summary>
-///     Path-safety guards for Hugging-Face-supplied file names (<c>rfilename</c>/<c>path</c>). A repo is untrusted
-///     input: a malicious or compromised repo could return a name like <c>../../etc/evil-Q4_K_M.gguf</c> or a rooted
-///     path. Discovery filters such names out, and the store re-checks containment before writing — defense in depth so
-///     a download can never land outside the configured models directory.
-/// </summary>
+/// <summary>Path-safety guards for Hugging-Face-supplied file names (<c>rfilename</c>/<c>path</c>).</summary>
+/// <remarks>
+///     A repo is untrusted input: a malicious or compromised repo could return a name like
+///     <c>../../etc/evil-Q4_K_M.gguf</c> or a rooted path. Discovery filters such names out, and the store re-checks
+///     containment before writing — defense in depth so a download can never land outside the configured models
+///     directory.
+/// </remarks>
 public static class GgufFilePath
 {
     /// <summary>

@@ -4,17 +4,11 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.External;
 ///     One external model's endpoint and trust facts, read as ONE atomic value out of ONE registry generation.
 /// </summary>
 /// <remarks>
-///     <para>
-///         It exists because reading the descriptor and the credential separately lets them come from two different
-///         generations: an operator edit landing between the two reads binds a NEW key to an OLD base URL, which is the
-///         shape of an accidental credential disclosure. Every consumer that both routes and authenticates therefore
-///         takes one of these, not a descriptor plus a lookup.
-///     </para>
-///     <para>
-///         <see cref="Generation" /> is the registry's monotonic snapshot epoch. It is what makes a binding
-///         VERIFIABLE later: a pinned invocation re-reads the registry on every send and compares generations, so a
-///         configuration edit mid-invocation is detected rather than silently applied.
-///     </para>
+///     It exists because reading the descriptor and the credential separately lets them come from two different generations: an operator
+///     edit landing between the two reads binds a NEW key to an OLD base URL, which is the shape of an accidental credential disclosure.
+///     Every consumer that both routes and authenticates therefore takes one of these, not a descriptor plus a lookup.
+///     <see cref="Generation" />, the registry's monotonic snapshot epoch, is what makes a binding VERIFIABLE later: a pinned invocation
+///     re-reads the registry on every send and compares generations, so an edit mid-invocation is detected, not silently applied.
 /// </remarks>
 public sealed class ExternalProviderBinding
 {

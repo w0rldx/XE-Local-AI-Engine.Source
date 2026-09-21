@@ -5,32 +5,25 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
-///     Builds the exact, ordered <c>sd-server</c> startup argument vector for one model's file-set on a loopback port.
-///     The ONLY place sd-server startup flag names live. Per-generation parameters (prompt,
-///     steps, seed, cfg) are NOT here — they ride the per-job HTTP body (<see cref="SdServerJobClient" />); startup args
-///     carry only the resident concerns: bind address, model file-set, acceleration backend, and threads.
+///     Builds the exact, ordered <c>sd-server</c> startup argument vector for one model's file-set on a loopback port,
+///     and is the ONLY place sd-server startup flag names live.
 /// </summary>
 /// <remarks>
-///     Model selection follows the resolved file-set shape: a single <see cref="ImageModelPartRole.Diffusion" /> part
-///     (SD1.5, the step-1 target) uses the single-file <c>-m</c> flag; a multi-part set (FLUX/SD3/Qwen-Image) uses
-///     <c>--diffusion-model</c> + <c>--vae</c> + <c>--clip_l</c> [+ <c>--clip_g</c>] + <c>--t5xxl</c> [+ <c>--llm</c>
-///     + <c>--llm_vision</c>]. Verified against stable-diffusion.cpp @ <c>master-742-1a13107</c>, whose <c>--help</c>
-///     carries all of those flags.
-///     <para>
-///         Two Qwen-adjacent flags the pinned binary offers are deliberately NOT emitted:
-///         <c>--flow-shift</c> documents itself as <c>default: auto</c>, so passing a hand-picked value would replace a
-///         model-aware default with a guess; and <c>--qwen-image-zero-cond-t</c> is an <em>edit</em>-model conditioning
-///         switch (Qwen-Image-Edit) that would change conditioning for the text-to-image sets this install path ships.
-///         Both stay off until there is a measurement that says otherwise.
-///     </para>
+///     Per-generation parameters (prompt, steps, seed, cfg) are NOT here — they ride the per-job HTTP body (<see cref="SdServerJobClient" />) — so startup args carry only the resident concerns: bind
+///     address, model file-set, backend and threads. Model selection follows the file-set shape: a single <see cref="ImageModelPartRole.Diffusion" /> part (SD1.5) uses <c>-m</c>, a multi-part set
+///     (FLUX/SD3/Qwen-Image) uses <c>--diffusion-model</c> + <c>--vae</c> + <c>--clip_l</c> [+ <c>--clip_g</c>] + <c>--t5xxl</c> [+ <c>--llm</c> + <c>--llm_vision</c>]. Verified @
+///     <c>master-742-1a13107</c>. Two Qwen-adjacent flags are deliberately NOT emitted — see docs/wiki/14-image-generation.md ("sd-server flags never emitted").
 /// </remarks>
 internal static class ImageServerArgumentBuilder
 {
     /// <summary>
-    ///     Text-encoder placement key in the <c>--backend</c> component=device string. Verified against the pinned
-    ///     <c>sd-server --help</c> output: the legacy <c>--clip-on-cpu</c> flag maps to <c>te=cpu</c>. The help's
-    ///     generic <c>clip=cpu</c> example is not the text-encoder key accepted by this pinned build.
+    ///     Text-encoder placement key in the <c>--backend</c> component=device string.
     /// </summary>
+    /// <remarks>
+    ///     Verified against the pinned <c>sd-server --help</c> output: the legacy <c>--clip-on-cpu</c> flag maps to
+    ///     <c>te=cpu</c>, and the help's generic <c>clip=cpu</c> example is not the text-encoder key this pinned build
+    ///     accepts.
+    /// </remarks>
     internal const string TextEncoderBackendKey = "te";
 
     /// <summary>Builds the launch spec for <paramref name="modelName" />'s resolved <paramref name="parts" /> on <paramref name="port" />.</summary>
@@ -58,9 +51,8 @@ internal static class ImageServerArgumentBuilder
 
         AppendModelArgs(args, parts);
 
-        // Acceleration backend via sd-server component-to-device syntax (no separate gpu-index flag, per spike section
-        // 4A). A GPU build keeps the text encoder and VAE on CPU to conserve VRAM because the diffusion transformer
-        // dominates the memory budget (section 4.3). The CPU floor passes the bare cpu device.
+        // Acceleration backend via sd-server component-to-device syntax (no separate gpu-index flag, per spike section 4A). A GPU build keeps the text encoder and VAE on CPU to conserve VRAM because
+        // the diffusion transformer dominates the memory budget (section 4.3). The CPU floor passes the bare cpu device.
         args.Add("--backend");
         args.Add(BuildBackendSpec(backend));
 

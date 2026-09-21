@@ -4,27 +4,15 @@ using System.Globalization;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 
 /// <summary>
-///     Builds the exact, ordered <c>whisper-server</c> startup argument vector for one model on a loopback port. The
-///     ONLY place whisper-server flag names live, which is what makes the invariant "no whisper-server flag escapes
-///     this project" checkable rather than aspirational.
+///     Builds the exact, ordered <c>whisper-server</c> startup argument vector for one model on a loopback port, and is
+///     the ONLY place whisper-server flag names live.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Per-request decoding knobs — language, translate, temperature, prompt, VAD on/off, response format — are
-///         NOT here. They ride the per-request multipart body, and the server takes a fresh copy of its defaults per
-///         request, so nothing set at launch leaks between callers. Startup arguments carry only the resident
-///         concerns: bind address, model file, VAD model, backend and threads.
-///     </para>
-///     <para>
-///         <b>Flags that are deliberately never emitted.</b> <c>--convert</c> and <c>--tmp-dir</c>: the server writes
-///         EVERY request's audio to a temp file and shells out to ffmpeg when convert is on, including for a native
-///         16 kHz mono WAV, which would put live PCM on disk and break the memory-only contract this feature is built
-///         around. Engine-side transcoding of the containers the server cannot decode is the caller's job, in the
-///         caller's own owned directory. <c>-di</c> (diarize) splits a stereo WAV by channel and is not speaker
-///         clustering; per-channel transcription is used instead. <c>-pr</c>/<c>-pp</c> print the transcript to a
-///         stream this project drains into the app log. <c>-fa</c> is redundant: the pinned build already defaults
-///         flash attention on where supported.
-///     </para>
+///     That is what makes the invariant "no whisper-server flag escapes this project" checkable rather than aspirational. Per-request
+///     decoding knobs — language, translate, temperature, prompt, VAD on/off, response format — are NOT here: they ride the per-request
+///     multipart body, and the server takes a fresh copy of its defaults per request, so nothing set at launch leaks between callers.
+///     Startup arguments carry only the resident concerns: bind address, model file, VAD model, backend and threads. See
+///     docs/wiki/24-audio-transcription.md ("whisper-server flags that are deliberately never emitted").
 /// </remarks>
 internal static class WhisperServerArgumentBuilder
 {

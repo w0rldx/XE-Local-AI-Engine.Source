@@ -346,14 +346,14 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
     }
 
     /// <summary>
-    ///     Compares the recorded registry digests against the freshly computed ones. The comparison is
-    ///     case-INSENSITIVE on purpose: registry entries written before the sidecar era persisted
-    ///     <c>Convert.ToHexString</c> (UPPERCASE) hex, while every current write path and
-    ///     <see cref="GgufAcquisitionSidecar.ComputeSha256Async" /> produce lowercase. An ordinal compare therefore
-    ///     failed every legacy entry with <c>InstalledModelMemberFingerprintMismatch</c>, which took down whole
-    ///     catalog endpoints that verify each installed model. Only the comparison is relaxed — the persisted
-    ///     fingerprint/revision inputs are untouched, so no identity changes.
+    ///     Compares the recorded registry digests against the freshly computed ones, case-INSENSITIVELY on purpose.
     /// </summary>
+    /// <remarks>
+    ///     Registry entries written before the sidecar era persist <c>Convert.ToHexString</c> (UPPERCASE) hex, while every current write
+    ///     path and <see cref="GgufAcquisitionSidecar.ComputeSha256Async" /> produce lowercase, so an ordinal compare fails every such
+    ///     entry with <c>InstalledModelMemberFingerprintMismatch</c> and takes down whole catalog endpoints that verify each installed
+    ///     model. Only the comparison is relaxed — the persisted fingerprint/revision inputs are untouched, so no identity changes.
+    /// </remarks>
     private static void VerifyRegistryFingerprints(IReadOnlyList<InstalledModelRegistryAliasSnapshot> aliases,
         IReadOnlyList<InstalledModelPhysicalMember> members)
     {

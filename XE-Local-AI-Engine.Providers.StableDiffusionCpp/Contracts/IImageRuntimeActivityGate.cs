@@ -21,9 +21,12 @@ public interface IImageRuntimeActivityLease : IAsyncDisposable, IDisposable;
 
 /// <summary>
 ///     Atomically coordinates long-lived image jobs, spawn/readiness windows, resident processes, and exclusive runtime
-///     mutation. A mutation reservation is granted only when all activity counts are zero; while reserved, new job and
-///     spawn leases are refused.
+///     mutation.
 /// </summary>
+/// <remarks>
+///     A mutation reservation is granted only when all activity counts are zero; while reserved, new job and spawn
+///     leases are refused.
+/// </remarks>
 public interface IImageRuntimeActivityGate
 {
     ImageRuntimeActivitySnapshot GetSnapshot();

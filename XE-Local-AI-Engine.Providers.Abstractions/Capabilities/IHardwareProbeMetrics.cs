@@ -1,11 +1,12 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
-/// <summary>
-///     Seam for recording hardware-probe reliability signals. The profiler lives in the Providers.Capabilities layer,
-///     which cannot reference the application layer's <c>NodeMetrics</c> meter directly (layering: providers depend only
-///     on Abstractions). The host supplies a <c>NodeMetrics</c>-backed implementation; tests and headless hosts fall back
-///     to <see cref="NullHardwareProbeMetrics" />.
-/// </summary>
+/// <summary>Seam for recording hardware-probe reliability signals.</summary>
+/// <remarks>
+///     The profiler lives in the Providers.Capabilities layer, which cannot reference the application layer's
+///     <c>NodeMetrics</c> meter directly (layering: providers depend only on Abstractions). The host supplies a
+///     <c>NodeMetrics</c>-backed implementation; tests and headless hosts fall back to
+///     <see cref="NullHardwareProbeMetrics" />.
+/// </remarks>
 public interface IHardwareProbeMetrics
 {
     /// <summary>

@@ -13,16 +13,10 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 ///     override, process supervision, and the transcriber the engine calls.
 /// </summary>
 /// <remarks>
-///     <para>
-///         One extension rather than the image runtime's provider/runtime pair: there is a single consumer and no
-///         split worth expressing. Every registration is <c>TryAdd</c>, so a host may override any seam — and so the
-///         composition root's own seeded <see cref="WhisperRuntimeOptions" />, registered BEFORE this call, wins over
-///         the default here.
-///     </para>
-///     <para>
-///         <strong>Caller contract:</strong> the consuming application must register an <see cref="IHardwareProfiler" />
-///         before resolving the backend selector.
-///     </para>
+///     One extension rather than the image runtime's provider/runtime pair: there is a single consumer and no split worth expressing.
+///     Every registration is <c>TryAdd</c>, so a host may override any seam — and so the composition root's own seeded
+///     <see cref="WhisperRuntimeOptions" />, registered BEFORE this call, wins over the default here.
+///     <strong>Caller contract:</strong> the application must register an <see cref="IHardwareProfiler" /> before resolving the selector.
 /// </remarks>
 public static class WhisperCppServiceCollectionExtensions
 {
@@ -47,18 +41,8 @@ public static class WhisperCppServiceCollectionExtensions
 
         services.AddHttpClient(BinaryHttpClientName);
 
-        // The runtime client carries NO resilience pipeline and NO client-level timeout, and both halves matter.
-        //
-        // Aspire's AddServiceDefaults installs a standard resilience handler on EVERY named client through
-        // ConfigureHttpClientDefaults, including one registered later, and that pipeline's per-attempt timeout is ten
-        // seconds — which would abort a CPU transcription that legitimately runs for minutes, while the status DTO
-        // advertises a thirty-minute budget. It also retries every method by default, and neither the model load nor
-        // the transcription is idempotent. RemoveAllResilienceHandlers strips it, and is a no-op outside Aspire.
-        //
-        // A single HttpClient.Timeout cannot serve three requests whose right budgets differ by four orders of
-        // magnitude, and its 100-second default would abort a long transcription on its own. Infinite here is safe
-        // ONLY because every call site owns an explicit deadline through a linked token source; nothing may call this
-        // client without one.
+        // The runtime client carries NO resilience pipeline and NO client-level timeout, and both halves matter. Infinite is safe ONLY because every call site
+        // owns an explicit deadline through a linked token source. See docs/wiki/24-audio-transcription.md ("The whisper-server HTTP client: no pipeline, no timeout").
 #pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental; used deliberately to drop the
         // Aspire-installed standard pipeline, whose attempt timeout and blanket retries are
         // both wrong for a local transcription daemon.
@@ -121,9 +105,8 @@ public static class WhisperCppServiceCollectionExtensions
         services.TryAddSingleton<IWhisperCppSourceBuildEventPublisher, NullWhisperCppSourceBuildEventPublisher>();
         services.TryAddSingleton<IWhisperCppSourceBuildService, WhisperCppSourceBuildService>();
 
-        // The hosted service is not optional bookkeeping: it republishes the managed-runtime signal at start, and the
-        // backend selector trusts a managed CUDA build only once that signal is set. Without it an adopted build
-        // stops resolving after a restart and the node silently falls back to CPU.
+        // The hosted service is not optional bookkeeping: it republishes the managed-runtime signal at start, and the backend selector trusts a managed CUDA build only once that signal is set.
+        // Without it an adopted build stops resolving after a restart and the node silently falls back to CPU.
         services.AddHostedService<WhisperCppSourceBuildLifecycle>();
 
         return services;

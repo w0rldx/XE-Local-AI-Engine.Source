@@ -4,18 +4,11 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 ///     Answers one question once per process: is <c>ffmpeg</c> on <c>PATH</c>?
 /// </summary>
 /// <remarks>
-///     <para>
-///         This feeds exactly one thing — the <c>supportsTranscode</c> field on the runtime status — and it never
-///         gates a launch flag. The name is deliberate: it advertises that the ENGINE can transcode the containers
-///         whisper-server cannot decode natively, into the engine's own owned temporary directory. It does not mean
-///         the daemon will convert anything; the daemon is never launched with its convert flag, because that would
-///         write every request's audio to disk.
-///     </para>
-///     <para>
-///         The answer is cached for the process lifetime. An operator who installs ffmpeg while the node is running
-///         gets the capability at the next restart, which is the same granularity every other PATH-resolved tool in
-///         this repository has.
-///     </para>
+///     This feeds exactly one thing — the <c>supportsTranscode</c> field on the runtime status — and never gates a launch flag. The name
+///     is deliberate: it advertises that the ENGINE can transcode the containers whisper-server cannot decode natively, into the
+///     engine's own owned temporary directory. It does NOT mean the daemon converts anything; the daemon is never launched with its
+///     convert flag, which would write every request's audio to disk. The answer is cached for the process lifetime, so ffmpeg installed
+///     mid-run is picked up at the next restart — the granularity every PATH-resolved tool here has.
 /// </remarks>
 internal static class WhisperFfmpegProbe
 {

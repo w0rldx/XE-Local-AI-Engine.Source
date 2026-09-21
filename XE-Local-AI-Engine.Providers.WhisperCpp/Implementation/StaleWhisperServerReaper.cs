@@ -6,22 +6,14 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
-///     Startup hosted service that reaps stale <c>whisper-server</c> orphans left by a previous run of THIS app. The
-///     supervisor launches the daemon detached and tears it down only through its graceful shutdown; a hard kill of
-///     the host skips that path entirely, orphaning a daemon that still holds its loopback port and its memory.
-///     Reaping on the next start is what makes a restart reliable however the previous run died.
+///     Startup hosted service that reaps stale <c>whisper-server</c> orphans left by a previous run of THIS app.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Strict matching:</b> a process is reaped ONLY when its executable path sits under this app's own
-///         whisper.cpp binaries root, so an unrelated <c>whisper-server</c> — an operator's own build, another tool's
-///         copy — is never touched. When the root cannot be resolved the reaper logs and does nothing.
-///     </para>
-///     <para>
-///         The whole reap is best-effort and wrapped, so a failure here can never block application start. It runs
-///         before any request is served and therefore only ever sees orphans from a previous run, never this run's own
-///         children.
-///     </para>
+///     The supervisor launches the daemon detached and tears it down only through its graceful shutdown; a hard kill of the host skips
+///     that path, orphaning a daemon that still holds its loopback port and memory, so reaping on the next start is what makes a restart
+///     reliable however the previous run died. <b>Strict matching:</b> a process is reaped ONLY when its executable path sits under this
+///     app's own whisper.cpp binaries root, so an unrelated <c>whisper-server</c> is never touched, and an unresolvable root logs and
+///     does nothing. Best-effort and wrapped throughout, and it runs before any request is served.
 /// </remarks>
 internal sealed class StaleWhisperServerReaper : IHostedService
 {

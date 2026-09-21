@@ -7,10 +7,12 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 
 /// <summary>
 ///     <see cref="IBaseCheckpointStore" /> over the reused <see cref="HfHubClient" /> + <see cref="HfDownloadClient" />.
+/// </summary>
+/// <remarks>
 ///     Mirrors <see cref="HuggingFaceImageModelStore" />: the download primitive is single-file, and everything here is
 ///     the multi-file orchestration on top of it — per-file staging, reuse of already-complete files, and one
 ///     set-relative progress bar instead of one bar per shard.
-/// </summary>
+/// </remarks>
 internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
 {
     private const string DefaultRevision = "main";
@@ -57,9 +59,8 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
 
-        // Read the metadata AT the requested revision. Labelling the default branch's file list with a pinned revision
-        // describes a checkpoint that may not exist: the download then fetches those names at the pin, and a file the
-        // pin does not have (or has at another size) fails mid-transfer rather than at resolve time.
+        // Read the metadata AT the requested revision. Labelling the default branch's file list with a pinned revision describes a checkpoint that may not exist: the download then fetches those names
+        // at the pin, and a file the pin does not have (or has at another size) fails mid-transfer rather than at resolve time.
         var detail = await _hubClient.GetRepoAsync(repoId, revision, ct).ConfigureAwait(false)
                      ?? throw new BaseCheckpointNotTrainableException("The base checkpoint repository could not be read from Hugging Face.");
 
@@ -189,10 +190,13 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
     }
 
     /// <summary>
-    ///     Decides what a repo file is for, or <see langword="null" /> when fine-tuning does not need it. Everything not
-    ///     recognised is skipped on purpose: a base repo commonly also ships ONNX exports, GGUF quants, PyTorch <c>.bin</c>
-    ///     duplicates of the same weights, and images, and downloading those would multiply the transfer for nothing.
+    ///     Decides what a repo file is for, or <see langword="null" /> when fine-tuning does not need it.
     /// </summary>
+    /// <remarks>
+    ///     Everything not recognised is skipped on purpose: a base repo commonly also ships ONNX exports, GGUF quants,
+    ///     PyTorch <c>.bin</c> duplicates of the same weights, and images, and downloading those would multiply the
+    ///     transfer for nothing.
+    /// </remarks>
     internal static BaseCheckpointFileRole? ClassifyFile(string fileName)
     {
         // Only root-level files are considered: subdirectories in these repos hold the alternative formats above.
@@ -217,11 +221,14 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
     }
 
     /// <summary>
-    ///     Reuse requires a declared size that matches the file exactly: without one there is nothing to check a leftover
-    ///     against, and a truncated file would be indistinguishable from a complete one. Length is deliberately the only
-    ///     check — hashing a 30 GB shard to avoid re-downloading it costs a large fraction of the transfer it saves, and
-    ///     anything actually fetched is still hash-verified by the download client.
+    ///     Reuse requires a declared size that matches the file exactly.
     /// </summary>
+    /// <remarks>
+    ///     Without a declared size there is nothing to check a leftover against, and a truncated file would be
+    ///     indistinguishable from a complete one. Length is deliberately the only check — hashing a 30 GB shard to avoid
+    ///     re-downloading it costs a large fraction of the transfer it saves, and anything actually fetched is still
+    ///     hash-verified by the download client.
+    /// </remarks>
     private static bool TryReuseCompletedFile(string destinationPath, BaseCheckpointFile file, out long sizeBytes)
     {
         sizeBytes = 0;

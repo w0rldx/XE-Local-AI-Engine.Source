@@ -29,10 +29,13 @@ public static class HuggingFaceServiceCollectionExtensions
     public const string DownloadHttpClientName = "hf-download";
 
     /// <summary>
-    ///     Named <see cref="HttpClient" /> for the pre-download metadata probe. Auto-redirect is DISABLED so the
-    ///     <c>X-Linked-Etag</c> (the true file sha256) on Hugging Face's <c>302</c> resolve response can be read before
-    ///     the redirect to the Xet/LFS CDN, whose own <c>ETag</c> is a content-defined-chunking hash, not the file sha256.
+    ///     Named <see cref="HttpClient" /> for the pre-download metadata probe.
     /// </summary>
+    /// <remarks>
+    ///     Auto-redirect is DISABLED so the <c>X-Linked-Etag</c> (the true file sha256) on Hugging Face's <c>302</c>
+    ///     resolve response can be read before the redirect to the Xet/LFS CDN, whose own <c>ETag</c> is a
+    ///     content-defined-chunking hash, not the file sha256.
+    /// </remarks>
     public const string ResolveHttpClientName = "hf-resolve";
 
     /// <summary>Registers the Hugging Face GGUF store, registry, and discovery over the documented Hub REST endpoints.</summary>

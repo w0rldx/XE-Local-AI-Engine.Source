@@ -2,15 +2,14 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
 ///     Thin process-launch seam isolating the OS-specific <c>Process.Start</c> and tree-kill mechanics from the
-///     supervisor's lifecycle logic. Faked in unit tests so the supervisor is exercised with no real child process; the
-///     production implementation starts a real <c>whisper-server</c> contained by a Windows Job Object or a Linux
-///     process group.
+///     supervisor's lifecycle logic.
 /// </summary>
 /// <remarks>
-///     Internal on purpose, together with <see cref="IWhisperServerProcessHandle" /> and
-///     <c>WhisperServerLaunchSpec</c>: making any of them public would move it under
-///     <c>PlacementConventionTests</c>' public-interface rule. They are visible to the test project through
-///     <c>InternalsVisibleTo</c>. Do not widen them for consistency with the public contracts beside them.
+///     Faked in unit tests so the supervisor is exercised with no real child process; the production implementation starts a real
+///     <c>whisper-server</c> contained by a Windows Job Object or a Linux process group. Internal on purpose, together with
+///     <see cref="IWhisperServerProcessHandle" /> and <c>WhisperServerLaunchSpec</c>: making any of them public would move it under
+///     <c>PlacementConventionTests</c>' public-interface rule, and they reach the test project through <c>InternalsVisibleTo</c>. Do not
+///     widen them for consistency with the public contracts beside them.
 /// </remarks>
 internal interface IWhisperServerProcessLauncher
 {

@@ -11,19 +11,11 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     whisper.cpp runtime.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The transaction is journal-first: the intent is written to disk before any directory moves, so a host that
-///         dies mid-adoption can be reconciled on the next start rather than left with a record and a tree that
-///         disagree. <see cref="RecoverAsync" /> is that reconciliation and is the reason the journal exists.
-///     </para>
-///     <para>
-///         <b>Link policy.</b> A whisper.cpp build's output legitimately contains SONAME symlink chains
-///         (<c>libwhisper.so</c> → <c>libwhisper.so.1</c> → <c>libwhisper.so.1.9.4</c>), so links cannot simply be
-///         rejected. They also cannot simply be accepted: hardening walks the tree setting permissions, and a link
-///         that escapes the staging root would have it chmod a file outside. Every link is therefore checked before
-///         anything is modified — relative and resolving inside the tree is accepted, anything else fails the
-///         adoption — and hardening then sets modes on real entries only, never through a link.
-///     </para>
+///     Journal-first: the intent is written to disk before any directory moves, so a host that dies mid-adoption is reconciled on the
+///     next start rather than left with a record and a tree that disagree, and <see cref="RecoverAsync" /> is that reconciliation.
+///     <b>Link policy:</b> a build's output legitimately contains SONAME symlink chains, so links can be neither rejected nor blindly
+///     accepted — hardening walks the tree setting permissions, and a link escaping the staging root would chmod a file outside. See
+///     docs/wiki/24-audio-transcription.md ("Adopting a managed source build").
 /// </remarks>
 internal sealed class WhisperCppRuntimeAdoption
 {
@@ -93,9 +85,8 @@ internal sealed class WhisperCppRuntimeAdoption
             return;
         }
 
-        // The swap had not started: the destination still holds the PREVIOUS runtime and there is no backup to
-        // restore because none was ever taken. Proven on bytes, not on the journal's word, before the journal is
-        // dropped — otherwise a half-written destination would be adopted as healthy.
+        // The swap had not started: the destination still holds the PREVIOUS runtime and there is no backup to restore because none was ever taken. Proven on bytes, not on the journal's word, before
+        // the journal is dropped — otherwise a half-written destination would be adopted as healthy.
         if (journal.HadPreviousDestination
             && !Directory.Exists(paths.Backup)
             && Directory.Exists(paths.Destination)
@@ -259,9 +250,8 @@ internal sealed class WhisperCppRuntimeAdoption
         }
     }
 
-    // Deliberately hand-rolled rather than SearchOption.AllDirectories: recursion must stop at a link instead of
-    // descending through one, or a directory link pointing outside the tree would be walked — and hardened — before
-    // anything judged it.
+    // Deliberately hand-rolled rather than SearchOption.AllDirectories: recursion must stop at a link instead of descending through one, or a directory link pointing outside the tree would be walked
+    // — and hardened — before anything judged it.
     private static void WalkValidatingLinks(string root, string directory, List<string> directories, List<string> files)
     {
         foreach (var entry in Directory.EnumerateFileSystemEntries(directory))

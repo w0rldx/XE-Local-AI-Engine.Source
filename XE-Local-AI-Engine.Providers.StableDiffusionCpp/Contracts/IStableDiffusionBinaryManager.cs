@@ -2,11 +2,11 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     Resolves a validated managed stable-diffusion.cpp runtime when selected; otherwise downloads, hash-verifies, and
-///     caches the exact pinned <c>sd-server</c> prebuilt for the host/backend. Source compilation is delegated to the
-///     managed source-build service. Mirrors <c>ILlamaCppBinaryManager</c> for the image runtime.
+///     caches the exact pinned <c>sd-server</c> prebuilt for the host/backend.
 /// </summary>
 /// <remarks>
-///     Responsibility: operator override → authoritative installed managed runtime → exact prebuilt release asset for
+///     Source compilation is delegated to the managed source-build service, and this mirrors <c>ILlamaCppBinaryManager</c> for the image
+///     runtime. Responsibility: operator override → authoritative installed managed runtime → exact prebuilt release asset for
 ///     the OS/arch + requested <see cref="SdGpuBackend" /> → download via <see cref="HttpClient" /> → verify SHA256
 ///     against the pinned hash (corrupt → re-download once then surface a sanitized error) → cache under a stable app
 ///     dir → offline uses the cached pinned binary.

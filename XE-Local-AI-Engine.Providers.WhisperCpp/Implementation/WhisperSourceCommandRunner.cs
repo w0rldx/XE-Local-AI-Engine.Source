@@ -80,9 +80,8 @@ internal sealed class WhisperSourceCommandRunner : IWhisperSourceCommandRunner
         return new WhisperSourceCommandResult { ExitCode = process.ExitCode, StandardOutput = stdout.ToString(), StandardError = stderr.ToString() };
     }
 
-    // The hardened environment's HOME and TMPDIR must sit inside the build's own work root, so the marker the build
-    // writes there is what identifies it. Falling back to the working directory keeps a probe — which runs before any
-    // build exists — isolated under its own root rather than the user's real HOME.
+    // The hardened environment's HOME and TMPDIR must sit inside the build's own work root, so the marker the build writes there is what identifies it. Falling back to the working directory keeps a
+    // probe — which runs before any build exists — isolated under its own root rather than the user's real HOME.
     private static string FindIsolationRoot(string workingDirectory)
     {
         for (var current = new DirectoryInfo(workingDirectory); current is not null; current = current.Parent)

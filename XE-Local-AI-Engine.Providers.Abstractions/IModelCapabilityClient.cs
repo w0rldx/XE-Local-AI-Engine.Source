@@ -5,12 +5,11 @@ namespace XE_Local_AI_Engine.Providers.Abstractions;
 ///     <see cref="ILocalModelProvider" /> management contract does not expose.
 /// </summary>
 /// <remarks>
-///     This narrows the raw capability probes (runtime reachability/version, installed-model digests, running models,
-///     per-model context length) into provider-neutral snapshots so application-layer capability reporting no longer
-///     binds the concrete runtime client. Implementations are thin pass-throughs and intentionally do NOT swallow
-///     transport failures: a probe against an unreachable runtime propagates the provider's transport exception (for
-///     example <see cref="System.Net.Http.HttpRequestException" />) so callers can classify unreachability exactly as
-///     they would against the raw client.
+///     This narrows the raw capability probes (runtime reachability/version, installed-model digests, running models, per-model context
+///     length) into provider-neutral snapshots so application-layer capability reporting does not bind the concrete runtime client.
+///     Implementations are thin pass-throughs and intentionally do NOT swallow transport failures: a probe against an unreachable
+///     runtime propagates the provider's transport exception (for example <see cref="System.Net.Http.HttpRequestException" />) so
+///     callers can classify unreachability exactly as they would against the raw client.
 /// </remarks>
 public interface IModelCapabilityClient
 {

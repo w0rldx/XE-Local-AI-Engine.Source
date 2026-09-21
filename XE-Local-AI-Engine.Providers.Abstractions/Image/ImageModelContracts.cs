@@ -90,36 +90,36 @@ public sealed record ImageModelPartRequest
     /// <summary>
     ///     Hugging Face repository this part is pulled from when it differs from the set's
     ///     <see cref="ImageModelRequest.RepoId" />; <see langword="null" /> uses the set's repo.
-    ///     <para>
-    ///         A real file-set is not always published in one place. Qwen-Image is the case that forced this: the
-    ///         quantized diffusion transformer and the VAE ship in one repo while the Qwen2.5-VL text encoder ships in
-    ///         another, so a single set-level repo id makes the model impossible to install rather than merely awkward.
-    ///     </para>
-    ///     <para>
-    ///         A part that overrides the repo cannot honour <see cref="ImageModelRequest.Revision" /> — a commit SHA
-    ///         pinning one repo is meaningless in another — so it resolves its own repo's default branch instead.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A real file-set is not always published in one place: for Qwen-Image the quantized diffusion transformer and
+    ///     the VAE ship in one repo while the Qwen2.5-VL text encoder ships in another, so a single set-level repo id
+    ///     would make the model impossible to install rather than merely awkward. A part that overrides the repo cannot
+    ///     honour <see cref="ImageModelRequest.Revision" /> — a commit SHA pinning one repo is meaningless in another —
+    ///     so it resolves its own repo's default branch instead.
+    /// </remarks>
     public string? RepoId { get; init; }
 
     /// <summary>
     ///     Known size of this part when the source exposed one (catalog entry / repo listing), otherwise
     ///     <see langword="null" />.
-    ///     <para>
-    ///         Two things depend on it. The pre-flight disk check is a no-op without a size, so a file-set that does not
-    ///         fit only fails part-way through the transfer instead of before it starts. And a set total is only
-    ///         computable when <b>every</b> part declares a size — without it the UI can honestly report per-part
-    ///         progress but not an overall percentage.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Two things depend on it. The pre-flight disk check is a no-op without a size, so a file-set that does not fit
+    ///     only fails part-way through the transfer instead of before it starts. And a set total is only computable when
+    ///     <b>every</b> part declares a size — without it the UI can honestly report per-part progress but not an
+    ///     overall percentage.
+    /// </remarks>
     public long? SizeBytes { get; init; }
 }
 
 /// <summary>
-///     Caller request to ensure a whole image-model file-set is present locally. A model is a <b>set</b> of weight
-///     parts — one for SD1.5, several for FLUX/SD3 (diffusion + vae + clip + t5) — so all parts download together and
-///     the model is only usable once every part is present.
+///     Caller request to ensure a whole image-model file-set is present locally.
 /// </summary>
+/// <remarks>
+///     A model is a <b>set</b> of weight parts — one for SD1.5, several for FLUX/SD3 (diffusion + vae + clip + t5) — so
+///     all parts download together and the model is only usable once every part is present.
+/// </remarks>
 public sealed record ImageModelRequest
 {
     /// <summary>Registry key — the canonical model name (for example <c>leejet/FLUX.1-schnell-gguf</c>).</summary>

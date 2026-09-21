@@ -8,10 +8,13 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
 ///     File-based <see cref="IImageModelRegistry" /> backed by a JSON manifest (<c>image-models.json</c>) under the
-///     image-models directory. The single owner of the manifest (read + write under a semaphore);
-///     <see cref="HuggingFaceImageModelStore" /> calls the internal write methods, while the public interface stays
-///     read-only. Mirrors <see cref="GgufModelRegistry" /> but each entry is a diffusion-model file-<b>set</b>.
+///     image-models directory.
 /// </summary>
+/// <remarks>
+///     The single owner of the manifest (read + write under a semaphore); <see cref="HuggingFaceImageModelStore" />
+///     calls the internal write methods, while the public interface stays read-only. Mirrors
+///     <see cref="GgufModelRegistry" /> but each entry is a diffusion-model file-<b>set</b>.
+/// </remarks>
 internal sealed class ImageModelRegistry : IImageModelRegistry, IDisposable
 {
     private const string ManifestFileName = "image-models.json";
@@ -117,9 +120,8 @@ internal sealed class ImageModelRegistry : IImageModelRegistry, IDisposable
         }
     }
 
-    // Reads the manifest, self-healing to an empty set when it is missing or corrupt. A file-set cannot be reconstructed
-    // from loose files on disk (family/part-role are not derivable), so — unlike the GGUF registry's directory rescan —
-    // a lost manifest yields no entries and the store re-materializes them on the next ensure. Caller holds the lock.
+    // Reads the manifest, self-healing to an empty set when it is missing or corrupt. A file-set cannot be reconstructed from loose files on disk (family/part-role are not derivable), so — unlike the
+    // GGUF registry's directory rescan — a lost manifest yields no entries and the store re-materializes them on the next ensure. Caller holds the lock.
     private async Task<IReadOnlyList<ImageModelRegistryEntry>> LoadEntriesAsync(CancellationToken ct)
     {
         if (!File.Exists(_manifestPath))

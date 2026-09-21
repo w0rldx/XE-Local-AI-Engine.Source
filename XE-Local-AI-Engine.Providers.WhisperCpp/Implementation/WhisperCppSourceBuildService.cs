@@ -10,18 +10,11 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     Linux-only, detached, single-flight source build for a managed whisper.cpp runtime.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The build runs on its own task and reports through <see cref="GetStatus" />, because it takes minutes and
-///         the operator's request must not hold a connection open for it. It holds the activity gate's mutation
-///         reservation for its whole duration, so an eject or a transcription cannot race the tree it is about to
-///         replace, and a start attempted while anything holds the runtime is refused with
-///         <see cref="WhisperCppSourceBuildStartOutcome.RuntimeBusy" /> instead.
-///     </para>
-///     <para>
-///         Every command goes through <see cref="IWhisperSourceCommandRunner" />, including the
-///         <c>readelf</c> relocation gate, so the whole pipeline is drivable in tests without compiling anything
-///         native.
-///     </para>
+///     The build runs on its own task and reports through <see cref="GetStatus" />, because it takes minutes and the operator's request
+///     must not hold a connection open for it. It holds the activity gate's mutation reservation for its whole duration, so an eject or
+///     a transcription cannot race the tree it is about to replace, and a start attempted while anything holds the runtime is refused
+///     with <see cref="WhisperCppSourceBuildStartOutcome.RuntimeBusy" /> instead. Every command goes through
+///     <see cref="IWhisperSourceCommandRunner" />, the <c>readelf</c> relocation gate included, so tests drive it without compiling.
 /// </remarks>
 public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuildService, IDisposable
 {
@@ -223,9 +216,8 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             {
                 var buildCts = new CancellationTokenSource();
 
-                // The detached task waits on this signal so it cannot start — and cannot complete — before the state
-                // below describes it; otherwise a fast failure could publish a terminal phase that the state write
-                // then overwrites with "running".
+                // The detached task waits on this signal so it cannot start — and cannot complete — before the state below describes it; otherwise a fast failure could publish a terminal phase that
+                // the state write then overwrites with "running".
                 startSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 var task = Task.Run(async () =>
                 {
@@ -417,12 +409,11 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
     ///     The cmake configure line. The three rpath arguments are load-bearing and are asserted by name in tests.
     /// </summary>
     /// <remarks>
-    ///     A stock build writes an ABSOLUTE build-tree <c>RUNPATH</c> into the binary. Adoption then moves
-    ///     <c>build/bin</c> out of the work root into the managed install root, so that path points at a directory
-    ///     that no longer exists and the relocated <c>whisper-server</c> dies at startup unable to open
-    ///     <c>libwhisper.so.1</c> — even though the library sits right beside it.
-    ///     <c>-DCMAKE_INSTALL_RPATH=$ORIGIN</c> is passed as the bare literal: there is no shell in this path, so
-    ///     escaping or quoting it would write that escaping into the binary.
+    ///     A stock build writes an ABSOLUTE build-tree <c>RUNPATH</c> into the binary. Adoption then moves <c>build/bin</c> out of the
+    ///     work root into the managed install root, so that path points at a directory that no longer exists and the relocated
+    ///     <c>whisper-server</c> dies at startup unable to open <c>libwhisper.so.1</c>, even though the library sits right beside it. The
+    ///     <c>$ORIGIN</c> install rpath is passed as a bare literal: there is no shell in this path, so escaping it would write the
+    ///     escaping into the binary.
     /// </remarks>
     internal static IReadOnlyList<string> BuildCMakeConfigureArguments(string sourceDir,
         string buildDir,
@@ -566,9 +557,8 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                     ct)
                 .ConfigureAwait(false)).StandardOutput.Trim();
 
-            // The engine-pinned revision is a PEELED commit SHA, never a tag object: fetching a tag object's SHA has
-            // nothing to land on. Asserting the checkout resolved to exactly what was asked for is what catches a pin
-            // that silently drifted.
+            // The engine-pinned revision is a PEELED commit SHA, never a tag object: fetching a tag object's SHA has nothing to land on. Asserting the checkout resolved to exactly what was asked for
+            // is what catches a pin that silently drifted.
             if (resolvedCommit.Length != 40
                 || !resolvedCommit.All(Uri.IsHexDigit)
                 || (requestedCommit is not null && !string.Equals(resolvedCommit, requestedCommit, StringComparison.OrdinalIgnoreCase)))
@@ -855,9 +845,8 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             }
         }
 
-        // Republishing the signal is the whole reason this runs at host start: the backend selector only trusts a
-        // managed runtime once something has set it, so without this an adopted CUDA build stops resolving after a
-        // restart and the node silently falls back.
+        // Republishing the signal is the whole reason this runs at host start: the backend selector only trusts a managed runtime once something has set it, so without this an adopted CUDA build
+        // stops resolving after a restart and the node silently falls back.
         var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
         if (installed?.Validity == WhisperInstalledRuntimeValidity.Active)
         {

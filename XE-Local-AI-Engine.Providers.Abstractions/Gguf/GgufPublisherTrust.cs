@@ -2,17 +2,18 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Classifies a GGUF repo's publisher as a "trusted" packager (a known, reputable GGUF distributor or first-party
-///     model org) versus an untrusted/community publisher. This is a <strong>soft signal only</strong>: it NEVER excludes
-///     a repo from search — every public GGUF repo stays discoverable — it only lets the advisor gently prefer trusted
-///     publishers when ranking recommendations and lets the UI badge an untrusted publisher with a
-///     "review before downloading" warning. Membership only ever RAISES trust; a missing publisher is "untrusted", never
-///     "blocked".
+///     model org) versus an untrusted/community publisher.
 /// </summary>
+/// <remarks>
+///     This is a <strong>soft signal only</strong>: it NEVER excludes a repo from search — every public GGUF repo stays
+///     discoverable — it only lets the advisor gently prefer trusted publishers when ranking recommendations and lets
+///     the UI badge an untrusted publisher with a "review before downloading" warning. Membership only ever RAISES
+///     trust; a missing publisher is "untrusted", never "blocked".
+/// </remarks>
 public static class GgufPublisherTrust
 {
-    // Reputable GGUF packagers + first-party model orgs, matched case-insensitively against the repo author (the
-    // segment before the first '/'). Intentionally a curated, conservative set — this is a quality nudge, not an
-    // allowlist gate.
+    // Reputable GGUF packagers + first-party model orgs, matched case-insensitively against the repo author (the segment before the
+    // first '/'). Intentionally a curated, conservative set — this is a quality nudge, not an allowlist gate.
     private static readonly HashSet<string> TrustedAuthors = new(StringComparer.OrdinalIgnoreCase)
     {
         "unsloth",

@@ -2,28 +2,15 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 /// <summary>
 ///     Deterministically classifies a GGUF model's tool / reasoning surface from its embedded Jinja chat template
-///     (<c>tokenizer.chat_template</c> in the GGUF header). The template is the most reliable offline signal — a model
-///     wired for tool calling renders the tool list in its template, and a model that exposes a thinking channel renders
-///     the think markers — so we never need an Ollama <c>/api/show</c> probe (a GGUF has no Ollama entry, and desktop
-///     mode runs no Ollama daemon). Stateless and pure: the same template always yields the same classification.
+///     (<c>tokenizer.chat_template</c> in the GGUF header). Stateless and pure: the same template always yields the same
+///     classification.
 /// </summary>
 /// <remarks>
-///     The heuristics are intentionally conservative — a false negative merely hides an available capability (the model
-///     still chats), while a false positive would offer tools the model cannot honor. The token sets below are matched
-///     case-insensitively against the raw template text and cover the mainstream tool/reasoning template families
-///     (Qwen2.5/Qwen3, Llama 3.1+, Mistral/Hermes, DeepSeek-R1, OpenAI harmony).
-///     Reasoning is TWO distinct capabilities, not one:
-///     <list type="bullet">
-///         <item>
-///             GRADED (<c>thinking</c>) — the template exposes a switchable thinking channel, so a
-///             <c>think:&lt;level&gt;</c> control is genuinely available.
-///         </item>
-///         <item>
-///             NATIVE (<c>native_reasoning</c>) — the model reasons on a channel baked into its template with no such
-///             switch. Detecting it as its own capability is what stops a reasoning model being advertised as unable to
-///             reason, WITHOUT handing it a graded control whose levels would do nothing.
-///         </item>
-///     </list>
+///     The template is the most reliable offline signal — a tool-wired model renders the tool list, a thinking-channel model renders the
+///     think markers — so no Ollama <c>/api/show</c> probe is needed: a GGUF has no Ollama entry and desktop mode runs no daemon. The
+///     heuristics are conservative: a false negative merely hides a capability (the model still chats), a false positive would offer
+///     tools the model cannot honor. Token sets are matched case-insensitively against the template text and cover the mainstream
+///     tool/reasoning families (Qwen2.5/Qwen3, Llama 3.1+, Mistral/Hermes, DeepSeek-R1, OpenAI harmony).
 /// </remarks>
 internal static class GgufCapabilityDetector
 {
@@ -34,11 +21,15 @@ internal static class GgufCapabilityDetector
 
     /// <summary>
     ///     The SECOND, distinct reasoning capability: the model reasons on a channel its chat template bakes in, with no
-    ///     graded <c>think:&lt;level&gt;</c> switch to drive it. Deliberately NOT the Ollama <c>thinking</c> token —
-    ///     <c>ModelKindDetector.SupportsThinking</c> matches that token by EXACT equality, so this one can never flip a
-    ///     native-reasoning model into the graded branch (which would write <c>think</c> and, on effort <c>none</c>, an
-    ///     <c>enable_thinking=false</c> the harmony template has no kwarg for). See <see cref="NativeReasoningTemplateMarkers" />.
+    ///     graded <c>think:&lt;level&gt;</c> switch to drive it.
     /// </summary>
+    /// <remarks>
+    ///     Detecting it as its own capability is what stops a reasoning model being advertised as unable to reason, WITHOUT handing it a
+    ///     graded control whose levels would do nothing. Deliberately NOT the Ollama <c>thinking</c> token:
+    ///     <c>ModelKindDetector.SupportsThinking</c> matches that token by EXACT equality, so this one can never flip a native-reasoning
+    ///     model into the graded branch (which would write <c>think</c> and, on effort <c>none</c>, an <c>enable_thinking=false</c> the
+    ///     harmony template has no kwarg for). See <see cref="NativeReasoningTemplateMarkers" />.
+    /// </remarks>
     private const string NativeReasoningCapability = "native_reasoning";
 
     // A tool-templated model references the tool collection and/or the tool-call message shape. Qwen2.5, Llama 3.1+,
@@ -51,9 +42,8 @@ internal static class GgufCapabilityDetector
         "tools"
     ];
 
-    // A GRADED-reasoning model carries an explicit thinking channel the caller can switch: the `<think>` marker (Qwen3,
-    // DeepSeek-R1), the Qwen3 `enable_thinking` switch, or the `reasoning_content` field the template branches on. A
-    // match here means a `think:<level>` control is available, so the model takes the graded branch downstream.
+    // A GRADED-reasoning model carries an explicit thinking channel the caller can switch: the `<think>` marker (Qwen3, DeepSeek-R1), the Qwen3
+    // `enable_thinking` switch, or the `reasoning_content` field the template branches on. A match means a `think:<level>` control is available.
     private static readonly string[] ReasoningTemplateMarkers =
     [
         "<think",
@@ -61,38 +51,34 @@ internal static class GgufCapabilityDetector
         "reasoning_content"
     ];
 
-    // A NATIVE-reasoning model reasons on a channel baked into its template, with no switch the caller can grade. The
-    // OpenAI harmony family (gpt-oss) is the reference case: reasoning is emitted on `<|channel|>analysis<|message|>`
-    // and the only knob is the `reasoning_effort` string the template renders into the system prompt itself.
-    //
-    // Both markers are literal template tags, NOT loose English words — verified by counting them in the genuine
-    // `tokenizer.chat_template` of unsloth/gpt-oss-20b-GGUF:Q5_K_M (2026-07-31): `<|channel|>analysis` ×5,
-    // `reasoning_effort` ×4, while `<think` / `enable_thinking` / `reasoning_content` are all ×0 — which is exactly why
-    // the graded list above cannot see this family. Keep these literal: a bare word like "analysis" or "reasoning"
-    // would match prose in unrelated templates and mislabel them.
+    /// <summary>
+    ///     The literal template tags a NATIVE-reasoning model renders: it reasons on a channel baked into its template,
+    ///     with no switch the caller can grade. A bare "analysis" or "reasoning" would match prose, so these stay literal.
+    /// </summary>
+    /// <remarks>
+    ///     The OpenAI harmony family (gpt-oss) is the reference case: reasoning is emitted on <c>&lt;|channel|&gt;analysis&lt;|message|&gt;</c>,
+    ///     the only knob being the <c>reasoning_effort</c> string the template renders into the system prompt. Both are literal tags, NOT
+    ///     loose English words — counted in the genuine <c>tokenizer.chat_template</c> of unsloth/gpt-oss-20b-GGUF:Q5_K_M:
+    ///     <c>&lt;|channel|&gt;analysis</c> ×5, <c>reasoning_effort</c> ×4, while <c>&lt;think</c> / <c>enable_thinking</c> /
+    ///     <c>reasoning_content</c> are all ×0 — exactly why the graded list above cannot see this family.
+    /// </remarks>
     private static readonly string[] NativeReasoningTemplateMarkers =
     [
         "<|channel|>analysis",
         "reasoning_effort"
     ];
 
-    // The closing-tag shapes that decide whether llama.cpp can ENFORCE a per-request `reasoning_budget_tokens` at all.
-    // The server gate (tools/server/server-common.cpp at the pinned b10201) writes the budget onto the sampler ONLY when
-    // `chat_params.thinking_end_tags` is non-empty; with an empty set the field is accepted and then silently ignored,
-    // so the model free-runs its reasoning exactly as if no budget had been sent. `thinking_end_tags` is filled either
-    // by a specialised per-family parser (which hardcodes the tags) or, for everything else, by the generic differential
-    // autoparser, which renders the template twice — with and without a `reasoning_content` — and diffs the output to
-    // discover the marker the template writes AFTER the reasoning text. Both routes therefore require the template to
-    // render a literal end marker, which is what these markers look for.
-    //
-    // Both entries are verified verbatim against the installed GGUF headers (read 2026-08-24):
-    //   * `</think>`   — unsloth-qwen3.8-27b Q4_K_M ×2, unsloth-qwen3.6-27b Q4_K_M ×5, rendered as
-    //                    `'<think>\n' + reasoning_content + '\n</think>\n\n' + content` (the generic autoparser's diff
-    //                    target).
-    //   * `<channel|>` — unsloth-gemma-4-12b-it Q4_K_M ×3, rendered as `'<|channel>thought\n' + thinking_text +
-    //                    '\n<channel|>'`; gemma-4 additionally takes the specialised path, which hardcodes the same tag.
-    // `</thinking>` is the same closing-tag shape under an alternate spelling and is accepted for the families that use
-    // it. Keep these literal for the same reason the marker lists above are literal: a loose word would match prose.
+    /// <summary>
+    ///     The closing-tag shapes that decide whether llama.cpp can ENFORCE a per-request <c>reasoning_budget_tokens</c>;
+    ///     <c>&lt;/thinking&gt;</c> is the alternate spelling of the first, and all stay literal since a loose word would match prose.
+    /// </summary>
+    /// <remarks>
+    ///     The server gate (<c>tools/server/server-common.cpp</c> at the pinned b10201) writes the budget onto the sampler ONLY when
+    ///     <c>chat_params.thinking_end_tags</c> is non-empty; an empty set is accepted, silently ignored, and the model free-runs. It
+    ///     is filled by a per-family parser hardcoding the tags, or the generic autoparser diffing out the marker written AFTER the
+    ///     reasoning text; both need a literal end marker. These markers were read out of installed GGUF headers — that census and the
+    ///     template render shapes they come from: docs/wiki/05-chat.md ("Thinking budget (llama.cpp) and where it is enforceable").
+    /// </remarks>
     private static readonly string[] ReasoningBudgetEndTagMarkers =
     [
         "</think>",
@@ -103,14 +89,14 @@ internal static class GgufCapabilityDetector
     /// <summary>
     ///     Classifies the supplied chat template into
     ///     <c>(IsToolCapable, IsReasoningCapable, IsNativeReasoningCapable, ReasoningBudgetEnforceable)</c> plus the
-    ///     matching Ollama-style capability tokens. A null/blank template (a raw base model, or a header read that did
-    ///     not reach the template) yields the safe default — chat-only, no tools, no reasoning.
+    ///     matching Ollama capability tokens; a null/blank template yields the safe chat-only default.
     /// </summary>
     /// <remarks>
-    ///     The two reasoning flags are MUTUALLY EXCLUSIVE and graded wins. A graded template already advertises a
-    ///     switchable thinking channel, so re-reporting it as "native" would render two chips meaning the same thing;
-    ///     more importantly, the exclusivity keeps the native flag a pure "reasons, but ungraded" signal that downstream
-    ///     code can trust without re-deriving it.
+    ///     A null or blank template — a raw base model, or a header read that did not reach the template — means no tools and no
+    ///     reasoning. Reasoning is TWO capabilities: GRADED (<c>thinking</c>) means the template exposes a switchable thinking channel,
+    ///     so a <c>think:&lt;level&gt;</c> control is genuinely available; NATIVE means the model reasons on a channel baked into its
+    ///     template with no such switch. The two flags are MUTUALLY EXCLUSIVE and graded wins — re-reporting a graded template as native
+    ///     would render two chips meaning the same thing, and exclusivity keeps native a pure "reasons, but ungraded" signal.
     /// </remarks>
     public static GgufCapabilities Detect(string? chatTemplate)
     {
@@ -153,10 +139,8 @@ internal static class GgufCapabilityDetector
             capabilities.Add(NativeReasoningCapability);
         }
 
-        // Whether llama.cpp can ENFORCE a per-request reasoning budget on this template. Asked only of a GRADED
-        // template, because that is the only kind the budget is ever sent for (see the marker emitters); every other
-        // template keeps the inert TRUE default rather than a stray false that downstream code would read as an
-        // instruction to drop a cap.
+        // Whether llama.cpp can ENFORCE a per-request reasoning budget here. Asked only of a GRADED template, because that is the only
+        // kind the budget is sent for; every other template keeps the inert TRUE default rather than a stray false read as "drop a cap".
         var reasoningBudgetEnforceable = !isReasoningCapable || ContainsAny(chatTemplate, ReasoningBudgetEndTagMarkers);
 
         return new GgufCapabilities(isToolCapable, isReasoningCapable, isNativeReasoningCapable, capabilities, reasoningBudgetEnforceable);
@@ -169,31 +153,19 @@ internal static class GgufCapabilityDetector
 }
 
 /// <summary>
-///     The capability classification of a single GGUF model derived from its chat template:
-///     <paramref name="IsToolCapable" /> / <paramref name="IsReasoningCapable" /> /
-///     <paramref name="IsNativeReasoningCapable" /> flags plus the matching Ollama-style capability tokens (always
-///     includes <c>completion</c>).
+///     The capability classification of a single GGUF model derived from its chat template: the tool / graded-reasoning
+///     / native-reasoning flags plus the matching Ollama-style capability tokens (always including <c>completion</c>).
 /// </summary>
-/// <param name="IsReasoningCapable">
-///     GRADED reasoning: the template exposes a switchable thinking channel, so a <c>think:&lt;level&gt;</c> control is
-///     available. Mutually exclusive with <paramref name="IsNativeReasoningCapable" />.
-/// </param>
-/// <param name="IsNativeReasoningCapable">
-///     NATIVE reasoning: the model reasons on a channel baked into its template with no graded switch (harmony/gpt-oss).
-///     It must stay OUT of the graded path — the enforcing layer keeps such a model on the omit-<c>think</c> branch.
-/// </param>
-/// <param name="ReasoningBudgetEnforceable">
-///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this template — i.e. whether
-///     the template renders a literal reasoning END marker, the thing llama.cpp's chat-template classification turns
-///     into a non-empty <c>thinking_end_tags</c> set. With an empty set the server accepts the budget field and then
-///     ignores it, so the cap silently does nothing and a reasoning model can still spend its whole window thinking.
-///     <para>
-///         Only meaningful together with <paramref name="IsReasoningCapable" />: a budget is sent exclusively on the
-///         graded branch. For every other template — native-reasoning, plain, or no template at all — this stays
-///         <see langword="true" />, the inert default, so an unrelated classification can never be read downstream as
-///         "drop the cap". Defaults to <see langword="true" /> for the same reason.
-/// </para>
-/// </param>
+/// <param name="IsReasoningCapable">GRADED reasoning: the template exposes a switchable thinking channel, so a <c>think:&lt;level&gt;</c> control is available.</param>
+/// <param name="IsNativeReasoningCapable">NATIVE reasoning: the model reasons on a channel baked into its template with no graded switch (harmony/gpt-oss).</param>
+/// <param name="ReasoningBudgetEnforceable">Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this template. Defaults to <see langword="true" />.</param>
+/// <remarks>
+///     The two reasoning flags are mutually exclusive: a native-reasoning model must stay OUT of the graded path, and the enforcing
+///     layer keeps it on the omit-<c>think</c> branch. <paramref name="ReasoningBudgetEnforceable" /> reports whether the template
+///     renders a literal reasoning END marker (see <see cref="GgufCapabilityDetector" />'s budget markers) and is only meaningful with
+///     <paramref name="IsReasoningCapable" />, since a budget is sent exclusively on the graded branch. For every other template —
+///     native-reasoning, plain, or none at all — it stays <see langword="true" />, so nothing downstream reads it as "drop the cap".
+/// </remarks>
 internal readonly record struct GgufCapabilities(
     bool IsToolCapable,
     bool IsReasoningCapable,

@@ -12,12 +12,14 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
 ///     DI wiring for the <c>sd-server</c> runtime adapter: the process launcher, the readiness probe, the resident
-///     process supervisor, the typed HTTP job client, and the <see cref="IImageRuntime" /> facade. Companion to
-///     <see cref="StableDiffusionCppServiceCollectionExtensions.AddStableDiffusionCppImageProvider" /> — it
+///     process supervisor, the typed HTTP job client, and the <see cref="IImageRuntime" /> facade.
+/// </summary>
+/// <remarks>
+///     Companion to <see cref="StableDiffusionCppServiceCollectionExtensions.AddStableDiffusionCppImageProvider" />: it
 ///     consumes that provider's seams (<see cref="Contracts.ISdGpuBackendSelector" />,
 ///     <see cref="Contracts.IStableDiffusionBinaryManager" />) plus the image model store
 ///     (<see cref="IImageModelStore" />), so both must be registered first.
-/// </summary>
+/// </remarks>
 public static class StableDiffusionCppRuntimeServiceCollectionExtensions
 {
     /// <summary>Named <see cref="System.Net.Http.HttpClient" /> for sd-server job/readiness HTTP (loopback, short-lived per call).</summary>
@@ -35,14 +37,8 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
         // Runtime supervision options default here so the supervisor is resolvable; the host may override from node config.
         services.TryAddSingleton(new StableDiffusionRuntimeOptions());
 
-        // Loopback HTTP for job submit/poll/cancel + readiness — mirrors how llama registers its runtime HttpClient.
-        //
-        // Retry contract: job submit (SdServerJobClient.SubmitAsync) is a POST with no idempotency key, so retrying a
-        // failed-but-received submit could enqueue a duplicate image job. Under Aspire, ServiceDefaults'
-        // ConfigureHttpClientDefaults adds a global StandardResilienceHandler that retries EVERY method by default —
-        // including this POST. Own a single, POST-safe pipeline: RemoveAllResilienceHandlers strips the global one (a
-        // no-op outside Aspire), and DisableForUnsafeHttpMethods narrows retries to safe methods (GET poll/readiness)
-        // while keeping the timeouts and circuit breaker for every method. Mirrors AddCentralPlatformResilience.
+        // Loopback HTTP for job submit/poll/cancel + readiness. Job submit is a POST with no idempotency key, so this owns a single POST-safe
+        // pipeline instead of Aspire's retry-everything default. See docs/wiki/14-image-generation.md ("The runtime HTTP client and its retry contract").
 #pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers / DisableForUnsafeHttpMethods are experimental; used deliberately to own a single, POST-safe pipeline.
         services.AddHttpClient(RuntimeHttpClientName)
                 .RemoveAllResilienceHandlers()
@@ -87,11 +83,8 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
                 sp.GetRequiredService<SdServerJobClient>(),
                 sp.GetRequiredService<IImageServerProgressBroker>()));
 
-        // Startup orphan reaper: kills stale sd-server processes THIS app left behind on a previous run. A hard host kill
-        // (e.g. `aspire stop`) skips the supervisor's graceful DisposeAsync teardown, orphaning the daemon while it still
-        // holds its loopback port + GPU VRAM and so blocking the next start. The reaper matches ONLY binaries under our own
-        // stable-diffusion.cpp cache root, so an unrelated sd-server is never touched. Best-effort — it never throws out of
-        // StartAsync, so it can never block startup. Mirrors the llama-server orphan reaper.
+        // Startup orphan reaper: kills stale sd-server processes THIS app left behind on a previous run, which a hard host kill orphans while they still hold a loopback port + GPU VRAM and so block
+        // the next start. Matches ONLY binaries under our own cache root; best-effort, never throwing out of StartAsync. Mirrors the llama-server reaper.
         services.TryAddSingleton<IStaleImageServerProcessScanner, OsStaleImageServerProcessScanner>();
         services.AddHostedService(static sp => new StaleImageServerReaper(sp.GetRequiredService<IStaleImageServerProcessScanner>(),
             StableDiffusionCppBinaryManager.DefaultStableDiffusionBinariesRoot(),

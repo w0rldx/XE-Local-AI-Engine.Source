@@ -11,32 +11,11 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 ///     <c>pipeline_tag=text-to-image</c> facet and lists one repo's selectable weight files with a suggested part role.
 /// </summary>
 /// <remarks>
-///     Two rules of the GGUF lane are deliberately NOT carried over, because copying them would make image discovery
-///     return almost nothing:
-///     <list type="bullet">
-///         <item>
-///             <description>
-///                 <b>No quant token is required.</b> <c>HuggingFaceGgufDiscovery</c> drops any file whose name does not
-///                 parse to a llama.cpp quant. A VAE (<c>qwen_image_vae.safetensors</c>) and a CLIP encoder
-///                 (<c>clip_l.safetensors</c>) never carry one, and they are exactly the parts a multi-part install
-///                 needs.
-///             </description>
-///         </item>
-///         <item>
-///             <description>
-///                 <b><c>.safetensors</c> counts.</b> stable-diffusion.cpp loads both containers, and real file-sets mix
-///                 them (a GGUF diffusion transformer next to a <c>.safetensors</c> VAE).
-///             </description>
-///         </item>
-///     </list>
-///     <para>
-///         <b>Sharded weight files are excluded, on purpose.</b> A part is one file:
-///         <see cref="ImageModelPartRequest.FileName" /> is a single string and the store downloads exactly one blob per
-///         role, so a <c>-00001-of-00003</c> member would install a fragment that cannot be loaded. Rather than let a
-///         picker offer a broken install, <see cref="IsShardMember" /> filters shard members out of both search and
-///         inspection. Supporting them means making a part a list of files end-to-end (request, store, registry,
-///         argument builder) — a change well beyond discovery.
-///     </para>
+///     Two rules of the GGUF lane are deliberately NOT carried over, because copying them would make image discovery return almost
+///     nothing. <b>No quant token is required:</b> <c>HuggingFaceGgufDiscovery</c> drops any file whose name does not parse to a
+///     llama.cpp quant, but a VAE (<c>qwen_image_vae.safetensors</c>) and a CLIP encoder (<c>clip_l.safetensors</c>) never carry one and
+///     are exactly the parts a multi-part install needs. <b><c>.safetensors</c> counts:</b> stable-diffusion.cpp loads both containers,
+///     and real file-sets mix them (a GGUF diffusion transformer next to a <c>.safetensors</c> VAE).
 /// </remarks>
 internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscovery
 {
@@ -142,10 +121,13 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
     }
 
     /// <summary>
-    ///     Guesses which part role a repo file fills from its name. Ordered most-specific-first: the vision tower is
-    ///     checked before the LLM it belongs to, and both before the generic diffusion fallback. A wrong guess costs the
-    ///     operator one dropdown change; the backend re-validates whatever is actually submitted.
+    ///     Guesses which part role a repo file fills from its name.
     /// </summary>
+    /// <remarks>
+    ///     Ordered most-specific-first: the vision tower is checked before the LLM it belongs to, and both before the
+    ///     generic diffusion fallback. A wrong guess costs the operator one dropdown change; the backend re-validates
+    ///     whatever is actually submitted.
+    /// </remarks>
     internal static ImageModelPartRole SuggestRole(string fileName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
@@ -194,9 +176,8 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
         return haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 
-    // FLUX ships its autoencoder as a bare "ae" file rather than anything containing "vae": second-state's repo alone
-    // carries "ae.safetensors" AND "ae-f16.gguf", and both are VAEs. Matched on the leaf's stem so it cannot collide
-    // with an unrelated file that merely happens to contain the letters "ae" (e.g. "flux1-schnell-Q4_0.gguf").
+    // FLUX ships its autoencoder as a bare "ae" file rather than anything containing "vae": second-state's repo alone carries "ae.safetensors" AND "ae-f16.gguf", and both are VAEs. Matched on the
+    // leaf's stem so it cannot collide with an unrelated file that merely happens to contain the letters "ae" (e.g. "flux1-schnell-Q4_0.gguf").
     private static bool IsFluxAutoencoderLeaf(string path)
     {
         var stem = Path.GetFileNameWithoutExtension(path);
@@ -210,9 +191,8 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
         return fileName.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase) ? ImageWeightFormat.Gguf : ImageWeightFormat.Safetensors;
     }
 
-    // A file is installable when it is a weight container, is not a multi-file shard member, and its repo-supplied
-    // path cannot escape the models directory. The path check is the same guard the store re-applies before writing —
-    // filtering here just keeps an unusable name from ever reaching a picker.
+    // A file is installable when it is a weight container, is not a multi-file shard member, and its repo-supplied path cannot escape the models directory. The path check is the same guard the store
+    // re-applies before writing — filtering here just keeps an unusable name from ever reaching a picker.
     private static bool IsUsableWeightFile(string fileName)
     {
         return IsWeightFileName(fileName) && !IsShardMember(fileName) && GgufFilePath.IsSafeRelativePath(fileName);
@@ -224,9 +204,17 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
                || fileName.EndsWith(".safetensors", StringComparison.OrdinalIgnoreCase);
     }
 
-    // The two shard conventions a large diffusion quant ships under: llama.cpp's "-00001-of-00003.gguf" splits and
-    // the HF "-00001-of-00003.safetensors" convention. See the type remarks for why these are excluded rather than
-    // grouped the way HuggingFaceGgufDiscovery.GroupShards does.
+    /// <summary>
+    ///     Matches the two shard conventions a large diffusion quant ships under: llama.cpp's
+    ///     <c>-00001-of-00003.gguf</c> splits and the Hugging Face <c>-00001-of-00003.safetensors</c> convention.
+    /// </summary>
+    /// <remarks>
+    ///     Sharded weight files are excluded on purpose, rather than grouped the way <c>HuggingFaceGgufDiscovery.GroupShards</c> does: a
+    ///     part is ONE file, since <see cref="ImageModelPartRequest.FileName" /> is a single string and the store downloads exactly one
+    ///     blob per role, so a shard member would install a fragment that cannot be loaded. Filtering them out of both search and
+    ///     inspection beats letting a picker offer a broken install; supporting them means making a part a list of files end-to-end
+    ///     (request, store, registry, argument builder), a change well beyond discovery.
+    /// </remarks>
     [GeneratedRegex(@"-\d{5}-of-\d{5}\.(?:gguf|safetensors)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 2000)]

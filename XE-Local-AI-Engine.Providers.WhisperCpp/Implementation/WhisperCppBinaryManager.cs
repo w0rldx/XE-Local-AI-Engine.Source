@@ -8,33 +8,25 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 
 /// <summary>
-///     Default <see cref="IWhisperCppBinaryManager" />: validates and resolves the selected managed runtime or, when
-///     none is selected, downloads the exact pinned prebuilt asset for the host and backend, verifies its SHA256
-///     against <see cref="WhisperCppReleasePins" />, extracts it under a stable cache directory, and returns the
-///     resolved <c>whisper-server</c> path.
+///     Default <see cref="IWhisperCppBinaryManager" />: resolves the selected managed runtime or, when none is selected,
+///     acquires the pinned prebuilt for the host and backend and returns the resolved <c>whisper-server</c> path.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Cache layout: <c>{cacheRoot}/whisper.cpp/{tag}/{backend}/</c> holds the extracted archive; a cached binary
-///         is reused without re-download, which is what makes the offline path work.
-///     </para>
-///     <para>
-///         On a SHA256 mismatch the partial download is discarded and retried <em>once</em>; a second mismatch
-///         surfaces a sanitized <see cref="WhisperRuntimeException" /> carrying no internal path or URL.
-///     </para>
-///     <para>
-///         Unlike the stable-diffusion.cpp manager this one pairs no companion CUDA-runtime archive: whisper.cpp's
-///         cuBLAS zip bundles its own <c>cudart</c>, <c>cublas</c> and <c>nvrtc</c> DLLs. It does, however, dispatch on
-///         archive kind, because Windows ships zip and Linux ships tar.gz.
-///     </para>
+///     Acquisition verifies the asset's SHA256 against <see cref="WhisperCppReleasePins" /> and extracts it under
+///     <c>{cacheRoot}/whisper.cpp/{tag}/{backend}/</c>; a cached binary is reused without re-download, which is what makes the offline
+///     path work. On a mismatch the partial download is discarded and retried <em>once</em>; a second mismatch surfaces a sanitized
+///     <see cref="WhisperRuntimeException" /> carrying no internal path or URL. Unlike the stable-diffusion.cpp manager this one pairs no
+///     companion CUDA archive — the cuBLAS zip bundles its own DLLs — but it does dispatch on archive kind, zip against tar.gz.
 /// </remarks>
 public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
 {
     /// <summary>
-    ///     Absolute hard ceiling on a single runtime download. The largest pinned asset is the 674 MB cuBLAS zip, so
-    ///     this is a disk-exhaustion guard against a hostile or buggy server streaming an unbounded body, not a limit
-    ///     any honest asset approaches.
+    ///     Absolute hard ceiling on a single runtime download.
     /// </summary>
+    /// <remarks>
+    ///     The largest pinned asset is the 674 MB cuBLAS zip, so this is a disk-exhaustion guard against a hostile or
+    ///     buggy server streaming an unbounded body, not a limit any honest asset approaches.
+    /// </remarks>
     private const long MaxDownloadBytes = 2L * 1024 * 1024 * 1024;
 
     private readonly string _activeTag;
@@ -106,9 +98,8 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     /// <inheritdoc />
     public async Task<WhisperBinary> EnsureBinaryAsync(WhisperBackend backend, CancellationToken ct)
     {
-        // Operator bring-your-own override: an active override short-circuits ALL acquisition (no download, no cache
-        // write). The supplied binary is validated and served as the override's OWN backend, never the caller's. A
-        // configured-but-broken override throws sanitized rather than falling through to acquisition.
+        // Operator bring-your-own override: an active override short-circuits ALL acquisition (no download, no cache write). The supplied binary is validated and served as the override's OWN backend,
+        // never the caller's. A configured-but-broken override throws sanitized rather than falling through to acquisition.
         if (_overrideOptions?.IsActive == true)
         {
             return ResolveOverrideBinary(_overrideOptions);
@@ -232,9 +223,8 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
             }, ct).ConfigureAwait(false);
         }
 
-        // The tombstone stays authoritative and fail-closed in the store, but it must stop advertising an active
-        // managed backend to the selector — otherwise the stale in-memory signal keeps steering selection toward a
-        // runtime this method has just proven unusable.
+        // The tombstone stays authoritative and fail-closed in the store, but it must stop advertising an active managed backend to the selector — otherwise the stale in-memory signal keeps steering
+        // selection toward a runtime this method has just proven unusable.
         _managedSourceSignal?.Clear();
     }
 
@@ -282,11 +272,13 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     }
 
     /// <summary>
-    ///     Validates and serves the operator bring-your-own <c>whisper-server</c>. Operator-trust channel: the path
-    ///     must be an existing regular file and, off Windows, must carry the user-execute bit — a path that is present
-    ///     but not runnable would otherwise surface later as an opaque spawn failure. A missing or unusable override
-    ///     throws sanitized rather than silently degrading to acquisition.
+    ///     Validates and serves the operator bring-your-own <c>whisper-server</c>.
     /// </summary>
+    /// <remarks>
+    ///     Operator-trust channel: the path must be an existing regular file and, off Windows, must carry the
+    ///     user-execute bit — a path that is present but not runnable would otherwise surface later as an opaque spawn
+    ///     failure. A missing or unusable override throws sanitized rather than silently degrading to acquisition.
+    /// </remarks>
     private static WhisperBinary ResolveOverrideBinary(WhisperServerRuntimeOverrideOptions overrideOptions)
     {
         var serverPath = overrideOptions.ServerPath;
@@ -306,10 +298,12 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     }
 
     /// <summary>
-    ///     Locates <c>whisper-server</c> inside an extracted backend directory. The pinned relative path is tried
-    ///     first; a recursive search by file name tolerates an upstream layout change. <c>whisper-cli</c> may or may
-    ///     not sit beside it, and its presence is never a precondition.
+    ///     Locates <c>whisper-server</c> inside an extracted backend directory.
     /// </summary>
+    /// <remarks>
+    ///     The pinned relative path is tried first; a recursive search by file name then tolerates an upstream layout
+    ///     change. <c>whisper-cli</c> may or may not sit beside it, and its presence is never a precondition.
+    /// </remarks>
     private static string? ResolveServerPath(string backendDir, WhisperAssetPin pin)
     {
         var pinned = Path.GetFullPath(Path.Combine(backendDir, pin.ServerRelativePath));
@@ -432,9 +426,12 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
 
     /// <summary>
     ///     Extracts into a temp sibling then atomically moves it into place, so a partial extract can never masquerade
-    ///     as a cached install. Dispatches on the archive kind because whisper.cpp ships zip on Windows and tar.gz on
-    ///     Linux — unlike stable-diffusion.cpp, which is zip everywhere.
+    ///     as a cached install.
     /// </summary>
+    /// <remarks>
+    ///     Dispatches on the archive kind because whisper.cpp ships zip on Windows and tar.gz on Linux — unlike
+    ///     stable-diffusion.cpp, which is zip everywhere.
+    /// </remarks>
     private static async Task ExtractArchiveAsync(string archivePath, WhisperArchiveKind archiveKind, string backendDir, CancellationToken ct)
     {
         var stagingDir = $"{backendDir}.{Guid.NewGuid():N}.tmp";

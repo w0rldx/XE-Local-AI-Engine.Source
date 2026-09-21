@@ -11,11 +11,14 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
 ///     <see cref="IImageModelStore" /> over the reused <see cref="HfDownloadClient" /> + <see cref="ImageModelRegistry" />:
-///     ensures every part of a diffusion-model file-set is present (download-if-missing, resume, retry, cancel, offline
-///     reuse), resolves a model name to its local part paths, lists installed models, and deletes. Mirrors
-///     <see cref="HuggingFaceGgufStore" /> but every operation is over a file-<b>set</b>. Serializes concurrent
-///     <see cref="EnsureModelAsync" /> for the same model name with a per-name gate.
+///     ensures every part of a diffusion-model file-set is present, resolves a model name to its part paths, lists
+///     installed models, and deletes.
 /// </summary>
+/// <remarks>
+///     Download-if-missing, resume, retry, cancel and offline reuse. Mirrors <see cref="HuggingFaceGgufStore" /> but
+///     every operation is over a file-<b>set</b>, and concurrent <see cref="EnsureModelAsync" /> calls for the same
+///     model name are serialized with a per-name gate.
+/// </remarks>
 internal sealed class HuggingFaceImageModelStore : IImageModelStore
 {
     // The image runtime provider name — the agreed constant for the host-process sd-server runtime. Kept as a local
@@ -28,9 +31,8 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
 
     private readonly HfDownloadClient _downloadClient;
 
-    // Per-ModelName gate so two concurrent EnsureModelAsync calls for the same file-set do not both download. Bounded by
-    // the node's image-model catalog; entries are intentionally never pruned (the SemaphoreSlims hold no unmanaged
-    // handles and the bound is small). Mirrors HuggingFaceGgufStore's per-model gate.
+    // Per-ModelName gate so two concurrent EnsureModelAsync calls for the same file-set do not both download. Bounded by the node's image-model catalog; entries are intentionally never pruned (the
+    // SemaphoreSlims hold no unmanaged handles and the bound is small). Mirrors HuggingFaceGgufStore's per-model gate.
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _ensureGates = new(StringComparer.Ordinal);
     private readonly ILogger<HuggingFaceImageModelStore> _logger;
     private readonly ImageModelStoreOptions _options;
@@ -117,9 +119,8 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
             long totalBytes = 0;
 
             var partCount = request.Parts.Count;
-            // A set total is only honest when EVERY part declares a size: summing the known ones would report a total
-            // the transfer will overshoot, and a progress bar that passes 100% is worse than one that admits it cannot
-            // compute a percentage.
+            // A set total is only honest when EVERY part declares a size: summing the known ones would report a total the transfer will overshoot, and a progress bar that passes 100% is worse than
+            // one that admits it cannot compute a percentage.
             long? knownSetTotal = request.Parts.All(part => part.SizeBytes is > 0)
                 ? request.Parts.Sum(part => part.SizeBytes!.Value)
                 : null;
@@ -136,9 +137,8 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                     var relativePath = $"{modelDirectory}/{partRequest.FileName}";
                     var destinationPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, relativePath);
 
-                    // Reuse a part this model already has. The registry entry is only written once the WHOLE set
-                    // succeeds, so without this a set that failed on its last part re-downloads every earlier part from
-                    // scratch on the next attempt — tens of gigabytes of pointless transfer for a multi-part model.
+                    // Reuse a part this model already has. The registry entry is only written once the WHOLE set succeeds, so without this a set that failed on its last part re-downloads every
+                    // earlier part from scratch on the next attempt — tens of gigabytes of pointless transfer for a multi-part model.
                     if (TryReuseCompletedPart(destinationPath, partRequest, out var reusedSize))
                     {
                         totalBytes += reusedSize;
@@ -153,11 +153,8 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                         continue;
                     }
 
-                    // The shared download client commits with create-new semantics so GGUF acquisitions can never
-                    // overwrite an installed model. Image sets have an older, different contract: a part whose declared
-                    // size does not match (or has no declared size) is explicitly stale and must be replaced. Remove only
-                    // this already-contained model-owned path before downloading; a locked file fails closed instead of
-                    // weakening the download client's no-overwrite boundary for every caller.
+                    // The shared download client commits create-new, so a GGUF acquisition can never overwrite an installed model. Image sets have an older contract: a part whose declared size
+                    // mismatches, or declares none, is stale and must be replaced. Remove only this contained, model-owned path first; a locked file fails closed rather than weakening that boundary.
                     if (!TryDeleteFile(destinationPath))
                     {
                         throw new ImageModelInUseException("The stale image model file is still in use and could not be replaced. Eject the image runtime and try again.");
@@ -171,9 +168,8 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                         // offset this part's byte counts must be added to.
                         : new SetProgressAdapter(progress, request.ModelName, totalBytes, knownSetTotal, partIndex, partCount);
 
-                    // A part may name its own repo (a file-set split across repos — see ImageModelPartRequest.RepoId).
-                    // The set-level revision pins the SET's repo, so a part sourced elsewhere resolves that repo's
-                    // default branch rather than being handed a commit SHA that does not exist there.
+                    // A part may name its own repo (a file-set split across repos — see ImageModelPartRequest.RepoId). The set-level revision pins the SET's repo, so a part sourced elsewhere resolves
+                    // that repo's default branch rather than being handed a commit SHA that does not exist there.
                     var partRepoId = string.IsNullOrWhiteSpace(partRequest.RepoId) ? request.RepoId : partRequest.RepoId;
                     var isSetRepo = string.Equals(partRepoId, request.RepoId, StringComparison.Ordinal);
                     var partRevision = isSetRepo ? revision : DefaultRevision;
@@ -183,9 +179,8 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                         partRevision,
                         request.ModelName,
                         destinationPath,
-                        // A real size makes the pre-flight disk check actually run (it early-returns on 0). Checking per
-                        // part is enough for the whole set: each check reads CURRENT free space, and earlier parts have
-                        // already been written by the time a later one is checked.
+                        // A real size makes the pre-flight disk check actually run (it early-returns on 0). Checking per part is enough for the whole set: each check reads CURRENT free space, and
+                        // earlier parts have already been written by the time a later one is checked.
                         partRequest.SizeBytes ?? 0,
                         partRequest.Sha256,
                         partProgress,
@@ -212,9 +207,8 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
             }
             catch
             {
-                // A download that never wrote a byte (a mistyped weight file 404s) still left the model's directory
-                // behind, so a failed attempt accumulated an orphan empty folder under models/images/. Remove it — but
-                // ONLY when empty, so a partially-transferred .part file survives for the next attempt to resume from.
+                // A download that never wrote a byte (a mistyped weight file 404s) still left the model's directory behind, so a failed attempt accumulated an orphan empty folder under
+                // models/images/. Remove it — but ONLY when empty, so a partially-transferred .part file survives for the next attempt to resume from.
                 TryDeleteEmptyDirectory(modelDirectory);
                 throw;
             }
@@ -258,10 +252,8 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
 
             if (undeleted > 0)
             {
-                // Dropping the registry entry here would be the worst outcome available: the model vanishes from the UI
-                // while tens of gigabytes stay on disk, with no remaining way to retry the delete. The commonest cause
-                // is the running sd-server still holding the file (a sharing violation on Windows), which is fixed by
-                // ejecting the runtime and retrying — so keep the entry and say so.
+                // Dropping the registry entry here is the worst outcome available: the model vanishes from the UI while tens of gigabytes stay on disk, with no way left to retry the delete. The
+                // commonest cause is the running sd-server still holding the file (a sharing violation on Windows), fixed by ejecting the runtime and retrying — so keep the entry and say so.
                 _logger.LogWarning("Could not delete {UndeletedCount} weight file(s) for image model {ModelName}; keeping the registry entry.",
                     undeleted,
                     modelName);
@@ -309,14 +301,17 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
         }
     }
 
-    // Derives a file-safe, single-segment subdirectory name from the (possibly repo-qualified) model name so each
-    // model's parts are isolated and two models can never collide on a shared part file name.
-    //
-    // The readable half of the name is a LOSSY sanitization — every unsafe character collapses to '_', so "owner/model"
-    // and "owner_model" both reduce to "owner_model". Two distinct models sharing a directory is not cosmetic: if their
-    // file-sets contain the same leaf name (they usually do — "model.safetensors", "vae.safetensors"), the second
-    // install silently overwrites the first's weights, and deleting either removes the file the other still points at.
-    // The suffix is a hash of the ORIGINAL name, which restores the uniqueness the sanitizer throws away.
+    /// <summary>
+    ///     Derives a file-safe, single-segment subdirectory name from the (possibly repo-qualified) model name, so each
+    ///     model's parts are isolated and two models can never collide on a shared part file name.
+    /// </summary>
+    /// <remarks>
+    ///     The readable half of the name is a LOSSY sanitization — every unsafe character collapses to <c>_</c>, so <c>owner/model</c>
+    ///     and <c>owner_model</c> both reduce to <c>owner_model</c>. Two distinct models sharing a directory is not cosmetic: if their
+    ///     file-sets contain the same leaf name (they usually do — <c>model.safetensors</c>, <c>vae.safetensors</c>), the second install
+    ///     silently overwrites the first's weights, and deleting either removes the file the other still points at. The suffix is a hash
+    ///     of the ORIGINAL name, which restores the uniqueness the sanitizer throws away.
+    /// </remarks>
     internal static string SafeModelDirectorySegment(string modelName)
     {
         var builder = new StringBuilder(modelName.Length);
@@ -325,9 +320,8 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
             builder.Append(char.IsAsciiLetterOrDigit(ch) || ch is '.' or '-' or '_' ? ch : '_');
         }
 
-        // Collapse runs of dots before trimming so no ".." survives anywhere in the segment. It could not traverse
-        // anyway — this is a single segment with no separator, and ResolveContainedPath is the real guard — but a
-        // directory literally named "..-_etc_passwd" is a trap for the next reader, and the collapse is free.
+        // Collapse runs of dots before trimming so no ".." survives anywhere in the segment. It could not traverse anyway — this is a single segment with no separator, and ResolveContainedPath is the
+        // real guard — but a directory literally named "..-_etc_passwd" is a trap for the next reader, and the collapse is free.
         var readable = builder.ToString().Replace("..", ".", StringComparison.Ordinal).Trim('.');
         while (readable.Contains("..", StringComparison.Ordinal))
         {
@@ -340,17 +334,14 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
             readable = "model";
         }
 
-        // Truncated to keep the path short; collision resistance here only has to separate the handful of models one
-        // node installs, not resist an adversary — and the name is operator-supplied, not attacker-supplied.
-        // Left as the uppercase hex Convert.ToHexString returns: lowercasing it is purely cosmetic and CA1308 rejects
-        // ToLowerInvariant for normalization.
+        // Truncated to keep the path short; collision resistance here only has to separate the handful of models one node installs, not resist an adversary — and the name is operator-supplied, not
+        // attacker-supplied. Left as the uppercase hex Convert.ToHexString returns: lowercasing it is purely cosmetic and CA1308 rejects ToLowerInvariant for normalization.
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(modelName)).AsSpan(start: 0, length: 4));
         return $"{readable}-{hash}";
     }
 
-    // Removes the model's own subdirectory when a failed download left it empty. Non-recursive by construction: an empty
-    // directory is all that is deleted, so a resumable .part file (or any already-downloaded part of a multi-part set)
-    // keeps the directory alive. Best-effort — cleanup must never mask the download failure that triggered it.
+    // Removes the model's own subdirectory when a failed download left it empty. Non-recursive by construction: an empty directory is all that is deleted, so a resumable .part file (or any
+    // already-downloaded part of a multi-part set) keeps the directory alive. Best-effort — cleanup must never mask the download failure that triggered it.
     private void TryDeleteEmptyDirectory(string modelDirectorySegment)
     {
         try

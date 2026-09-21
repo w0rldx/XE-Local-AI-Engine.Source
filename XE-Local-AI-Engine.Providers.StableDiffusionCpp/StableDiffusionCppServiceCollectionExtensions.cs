@@ -8,19 +8,15 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
-///     DI wiring for the stable-diffusion.cpp image-runtime infrastructure: the pinned binary manager, the
-///     GPU-backend selector (over the shared <see cref="IHardwareProfiler" />), the bring-your-own override, and the
-///     runtime options. Mirrors the ordered registration of <c>AddLlamaServerLocalModelProvider</c>.
+///     DI wiring for the stable-diffusion.cpp image-runtime infrastructure: the pinned binary manager, the GPU-backend
+///     selector (over the shared <see cref="IHardwareProfiler" />), the bring-your-own override, and the runtime options.
 /// </summary>
 /// <remarks>
-///     <strong>Scope:</strong> this registers only the binary-manager and backend-selector infrastructure. The
-///     <c>sd-server</c> supervisor/runtime adapter and the job coordinator / encrypted image store / hub are wired
-///     separately and consume these seams — chiefly <see cref="IStableDiffusionBinaryManager" /> (call
-///     <see cref="IStableDiffusionBinaryManager.EnsureBinaryAsync" />) and <see cref="ISdGpuBackendSelector" />.
-///     <para>
-///         <strong>Caller contract:</strong> the consuming application must register an <see cref="IHardwareProfiler" />
-///         (the shared hardware probe lives in <c>Providers.Capabilities</c>) before resolving the selector.
-///     </para>
+///     Mirrors the ordered registration of <c>AddLlamaServerLocalModelProvider</c>. <strong>Scope:</strong> only the binary-manager and
+///     backend-selector infrastructure is registered here; the <c>sd-server</c> supervisor/runtime adapter and the job coordinator /
+///     encrypted image store / hub are wired separately and consume these seams — chiefly <see cref="IStableDiffusionBinaryManager" />
+///     (call <see cref="IStableDiffusionBinaryManager.EnsureBinaryAsync" />) and <see cref="ISdGpuBackendSelector" />. <strong>Caller
+///     contract:</strong> the application must register an <see cref="IHardwareProfiler" /> — the shared probe lives in <c>Providers.Capabilities</c> — first.
 /// </remarks>
 public static class StableDiffusionCppServiceCollectionExtensions
 {

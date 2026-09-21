@@ -2,11 +2,11 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
 ///     Resolves a validated managed whisper.cpp runtime when one is selected; otherwise downloads, hash-verifies and
-///     caches the exact pinned <c>whisper-server</c> prebuilt for the host and backend. Source compilation itself is
-///     the source-build service's job, not this one's.
+///     caches the exact pinned <c>whisper-server</c> prebuilt for the host and backend.
 /// </summary>
 /// <remarks>
-///     Resolution order: operator bring-your-own override, then the authoritative installed managed-runtime record,
+///     Source compilation itself is the source-build service's job, not this one's. Resolution order: operator
+///     bring-your-own override, then the authoritative installed managed-runtime record,
 ///     then the exact pinned release asset for the OS/arch and requested <see cref="WhisperBackend" /> — downloaded,
 ///     verified against the pinned SHA256 (a corrupt download is discarded and retried once, then surfaced sanitized),
 ///     extracted under a stable cache directory, and reused offline from there afterwards.

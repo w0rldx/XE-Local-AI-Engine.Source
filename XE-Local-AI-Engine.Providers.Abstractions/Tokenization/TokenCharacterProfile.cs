@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
-/// <summary>
-///     Script-category counts cached independently of a model divisor. This lets a later calibration affect an already
-///     memoized message while keeping CJK/emoji at approximately one token per code unit and accented text at the same
-///     relative half-token bias as the chars/4 fallback.
-/// </summary>
+/// <summary>Script-category counts cached independently of a model divisor.</summary>
+/// <remarks>
+///     This lets a later calibration affect an already memoized message while keeping CJK/emoji at approximately one
+///     token per code unit and accented text at the same relative half-token bias as the chars/4 fallback.
+/// </remarks>
 public sealed class TokenCharacterProfile
 {
     private int _ascii;

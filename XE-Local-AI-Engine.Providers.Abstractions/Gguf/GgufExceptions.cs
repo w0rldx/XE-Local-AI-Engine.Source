@@ -25,11 +25,11 @@ public enum HuggingFaceDownloadFailure
     DestinationConflict = 6
 }
 
-/// <summary>
-///     Sanitized, user-facing failure surface for Hugging Face discovery/download. The <see cref="Exception.Message" />
-///     is safe to show — it must never carry the HF token, a <c>Bearer</c> value, or internal absolute paths/URLs.
-///     Internal diagnostics belong only in the (non-surfaced) inner exception.
-/// </summary>
+/// <summary>Sanitized, user-facing failure surface for Hugging Face discovery/download.</summary>
+/// <remarks>
+///     The <see cref="Exception.Message" /> is safe to show — it must never carry the HF token, a <c>Bearer</c> value,
+///     or internal absolute paths/URLs. Internal diagnostics belong only in the (non-surfaced) inner exception.
+/// </remarks>
 public sealed class HuggingFaceDownloadException : Exception
 {
     /// <summary>Creates a sanitized failure with the classified reason.</summary>

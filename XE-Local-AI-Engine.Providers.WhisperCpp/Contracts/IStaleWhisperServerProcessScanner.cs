@@ -2,9 +2,12 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
 ///     Testability seam for the startup orphan reaper: enumerates the host's candidate <c>whisper-server</c> processes
-///     and tree-kills one by pid. The production implementation reads the real OS process table; unit tests substitute
-///     an in-memory fake so the reaper's matching and kill logic runs with no real process.
+///     and tree-kills one by pid.
 /// </summary>
+/// <remarks>
+///     The production implementation reads the real OS process table; unit tests substitute an in-memory fake so the
+///     reaper's matching and kill logic runs with no real process.
+/// </remarks>
 internal interface IStaleWhisperServerProcessScanner
 {
     /// <summary>

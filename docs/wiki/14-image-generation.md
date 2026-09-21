@@ -79,6 +79,182 @@ The process-wide activity gate (`IImageRuntimeActivityGate` → `ImageRuntimeAct
 
 Like the text runtime, a `StaleImageServerReaper` runs at startup to reap `sd-server` orphans left by a previous run of **this** app — matched strictly against the app's own binaries root (`{LocalApplicationData}/XE-Local-AI-Engine/stable-diffusion.cpp`) so an unrelated install is never touched. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the shared supervisor pattern and [Hosting & Deployment](11-hosting-and-deployment.md) for process reaping.
 
+## sd-server flags never emitted
+
+`ImageServerArgumentBuilder` is the only place sd-server startup flag names live, and two Qwen-adjacent flags the
+pinned binary offers are left out on purpose:
+
+- **`--flow-shift`** documents itself as `default: auto`, so passing a hand-picked value would replace a model-aware
+  default with a guess.
+- **`--qwen-image-zero-cond-t`** is an *edit*-model conditioning switch (Qwen-Image-Edit); emitting it would change
+  conditioning for the text-to-image sets this install path ships.
+
+Both stay off until there is a measurement that says otherwise.
+
+## The rate token is the anchor, not the fraction
+
+`SdProgressLineParser` is the only place sd.cpp's console output format is interpreted. It exists because sd-server's
+HTTP job contract has no step, percent or preview field at all — a live verification against the running daemon found
+only `queue_position` and the finished image — so the sampler step counter, printed to the process's own stdout and
+nowhere else, is the only way to show real progress rather than a spinner.
+
+Three different sd.cpp lines carry an `N/M` pair and only one of them is a sampler step, which is why the parser
+anchors on the **rate token** rather than on the fraction:
+
+| Line | What `N/M` means |
+|---|---|
+| `\|====>    \| 1/8 - 6.34s/it` | the sampler — the one we want |
+| `\|####     \| 21/686 - 110.31MB/s` | the tensor loader; N/M is tensors, not steps |
+| `generating image: 1/1 - seed 42` | the batch counter |
+
+The batch counter is the dangerous one: it prints `1/1` for every ordinary single-image job, so a parser keyed on the
+fraction reads it as "step 1 of 1, complete" and slams the bar to 100% before sampling has even begun. It is covered
+by an explicit must-not-match test.
+
+All of this was verified against the pinned build `master-742-1a13107` by running the daemon and hexdumping a real
+generation — the same capture that pinned the framing above.
+
+## Framing sd-server's progress bar
+
+`SdOutputFrameSplitter` cuts sd-server's raw output into frames, and lives apart from `ImageServerProcessLauncher` so
+the exact framing sd.cpp emits can be pinned by a fixture rather than only observed in production. A frame ends at LF,
+at CR, **or** at the ANSI erase-to-end-of-line sequence — and the last of those is the one that matters.
+
+A hexdump of a real generation against the pinned build shows the progress bar written with a *leading* carriage
+return, each frame closed by the erase sequence:
+
+```text
+\n \r "  |===>    | 1/8 - 6.34s/it" ESC[K \r "  |=====>  | 2/8 - 4.97s/it" ESC[K ... \n
+```
+
+Because the CR *leads*, a frame's text is not terminated by anything until the next frame starts. A reader that splits
+only on CR/LF therefore surfaces every step exactly one step late and holds the final step until sampling ends
+entirely — a bar permanently one behind, and an ETA computed from stale counters. Treating the erase sequence as a
+terminator flushes each frame the instant it is written. All 19 frames of the captured run ended with it, and it was
+the only escape sequence anywhere in the capture.
+
+A splitter is not thread-safe: one belongs to exactly one stream's drain loop.
+
+## sd-server's stdout is the progress channel
+
+sd-server's HTTP job contract has **no** step or percent field at all, so the child's drained stdout is the only place
+it reports sampling progress. `ImageServerProcessLauncher` therefore offers every frame to `SdProgressLineParser` and
+publishes only the PARSED result — phase plus step counters, never the text — to `IImageServerProgressBroker`. That is
+what stops a prompt that may sit in a log line from riding the progress path out to the status hub, and it is the same
+reason the stdout forward to the app logger is pinned at Debug rather than Information: a normal Information-level
+deployment never persists a prompt, while a developer can still opt into the backend/device banner.
+
+Framing is delegated to `SdOutputFrameSplitter` rather than `BeginOutputReadLine`, which cannot surface sd.cpp's
+leading-carriage-return progress bar in time — see that type's own remarks.
+
+## Attributing stdout progress to the right generation
+
+The fine phases (`Loading`, `Encoding`, `Sampling`, `Decoding`) are scraped from a daemon's stdout, which says nothing
+about *which* job produced a given line. `GenerationProgressTracker` therefore believes an out-of-band observation only
+under the rules in `ObserveFine`, keyed on this generation's own polled HTTP status — never on "some job is active".
+
+That matters because an abandoned generation can still be running. The coordinator releases its generation slot in a
+`finally` even when the cancel path throws something other than a `StableDiffusionRuntimeException` — an
+`HttpRequestException` out of the cancel POST, or a restart refused because the spawn gate is busy — so the daemon may
+well still be working on the old job while the next one starts. The progress subscription handle that feeds a tracker
+is disposed on **every** exit path, and that is what keeps an abandoned generation's continuing output from ever
+reaching the next job's tracker.
+
+## The pinned prebuilt release table
+
+`StableDiffusionReleasePins` is the recommended-pinned acquisition source `StableDiffusionCppBinaryManager` uses when no
+managed source-built runtime is selected. The pinned tag is **`master-742-1a13107`** (commit `1a13107`), and assets are
+fetched from `https://github.com/leejet/stable-diffusion.cpp/releases/download/{tag}/{asset}`.
+
+SHA256 digests come from the GitHub release-assets API `digest` field, because stable-diffusion.cpp publishes **no**
+`.sha256` sidecar files — the digest API is the source of truth. The project ships **rolling** `master-<n>-<sha>`
+releases with no semver, moving daily, so bumping the recommended version means re-pinning the tag *and* every hash.
+
+One constraint shapes the whole table: stable-diffusion.cpp ships **no prebuilt Linux CUDA asset**. A Linux NVIDIA box
+therefore defaults to Vulkan when a Vulkan device enumerates and to CPU otherwise, enforced by `SdGpuBackendSelector`;
+only a validated managed source build can select CUDA there. Windows CUDA additionally needs the separate `cudart-…`
+runtime archive, which the Windows-CUDA pin row carries as `StableDiffusionAssetPin.CudartAssetName` /
+`StableDiffusionAssetPin.CudartSha256`.
+
+## The bring-your-own sd-server override
+
+`StableDiffusionServerRuntimeOverrideOptions` points the runtime at a locally-built `sd-server` — a Linux CUDA build,
+say, for which no prebuilt asset is shipped — instead of the pinned download-and-verify path. It is off by default:
+when `ServerPath` is unset, the selector and binary manager behave byte-identically to the pinned path.
+
+**Trust-channel containment.** The override is *operator-trust only*. It is built exclusively from process environment
+variables (`ServerPathEnvironmentVariable` / `BackendEnvironmentVariable`) through `FromEnvironment`, which is the same
+trust level as the app binary itself. It is **never** bound from an `IConfiguration` section, from the user-editable
+node settings store, or from any request DTO: a lower-trust write to the override path would become arbitrary-binary
+execution at app privilege. Skipping the network-oriented SHA256 pin is sound only under that containment.
+
+The options type is deliberately dumb. It carries the resolved values and a computed `IsActive` flag and performs no
+I/O or path validation in its members — validating the path on disk is the binary manager's job at acquisition time.
+The type only decides *whether* an override is configured and *which* backend it claims.
+
+## The runtime HTTP client and its retry contract
+
+`StableDiffusionCppRuntimeServiceCollectionExtensions` registers one named loopback client for job submit, poll, cancel
+and readiness, mirroring how llama registers its runtime `HttpClient`. It owns its resilience pipeline outright, because
+the default one is wrong here: job submit (`SdServerJobClient.SubmitAsync`) is a POST with **no idempotency key**, so
+retrying a submit that failed but was actually received would enqueue a duplicate image job. Under Aspire,
+`ServiceDefaults`' `ConfigureHttpClientDefaults` adds a global `StandardResilienceHandler` that retries EVERY method by
+default — including that POST.
+
+The registration therefore builds a single POST-safe pipeline: `RemoveAllResilienceHandlers` strips the global handler
+(a no-op outside Aspire), and `DisableForUnsafeHttpMethods` narrows retries to safe methods — the GET poll and readiness
+calls — while keeping the timeouts and the circuit breaker for every method. This mirrors `AddCentralPlatformResilience`.
+
+## Daemon leases and the teardown races
+
+`ImageServerProcessSupervisor` keeps each resident daemon's lease/eviction state in ONE word, mutated only by atomic CAS:
+a value `>= 0` is the count of in-flight generations holding that daemon, and `-1` is a terminal *evicting* latch set by the
+idle reaper or the cap evictor. A new lease (`TryAcquireJob`) and an eviction decision (`TryBeginEvict`) transition the same
+word, so they can never both win. A plain increment would leave a window in which a lease is granted after the reaper has
+read "no active jobs" but before it tree-kills the daemon.
+
+The rules that fall out of it:
+
+- **Acquisition also re-checks identity.** After latching the word, the supervisor confirms the daemon is still the
+  registered, live one. A forced teardown (restart, evict, dispose) that removed it between the lookup and the latch would
+  leave the lease guarding a dead handle, so the lease is released and acquisition returns null — the caller proceeds
+  *leaseless*.
+- **The lease spans the whole generation.** `StableDiffusionCppRuntime` holds it across submit → poll → complete, so the
+  reaper and the LRU evictor never tree-kill a daemon mid-generation even when the job outruns the idle TTL. Each poll
+  `Touch()`es the lease, so the idle window is measured from the last observed progress rather than from submission. A
+  leaseless job still runs; the poll loop surfaces any failure through the normal error path.
+- **Idle reaping is refused, never forced.** `TryBeginEvict` latches only while no lease is held, and once latched no new
+  lease can attach. A generation starting concurrently with a reap therefore either wins the lease first — `TryBeginEvict`
+  fails and the daemon is reaped on a later pass — or is refused. A daemon under an active lease is never tree-killed.
+- **Tree-kill runs outside the gate, but completes before returning.** A multi-GB kill must not serialize unrelated
+  admissions, yet every caller depends on the child actually being gone: the ensure/restart path reaps the outgoing daemon
+  and immediately respawns under the same key (at the default cap of one, the replacement's load must not overlap the
+  outgoing model's VRAM), and the wedged-daemon and idle-reaper paths must not leave a second child alive against the same
+  model files.
+
+Shutdown races with an in-flight spawn are handled the same deliberate way:
+
+- The spawn/readiness window is linked to the supervisor's shutdown token, so a `DisposeAsync` racing a spawn cancels the
+  readiness wait and the spawn's own catch tree-kills the launched handle instead of orphaning it. `DisposeAsync` tears
+  down only the `_processes` snapshot it sees, and a spawn registers into `_processes` only *after* readiness. A caller
+  cancellation unwinds through the same catch.
+- A daemon that registered after that teardown snapshot would be left resident, so the spawn tears it down itself. The
+  detach/kill pair — or, on a lost removal race, whichever concurrent path won it — owns the kill, dispose and port
+  release, so the handle is nulled to stop the catch acting on it twice, and the `ObjectDisposedException` is excluded
+  from the error log.
+- `DisposeAsync` disposes the per-model ensure gates, so a spawn unwinding on the shutdown-linked token can find its gate
+  already disposed. The release is moot at teardown and is swallowed, so the real unwind cause — the
+  `OperationCanceledException` from the cancelled readiness wait — reaches the caller instead of a leaked
+  `ObjectDisposedException`. A spawn cancelled by `DisposeAsync` likewise unwinds to release its reserved port when the
+  admission gate may already be disposed; the disposal teardown reaps every registered daemon's port anyway and no
+  concurrent allocator remains, so dropping that release is safe.
+
+**GPU admission.** The spawn-through-readiness window of a GPU-backed image load passes through the SAME process-wide
+`IGpuModelLoadAdmission` gate the llama-server supervisor uses, so an image load and an LLM load never race two
+`--fit` / free-VRAM reads. The *binary's own* backend decides, because a bring-your-own override may serve a different
+backend than the host probe selected; a CPU backend bypasses the gate entirely. The ticket releases on ready or on any
+failure through its `using` scope. sd-server has no restart loop, so an admission timeout surfaces straight to the caller.
+
 ## Binary provisioning and managed source builds
 
 `StableDiffusionCppBinaryManager` first checks the authoritative installed-runtime record. An active managed runtime is revalidated by backend, path, permissions, and SHA256 before use. Drift tombstones the record and fails closed: the manager does **not** silently fall back to a different prebuilt while the operator-selected managed runtime is invalid. Node Settings exposes eject/remove recovery for that state even when Development Mode is disabled.

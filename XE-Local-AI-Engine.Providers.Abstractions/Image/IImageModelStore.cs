@@ -4,9 +4,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     Ensures an image-model file-set is present (download-if-missing, resume, retry, cancel, offline reuse), resolves
-///     a model name to its local part paths, and lists installed image models. Mirrors <see cref="Gguf.IGgufModelStore" />
-///     but every operation is over a <b>file-set</b> (diffusion + optional vae/clip/t5), not a single file.
+///     a model name to its local part paths, and lists installed image models.
 /// </summary>
+/// <remarks>
+///     Mirrors <see cref="Gguf.IGgufModelStore" /> but every operation is over a <b>file-set</b> (diffusion + optional
+///     vae/clip/t5), not a single file.
+/// </remarks>
 public interface IImageModelStore
 {
     /// <summary>

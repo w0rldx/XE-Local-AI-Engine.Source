@@ -312,6 +312,19 @@ Both installed families therefore ENFORCE the budget today; the enforceability f
 whose template does not, and the detector tests pin all three shapes (Qwen `</think>`, gemma `<channel|>`, and a
 closing-tag-less thinking channel that stays reasoning-capable while reporting the budget unenforceable).
 
+The literal markers `GgufCapabilityDetector.ReasoningBudgetEndTagMarkers` matches on were taken from the chat
+templates embedded in the installed GGUF headers, not from the llama.cpp sources: `</think>` in
+`unsloth-qwen3.8-27b` Q4_K_M ×2 and `unsloth-qwen3.6-27b` Q4_K_M ×5, `<channel|>` in `unsloth-gemma-4-12b-it`
+Q4_K_M ×3. Those templates render the reasoning turn as:
+
+```text
+</think>    : '<think>\n' + reasoning_content + '\n</think>\n\n' + content
+<channel|>  : '<|channel>thought\n' + thinking_text + '\n<channel|>'
+```
+
+The first is what the generic differential autoparser diffs out as its end marker; gemma-4 additionally takes the
+specialised per-family path, so its marker is hardcoded there rather than derived.
+
 ## Conversation compaction (non-destructive)
 
 A long conversation is kept inside the context window by **folding its older turns into a synopsis instead of

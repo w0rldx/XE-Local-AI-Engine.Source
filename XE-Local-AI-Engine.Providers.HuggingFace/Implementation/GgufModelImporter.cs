@@ -281,9 +281,8 @@ internal sealed class GgufModelImporter : IGgufModelImporter
                 "The committed import is now owned by a different registry entry.");
         }
 
-        // A previous rollback may have removed the exact registry row and then crashed between artifact deletes.
-        // Delete only orphaned artifacts that still prove they belong to this receipt; a same-path replacement is
-        // preserved and reported as a conflict.
+        // A previous rollback may have removed the exact registry row and then crashed between artifact deletes. Delete only orphaned artifacts that still prove they belong to this receipt; a
+        // same-path replacement is preserved and reported as a conflict.
         if (commitReceipt.OwnsFinalGguf && File.Exists(commitReceipt.FinalGgufPath))
         {
             var info = new FileInfo(commitReceipt.FinalGgufPath);
@@ -426,11 +425,13 @@ internal sealed class GgufModelImporter : IGgufModelImporter
     }
 
     /// <summary>
-    ///     The code a refused inspection is reported under. A file whose WORKLOAD is wrong for the destination — an
-    ///     adapter offered as a standalone model, or the reverse — carries no rejection of its own, because it is a
-    ///     perfectly valid GGUF of the other kind; reporting the quantization fallback there would send the caller
-    ///     looking at the wrong field entirely.
+    ///     The code a refused inspection is reported under.
     /// </summary>
+    /// <remarks>
+    ///     A file whose WORKLOAD is wrong for the destination — an adapter offered as a standalone model, or the reverse
+    ///     — carries no rejection of its own, because it is a perfectly valid GGUF of the other kind; reporting the
+    ///     quantization fallback there would send the caller looking at the wrong field entirely.
+    /// </remarks>
     private static GgufImportRejectionCode RejectionFor(GgufImportInspection inspection, GgufImportDestination destination)
     {
         if (inspection.Rejections.Count > 0)

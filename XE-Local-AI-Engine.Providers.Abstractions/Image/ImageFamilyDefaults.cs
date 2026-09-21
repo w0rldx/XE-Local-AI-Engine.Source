@@ -1,16 +1,15 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     Per-family generation defaults — the sampling parameters a diffusion family is actually meant to run at. They
-///     exist because <c>sd-server</c>'s own defaults (20 steps, CFG 7.0, <c>euler_a</c>) are the <b>SD1.5</b> defaults,
-///     and applying them to a later family produces a bad image rather than an error: FLUX-schnell is distilled for
-///     ~4 steps at CFG 1.0 and burns out at 7.0, and Qwen-Image is tuned for a low guidance scale around 2.5. A form
-///     that pre-fills SD-era numbers for every model therefore looks like it works and quietly generates garbage.
-///     <para>
-///         These are <em>starting points</em> surfaced to the operator, never a clamp: the request contract keeps its
-///         own bounds and the operator can override any of them.
-///     </para>
+///     Per-family generation defaults — the sampling parameters a diffusion family is actually meant to run at.
 /// </summary>
+/// <remarks>
+///     <c>sd-server</c>'s own defaults (20 steps, CFG 7.0, <c>euler_a</c>) are the <b>SD1.5</b> defaults, and applying them to a later
+///     family produces a bad image rather than an error: FLUX-schnell is distilled for ~4 steps at CFG 1.0 and burns out at 7.0, and
+///     Qwen-Image is tuned for a low guidance scale around 2.5, so a form pre-filling SD-era numbers for every model looks like it works
+///     and quietly generates garbage. These are <em>starting points</em> surfaced to the operator, never a clamp: the request contract
+///     keeps its own bounds and the operator can override any of them.
+/// </remarks>
 public static class ImageFamilyDefaults
 {
     /// <summary>The fallback used for <see cref="ImageModelFamily.Unknown" /> and any family not listed — SD1.5-era values.</summary>

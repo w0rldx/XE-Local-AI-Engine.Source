@@ -6,11 +6,13 @@ using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
-///     Linux process handle whose tree-kill signals the child's whole process group. The child is started under
-///     <c>setsid</c> (see <see cref="ImageServerProcessLauncher" />), so its pid is also its process-group id and
-///     <c>kill(-pid, SIGKILL)</c> reaps the server plus any descendants it forked — no orphans. Mirrors
+///     Linux process handle whose tree-kill signals the child's whole process group. Mirrors
 ///     <c>LinuxProcessGroupHandle</c>.
 /// </summary>
+/// <remarks>
+///     The child is started under <c>setsid</c> (see <see cref="ImageServerProcessLauncher" />), so its pid is also its
+///     process-group id and <c>kill(-pid, SIGKILL)</c> reaps the server plus any descendants it forked — no orphans.
+/// </remarks>
 [SupportedOSPlatform("linux")]
 internal sealed partial class LinuxImageProcessGroupHandle : IImageServerProcessHandle
 {

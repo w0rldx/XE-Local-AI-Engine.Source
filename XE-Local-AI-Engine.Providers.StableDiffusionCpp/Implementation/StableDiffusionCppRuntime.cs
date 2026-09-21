@@ -6,25 +6,13 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     The stable-diffusion.cpp <see cref="IImageRuntime" /> — the orchestration boundary for local image generation.
-///     Ensures a resident <c>sd-server</c> daemon via <see cref="IImageServerSupervisor" />, submits the job and polls
-///     it via <see cref="SdServerJobClient" />, maps coarse status transitions to <see cref="ImageGenProgress" />, and on
-///     completion decodes the base64 image inline (before the 600s result TTL). No sd-server flag, route, or HTTP
-///     shape escapes this project.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>Cancellation (two-mode).</strong> When <c>ct</c> is signalled the runtime asks sd-server to
-///         cancel the job: a still-<em>queued</em> job cancels cleanly (HTTP 200); a job already <em>generating</em>
-///         cannot be interrupted (HTTP 409), so the runtime asks the supervisor to tree-kill + restart the daemon,
-///         dropping the one active job. The job coordinator invokes both paths simply by cancelling the token it passes to
-///         <see cref="GenerateAsync" />.
-///     </para>
-///     <para>
-///         <strong>Fine progress.</strong> The HTTP contract carries only a queue position, so the load / encode /
-///         sample / decode timeline is read from the daemon's own stdout via <see cref="IImageServerProgressBroker" />.
-///         The subscription taken here is this generation's epoch: it is disposed on EVERY exit path, so a job that was
-///         abandoned by a cancel whose cleanup failed can never have its remaining output attributed to the next job.
-///     </para>
+///     It ensures a resident <c>sd-server</c> daemon via <see cref="IImageServerSupervisor" />, submits and polls the job via
+///     <see cref="SdServerJobClient" />, maps coarse status transitions to <see cref="ImageGenProgress" />, and on completion decodes the
+///     base64 image inline, before the 600s result TTL. No sd-server flag, route or HTTP shape escapes this project. <strong>Fine
+///     progress</strong> comes from the daemon's own stdout via <see cref="IImageServerProgressBroker" />, because the HTTP contract
+///     carries only a queue position — see docs/wiki/14-image-generation.md ("Attributing stdout progress to the right generation").
 /// </remarks>
 internal sealed class StableDiffusionCppRuntime : IImageRuntime
 {
@@ -50,18 +38,14 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         var startedTimestamp = Stopwatch.GetTimestamp();
         var tracker = new GenerationProgressTracker(progress, startedTimestamp);
 
-        // Subscribed BEFORE the ensure so a cold model load — minutes for a large file-set — shows as "preparing"
-        // rather than as a silent gap. The tracker refuses the step/decode observations until this job's own status
-        // says Generating, so only the load phase can be attributed this early.
+        // Subscribed BEFORE the ensure so a cold model load — minutes for a large file-set — shows as "preparing" rather than as a silent gap. The tracker refuses the step/decode observations until
+        // this job's own status says Generating, so only the load phase can be attributed this early.
         using var progressSubscription = _progressBroker.Subscribe(request.ModelName, tracker.ObserveFine);
 
         var endpoint = await _supervisor.EnsureRunningAsync(request.ModelName, ct).ConfigureAwait(false);
 
-        // Hold an active-job lease for the whole submit→poll→complete window so the idle reaper / LRU evictor never
-        // tree-kill this daemon mid-generation, even if the job outruns the idle TTL. A null lease (no live
-        // daemon backs the model despite the ensure above — a rare teardown race) proceeds leaseless; the poll loop below
-        // then surfaces any failure through the normal error path. Each poll Touch()es the lease to refresh the daemon's
-        // idle clock so the idle window is measured from the last observed progress, not from submission.
+        // Hold an active-job lease for the whole submit→poll→complete window so the idle reaper / LRU evictor never tree-kill this daemon mid-generation, even if the job outruns the idle TTL. Each
+        // poll Touch()es the lease. See docs/wiki/14-image-generation.md ("Daemon leases and the teardown races").
         using var jobLease = _supervisor.TryAcquireJobLease(request.ModelName);
 
         string? jobId = null;
@@ -119,9 +103,8 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // Close the epoch FIRST. The cleanup below may fail to stop the daemon (the cancel POST can throw an
-            // HttpRequestException, and the restart can be refused while the spawn gate is busy), in which case the
-            // abandoned job keeps printing steps — which must reach nobody, not the next job's tracker.
+            // Close the epoch FIRST. The cleanup below may fail to stop the daemon (the cancel POST can throw an HttpRequestException, and the restart can be refused while the spawn gate is busy), in
+            // which case the abandoned job keeps printing steps — which must reach nobody, not the next job's tracker.
             progressSubscription.Dispose();
 
             if (jobId is not null)
@@ -135,10 +118,13 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
     }
 
     /// <summary>
-    ///     Two-mode cancel: ask sd-server to cancel; if the job is already generating (409) it cannot be interrupted, so
-    ///     tree-kill + restart the daemon to drop it. Runs on <see cref="CancellationToken.None" /> — the caller's token
-    ///     is already cancelled, but the cleanup HTTP call / restart must still complete.
+    ///     Two-mode cancel: ask sd-server to cancel, and if the job is already generating (409) and so cannot be
+    ///     interrupted, tree-kill + restart the daemon to drop it.
     /// </summary>
+    /// <remarks>
+    ///     Runs on <see cref="CancellationToken.None" />: the caller's token is already cancelled, but the cleanup HTTP
+    ///     call and restart must still complete. A still-queued job cancels cleanly with HTTP 200.
+    /// </remarks>
     private async Task HandleCancellationAsync(Uri baseAddress, string jobId, string modelName)
     {
         SdCancelOutcome outcome;
@@ -165,10 +151,8 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
             throw new StableDiffusionRuntimeException("The image runtime reported completion but returned no image data.");
         }
 
-        // Report the dimensions of the bytes we actually got back, NOT the requested ones: sd-server rounds the latent
-        // grid up to a multiple of 64, so a requested 100x512 arrives as 128x512. Echoing the request here made every
-        // consumer (job card, stored image metadata) state a false fact about the produced PNG. The request is only the
-        // fallback for a payload whose header cannot be read.
+        // Report the dimensions of the bytes we actually got back, NOT the requested ones: sd-server rounds the latent grid up to a multiple of 64, so a requested 100x512 arrives as 128x512. Echoing
+        // the request here made every consumer (job card, stored image metadata) state a false fact about the produced PNG. The request is only the fallback for a payload whose header cannot be read.
         var produced = PngImageDimensions.TryRead(bytes);
 
         return new ImageGenerationResult

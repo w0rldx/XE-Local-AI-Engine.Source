@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
-///     Runtime-supervision options for the stable-diffusion.cpp <c>sd-server</c> daemon. The image runtime sits side by
-///     side with the llama.cpp text runtime but owns a <b>separate</b> loopback port range so the two supervisors never
-///     collide. This type owns the option shape; the sd-server runtime adapter wires the supervisor over it.
+///     Runtime-supervision options for the stable-diffusion.cpp <c>sd-server</c> daemon.
 /// </summary>
+/// <remarks>
+///     The image runtime sits side by side with the llama.cpp text runtime but owns a <b>separate</b> loopback port
+///     range so the two supervisors never collide. This type owns the option shape; the sd-server runtime adapter wires
+///     the supervisor over it.
+/// </remarks>
 public sealed class StableDiffusionRuntimeOptions
 {
     public const string SectionName = "StableDiffusionRuntime";
@@ -25,24 +28,32 @@ public sealed class StableDiffusionRuntimeOptions
     public TimeSpan IdleTimeToLive { get; set; } = TimeSpan.FromMinutes(15);
 
     /// <summary>
-    ///     Max number of concurrently-resident <c>sd-server</c> daemons before a spawn for a new model is rejected (an
-    ///     idle least-recently-used daemon is evicted first to make room when possible). sd-server is VRAM-heavy and
-    ///     typically co-resident with a chat model, so the default is a single daemon. Mirrors the llama.cpp loaded cap.
+    ///     Max number of concurrently-resident <c>sd-server</c> daemons before a spawn for a new model is rejected; an
+    ///     idle least-recently-used daemon is evicted first to make room when possible.
     /// </summary>
+    /// <remarks>
+    ///     sd-server is VRAM-heavy and typically co-resident with a chat model, so the default is a single daemon.
+    ///     Mirrors the llama.cpp loaded cap.
+    /// </remarks>
     public int MaxLoadedProcesses { get; set; } = 1;
 
     /// <summary>
-    ///     Minimum interval between reuse-path liveness probes for a single daemon. A reuse is handed out immediately
-    ///     (no HTTP) unless at least this long has passed since the last probe of that daemon, so the hot path stays
-    ///     cheap: at most one capabilities probe per daemon per interval, not one per request. Mirrors the llama.cpp path.
+    ///     Minimum interval between reuse-path liveness probes for a single daemon.
     /// </summary>
+    /// <remarks>
+    ///     A reuse is handed out immediately (no HTTP) unless at least this long has passed since the last probe of that
+    ///     daemon, so the hot path stays cheap: at most one capabilities probe per daemon per interval, not one per
+    ///     request. Mirrors the llama.cpp path.
+    /// </remarks>
     public TimeSpan ReuseLivenessProbeInterval { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
     ///     Number of <em>consecutive</em> failed reuse-path liveness probes after which a still-alive-but-unresponsive
-    ///     (wedged) daemon is torn down and respawned instead of being handed out again. A single transient failure never
-    ///     evicts a busy daemon; one successful probe resets the count.
+    ///     (wedged) daemon is torn down and respawned instead of being handed out again.
     /// </summary>
+    /// <remarks>
+    ///     A single transient failure never evicts a busy daemon; one successful probe resets the count.
+    /// </remarks>
     public int MaxReuseLivenessFailures { get; set; } = 3;
 
     /// <summary>
@@ -54,20 +65,25 @@ public sealed class StableDiffusionRuntimeOptions
 
     /// <summary>
     ///     Readiness budget <b>floor</b>: the minimum time the supervisor waits for a freshly-spawned daemon's socket to
-    ///     open (the daemon binds only after synchronous model load completes). A file-set large enough to need longer
-    ///     than this gets a proportionally larger budget — see <see cref="ReadinessLoadBytesPerSecond" />.
+    ///     open, since the daemon binds only after synchronous model load completes.
     /// </summary>
+    /// <remarks>
+    ///     A file-set large enough to need longer than this gets a proportionally larger budget — see
+    ///     <see cref="ReadinessLoadBytesPerSecond" />.
+    /// </remarks>
     public TimeSpan ReadinessTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
     /// <summary>
-    ///     Assumed worst-case load throughput, in bytes per second, used to scale the readiness budget to the size of the
-    ///     file-set being loaded. A flat budget is only safe for the family it was measured on: SD1.5 is ~2 GB and loads
-    ///     in seconds, while a Qwen-Image set is a diffusion transformer plus a 7B LLM text encoder plus a VAE — around
-    ///     18 GB, with the text encoder pinned to CPU — and a flat two minutes would fail it on first launch with a
-    ///     readiness timeout that looks like a broken model rather than an impatient budget. Deliberately pessimistic:
-    ///     over-waiting costs nothing on the happy path (readiness is signalled the moment the socket opens), whereas
-    ///     under-waiting kills a load that was going to succeed.
+    ///     Assumed worst-case load throughput, in bytes per second, used to scale the readiness budget to the size of
+    ///     the file-set being loaded.
     /// </summary>
+    /// <remarks>
+    ///     A flat budget is only safe for the family it was measured on: SD1.5 is ~2 GB and loads in seconds, while a Qwen-Image set is a
+    ///     diffusion transformer plus a 7B LLM text encoder plus a VAE — around 18 GB, with the text encoder pinned to CPU — so a flat two
+    ///     minutes would fail it on first launch with a readiness timeout that looks like a broken model rather than an impatient budget.
+    ///     Deliberately pessimistic: over-waiting costs nothing on the happy path, readiness being signalled the moment the socket opens,
+    ///     whereas under-waiting kills a load that was going to succeed.
+    /// </remarks>
     public long ReadinessLoadBytesPerSecond { get; set; } = 40L * 1024 * 1024;
 
     /// <summary>

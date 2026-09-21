@@ -23,16 +23,17 @@ internal sealed class HuggingFaceWhisperWeightStore : IWhisperWeightFileStore
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     Ensure, not download: every model download fetches the SHARED voice-activity-detection file as its first part, so a node that
+    ///     already installed one model has that file on disk when the next download starts. Without the existence branch the client
+    ///     refetches it, verifies it, then refuses to publish it onto the existing destination
+    ///     (<c>HuggingFaceDownloadFailure.DestinationConflict</c>, "The model download destination already exists.") — failing the whole
+    ///     download before the weights the operator asked for are ever requested, so a second model could never install.
+    /// </remarks>
     public async Task<string> EnsureFileAsync(WhisperWeightFileRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Ensure, not download. Every model download fetches the SHARED voice-activity-detection file as its first
-        // part, so a node that already installed one model has that file on disk when the next download starts.
-        // Without this branch the client re-fetched it, verified it, and then refused to publish it onto the existing
-        // destination (HuggingFaceDownloadFailure.DestinationConflict, "The model download destination already
-        // exists.") — which failed the whole download before the weights the operator actually asked for were ever
-        // requested. The second model an operator installed could therefore never succeed.
         if (File.Exists(request.DestinationPath))
         {
             if (await MatchesExpectedContentAsync(request, ct).ConfigureAwait(false))
@@ -50,9 +51,8 @@ internal sealed class HuggingFaceWhisperWeightStore : IWhisperWeightFileStore
                 return request.DestinationPath;
             }
 
-            // Present but not what the pinned catalogue describes: a truncated copy, an upstream re-upload, or a
-            // foreign file under our name. Remove it and its residue so the download has a clean destination to
-            // commit onto instead of failing on the same conflict guard forever.
+            // Present but not what the pinned catalogue describes: a truncated copy, an upstream re-upload, or a foreign file under our name. Remove it and its residue so the download has a clean
+            // destination to commit onto instead of failing on the same conflict guard forever.
             TryDelete(request.DestinationPath);
             DeleteTransferArtifacts(request.DestinationPath);
         }
@@ -67,9 +67,8 @@ internal sealed class HuggingFaceWhisperWeightStore : IWhisperWeightFileStore
             progress,
             ct).ConfigureAwait(false);
 
-        // The download client verifies against the digest it was given, but it reports the digest it actually saw. A
-        // mismatch here means the repository served different bytes under the same name — a re-upload, or worse — so
-        // the file is removed rather than left on disk looking installed.
+        // The download client verifies against the digest it was given, but it reports the digest it actually saw. A mismatch here means the repository served different bytes under the same name — a
+        // re-upload, or worse — so the file is removed rather than left on disk looking installed.
         if (result.Sha256 is { Length: > 0 } actual
             && !string.Equals(actual, request.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
         {

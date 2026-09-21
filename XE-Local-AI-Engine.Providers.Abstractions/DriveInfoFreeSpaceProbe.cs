@@ -1,17 +1,16 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Production <see cref="IFreeSpaceProbe" /> backed by <see cref="DriveInfo" />, and the ONE free-disk
-///     measurement in the node: every runtime gate, source-build prerequisite checklist and hardware profile goes
-///     through it rather than re-deriving the walk.
-///     <para>
-///         Measured on the closest EXISTING ancestor of the path, which is also the directory handed to
-///         <see cref="DriveInfo" />. The path ROOT is not that filesystem: on Linux every absolute path roots at
-///         <c>/</c>, so measuring the root reported the root filesystem for a models directory, a cache or an
-///         instance directory that lives on a mounted data volume. <see cref="DriveInfo" /> resolves the filesystem
-///         actually holding a directory when it is given one, and on Windows the ancestor still names its volume.
-///     </para>
+///     Production <see cref="IFreeSpaceProbe" /> backed by <see cref="DriveInfo" />, and the ONE free-disk measurement
+///     in the node: every runtime gate, source-build prerequisite checklist and hardware profile goes through it.
 /// </summary>
+/// <remarks>
+///     Measured on the closest EXISTING ancestor of the path, which is also the directory handed to
+///     <see cref="DriveInfo" />. The path ROOT is not that filesystem: on Linux every absolute path roots at <c>/</c>, so
+///     measuring the root would report the root filesystem for a models directory, a cache or an instance directory that
+///     lives on a mounted data volume. <see cref="DriveInfo" /> resolves the filesystem actually holding a directory when
+///     it is given one, and on Windows the ancestor still names its volume.
+/// </remarks>
 public sealed class DriveInfoFreeSpaceProbe : IFreeSpaceProbe
 {
     /// <inheritdoc />

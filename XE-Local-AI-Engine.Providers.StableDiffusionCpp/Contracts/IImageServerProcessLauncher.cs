@@ -2,10 +2,12 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     Thin process-launch seam isolating the OS-specific <c>Process.Start</c> + tree-kill mechanics from the
-///     supervisor's lifecycle logic. Faked in unit tests so the supervisor is exercised with no real child processes;
-///     the production implementation starts a real <c>sd-server</c> contained by a Windows Job Object or a Linux process
-///     group. Mirrors <c>ILlamaServerProcessLauncher</c>.
+///     supervisor's lifecycle logic. Mirrors <c>ILlamaServerProcessLauncher</c>.
 /// </summary>
+/// <remarks>
+///     Faked in unit tests so the supervisor is exercised with no real child processes; the production implementation
+///     starts a real <c>sd-server</c> contained by a Windows Job Object or a Linux process group.
+/// </remarks>
 internal interface IImageServerProcessLauncher
 {
     /// <summary>
@@ -17,9 +19,12 @@ internal interface IImageServerProcessLauncher
 }
 
 /// <summary>
-///     A handle to one launched <c>sd-server</c> child. Disposing the handle tree-kills the process and releases all OS
-///     resources (Job Object handle on Windows; the process group is signalled on Linux).
+///     A handle to one launched <c>sd-server</c> child.
 /// </summary>
+/// <remarks>
+///     Disposing the handle tree-kills the process and releases all OS resources (Job Object handle on Windows; the
+///     process group is signalled on Linux).
+/// </remarks>
 internal interface IImageServerProcessHandle : IDisposable
 {
     /// <summary>The OS process id of the launched server (diagnostics only).</summary>

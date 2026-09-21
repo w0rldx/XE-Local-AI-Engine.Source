@@ -3,20 +3,16 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using System.Collections.Concurrent;
 
 /// <summary>
-///     Minimal thread-safe TTL cache keyed by string with a bounded, approximately-LRU eviction policy. Used to avoid
-///     re-fetching Hugging Face Hub search results, repo-blob listings, and GGUF header reads on every advisor refresh.
-///     A per-key gate serializes concurrent misses for the same key so two callers racing on a cold entry issue one
-///     fetch, not two. Expiry is checked lazily on read (no background sweep). Because search keys are user-driven they
-///     would otherwise grow without bound, so the cache caps itself at <c>maxEntries</c>: once an insert pushes the
-///     count over the cap, expired entries are dropped first, then the least-recently-used live entries, until the
-///     count is back at or below capacity. Reads refresh recency via a cheap Interlocked stamp (no lock on the read
-///     path); the O(n) eviction scan runs only on the miss/insert path and only while over capacity.
-///
-///     Microsoft.Extensions.Caching.Memory.MemoryCache is deliberately not used: it has no built-in async single-flight
-///     (its factory can run more than once under a concurrent-miss race), and its SizeLimit compaction is a heuristic
-///     percentage purge rather than strict LRU, neither of which composes with the deterministic TimeProvider-driven
-///     expiry these caches rely on and their tests assert against.
+///     Minimal thread-safe TTL cache keyed by string with a bounded, approximately-LRU eviction policy, used to avoid
+///     re-fetching Hugging Face Hub search results, repo-blob listings and GGUF header reads on every advisor refresh.
 /// </summary>
+/// <remarks>
+///     User-driven search keys would otherwise grow without bound, so the cache caps itself at <c>maxEntries</c> and evicts
+///     approximately-LRU (see <see cref="EvictIfOverCapacity" />). <c>MemoryCache</c> is deliberately not used: it has no built-in async
+///     single-flight, its factory being able to run more than once under a concurrent-miss race, and its <c>SizeLimit</c> compaction is a
+///     heuristic percentage purge rather than strict LRU — neither composes with the deterministic <c>TimeProvider</c>-driven expiry
+///     these caches rely on and their tests assert against.
+/// </remarks>
 internal sealed class TtlCache<TValue>
 {
     private const int DefaultMaxEntries = 256;
@@ -37,10 +33,14 @@ internal sealed class TtlCache<TValue>
 
     /// <summary>
     ///     Returns the cached value for <paramref name="key" /> when present and unexpired; otherwise invokes
-    ///     <paramref name="factory" /> once, caches the result for <paramref name="ttl" />, and returns it. A
-    ///     <paramref name="ttl" /> of zero or less disables caching for this call (always invokes the factory). A
-    ///     failed or cancelled factory caches nothing — the entry keeps its prior state (empty, or its previous value).
+    ///     <paramref name="factory" /> once, caches the result for <paramref name="ttl" />, and returns it.
     /// </summary>
+    /// <remarks>
+    ///     A per-key gate serializes concurrent misses so two callers racing a cold entry issue one fetch, not two, and expiry is
+    ///     checked lazily on read, with no background sweep. A <paramref name="ttl" /> of zero or less disables caching for this call
+    ///     (the factory always runs). A failed or cancelled factory caches nothing — the entry keeps its prior state (empty, or its
+    ///     previous value).
+    /// </remarks>
     public async Task<TValue> GetOrAddAsync(string key, TimeSpan ttl, Func<CancellationToken, Task<TValue>> factory, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
@@ -77,9 +77,8 @@ internal sealed class TtlCache<TValue>
             entry.Gate.Release();
         }
 
-        // Evict only after a successful insert grew the live set, and outside the gate so a throwing factory (which
-        // leaves the entry untouched and rethrows above) never triggers a scan. Passing the just-inserted key keeps
-        // it out of eviction while the cache is still over capacity.
+        // Evict only after a successful insert grew the live set, and outside the gate so a throwing factory (which leaves the entry untouched and rethrows above) never triggers a scan. Passing the
+        // just-inserted key keeps it out of eviction while the cache is still over capacity.
         if (inserted)
         {
             EvictIfOverCapacity(key);
@@ -94,6 +93,12 @@ internal sealed class TtlCache<TValue>
         Volatile.Write(ref entry.LastAccessStamp, Interlocked.Increment(ref _accessClock));
     }
 
+    /// <summary>Brings the entry count back to <c>maxEntries</c> after an insert pushed it over.</summary>
+    /// <remarks>
+    ///     Expired entries are dropped first, then least-recently-used live ones, until the count is back at capacity.
+    ///     Reads refresh recency via a cheap Interlocked stamp (no lock on the read path); this O(n) scan runs only on
+    ///     the miss/insert path, and only while over capacity.
+    /// </remarks>
     private void EvictIfOverCapacity(string justInsertedKey)
     {
         if (_entries.Count <= _maxEntries)
@@ -112,10 +117,8 @@ internal sealed class TtlCache<TValue>
         {
             var now = _timeProvider.GetUtcNow();
 
-            // Pass 1: drop expired live entries (cheapest to lose). Never touch the just-inserted key, and skip any
-            // entry whose gate is currently held so an in-flight single-flight fetch is neither disrupted nor
-            // duplicated. Removing a free entry another caller happens to be re-adding is safe: that caller holds its
-            // own CacheEntry reference and completes against it; only single-flight for that key briefly relaxes.
+            // Pass 1: drop expired live entries (cheapest to lose). Never touch the just-inserted key, and skip any entry whose gate is held so an in-flight single-flight fetch is neither disrupted
+            // nor duplicated. Removing a free entry another caller is re-adding is safe: that caller holds its own CacheEntry reference and completes against it; only single-flight briefly relaxes.
             foreach (var pair in _entries)
             {
                 if (_entries.Count <= _maxEntries)
@@ -164,10 +167,8 @@ internal sealed class TtlCache<TValue>
 
     private sealed class CacheEntry
     {
-        // Recency stamp assigned from the cache-wide monotonic counter; a field (not a property) so it can be
-        // Volatile/Interlocked accessed by ref. An evicted entry's gate is intentionally not disposed: a concurrent
-        // caller may already hold its reference, and the gate allocates no unmanaged handle here (we never touch
-        // AvailableWaitHandle), so the GC reclaims it safely.
+        // Recency stamp assigned from the cache-wide monotonic counter; a field (not a property) so it can be Volatile/Interlocked accessed by ref. An evicted entry's gate is intentionally not
+        // disposed: a concurrent caller may already hold its reference, and the gate allocates no unmanaged handle here (we never touch AvailableWaitHandle), so the GC reclaims it safely.
         public long LastAccessStamp;
 
         public SemaphoreSlim Gate { get; } = new(initialCount: 1, maxCount: 1);

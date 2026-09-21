@@ -8,10 +8,13 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
 ///     File-based <see cref="IGgufModelRegistry" /> backed by a JSON manifest (<c>index.json</c>) under the models
-///     directory. The single owner of the manifest (read + write under a semaphore); <see cref="HuggingFaceGgufStore" />
-///     calls the internal write methods, while the public interface stays read-only. Self-heals by rescanning the
-///     directory when the manifest is missing or corrupt.
+///     directory.
 /// </summary>
+/// <remarks>
+///     The single owner of the manifest (read + write under a semaphore); <see cref="HuggingFaceGgufStore" /> calls the
+///     internal write methods, while the public interface stays read-only. Self-heals by rescanning the directory when
+///     the manifest is missing or corrupt.
+/// </remarks>
 internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 {
     private const string ManifestFileName = "index.json";
@@ -54,9 +57,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            // Public view: collapse any duplicate-path entries (a legacy first-download alias sharing one file) so a
-            // single .gguf is listed once. This is the load-time migration for manifests written before the upsert fix —
-            // it never touches the file, only the in-memory view; a later write persists the collapse.
+            // Public view: collapse any duplicate-path entries (a legacy first-download alias sharing one file) so a single .gguf is listed once. This is the load-time migration for manifests written
+            // before the upsert fix — it never touches the file, only the in-memory view; a later write persists the collapse.
             var entries = await LoadEntriesAsync(ct).ConfigureAwait(false);
             return CollapseDuplicatePaths(entries);
         }
@@ -98,11 +100,14 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 
     /// <summary>
     ///     Inserts or replaces the entry keyed by <see cref="GgufModelRegistryEntry.ModelName" />, and also removes any
-    ///     prior entry that resolves to the SAME backing file. The self-healing rescan (triggered when the manifest is
-    ///     absent, e.g. the very first download) registers the just-written .gguf under a filename-derived name; without
-    ///     the same-path removal the canonical upsert that follows would append a second entry to one file. The incoming
-    ///     entry carries canonical repo metadata (verified hash/revision), so it is preferred over the alias.
+    ///     prior entry that resolves to the SAME backing file.
     /// </summary>
+    /// <remarks>
+    ///     The self-healing rescan (triggered when the manifest is absent, e.g. the very first download) registers the
+    ///     just-written .gguf under a filename-derived name; without the same-path removal the canonical upsert that
+    ///     follows would append a second entry to one file. The incoming entry carries canonical repo metadata (verified
+    ///     hash/revision), so it is preferred over the alias.
+    /// </remarks>
     public async Task UpsertAsync(GgufModelRegistryEntry entry, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -291,11 +296,13 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
     }
 
     /// <summary>
-    ///     Removes EVERY entry whose backing file resolves to <paramref name="localPath" />, atomically. A legacy first
-    ///     download registered one file under two names (a filename alias plus the canonical repo id); deleting through
-    ///     either identity must leave no manifest entry pointing at the now-removed file. Returns the count removed;
-    ///     idempotent (no match is a no-op).
+    ///     Removes EVERY entry whose backing file resolves to <paramref name="localPath" />, atomically. Returns the
+    ///     count removed; idempotent (no match is a no-op).
     /// </summary>
+    /// <remarks>
+    ///     A first download can have registered one file under two names (a filename alias plus the canonical repo id),
+    ///     and deleting through either identity must leave no manifest entry pointing at the now-removed file.
+    /// </remarks>
     public async Task<int> RemoveByLocalPathAsync(string localPath, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
@@ -342,10 +349,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             var entries = new List<GgufModelRegistryEntry>(manifest.Models.Count);
             foreach (var element in manifest.Models)
             {
-                // Per-ENTRY deserialization. A row this build cannot understand — most concretely an origin string a
-                // newer build writes and this one has no member for, which the strict origin converter rejects — is
-                // skipped with a warning instead of failing the whole document and triggering a full directory rescan
-                // that would demote every other model to a legacy entry.
+                // Per-ENTRY deserialization. A row this build cannot understand — most concretely an origin string a newer build writes and this one has no member for, which the strict origin
+                // converter rejects — is skipped with a warning instead of failing the whole document and triggering a full directory rescan that would demote every other model to a legacy entry.
                 GgufModelRegistryEntry? entry;
                 try
                 {
@@ -420,9 +425,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         return manifest.Models.Where(static entry => entry.LocalPath is not null).Select(EnsureRevision).ToArray();
     }
 
-    // Best-effort rebuild from the .gguf files on disk when the manifest is unavailable. Metadata not derivable from the
-    // file alone (sha256, source revision) is left empty — the store re-verifies on the next ensure. The role stays
-    // Unknown EXCEPT for a speculative-decoding drafter, which the file name alone identifies (see GgufDraftModel).
+    // Best-effort rebuild from the .gguf files on disk when the manifest is unavailable. Metadata not derivable from the file alone (sha256, source revision) is left empty — the store re-verifies on
+    // the next ensure. The role stays Unknown EXCEPT for a speculative-decoding drafter, which the file name alone identifies (see GgufDraftModel).
     private async Task<IReadOnlyList<GgufModelRegistryEntry>> RescanAsync(CancellationToken ct)
     {
         if (!Directory.Exists(_modelsDirectory))
@@ -477,10 +481,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                 continue;
             }
 
-            // A parseable quant alone does NOT make a file a chat model: a speculative-decoding drafter
-            // (mtp-<model>-Q8_0.gguf) parses to Q8_0 like any base quant, and a rescan used to register it as an
-            // ordinary model — a 0.4 GB "Q8_0" sitting beside the real one. Mark its quant and role so it keeps a
-            // distinct identity and stays out of the chat surfaces (the same rule discovery applies to the repo side).
+            // A parseable quant alone does NOT make a file a chat model: a speculative-decoding drafter (mtp-<model>-Q8_0.gguf) parses to Q8_0 like any base quant, and a rescan would register it as
+            // an ordinary model — a 0.4 GB "Q8_0" beside the real one. Mark its quant and role to keep a distinct identity and stay out of the chat surfaces.
             var isDraft = GgufDraftModel.IsDraftFile(fileName);
             if (isDraft)
             {
@@ -548,12 +550,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             var sidecarPath = path + GgufAcquisitionSidecar.Suffix;
             if (File.Exists(sidecarPath))
             {
-                // An unreadable/corrupt sidecar (metadata null) or one whose own claimed revision does not recompute
-                // (RegistryRevisionMismatch) is repaired in place from the token-verified manifest entry when one
-                // exists for this path — a registered model without a valid sidecar would be loadable but unable to
-                // pass the sidecar-requiring mutation/deletion snapshot checks. When repair is impossible the entry is
-                // still kept (the manifest passed its own RegistryRevision self-check in LoadEntriesAsync); only the
-                // startup reaper cleans up genuine orphans.
+                // An unreadable sidecar, or one whose revision does not recompute (RegistryRevisionMismatch), is repaired from the path's verified manifest entry: without one a model loads but fails
+                // the sidecar-requiring snapshot checks. If repair fails the entry is kept (LoadEntriesAsync passed its own RegistryRevision self-check); the startup reaper clears orphans.
                 var metadata = await GgufAcquisitionSidecar.ReadShapeValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false);
                 if (metadata is null)
                 {
@@ -599,9 +597,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                     continue;
                 }
 
-                // Recovery is the only normal registry path that needs to establish file-byte integrity. Existing exact
-                // manifest rows are deliberately served from stable registry/sidecar facts; explicit snapshots perform
-                // the full content verification required for mutation and benchmark boundaries.
+                // Recovery is the only normal registry path that needs to establish file-byte integrity. Existing exact manifest rows are deliberately served from stable
+                // registry/sidecar facts; explicit snapshots perform the full content verification required for mutation and benchmark boundaries.
                 if (await GgufAcquisitionSidecar.ReadValidAsync(sidecarPath, path, _modelsDirectory, ct).ConfigureAwait(false) is null)
                 {
                     _logger.LogWarning("Acquisition content verification failed for GGUF {FileName}; keeping any existing valid manifest entry without sidecar-derived recovery.",
@@ -621,10 +618,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             }
         }
 
-        // A missing acquisition sidecar, of any filename shape, is rewritten from its token-verified manifest entry so
-        // the model stays consistent for the sidecar-requiring mutation/deletion snapshot checks. When repair is
-        // impossible the entry is still kept (its manifest row passed the RegistryRevision self-check); the startup
-        // reaper cleans up genuinely orphaned acquisition artifacts.
+        // A missing acquisition sidecar, of any filename shape, is rewritten from its token-verified manifest entry so the model stays consistent for the sidecar-requiring mutation/deletion snapshot
+        // checks. When repair is impossible the entry is still kept (its manifest row passed the RegistryRevision self-check); the startup reaper cleans up genuinely orphaned acquisition artifacts.
         foreach (var localPath in entries.Where(entry => entry.Origin is not null
                                                          && !File.Exists(entry.LocalPath + GgufAcquisitionSidecar.Suffix))
                                          .Select(entry => entry.LocalPath)
@@ -642,11 +637,14 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 
     /// <summary>
     ///     Rewrites the acquisition sidecar for <paramref name="weightPath" /> from its single token-verified manifest
-    ///     entry. The reconstruction is trusted only when round-tripping it back through
+    ///     entry. Best-effort: returns <see langword="false" /> instead of throwing.
+    /// </summary>
+    /// <remarks>
+    ///     The reconstruction is trusted only when round-tripping it back through
     ///     <see cref="GgufAcquisitionSidecar.ToRegistryEntry" /> reproduces the entry's exact verified
     ///     <c>RegistryRevision</c>, and the on-disk weight/projector sizes still match the entry — replaced bytes are
-    ///     never blessed with fresh metadata. Best-effort: returns <see langword="false" /> instead of throwing.
-    /// </summary>
+    ///     never blessed with fresh metadata.
+    /// </remarks>
     private async Task<bool> TryRepairSidecarAsync(List<GgufModelRegistryEntry> entries, string weightPath, CancellationToken ct)
     {
         var samePath = entries.Where(entry => PathComparer.Equals(NormalizeLocalPath(entry.LocalPath), NormalizeLocalPath(weightPath)))
@@ -824,9 +822,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         public List<GgufModelRegistryEntry> Models { get; set; } = [];
     }
 
-    // Read-side shape for the tolerant load path: rows stay unparsed until each is converted individually, so one
-    // unreadable row cannot fail the document. The mutation path deliberately keeps the strict ManifestDocument —
-    // silently dropping a row there would delete it from the manifest on the write that follows.
+    // Read-side shape for the tolerant load path: rows stay unparsed until each is converted individually, so one unreadable row cannot fail the document. The mutation path deliberately keeps the
+    // strict ManifestDocument — silently dropping a row there would delete it from the manifest on the write that follows.
     private sealed class RawManifestDocument
     {
         public List<JsonElement> Models { get; set; } = [];

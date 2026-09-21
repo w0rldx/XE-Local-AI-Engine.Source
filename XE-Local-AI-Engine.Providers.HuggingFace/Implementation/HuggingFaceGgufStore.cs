@@ -10,9 +10,11 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 /// <summary>
 ///     <see cref="IGgufModelStore" /> over <see cref="HfDownloadClient" /> + <see cref="IHuggingFaceGgufDiscovery" /> +
 ///     <see cref="GgufModelRegistry" />: ensures a selected GGUF is present (download-if-missing, resume, retry, cancel,
-///     offline reuse), resolves model name → file path, lists installed models, and deletes. Serializes concurrent
-///     <see cref="EnsureModelAsync" /> for the same model name with a per-name gate.
+///     offline reuse), resolves model name → file path, lists installed models, and deletes.
 /// </summary>
+/// <remarks>
+///     Concurrent <see cref="EnsureModelAsync" /> calls for the same model name are serialized with a per-name gate.
+/// </remarks>
 internal sealed class HuggingFaceGgufStore : IGgufModelStore
 {
     // The Hugging Face provider must not depend on the LlamaServer project; the descriptor provider name is the agreed
@@ -26,22 +28,37 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
     private readonly HfDownloadClient _downloadClient;
 
-    // Per-ModelName gate so two concurrent EnsureModelAsync calls for the same file do not both download. The set is
-    // bounded by the node's model catalog (one entry per distinct model ever ensured for the process lifetime), so
-    // entries are intentionally never pruned or disposed — the SemaphoreSlims hold no unmanaged handles and the bound
-    // is small. Mirrors OllamaLocalModelProvider's per-pull gate.
+    /// <summary>
+    ///     Per-ModelName gate so two concurrent <see cref="EnsureModelAsync" /> calls for the same file do not both
+    ///     download. Mirrors <c>OllamaLocalModelProvider</c>'s per-pull gate.
+    /// </summary>
+    /// <remarks>
+    ///     The set is bounded by the node's model catalog (one entry per distinct model ever ensured for the process
+    ///     lifetime), so entries are intentionally never pruned or disposed — the <see cref="SemaphoreSlim" />s hold no
+    ///     unmanaged handles and the bound is small.
+    /// </remarks>
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _ensureGates = new(StringComparer.Ordinal);
 
-    // Caches the per-file header facts (context length + detected capabilities) read from each installed GGUF header so
-    // the model-list endpoint (which hits ListInstalledModelsAsync often) never re-reads the file. Keyed by
-    // (LocalPath, SizeBytes, DownloadedAtUtc) so a re-download (new size/timestamp) naturally invalidates the entry. A
-    // null/empty result is cached too — a model whose header carries no metadata must not be re-read on every list.
+    /// <summary>
+    ///     Caches the per-file header facts (context length + detected capabilities) read from each installed GGUF
+    ///     header, so the model-list endpoint (which hits <see cref="ListInstalledModelsAsync" /> often) never re-reads
+    ///     the file.
+    /// </summary>
+    /// <remarks>
+    ///     Keyed by <c>(LocalPath, SizeBytes, DownloadedAtUtc)</c> so a re-download (new size/timestamp) naturally
+    ///     invalidates the entry. A null/empty result is cached too — a model whose header carries no metadata must not
+    ///     be re-read on every list.
+    /// </remarks>
     private readonly ConcurrentDictionary<HeaderFactsCacheKey, GgufHeaderFacts> _headerFactsCache = new();
 
-    // Caches the per-file memory-footprint header inputs (param/block/head/embedding/context counts) read from each
-    // installed GGUF header so the capacity gate (which can probe per spawn) never re-reads the file. Keyed identically
-    // to the header-facts cache so a re-download (new size/timestamp) naturally invalidates the entry; a null-bearing
-    // result is cached too so a header that carries no estimator inputs is read at most once.
+    /// <summary>
+    ///     Caches the per-file memory-footprint header inputs (param/block/head/embedding/context counts) read from each
+    ///     installed GGUF header, so the capacity gate (which can probe per spawn) never re-reads the file.
+    /// </summary>
+    /// <remarks>
+    ///     Keyed identically to the header-facts cache so a re-download (new size/timestamp) naturally invalidates the
+    ///     entry; a null-bearing result is cached too, so a header that carries no estimator inputs is read at most once.
+    /// </remarks>
     private readonly ConcurrentDictionary<HeaderFactsCacheKey, GgufHeaderFootprintInputs> _footprintFactsCache = new();
     private readonly GgufHeaderReader _headerReader;
     private readonly ILogger<HuggingFaceGgufStore> _logger;
@@ -213,9 +230,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             var existing = await _registry.FindAsync(modelName, ct).ConfigureAwait(false);
             if (existing is not null && File.Exists(existing.LocalPath))
             {
-                // Projector backfill is intentionally fail-closed here. Retrofitting a projector changes the complete
-                // member set, aggregate fingerprint, universal sidecar, and registry revision and therefore belongs to
-                // the coordinated acquisition transaction rather than this legacy offline-reuse fast path.
+                // Projector backfill is intentionally fail-closed here. Retrofitting a projector changes the complete member set, aggregate fingerprint, universal sidecar, and registry revision and
+                // therefore belongs to the coordinated acquisition transaction rather than this legacy offline-reuse fast path.
 
                 progress?.Report(new PullProgress
                 {
@@ -239,11 +255,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 progress,
                 ct).ConfigureAwait(false);
 
-            // A vision repo ships an mmproj projector companion the model needs for image input; pull it alongside the
-            // weights (auto-pair). A text-only repo has none — FindProjectorAsync returns null and nothing extra is
-            // fetched. A projector failure never fails the model: it loads text-only. Skipped for a draft file — a
-            // speculative drafter is never the chat model that would consume a projector, and so is a weights-only
-            // request (GgufModelRequest.IncludeProjector) — the flag means the same thing on every acquisition path.
+            // A vision repo ships an mmproj projector the model needs for image input; pull it alongside the weights (auto-pair). A text-only repo has none — FindProjectorAsync returns null. A
+            // projector failure never fails the model: it loads text-only. Skipped for a draft file (never a chat model) and for a weights-only GgufModelRequest.IncludeProjector request.
             var projector = GgufDraftModel.IsDraftQuant(quant) || !request.IncludeProjector
                 ? ProjectorDownloadResult.None
                 : await TryEnsureProjectorAsync(request.RepoId, fileName, revision, ct).ConfigureAwait(false);
@@ -285,15 +298,13 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 Quant = quant,
                 LocalPath = result.LocalPath,
                 SizeBytes = result.SizeBytes,
-                // The download verified the content against the resolve OID or, failing that, the discovery digest we
-                // just passed. Persist ONLY that verified hash — never echo an unverified digest, which would be
-                // indistinguishable from a real integrity guarantee.
+                // The download verified the content against the resolve OID or, failing that, the discovery digest we just passed. Persist ONLY that verified hash — never echo an unverified digest,
+                // which would be indistinguishable from a real integrity guarantee.
                 Sha256 = weightHash,
                 SourceRevision = string.IsNullOrEmpty(result.ResolvedRevision) ? revision : result.ResolvedRevision,
                 DownloadedAtUtc = acquiredAt,
-                // A speculative-decoding drafter is a draft whatever the caller hinted — the picker offers the whole
-                // repo through one download action, so a drafter arrives on the same Chat/Unknown-role request as the
-                // base weights. The resolved quant carries the marker discovery stamped on it, so it is authoritative.
+                // A speculative-decoding drafter is a draft whatever the caller hinted — the picker offers the whole repo through one download action, so a drafter arrives on the same
+                // Chat/Unknown-role request as the base weights. The resolved quant carries the marker discovery stamped on it, so it is authoritative.
                 Role = role,
                 ProjectorFileName = projector.SourceDisplayName,
                 ProjectorLocalPath = projector.LocalPath,
@@ -390,9 +401,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         var byQuant = detail.Files.FirstOrDefault(file =>
             string.Equals(file.Quant, targetQuant, StringComparison.OrdinalIgnoreCase));
 
-        // A bare base quant (e.g. the default Q4_K_M, or an explicit Q4_K_XL) also resolves to an Unsloth Dynamic
-        // file (UD-Q4_K_M) when no exact match exists, so default/base requests still succeed against UD-only repos.
-        // An explicit UD- request stays exact — it must not silently fall through to a plain quant.
+        // A bare base quant (e.g. the default Q4_K_M, or an explicit Q4_K_XL) also resolves to an Unsloth Dynamic file (UD-Q4_K_M) when no exact match exists, so default/base requests still succeed
+        // against UD-only repos. An explicit UD- request stays exact — it must not silently fall through to a plain quant.
         if (byQuant is null && !GgufQuantParser.IsDynamic(targetQuant))
         {
             byQuant = detail.Files.FirstOrDefault(file =>
@@ -409,13 +419,18 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         return new ResolvedTarget(byQuant.FileName, byQuant.Quant, byQuant.SizeBytes, byQuant.Sha256, request.Revision ?? byQuant.Revision);
     }
 
-    // Downloads the repo's mmproj projector companion (when it ships one) next to the model and returns its filename +
-    // local path. Stored under a NON-scanned "projectors/" subdirectory keyed by the model's file stem: the projector
-    // name embeds the model's quant token, so a top-level placement would be mis-registered as a phantom model by the
-    // registry rescan (which parses a quant from every top-level *.gguf). A projector download must never fail the model
-    // — any failure degrades to text-only (null path). Cancellation propagates.
     private const string ProjectorSubdirectory = "projectors";
 
+    /// <summary>
+    ///     Downloads the repo's <c>mmproj</c> projector companion (when it ships one) next to the model and returns its
+    ///     filename + local path.
+    /// </summary>
+    /// <remarks>
+    ///     Stored under a NON-scanned <c>projectors/</c> subdirectory keyed by the model's file stem: the projector name embeds the
+    ///     model's quant token, so a top-level placement would be mis-registered as a phantom model by the registry rescan, which parses
+    ///     a quant from every top-level <c>*.gguf</c>. A projector download must never fail the model — any failure degrades to text-only
+    ///     (null path). Cancellation propagates.
+    /// </remarks>
     private async Task<ProjectorDownloadResult> TryEnsureProjectorAsync(string repoId,
         string modelFileName,
         string weightsRevision,
@@ -432,10 +447,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             var localRelativePath = $"{ProjectorSubdirectory}/{Path.GetFileNameWithoutExtension(modelFileName)}.mmproj.gguf";
             var destinationPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, localRelativePath);
 
-            // Pin the projector to the SAME commit as the weights: a pinned older model must not pair with a newer,
-            // possibly incompatible projector from the repo head. Fall back to the projector's own (head) revision only
-            // when the weights revision is unknown (e.g. a rescanned entry). The discovery sha is for the head file, so
-            // it is dropped when the pinned revision differs — the download then verifies against that revision's own OID.
+            // Pin the projector to the SAME commit as the weights: a pinned older model must not pair with a newer, possibly incompatible projector from the repo head. Fall back to the projector's
+            // own (head) revision only when the weights revision is unknown (a rescanned entry). The discovery sha is for the head file, so it is dropped when the pinned revision differs.
             var pinnedRevision = string.IsNullOrWhiteSpace(weightsRevision) ? projector.Revision : weightsRevision;
             var expectedSha = string.Equals(pinnedRevision, projector.Revision, StringComparison.Ordinal) ? projector.Sha256 : null;
 
@@ -486,9 +499,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     {
         var facts = await ResolveHeaderFactsAsync(entry, ct).ConfigureAwait(false);
 
-        // A model is multimodal (accepts image input) exactly when its mmproj projector companion is present locally —
-        // the same file that gates the llama-server --mmproj argument, so the flag never over-claims. Surface the vision
-        // capability token too, alongside the chat-template-derived tokens.
+        // A model is multimodal (accepts image input) exactly when its mmproj projector companion is present locally — the same file that gates the llama-server --mmproj argument, so the flag never
+        // over-claims. Surface the vision capability token too, alongside the chat-template-derived tokens.
         var isMultimodalCapable = entry.ProjectorLocalPath is not null && File.Exists(entry.ProjectorLocalPath);
         var capabilities = isMultimodalCapable
             ? facts.Capabilities.Append(VisionCapability).ToArray()
@@ -514,9 +526,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         };
     }
 
-    // Reads (and caches) the GGUF header facts (context_length + chat-template-derived capabilities) for one installed
-    // model in a SINGLE header read. A read failure for one model must never fail the whole list — any error yields the
-    // empty facts (unknown context window, no extra capabilities).
+    // Reads (and caches) the GGUF header facts (context_length + chat-template-derived capabilities) for one installed model in a SINGLE header read. A read failure for one model must never fail the
+    // whole list — any error yields the empty facts (unknown context window, no extra capabilities).
     private async Task<GgufHeaderFacts> ResolveHeaderFactsAsync(GgufModelRegistryEntry entry, CancellationToken ct)
     {
         if (!File.Exists(entry.LocalPath))
@@ -553,10 +564,14 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         return resolved;
     }
 
-    // Reads (and caches) the GGUF header weight/KV inputs for one installed model in a SINGLE header read. A read
-    // failure yields the empty inputs (all-null) so the footprint consumer falls back to the on-disk file size for the
-    // weights term — a model is never reported "unknown" purely for a header that could not be parsed when its size is
-    // known. Cancellation propagates; every other failure degrades.
+    /// <summary>
+    ///     Reads (and caches) the GGUF header weight/KV inputs for one installed model in a SINGLE header read.
+    /// </summary>
+    /// <remarks>
+    ///     A read failure yields the empty inputs (all-null) so the footprint consumer falls back to the on-disk file
+    ///     size for the weights term — a model is never reported "unknown" purely for a header that could not be parsed
+    ///     when its size is known. Cancellation propagates; every other failure degrades.
+    /// </remarks>
     private async Task<GgufHeaderFootprintInputs> ResolveFootprintInputsAsync(GgufModelRegistryEntry entry, CancellationToken ct)
     {
         var key = new HeaderFactsCacheKey(entry.LocalPath, entry.SizeBytes, entry.DownloadedAtUtc);

@@ -10,13 +10,13 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
 ///     Windows process handle that contains the child, and anything it spawns, in a Job Object configured with
-///     <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c>. Closing the job handle — on <see cref="TreeKill" /> or
-///     <see cref="Dispose" /> — terminates the whole tree, so no orphan survives a supervisor stop or a crash.
+///     <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c>.
 /// </summary>
 /// <remarks>
-///     <strong>Operator-verification flag:</strong> this Linux/WSL2 build cannot exercise the Win32 path. The
-///     signatures, struct layout and SafeHandle ownership follow the verified llama.cpp and stable-diffusion.cpp
-///     handles, but real tree-kill behaviour must be verified on Windows.
+///     Closing the job handle — on <see cref="TreeKill" /> or <see cref="Dispose" /> — terminates the whole tree, so no orphan survives a
+///     supervisor stop or a crash. <strong>Operator-verification flag:</strong> a Linux/WSL2 build cannot exercise the Win32 path; the
+///     signatures, struct layout and SafeHandle ownership follow the verified llama.cpp and stable-diffusion.cpp handles, but real
+///     tree-kill behaviour must be verified on Windows.
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal sealed partial class WindowsWhisperJobObjectProcessHandle : IWhisperServerProcessHandle

@@ -9,24 +9,15 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 
 /// <summary>
-///     Owns the node's single resident <c>whisper-server</c> child process: reuse-or-spawn behind a single-flight
-///     gate, readiness gating on the health route, an in-place model switch when the daemon is healthy, loopback port
-///     allocation by bind probe, idle-TTL eviction with a background reaper, per-OS tree-kill teardown, and an
-///     orphan-free shutdown.
+///     Owns the node's single resident <c>whisper-server</c> child process: reuse-or-spawn behind a single-flight gate,
+///     readiness gating, an in-place model switch, port allocation, idle eviction, tree-kill teardown and clean shutdown.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Reduced to ONE daemon on purpose.</b> The image supervisor this ports is keyed by model with a loaded
-///         cap and least-recently-used eviction. A node has one selected transcription model, and the server
-///         serializes every request on a single mutex, so a second daemon could never serve anyone faster. The cap,
-///         the LRU and the per-model gate dictionary are not ported; everything else is kept one for one.
-///     </para>
-///     <para>
-///         <b>GPU loads are serialized process-wide.</b> Both a spawn and an in-place model switch initialise GPU
-///         weights, so both acquire the shared admission gate that the llama-server and image supervisors also use,
-///         and hold it through readiness, failure, timeout and process exit. A CPU backend bypasses it entirely — it
-///         does not contend for VRAM.
-///     </para>
+///     <b>Reduced to ONE daemon on purpose:</b> the image supervisor this ports is keyed by model with a loaded cap and LRU eviction, but
+///     a node has one selected transcription model and the server serializes every request on a single mutex, so a second daemon could
+///     never serve anyone faster. The cap, the LRU and the per-model gate dictionary are not ported; the rest is kept one for one.
+///     <b>GPU loads are serialized process-wide:</b> a spawn and an in-place model switch both initialise GPU weights, so both hold the
+///     shared admission gate through readiness, failure, timeout and exit. A CPU backend bypasses it.
 /// </remarks>
 internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor, IAsyncDisposable
 {
@@ -162,9 +153,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
             catch (ObjectDisposedException)
             {
-                // DisposeAsync disposes the gate. When a dispose races a spawn unwinding on the shutdown-linked token,
-                // the gate can already be gone here; the release is moot at teardown. Swallowing it lets the real
-                // unwind cause surface instead of a leaked ObjectDisposedException.
+                // DisposeAsync disposes the gate. When a dispose races a spawn unwinding on the shutdown-linked token, the gate can already be gone here; the release is moot at teardown. Swallowing
+                // it lets the real unwind cause surface instead of a leaked ObjectDisposedException.
             }
         }
     }
@@ -303,10 +293,13 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
     /// <summary>
     ///     Reuse decision for a live daemon already serving the requested model: hands back its endpoint, or returns
-    ///     <see langword="null" /> after tearing it down when it is wedged — alive, but unresponsive to
-    ///     <see cref="WhisperRuntimeOptions.MaxReuseLivenessFailures" /> consecutive probes. The probe is rate limited
-    ///     to at most one per interval per daemon, so the hot path costs no HTTP at all between probes.
+    ///     <see langword="null" /> after tearing it down when it is wedged.
     /// </summary>
+    /// <remarks>
+    ///     Wedged means alive but unresponsive to <see cref="WhisperRuntimeOptions.MaxReuseLivenessFailures" />
+    ///     consecutive probes. The probe is rate limited to at most one per interval per daemon, so the hot path costs
+    ///     no HTTP at all between probes.
+    /// </remarks>
     private async Task<WhisperServerEndpoint?> TryReuseAsync(RunningServer existing, CancellationToken ct)
     {
         var now = _timeProvider.GetUtcNow();
@@ -368,9 +361,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         var backend = await _backendSelector.SelectBackendAsync(ct).ConfigureAwait(false);
         var binary = await _binaryManager.EnsureBinaryAsync(backend, ct).ConfigureAwait(false);
 
-        // Link the spawn/readiness window to the supervisor's shutdown token, so a DisposeAsync racing this spawn
-        // cancels the readiness wait and the catch below tree-kills the launched handle instead of orphaning it: this
-        // spawn registers itself only AFTER readiness, so disposal's own teardown cannot see it yet.
+        // Link the spawn/readiness window to the supervisor's shutdown token, so a DisposeAsync racing this spawn cancels the readiness wait and the catch below tree-kills the launched handle instead
+        // of orphaning it: this spawn registers itself only AFTER readiness, so disposal's own teardown cannot see it yet.
         using var spawnCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
         var spawnCt = spawnCts.Token;
 
@@ -419,9 +411,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
                 _current = running;
             }
 
-            // A DisposeAsync that ran while this spawn was in flight tore down only what its snapshot held; this one
-            // registered after that, so it would be left resident. Tear it down here. The detach/kill pair owns the
-            // handle from this point, so null it out to keep the catch from acting on it twice.
+            // A DisposeAsync that ran while this spawn was in flight tore down only what its snapshot held; this one registered after that, so it would be left resident. Tear it down here. The
+            // detach/kill pair owns the handle from this point, so null it out to keep the catch from acting on it twice.
             if (Volatile.Read(ref _disposed) != 0)
             {
                 if (Detach() is { } detached)
@@ -459,20 +450,11 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     ///     when the caller should tear down and respawn instead.
     /// </summary>
     /// <remarks>
-    ///     <para>
-    ///         Exclusive: the same compare-and-swap latch an eviction uses, so the switch succeeds only when no
-    ///         transcription is in flight and, once latched, no new lease can attach. A refused latch is reported as a
-    ///         busy failure rather than switching the model out from under an in-flight request.
-    ///     </para>
-    ///     <para>
-    ///         Admission-gated on a GPU backend for the whole method: an in-place load initialises GPU weights exactly
-    ///         as a spawn does, so skipping the gate here would let a model switch race another runtime's load.
-    ///     </para>
-    ///     <para>
-    ///         A failed load can kill the server outright — the daemon exits when a model fails to initialise, after
-    ///         it has already freed the previous one — so any non-2xx, health timeout or process exit returns
-    ///         <see langword="null" /> and the caller respawns.
-    ///     </para>
+    ///     Exclusive: the same compare-and-swap latch an eviction uses, so the switch succeeds only when no transcription is in flight
+    ///     and, once latched, no new lease can attach — a refused latch is a busy failure rather than switching the model out from under
+    ///     an in-flight request. Admission-gated on a GPU backend throughout, because an in-place load initialises GPU weights exactly as
+    ///     a spawn does. A failed load can kill the server outright, the daemon exiting when a model fails to initialise after freeing the
+    ///     previous one, so any non-2xx, health timeout or exit returns null and the caller respawns.
     /// </remarks>
     private async Task<WhisperServerEndpoint?> TryLoadModelAsync(RunningServer running, string modelId, CancellationToken ct)
     {
@@ -485,9 +467,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             throw new WhisperRuntimeException("The transcription runtime is busy with another transcription.");
         }
 
-        // The same flag a spawn raises: for the duration of an in-place load the daemon answers 503 and the model it
-        // reports is the one being replaced, so a status that still said Ready would be describing a runtime that
-        // cannot serve a request.
+        // The same flag a spawn raises: for the duration of an in-place load the daemon answers 503 and the model it reports is the one being replaced, so a status that still said Ready would be
+        // describing a runtime that cannot serve a request.
         SetStarting(starting: true);
 
         try
@@ -556,12 +537,14 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
     /// <summary>
     ///     Fails the spawn when a VAD file is configured but absent, instead of launching a daemon that would answer
-    ///     with the wrong shape. The argument builder emits <c>--vad</c> and its model path together or not at all, so
-    ///     an unconfigured path is a deliberate no-VAD launch and stays legal; a configured path that does not exist is
-    ///     an incomplete installation, and the VAD weights are part of installation. Letting it through would either
-    ///     stall readiness or produce a running daemon whose every transcription fails opaquely, and the segmenter that
-    ///     consumes these segments relies on the server doing the voice-activity split.
+    ///     with the wrong shape.
     /// </summary>
+    /// <remarks>
+    ///     The argument builder emits <c>--vad</c> and its model path together or not at all, so an unconfigured path is a deliberate
+    ///     no-VAD launch and stays legal; a configured path that does not exist is an incomplete installation, the VAD weights being part
+    ///     of installation. Letting it through would either stall readiness or produce a running daemon whose every transcription fails
+    ///     opaquely, and the segmenter that consumes these segments relies on the server doing the voice-activity split.
+    /// </remarks>
     private void RequireConfiguredVadFile()
     {
         if (string.IsNullOrWhiteSpace(_options.VadModelPath))
@@ -694,9 +677,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             return;
         }
 
-        // TryBeginEvict latches the daemon only when no transcription holds it, and once latched no new lease can
-        // attach — so a transcription starting concurrently with this reap either wins the lease first (and the latch
-        // fails, reaping on a later pass) or is refused. A leased daemon can never be tree-killed underneath it.
+        // TryBeginEvict latches the daemon only when no transcription holds it, and once latched no new lease can attach — so a transcription starting concurrently with this reap either wins the
+        // lease first (and the latch fails, reaping on a later pass) or is refused. A leased daemon can never be tree-killed underneath it.
         if (running.TryBeginEvict())
         {
             _logger.LogInformation("Evicting idle whisper-server for model {ModelId}.", running.ModelId);
@@ -732,10 +714,12 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     }
 
     /// <summary>
-    ///     Tree-kills and disposes a detached daemon, then releases the resident-process lease it held. The lease is
-    ///     released HERE and not at detach time: it is what holds off an exclusive runtime mutation, and a child that
-    ///     has been detached but not yet killed still has the binary and the model file open.
+    ///     Tree-kills and disposes a detached daemon, then releases the resident-process lease it held.
     /// </summary>
+    /// <remarks>
+    ///     The lease is released HERE and not at detach time: it is what holds off an exclusive runtime mutation, and a
+    ///     child that has been detached but not yet killed still has the binary and the model file open.
+    /// </remarks>
     private static void KillDetached(RunningServer running)
     {
         try
@@ -791,9 +775,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         private long _lastLivenessProbeTicks;
         private long _lastUsedTicks;
 
-        // Lease state, mutated only by atomic compare-and-swap: >= 0 counts in-flight transcriptions; -1 is a terminal
-        // latch set by the idle reaper, an eviction or a model switch. A new lease and a teardown decision therefore
-        // transition the SAME word and can never both win.
+        // Lease state, mutated only by atomic compare-and-swap: >= 0 counts in-flight transcriptions; -1 is a terminal latch set by the idle reaper, an eviction or a model switch. A new lease and a
+        // teardown decision therefore transition the SAME word and can never both win.
         private int _leaseState;
 
         private WhisperServerEndpoint _endpoint;

@@ -8,11 +8,13 @@ public enum WhisperInstalledRuntimeValidity
 }
 
 /// <summary>
-///     The authoritative managed-runtime record. An <see cref="WhisperInstalledRuntimeValidity.Invalid" /> record is a
-///     fail-closed tombstone, not an absent one: the desired backend and source selection persist through corruption so
-///     resolution can never silently replace the operator-selected runtime with a prebuilt that contradicts it.
-///     Recovery is an explicit remove or rebuild.
+///     The authoritative managed-runtime record.
 /// </summary>
+/// <remarks>
+///     An <see cref="WhisperInstalledRuntimeValidity.Invalid" /> record is a fail-closed tombstone, not an absent one:
+///     the desired backend and source selection persist through corruption, so resolution can never silently replace
+///     the operator-selected runtime with a prebuilt that contradicts it. Recovery is an explicit remove or rebuild.
+/// </remarks>
 public sealed record WhisperInstalledRuntimeState(
     WhisperInstalledRuntimeValidity Validity,
     WhisperBackend DesiredBackend,

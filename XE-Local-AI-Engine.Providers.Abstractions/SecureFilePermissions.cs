@@ -6,10 +6,13 @@ using System.Security.Principal;
 
 /// <summary>
 ///     Narrows a secret-bearing file on disk to the current user only: an explicit, inheritance-free Windows ACL, or
-///     mode <c>0600</c> on Linux/macOS. Every token, credential and MSAL-cache store on the node hardens through this
-///     one implementation — the rule is the last line of defence for a protected blob, so a copy that drifts is a
-///     silent downgrade on whichever store holds the stale copy.
+///     mode <c>0600</c> on Linux/macOS.
 /// </summary>
+/// <remarks>
+///     Every token, credential and MSAL-cache store on the node hardens through this one implementation — the rule is
+///     the last line of defence for a protected blob, so a copy that drifts is a silent downgrade on whichever store
+///     holds the stale copy.
+/// </remarks>
 public static class SecureFilePermissions
 {
     /// <summary>

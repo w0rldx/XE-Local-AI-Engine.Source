@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 
 /// <summary>
-///     Runtime-supervision options for the whisper.cpp <c>whisper-server</c> daemon. The transcription runtime sits
-///     beside the llama.cpp text runtime and the stable-diffusion.cpp image runtime and owns a <b>separate</b> loopback
-///     port range, so the three supervisors never contend for a port.
+///     Runtime-supervision options for the whisper.cpp <c>whisper-server</c> daemon.
 /// </summary>
+/// <remarks>
+///     The transcription runtime sits beside the llama.cpp text runtime and the stable-diffusion.cpp image runtime and
+///     owns a <b>separate</b> loopback port range, so the three supervisors never contend for a port.
+/// </remarks>
 public sealed class WhisperRuntimeOptions
 {
     public const string SectionName = "WhisperRuntime";
@@ -64,9 +66,9 @@ public sealed class WhisperRuntimeOptions
 
     /// <summary>
     ///     Number of <em>consecutive</em> failed reuse-path liveness probes after which a still-alive-but-unresponsive
-    ///     daemon is torn down and respawned instead of being handed out again. One transient failure never evicts a
-    ///     busy daemon; one success resets the count.
+    ///     daemon is torn down and respawned instead of being handed out again.
     /// </summary>
+    /// <remarks>One transient failure never evicts a busy daemon; one success resets the count.</remarks>
     public int MaxReuseLivenessFailures { get; set; } = 3;
 
     /// <summary>
@@ -81,13 +83,13 @@ public sealed class WhisperRuntimeOptions
 
     /// <summary>
     ///     Absolute path to the node's whisper models directory — the root the catalogue's relative
-    ///     <c>{modelId}/{fileName}</c> path is resolved against. <see langword="null" /> until the application layer
-    ///     seeds it, in which case the supervisor reports the model as not installed rather than guessing a location.
+    ///     <c>{modelId}/{fileName}</c> path is resolved against.
     /// </summary>
     /// <remarks>
-    ///     Seeded alongside <see cref="VadModelPath" /> and for the same reason: the catalogue is a static table inside
-    ///     this provider, but where the weights live is decided by the node data directory, which only the application
-    ///     layer can resolve.
+    ///     <see langword="null" /> until the application layer seeds it, in which case the supervisor reports the model
+    ///     as not installed rather than guessing a location. Seeded alongside <see cref="VadModelPath" /> and for the
+    ///     same reason: the catalogue is a static table inside this provider, but where the weights live is decided by
+    ///     the node data directory, which only the application layer can resolve.
     /// </remarks>
     public string? ModelsDirectory { get; set; }
 }

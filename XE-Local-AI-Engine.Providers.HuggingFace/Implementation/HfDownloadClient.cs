@@ -15,31 +15,20 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
 ///     The ranged, resumable, retryable HTTP download against <c>/{repo}/resolve/{rev}/{file}</c>: enforces the hard
-///     pre-download disk guard, streams to a <c>.part</c> file, resumes via <c>Range</c>, verifies sha256 against the
-///     LFS OID when exposed, atomically renames <c>.part</c> → final, and sets the optional <c>Bearer</c> token for
-///     gated repos. Internal — tested via a stubbed handler + injected <see cref="IFreeSpaceProbe" />.
-///     <para>
-///         <b>Parallel range mode.</b> A file of at least <see cref="HuggingFaceOptions.ParallelDownloadMinimumBytes" />
-///         is split across <see cref="HuggingFaceOptions.DownloadConnections" /> simultaneous <c>Range</c> streams that
-///         all write into the SAME pre-sized <c>.part</c> at their own offsets, because Hugging Face's CDN is
-///         per-connection throughput limited and a 30 GB weight file over one socket leaves most of the link idle. Every
-///         reliability property of the single-stream path is kept per chunk (read-idle deadline, transient
-///         classification, cancellation) and resume is per range via a sidecar of byte cursors. The mode is entered only
-///         after a one-byte probe proves the origin actually honours <c>Range</c>; anything else — an unknown size, a
-///         length disagreement, a <c>200</c> — falls back to the single stream automatically.
-///     </para>
+///     pre-download disk guard, streams to a <c>.part</c>, resumes via <c>Range</c>, verifies sha256, and atomically
+///     renames <c>.part</c> → final.
 /// </summary>
 /// <remarks>
-///     Security: the HF token is a secret. It is attached only as an <c>Authorization: Bearer</c> header at request time
-///     and is never logged, never placed in an exception/message, and never written to disk by this client.
+///     The sha256 is verified against the LFS OID when the resolve endpoint exposes it, and the optional <c>Bearer</c> token is set for
+///     gated repos. Security: that HF token is a secret, attached only as an <c>Authorization: Bearer</c> header at request time and
+///     never logged, never placed in an exception or message, never written to disk here. <b>Parallel range mode:</b> a file of at least
+///     <see cref="HuggingFaceOptions.ParallelDownloadMinimumBytes" /> is split across
+///     <see cref="HuggingFaceOptions.DownloadConnections" /> <c>Range</c> streams — see <see cref="DownloadRangesAsync" />.
 /// </remarks>
 internal sealed class HfDownloadClient
 {
-    // The file sha256 is surfaced ONLY via the X-Linked-Etag on Hugging Face's resolve response. The plain ETag is NOT a
-    // trustworthy sha256: for Xet-backed repos (now HF's default storage) the post-redirect CDN ETag is a content-defined
-    // chunking hash that is also 64-hex, so trusting it would guarantee a false HashMismatch. We therefore read
-    // X-Linked-Etag from the pre-redirect (302) resolve response via a dedicated no-redirect client and never fall back
-    // to ETag.
+    // The file sha256 is surfaced ONLY via the X-Linked-Etag on Hugging Face's resolve response; the plain ETag is NOT a trustworthy sha256, because for Xet-backed repos (HF's default storage) the
+    // post-redirect CDN ETag is a content-defined chunking hash that is 64-hex, so trusting it guarantees a false HashMismatch. Read from the pre-redirect (302) via a no-redirect client, never ETag.
     private const string LinkedEtagHeader = "X-Linked-Etag";
     private const string RepoCommitHeader = "X-Repo-Commit";
     private const int CopyBufferSize = 128 * 1024;
@@ -51,14 +40,12 @@ internal sealed class HfDownloadClient
     // most this much re-downloading, large enough that the sidecar rewrite is noise next to the bytes moved.
     private const long ResumeCursorFlushBytes = 8L * 1024 * 1024;
 
-    // Resume cursors — and the commit that wrote them — kept beside the .part by BOTH download paths. The ".part" tail
-    // is deliberate: it makes the file match the "*.part" glob that GgufAcquisitionArtifactStartupReaper already
-    // sweeps, so an abandoned download leaves nothing the existing startup cleanup misses.
+    // Resume cursors — and the commit that wrote them — kept beside the .part by BOTH download paths. The ".part" tail is deliberate: it makes
+    // the file match the "*.part" glob GgufAcquisitionArtifactStartupReaper sweeps, so an abandoned download leaves nothing the cleanup misses.
     internal const string RangeSidecarSuffix = ".ranges.part";
 
-    // The in-progress file this client writes beside every destination. Internal because a caller that decides whether
-    // to reuse an already-published destination has to be able to recognise the orphan left beside it, and a second
-    // copy of the literal in another file is exactly the drift that would leave those bytes behind forever.
+    // The in-progress file this client writes beside every destination. Internal because a caller deciding whether to reuse an already-published
+    // destination must recognise the orphan beside it, and a second copy of the literal elsewhere would leave those bytes behind forever.
     internal const string PartSuffix = ".part";
     private readonly IHfDownloadMetrics _downloadMetrics;
     private readonly IFreeSpaceProbe _freeSpaceProbe;
@@ -96,12 +83,14 @@ internal sealed class HfDownloadClient
     /// <summary>
     ///     Downloads <paramref name="fileName" /> from <paramref name="repoId" />@<paramref name="revision" /> to
     ///     <paramref name="destinationPath" />, resuming any existing <c>.part</c>, verifying the sha256 when the LFS OID
-    ///     is exposed, and atomically renaming on success. Returns the resolved commit revision and verified sha256
-    ///     (null when the content could not be verified). <paramref name="expectedSha256" /> is a caller-supplied
-    ///     discovery digest (HF API <c>lfs.sha256</c>): it is used to integrity-check the stream ONLY as a fallback when
-    ///     the resolve endpoint did not expose the LFS OID, so the returned sha256 always reflects content that was
-    ///     actually verified — never an unverified digest echoed back.
+    ///     is exposed, and atomically renaming on success.
     /// </summary>
+    /// <remarks>
+    ///     Returns the resolved commit revision and verified sha256 (null when the content could not be verified).
+    ///     <paramref name="expectedSha256" /> is a caller-supplied discovery digest (HF API <c>lfs.sha256</c>): it
+    ///     integrity-checks the stream ONLY as a fallback when the resolve endpoint did not expose the LFS OID, so the
+    ///     returned sha256 always reflects content that was actually verified — never an unverified digest echoed back.
+    /// </remarks>
     public async Task<HfDownloadResult> DownloadAsync(string repoId,
         string fileName,
         string revision,
@@ -130,9 +119,8 @@ internal sealed class HfDownloadClient
 
         var requestUri = BuildResolveUri(repoId, revision, fileName);
 
-        // Probe the resolve endpoint ONCE (no-redirect) to capture the true file sha256 from X-Linked-Etag before the
-        // CDN redirect hides it. Best-effort: a probe failure leaves expectedSha null (unverified) rather than blocking
-        // the download — the byte GET below still classifies real HTTP failures.
+        // Probe the resolve endpoint ONCE (no-redirect) to capture the true file sha256 from X-Linked-Etag before the CDN redirect hides it.
+        // Best-effort: a probe failure leaves expectedSha null (unverified) rather than blocking — the byte GET below still classifies failures.
         var expectedSha = await ResolveLinkedShaAsync(requestUri, ct).ConfigureAwait(false);
 
         // The caller's discovery digest is the last-resort verification source when the resolve endpoint exposes no OID.
@@ -191,11 +179,8 @@ internal sealed class HfDownloadClient
             }
         }
 
-        // Single stream: either the file was not eligible for parallel mode or the origin turned out not to honour
-        // Range. Only bytes a RECORDED commit vouches for may be resumed — appending to a prefix a different commit
-        // wrote splices two versions of the file into one that never existed upstream, and there is usually no sha256
-        // to catch it. A .part with no record (one written before this client recorded revisions, or one whose ref has
-        // since moved) is refetched from byte 0 instead: a bounded one-time cost, paid once per abandoned file.
+        // Single stream: not eligible for parallel mode, or the origin does not honour Range. Only bytes a RECORDED commit vouches for may be resumed — appending to a prefix a different commit wrote
+        // splices two versions into a file that never existed upstream, usually with no sha256 to catch it. A .part with no record, or whose ref moved, refetches from byte 0.
         var resume = await ReadSingleStreamResumeAsync(partPath, expectedSizeBytes, ct).ConfigureAwait(false);
         var existingPartBytes = resume?.Bytes ?? 0L;
         // Pin to the recorded commit where it looks like one, exactly as the parallel path does, so the resumed bytes
@@ -213,9 +198,8 @@ internal sealed class HfDownloadClient
 
         using (response)
         {
-            // 416 means the .part is already at/over the real length (a prior full-but-unrenamed download, or the
-            // upstream file shrank). Re-sending the same Range would 416 forever, so drop the stale .part and surface a
-            // transient failure: the next retry sees no .part, sends no Range, and restarts cleanly from byte 0.
+            // 416 means the .part is already at/over the real length (a prior full-but-unrenamed download, or the upstream file shrank). Re-sending
+            // the same Range would 416 forever, so drop the stale .part and surface a transient failure: the next retry restarts from byte 0.
             if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
             {
                 DiscardPartial(partPath);
@@ -236,16 +220,13 @@ internal sealed class HfDownloadClient
 
             // If the server ignored our Range and returned 200, restart the .part from scratch (truncate-append below).
             var appending = existingPartBytes > 0 && response.StatusCode == HttpStatusCode.PartialContent;
-            // Prefer the sha256 captured from the pre-redirect resolve probe; fall back to a directly-served
-            // X-Linked-Etag (e.g. a non-redirecting inline response), then to the caller's discovery digest. Never the
-            // plain ETag (see ReadLinkedSha256).
+            // Prefer the sha256 captured from the pre-redirect resolve probe; fall back to a directly-served X-Linked-Etag (e.g. a
+            // non-redirecting inline response), then to the caller's discovery digest. Never the plain ETag (see ReadLinkedSha256).
             expectedSha ??= ReadLinkedSha256(response) ?? fallbackSha;
             var resolvedRevision = ReadRepoCommit(response) ?? string.Empty;
 
-            // Backstop for a pin that could not be applied (or did not hold): the body about to be appended belongs to
-            // a different version of the file than the prefix on disk. An origin that names no commit at all compares
-            // equal to a record that named none either — the same residual the parallel path accepts, because there is
-            // nothing left to detect a move with.
+            // Backstop for a pin that could not be applied (or did not hold): the body about to be appended belongs to a different version of the file than the prefix on disk. An origin naming no
+            // commit compares equal to a record that named none — the residual the parallel path accepts too, because nothing is left to detect a move with.
             if (appending && !string.Equals(RangeResumeState.Stamp(resolvedRevision), resume!.Revision, StringComparison.Ordinal))
             {
                 DiscardPartial(partPath);
@@ -277,9 +258,11 @@ internal sealed class HfDownloadClient
 
     /// <summary>
     ///     Verifies the completed <c>.part</c> and publishes it: the sha256 check (when any digest is known), the
-    ///     case-insensitive destination guard, and the atomic rename that makes the bytes a real model file. Shared by
-    ///     the single-stream and parallel-range paths so integrity and commit semantics cannot drift apart.
+    ///     case-insensitive destination guard, and the atomic rename that makes the bytes a real model file.
     /// </summary>
+    /// <remarks>
+    ///     Shared by the single-stream and parallel-range paths so integrity and commit semantics cannot drift apart.
+    /// </remarks>
     private static async Task<HfDownloadResult> CommitAsync(string partPath,
         string destinationPath,
         string modelName,
@@ -324,11 +307,13 @@ internal sealed class HfDownloadClient
     }
 
     /// <summary>
-    ///     How many range streams this file gets. Clamped at the point of use — the same convention the other
-    ///     concurrency knob in these options follows — so an out-of-range configured value degrades instead of throwing
-    ///     mid-download. Returns 1 (the untouched single-stream path) whenever the size is unknown, below the
-    ///     worth-it threshold, or the operator asked for one connection.
+    ///     How many range streams this file gets; 1 — the untouched single-stream path — whenever the size is unknown,
+    ///     below the worth-it threshold, or the operator asked for one connection.
     /// </summary>
+    /// <remarks>
+    ///     Clamped at the point of use — the same convention the other concurrency knob in these options follows — so an
+    ///     out-of-range configured value degrades instead of throwing mid-download.
+    /// </remarks>
     private int ResolveConnections(long expectedSizeBytes)
     {
         var connections = Math.Clamp(_options.DownloadConnections, min: 1, MaxDownloadConnections);
@@ -339,15 +324,18 @@ internal sealed class HfDownloadClient
 
     /// <summary>
     ///     Fetches the whole file over <paramref name="connections" /> simultaneous <c>Range</c> streams into one
-    ///     pre-sized <c>.part</c>, resuming each range from its recorded cursor. Returns the probe result (revision +
-    ///     any LFS OID) on success, or <see langword="null" /> when the origin does not honour <c>Range</c> — in which
-    ///     case any sparse <c>.part</c> has been discarded and the caller must use the single-stream path.
-    ///     <para>
-    ///         Every chunk is fetched from the COMMIT the probe resolved, not from the caller's ref: <c>main</c> is a
-    ///         mutable branch, and a branch that advances mid-download would otherwise hand different chunks bytes from
-    ///         different commits — a file that never existed upstream, committed as genuine whenever no sha256 is known.
-    ///     </para>
+    ///     pre-sized <c>.part</c>, resuming each range from its recorded cursor.
     /// </summary>
+    /// <returns>
+    ///     The probe result (revision + any LFS OID), or <see langword="null" /> when the origin does not honour <c>Range</c>.
+    /// </returns>
+    /// <remarks>
+    ///     All streams write into the one pre-sized file at their own offsets, because Hugging Face's CDN is per-connection throughput
+    ///     limited and a 30 GB weight file over one socket leaves most of the link idle. Each chunk keeps the single-stream path's
+    ///     reliability properties (read-idle deadline, transient classification, cancellation). On a <see langword="null" /> result any
+    ///     sparse <c>.part</c> has been discarded and the caller must use the single-stream path. Every chunk is fetched from the COMMIT
+    ///     the probe resolved, never the caller's mutable ref.
+    /// </remarks>
     private async Task<RangeProbe?> DownloadRangesAsync(Uri requestUri,
         Func<string, Uri> resolveAtCommit,
         string modelName,
@@ -376,9 +364,8 @@ internal sealed class HfDownloadClient
                           .CreateAsync(partPath + RangeSidecarSuffix, total, chunkCount, chunkSize, GetExistingPartLength(partPath), probe.Revision, ct)
                           .ConfigureAwait(false);
 
-        // ONE handle shared by every chunk. RandomAccess writes are positional and keep no user-mode buffer, so
-        // non-overlapping chunks never contend and a cursor written after a completed write can never claim more bytes
-        // than the file actually holds.
+        // ONE handle shared by every chunk. RandomAccess writes are positional and keep no user-mode buffer, so non-overlapping chunks never
+        // contend and a cursor written after a completed write can never claim more bytes than the file actually holds.
         using (var handle = File.OpenHandle(partPath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, FileOptions.Asynchronous))
         {
             RandomAccess.SetLength(handle, total);
@@ -409,11 +396,14 @@ internal sealed class HfDownloadClient
 
     /// <summary>
     ///     Asks for a single byte to learn whether the origin that will actually serve the payload honours <c>Range</c>
-    ///     and what it believes the file's length is. Hugging Face redirects to a CDN, so only a real ranged <c>GET</c>
-    ///     can answer this — the no-redirect resolve <c>HEAD</c> describes a different server. Returns
-    ///     <see langword="null" /> when ranges are ignored or the advertised length disagrees with the size the disk
-    ///     guard was sized against; genuine HTTP failures still throw through <see cref="ClassifyStatus" />.
+    ///     and what it believes the file's length is.
     /// </summary>
+    /// <remarks>
+    ///     Hugging Face redirects to a CDN, so only a real ranged <c>GET</c> can answer this — the no-redirect resolve
+    ///     <c>HEAD</c> describes a different server. Parallel mode is entered only once this says yes; it returns
+    ///     <see langword="null" /> when ranges are ignored or the advertised length disagrees with the size the disk
+    ///     guard was sized against, and genuine HTTP failures still throw through <see cref="ClassifyStatus" />.
+    /// </remarks>
     private async Task<RangeProbe?> ProbeRangeSupportAsync(Uri requestUri, long expectedSizeBytes, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
@@ -456,9 +446,8 @@ internal sealed class HfDownloadClient
             using var response = await SendAsync(request, token).ConfigureAwait(false);
             if (response.StatusCode != HttpStatusCode.PartialContent)
             {
-                // Throws for the real HTTP failures. A 2xx that is not 206 means the origin stopped honouring Range
-                // after the probe said it would; streaming a whole-file body into a chunk offset would silently corrupt
-                // the .part, so treat it as transient and let the retry re-probe.
+                // Throws for the real HTTP failures. A 2xx that is not 206 means the origin stopped honouring Range after the probe said it
+                // would; streaming a whole-file body into a chunk offset would silently corrupt the .part, so treat it as transient and re-probe.
                 ClassifyStatus(response.StatusCode);
                 throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
                     "The model download server stopped serving byte ranges. Please try again.");
@@ -488,12 +477,15 @@ internal sealed class HfDownloadClient
 
     /// <summary>
     ///     Refuses a <c>206</c> that does not describe EXACTLY the bytes that were asked for, at the commit the probe
-    ///     resolved. The body is about to be written at the offset we requested, not at the offset the response claims,
-    ///     so a shifted range, a different file length, or bytes from a commit the branch has since moved to would be
-    ///     assembled into a file that never existed upstream — and committed as genuine whenever no sha256 is known.
-    ///     Checked BEFORE the copy, so a rejected response leaves the <c>.part</c> exactly as it was and the transient
-    ///     classification lets the retry re-probe, re-pin, and resume from the recorded cursors.
+    ///     resolved.
     /// </summary>
+    /// <remarks>
+    ///     The body is about to be written at the offset we requested, not at the offset the response claims, so a shifted range, a
+    ///     different file length, or bytes from a commit the branch has since moved to would be assembled into a file that never existed
+    ///     upstream — and committed as genuine whenever no sha256 is known. Checked BEFORE the copy, so a rejected response leaves the
+    ///     <c>.part</c> exactly as it was and the transient classification lets the retry re-probe, re-pin, and resume from the recorded
+    ///     cursors.
+    /// </remarks>
     private static void EnsureChunkDescribesRequest(HttpResponseMessage response, ChunkContext context, long position, long end)
     {
         var range = response.Content.Headers.ContentRange;
@@ -595,11 +587,13 @@ internal sealed class HfDownloadClient
     }
 
     /// <summary>
-    ///     Drops a <c>.part</c> left by an earlier parallel attempt. It is pre-sized and sparse, so its LENGTH is not a
-    ///     byte count: letting the single-stream path resume from it would skip everything the holes cover. A partial
-    ///     whose record says one contiguous run from byte 0 is kept — that is the single-stream path's own file, and it
-    ///     is exactly what the fallback below is about to resume.
+    ///     Drops a <c>.part</c> left by an earlier parallel attempt.
     /// </summary>
+    /// <remarks>
+    ///     It is pre-sized and sparse, so its LENGTH is not a byte count: letting the single-stream path resume from it
+    ///     would skip everything the holes cover. A partial whose record says one contiguous run from byte 0 is kept —
+    ///     that is the single-stream path's own file, and exactly what the fallback below is about to resume.
+    /// </remarks>
     private static async Task DiscardRangedPartialAsync(string partPath, long expectedSizeBytes, CancellationToken ct)
     {
         if (!File.Exists(partPath + RangeSidecarSuffix)
@@ -619,11 +613,13 @@ internal sealed class HfDownloadClient
     }
 
     /// <summary>
-    ///     How much of the <c>.part</c> the single-stream path may resume, and which commit wrote it. Non-null only for
-    ///     a record describing ONE contiguous run whose length still matches what is actually on disk; anything else —
-    ///     no partial, no record, a torn one, a record for a different file length, or a pre-sized parallel partial —
-    ///     is <see langword="null" />, meaning refetch from byte 0.
+    ///     How much of the <c>.part</c> the single-stream path may resume, and which commit wrote it.
     /// </summary>
+    /// <remarks>
+    ///     Non-null only for a record describing ONE contiguous run whose length still matches what is actually on disk;
+    ///     anything else — no partial, no record, a torn one, a record for a different file length, or a pre-sized
+    ///     parallel partial — is <see langword="null" />, meaning refetch from byte 0.
+    /// </remarks>
     private static async Task<SingleStreamResume?> ReadSingleStreamResumeAsync(string partPath, long expectedSizeBytes, CancellationToken ct)
     {
         var partBytes = GetExistingPartLength(partPath);
@@ -640,11 +636,14 @@ internal sealed class HfDownloadClient
     }
 
     /// <summary>
-    ///     Bytes genuinely present in the partial file, for the pre-download disk guard. A parallel <c>.part</c> is
-    ///     pre-sized to the full length, so only its resume cursors say how much was actually fetched. (The guard runs
-    ///     before any commit is known, so a partial that later turns out to be from a moved ref is counted here and
-    ///     refetched afterwards — it over-states free space by at most the partial, which the disk margin absorbs.)
+    ///     Bytes genuinely present in the partial file, for the pre-download disk guard.
     /// </summary>
+    /// <remarks>
+    ///     A parallel <c>.part</c> is pre-sized to the full length, so only its resume cursors say how much was actually
+    ///     fetched. The guard runs before any commit is known, so a partial that later turns out to be from a moved ref
+    ///     is counted here and refetched afterwards — it over-states free space by at most the partial, which the disk
+    ///     margin absorbs.
+    /// </remarks>
     private static async Task<long> GetCompletedPartBytesAsync(string partPath, CancellationToken ct)
     {
         if (!File.Exists(partPath))
@@ -755,14 +754,15 @@ internal sealed class HfDownloadClient
     }
 
     /// <summary>
-    ///     Reads one buffer's worth of body under a read-idle deadline. <c>ResponseHeadersRead</c> means the HttpClient
-    ///     timeout covered only the headers, so without this a CDN that stalls mid-body hangs the copy forever. ONE
-    ///     linked CTS is re-armed per read (<c>CancelAfter</c> reschedules its timer) — cheap on the happy path, where it
-    ///     never fires; a genuine stall cancels the read, which becomes a TRANSIENT network failure so the caller's
-    ///     retry/resume path (<c>MaxDownloadRetries</c> + <c>Range</c> resume) re-attempts from the recorded offset. A
-    ///     non-positive timeout disables the bound. A rare spurious fire at the idle boundary is self-healing: it costs
-    ///     one resume.
+    ///     Reads one buffer's worth of body under a read-idle deadline.
     /// </summary>
+    /// <remarks>
+    ///     <c>ResponseHeadersRead</c> means the HttpClient timeout covered only the headers, so without this a CDN that stalls mid-body
+    ///     hangs the copy forever. ONE linked CTS is re-armed per read (<c>CancelAfter</c> reschedules its timer) — cheap on the happy
+    ///     path, where it never fires; a genuine stall cancels the read, which becomes a TRANSIENT network failure so the caller's
+    ///     retry/resume path (<c>MaxDownloadRetries</c> + <c>Range</c> resume) re-attempts from the recorded offset. A non-positive
+    ///     timeout disables the bound. A rare spurious fire at the idle boundary is self-healing: it costs one resume.
+    /// </remarks>
     private static async ValueTask<int> ReadBoundedAsync(Stream source,
         Memory<byte> buffer,
         CancellationTokenSource? idleCts,
@@ -877,12 +877,15 @@ internal sealed class HfDownloadClient
     }
 
     /// <summary>
-    ///     Issues a no-redirect <c>HEAD</c> to the resolve URI and returns the file sha256 from <c>X-Linked-Etag</c> on the
-    ///     <c>302</c> (or a non-redirecting <c>2xx</c>). Best-effort: any failure — network, an unexpected status, a missing
-    ///     or non-sha header — yields <see langword="null" /> so the caller downloads revision-pinned-but-unverified rather
-    ///     than failing; real HTTP errors are still surfaced by the byte GET. The HF token rides this same-origin probe for
-    ///     gated repos but never reaches the CDN (no redirect is followed).
+    ///     Issues a no-redirect <c>HEAD</c> to the resolve URI and returns the file sha256 from <c>X-Linked-Etag</c> on
+    ///     the <c>302</c> (or a non-redirecting <c>2xx</c>).
     /// </summary>
+    /// <remarks>
+    ///     Best-effort: any failure — network, an unexpected status, a missing or non-sha header — yields
+    ///     <see langword="null" /> so the caller downloads revision-pinned-but-unverified rather than failing; real HTTP
+    ///     errors are still surfaced by the byte GET. The HF token rides this same-origin probe for gated repos but
+    ///     never reaches the CDN (no redirect is followed).
+    /// </remarks>
     private async Task<string?> ResolveLinkedShaAsync(Uri requestUri, CancellationToken ct)
     {
         try
@@ -1029,22 +1032,14 @@ internal sealed class HfDownloadClient
 
     /// <summary>
     ///     Per-chunk resume cursors plus the aggregate byte count for one parallel download.
-    ///     <para>
-    ///         <b>Resume scheme.</b> The chunk layout is derived purely from (total length, connection count), so the
-    ///         only state worth keeping is how many bytes each chunk has fetched, and which version of the file they
-    ///         came from. The single-stream path keeps the SAME record with a single cursor — one contiguous run from
-    ///         byte 0 — so both paths answer "which commit wrote these bytes" the same way. That lives in a one-line
-    ///         sidecar next to the <c>.part</c>:
-    ///         <c>"2 &lt;total&gt; &lt;revision&gt; &lt;cursor0&gt; &lt;cursor1&gt; …"</c>. A cursor is
-    ///         written only AFTER the corresponding positional write returned, and <see cref="RandomAccess" /> keeps no
-    ///         user-mode buffer, so a cursor can never claim more bytes than the file holds. The line is rewritten in
-    ///         place rather than atomically: a crash mid-write leaves an unparseable line, which
-    ///         <see cref="RangeResumeState.TryReadRecordAsync" /> discards — the partial is lost, but a torn cursor is never trusted. A
-    ///         mismatched total, chunk count, or revision is discarded the same way, so changing
-    ///         <see cref="HuggingFaceOptions.DownloadConnections" /> mid-download is safe and a mutable ref that moved
-    ///         between attempts refetches rather than splicing two commits together.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The chunk layout is derived purely from (total length, connection count), so the only state worth keeping is each chunk's byte
+    ///     count and which version of the file they came from; the single-stream path keeps the SAME record with a single cursor — one
+    ///     contiguous run from byte 0 — so both paths answer "which commit wrote these bytes" the same way. It lives in a one-line sidecar
+    ///     next to the <c>.part</c>: <c>"2 &lt;total&gt; &lt;revision&gt; &lt;cursor0&gt; &lt;cursor1&gt; …"</c>. A cursor is written only
+    ///     AFTER its positional write returned, and <see cref="RandomAccess" /> keeps no user-mode buffer, so it can never over-claim.
+    /// </remarks>
     private sealed class RangeResumeState
     {
         // Bumped when the line's shape changed (a revision field was added). An older line fails the version check and
@@ -1089,10 +1084,12 @@ internal sealed class HfDownloadClient
         }
 
         /// <summary>
-        ///     The single-stream path's state: one cursor, because that path writes one contiguous run from byte 0. It
-        ///     shares the sidecar rather than inventing a second record, so the parallel path can read what wrote a
-        ///     prefix it is thinking of adopting — and so both paths clean up after themselves the same way.
+        ///     The single-stream path's state: one cursor, because that path writes one contiguous run from byte 0.
         /// </summary>
+        /// <remarks>
+        ///     It shares the sidecar rather than inventing a second record, so the parallel path can read what wrote a
+        ///     prefix it is thinking of adopting — and so both paths clean up after themselves the same way.
+        /// </remarks>
         public static RangeResumeState CreateSingle(string sidecarPath, long totalBytes, string revision, long cursor)
         {
             return new RangeResumeState(sidecarPath, totalBytes, Stamp(revision), [cursor]);
@@ -1105,11 +1102,15 @@ internal sealed class HfDownloadClient
         }
 
         /// <summary>
-        ///     Decides how much of the <c>.part</c> the next attempt may keep. Nothing on disk distinguishes a sparse
-        ///     pre-sized parallel partial from a contiguous single-stream one, and nothing distinguishes bytes from this
-        ///     commit from bytes from the one the ref moved off — so the record beside the <c>.part</c> is the ONLY
-        ///     thing that may grant a head start, and only when it still describes the file that is actually there.
+        ///     Decides how much of the <c>.part</c> the next attempt may keep.
         /// </summary>
+        /// <remarks>
+        ///     Nothing on disk distinguishes a sparse pre-sized parallel partial from a contiguous single-stream one, and nothing
+        ///     distinguishes bytes from this commit from bytes from the one the ref moved off — so the record beside the <c>.part</c> is
+        ///     the ONLY thing that may grant a head start, and only when it still describes the file that is actually there. A mismatched
+        ///     total, chunk count or revision is discarded, so changing <see cref="HuggingFaceOptions.DownloadConnections" /> mid-download
+        ///     is safe and a ref that moved between attempts refetches rather than splicing two commits together.
+        /// </remarks>
         private static async Task<long[]> ResolveCursorsAsync(string sidecarPath,
             long totalBytes,
             int chunkCount,
@@ -1118,9 +1119,8 @@ internal sealed class HfDownloadClient
             string revision,
             CancellationToken ct)
         {
-            // No record, a torn one, a record for a different file length, or one written by a commit this ref has
-            // since moved off: refetch every range. That includes a .part from before this client recorded revisions —
-            // deliberately, since there is no way to learn what wrote it, and the cost is one re-download.
+            // No record, a torn one (the line is rewritten in place, not atomically, so a crash mid-write leaves an unparseable line TryReadRecordAsync discards — the partial is lost, a torn cursor
+            // never trusted), a record for a different file length, or one written by a commit this ref moved off: refetch every range, including a pre-revision .part.
             if (await TryReadRecordAsync(sidecarPath, ct).ConfigureAwait(false) is not { } record
                 || record.Total != totalBytes
                 || !string.Equals(record.Revision, revision, StringComparison.Ordinal))
@@ -1162,11 +1162,14 @@ internal sealed class HfDownloadClient
         }
 
         /// <summary>
-        ///     Adds <paramref name="count" /> to the aggregate and publishes it. The increment and the delivery happen
-        ///     under one lock ON PURPOSE: chunks advance concurrently, and merely making the running total atomic would
-        ///     still let a smaller figure reach the consumer after a larger one. Serialising both is what keeps reported
-        ///     progress monotonic. Contention is a lock per buffer read, which is nothing next to the bytes moved.
+        ///     Adds <paramref name="count" /> to the aggregate and publishes it.
         /// </summary>
+        /// <remarks>
+        ///     The increment and the delivery happen under one lock ON PURPOSE: chunks advance concurrently, and merely
+        ///     making the running total atomic would still let a smaller figure reach the consumer after a larger one.
+        ///     Serialising both is what keeps reported progress monotonic. Contention is a lock per buffer read, which
+        ///     is nothing next to the bytes moved.
+        /// </remarks>
         public void Advance(int count, string modelName, IProgress<PullProgress>? progress)
         {
             lock (_gate)

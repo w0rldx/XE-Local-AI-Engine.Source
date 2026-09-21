@@ -1,41 +1,39 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
-///     Process-wide serialization gate for GPU-backed model loads. Every supervisor that spawns a GPU-backed
-///     runtime process — the llama-server supervisor and the stable-diffusion.cpp image supervisor — acquires this gate
-///     around the spawn-through-readiness window, so at most ONE GPU load is choosing its placement at a time. Two
-///     concurrent <c>--fit</c> loads therefore never read the same free-VRAM snapshot and oversubscribe the device
-///     (the last loader spilling weights to system RAM or crashing). CPU-only loads bypass the gate entirely — they do
-///     not contend for VRAM. Serialization gives the next waiter a fresh free-VRAM read for free once the current load
-///     is resident, which IS the re-evaluation: no byte-level accounting is invented here beyond the existing ledger.
+///     Process-wide serialization gate for GPU-backed model loads: the llama-server and stable-diffusion.cpp image
+///     supervisors hold it across the spawn-through-readiness window, so at most ONE GPU load chooses placement at a
+///     time.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The gate is a single shared singleton across supervisors, so an image load and an LLM load serialize against
-///         each other. Implementations must be cancellation-safe: a waiter whose token is cancelled abandons the wait
-///         cleanly, and a holder always releases via the returned ticket's disposal (the caller wraps it in a
-///         <c>using</c>). A bounded max-wait means a waiter never blocks a chat turn forever behind a wedged load — on
-///         expiry a <see cref="GpuModelLoadAdmissionTimeoutException" /> is surfaced rather than hanging (the readiness
-///         timeouts that bound the holder already make this a rare backstop).
-///     </para>
+///     Two concurrent <c>--fit</c> loads therefore never read the same free-VRAM snapshot and oversubscribe the device
+///     (the last loader spilling weights to system RAM or crashing). Serialization hands the next waiter a fresh
+///     free-VRAM read once the current load is resident, which IS the re-evaluation: no byte-level accounting is
+///     invented beyond the existing ledger. CPU-only loads bypass the gate entirely — they do not contend for VRAM.
+///     One shared singleton serves every supervisor, so an image load and an LLM load serialize against each other.
 /// </remarks>
 public interface IGpuModelLoadAdmission
 {
     /// <summary>
     ///     Waits (bounded by the implementation's configured max-wait) for exclusive GPU-load admission and returns a
-    ///     ticket that MUST be disposed once the load has become ready or failed — disposal releases the gate for the
-    ///     next waiter. Honors <paramref name="ct" /> (a cancelled caller abandons the wait). Throws
-    ///     <see cref="GpuModelLoadAdmissionTimeoutException" /> when the bounded wait elapses without admission.
+    ///     ticket whose disposal releases the gate for the next waiter.
     /// </summary>
+    /// <remarks>
+    ///     The caller wraps the ticket in a <c>using</c> and disposes it once the load has become ready or failed.
+    ///     Implementations must be cancellation-safe: a waiter whose <paramref name="ct" /> is cancelled abandons the
+    ///     wait cleanly. On expiry of the bounded wait a <see cref="GpuModelLoadAdmissionTimeoutException" /> is thrown
+    ///     rather than blocking a chat turn forever behind a wedged load; the readiness timeouts that bound the holder
+    ///     already make that a rare backstop.
+    /// </remarks>
     Task<IDisposable> AcquireAsync(CancellationToken ct);
 }
 
-/// <summary>
-///     No-op <see cref="IGpuModelLoadAdmission" /> floor: admits immediately with no serialization. Wired via
-///     <c>TryAddSingleton</c> so a provider-only host (or a test) resolves a gate even when the application layer has not
-///     registered the real, metric-emitting serializer. The real gate (registered by the composition root via a plain
-///     <c>AddSingleton</c>) wins over this floor.
-/// </summary>
+/// <summary>No-op <see cref="IGpuModelLoadAdmission" /> floor: admits immediately with no serialization.</summary>
+/// <remarks>
+///     Wired via <c>TryAddSingleton</c> so a provider-only host (or a test) resolves a gate even when the application
+///     layer has not registered the real, metric-emitting serializer. That real gate, registered by the composition
+///     root via a plain <c>AddSingleton</c>, wins over this floor.
+/// </remarks>
 public sealed class NoOpGpuModelLoadAdmission : IGpuModelLoadAdmission
 {
     /// <inheritdoc />
@@ -53,11 +51,11 @@ public sealed class NoOpGpuModelLoadAdmission : IGpuModelLoadAdmission
     }
 }
 
-/// <summary>
-///     Raised when a GPU-load admission wait exceeds the configured max-wait. Surfaced (rather than hanging) so a chat
-///     turn behind a wedged model load fails with a clear, user-safe message instead of blocking forever. The message is
-///     sanitized — no paths, model identities, or internal detail.
-/// </summary>
+/// <summary>Raised when a GPU-load admission wait exceeds the configured max-wait.</summary>
+/// <remarks>
+///     Surfaced rather than hanging, so a chat turn behind a wedged model load fails with a clear, user-safe message
+///     instead of blocking forever. The message is sanitized — no paths, model identities, or internal detail.
+/// </remarks>
 public sealed class GpuModelLoadAdmissionTimeoutException : Exception
 {
     private const string DefaultMessage =

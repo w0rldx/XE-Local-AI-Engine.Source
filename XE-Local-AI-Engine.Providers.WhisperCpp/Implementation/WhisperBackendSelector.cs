@@ -10,17 +10,11 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 ///     adds no hardware probing of its own to this node.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Rule: NVIDIA on Windows selects <see cref="WhisperBackend.Cuda" />, the only GPU prebuilt upstream ships.
-///         Everything else selects <see cref="WhisperBackend.Cpu" /> — including NVIDIA on Linux, where CUDA comes from
-///         the managed source build or the bring-your-own override rather than from a downloadable asset, and including
-///         AMD and Intel, for which whisper.cpp publishes no accelerated asset at all under this plan's backend set.
-///     </para>
-///     <para>
-///         An active operator override or a validated managed source build short-circuits the probe with its own
-///         backend, which is how a Linux CUDA build stays selected despite the missing prebuilt. Their paths and bytes
-///         are validated by the binary manager, never here.
-///     </para>
+///     Rule: NVIDIA on Windows selects <see cref="WhisperBackend.Cuda" />, the only GPU prebuilt upstream ships, and everything else
+///     selects <see cref="WhisperBackend.Cpu" /> — including NVIDIA on Linux, where CUDA comes from the managed source build or the
+///     bring-your-own override rather than a downloadable asset, and including AMD and Intel, for which whisper.cpp publishes no
+///     accelerated asset at all under this backend set. An operator override or validated managed source build short-circuits the probe
+///     with its own backend, which is how a Linux CUDA build stays selected; their paths and bytes are validated by the binary manager.
 /// </remarks>
 public sealed class WhisperBackendSelector : IWhisperBackendSelector
 {
@@ -55,9 +49,8 @@ public sealed class WhisperBackendSelector : IWhisperBackendSelector
     /// <inheritdoc />
     public async Task<WhisperBackend> SelectBackendAsync(CancellationToken ct)
     {
-        // An operator-supplied binary is served as ITS configured backend and the vendor probe is skipped entirely:
-        // the live host may report a different or absent GPU than the machine the binary was built on. The path is not
-        // validated here — the binary manager is the single path validator.
+        // An operator-supplied binary is served as ITS configured backend and the vendor probe is skipped entirely: the live host may report a different or absent GPU than the machine the binary was
+        // built on. The path is not validated here — the binary manager is the single path validator.
         if (_overrideOptions.IsActive)
         {
             return _overrideOptions.Backend;
@@ -75,9 +68,8 @@ public sealed class WhisperBackendSelector : IWhisperBackendSelector
     /// <summary>Pure selection rule, exposed for direct assertion in tests.</summary>
     internal static WhisperBackend SelectForVendor(GpuVendor vendor, bool isWindows)
     {
-        // The cuBLAS prebuilt exists for Windows x64 only. Linux NVIDIA deliberately lands on CPU here: selecting CUDA
-        // would resolve bytes that upstream does not publish, and the honest CUDA lanes on Linux are the managed
-        // source build and the bring-your-own override, both of which short-circuit above.
+        // The cuBLAS prebuilt exists for Windows x64 only. Linux NVIDIA deliberately lands on CPU here: selecting CUDA would resolve bytes that upstream does not publish, and the honest CUDA lanes on
+        // Linux are the managed source build and the bring-your-own override, both of which short-circuit above.
         return vendor == GpuVendor.Nvidia && isWindows ? WhisperBackend.Cuda : WhisperBackend.Cpu;
     }
 }

@@ -15,15 +15,10 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 ///     <see cref="WhisperTranscriptionRequest" /> and <see cref="WhisperTranscriptionResult" />.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The audio is streamed straight from the caller's handle into the multipart body. Nothing is written to disk
-///         and nothing the caller owns is disposed. The submitted file name is a fixed placeholder rather than the
-///         user's, because the daemon prints the received file name to its log.
-///     </para>
-///     <para>
-///         The request holds a transcription lease for its whole duration, which is what makes an eject, a managed
-///         source build or a source-build remove answer <c>409 runtime-busy</c> while audio is being transcribed.
-///     </para>
+///     The audio is streamed straight from the caller's handle into the multipart body: nothing is written to disk and nothing the
+///     caller owns is disposed. The submitted file name is a fixed placeholder rather than the user's, because the daemon prints the
+///     received file name to its log. The request holds a transcription lease for its whole duration, which is what makes an eject, a
+///     managed source build or a source-build remove answer <c>409 runtime-busy</c> while audio is being transcribed.
 /// </remarks>
 internal sealed class WhisperServerTranscriber : IWhisperTranscriber
 {
@@ -99,9 +94,8 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         WhisperTranscriptionRequest request,
         CancellationToken ct)
     {
-        // The client carries an infinite timeout on purpose — one client serves requests whose right budgets differ by
-        // four orders of magnitude — so every call site owns its own deadline, linked to the caller's token so a
-        // caller cancellation still propagates unchanged.
+        // The client carries an infinite timeout on purpose — one client serves requests whose right budgets differ by four orders of magnitude — so every call site owns its own deadline, linked to
+        // the caller's token so a caller cancellation still propagates unchanged.
         using var inferenceCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         inferenceCts.CancelAfter(_options.InferenceTimeout);
 
@@ -145,11 +139,8 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         try
         {
 #pragma warning disable CA2000 // MultipartFormDataContent takes ownership of every part it is given and disposes them
-            // with itself; the caller disposes the multipart. The catch below covers the only window
-            // in which a part could be orphaned, which is a failure partway through building it.
-            // Wrapped, because MultipartFormDataContent disposes every part it owns and StreamContent disposes the
-            // stream it was given: handing it the caller's handle directly would close a stream this adapter promises
-            // not to touch, and the caller is the one that owns and deletes the temp file behind it.
+            // with itself; the caller disposes the multipart, and the catch below covers the only window in which a part could be orphaned — a failure partway through building it.
+            // StreamContent also disposes the stream it was given, so the caller's handle is wrapped: this adapter never closes a stream the caller owns and deletes the temp file behind.
             var audio = new StreamContent(new NonDisposingStream(request.Audio));
             audio.Headers.ContentType = MediaTypeHeaderValue.Parse(request.ContentType);
             content.Add(audio, "file", SubmittedFileName);
@@ -199,9 +190,12 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
 
     /// <summary>
     ///     The payload's <c>detected_language</c> is whisper's full English NAME for the language ("english"), not a
-    ///     code. The only ISO codes in the response are the keys of the probability map, so the detected code is that
-    ///     map's argmax — and is absent when the caller did not ask for detection.
+    ///     code.
     /// </summary>
+    /// <remarks>
+    ///     The only ISO codes in the response are the keys of the probability map, so the detected code is that map's
+    ///     argmax — and is absent when the caller did not ask for detection.
+    /// </remarks>
     private static string? ResolveDetectedLanguageCode(VerboseJsonResponse payload)
     {
         if (payload.LanguageProbabilities is not { Count: > 0 } probabilities)
@@ -285,9 +279,8 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         public override void Write(byte[] buffer, int offset, int count) =>
             throw new NotSupportedException();
 
-        // Dispose is deliberately NOT overridden. Stream's own teardown knows nothing about the wrapped handle, so
-        // inheriting it is exactly the required behaviour: the multipart content disposes this wrapper and the
-        // caller's stream underneath it is left open, which is what the transcription contract promises.
+        // Dispose is deliberately NOT overridden. Stream's own teardown knows nothing about the wrapped handle, so inheriting it is exactly the required behaviour: the multipart content disposes this
+        // wrapper and the caller's stream underneath it is left open, which is what the transcription contract promises.
     }
 
     /// <summary>The private shape of whisper-server's verbose JSON. Nothing of this type escapes the project.</summary>

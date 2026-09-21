@@ -9,32 +9,27 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     public const int MaximumCharsPerToken = 8;
 
     /// <summary>
-    ///     Fraction of a model's context window the budgeters measure against, absorbing the char-heuristic's optimism.
-    ///     <para>
-    ///         <see cref="DefaultCharsPerToken" /> is 4, but a Qwen3-class tokenizer runs nearer 3.4–3.6 chars/token on
-    ///         English markdown and fenced JSON, so an estimate can sit ~12% BELOW the truth. Measuring against the full
-    ///         window therefore lets an over-window round through as "fitting", and the provider rejects it outright
-    ///         instead of the budgeters trimming it — observed live twice on 2026-08-24 (72,343 and 71,172 real tokens
-    ///         against a 65,536 window). Budgeting against 85% of the window turns that class of failure back into a
-    ///         trim. The divisors here are integers, so lowering the divisor itself (4 → 3) would over-correct by 25%;
-    ///         this is the finer-grained knob until a rational divisor exists.
-    ///     </para>
-    ///     <para>
-    ///         It is deliberately kept alongside the observed-ratio correction below rather than replaced by it: the
-    ///         factor is a flat, always-on floor that protects the very first round of a never-before-seen model, which
-    ///         is precisely the round no observation can have taught anything about yet.
-    ///     </para>
+    ///     Fraction of a model's context window the budgeters measure against, absorbing the optimism of a chars/4
+    ///     heuristic (<see cref="DefaultCharsPerToken" /> is 4 while a Qwen3-class tokenizer runs nearer 3.4–3.6).
     /// </summary>
+    /// <remarks>
+    ///     On English markdown and fenced JSON an estimate can sit ~12% BELOW the truth, and measuring against the full window lets an
+    ///     over-window round pass as "fitting", so the provider rejects it instead of the budgeters trimming it — measured live at
+    ///     72,343 and 71,172 real tokens against a 65,536 window; 85% turns that back into a trim. The finer-grained knob while divisors
+    ///     stay integers (4 → 3 over-corrects by 25%). Kept alongside the observed-ratio correction, not replaced by it: a flat,
+    ///     always-on floor protects the first round of a never-seen model, the one round no observation can have taught.
+    /// </remarks>
     public const double EstimateSafetyFactor = 0.85;
 
     /// <summary>The correction of a model nothing has been observed for: multiply/divide by one, i.e. do nothing.</summary>
     public const double NeutralObservedCorrection = 1.0;
 
-    /// <summary>
-    ///     Bounds on the observed correction. A ratio outside them is a measurement artefact rather than a tokenizer
-    ///     property (a cached prompt reported oddly, a provider counting a whole conversation against one round), and
-    ///     letting one through would move the window by a factor no tokenizer difference justifies.
-    /// </summary>
+    /// <summary>Bounds on the observed correction.</summary>
+    /// <remarks>
+    ///     A ratio outside them is a measurement artefact rather than a tokenizer property (a cached prompt reported
+    ///     oddly, a provider counting a whole conversation against one round), and letting one through would move the
+    ///     window by a factor no tokenizer difference justifies.
+    /// </remarks>
     public const double MinimumObservedCorrection = 0.5;
 
     /// <inheritdoc cref="MinimumObservedCorrection" />
@@ -47,12 +42,12 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     /// </summary>
     public const double ObservedCorrectionSmoothingFactor = 0.2;
 
-    /// <summary>
-    ///     Smallest estimated round, in tokens, that may contribute a sample. Below this the per-message framing
-    ///     constants (four tokens a message, plus the provider's own fixed template preamble) dominate the ratio, so a
-    ///     handful of short rounds would teach a correction that says nothing about long ones — and long ones are the
-    ///     only ones the budgeters ever have to trim.
-    /// </summary>
+    /// <summary>Smallest estimated round, in tokens, that may contribute a sample.</summary>
+    /// <remarks>
+    ///     Below this the per-message framing constants (four tokens a message, plus the provider's own fixed template
+    ///     preamble) dominate the ratio, so a handful of short rounds would teach a correction that says nothing about
+    ///     long ones — and long ones are the only ones the budgeters ever have to trim.
+    /// </remarks>
     public const int MinimumObservedSampleTokens = 500;
 
     /// <summary>Applies <see cref="EstimateSafetyFactor" /> to a context window, floored at zero.</summary>
@@ -63,17 +58,15 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
 
     /// <summary>
     ///     The window a budgeter compares its estimate against: <see cref="ApplySafetyMargin" />, then divided by the
-    ///     model's observed correction. Dividing the WINDOW rather than scaling the ESTIMATE is what keeps this a
-    ///     one-line change at the two comparison sites — every per-message number a budgeter carries (and every test
-    ///     asserting one) stays in estimator units.
-    ///     <para>
-    ///         TIGHTEN-ONLY, and that asymmetry is deliberate. A correction above 1.0 means the provider counts more
-    ///         than we predict, so the window shrinks and the round trims earlier. A correction BELOW 1.0 would widen
-    ///         it — up to 2× at the bound — which would spend the safety factor and then some on the strength of an
-    ///         estimate we already know to be optimistic in the general case. So a below-neutral correction is stored
-    ///         (it is how a model that was once tightened stops being tightened) but never applied.
-    ///     </para>
+    ///     model's observed correction.
     /// </summary>
+    /// <remarks>
+    ///     Dividing the WINDOW rather than scaling the ESTIMATE keeps this a one-line change at the two comparison sites — every per-message
+    ///     number a budgeter carries, and every test asserting one, stays in estimator units. TIGHTEN-ONLY, deliberately: above 1.0 the
+    ///     provider counts more than we predict, so the window shrinks and the round trims earlier; one BELOW 1.0 would widen it — up to 2× at
+    ///     the bound — spending the safety factor and more on an estimate already known to be optimistic. A below-neutral correction is
+    ///     stored — how a once-tightened model stops being tightened — but never applied.
+    /// </remarks>
     public static int ApplyEstimateMargins(int windowTokens, double observedCorrection)
     {
         return ApplyObservedCorrection(ApplySafetyMargin(windowTokens), observedCorrection);
@@ -81,16 +74,15 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
 
     /// <summary>
     ///     The observed correction alone, applied to a FLAT token budget that is not a context window — the work-session
-    ///     step-context budget being the one such caller. Same tighten-only rule and same bound as
-    ///     <see cref="ApplyEstimateMargins" />, deliberately WITHOUT <see cref="EstimateSafetyFactor" />: that factor
-    ///     reserves headroom inside a launched context window against an estimate that may overshoot it, and a flat
-    ///     budget chosen as a policy number has no window to overshoot. Applying it there would silently retune the
-    ///     policy by 15%.
-    ///     <para>
-    ///         Divides the BUDGET rather than scaling the estimate, for the same reason the window path does: it keeps
-    ///         every token number the caller carries, and every test asserting one, in estimator units.
-    ///     </para>
+    ///     step-context budget being the one such caller.
     /// </summary>
+    /// <remarks>
+    ///     Same tighten-only rule and same bound as <see cref="ApplyEstimateMargins" />, deliberately WITHOUT
+    ///     <see cref="EstimateSafetyFactor" />: that factor reserves headroom inside a launched context window against an estimate that may
+    ///     overshoot it, and a flat budget chosen as a policy number has no window to overshoot, so applying it there would silently retune
+    ///     the policy by 15%. Divides the BUDGET rather than scaling the estimate, for the same reason the window path does: every token
+    ///     number the caller carries, and every test asserting one, stays in estimator units.
+    /// </remarks>
     public static int ApplyObservedCorrection(int budgetTokens, double observedCorrection)
     {
         if (budgetTokens <= 0)
@@ -124,6 +116,13 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     The FIRST sample folds from neutral rather than being taken raw, so no single round can move the window by more than the
+    ///     smoothing factor allows. Raw looks tempting — there is no prior to blend with, and it reaches a genuinely optimistic model's
+    ///     true ratio in one round instead of ten — but one anomalous round at the 2.0 bound would pin the correction there outright,
+    ///     cutting the effective window to 42.5% of the launched one and taking ~10 rounds to decay back. The flat
+    ///     <see cref="EstimateSafetyFactor" /> already covers the rounds before the EMA has converged.
+    /// </remarks>
     public void RecordObservedUsage(string modelName, long estimatedTokens, long observedInputTokens)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -137,15 +136,8 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
 
         var sample = Math.Clamp((double)observedInputTokens / estimatedTokens, MinimumObservedCorrection, MaximumObservedCorrection);
 
-        // The FIRST sample folds from neutral rather than being taken raw, so no single round can ever move the window
-        // by more than the smoothing factor allows. Taking it raw looks tempting — there is no prior to blend with, and
-        // it reaches a genuinely optimistic model's true ratio in one round instead of ten — but it means one anomalous
-        // round at the 2.0 bound pins the correction there outright, cutting the effective window to 42.5% of the
-        // launched one and taking ~10 rounds to decay back. That is the failure this smoothing exists to prevent, and
-        // the flat EstimateSafetyFactor already covers the rounds before the EMA has converged.
-        //
-        // AddOrUpdate's update delegate re-reads the current value on each CAS retry, so the fold is applied to the
-        // value it actually replaces even under concurrent rounds of the same model.
+        // AddOrUpdate's update delegate re-reads the current value on each CAS retry, so the fold is applied to the value it actually
+        // replaces even under concurrent rounds of the same model. The neutral seed is the first-sample smoothing rule (see the docs).
         _ = _observedCorrections.AddOrUpdate(modelName, Fold(NeutralObservedCorrection, sample), (_, prior) => Fold(prior, sample));
     }
 

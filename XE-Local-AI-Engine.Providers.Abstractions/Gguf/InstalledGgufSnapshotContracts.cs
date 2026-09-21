@@ -15,12 +15,12 @@ public sealed record InstalledModelPhysicalMember(
     bool Required,
     int? MetadataSchemaVersion);
 
-/// <summary>
-///     Immutable registry material with provider-root-relative paths. This must carry EVERY field the entry's
-///     <c>RegistryRevision</c> commits to: the deletion store reconstructs an entry from this value and the registry
-///     re-derives the revision from it, so a field missing here recomputes to a different token and fails the
-///     compare-and-swap it exists to satisfy.
-/// </summary>
+/// <summary>Immutable registry material with provider-root-relative paths.</summary>
+/// <remarks>
+///     It must carry EVERY field the entry's <c>RegistryRevision</c> commits to: the deletion store reconstructs an
+///     entry from this value and the registry re-derives the revision from it, so a field missing here recomputes to a
+///     different token and fails the compare-and-swap it exists to satisfy.
+/// </remarks>
 public sealed record InstalledGgufRegistryValue(
     string RepoId,
     string FileName,

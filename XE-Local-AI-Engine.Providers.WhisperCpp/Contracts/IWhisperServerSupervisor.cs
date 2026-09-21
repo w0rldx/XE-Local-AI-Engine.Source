@@ -64,19 +64,11 @@ public interface IWhisperTranscriptionLease : IDisposable
 ///     place where that is cheaper than a respawn, tree-kill it on demand, and reap it when it goes idle.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>One daemon, deliberately.</b> A node has one selected transcription model, and the server serializes
-///         every request on a single mutex anyway, so a second daemon could never serve anyone faster. The
-///         per-model dictionary, the loaded cap and the least-recently-used eviction that the image runtime needs are
-///         therefore not ported.
-///     </para>
-///     <para>
-///         <b>Why the lease is generation-bound.</b> <see cref="EnsureRunningAsync" /> returns an endpoint and the
-///         caller acquires a lease as a second step. Between the two, another caller can complete a model switch on the
-///         same mutable daemon, so the model id alone cannot say whether the instance that was resolved is still the
-///         instance about to be used. The generation moves on every spawn and every successful switch, which makes the
-///         pair unambiguous.
-///     </para>
+///     <b>One daemon, deliberately:</b> a node has one selected transcription model and the server serializes every request on a single
+///     mutex anyway, so a second daemon could never serve anyone faster, and the per-model dictionary, loaded cap and LRU eviction the
+///     image runtime needs are not ported. <b>The lease is generation-bound</b> because <see cref="EnsureRunningAsync" /> returns an
+///     endpoint and the caller leases as a second step: in between, another caller can switch the model on the same mutable daemon, so
+///     the model id alone cannot say the resolved instance is still the one about to be used. The generation moves on spawn and switch.
 /// </remarks>
 public interface IWhisperServerSupervisor
 {

@@ -10,23 +10,11 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 ///     <see cref="StableDiffusionCppRuntime.GenerateAsync" /> call and thrown away with it.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Why an object and not a few locals.</b> The dedupe state used to be a <c>ref ImageGenPhase?</c> threaded
-///         through a static reporter. A <c>ref</c> local cannot be captured by a lambda (CS8175), and the fine phases
-///         arrive on the launcher's stdout drain thread through a callback — so the state had to move onto an instance
-///         before any of this was expressible at all.
-///     </para>
-///     <para>
-///         <b>Attribution.</b> Fine observations are read from a daemon's stdout, which says nothing about which job
-///         produced them. They are believed only under the rules in <see cref="ObserveFine" />, keyed on this
-///         generation's own polled HTTP status — never on "some job is active". The coordinator releases its generation
-///         slot in a <c>finally</c> even when the cancel path throws something other than a
-///         <c>StableDiffusionRuntimeException</c> (an <c>HttpRequestException</c> out of the cancel POST, or a restart
-///         refused because the spawn gate is busy), so the daemon can still be working on an abandoned job while the
-///         next one starts. The subscription handle that feeds this tracker is disposed on every exit path, which is
-///         what keeps an abandoned generation's output from ever reaching the next job's tracker.
-///     </para>
-///     <para>Thread-safe: the poll loop and the stdout drain thread both report through it.</para>
+///     An object rather than locals because a <c>ref</c> local cannot be captured by a lambda (CS8175) and the fine phases arrive on the
+///     launcher's stdout drain thread through a callback, so the dedupe state has to live on an instance. <b>Attribution:</b> stdout
+///     observations are believed only under the rules in <see cref="ObserveFine" />, keyed on this generation's own polled HTTP status
+///     and never on "some job is active" — see docs/wiki/14-image-generation.md ("Attributing stdout progress to the right generation").
+///     Thread-safe: the poll loop and the stdout drain thread both report through it.
 /// </remarks>
 internal sealed class GenerationProgressTracker
 {
@@ -69,10 +57,13 @@ internal sealed class GenerationProgressTracker
     }
 
     /// <summary>
-    ///     Reports a coarse HTTP-status transition. Repeat observations of the same phase are dropped, except while
-    ///     queued (where a changed queue position is news). A coarse <c>Generating</c> never overwrites a fine phase:
-    ///     doing so would flicker the card between "sampling 5/20" and a bare "generating" on every poll.
+    ///     Reports a coarse HTTP-status transition.
     /// </summary>
+    /// <remarks>
+    ///     Repeat observations of the same phase are dropped, except while queued, where a changed queue position is
+    ///     news. A coarse <c>Generating</c> never overwrites a fine phase: doing so would flicker the card between
+    ///     "sampling 5/20" and a bare "generating" on every poll.
+    /// </remarks>
     public void ReportCoarse(ImageGenPhase phase, int? queuePosition)
     {
         lock (_gate)
@@ -192,11 +183,13 @@ internal sealed class GenerationProgressTracker
     }
 
     /// <summary>
-    ///     The estimate, and the deliberate refusal to produce one outside sampling. Loading and encoding have no
-    ///     measurable rate, and the decode that follows the last step has no step counter at all — a countdown that
-    ///     survived into either would show "0s left" while the job kept running, which is the exact complaint this
-    ///     phase-aware timeline exists to fix.
+    ///     The estimate, and the deliberate refusal to produce one outside sampling.
     /// </summary>
+    /// <remarks>
+    ///     Loading and encoding have no measurable rate, and the decode that follows the last step has no step counter
+    ///     at all — a countdown that survived into either would show "0s left" while the job kept running, which is the
+    ///     exact complaint this phase-aware timeline exists to fix.
+    /// </remarks>
     private TimeSpan? EstimateRemaining(ImageGenPhase phase)
     {
         if (phase != ImageGenPhase.Sampling

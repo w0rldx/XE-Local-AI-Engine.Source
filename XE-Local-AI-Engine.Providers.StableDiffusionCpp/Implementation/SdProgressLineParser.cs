@@ -7,32 +7,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
-///     Turns one drained <c>sd-server</c> stdout line into a <see cref="SdProgressObservation" />, or into nothing. The
-///     ONLY place sd.cpp's console output format is interpreted.
-///     <para>
-///         This exists because sd-server's HTTP job contract has no step, percent or preview field at all — a live
-///         verification against the running daemon found only <c>queue_position</c> and the finished image. The sampler
-///         step counter is printed to the process's own stdout and nowhere else, so reading it here is the only way to
-///         show real progress rather than a spinner.
-///     </para>
-///     <para>
-///         <b>The rate token is the anchor, not the fraction.</b> Three different sd.cpp lines carry an
-///         <c>N/M</c> pair and only one of them is a sampler step:
-///     </para>
-///     <list type="bullet">
-///         <item><c>|====&gt;    | 1/8 - 6.34s/it</c> — the sampler. What we want.</item>
-///         <item><c>|####     | 21/686 - 110.31MB/s</c> — the tensor loader, whose N/M is tensors, not steps.</item>
-///         <item>
-///             <c>generating image: 1/1 - seed 42</c> — the batch counter, which prints <c>1/1</c> for every ordinary
-///             single-image job. A parser keyed on the fraction reads that as "step 1 of 1, complete" and slams the bar
-///             to 100% before sampling has begun. It is covered by an explicit must-not-match test.
-///         </item>
-///     </list>
-///     <para>
-///         Verified against the pinned build <c>master-742-1a13107</c> by running the daemon and hexdumping a real
-///         generation; <see cref="ImageServerProcessLauncher" /> documents the framing the same capture pinned.
-///     </para>
+///     Turns one drained <c>sd-server</c> stdout line into a <see cref="SdProgressObservation" />, or into nothing, and
+///     is the ONLY place sd.cpp's console output format is interpreted.
 /// </summary>
+/// <remarks>
+///     The rate token is the anchor, NOT the fraction: three different sd.cpp lines carry an <c>N/M</c> pair and only the one ending in
+///     a per-iteration rate is a sampler step. Verified against the pinned build <c>master-742-1a13107</c> by running the daemon and
+///     hexdumping a real generation, the same capture that pinned the framing in <see cref="SdOutputFrameSplitter" />. See
+///     docs/wiki/14-image-generation.md ("The rate token is the anchor, not the fraction").
+/// </remarks>
 internal static partial class SdProgressLineParser
 {
     private const int RegexTimeoutMilliseconds = 1000;
@@ -56,9 +39,8 @@ internal static partial class SdProgressLineParser
             return observation is not null;
         }
 
-        // Ordered by position in a generation, but the consumer does NOT rely on that order: the daemon loads the VAE
-        // weights AFTER sampling, so "loading" legitimately reappears late. Ordering is resolved by the consumer's
-        // sampling-seen latch, not here.
+        // Ordered by position in a generation, but the consumer does NOT rely on that order: the daemon loads the VAE weights AFTER sampling, so "loading" legitimately reappears late. Ordering is
+        // resolved by the consumer's sampling-seen latch, not here.
         if (DecodingPattern().IsMatch(line))
         {
             observation = new SdProgressObservation { Phase = ImageGenPhase.Decoding };
@@ -82,9 +64,11 @@ internal static partial class SdProgressLineParser
 
     /// <summary>
     ///     Builds the sampling observation from a matched step line, normalizing the rate to seconds per iteration.
+    /// </summary>
+    /// <remarks>
     ///     Returns <see langword="null" /> for a nonsensical counter (step 0, total 0, step past total) so a garbled
     ///     line degrades to "no observation" instead of a bar that runs backwards or past its end.
-    /// </summary>
+    /// </remarks>
     private static SdProgressObservation? BuildSamplingObservation(Match match)
     {
         if (!int.TryParse(match.Groups["step"].ValueSpan, CultureInfo.InvariantCulture, out var step)

@@ -7,11 +7,13 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     Production <see cref="IStaleImageServerProcessScanner" />: reads the OS process table for <c>sd-server</c>
-///     processes and tree-kills by pid via <see cref="Process" />. On Linux the executable path is read from the
-///     <c>/proc/&lt;pid&gt;/exe</c> symlink (the kernel's authoritative pointer to the real binary), which is more reliable
-///     than <see cref="ProcessModule.FileName" /> — that can throw for a foreign-owned or just-exited process. Other
-///     platforms read <see cref="Process.MainModule" />. Mirrors <c>OsStaleLlamaServerProcessScanner</c>.
+///     processes and tree-kills by pid via <see cref="Process" />. Mirrors <c>OsStaleLlamaServerProcessScanner</c>.
 /// </summary>
+/// <remarks>
+///     On Linux the executable path is read from the <c>/proc/&lt;pid&gt;/exe</c> symlink, the kernel's authoritative
+///     pointer to the real binary, which is more reliable than <see cref="ProcessModule.FileName" /> — that can throw
+///     for a foreign-owned or just-exited process. Other platforms read <see cref="Process.MainModule" />.
+/// </remarks>
 internal sealed class OsStaleImageServerProcessScanner : IStaleImageServerProcessScanner
 {
     // The OS process name carries no extension on any platform (Windows reports "sd-server", not "sd-server.exe").

@@ -11,18 +11,14 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
 ///     Typed wrapper over the Hugging Face Hub REST list/tree endpoints feeding <see cref="HuggingFaceGgufDiscovery" />.
-///     Anonymous for public listing; tolerant JSON parsing (Hub field variance) via <see cref="JsonDocument" /> — unknown
-///     fields are ignored and a missing optional field is never fatal. Internal — exercised in tests via a stubbed
-///     <see cref="HttpMessageHandler" />.
+///     Anonymous for public listing; tolerant JSON parsing (Hub field variance) via <see cref="JsonDocument" />.
 /// </summary>
 /// <remarks>
-///     Hub facts (verified live 2026-06-18; sort confirmed 2026-06-26): listing is
-///     <c>GET /api/models?filter=gguf&amp;sort=trendingScore&amp;limit=N&amp;full=true</c> (<c>sort</c> is one of
-///     <c>trendingScore|downloads|likes|lastModified</c>)
-///     returning <c>id</c>, <c>gated</c> (<see langword="false" /> | <c>"auto"</c> | <c>"manual"</c>), <c>downloads</c>,
-///     <c>likes</c>, <c>lastModified</c>, and <c>siblings[].rfilename</c> (filenames only in the listing). Per-repo detail
-///     is <c>GET /api/models/{repo}?blobs=true</c> returning <c>sha</c> (resolved commit), <c>cardData.license</c>, and
-///     <c>siblings[]</c> with <c>rfilename</c>, <c>size</c>, <c>blobId</c>, and <c>lfs.sha256</c>/<c>lfs.size</c> for LFS blobs.
+///     Unknown fields are ignored, a missing optional field is never fatal, and tests exercise it via a stubbed <see cref="HttpMessageHandler" />.
+///     Verified Hub facts: listing is <c>GET /api/models?filter=gguf&amp;sort=trendingScore&amp;limit=N&amp;full=true</c> (<c>sort</c> is one of
+///     <c>trendingScore|downloads|likes|lastModified</c>), returning <c>id</c>, <c>gated</c> (<see langword="false" /> | <c>"auto"</c> | <c>"manual"</c>),
+///     <c>downloads</c>, <c>likes</c>, <c>lastModified</c>, <c>siblings[].rfilename</c>; per-repo detail is <c>GET /api/models/{repo}?blobs=true</c>,
+///     returning <c>sha</c> (resolved commit), <c>cardData.license</c> and <c>siblings[]</c> with <c>rfilename</c>, <c>size</c>, <c>blobId</c>, <c>lfs.sha256</c>/<c>lfs.size</c>.
 /// </remarks>
 internal sealed class HfHubClient
 {
@@ -47,11 +43,14 @@ internal sealed class HfHubClient
     }
 
     /// <summary>
-    ///     Lists GGUF repos (<c>?filter=gguf</c>) sorted by popularity. Returns the raw summaries the Hub exposes in the
-    ///     listing; per-file inspection (sizes, header metadata) happens later via <see cref="GetRepoAsync" />. Cached for
+    ///     Lists GGUF repos (<c>?filter=gguf</c>) sorted by popularity, returning the raw summaries the Hub exposes in
+    ///     the listing.
+    /// </summary>
+    /// <remarks>
+    ///     Per-file inspection (sizes, header metadata) happens later via <see cref="GetRepoAsync" />. Cached for
     ///     <see cref="HuggingFaceOptions.HubMetadataCacheTtl" />, keyed by the fully-built listing URL (sort/limit/search
     ///     all included), so repeated advisor refreshes with the same query reuse one fetch.
-    /// </summary>
+    /// </remarks>
     public Task<IReadOnlyList<HubModelSummary>> ListGgufModelsAsync(GgufSearchQuery query, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -132,11 +131,14 @@ internal sealed class HfHubClient
         GetRepoAsync(repoId, revision: null, ct);
 
     /// <summary>
-    ///     The same detail read at a specific commit, branch or tag — <c>GET /api/models/{repo}/revision/{rev}?blobs=true</c>.
+    ///     The same detail read at a specific commit, branch or tag —
+    ///     <c>GET /api/models/{repo}/revision/{rev}?blobs=true</c>.
+    /// </summary>
+    /// <remarks>
     ///     A blank revision reads the default branch, which is what the two-argument overload asks for. The revision is
     ///     part of the cache key AND escaped into its own path segment: it is untrusted repo input, and a branch name
     ///     like <c>refs/pr/1</c> is one segment to the Hub, not three.
-    /// </summary>
+    /// </remarks>
     public Task<HubModelDetail?> GetRepoAsync(string repoId, string? revision, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
@@ -250,10 +252,8 @@ internal sealed class HfHubClient
         var builder = new StringBuilder();
         builder.Append(TrimBase(_options.HubBaseUrl));
         builder.Append("/api/models?");
-        // filter=<tag> (tag-based) NOT library=<tag> — community repos (bartowski/unsloth) report library_name "None"
-        // and would be under-matched by library=. pipeline_tag narrows by TASK (text-to-image) and is what makes image
-        // discovery return diffusion repos instead of every GGUF on the Hub. Emitted before the shared parameters so
-        // the GGUF listing URL keeps the exact shape its pin test froze.
+        // filter=<tag> (tag-based) NOT library=<tag> — community repos (bartowski/unsloth) report library_name "None" and would be under-matched by library=. pipeline_tag narrows by TASK
+        // (text-to-image), which makes image discovery return diffusion repos instead of every GGUF on the Hub. Emitted before the shared parameters so the GGUF listing URL keeps its pinned shape.
         if (!string.IsNullOrWhiteSpace(query.Filter))
         {
             builder.Append("filter=");

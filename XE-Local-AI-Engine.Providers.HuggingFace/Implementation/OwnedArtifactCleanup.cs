@@ -9,10 +9,12 @@ internal sealed class OwnedArtifact
 }
 
 /// <summary>
-///     Compensating deletion of the artifacts an import or a download created. Shared by both transactions because a
-///     rollback that deletes a pre-existing file the operation did not create destroys operator data, so the ownership
-///     rule must be one implementation rather than a copy per transaction.
+///     Compensating deletion of the artifacts an import or a download created.
 /// </summary>
+/// <remarks>
+///     Shared by both transactions because a rollback that deletes a pre-existing file the operation did not create
+///     destroys operator data, so the ownership rule must be one implementation rather than a copy per transaction.
+/// </remarks>
 internal static class OwnedArtifactCleanup
 {
     /// <summary>

@@ -6,21 +6,15 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
 ///     Startup sweep for stale GGUF acquisition artifacts left behind by a crashed import/download: operation-owned
-///     <c>*.part</c> files (weight and sidecar staging — see <see cref="GgufModelImporter" />,
-///     <see cref="HuggingFaceGgufDownloadTransaction" />, and <see cref="HfDownloadClient" />) and orphaned final
-///     <c>.xe-model.json</c> sidecars with no adjacent GGUF (a crash between the sidecar-first and weight renames of a
-///     commit — see <see cref="GgufModelImporter.CommitAsync" />). Runs once at startup; best-effort, never blocks
-///     node startup on a cleanup failure.
-///     <para>
-///         <b>Safety.</b> Never deletes a <c>.gguf</c> file — the two sweeps only ever match the <c>.part</c> and
-///         <c>.xe-model.json</c> file-name patterns, which a real model weight never has. An artifact is only removed
-///         once it is older than <see cref="StaleArtifactAge" />, so an acquisition genuinely in progress is untouched.
-///     </para>
-///     <para>
-///         <b>Scope.</b> This does not reconcile the model-provider-map (an absent map row for a verified,
-///         sidecar-backed entry); the resolver's default-provider fallback covers routing for that case.
-///     </para>
+///     <c>*.part</c> staging files and orphaned final <c>.xe-model.json</c> sidecars with no adjacent GGUF.
 /// </summary>
+/// <remarks>
+///     The <c>.part</c> writers are <see cref="GgufModelImporter" />, <see cref="HuggingFaceGgufDownloadTransaction" /> and <see cref="HfDownloadClient" />;
+///     an orphan means a crash between the sidecar-first and weight renames of a commit (<see cref="GgufModelImporter.CommitAsync" />).
+///     Runs once at startup, best-effort, never blocking startup on a cleanup failure. <b>Safety.</b> Never deletes a <c>.gguf</c> file —
+///     no real weight carries those patterns — and only removes an artifact older than <see cref="StaleArtifactAge" />, so a live
+///     acquisition is untouched. <b>Scope.</b> It does not reconcile the model-provider-map; the default-provider fallback covers that.
+/// </remarks>
 internal sealed class GgufAcquisitionArtifactStartupReaper : IHostedService
 {
     /// <summary>Conservative age threshold before a stale acquisition artifact is considered abandoned.</summary>

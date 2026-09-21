@@ -8,10 +8,13 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
-///     Typed HTTP client for the sd-server native async job API (<c>/sdcpp/v1/*</c>). The ONLY place sd-server route
-///     strings, request-body shape, and response JSON live. Prompts pass through the request
-///     body but are NEVER logged here. Frozen field-level against stable-diffusion.cpp @ <c>master-742-1a13107</c>.
+///     Typed HTTP client for the sd-server native async job API (<c>/sdcpp/v1/*</c>), and the ONLY place sd-server route
+///     strings, request-body shape and response JSON live.
 /// </summary>
+/// <remarks>
+///     Prompts pass through the request body but are NEVER logged here. Frozen field-level against
+///     stable-diffusion.cpp @ <c>master-742-1a13107</c>.
+/// </remarks>
 internal sealed class SdServerJobClient
 {
     internal const string ImgGenRoute = "sdcpp/v1/img_gen";

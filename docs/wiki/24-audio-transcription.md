@@ -864,6 +864,80 @@ last two are persisted and normalized already, and are read by the live slices.
 - **Diarization.** whisper.cpp clusters no speakers; `You`/`Others` come from transcribing two captured channels
   separately ([ADR 0012](../adr/0012-audio-transcription-runtime-and-capture.md) D2).
 
+## whisper-server flags that are deliberately never emitted
+
+`WhisperServerArgumentBuilder` is the only place whisper-server flag names live, and four of them are left out on
+purpose:
+
+- **`--convert` and `--tmp-dir`.** With convert on, the server writes EVERY request's audio to a temp file and shells
+  out to ffmpeg — including for a native 16 kHz mono WAV. That would put live PCM on disk and break the memory-only
+  contract this feature is built around. Engine-side transcoding of the containers the server cannot decode is the
+  caller's job, in the caller's own owned directory.
+- **`-di` (diarize)** splits a stereo WAV by channel and is not speaker clustering; per-channel transcription is used
+  instead.
+- **`-pr` / `-pp`** print the transcript to a stream this project drains into the app log.
+- **`-fa`** is redundant: the pinned build already defaults flash attention on where supported.
+
+## Adopting a managed source build
+
+`WhisperCppRuntimeAdoption` owns the journaled directory-and-state transaction that turns a finished build tree into
+the node's managed whisper.cpp runtime. It is **journal-first**: the intent is written to disk before any directory
+moves, so a host that dies mid-adoption can be reconciled on the next start rather than left with a record and a tree
+that disagree. `RecoverAsync` is that reconciliation, and it is the reason the journal exists.
+
+**Link policy.** A whisper.cpp build's output legitimately contains SONAME symlink chains — `libwhisper.so` →
+`libwhisper.so.1` → `libwhisper.so.1.9.4` — so links cannot simply be rejected. They also cannot simply be accepted:
+hardening walks the tree setting permissions, and a link that escapes the staging root would have it chmod a file
+outside the tree. Every link is therefore checked *before* anything is modified — relative and resolving inside the
+tree is accepted, anything else fails the adoption — and hardening then sets modes on real entries only, never through
+a link.
+
+## The pinned whisper.cpp prebuilt release table
+
+`WhisperCppReleasePins` is the acquisition source `WhisperCppBinaryManager` uses when no managed source-built runtime
+is selected and no bring-your-own override is active. The pinned tag is **`b5130`**, and assets come from
+`https://github.com/ggml-org/whisper.cpp/releases/download/{tag}/{asset}`.
+
+whisper.cpp ships release binaries **only** on its nightly `b<n>` tags; the semantic `v1.9.x` tags carry zero assets,
+so pinning one of those would pin a tag nothing can be downloaded from. SHA256 digests come from the GitHub
+release-assets API `digest` field, because whisper.cpp publishes no `.sha256` sidecar files.
+
+**Constraint:** whisper.cpp ships no prebuilt Linux CUDA asset. A Linux NVIDIA box therefore resolves the Ubuntu CPU
+tarball, and the CUDA lane on Linux is the managed source build or the `XE_WHISPERCPP_SERVER_PATH` override. Unlike
+stable-diffusion.cpp there is no separate cudart companion archive: the Windows cuBLAS zip bundles `cudart64_12.dll`,
+`cublas64_12.dll`, `cublasLt64_12.dll` and the `nvrtc` pair itself.
+
+## The bring-your-own whisper-server override
+
+`WhisperServerRuntimeOverrideOptions` points the runtime at a locally-built `whisper-server` — a Linux CUDA build, for
+which upstream ships no prebuilt asset — instead of the pinned download-and-verify acquisition path. It is off by
+default: with `ServerPath` unset, the selector and the binary manager behave byte-identically to the pinned path.
+
+**Trust-channel containment.** The override is *operator-trust only*. It is built exclusively from process environment
+variables (`ServerPathEnvironmentVariable` / `BackendEnvironmentVariable`) through `FromEnvironment`, the same trust
+level as the app binary itself. It is **never** bound from an `IConfiguration` section, from the user-editable node
+settings store, or from any request DTO: a lower-trust write to the override path would become arbitrary-binary
+execution at app privilege. Skipping the network-oriented SHA256 pin is sound only under that containment.
+
+The options type is deliberately dumb. It carries the resolved values and a computed `IsActive` flag and performs no
+I/O or path validation — validating the path on disk is the binary manager's job at acquisition time. The type only
+decides *whether* an override is configured and *which* backend it claims.
+
+## The whisper-server HTTP client: no pipeline, no timeout
+
+The named runtime client registered by `WhisperCppServiceCollectionExtensions` carries **no** resilience pipeline and
+**no** client-level timeout. Both halves are deliberate.
+
+Aspire's `AddServiceDefaults` installs a standard resilience handler on EVERY named client through
+`ConfigureHttpClientDefaults` — including one registered later — and that pipeline's per-attempt timeout is ten seconds.
+Ten seconds would abort a CPU transcription that legitimately runs for minutes, while the status DTO advertises a
+thirty-minute budget. The same pipeline also retries every method by default, and neither the model load nor the
+transcription is idempotent. `RemoveAllResilienceHandlers` strips it, and is a no-op outside Aspire.
+
+A single `HttpClient.Timeout` cannot serve three requests whose right budgets differ by four orders of magnitude, and
+its 100-second default would abort a long transcription on its own. Infinite is safe here **only** because every call
+site owns an explicit deadline through a linked token source; nothing may call this client without one.
+
 ## Related pages
 
 - [Local Runtime & Providers](03-local-runtime-and-providers.md) — the whisper.cpp supervisor, binary acquisition and the managed CUDA build lane.

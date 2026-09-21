@@ -20,10 +20,13 @@ public sealed class StableDiffusionAssetPin
     public required string ServerRelativePath { get; init; }
 
     /// <summary>
-    ///     The companion CUDA-runtime archive name, set ONLY on the Windows x64 CUDA pin. stable-diffusion.cpp ships the
-    ///     CUDA runtime DLLs in a SEPARATE archive from the main build; without them next to <c>sd-server.exe</c> the CUDA
-    ///     backend fails to load. <see langword="null" /> for every non-Windows-CUDA pin.
+    ///     The companion CUDA-runtime archive name, set ONLY on the Windows x64 CUDA pin; <see langword="null" /> for
+    ///     every other pin.
     /// </summary>
+    /// <remarks>
+    ///     stable-diffusion.cpp ships the CUDA runtime DLLs in a SEPARATE archive from the main build; without them next
+    ///     to <c>sd-server.exe</c> the CUDA backend fails to load.
+    /// </remarks>
     public string? CudartAssetName { get; init; }
 
     /// <summary>Lowercase hex SHA256 the companion CUDA-runtime archive must match. <see langword="null" /> when <see cref="CudartAssetName" /> is.</summary>
@@ -35,24 +38,11 @@ public sealed class StableDiffusionAssetPin
 ///     <see cref="Implementation.StableDiffusionCppBinaryManager" /> when no managed source-built runtime is selected.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>Pinned tag <c>master-742-1a13107</c></strong> (spike-frozen 2026-07-01, commit <c>1a13107</c>).
-///         SHA256 digests are taken from the GitHub release-assets API <c>digest</c> field — stable-diffusion.cpp
-///         publishes NO <c>.sha256</c> sidecar files, so the digest API is the source of truth. The project ships
-///         <b>rolling</b> <c>master-&lt;n&gt;-&lt;sha&gt;</c> releases (no semver, moves daily); re-pin (tag + every hash)
-///         when bumping the recommended version.
-///     </para>
-///     <para>
-///         <strong>Download URL:</strong>
-///         <c>https://github.com/leejet/stable-diffusion.cpp/releases/download/{tag}/{asset}</c>.
-///     </para>
-///     <para>
-///         <strong>Constraint:</strong> stable-diffusion.cpp ships NO prebuilt Linux CUDA asset — a Linux NVIDIA box
-///         defaults to Vulkan when a Vulkan device enumerates, otherwise CPU (enforced by
-///         <see cref="Implementation.SdGpuBackendSelector" />). A validated managed source build can instead select CUDA.
-///         Windows CUDA also needs the separate <c>cudart-…</c> runtime archive; the Windows-CUDA pin row carries it as
-///         <see cref="StableDiffusionAssetPin.CudartAssetName" />/<see cref="StableDiffusionAssetPin.CudartSha256" />.
-///     </para>
+///     Pinned tag <c>master-742-1a13107</c> (commit <c>1a13107</c>), fetched from
+///     <c>https://github.com/leejet/stable-diffusion.cpp/releases/download/{tag}/{asset}</c>. The project ships <b>rolling</b>
+///     <c>master-&lt;n&gt;-&lt;sha&gt;</c> releases, so re-pin the tag AND every hash when bumping. stable-diffusion.cpp ships NO prebuilt
+///     Linux CUDA asset, which <see cref="Implementation.SdGpuBackendSelector" /> enforces. See
+///     docs/wiki/14-image-generation.md ("The pinned prebuilt release table").
 /// </remarks>
 public static class StableDiffusionReleasePins
 {
@@ -104,11 +94,13 @@ public static class StableDiffusionReleasePins
     }
 
     /// <summary>
-    ///     Resolves the pinned asset for the given OS/arch/backend, falling back to the CPU floor when no GPU prebuilt
-    ///     exists for the host. Returns <see langword="null" /> only when even the CPU floor is unavailable. Runtime
-    ///     acquisition uses this fallback only for an explicit CPU selection; GPU selections must use
-    ///     <see cref="ResolveExact" /> so the resolved bytes cannot contradict the requested backend.
+    ///     Resolves the pinned asset for the given OS/arch/backend, degrading to the CPU floor when no GPU prebuilt
+    ///     exists for the host; <see langword="null" /> only when even the CPU floor is unavailable.
     /// </summary>
+    /// <remarks>
+    ///     Runtime acquisition takes that degrade only for an explicit CPU selection; GPU selections must use
+    ///     <see cref="ResolveExact" /> so the resolved bytes cannot contradict the requested backend.
+    /// </remarks>
     public static StableDiffusionAssetPin? Resolve(OSPlatform os, Architecture arch, SdGpuBackend backend)
     {
         if (Pins.TryGetValue(new PinKey(os, arch, backend), out var pin))

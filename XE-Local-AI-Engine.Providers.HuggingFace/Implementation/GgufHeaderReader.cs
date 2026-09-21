@@ -11,14 +11,13 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 /// <summary>
 ///     Reads a GGUF file header via an HTTP range request (no full download) and extracts the standardized metadata
 ///     fields populated onto <c>GgufRepoFile</c> (architecture, block/head counts, embedding/context lengths, etc.).
-///     Internal — tests feed canned header bytes through a stubbed handler.
 /// </summary>
 /// <remarks>
-///     GGUF v3 layout (verified against the ggml GGUF spec 2026-06-18): little-endian <c>magic</c> (<c>0x47 0x47 0x55 0x46</c>),
-///     <c>uint32 version</c>, <c>uint64 tensor_count</c>, <c>uint64 metadata_kv_count</c>, then KV pairs — key is
-///     <c>uint64 len</c> + UTF-8 bytes, value is <c>uint32 value_type</c> + the typed value. Strings are <c>uint64 len</c>
-///     + UTF-8. If the KV block extends past the initially-requested range the reader re-requests a doubled range up to
-///     a cap, then surfaces partial (null) fields rather than throwing.
+///     Internal — tests feed canned header bytes through a stubbed handler. GGUF v3 layout (verified against the ggml GGUF spec):
+///     little-endian <c>magic</c> (<c>0x47 0x47 0x55 0x46</c>), <c>uint32 version</c>, <c>uint64 tensor_count</c>,
+///     <c>uint64 metadata_kv_count</c>, then KV pairs — key is <c>uint64 len</c> + UTF-8 bytes, value is <c>uint32 value_type</c> + the
+///     typed value. Strings are <c>uint64 len</c> + UTF-8. If the KV block extends past the initially-requested range the reader
+///     re-requests a doubled range up to a cap, then surfaces partial (null) fields rather than throwing.
 /// </remarks>
 internal sealed class GgufHeaderReader
 {
@@ -44,11 +43,14 @@ internal sealed class GgufHeaderReader
 
     /// <summary>
     ///     Range-reads the GGUF header from <paramref name="repoId" />/<paramref name="fileName" /> at
-    ///     <paramref name="revision" /> and extracts the standardized metadata. Never throws on a missing optional key,
-    ///     a short read, or a non-GGUF file — returns an all-null <see cref="GgufHeaderMetadata" /> instead. Cached for
-    ///     <see cref="HuggingFaceOptions.HeaderCacheTtl" />, keyed by repo + filename + resolved revision — a header is
-    ///     immutable for a given resolved revision, so once read it never needs a second range request.
+    ///     <paramref name="revision" /> and extracts the standardized metadata.
     /// </summary>
+    /// <remarks>
+    ///     Never throws on a missing optional key, a short read, or a non-GGUF file — returns an all-null
+    ///     <see cref="GgufHeaderMetadata" /> instead. Cached for <see cref="HuggingFaceOptions.HeaderCacheTtl" />, keyed
+    ///     by repo + filename + resolved revision: a header is immutable for a given resolved revision, so once read it
+    ///     never needs a second range request.
+    /// </remarks>
     public Task<GgufHeaderMetadata> ReadHeaderAsync(string repoId, string fileName, string revision, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
@@ -86,19 +88,21 @@ internal sealed class GgufHeaderReader
 
     /// <summary>
     ///     Reads the GGUF header from a local <paramref name="filePath" /> and extracts the standardized metadata, using
-    ///     the same grow-on-truncation probe loop as the remote path. <c>context_length</c> sits early in the header (before
-    ///     the large tokenizer arrays) for llama.cpp-written GGUFs, so the first modest read virtually always suffices.
-    ///     Fully tolerant: a missing file / non-GGUF content / short read / IO error / parse failure returns an all-null
-    ///     <see cref="GgufHeaderMetadata" /> and never throws (cancellation excepted).
+    ///     the same grow-on-truncation probe loop as the remote path.
     /// </summary>
+    /// <remarks>
+    ///     <c>context_length</c> sits early in the header (before the large tokenizer arrays) for llama.cpp-written
+    ///     GGUFs, so the first modest read virtually always suffices. Fully tolerant: a missing file / non-GGUF content
+    ///     / short read / IO error / parse failure returns an all-null <see cref="GgufHeaderMetadata" /> and never
+    ///     throws (cancellation excepted).
+    /// </remarks>
     public async Task<GgufHeaderMetadata> ReadHeaderFromFileAsync(string filePath, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
         const long initialProbe = 1L * 1024 * 1024; // 1 MiB — context_length lives near the start of the header.
-        // tokenizer.chat_template typically sits AFTER the large tokenizer.ggml.tokens vocab array, so it can land
-        // several MiB into the header. The grow loop doubles up to this ceiling to capture it for capability detection;
-        // it is a local file read, so the larger ceiling costs only a one-time read of an already-installed file.
+        // tokenizer.chat_template typically sits AFTER the large tokenizer.ggml.tokens vocab array, so it can land several MiB into the header. The grow loop doubles up to this ceiling to capture it
+        // for capability detection; it is a local file read, so the larger ceiling costs only a one-time read of an already-installed file.
         const long hardCap = 64L * 1024 * 1024; // doubling ceiling for the local read.
 
         try
@@ -122,9 +126,12 @@ internal sealed class GgufHeaderReader
 
     /// <summary>
     ///     Runs the shared grow-on-truncation probe loop over a byte source that returns the first <c>count</c> bytes of
-    ///     the file. Doubles the probe up to <paramref name="hardCap" /> while parsing reports it ran out of bytes
-    ///     mid-block, stopping early when the source returns fewer bytes than requested (the whole short file was read).
+    ///     the file.
     /// </summary>
+    /// <remarks>
+    ///     Doubles the probe up to <paramref name="hardCap" /> while parsing reports it ran out of bytes mid-block,
+    ///     stopping early when the source returns fewer bytes than requested (the whole short file was read).
+    /// </remarks>
     private static async Task<GgufHeaderMetadata> ReadGrowingAsync(Func<long, CancellationToken, Task<byte[]?>> fetch,
         long initialProbe,
         long hardCap,
@@ -269,30 +276,26 @@ internal sealed class GgufHeaderReader
         var embeddingLength = TryGetLong(values, Arch("embedding_length"));
         var contextLength = TryGetLong(values, Arch("context_length"));
 
-        // Mixture-of-Experts marker: a dense model omits this key (or writes 0); an MoE model writes its total expert
-        // count (e.g. <arch>.expert_count = 8 for Mixtral/Qwen-MoE). Drives the inference profile's is_moe/expert_count
-        // so the optimizer measures MoE throughput empirically rather than predicting it.
+        // Mixture-of-Experts marker: a dense model omits this key (or writes 0); an MoE model writes its total expert count (e.g. <arch>.expert_count = 8 for Mixtral/Qwen-MoE). Drives the inference
+        // profile's is_moe/expert_count so the optimizer measures MoE throughput empirically rather than predicting it.
         var expertCount = TryGetLong(values, Arch("expert_count"));
 
         // Active experts routed per token (e.g. <arch>.expert_used_count = 2 of 8 for a top-2 MoE gate). Combined with
         // expert_count this drives the memory-fit estimator's expert-offload split; null for dense models.
         var expertUsedCount = TryGetLong(values, Arch("expert_used_count"));
 
-        // Explicit per-head key/value dimensions (<arch>.attention.key_length / value_length). Preferred by the memory-fit
-        // estimator over the derived head_dim = embedding_length / n_heads — the derivation is wrong for families like
-        // Qwen3 that pin head_dim (128) independently of the embedding width. Null when the header omits them.
+        // Explicit per-head key/value dimensions (<arch>.attention.key_length / value_length). Preferred by the memory-fit estimator over the derived head_dim = embedding_length / n_heads — the
+        // derivation is wrong for families like Qwen3 that pin head_dim (128) independently of the embedding width. Null when the header omits them.
         var attentionKeyLength = TryGetLong(values, Arch("attention.key_length"));
         var attentionValueLength = TryGetLong(values, Arch("attention.value_length"));
 
-        // Multi-head Latent Attention (deepseek2 family): when BOTH {arch}.attention.key_length_mla and
-        // .value_length_mla are present and positive, llama.cpp's is_mla() holds and the cache is allocated as a single
-        // latent K tensor with NO V tensor at all. Detection is by these two keys only — never by architecture name.
+        // Multi-head Latent Attention (deepseek2 family): when BOTH {arch}.attention.key_length_mla and .value_length_mla are present and positive, llama.cpp's is_mla() holds and the cache is
+        // allocated as a single latent K tensor with NO V tensor at all. Detection is by these two keys only — never by architecture name.
         var attentionKeyLengthMla = TryGetLong(values, Arch("attention.key_length_mla"));
         var attentionValueLengthMla = TryGetLong(values, Arch("attention.value_length_mla"));
 
-        // Interleaved sliding-window attention (Gemma family): a positive window means the window-limited layers hold at
-        // most this many KV positions instead of the full context. The layer stride (every Nth layer is full attention)
-        // comes from an explicit header key when present, else the per-architecture default (Gemma3=6, Gemma2=2).
+        // Interleaved sliding-window attention (Gemma family): a positive window means the window-limited layers hold at most this many KV positions instead of the full context. The layer stride
+        // (every Nth layer is full attention) comes from an explicit header key when present, else the per-architecture default (Gemma3=6, Gemma2=2).
         var slidingWindow = TryGetLong(values, Arch("attention.sliding_window"));
         var slidingWindowPattern = TryGetLong(values, Arch("attention.sliding_window_pattern"))
                                    ?? GgufAttentionDefaults.SlidingWindowPattern(architecture);

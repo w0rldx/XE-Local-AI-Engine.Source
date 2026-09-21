@@ -124,12 +124,15 @@ internal static class GgufAcquisitionSidecar
 
     /// <summary>
     ///     Rebuilds the recovery sidecar metadata from a token-verified manifest entry, or returns <see langword="null" />
-    ///     when the entry lacks the required acquisition fields or cannot produce a shape-valid sidecar. The registry
-    ///     entry is the complete material value its <c>RegistryRevision</c> commits to, so this is reconstruction from an
-    ///     authoritative representation — the caller must still prove faithfulness by round-tripping the result through
-    ///     <see cref="ToRegistryEntry" /> and comparing revisions. Remote-declared projector source hash/size are not part
-    ///     of the registry value and are rebuilt as <see langword="null" />, which the shape contract permits.
+    ///     when the entry lacks the required acquisition fields or cannot produce a shape-valid sidecar.
     /// </summary>
+    /// <remarks>
+    ///     The registry entry is the complete material value its <c>RegistryRevision</c> commits to, so this is
+    ///     reconstruction from an authoritative representation — the caller must still prove faithfulness by
+    ///     round-tripping the result through <see cref="ToRegistryEntry" /> and comparing revisions. Remote-declared
+    ///     projector source hash/size are not part of the registry value and are rebuilt as <see langword="null" />,
+    ///     which the shape contract permits.
+    /// </remarks>
     public static GgufAcquisitionMetadata? FromRegistryEntry(GgufModelRegistryEntry entry, string modelsDirectory)
     {
         if (entry.Origin is not { } origin
@@ -250,10 +253,13 @@ internal static class GgufAcquisitionSidecar
     }
 
     /// <summary>
-    ///     Trained-model lineage rules. Lineage of any kind belongs only to a <see cref="LocalModelOrigin.Trained" />
-    ///     acquisition. An adapter sidecar describes the adapter file itself — its bytes ARE the weight member — so the
-    ///     adapter fields must agree with the weight fields, and it must name the installed base model it launches against.
+    ///     Trained-model lineage rules.
     /// </summary>
+    /// <remarks>
+    ///     Lineage of any kind belongs only to a <see cref="LocalModelOrigin.Trained" /> acquisition. An adapter sidecar
+    ///     describes the adapter file itself — its bytes ARE the weight member — so the adapter fields must agree with
+    ///     the weight fields, and it must name the installed base model it launches against.
+    /// </remarks>
     private static bool IsValidAdapterShape(GgufAcquisitionMetadata metadata)
     {
         var hasLineage = metadata.DerivedFromRepoId is not null

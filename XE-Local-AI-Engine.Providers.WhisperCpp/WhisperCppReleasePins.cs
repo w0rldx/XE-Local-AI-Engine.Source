@@ -40,23 +40,11 @@ public sealed class WhisperAssetPin
 ///     bring-your-own override is active.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>Pinned tag <c>b5130</c></strong> (published 2026-09-11). whisper.cpp ships release binaries ONLY on
-///         its nightly <c>b&lt;n&gt;</c> tags; the semantic <c>v1.9.x</c> tags carry zero assets, so pinning one of
-///         those would pin a tag nothing can be downloaded from. SHA256 digests come from the GitHub release-assets API
-///         <c>digest</c> field — whisper.cpp publishes no <c>.sha256</c> sidecar files.
-///     </para>
-///     <para>
-///         <strong>Download URL:</strong>
-///         <c>https://github.com/ggml-org/whisper.cpp/releases/download/{tag}/{asset}</c>.
-///     </para>
-///     <para>
-///         <strong>Constraint:</strong> whisper.cpp ships NO prebuilt Linux CUDA asset. A Linux NVIDIA box therefore
-///         resolves the Ubuntu CPU tarball; the CUDA lane on Linux is the managed source build or the
-///         <c>XE_WHISPERCPP_SERVER_PATH</c> override. Unlike stable-diffusion.cpp there is no separate cudart companion
-///         archive: the Windows cuBLAS zip bundles <c>cudart64_12.dll</c>, <c>cublas64_12.dll</c>,
-///         <c>cublasLt64_12.dll</c> and the <c>nvrtc</c> pair itself.
-///     </para>
+///     Pinned tag <c>b5130</c>, fetched from <c>https://github.com/ggml-org/whisper.cpp/releases/download/{tag}/{asset}</c>.
+///     whisper.cpp ships release binaries ONLY on its nightly <c>b&lt;n&gt;</c> tags — the semantic <c>v1.9.x</c> tags carry zero
+///     assets — and it publishes no <c>.sha256</c> sidecars, so digests come from the GitHub release-assets API <c>digest</c> field. It
+///     ships NO prebuilt Linux CUDA asset either. See docs/wiki/24-audio-transcription.md
+///     ("The pinned whisper.cpp prebuilt release table").
 /// </remarks>
 public static class WhisperCppReleasePins
 {

@@ -4,15 +4,14 @@ using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
-///     Strict, idempotent validation for managed source-build requests. Only a canonical public GitHub HTTPS
-///     repository and a full 40-character hexadecimal commit are accepted, and the official source is pinned by the
-///     server rather than trusted from the caller.
+///     Strict, idempotent validation for managed source-build requests: only a canonical public GitHub HTTPS repository
+///     and a full 40-character hexadecimal commit are accepted.
 /// </summary>
 /// <remarks>
-///     <see cref="Normalize" /> is idempotent by construction: normalizing an already-normalized request returns an
-///     equal request. That matters because the installed-runtime store validates a persisted repository by
-///     round-tripping it through <see cref="NormalizeGitHubRepository" /> and comparing, so a normalizer that changed
-///     its answer on the second pass would tombstone every healthy record.
+///     The official source is pinned by the server rather than trusted from the caller. <see cref="Normalize" /> is idempotent by
+///     construction: normalizing an already-normalized request returns an equal request. That matters because the installed-runtime
+///     store validates a persisted repository by round-tripping it through <see cref="NormalizeGitHubRepository" /> and comparing, so a
+///     normalizer that changed its answer on the second pass would tombstone every healthy record.
 /// </remarks>
 public static partial class WhisperCppSourceBuildRequestValidation
 {

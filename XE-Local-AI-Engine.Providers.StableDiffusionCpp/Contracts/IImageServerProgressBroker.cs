@@ -3,21 +3,16 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     Carries the fine generation progress that sd-server prints on its own stdout — and only that — from the process
-///     launcher (the only component holding the child's streams) to the runtime facade (the only component that knows
-///     which generation is in flight).
-///     <para>
-///         <b>Privacy.</b> The launcher parses each drained line and publishes a <see cref="SdProgressObservation" />;
-///         the raw line NEVER crosses this seam. That is load-bearing rather than tidy: sd-server echoes the request
-///         prompt in its own debug output (<c>parse '&lt;prompt&gt;' to [...]</c>), which is why the stdout forward to the
-///         app log is pinned at Debug. A broker that carried lines would route prompts into the progress path and out
-///         over the status hub.
-///     </para>
-///     <para>
-///         Delivery is best-effort and fire-and-forget: a model with no subscriber drops its observations, and a handler
-///         that throws must never take down the drain loop that feeds the child's stdout pipe.
-///     </para>
+///     Carries the fine generation progress sd-server prints on its own stdout — and only that — from the process
+///     launcher, which holds the child's streams, to the runtime facade, which knows the generation in flight.
 /// </summary>
+/// <remarks>
+///     <b>Privacy.</b> The launcher parses each drained line and publishes a <see cref="SdProgressObservation" />; the raw line NEVER
+///     crosses this seam. That is load-bearing rather than tidy: sd-server echoes the request prompt in its own debug output
+///     (<c>parse '&lt;prompt&gt;' to [...]</c>), which is why the stdout forward to the app log is pinned at Debug, and a broker carrying
+///     lines would route prompts into the progress path and out over the status hub. Delivery is best-effort and fire-and-forget: a model
+///     with no subscriber drops its observations, and a throwing handler must never take down the child's stdout drain loop.
+/// </remarks>
 internal interface IImageServerProgressBroker
 {
     /// <summary>Publishes one parsed observation for <paramref name="modelName" /> to whatever subscriber is listening.</summary>
@@ -25,9 +20,12 @@ internal interface IImageServerProgressBroker
 
     /// <summary>
     ///     Subscribes <paramref name="handler" /> to <paramref name="modelName" />'s observations until the returned
-    ///     handle is disposed. The handle is the generation epoch: the runtime takes one per generation and disposes it
-    ///     on EVERY exit path, so an abandoned generation's continuing output can never be attributed to the next job.
+    ///     handle is disposed.
     /// </summary>
+    /// <remarks>
+    ///     The handle is the generation epoch: the runtime takes one per generation and disposes it on EVERY exit path,
+    ///     so an abandoned generation's continuing output can never be attributed to the next job.
+    /// </remarks>
     IDisposable Subscribe(string modelName, Action<SdProgressObservation> handler);
 }
 

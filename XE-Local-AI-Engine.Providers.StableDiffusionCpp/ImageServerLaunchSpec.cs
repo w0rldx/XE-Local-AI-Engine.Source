@@ -2,10 +2,12 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 
 /// <summary>
 ///     A fully-resolved launch specification for one <c>sd-server</c> child process: the executable, the complete
-///     command-line argument vector, the allocated loopback port, and the working directory. Produced by
-///     <see cref="Implementation.ImageServerArgumentBuilder" /> and consumed by the process launcher. Mirrors
-///     <c>LlamaServerLaunchSpec</c>.
+///     command-line argument vector, the allocated loopback port, and the working directory.
 /// </summary>
+/// <remarks>
+///     Produced by <see cref="Implementation.ImageServerArgumentBuilder" /> and consumed by the process launcher.
+///     Mirrors <c>LlamaServerLaunchSpec</c>.
+/// </remarks>
 internal sealed class ImageServerLaunchSpec
 {
     /// <summary>Model the process serves.</summary>

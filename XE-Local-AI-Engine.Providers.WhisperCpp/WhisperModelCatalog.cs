@@ -46,20 +46,14 @@ public sealed class WhisperModelEntry
 }
 
 /// <summary>
-///     The static Whisper weight catalogue plus the Silero VAD file every launch needs. A table, not a service: no
-///     network call decides what this node may install, so an offline node still shows the full list and a mistyped id
-///     is rejected before anything is downloaded.
+///     The static Whisper weight catalogue plus the Silero VAD file every launch needs.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b><see cref="Models" /> is ordered ascending by approximate footprint, and that ordering is load-bearing:</b>
-///         <see cref="WhisperModelRecommendation.Recommend" /> walks the list and keeps the LAST fitting row, so a
-///         re-ordering would silently change every recommendation. <c>WhisperModelCatalogTests</c> pins it.
-///     </para>
-///     <para>
-///         Every row is multilingual, so <see cref="WhisperModelEntry.EnglishOnly" /> is <see langword="false" />
-///         throughout V1. The field exists so that adding a <c>.en</c> row later does not change the record shape.
-///     </para>
+///     A table, not a service: no network call decides what this node may install, so an offline node still shows the full list and a
+///     mistyped id is rejected before anything is downloaded. <b><see cref="Models" /> is ordered ascending by approximate footprint,
+///     and that ordering is load-bearing:</b> <see cref="WhisperModelRecommendation.Recommend" /> walks the list and keeps the LAST
+///     fitting row, so a re-ordering would silently change every recommendation, and <c>WhisperModelCatalogTests</c> pins it. Every row
+///     is multilingual, so <see cref="WhisperModelEntry.EnglishOnly" /> is <see langword="false" /> throughout V1.
 /// </remarks>
 public static class WhisperModelCatalog
 {
@@ -91,6 +85,11 @@ public static class WhisperModelCatalog
     ///     The V1 weight rows, ordered ascending by approximate footprint. See the type remarks: the ordering is an
     ///     invariant, not a presentation choice.
     /// </summary>
+    /// <remarks>
+    ///     ponytail: only <c>base</c> — an upper bound measured with a second server resident — and
+    ///     <c>large-v3-turbo-q8_0</c> are measured figures; the rest are interpolated from file size. Re-measure both in
+    ///     isolation during a live round and correct the table from that run, not from a second guess.
+    /// </remarks>
     public static IReadOnlyList<WhisperModelEntry> Models { get; } =
     [
         new()
@@ -178,10 +177,6 @@ public static class WhisperModelCatalog
             EnglishOnly = false
         }
     ];
-
-    // ponytail: only `base` (an upper bound measured with a second server resident) and `large-v3-turbo-q8_0` are
-    // measured figures; the rest are interpolated from file size. Re-measure both in isolation during the S1 live
-    // round and correct the table from that run, not from a second guess.
 
     /// <summary>Finds a catalogue row by id, or <see langword="null" /> when the id is unknown.</summary>
     public static WhisperModelEntry? Find(string? modelId)

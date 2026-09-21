@@ -31,9 +31,8 @@ public static class GgufRegistryRevision
         WriteNullable(entry.SourceDisplayName);
         WriteNullable(entry.MetadataSchemaVersion?.ToString(CultureInfo.InvariantCulture));
 
-        // Trained-model lineage + adapter member. Written ONLY when the entry carries some — an entry with no lineage
-        // hashes to exactly the same token it did before these fields existed, so adding them does not invalidate the
-        // recorded revision of every already-installed model (which would skip them all on the next registry load).
+        // Trained-model lineage + adapter member. Written ONLY when the entry carries some — an entry with no lineage hashes to exactly the same token it did
+        // without these fields, so they do not invalidate every already-installed model's recorded revision (which would skip them all on the next registry load).
         if (HasLineage(entry))
         {
             Write("lineage");

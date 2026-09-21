@@ -8,11 +8,12 @@ public sealed record GgufAcquisitionMetadata
     /// <summary>Version written by new acquisitions. v2 added the trained-model lineage + adapter member fields.</summary>
     public const int CurrentSchemaVersion = 2;
 
-    /// <summary>
-    ///     Oldest sidecar version still accepted on read. Every field v2 added is optional, so a v1 sidecar written by an
-    ///     earlier install IS a valid v2 document with null lineage — rejecting it would strand every already-installed
-    ///     model behind a "corrupt sidecar" repair loop on first launch after the upgrade.
-    /// </summary>
+    /// <summary>Oldest sidecar version still accepted on read.</summary>
+    /// <remarks>
+    ///     Every field v2 added is optional, so a v1 sidecar written by an earlier install IS a valid v2 document with
+    ///     null lineage — rejecting it would strand every already-installed model behind a "corrupt sidecar" repair loop
+    ///     on first launch after the upgrade.
+    /// </remarks>
     public const int MinimumSupportedSchemaVersion = 1;
 
     public required int SchemaVersion { get; init; }

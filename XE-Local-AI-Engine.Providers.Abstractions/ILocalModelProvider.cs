@@ -33,10 +33,13 @@ public interface ILocalModelProvider
     /// <summary>
     ///     Returns live runtime facts for the running chat process backing <paramref name="modelName" /> — currently the
     ///     effective context window it actually loaded — or <see langword="null" /> when unknown (the model is not yet
-    ///     started, or the provider has no fixed launched window, e.g. Ollama/cloud). The default implementation reports
-    ///     <see langword="null" />; a runtime that pins a launched context window (llama.cpp) overrides it so the chat
-    ///     turn's budgeters and the UI meter can size against the real window rather than the advertised train context.
+    ///     started, or the provider has no fixed launched window, e.g. Ollama/cloud).
     /// </summary>
+    /// <remarks>
+    ///     The default implementation reports <see langword="null" />; a runtime that pins a launched context window
+    ///     (llama.cpp) overrides it so the chat turn's budgeters and the UI meter can size against the real window
+    ///     rather than the advertised train context.
+    /// </remarks>
     Task<LocalModelRuntimeInfo?> GetRuntimeInfoAsync(string modelName, CancellationToken ct)
     {
         return Task.FromResult<LocalModelRuntimeInfo?>(null);
@@ -53,9 +56,11 @@ public interface ILocalModelProvider
 
     /// <summary>
     ///     Creates an embedding generator for the selected provider/model pair. Callers must pass a selection whose
-    ///     <see cref="LocalModelSelection.ProviderName" /> matches <see cref="ProviderName" />. Embeddings are produced
-    ///     by the node-local runtime only, never a shared/cloud endpoint, so playbook and prompt text never leave the
-    ///     node. The returned client is <see cref="IDisposable" />; the caller owns and disposes it.
+    ///     <see cref="LocalModelSelection.ProviderName" /> matches <see cref="ProviderName" />.
     /// </summary>
+    /// <remarks>
+    ///     Embeddings are produced by the node-local runtime only, never a shared/cloud endpoint, so playbook and prompt
+    ///     text never leave the node. The returned client is <see cref="IDisposable" />; the caller owns and disposes it.
+    /// </remarks>
     IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection);
 }

@@ -11,34 +11,32 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.External;
 ///     endpoint that never earned them. Pinning these three facts and re-checking them on every send is what turns that
 ///     silent redirect into a refused send.
 /// </remarks>
-/// <param name="ModelId">
-///     The namespaced <c>ext:{connectionId}/{wireId}</c> id this pin authorizes. Stored CANONICALIZED, so a producer
-///     holding the id in whatever case the (NOCASE) provider map handed back and a verifier holding the registry's
-///     canonical spelling cannot end up talking past each other and leaving the send effectively unpinned.
-/// </param>
+/// <param name="ModelId">The namespaced <c>ext:{connectionId}/{wireId}</c> id this pin authorizes, stored CANONICALIZED.</param>
 /// <param name="Generation">The registry generation the authorization decision was made against.</param>
 /// <param name="Locality">The declared locality the tool gate saw.</param>
 /// <param name="BaseAddress">The full base address (scheme, host, port and path) the prompt was authorized to reach.</param>
 public sealed record ExternalProviderBindingPin(string ModelId, long Generation, ExternalProviderLocality Locality, string BaseAddress)
 {
     /// <inheritdoc cref="ExternalProviderBindingPin" />
-    // Explicitly declared so EVERY producer canonicalizes, at the one place a pin can come into existence. A
-    // non-external or malformed id has no canonical form and is kept verbatim: it can then only match itself, which is
-    // the fail-closed direction.
+    /// <remarks>
+    ///     Explicitly declared so EVERY producer canonicalizes at the one place a pin can come into existence: else the producer's
+    ///     spelling (a NOCASE provider-map row) and the verifier's canonical one talk past each other and leave the send effectively
+    ///     unpinned. A non-external or malformed id has no canonical form and stays verbatim, so it can only match itself — fail-closed.
+    /// </remarks>
     public string ModelId { get; } = ExternalModelId.Canonicalize(ModelId) ?? ModelId;
 
-    /// <summary>
-    ///     Whether <paramref name="binding" /> still matches what this pin authorized. Compares all three facts, not
-    ///     just the generation: a generation bump caused by an unrelated connection's edit must not abort a turn, while
-    ///     a locality or base-address change must abort it even if the generation somehow did not move.
-    /// </summary>
+    /// <summary>Whether <paramref name="binding" /> still matches what this pin authorized.</summary>
+    /// <remarks>
+    ///     Compares all three facts, not just the generation: a generation bump caused by an unrelated connection's edit
+    ///     must not abort a turn, while a locality or base-address change must abort it even if the generation somehow
+    ///     did not move.
+    /// </remarks>
     public bool Matches(ExternalProviderBinding binding)
     {
         ArgumentNullException.ThrowIfNull(binding);
 
-        // Ordinal on purpose: both sides are a normalized Uri.AbsoluteUri, which already lower-cases the scheme and
-        // host, so case-insensitivity would forgive exactly one thing — a case-only PATH change ("/Tenant/v1/" →
-        // "/tenant/v1/") — and paths are case-sensitive routes on the servers this pins against.
+        // Ordinal on purpose: both sides are a normalized Uri.AbsoluteUri, which already lower-cases scheme and host, so case-insensitivity would forgive exactly one thing — a case-only PATH change
+        // ("/Tenant/v1/" → "/tenant/v1/") — and paths are case-sensitive routes on the servers this pins against.
         return binding.Generation == Generation
                || (binding.Locality == Locality && string.Equals(binding.BaseAddress, BaseAddress, StringComparison.Ordinal));
     }
@@ -49,17 +47,11 @@ public sealed record ExternalProviderBindingPin(string ModelId, long Generation,
 ///     agent tool loop as an <see cref="AsyncLocal{T}" />.
 /// </summary>
 /// <remarks>
-///     <para>
-///         An <see cref="AsyncLocal{T}" /> rather than a parameter for the same reason <c>SpawnContext</c> is one: the
-///         value has to reach the provider through MAF's function-invocation pipeline and its <c>IChatClient</c> chain,
-///         neither of which carries a per-invocation context the node controls.
-///     </para>
-///     <para>
-///         Pins are ADDITIVE and looked up by model id, because one invocation legitimately involves more than one
-///         model — a sub-agent child runs inside the parent's async flow with its own binding. A send whose model has
-///         no pin is not an error: it is a non-turn context (a health probe, a background summarization), which
-///         resolves live under the transport's own weaker check.
-///     </para>
+///     An <see cref="AsyncLocal{T}" /> rather than a parameter for the same reason <c>SpawnContext</c> is one: it must reach the
+///     provider through MAF's function-invocation pipeline and its <c>IChatClient</c> chain, neither of which carries a per-invocation
+///     context the node controls. Pins are ADDITIVE and looked up by model id, because one invocation legitimately involves more than
+///     one model — a sub-agent child runs inside the parent's async flow with its own binding. A send whose model has no pin is not an
+///     error but a non-turn context (a health probe, a background summarization), resolved live under the transport's weaker check.
 /// </remarks>
 public static class ExternalProviderBindingPinScope
 {
@@ -115,9 +107,8 @@ public static class ExternalProviderBindingPinScope
             return null;
         }
 
-        // Canonicalize the LOOKUP too, for the same reason the pin canonicalizes what it stores: this id arrives from
-        // whatever spelling built the chat client (a NOCASE provider-map row), and a case-variant miss here would read
-        // as "not a pinned invocation" and silently drop the send to the weaker unpinned check.
+        // Canonicalize the LOOKUP too, for the same reason the pin canonicalizes what it stores: this id arrives from whatever spelling built the chat client (a NOCASE provider-map row), and a
+        // case-variant miss here would read as "not a pinned invocation" and silently drop the send to the weaker unpinned check.
         var canonical = ExternalModelId.Canonicalize(modelId) ?? modelId;
         for (var index = pins.Count - 1; index >= 0; index--)
         {

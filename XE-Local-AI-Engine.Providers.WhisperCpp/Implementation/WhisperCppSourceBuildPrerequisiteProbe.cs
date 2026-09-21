@@ -69,9 +69,8 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
             await ProbeEitherToolAsync(ct).ConfigureAwait(false),
             await ProbeToolAsync("git", ["--version"], "git", ProbeIsolationRoot, ct).ConfigureAwait(false),
 
-            // The post-build relocation gate runs readelf. Without binutils a build compiles for up to two hours and
-            // then fails on a check the operator could have satisfied in seconds, so it is a checklist row like the
-            // compilers, and it is required for every backend because the gate is backend-independent.
+            // The post-build relocation gate runs readelf. Without binutils a build compiles for up to two hours and then fails on a check the operator could have satisfied in seconds, so it is a
+            // checklist row like the compilers, and it is required for every backend because the gate is backend-independent.
             await ProbeToolAsync("readelf", ["--version"], "readelf (binutils)", ProbeIsolationRoot, ct).ConfigureAwait(false),
             ProbeFreeDisk()
         };

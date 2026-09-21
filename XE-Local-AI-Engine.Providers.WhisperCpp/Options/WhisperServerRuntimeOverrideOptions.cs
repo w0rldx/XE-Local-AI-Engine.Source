@@ -1,26 +1,15 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 
 /// <summary>
-///     Operator "bring-your-own" <c>whisper-server</c> override. When active it points the runtime at a locally-built
-///     binary — a Linux CUDA build, for which upstream ships no prebuilt asset — instead of the pinned
-///     download-and-verify acquisition path. Off by default: with <see cref="ServerPath" /> unset the selector and the
-///     binary manager behave byte-identically to the pinned path.
+///     Operator "bring-your-own" <c>whisper-server</c> override pointing the runtime at a locally-built binary — a Linux
+///     CUDA build, for which upstream ships no prebuilt asset — instead of the pinned download-and-verify path.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Trust-channel containment.</b> The override is <em>operator-trust only</em>: it is built exclusively from
-///         process environment variables (<see cref="ServerPathEnvironmentVariable" /> /
-///         <see cref="BackendEnvironmentVariable" />) via <see cref="FromEnvironment" />, the same trust level as the
-///         app binary itself. It is NEVER bound from <c>IConfiguration</c> sections, the user-editable node settings
-///         store, or any request DTO — a lower-trust write to the override path would otherwise become arbitrary-binary
-///         execution at app privilege. Skipping the network-oriented SHA256 pin is sound only under this containment.
-///     </para>
-///     <para>
-///         The options type is intentionally dumb: it carries the resolved values and a computed
-///         <see cref="IsActive" /> flag and performs no I/O or path validation. Validating the path on disk is the
-///         binary manager's job at acquisition time — this type only decides <em>whether</em> an override is configured
-///         and <em>which</em> backend it claims.
-///     </para>
+///     Off by default: with <see cref="ServerPath" /> unset the selector and the binary manager behave byte-identically to the pinned
+///     path. <b>Trust-channel containment:</b> the override is <em>operator-trust only</em>, built exclusively from process environment
+///     variables (<see cref="ServerPathEnvironmentVariable" /> / <see cref="BackendEnvironmentVariable" />) via
+///     <see cref="FromEnvironment" /> and NEVER from configuration, node settings or a request DTO. See
+///     docs/wiki/24-audio-transcription.md ("The bring-your-own whisper-server override").
 /// </remarks>
 public sealed class WhisperServerRuntimeOverrideOptions
 {

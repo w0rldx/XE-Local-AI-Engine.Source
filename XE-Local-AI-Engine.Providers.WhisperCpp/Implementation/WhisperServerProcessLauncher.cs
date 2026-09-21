@@ -8,21 +8,14 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
 ///     Production <see cref="IWhisperServerProcessLauncher" />: starts a real <c>whisper-server</c> child contained for
-///     orphan-free tree-kill. On Windows the child is assigned to a Job Object with
-///     <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c>; on Linux it starts a new session and process group via
-///     <c>setsid</c>, so <c>kill(-pgid)</c> reaps every descendant.
+///     orphan-free tree-kill.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Both of the child's streams are drained so a chatty server never stalls on a full pipe, and every line is
-///         forwarded at <b>Debug</b>, never Information. whisper-server prints the multipart file name of each request
-///         it receives, and file names are user content; keeping the forward at Debug means a normal
-///         Information-level deployment never persists one.
-///     </para>
-///     <para>
-///         Framing is plain line reading. Unlike stable-diffusion.cpp, whisper-server writes no carriage-return
-///         progress bar, so there is nothing a line splitter would rescue and no reason to port one.
-///     </para>
+///     On Windows the child is assigned to a Job Object with <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c>; on Linux it starts a new session
+///     and process group via <c>setsid</c>, so <c>kill(-pgid)</c> reaps every descendant. Both of the child's streams are drained so a
+///     chatty server never stalls on a full pipe, and every line is forwarded at <b>Debug</b>, never Information, because
+///     whisper-server prints the multipart file name of each request and file names are user content. Framing is plain line reading:
+///     unlike stable-diffusion.cpp, whisper-server writes no carriage-return progress bar for a splitter to rescue.
 /// </remarks>
 internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLauncher
 {

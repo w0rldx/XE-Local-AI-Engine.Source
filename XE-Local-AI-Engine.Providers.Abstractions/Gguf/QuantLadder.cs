@@ -5,22 +5,14 @@ using System.Collections.ObjectModel;
 /// <summary>
 ///     The single source of truth for GGUF quant quality: a llama.cpp quant ladder ordered by quality (best → worst),
 ///     where each known token carries BOTH a fine-grained quality RANK and the coarse <see cref="GgufQuantTier" /> grade.
-///     <para>
-///         Two consumers read different facets of the same table:
-///         <list type="bullet">
-///             <item>the advisor (memory-fit) walks the fine <see cref="QualityRank" /> + <see cref="DefaultFloorQuant" />
-///             to step down to the highest quant that fits;</item>
-///             <item><see cref="GgufQuantQuality" /> (the download picker) reads <see cref="TierOf" /> for the coarse
-///             per-row badge.</item>
-///         </list>
-///         Keeping both facets in one table means the quant knowledge is defined once. Quality is NOT a strict function
-///         of bytes-per-weight across families (an I-quant beats a same-bit K-quant, and a native FP4 format beats a
-///         wider requant), so the order is the curated quality ranking; <see cref="MemoryFitEstimator" /> supplies the
-///         size term separately. Note the rank and the tier deliberately diverge for the IQ4 family: IQ4_NL/IQ4_XS rank
-///         near Q4 on quality but are graded the conservative <see cref="GgufQuantTier.Small" /> for the picker.
-///     </para>
 /// </summary>
-/// <remarks>Pure and stateless. Rank 0 is the best quality; larger ranks are progressively more compressed.</remarks>
+/// <remarks>
+///     Pure and stateless: rank 0 is the best quality, larger ranks are progressively more compressed. Two consumers read one table, so
+///     the quant knowledge is defined once: the advisor walks the fine <see cref="QualityRank" /> and <see cref="DefaultFloorQuant" /> to
+///     step down to the highest quant that fits; the picker's <see cref="GgufQuantQuality" /> reads <see cref="TierOf" /> for the coarse
+///     badge. Quality is NOT a strict function of bytes-per-weight across families (an I-quant beats a same-bit K-quant, a native FP4
+///     beats a wider requant), so the order is the curated quality ranking and <see cref="MemoryFitEstimator" /> supplies the size term.
+/// </remarks>
 public static class QuantLadder
 {
     /// <summary>
@@ -29,9 +21,8 @@ public static class QuantLadder
     /// </summary>
     public const string DefaultFloorQuant = "Q3_K_M";
 
-    // Best → worst. Each rung carries the curated fine quality order (the array index) AND the coarse tier the download
-    // picker badges. Unknown / off-ladder labels are treated as just below Q4_K_M for ranking (see QualityRank); the
-    // picker's GgufQuantQuality falls back to its own family rules for off-ladder tokens (the _L variants, legacy/ARM,…).
+    // Best → worst. Each rung carries the curated fine quality order (the array index) AND the coarse tier the download picker badges.
+    // Unknown / off-ladder labels rank just below Q4_K_M (see QualityRank); GgufQuantQuality applies its own family rules to them.
     private static readonly QuantRung[] Rungs =
     [
         new() { Quant = "F32", Tier = GgufQuantTier.NearLossless },
@@ -40,12 +31,8 @@ public static class QuantLadder
         new() { Quant = "Q6_K", Tier = GgufQuantTier.NearLossless },
         new() { Quant = "Q5_K_M", Tier = GgufQuantTier.SweetSpot },
         new() { Quant = "Q5_K_S", Tier = GgufQuantTier.SweetSpot },
-        // Native FP4 (see IsNativeFormat): trained precision, not a lossy requant, so both rank ABOVE Q4_K_M despite
-        // sizing narrower than it (4.25 vs 4.5 bits/weight) — the same rank-vs-bytes divergence the IQ4 family shows.
-        // Omitting them was a live defect: an off-ladder label takes UnknownRank (just below Q4_K_M), which is exactly
-        // one step past the "recommended" gate, so a native-FP4 repo was demoted to "Can run" however well it fit.
-        // NVFP4 leads MXFP4 because it carries finer scale granularity (a 16-element block with an FP8 scale against
-        // MXFP4's 32-element block with a power-of-two scale) at the same measured on-disk density.
+        // NVFP4 leads MXFP4: finer scale granularity (a 16-element block with an FP8 scale vs MXFP4's 32-element block with a power-of-two scale) at the same measured on-disk density.
+        // Off the ladder both take UnknownRank — one step past the "recommended" gate, demoting a native-FP4 repo to "Can run" however well it fits. See IsNativeFormat.
         new() { Quant = "NVFP4", Tier = GgufQuantTier.Balanced },
         new() { Quant = "MXFP4", Tier = GgufQuantTier.Balanced },
         new() { Quant = "Q4_K_M", Tier = GgufQuantTier.Balanced },
@@ -84,9 +71,12 @@ public static class QuantLadder
 
     /// <summary>
     ///     Repository-owned canonical quantizations that may be selected when a GGUF header and filename cannot
-    ///     identify the source quantization. The returned collection is immutable and ordered best-to-worst by the
-    ///     same quality ladder used by model-fit selection.
+    ///     identify the source quantization.
     /// </summary>
+    /// <remarks>
+    ///     The returned collection is immutable and ordered best-to-worst by the same quality ladder used by model-fit
+    ///     selection.
+    /// </remarks>
     public static IReadOnlyList<string> CanonicalQuantizations => CanonicalQuantizationValues;
 
     /// <summary>
@@ -107,13 +97,16 @@ public static class QuantLadder
     }
 
     /// <summary>
-    ///     <see langword="true" /> when <paramref name="quant" /> is a native, non-requantizable GGUF format — today MXFP4
-    ///     (gpt-oss ships its MoE weights natively at ~4.25 bits/weight) and NVFP4 (NVIDIA's Blackwell-era FP4; llama.cpp
-    ///     carries <c>GGML_TYPE_NVFP4</c> with sm_120-tuned kernels). Re-quantizing such a model UP to a higher nominal
-    ///     quant (Q6/Q8/…) only wastes space without adding quality — the weights are already at their trained precision —
-    ///     so the advisor must never prefer a higher-quality requant over the native file. The advisor uses this to cap
-    ///     the recommendable quality of a repo that ships a native format at the native file itself.
+    ///     <see langword="true" /> when <paramref name="quant" /> is a native, non-requantizable GGUF format — today
+    ///     MXFP4 and NVFP4.
     /// </summary>
+    /// <remarks>
+    ///     gpt-oss ships its MoE weights natively at MXFP4's ~4.25 bits/weight; NVFP4 is NVIDIA's Blackwell-era FP4, which llama.cpp
+    ///     carries as <c>GGML_TYPE_NVFP4</c> with sm_120-tuned kernels. Both therefore rank ABOVE Q4_K_M on the ladder despite sizing
+    ///     narrower (4.25 vs 4.5 bits/weight) — the same rank-vs-bytes divergence the IQ4 family shows. Re-quantizing such a model UP to
+    ///     a higher nominal quant (Q6/Q8/…) only wastes space without adding quality, the weights already being at their trained
+    ///     precision, so the advisor never prefers a requant over the native file and caps a native repo's quality at that file.
+    /// </remarks>
     public static bool IsNativeFormat(string quant)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(quant);
@@ -127,6 +120,10 @@ public static class QuantLadder
     ///     tokens priced off their stripped base), or <see langword="null" /> when the token is off-ladder so the caller
     ///     (<see cref="GgufQuantQuality" />) applies its own family rules.
     /// </summary>
+    /// <remarks>
+    ///     Rank and tier deliberately diverge for the IQ4 family: IQ4_NL/IQ4_XS rank near Q4 on quality but are graded
+    ///     the conservative <see cref="GgufQuantTier.Small" /> for the picker.
+    /// </remarks>
     public static GgufQuantTier? TierOf(string quant)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(quant);

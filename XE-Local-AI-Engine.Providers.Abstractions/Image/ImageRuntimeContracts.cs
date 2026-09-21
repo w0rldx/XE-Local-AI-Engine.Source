@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
-///     A single text-to-image generation request handed to <see cref="IImageRuntime" />. Provider-neutral: it carries
-///     only the generation parameters, never any stable-diffusion.cpp flag, route, or HTTP detail (those stay inside the
-///     adapter). The job/coordinator layer builds one of these per job and passes it to
-///     <see cref="IImageRuntime.GenerateAsync" />.
+///     A single text-to-image generation request handed to <see cref="IImageRuntime" />.
 /// </summary>
+/// <remarks>
+///     Provider-neutral: it carries only the generation parameters, never any stable-diffusion.cpp flag, route, or HTTP
+///     detail (those stay inside the adapter). The job/coordinator layer builds one of these per job and passes it to
+///     <see cref="IImageRuntime.GenerateAsync" />.
+/// </remarks>
 public sealed record ImageGenerationRequest
 {
     /// <summary>Registry key of the installed image model to generate with.</summary>
@@ -35,23 +37,14 @@ public sealed record ImageGenerationRequest
     public int BatchCount { get; init; } = 1;
 }
 
-/// <summary>
-///     The lifecycle phase of an image job.
-///     <para>
-///         The coarse values (<see cref="Queued" />, <see cref="Generating" /> and the three terminal ones) come from the
-///         runtime's HTTP job status, which is all sd-server's HTTP contract exposes. The four <em>fine</em> values
-///         (<see cref="Loading" />, <see cref="Encoding" />, <see cref="Sampling" />, <see cref="Decoding" />) are
-///         observed out-of-band from the daemon's own stdout progress lines, so a runtime that cannot read them simply
-///         never reports them and the coarse transitions still stand on their own.
-///     </para>
-///     <para>
-///         The fine values are load-bearing for an honest countdown: a step-only ETA reaches zero at the last sampling
-///         step and then sits there through VAE decode, which on a small image is a large share of the wall clock. Only
-///         <see cref="Sampling" /> carries a step count and an estimate; <see cref="Loading" />/<see cref="Encoding" />
-///         precede step 1 and <see cref="Decoding" /> follows the last step, and all three are deliberately
-///         countdown-free.
-///     </para>
-/// </summary>
+/// <summary>The lifecycle phase of an image job.</summary>
+/// <remarks>
+///     The coarse values (<see cref="Queued" />, <see cref="Generating" /> and the three terminal ones) come from the runtime's HTTP job status,
+///     all sd-server exposes; the four <em>fine</em> values (<see cref="Loading" />, <see cref="Encoding" />, <see cref="Sampling" />,
+///     <see cref="Decoding" />) are observed out-of-band from the daemon's stdout progress lines, so a runtime that cannot read them never
+///     reports them and the coarse transitions still stand. Only <see cref="Sampling" /> carries a step count and an estimate: <see cref="Loading" /> and
+///     <see cref="Encoding" /> precede step 1 and <see cref="Decoding" /> — a large share of a small image's wall clock — follows the last step, all three deliberately countdown-free.
+/// </remarks>
 public enum ImageGenPhase
 {
     /// <summary>Accepted and waiting for a generation slot.</summary>
@@ -82,10 +75,13 @@ public enum ImageGenPhase
 
 /// <summary>
 ///     One progress observation pushed to the caller-supplied <see cref="IProgress{T}" /> as an image job moves through
-///     its phases. Every field except <see cref="Phase" /> and <see cref="Elapsed" /> is nullable, so a runtime that can
-///     only observe the coarse HTTP status reports exactly what it knows and nothing more — an absent field means
-///     "not observed", never "zero".
+///     its phases.
 /// </summary>
+/// <remarks>
+///     Every field except <see cref="Phase" /> and <see cref="Elapsed" /> is nullable, so a runtime that can only
+///     observe the coarse HTTP status reports exactly what it knows and nothing more — an absent field means "not
+///     observed", never "zero".
+/// </remarks>
 public sealed record ImageGenProgress
 {
     public required ImageGenPhase Phase { get; init; }
@@ -105,17 +101,22 @@ public sealed record ImageGenProgress
     public double? SecondsPerIteration { get; init; }
 
     /// <summary>
-    ///     Estimated time left in the SAMPLING phase only, when it can honestly be computed. Deliberately
-    ///     <see langword="null" /> outside <see cref="ImageGenPhase.Sampling" /> and once the last step is done: the
-    ///     decode that follows has no observable progress, so a countdown there would sit at zero while the job runs on.
+    ///     Estimated time left in the SAMPLING phase only, when it can honestly be computed.
     /// </summary>
+    /// <remarks>
+    ///     Deliberately <see langword="null" /> outside <see cref="ImageGenPhase.Sampling" /> and once the last step is
+    ///     done: the decode that follows has no observable progress, so a countdown there would sit at zero while the
+    ///     job runs on.
+    /// </remarks>
     public TimeSpan? EstimatedRemaining { get; init; }
 }
 
 /// <summary>
-///     A completed image generation: the decoded PNG bytes plus the resolved metadata. The bytes are plaintext in
-///     memory only — the caller persists them through the encrypted-at-rest blob store.
+///     A completed image generation: the decoded PNG bytes plus the resolved metadata.
 /// </summary>
+/// <remarks>
+///     The bytes are plaintext in memory only — the caller persists them through the encrypted-at-rest blob store.
+/// </remarks>
 public sealed record ImageGenerationResult
 {
     /// <summary>The decoded image bytes (PNG). The caller persists these through the encrypted-at-rest blob store.</summary>
@@ -123,9 +124,12 @@ public sealed record ImageGenerationResult
 
     /// <summary>
     ///     Width in pixels of the image that was actually produced — read from the returned payload, NOT echoed from the
-    ///     request. Runtimes round the requested size (stable-diffusion.cpp snaps up to a multiple of 64), so this can
-    ///     legitimately differ from <see cref="ImageGenerationRequest.Width" />.
+    ///     request.
     /// </summary>
+    /// <remarks>
+    ///     Runtimes round the requested size (stable-diffusion.cpp snaps up to a multiple of 64), so this can
+    ///     legitimately differ from <see cref="ImageGenerationRequest.Width" />.
+    /// </remarks>
     public required int Width { get; init; }
 
     /// <summary>Height in pixels of the image that was actually produced; see <see cref="Width" />.</summary>

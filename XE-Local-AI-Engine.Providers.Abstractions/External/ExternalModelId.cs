@@ -7,20 +7,11 @@ using System.Diagnostics.CodeAnalysis;
 ///     grammar, its formatting, its parsing and its canonical form.
 /// </summary>
 /// <remarks>
-///     <para>
-///         WHY a namespaced id at all: the node routes a chat turn by ONE model-name string through the provider map,
-///         and two operators can legitimately register the same backing model id (<c>qwen3-27b</c>) on two different
-///         connections. Prefixing with the connection slug makes the identity unique without a second routing key, and
-///         the <c>ext:</c> scheme lets every policy site recognise an external id by inspection alone.
-///     </para>
-///     <para>
-///         WHY the grammar is deliberately narrow on the LEFT and wide on the RIGHT: the connection slug is ours to
-///         mint, so it is restricted to <c>[a-z0-9-]</c> and canonicalized once at write time — the provider map
-///         compares model names case-INSENSITIVELY while the tool-capable allow-list compares them ORDINALLY, and a
-///         single canonical spelling is what keeps those two agreeing. The wire id is the REMOTE server's, so it is
-///         only constrained enough to stay safe: it may carry <c>/</c> (an <c>org/model</c> vLLM id) and <c>:</c> (an
-///         Ollama-style tag), but never a path traversal, a backslash, a scheme, or whitespace.
-///     </para>
+///     WHY a namespaced id at all: the node routes a chat turn by ONE model-name string through the provider map, and two
+///     operators can legitimately register the same backing model id (<c>qwen3-27b</c>) on two different connections.
+///     Prefixing with the connection slug makes the identity unique without a second routing key, and the <c>ext:</c>
+///     scheme lets every policy site recognise an external id by inspection alone. The grammar is deliberately narrow on
+///     the LEFT (<see cref="IsValidConnectionId" />) and wide on the RIGHT (<see cref="IsValidWireId" />).
 /// </remarks>
 public static class ExternalModelId
 {
@@ -76,10 +67,13 @@ public static class ExternalModelId
     }
 
     /// <summary>
-    ///     Parses a namespaced id into its canonical parts. Returns <see langword="false" /> — never throws — for any
-    ///     input that is not a well-formed external id, so a malformed or hand-edited id resolves to the caller's
-    ///     fail-closed branch rather than an exception on the routing path.
+    ///     Parses a namespaced id into its canonical parts; returns <see langword="false" /> — never throws — for any
+    ///     input that is not a well-formed external id.
     /// </summary>
+    /// <remarks>
+    ///     A malformed or hand-edited id therefore resolves to the caller's fail-closed branch rather than an exception
+    ///     on the routing path.
+    /// </remarks>
     /// <param name="modelName">The candidate id.</param>
     /// <param name="connectionId">The canonical (lowered) connection slug on success.</param>
     /// <param name="wireId">The backing model id, exactly as it must appear on the wire, on success.</param>
@@ -127,8 +121,12 @@ public static class ExternalModelId
     }
 
     /// <summary>True when <paramref name="connectionId" /> is already in canonical slug form.</summary>
-    // Hand-validated rather than regex-matched: the grammars are single character classes, so a linear scan is both
-    // cheaper and free of the catastrophic-backtracking surface a regex on caller-supplied input carries (MA0009).
+    /// <remarks>
+    ///     The slug is ours to mint, so it is narrow — restricted to <c>[a-z0-9-]</c> and canonicalized once at write
+    ///     time by <see cref="CanonicalizeConnectionId" />. Hand-validated rather than regex-matched: the grammars are
+    ///     single character classes, so a linear scan is both cheaper and free of the catastrophic-backtracking surface
+    ///     a regex on caller-supplied input carries (MA0009).
+    /// </remarks>
     public static bool IsValidConnectionId([NotNullWhen(true)] string? connectionId)
     {
         return connectionId is { Length: > 0 and <= MaxConnectionIdLength }
@@ -139,6 +137,11 @@ public static class ExternalModelId
     ///     True when <paramref name="wireId" /> is a safe backing model id: within the charset and length bound, free of
     ///     path traversal, and without an empty leading/trailing/interior path segment.
     /// </summary>
+    /// <remarks>
+    ///     The wire id is the REMOTE server's, so it is only constrained enough to stay safe: it may carry <c>/</c> (an
+    ///     <c>org/model</c> vLLM id) and <c>:</c> (an Ollama-style tag), but never a path traversal, a backslash, a
+    ///     scheme, or whitespace.
+    /// </remarks>
     public static bool IsValidWireId([NotNullWhen(true)] string? wireId)
     {
         // Charset: letters, digits, and the punctuation real remote model ids use — dot, underscore, dash, colon (tags)
@@ -153,10 +156,13 @@ public static class ExternalModelId
 
     /// <summary>
     ///     Returns the canonical spelling of a connection slug — trimmed and lowered — WITHOUT asserting the grammar;
-    ///     pair it with <see cref="IsValidConnectionId" /> when the input is operator-supplied. Public so the store that
-    ///     MINTS slugs canonicalizes them with the same code that parses them back out of a model id: two independent
-    ///     lowering passes are how the case-insensitive provider map and the ordinal allow-list drift apart.
+    ///     pair it with <see cref="IsValidConnectionId" /> when the input is operator-supplied.
     /// </summary>
+    /// <remarks>
+    ///     Public so the store that MINTS slugs canonicalizes them with the same code that parses them back out of a
+    ///     model id: two independent lowering passes are how the case-insensitive provider map and the ordinal
+    ///     tool-capable allow-list drift apart.
+    /// </remarks>
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "The connection slug's canonical persisted form is lowercase ASCII by grammar; it is an identity segment we mint, not a security token compared after a round-trip.")]
     public static string CanonicalizeConnectionId(string? connectionId)

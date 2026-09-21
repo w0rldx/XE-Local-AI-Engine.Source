@@ -27,10 +27,11 @@ public interface IWhisperRuntimeActivityLease : IAsyncDisposable, IDisposable;
 
 /// <summary>
 ///     Atomically coordinates in-flight transcriptions, spawn/readiness windows, resident processes, and exclusive
-///     runtime mutation. A mutation reservation is granted only when every activity count is zero; while one is held,
-///     new transcription and spawn leases are refused.
+///     runtime mutation.
 /// </summary>
 /// <remarks>
+///     A mutation reservation is granted only when every activity count is zero; while one is held, new transcription
+///     and spawn leases are refused.
 ///     This is what answers <c>409 runtime-busy</c>: an eject, a managed source build or a source-build remove issued
 ///     while a transcription is in flight is refused here rather than racing the daemon that is serving it.
 /// </remarks>

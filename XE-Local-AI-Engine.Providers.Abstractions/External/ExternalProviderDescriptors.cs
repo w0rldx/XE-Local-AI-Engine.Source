@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
-///     The non-secret read model of one external OpenAI-compatible API connection. Deliberately carries NO API key:
-///     the key is a secret whose only legitimate consumer is the transport, and it reaches the transport bound to its
+///     The non-secret read model of one external OpenAI-compatible API connection. Deliberately carries NO API key.
+/// </summary>
+/// <remarks>
+///     The key is a secret whose only legitimate consumer is the transport, and it reaches the transport bound to its
 ///     own endpoint through <see cref="IExternalProviderRegistry.TryResolveTransportBindingAsync" />, so every
 ///     catalog/UI/policy consumer of this descriptor is structurally incapable of leaking it.
-/// </summary>
+/// </remarks>
 public sealed record ExternalProviderConnectionDescriptor
 {
     /// <summary>
@@ -17,11 +19,11 @@ public sealed record ExternalProviderConnectionDescriptor
     /// <summary>Operator-chosen label shown in the picker, egress cues, and usage attribution.</summary>
     public required string DisplayName { get; init; }
 
-    /// <summary>
-    ///     The NORMALIZED, <c>/v1</c>-terminated base address (see the transport's base-URL normalizer). Both the
-    ///     connect-time probe and every chat send are pinned to it, so a descriptor carrying an un-normalized value
-    ///     would silently widen the outbound guard.
-    /// </summary>
+    /// <summary>The NORMALIZED, <c>/v1</c>-terminated base address (see the transport's base-URL normalizer).</summary>
+    /// <remarks>
+    ///     Both the connect-time probe and every chat send are pinned to it, so a descriptor carrying an un-normalized
+    ///     value would silently widen the outbound guard.
+    /// </remarks>
     public required Uri BaseUrl { get; init; }
 
     /// <summary>The operator-declared trust locality driving every downstream tool/knowledge/dev-mode gate.</summary>
@@ -35,10 +37,12 @@ public sealed record ExternalProviderConnectionDescriptor
 }
 
 /// <summary>
-///     One operator-registered model on an external connection. Every capability here is DECLARED, never probed: only
-///     <c>POST /v1/chat/completions</c> is universal across OpenAI-compatible servers, and no endpoint advertises tool,
-///     vision or reasoning support in a way that can be trusted across llama.cpp / vLLM / LM Studio / hosted APIs.
+///     One operator-registered model on an external connection. Every capability here is DECLARED, never probed.
 /// </summary>
+/// <remarks>
+///     Only <c>POST /v1/chat/completions</c> is universal across OpenAI-compatible servers, and no endpoint advertises
+///     tool, vision or reasoning support in a way that can be trusted across llama.cpp / vLLM / LM Studio / hosted APIs.
+/// </remarks>
 public sealed record ExternalProviderModelDescriptor
 {
     /// <summary>The backing model id sent on the wire as the request's <c>model</c> field, verbatim.</summary>
@@ -68,10 +72,13 @@ public sealed record ExternalProviderModelDescriptor
 
     /// <summary>
     ///     The effort applied when the turn selects none, in the canonical lowercase vocabulary
-    ///     (<c>none</c>/<c>on</c>/<c>minimal</c>/<c>low</c>/<c>medium</c>/<c>high</c>/<c>xhigh</c>). A string rather
-    ///     than an enum because that vocabulary's single source of truth (the chat reasoning normalizer) lives in the
-    ///     application layer, which this seam must not reference. Unrecognized values are treated as unspecified.
+    ///     (<c>none</c>/<c>on</c>/<c>minimal</c>/<c>low</c>/<c>medium</c>/<c>high</c>/<c>xhigh</c>).
     /// </summary>
+    /// <remarks>
+    ///     A string rather than an enum because that vocabulary's single source of truth (the chat reasoning normalizer)
+    ///     lives in the application layer, which this seam must not reference. Unrecognized values are treated as
+    ///     unspecified.
+    /// </remarks>
     public string? DefaultReasoningEffort { get; init; }
 }
 

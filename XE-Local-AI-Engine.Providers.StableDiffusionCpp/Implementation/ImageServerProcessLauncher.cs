@@ -8,28 +8,14 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     Production <see cref="IImageServerProcessLauncher" />: starts a real <c>sd-server</c> child contained for
-///     orphan-free tree-kill. On Windows the child is assigned to a Job Object with
-///     <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c>; on Linux it starts a new session/process-group (<c>setsid</c>) so
-///     <c>kill(-pgid)</c> reaps every descendant. Mirrors <c>LlamaServerProcessLauncher</c>.
+///     orphan-free tree-kill, mirroring <c>LlamaServerProcessLauncher</c>.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The child's stdout/stderr are drained (so a chatty server never stalls on a full pipe) and forwarded to the
-///         app logger at <b>Debug</b> level — NOT Information. sd-server can echo the request prompt in its own logs,
-///         and prompts are privacy-sensitive: keeping the forward at Debug ensures a normal Information-level deployment
-///         never persists a prompt, while a developer can still opt into the backend/device banner at Debug.
-///     </para>
-///     <para>
-///         The same drained output is the ONLY place sd-server reports sampling progress — its HTTP job contract has no
-///         step or percent field at all. Each frame is therefore offered to <see cref="SdProgressLineParser" /> and only
-///         the PARSED result (phase plus step counters, never the text) is published to
-///         <see cref="IImageServerProgressBroker" />, so the prompt that may sit in a log line cannot ride the progress
-///         path out to the status hub.
-///     </para>
-///     <para>
-///         Framing is delegated to <see cref="SdOutputFrameSplitter" /> rather than <c>BeginOutputReadLine</c>, which
-///         cannot surface sd.cpp's leading-carriage-return progress bar in time — see that type's remarks.
-///     </para>
+///     On Windows the child is assigned to a Job Object with <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c>; on Linux it starts a new
+///     session/process-group (<c>setsid</c>) so <c>kill(-pgid)</c> reaps every descendant. The child's stdout/stderr are drained, so a
+///     chatty server never stalls on a full pipe, and forwarded to the app logger at <b>Debug</b> — NOT Information — because sd-server
+///     can echo the privacy-sensitive request prompt in its own logs. Framing is delegated to <see cref="SdOutputFrameSplitter" />
+///     rather than <c>BeginOutputReadLine</c>. See docs/wiki/14-image-generation.md ("sd-server's stdout is the progress channel").
 /// </remarks>
 internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
 {
@@ -159,10 +145,12 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     }
 
     /// <summary>
-    ///     Reads one stream to EOF, feeding it through the frame splitter. Reads into a char buffer rather than calling
-    ///     <c>ReadLineAsync</c>, whose carriage-return handling waits to see whether a line feed follows — the exact
-    ///     one-frame stall the splitter exists to avoid.
+    ///     Reads one stream to EOF, feeding it through the frame splitter.
     /// </summary>
+    /// <remarks>
+    ///     Reads into a char buffer rather than calling <c>ReadLineAsync</c>, whose carriage-return handling waits to
+    ///     see whether a line feed follows — the exact one-frame stall the splitter exists to avoid.
+    /// </remarks>
     private async Task DrainAsync(StreamReader reader, string label)
     {
         var buffer = new char[DrainBufferLength];

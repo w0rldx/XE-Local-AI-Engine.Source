@@ -3,22 +3,13 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     App-controlled lifecycle of GGUF model files on local disk and the shared storage seam. The llama-server
-///     provider consumes the resolve + list pair (to launch <c>llama-server -m &lt;path&gt;</c> and to enumerate
-///     installed models for <see cref="ILocalModelProvider.ListModelsAsync" />); its pull/delete operations and the
-///     model-fit advisor consume the acquire/delete pair.
+///     The two files a LoRA-adapter model launches with: the installed BASE model llama-server loads as <c>-m</c>, and
+///     the adapter it applies as <c>--lora</c>.
 /// </summary>
 /// <remarks>
-///     Downloads are atomic-on-complete: a file is reported present only after the full byte stream is received and its
-///     hash verifies (when an LFS OID is available). Partial downloads live under a <c>.part</c> name and are never
-///     returned as complete. Progress is reported as the same <see cref="PullProgress" /> DTO the Ollama provider uses,
-///     so the provider layer maps it 1:1.
+///     <see cref="AdapterSizeBytes" /> is the adapter's on-disk size, which the launch path adds to the base weight size
+///     wherever the main model file size is accounted for.
 /// </remarks>
-/// <summary>
-///     The two files a LoRA-adapter model launches with: the installed BASE model llama-server loads as <c>-m</c>, and
-///     the adapter it applies as <c>--lora</c>. <see cref="AdapterSizeBytes" /> is the adapter's on-disk size, which the
-///     launch path adds to the base weight size wherever the main model file size is accounted for.
-/// </summary>
 public sealed class GgufAdapterLaunch
 {
     public required string BaseModelFilePath { get; init; }
@@ -39,13 +30,23 @@ public sealed class GgufAdapterBaseModelMissingException : Exception
     }
 }
 
+/// <summary>App-controlled lifecycle of GGUF model files on local disk, and the shared storage seam.</summary>
+/// <remarks>
+///     The llama-server provider consumes the resolve + list pair (launching <c>llama-server -m &lt;path&gt;</c> and enumerating installed
+///     models for <see cref="ILocalModelProvider.ListModelsAsync" />); its pull/delete operations and the model-fit advisor consume the
+///     acquire/delete pair. Downloads are atomic-on-complete: a file is reported present only after the full byte stream is received and
+///     its hash verifies (when an LFS OID is available); partial downloads live under a <c>.part</c> name and are never returned as
+///     complete. Progress is reported as the same <see cref="PullProgress" /> DTO the Ollama provider uses, so the layer maps it 1:1.
+/// </remarks>
 public interface IGgufModelStore
 {
     /// <summary>
     ///     Resolves the base-model + adapter file pair for <paramref name="modelName" /> when it is a LoRA adapter entry,
-    ///     or <see langword="null" /> when it is an ordinary standalone model (including a merged fine-tune). Consumed by
-    ///     the llama-server supervisor to launch the base model with <c>--lora &lt;adapter&gt;</c>.
+    ///     or <see langword="null" /> when it is an ordinary standalone model (including a merged fine-tune).
     /// </summary>
+    /// <remarks>
+    ///     Consumed by the llama-server supervisor to launch the base model with <c>--lora &lt;adapter&gt;</c>.
+    /// </remarks>
     /// <exception cref="GgufAdapterBaseModelMissingException">
     ///     The entry is an adapter but the base model it names is not installed or its file is gone.
     /// </exception>
@@ -62,9 +63,12 @@ public interface IGgufModelStore
     /// <summary>
     ///     Resolves the absolute path to the local multimodal projector (<c>mmproj</c>) file paired with
     ///     <paramref name="modelName" />, or <see langword="null" /> when the model has no projector companion (a
-    ///     text-only model) or the model is not installed. Consumed by the llama-server supervisor to add
-    ///     <c>--mmproj &lt;path&gt;</c> so a vision model can accept image input.
+    ///     text-only model) or the model is not installed.
     /// </summary>
+    /// <remarks>
+    ///     Consumed by the llama-server supervisor to add <c>--mmproj &lt;path&gt;</c> so a vision model can accept
+    ///     image input.
+    /// </remarks>
     Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct);
 
     /// <summary>Enumerates the installed GGUF models as normalized host-agent descriptors.</summary>
@@ -72,11 +76,14 @@ public interface IGgufModelStore
 
     /// <summary>
     ///     Resolves the canonical <c>{repoId}:{quant}</c> model name a request would be stored under — the SAME identity
-    ///     <see cref="EnsureModelAsync" /> registers — WITHOUT downloading. Lets a caller (e.g. the download coordinator)
-    ///     key its tracking/cancellation by the identity the model will actually be installed as, even when a base-quant
-    ///     request resolves to a different file (such as an Unsloth Dynamic variant). May perform a lightweight repo
-    ///     inspection to resolve the file; throws the same discovery/transport exceptions as a download's resolve step.
+    ///     <see cref="EnsureModelAsync" /> registers — WITHOUT downloading.
     /// </summary>
+    /// <remarks>
+    ///     Lets a caller (e.g. the download coordinator) key its tracking/cancellation by the identity the model will
+    ///     actually be installed as, even when a base-quant request resolves to a different file (such as an Unsloth
+    ///     Dynamic variant). May perform a lightweight repo inspection to resolve the file; throws the same
+    ///     discovery/transport exceptions as a download's resolve step.
+    /// </remarks>
     Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct);
 
     /// <summary>
@@ -94,9 +101,11 @@ public interface IGgufModelStore
     /// <summary>
     ///     Resolves the memory-footprint inputs for the installed model <paramref name="modelName" /> — the registry
     ///     quant label + on-disk file size + a single tolerant GGUF header read (param/block/head/embedding/context).
+    /// </summary>
+    /// <remarks>
     ///     Returns <see langword="null" /> when the model is not installed (no registry entry or its file is gone). Used
     ///     by the capacity footprint provider so it never re-parses GGUF headers or re-reads the quant from the file
     ///     name. The header read is cached per <c>(path, size, downloaded-at)</c>; a re-download invalidates the entry.
-    /// </summary>
+    /// </remarks>
     Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string modelName, CancellationToken ct);
 }

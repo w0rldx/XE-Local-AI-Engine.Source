@@ -50,10 +50,13 @@ public sealed record BaseCheckpointManifest
 }
 
 /// <summary>
-///     Resolves and downloads trainable Hugging Face base checkpoints (safetensors + config + tokenizer). Sits beside
-///     the GGUF and image stores over the same <c>HfHubClient</c> / <c>HfDownloadClient</c> pair, because those are
-///     internal to this assembly and multi-file download is orchestration over them rather than a new primitive.
+///     Resolves and downloads trainable Hugging Face base checkpoints (safetensors + config + tokenizer).
 /// </summary>
+/// <remarks>
+///     Sits beside the GGUF and image stores over the same <c>HfHubClient</c> / <c>HfDownloadClient</c> pair, because
+///     those are internal to this assembly and multi-file download is orchestration over them rather than a new
+///     primitive.
+/// </remarks>
 public interface IBaseCheckpointStore
 {
     /// <summary>
@@ -68,9 +71,12 @@ public interface IBaseCheckpointStore
     /// <summary>
     ///     Downloads every file of <paramref name="manifest" /> into <paramref name="destinationDirectory" />, one file
     ///     at a time with <c>.part</c> staging, resume and SHA-256 verification, and returns the manifest with each
-    ///     file's verified local path filled in. Already-complete files are reused rather than refetched, so a resumed
-    ///     download does not re-transfer finished shards.
+    ///     file's verified local path filled in.
     /// </summary>
+    /// <remarks>
+    ///     Already-complete files are reused rather than refetched, so a resumed download does not re-transfer finished
+    ///     shards.
+    /// </remarks>
     Task<BaseCheckpointManifest> DownloadAsync(BaseCheckpointManifest manifest,
         string destinationDirectory,
         IProgress<PullProgress>? progress,

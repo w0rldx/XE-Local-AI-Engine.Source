@@ -5,13 +5,13 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     Default <see cref="IImageServerProgressBroker" />: a per-model fan-out of parsed stdout observations from the
-///     launcher's drain threads to whichever generation is currently listening. Singleton — the launcher publishes for
-///     the lifetime of every child process it started, while subscriptions come and go with each generation.
+///     launcher's drain threads to whichever generation is currently listening.
 /// </summary>
 /// <remarks>
-///     A publish never blocks and never throws: it runs on the thread that drains the child's stdout pipe, so a slow or
-///     faulting handler there would back the pipe up and eventually stall the daemon itself. Handlers are therefore
-///     invoked inline but wrapped, and an observation with no subscriber is simply dropped.
+///     Singleton — the launcher publishes for the lifetime of every child process it started, while subscriptions come and go with each
+///     generation. A publish never blocks and never throws: it runs on the thread that drains the child's stdout pipe, so a slow or
+///     faulting handler there would back the pipe up and eventually stall the daemon itself. Handlers are therefore invoked inline but
+///     wrapped, and an observation with no subscriber is simply dropped.
 /// </remarks>
 internal sealed class ImageServerProgressBroker : IImageServerProgressBroker
 {
@@ -64,9 +64,8 @@ internal sealed class ImageServerProgressBroker : IImageServerProgressBroker
 
         _ = handlers.TryRemove(token, out _);
 
-        // Drop the now-empty per-model bucket so a node that installs and generates with many models does not
-        // accumulate one dictionary per model name for the process lifetime. A racing Subscribe re-adds it via
-        // GetOrAdd; the worst case is one observation delivered to nobody, which is already the no-subscriber path.
+        // Drop the now-empty per-model bucket so a node that installs and generates with many models does not accumulate one dictionary per model name for the process lifetime. A racing Subscribe
+        // re-adds it via GetOrAdd; the worst case is one observation delivered to nobody, which is already the no-subscriber path.
         if (handlers.IsEmpty)
         {
             _ = _subscribers.TryRemove(new KeyValuePair<string, ConcurrentDictionary<Guid, Action<SdProgressObservation>>>(modelName, handlers));

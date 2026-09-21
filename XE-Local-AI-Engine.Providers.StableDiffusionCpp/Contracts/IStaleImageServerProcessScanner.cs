@@ -2,10 +2,13 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
 ///     Testability seam for the startup orphan reaper (<c>StaleImageServerReaper</c>): enumerates the host's candidate
-///     <c>sd-server</c> processes and tree-kills one by pid. The production implementation
-///     (<c>OsStaleImageServerProcessScanner</c>) reads the real OS process table; unit tests substitute an in-memory fake
-///     so the reaper's matching/kill logic runs with no real process. Mirrors <c>IStaleLlamaServerProcessScanner</c>.
+///     <c>sd-server</c> processes and tree-kills one by pid.
 /// </summary>
+/// <remarks>
+///     The production implementation (<c>OsStaleImageServerProcessScanner</c>) reads the real OS process table; unit
+///     tests substitute an in-memory fake so the reaper's matching/kill logic runs with no real process. Mirrors
+///     <c>IStaleLlamaServerProcessScanner</c>.
+/// </remarks>
 internal interface IStaleImageServerProcessScanner
 {
     /// <summary>

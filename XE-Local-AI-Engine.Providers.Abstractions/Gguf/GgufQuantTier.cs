@@ -1,10 +1,11 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
-/// <summary>
-///     Coarse quality grade for a GGUF quant token, independent of any hardware. Used by the download picker to hint how
-///     close a quant is to the source weights. The underlying integer is an ORDERED rank (higher = better quality), so
-///     tiers compare directly (<c>GgufQuantTier.SweetSpot &gt; GgufQuantTier.Small</c>) for "pick the best tier" logic.
-/// </summary>
+/// <summary>Coarse quality grade for a GGUF quant token, independent of any hardware.</summary>
+/// <remarks>
+///     Used by the download picker to hint how close a quant is to the source weights. The underlying integer is an
+///     ORDERED rank (higher = better quality), so tiers compare directly
+///     (<c>GgufQuantTier.SweetSpot &gt; GgufQuantTier.Small</c>) for "pick the best tier" logic.
+/// </remarks>
 public enum GgufQuantTier
 {
     /// <summary>Strongest compression, largest quality loss: 2-bit K-quants and 1-/2-bit IQ (Q2_K, IQ1_*, IQ2_*).</summary>

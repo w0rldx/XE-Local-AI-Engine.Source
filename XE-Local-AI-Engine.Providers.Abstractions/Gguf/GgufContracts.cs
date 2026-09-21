@@ -26,12 +26,14 @@ public sealed record GgufModelRequest
 
     /// <summary>
     ///     Whether the repo's multimodal projector (<c>mmproj</c>) companion is pulled alongside the weights when the repo
-    ///     ships one. <see langword="true" /> (the default) is the auto-pair behaviour every caller had before this
-    ///     existed. <see langword="false" /> installs the weights only — the same identity a projector-less repo already
-    ///     produces, which is what makes a vision-capable repo usable as a benchmark judge (a projector-bearing model is
-    ///     refused there because its launch receipt cannot name the extra asset). A draft quant never takes a projector
-    ///     regardless. There is no in-place "add the projector later" path: delete the model and download it again.
+    ///     ships one. <see langword="true" />, the default, auto-pairs.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="false" /> installs the weights only — the same identity a projector-less repo produces, which
+    ///     is what makes a vision-capable repo usable as a benchmark judge (a projector-bearing model is refused there
+    ///     because its launch receipt cannot name the extra asset). A draft quant never takes a projector regardless.
+    ///     There is no in-place "add the projector later" path: delete the model and download it again.
+    /// </remarks>
     public bool IncludeProjector { get; init; } = true;
 }
 
@@ -132,11 +134,14 @@ public sealed record GgufModelRegistryEntry
     public string? DerivedFromContentFingerprint { get; init; }
 
     /// <summary>
-    ///     The LoRA adapter file name when this entry IS an adapter rather than a standalone model. Its bytes are the
-    ///     entry's own <see cref="LocalPath" /> (<see cref="FileName" /> equals this) — an adapter entry carries no
-    ///     separate weight file, because its base weights live in the entry named by <see cref="BaseModelName" />.
+    ///     The LoRA adapter file name when this entry IS an adapter rather than a standalone model;
     ///     <see langword="null" /> for a standalone model, including a merged fine-tune.
     /// </summary>
+    /// <remarks>
+    ///     Its bytes are the entry's own <see cref="LocalPath" /> (<see cref="FileName" /> equals this) — an adapter
+    ///     entry carries no separate weight file, because its base weights live in the entry named by
+    ///     <see cref="BaseModelName" />.
+    /// </remarks>
     public string? AdapterFileName { get; init; }
 
     /// <summary>Lowercase SHA-256 of the adapter bytes, present together with <see cref="AdapterFileName" />.</summary>
@@ -158,9 +163,12 @@ public sealed record GgufModelRegistryEntry
 
 /// <summary>
 ///     A multimodal projector (<c>mmproj</c>) companion file inside a GGUF repo — the vision/audio encoder a vision
-///     model needs for llama-server to accept image input. Discovered separately from the selectable weight files
-///     (which exclude projectors), so a repo's projector can be paired with the chosen quant and downloaded alongside it.
+///     model needs for llama-server to accept image input.
 /// </summary>
+/// <remarks>
+///     Discovered separately from the selectable weight files (which exclude projectors), so a repo's projector can be
+///     paired with the chosen quant and downloaded alongside it.
+/// </remarks>
 public sealed class GgufProjectorFile
 {
     public required string FileName { get; init; }
@@ -184,9 +192,11 @@ public enum GgufSearchSort
 
     /// <summary>
     ///     Trending now — Hugging Face's recency-weighted popularity (the Hub "Trending" ranking, <c>sort=trendingScore</c>).
+    /// </summary>
+    /// <remarks>
     ///     This is the freshness-aware default: lifetime <see cref="Downloads" /> is age-biased and surfaces years-old
     ///     repos, whereas trending reflects current download/like velocity.
-    /// </summary>
+    /// </remarks>
     Trending = 3
 }
 
@@ -203,10 +213,13 @@ public sealed record GgufSearchQuery
 }
 
 /// <summary>
-///     Summary of a GGUF repo from a Hub search (popularity + gating + license). <see cref="IsTrustedPublisher" /> is a
-///     soft quality signal (<see cref="GgufPublisherTrust" />) — a reputable packager / first-party org — never an
-///     exclusion gate; untrusted repos still appear in results and are simply badged for review by the UI.
+///     Summary of a GGUF repo from a Hub search (popularity + gating + license).
 /// </summary>
+/// <remarks>
+///     <see cref="IsTrustedPublisher" /> is a soft quality signal (<see cref="GgufPublisherTrust" />) — a reputable
+///     packager / first-party org — never an exclusion gate; untrusted repos still appear in results and are simply
+///     badged for review by the UI.
+/// </remarks>
 public sealed class GgufRepoSummary
 {
     public required string RepoId { get; init; }
@@ -228,11 +241,14 @@ public sealed class GgufRepoSummary
 
 /// <summary>
 ///     One <c>.gguf</c> file inside a repo, with quant/size/integrity plus the GGUF header metadata read via an HTTP
-///     range request during repo inspection (no full download). <strong>Frozen contract:</strong> the
-///     <c>MemoryFitEstimator</c> consumes these header fields as a pure function and performs no GGUF parsing itself.
-///     Header fields absent from a file are <see langword="null" />. <see cref="Sha256" /> is <see langword="null" />
-///     when the LFS OID was not exposed (treat as "unavailable, revision-pin only").
+///     range request during repo inspection (no full download).
 /// </summary>
+/// <remarks>
+///     <strong>Frozen contract:</strong> the <c>MemoryFitEstimator</c> consumes these header fields as a pure function
+///     and performs no GGUF parsing itself. Header fields absent from a file are <see langword="null" />.
+///     <see cref="Sha256" /> is <see langword="null" /> when the LFS OID was not exposed (treat as "unavailable,
+///     revision-pin only").
+/// </remarks>
 public sealed class GgufRepoFile
 {
     public required string FileName { get; init; }
@@ -262,10 +278,13 @@ public sealed class GgufRepoFile
     public required long? ContextLength { get; init; }
 
     /// <summary>
-    ///     Total experts (GGUF <c>{arch}.expert_count</c>), when the header was read. A positive value marks the file as
-    ///     Mixture-of-Experts; <see langword="null" /> for a dense model or when headers were not requested
-    ///     (<c>ListRepoFilesAsync</c>). Feeds <c>MoeFacts.ExpertCount</c> for the memory-fit estimator's expert-offload split.
+    ///     Total experts (GGUF <c>{arch}.expert_count</c>), when the header was read; <see langword="null" /> for a dense
+    ///     model or when headers were not requested (<c>ListRepoFilesAsync</c>).
     /// </summary>
+    /// <remarks>
+    ///     A positive value marks the file as Mixture-of-Experts and feeds <c>MoeFacts.ExpertCount</c> for the
+    ///     memory-fit estimator's expert-offload split.
+    /// </remarks>
     public long? ExpertCount { get; init; }
 
     /// <summary>
@@ -296,11 +315,14 @@ public sealed class GgufRepoFile
     public long? SlidingWindowPattern { get; init; }
 
     /// <summary>
-    ///     Multi-head Latent Attention latent key dimension (GGUF <c>{arch}.attention.key_length_mla</c>). Together with
-    ///     <see cref="AttentionValueLengthMla" /> this is llama.cpp's <c>is_mla()</c> test: when both are present and
-    ///     positive the KV cache is one latent K tensor per layer and NO V tensor. <see langword="null" /> for every
-    ///     non-MLA model. Detection is by these keys, never by architecture name.
+    ///     Multi-head Latent Attention latent key dimension (GGUF <c>{arch}.attention.key_length_mla</c>);
+    ///     <see langword="null" /> for every non-MLA model.
     /// </summary>
+    /// <remarks>
+    ///     Together with <see cref="AttentionValueLengthMla" /> this is llama.cpp's <c>is_mla()</c> test: when both are
+    ///     present and positive the KV cache is one latent K tensor per layer and NO V tensor. Detection is by these
+    ///     keys, never by architecture name.
+    /// </remarks>
     public long? AttentionKeyLengthMla { get; init; }
 
     /// <summary>
@@ -325,12 +347,15 @@ public sealed class GgufRepoDetail
 
 /// <summary>
 ///     The memory-footprint inputs for one INSTALLED GGUF model, sourced from the registry (quant label + on-disk file
-///     size) plus a single tolerant header read (the estimator's weight/KV inputs). The quant label is the registry's
-///     parsed value — never the header's stringified-int <c>general.file_type</c>. Header fields absent from the file are
-///     <see langword="null" />; the consumer falls back to <see cref="FileSizeBytes" /> for the weights term when
-///     <see cref="ParamCount" /> is null. This is the public seam the capacity footprint provider consumes so the GGUF
-///     header reader can stay internal to the Hugging Face provider.
+///     size) plus a single tolerant header read (the estimator's weight/KV inputs).
 /// </summary>
+/// <remarks>
+///     The quant label is the registry's parsed value — never the header's stringified-int <c>general.file_type</c>.
+///     Header fields absent from the file are <see langword="null" />; the consumer falls back to
+///     <see cref="FileSizeBytes" /> for the weights term when <see cref="ParamCount" /> is null. This is the public seam
+///     the capacity footprint provider consumes so the GGUF header reader can stay internal to the Hugging Face
+///     provider.
+/// </remarks>
 public sealed class GgufModelFootprintFacts
 {
     public required string Quant { get; init; }

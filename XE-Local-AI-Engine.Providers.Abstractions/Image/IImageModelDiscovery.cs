@@ -36,10 +36,12 @@ public sealed record ImageModelSearchQuery
     public ImageModelSearchSort Sort { get; init; } = ImageModelSearchSort.Trending;
 
     /// <summary>
-    ///     Narrows the search to repos additionally tagged <c>gguf</c>. Off by default: a real file-set is routinely
-    ///     assembled from a quantized GGUF diffusion repo plus a <c>.safetensors</c> VAE that carries no gguf tag, so
-    ///     forcing the tag on would hide half the parts an install needs.
+    ///     Narrows the search to repos additionally tagged <c>gguf</c>. Off by default.
     /// </summary>
+    /// <remarks>
+    ///     A real file-set is routinely assembled from a quantized GGUF diffusion repo plus a <c>.safetensors</c> VAE
+    ///     that carries no gguf tag, so forcing the tag on would hide half the parts an install needs.
+    /// </remarks>
     public bool GgufOnly { get; init; }
 }
 
@@ -68,9 +70,12 @@ public sealed class ImageRepoSummary
 
 /// <summary>
 ///     One selectable weight file inside an image-model repo: its repo-relative name, container format, byte size and
-///     the part role the file name suggests. <see cref="SuggestedRole" /> is a naming heuristic the picker pre-selects —
-///     the operator can always override it, and nothing downstream trusts it as fact.
+///     the part role the file name suggests.
 /// </summary>
+/// <remarks>
+///     <see cref="SuggestedRole" /> is a naming heuristic the picker pre-selects — the operator can always override it,
+///     and nothing downstream trusts it as fact.
+/// </remarks>
 public sealed class ImageRepoFile
 {
     public required string FileName { get; init; }
@@ -99,13 +104,13 @@ public sealed class ImageRepoDetail
 /// <summary>
 ///     Queries the Hugging Face Hub for image (diffusion) model repos and inspects their weight files, so the operator
 ///     picks a model from a list instead of hand-typing a repo id, a file name and a family.
-///     <para>
-///         Deliberately NOT a copy of <see cref="Gguf.IHuggingFaceGgufDiscovery" />: that seam requires a parseable
-///         llama.cpp quant token and accepts <c>.gguf</c> only, both of which are wrong here. A diffusion file-set
-///         legitimately mixes <c>.gguf</c> diffusion weights with a <c>.safetensors</c> VAE, and neither a VAE nor a
-///         CLIP encoder carries a quant token at all.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Deliberately NOT a copy of <see cref="Gguf.IHuggingFaceGgufDiscovery" />: that seam requires a parseable
+///     llama.cpp quant token and accepts <c>.gguf</c> only, both of which are wrong here. A diffusion file-set
+///     legitimately mixes <c>.gguf</c> diffusion weights with a <c>.safetensors</c> VAE, and neither a VAE nor a CLIP
+///     encoder carries a quant token at all.
+/// </remarks>
 public interface IImageModelDiscovery
 {
     /// <summary>Searches text-to-image repos in the requested order; repos with no usable weight file are excluded.</summary>

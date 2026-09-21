@@ -64,12 +64,13 @@ public enum GgufImportWorkload
     LoraAdapter = 1
 }
 
-/// <summary>
-///     Who is asking. The public HTTP import surface accepts exactly one thing — a standalone causal-chat model — and
-///     leans on file-name heuristics as a second line of defence against an operator uploading a projector or adapter
-///     under a misleading name. An in-process commit from a local training run needs neither: the engine wrote the file
-///     it is committing, so the decision is made from the GGUF metadata alone and the name is not evidence of anything.
-/// </summary>
+/// <summary>Who is asking.</summary>
+/// <remarks>
+///     The public HTTP import surface accepts exactly one thing — a standalone causal-chat model — and leans on
+///     file-name heuristics as a second line of defence against an operator uploading a projector or adapter under a
+///     misleading name. An in-process commit from a local training run needs neither: the engine wrote the file it is
+///     committing, so the decision is made from the GGUF metadata alone and the name is not evidence of anything.
+/// </remarks>
 public enum GgufImportInspectionMode
 {
     /// <summary>Operator-supplied file arriving over the import surface. Today's behavior, unchanged.</summary>
@@ -120,11 +121,14 @@ public sealed record GgufImportInspection
 
     /// <summary>
     ///     Whether llama-server could ENFORCE a per-request <c>reasoning_budget_tokens</c> for this file's chat
-    ///     template — i.e. whether the template renders a literal reasoning END marker. Computed at import time from
-    ///     the same strict header this inspection was classified from, so an operator learns before the copy that a
-    ///     reasoning model's thinking cap would not stick. <see langword="false" /> is reported together with a
-    ///     <see cref="Warnings" /> entry; every non-graded template keeps the inert <see langword="true" /> default.
+    ///     template — i.e. whether the template renders a literal reasoning END marker.
     /// </summary>
+    /// <remarks>
+    ///     Computed at import time from the same strict header this inspection was classified from, so an operator
+    ///     learns before the copy that a reasoning model's thinking cap would not stick. <see langword="false" /> is
+    ///     reported together with a <see cref="Warnings" /> entry; every non-graded template keeps the inert
+    ///     <see langword="true" /> default.
+    /// </remarks>
     public bool ReasoningBudgetEnforceable { get; init; } = true;
 
     /// <summary>True when no locked rejection was found.</summary>

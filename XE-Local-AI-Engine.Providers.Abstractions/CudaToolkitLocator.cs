@@ -1,29 +1,16 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Finds the CUDA compiler when it is installed where NVIDIA's Linux installer puts it — <c>/usr/local/cuda/bin</c>
-///     — but that directory is not on the host process PATH, which is the default on a box where CUDA was installed
-///     from the runfile or the distro package without a login-shell profile edit.
-///     <para>
-///         This exists because the source-build prerequisite probes were stricter than the build they gate: a probe
-///         spawns <c>nvcc</c> by bare name, which .NET resolves against the PARENT process PATH only, while the build
-///         runs CMake, whose <c>FindCUDAToolkit</c> falls back to <c>/usr/local/cuda</c> on its own. The checklist
-///         therefore said "CUDA compiler Missing" on a host that builds fine. Providers use
-///         <see cref="FindNvccOutsidePath" /> for both halves: the probe spawns the returned absolute path, and the
-///         build child gets <c>CUDACXX</c> set to it so CMake picks the same toolkit the checklist was answered from.
-///     </para>
-///     <para>
-///         Nothing host-derived is ever executed: the file name is the fixed literal <c>nvcc</c>, the directory is
-///         always <c>{root}/bin</c> of a fully qualified root, and the roots are the two variables NVIDIA's own
-///         installers set plus one absolute constant. No shell is involved anywhere.
-///     </para>
-///     <para>
-///         Linux-only today, by the file name (<c>nvcc</c>, no <c>.exe</c>) and by the conventional root: every call
-///         site sits behind an <c>OperatingSystem.IsLinux()</c> gate in the three prerequisite probes, so the gap is
-///         unreachable rather than a live bug. Extend both before reusing this from a Windows source-build lane —
-///         nothing in this project's type system stops a future caller from assuming it is cross-platform.
-///     </para>
+///     Finds the CUDA compiler when NVIDIA's Linux installer put it in <c>/usr/local/cuda/bin</c> but that directory is
+///     not on the host process PATH, the default after a runfile or distro-package install with no profile edit.
 /// </summary>
+/// <remarks>
+///     Nothing host-derived is ever executed: the file name is the fixed literal <c>nvcc</c>, the directory is always
+///     <c>{root}/bin</c> of a fully qualified root, and the roots are the two variables NVIDIA's installers set plus one
+///     absolute constant. No shell is involved anywhere. Linux-only today, by the file name (no <c>.exe</c>) and the
+///     conventional root: every call site sits behind an <c>OperatingSystem.IsLinux()</c> gate in the three prerequisite
+///     probes, so the gap is unreachable, not a live bug. Extend both before reusing this from a Windows lane.
+/// </remarks>
 public static class CudaToolkitLocator
 {
     private const string NvccFileName = "nvcc";
@@ -36,9 +23,15 @@ public static class CudaToolkitLocator
 
     /// <summary>
     ///     The absolute <c>nvcc</c> a caller should use instead of the bare name, or <c>null</c> when PATH already
-    ///     resolves one (nothing to correct) or no conventional install exists (nothing to offer). Returning
-    ///     <c>null</c> for the PATH case keeps the behaviour of every already-working host byte-identical.
+    ///     resolves one (nothing to correct) or no conventional install exists (nothing to offer).
     /// </summary>
+    /// <remarks>
+    ///     Returning <c>null</c> for the PATH case keeps the behaviour of every already-working host byte-identical. Both halves of a
+    ///     source build go through it: the prerequisite probe spawns the returned absolute path, and the build child gets <c>CUDACXX</c>
+    ///     set to it so CMake picks the same toolkit the checklist was answered from. Without it the probe is stricter than the build it
+    ///     gates — a probe spawning <c>nvcc</c> by bare name resolves only against the PARENT process PATH, while CMake's
+    ///     <c>FindCUDAToolkit</c> falls back to <c>/usr/local/cuda</c>, so the checklist reports a missing compiler on a host that builds.
+    /// </remarks>
     public static string? FindNvccOutsidePath()
     {
         if (ResolveOnPath() is not null)
@@ -46,11 +39,8 @@ public static class CudaToolkitLocator
             return null;
         }
 
-        // An operator who exports CUDA_HOME/CUDA_PATH has named the toolkit to use, so a set variable is authoritative:
-        // the conventional root is consulted only when neither is set. Without that rule a broken explicit root would
-        // be silently overruled by whatever happens to sit in /usr/local/cuda. This is deliberately STRICTER than
-        // CMake, which would still fall back to /usr/local/cuda given a hint variable that resolves to nothing: the
-        // disagreement can only make the checklist refuse a build CMake might have managed, never the reverse.
+        // A set CUDA_HOME/CUDA_PATH names the toolkit, so the conventional root applies only when neither is set; else a broken explicit root is overruled by whatever sits in /usr/local/cuda.
+        // Deliberately STRICTER than CMake, which falls back to /usr/local/cuda even for a hint resolving to nothing: the checklist can then only refuse a build CMake could manage, never the reverse.
         var configured = false;
         foreach (var variable in RootVariables)
         {
@@ -70,9 +60,8 @@ public static class CudaToolkitLocator
         return configured ? null : NvccUnder(DefaultLinuxCudaRoot);
     }
 
-    // The same lookup .NET's own Process.Start does for a file name with no directory separator: the PARENT process
-    // PATH, entry by entry. Reimplemented rather than inferred from a spawn, because "did it run" and "is it there"
-    // must not be conflated here — the caller still spawns the tool to prove it actually works.
+    // The same lookup .NET's own Process.Start does for a file name with no directory separator: the PARENT process PATH, entry by entry. Reimplemented rather
+    // than inferred from a spawn, because "did it run" and "is it there" must not be conflated here — the caller still spawns the tool to prove it actually works.
     private static string? ResolveOnPath()
     {
         var path = Environment.GetEnvironmentVariable("PATH");

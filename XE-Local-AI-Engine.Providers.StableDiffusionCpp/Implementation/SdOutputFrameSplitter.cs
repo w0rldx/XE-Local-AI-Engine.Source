@@ -8,20 +8,10 @@ using System.Text;
 ///     than only observed in production.
 /// </summary>
 /// <remarks>
-///     <para>
-///         A frame ends at LF, at CR, or at the ANSI erase-to-end-of-line sequence. The last of those is the one that
-///         matters. A hexdump of a real generation against the pinned build shows the progress bar written with a
-///         <em>leading</em> carriage return and each frame closed by the erase sequence:
-///     </para>
-///     <code>\n \r "  |===&gt;    | 1/8 - 6.34s/it" ESC[K \r "  |=====&gt;  | 2/8 - 4.97s/it" ESC[K ... \n</code>
-///     <para>
-///         Because the CR <em>leads</em>, a frame's text is not terminated by anything until the next frame starts. A
-///         reader that splits only on CR/LF therefore surfaces every step exactly one step late, and holds the final
-///         step until sampling ends entirely — a bar permanently one behind and an ETA computed from stale counters.
-///         Treating the erase sequence as a terminator flushes each frame the instant it is written. All 19 frames of
-///         the captured run ended with it and it was the only escape sequence anywhere in the capture.
-///     </para>
-///     <para>Not thread-safe: one splitter belongs to exactly one stream's drain loop.</para>
+///     A frame ends at LF, at CR, or at the ANSI erase-to-end-of-line sequence — and the last of those is the one that matters, because
+///     sd.cpp writes its progress bar with a LEADING carriage return, so a reader splitting only on CR/LF surfaces every step one step
+///     late. Not thread-safe: one splitter belongs to exactly one stream's drain loop. See docs/wiki/14-image-generation.md
+///     ("Framing sd-server's progress bar") for the captured frame layout and the measurement behind it.
 /// </remarks>
 internal sealed class SdOutputFrameSplitter
 {
@@ -29,10 +19,12 @@ internal sealed class SdOutputFrameSplitter
     internal const string EraseToEndOfLine = "\u001b[K";
 
     /// <summary>
-    ///     Hard cap on one reassembled frame. sd.cpp's longest genuine line is a model path; anything past this arrived
-    ///     with no terminator at all, and buffering it unbounded would trade a full child pipe for an unbounded string.
-    ///     Over the cap the frame is emitted as-is and reassembly restarts.
+    ///     Hard cap on one reassembled frame; over it the frame is emitted as-is and reassembly restarts.
     /// </summary>
+    /// <remarks>
+    ///     sd.cpp's longest genuine line is a model path, so anything past this arrived with no terminator at all, and
+    ///     buffering it unbounded would trade a full child pipe for an unbounded string.
+    /// </remarks>
     internal const int MaxFrameLength = 8 * 1024;
 
     private readonly Action<string> _onFrame;

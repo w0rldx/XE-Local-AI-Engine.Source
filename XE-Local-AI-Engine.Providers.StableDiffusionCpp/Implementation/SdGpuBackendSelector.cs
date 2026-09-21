@@ -6,21 +6,15 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
 ///     Applies the OS-aware backend-selection rule over the GPU vendor reported by the shared, provider-neutral
-///     <see cref="IHardwareProfiler" />. Reuses that probe abstraction rather than duplicating vendor detection — the
-///     same hardware profiler the model advisor consumes. Pure decision logic beyond the single probe call, so the rule
-///     is fully unit-testable via <see cref="SelectForVendor" />.
+///     <see cref="IHardwareProfiler" /> — the same probe the model advisor consumes, rather than duplicated vendor
+///     detection.
 /// </summary>
 /// <remarks>
-///     Rule: NVIDIA → CUDA on Windows; on Linux NVIDIA/AMD/Intel → Vulkan <em>only when an enumerable Vulkan device is
-///     confirmed</em> by <see cref="IVulkanDeviceProbe" />, else CPU (stable-diffusion.cpp ships no prebuilt Linux CUDA
-///     asset, and a Vulkan pick with no enumerable Vulkan device makes <c>sd-server</c> hard-fail — e.g. WSL2, where the
-///     NVIDIA GPU is exposed via CUDA/dxcore, not Vulkan); Windows AMD/Intel → Vulkan; none/unknown → CPU.
-///     <para>
-///         An active operator override or validated managed source build short-circuits hardware selection with its
-///         configured backend, which is how Linux CUDA source builds remain selected despite the missing prebuilt.
-///         Their paths and bytes are validated by the binary manager, never here. Without either signal, Linux NVIDIA
-///         selects Vulkan when a Vulkan device exists, otherwise CPU.
-///     </para>
+///     Pure decision logic beyond the single probe call, so the rule is fully unit-testable via <see cref="SelectForVendor" />; the rule
+///     itself is stated on <see cref="ISdGpuBackendSelector" />. An active operator override or validated managed source build
+///     short-circuits hardware selection with its configured backend, which is how Linux CUDA source builds remain selected despite the
+///     missing prebuilt; their paths and bytes are validated by the binary manager, never here. Without either signal, Linux NVIDIA
+///     selects Vulkan when a Vulkan device exists, otherwise CPU.
 /// </remarks>
 public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
 {
@@ -60,9 +54,8 @@ public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
     /// <inheritdoc />
     public async Task<SdGpuBackend> SelectBackendAsync(CancellationToken ct)
     {
-        // Override short-circuit: an operator-supplied binary is served as the configured backend; the vendor probe is
-        // skipped entirely (the live host may report a different/absent GPU). The path is NOT validated here — the binary
-        // manager is the single path-validator.
+        // Override short-circuit: an operator-supplied binary is served as the configured backend; the vendor probe is skipped entirely (the live host may report a different/absent GPU). The path is
+        // NOT validated here — the binary manager is the single path-validator.
         if (_overrideOptions.IsActive)
         {
             return _overrideOptions.Backend;
@@ -76,10 +69,8 @@ public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
         var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);
         var vendor = profile.GpuVendor;
 
-        // The Vulkan device probe is consulted only where it can change the decision: Linux GPU vendors, whose sole GPU
-        // backend is Vulkan. Windows/macOS keep their existing mapping (Windows NVIDIA→CUDA, AMD/Intel→Vulkan), so the
-        // probe is skipped there. A confirmed Vulkan device is required on Linux because a Vulkan pick with no enumerable
-        // Vulkan device makes sd-server hard-fail (e.g. WSL2), whereas CPU always works.
+        // The Vulkan device probe is consulted only where it can change the decision: Linux GPU vendors, whose sole GPU backend is Vulkan; Windows/macOS keep their mapping (Windows NVIDIA→CUDA,
+        // AMD/Intel→Vulkan). A confirmed Vulkan device is required on Linux because a Vulkan pick with no enumerable device hard-fails sd-server (e.g. WSL2), whereas CPU always works.
         var vulkanDeviceAvailable = !_isWindows
                                     && vendor is GpuVendor.Nvidia or GpuVendor.Amd or GpuVendor.Intel
                                     && _vulkanDeviceProbe.HasEnumerableVulkanDevice();
