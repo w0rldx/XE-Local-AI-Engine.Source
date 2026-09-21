@@ -36,6 +36,61 @@ test("normalizes nested int64 integer schemas without changing other formats", (
 	assert.deepEqual(document.components.schemas.Envelope.properties.id, { type: "string", format: "uuid" });
 });
 
+test("sorts discovery-ordered maps so two documents differing only in emission order serialize identically", () => {
+	// The two arguments below are the SAME contract emitted in two discovery orders — which is what renaming an
+	// endpoint file produces. Serializing both must give one byte sequence, or a file move keeps reshuffling the
+	// committed document.
+	const emitted = (order) => ({
+		paths:
+			order === "a"
+				? { "/b": { post: { operationId: "two" }, get: { operationId: "one" } }, "/a": { get: { operationId: "three" } } }
+				: { "/a": { get: { operationId: "three" } }, "/b": { get: { operationId: "one" }, post: { operationId: "two" } } },
+		components:
+			order === "a"
+				? { schemas: { Zebra: { type: "object" }, Apple: { type: "object" } } }
+				: { schemas: { Apple: { type: "object" }, Zebra: { type: "object" } } },
+	});
+
+	const first = serializeOpenapi(normalizeOpenapiDocument(emitted("a")));
+	const second = serializeOpenapi(normalizeOpenapiDocument(emitted("b")));
+
+	assert.equal(first, second);
+	const sorted = JSON.parse(first);
+	assert.deepEqual(Object.keys(sorted.paths), ["/a", "/b"]);
+	assert.deepEqual(Object.keys(sorted.paths["/b"]), ["get", "post"]);
+	assert.deepEqual(Object.keys(sorted.components.schemas), ["Apple", "Zebra"]);
+});
+
+test("leaves arrays whose order reaches the generated client untouched", () => {
+	// `required`, `enum` and `parameters` order feeds the generated TypeScript and zod schemas. Sorting maps must
+	// never reach into them.
+	const document = {
+		paths: {
+			"/a": {
+				get: { parameters: [{ name: "zebra" }, { name: "apple" }], tags: ["Zebra", "Apple"] },
+			},
+		},
+		components: {
+			schemas: {
+				Envelope: {
+					required: ["zebra", "apple"],
+					enum: undefined,
+					properties: { zebra: { type: "string" }, apple: { type: "string" } },
+				},
+				Kind: { enum: ["zebra", "apple"] },
+			},
+		},
+	};
+
+	normalizeOpenapiDocument(document);
+
+	assert.deepEqual(document.paths["/a"].get.parameters, [{ name: "zebra" }, { name: "apple" }]);
+	assert.deepEqual(document.paths["/a"].get.tags, ["Zebra", "Apple"]);
+	assert.deepEqual(document.components.schemas.Envelope.required, ["zebra", "apple"]);
+	assert.deepEqual(document.components.schemas.Kind.enum, ["zebra", "apple"]);
+	assert.deepEqual(Object.keys(document.components.schemas.Envelope.properties), ["zebra", "apple"]);
+});
+
 test("reports the first deterministic snapshot difference", () => {
 	const committed = serializeOpenapi({ openapi: "3.1.0", info: { title: "Committed" } });
 	const live = serializeOpenapi({ openapi: "3.1.0", info: { title: "Live" } });

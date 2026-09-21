@@ -155,6 +155,56 @@ export function normalizeInt64ToNumber(node) {
 	}
 }
 
+// The document generator emits `paths`, each path item's operations, and `components.schemas` in ENDPOINT and
+// TYPE DISCOVERY order — assembly type order, and therefore compile order, and therefore the order the .cs files
+// sort in. Renaming or moving a single endpoint file reshuffles thousands of lines of a document whose contract is
+// unchanged: measured on 2026-09-21 by renaming two endpoint files and touching nothing else, which moved 777
+// lines and flipped `post`/`get` on one path. That buries a real contract change in noise and makes the committed
+// document look stale when it is not. Key order carries no meaning in any of those three maps, so sort all three
+// here — the single place the committed document is materialized, shared by the live drift check — and the
+// committed file then changes only when the contract does.
+//
+// Exactly these three maps, and NOT a blanket recursive key sort. The order of an ARRAY can be semantic or can
+// feed the generated TypeScript: `required`, `enum`, `parameters`, `oneOf`/`anyOf`, `tags` and a schema's
+// `properties` order all reach the generated types and schemas, and none of them was measured to drift. Sorting
+// them would be a large one-time churn of the generated client bought with no stability gained.
+//
+// The comparator is code-unit order (`<`), not `localeCompare`: locale-sensitive collation would make the
+// committed document depend on the machine's locale, which is the same class of bug one level down.
+function sortMapKeys(map) {
+	return Object.fromEntries(
+		Object.entries(map).sort(([left], [right]) => {
+			if (left < right) {
+				return -1;
+			}
+			return left > right ? 1 : 0;
+		}),
+	);
+}
+
+function isPlainObject(value) {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export function sortOpenapiDiscoveryOrder(document) {
+	if (!isPlainObject(document)) {
+		return document;
+	}
+	if (isPlainObject(document.paths)) {
+		const sortedPaths = sortMapKeys(document.paths);
+		for (const [route, pathItem] of Object.entries(sortedPaths)) {
+			if (isPlainObject(pathItem)) {
+				sortedPaths[route] = sortMapKeys(pathItem);
+			}
+		}
+		document.paths = sortedPaths;
+	}
+	if (isPlainObject(document.components) && isPlainObject(document.components.schemas)) {
+		document.components.schemas = sortMapKeys(document.components.schemas);
+	}
+	return document;
+}
+
 function isLoopbackServerUrl(value) {
 	try {
 		const url = new URL(value);
@@ -166,6 +216,7 @@ function isLoopbackServerUrl(value) {
 
 export function normalizeOpenapiDocument(document) {
 	normalizeInt64ToNumber(document);
+	sortOpenapiDiscoveryOrder(document);
 	if (document && typeof document === "object" && !Array.isArray(document) && Array.isArray(document.servers)) {
 		const stableServers = document.servers.filter(
 			(server) => !server || typeof server !== "object" || !isLoopbackServerUrl(server.url),

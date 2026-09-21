@@ -11,6 +11,16 @@ FRONTEND_DIR="${PROJECT_ROOT}/XE-Local-AI-Engine.Client.React"
 BUILD_LOCK="${PROJECT_ROOT}/scripts/with-build-lock.sh"
 ASSEMBLY_GUARD="${PROJECT_ROOT}/scripts/assembly-guard.sh"
 TIMEOUT_SECONDS="${OPENAPI_LIVE_TIMEOUT_SECONDS:-120}"
+# Which frontend script the ready backend is handed. The default compares; `openapi` REGENERATES the committed
+# document and client from the live host, which is the only sanctioned way to do that — every isolation trap a
+# hand-rolled host start has to solve (desktop mode, scratch XDG_DATA_HOME/HOME, mise forwarding, the build lock,
+# the assembly guard, killing the process group) is already solved here. Must name a script that reads
+# OPENAPI_SPEC_URL.
+LIVE_SCRIPT="${OPENAPI_LIVE_SCRIPT:-openapi:check:live}"
+case "${LIVE_SCRIPT}" in
+  openapi | openapi:fetch | openapi:check:live) ;;
+  *) echo "[openapi-live] OPENAPI_LIVE_SCRIPT must be openapi, openapi:fetch or openapi:check:live." >&2; exit 2 ;;
+esac
 
 # The live server reads Release assemblies for the duration of the contract check. Hold the same
 # repository-wide lock as builds/tests; the wrapper is re-entrant through XE_BUILD_LOCK_HELD.
@@ -164,7 +174,7 @@ with urllib.request.urlopen(os.environ["BASE_URL"] + "/health/live", timeout=2) 
   exit 1
 fi
 
-echo "[openapi-live] Backend ready; comparing live OpenAPI contract."
+echo "[openapi-live] Backend ready; running pnpm ${LIVE_SCRIPT} against it."
 cd "${FRONTEND_DIR}"
-OPENAPI_SPEC_URL="${base_url}/openapi/local/v1/v1.json" pnpm openapi:check:live
-echo "[openapi-live] PASS: live backend contract matches committed frontend artifacts."
+OPENAPI_SPEC_URL="${base_url}/openapi/local/v1/v1.json" pnpm "${LIVE_SCRIPT}"
+echo "[openapi-live] PASS: pnpm ${LIVE_SCRIPT} succeeded against the live backend."
