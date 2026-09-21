@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     The closed v1 node vocabulary of a Graph Workflow. Unlike the Dev Workflow module, <c>Start</c> and <c>End</c>
-///     are explicit nodes: a definition has exactly one <c>Start</c> and at least one <c>End</c>, and the parser refuses
-///     any other kind. Widening this set is a reviewed schema change.
+///     The closed v1 node vocabulary of a Graph Workflow. Widening this set is a reviewed schema change.
 /// </summary>
+/// <remarks>
+///     Unlike the Dev Workflow module, <c>Start</c> and <c>End</c> are explicit nodes: a definition has exactly one
+///     <c>Start</c> and at least one <c>End</c>, and the parser refuses any other kind.
+/// </remarks>
 public enum GraphWorkflowNodeKind
 {
     Start,

@@ -42,9 +42,12 @@ internal sealed partial class DevWorkflowStore
 
     /// <summary>
     ///     The batch form, and the same "latest wins" rule: one query returns every (task, run) pointer for the ids
-    ///     asked about, and the pick is made over the ordered rows in memory — the projection is two columns per node
-    ///     run, so what comes back is small even for a project with a long attempt history.
+    ///     asked about, and the pick is made over the ordered rows in memory.
     /// </summary>
+    /// <remarks>
+    ///     The projection is two columns per node run, so what comes back is small even for a project with a long
+    ///     attempt history.
+    /// </remarks>
     public async Task<IReadOnlyDictionary<Guid, Guid>> FindRunIdsForDevelopmentTasksAsync(IReadOnlyList<Guid> developmentTaskIds,
         CancellationToken cancellationToken = default)
     {
@@ -77,11 +80,8 @@ internal sealed partial class DevWorkflowStore
     {
         await EnsureRunExistsAsync(runId, cancellationToken);
 
-        // The artifact cursor is append-correct only. The sequence is allocated at insert and never re-stamped, so a
-        // sinceSequence page returns every artifact that has APPEARED since — and no staleness flip that has happened
-        // since. Staleness mutations are announced on the event feed as artifact.stale.marked and read by refetching
-        // the artifact, never by advancing this cursor. IsLatest is derived from the whole lineage, which is why that
-        // filter cannot be pushed into SQL.
+        // The artifact cursor is append-correct only: the sequence is allocated at insert and never re-stamped, so a sinceSequence page returns every artifact that
+        // APPEARED since and no staleness flip — those come on the event feed as artifact.stale.marked. IsLatest is derived from the lineage, so it cannot go in SQL.
         var artifacts = await _dbContext.DevWorkflowArtifacts.AsNoTracking()
                                         .Where(entity => entity.RunId == runId)
                                         .OrderBy(entity => entity.Sequence)
@@ -176,10 +176,12 @@ internal sealed partial class DevWorkflowStore
     }
 
     /// <summary>
-    ///     Which of these work sessions still exist. A purged conversation takes its session's whole subtree with it, so
-    ///     a node-run's pointer can outlive its target — and that has to read back as "transcript no longer available"
-    ///     rather than as an error.
+    ///     Which of these work sessions still exist.
     /// </summary>
+    /// <remarks>
+    ///     A purged conversation takes its session's whole subtree with it, so a node-run's pointer can outlive its
+    ///     target — and that has to read back as "transcript no longer available" rather than as an error.
+    /// </remarks>
     private async Task<HashSet<Guid>> LoadAvailableWorkSessionsAsync(IReadOnlyList<Guid> sessionIds, CancellationToken cancellationToken)
     {
         if (sessionIds.Count == 0)

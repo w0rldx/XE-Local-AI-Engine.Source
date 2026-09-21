@@ -1,12 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for MCP server registrations. <c>Description</c>, <c>ArgumentsJson</c> and
-///     <c>EnvJson</c> are encrypted at rest by the node encryption interceptors; reads return them decrypted (and
-///     materialized into typed collections) on the <see cref="McpServerRecord" />. This store performs no content
-///     validation — that is the application-layer service's responsibility; it owns only id/version/timestamp stamping
-///     and the connection-affecting version-bump rule.
+///     Node-scoped persistence for MCP server registrations.
 /// </summary>
+/// <remarks>
+///     <c>Description</c>, <c>ArgumentsJson</c> and <c>EnvJson</c> are encrypted at rest by the node encryption
+///     interceptors; reads return them decrypted (and materialized into typed collections) on the
+///     <see cref="McpServerRecord" />. The store performs no content validation — that is the application-layer
+///     service's responsibility; it owns only id/version/timestamp stamping and the connection-affecting bump rule.
+/// </remarks>
 public interface IMcpServerStore
 {
     /// <summary>
@@ -17,20 +19,24 @@ public interface IMcpServerStore
     Task<McpServerRecord> AddAsync(McpServerInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Applies <paramref name="input" /> to the registration identified by <paramref name="id" />, stamping
-    ///     <c>UpdatedAtUtc</c> and incrementing <c>Version</c> only when a connection-affecting field changed (transport,
-    ///     command, arguments, environment, url, or the enabled toggle — never Name/Description alone). Returns the
-    ///     updated record, or <c>null</c> when no registration has that id.
+    ///     Applies <paramref name="input" /> to the registration identified by <paramref name="id" />, or returns
+    ///     <c>null</c> when no registration has that id.
     /// </summary>
+    /// <remarks>
+    ///     Stamps <c>UpdatedAtUtc</c> and increments <c>Version</c> only when a connection-affecting field changed:
+    ///     transport, command, arguments, environment, url, or the enabled toggle — never Name/Description alone.
+    /// </remarks>
     Task<McpServerRecord?> UpdateAsync(Guid id, McpServerInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Flips only the <c>Enabled</c> flag of the registration identified by <paramref name="id" />, stamping
-    ///     <c>UpdatedAtUtc</c> and bumping <c>Version</c> once when the flag actually changes. Unlike
-    ///     <see cref="UpdateAsync" /> this does not touch (or re-encrypt) the args/env/description columns, so toggling
-    ///     enablement neither rewrites secret ciphertext nor double-bumps <c>Version</c> across an enable/disable cycle.
-    ///     Returns the updated record, or <c>null</c> when no registration has that id.
+    ///     Flips only the <c>Enabled</c> flag of the registration identified by <paramref name="id" />, or returns
+    ///     <c>null</c> when no registration has that id.
     /// </summary>
+    /// <remarks>
+    ///     Stamps <c>UpdatedAtUtc</c> and bumps <c>Version</c> once when the flag actually changes. Unlike
+    ///     <see cref="UpdateAsync" /> it does not touch (or re-encrypt) the args/env/description columns, so toggling
+    ///     enablement neither rewrites secret ciphertext nor double-bumps <c>Version</c> across an enable/disable cycle.
+    /// </remarks>
     Task<McpServerRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default);
 
     /// <summary>Removes the registration with <paramref name="id" />. Returns <c>true</c> when a row was deleted.</summary>
@@ -47,11 +53,13 @@ public interface IMcpServerStore
 }
 
 /// <summary>
-///     Mutable fields of an MCP server registration supplied on create/update. Free text is passed as plaintext
-///     strings/collections; the store encodes <see cref="Description" /> and the arguments/environment to UTF-8 JSON
-///     bytes before the interceptors encrypt them. On create, <see cref="Enabled" /> is ignored and the registration is
-///     persisted disabled.
+///     Mutable fields of an MCP server registration supplied on create/update.
 /// </summary>
+/// <remarks>
+///     Free text is passed as plaintext strings/collections; the store encodes <see cref="Description" /> and the
+///     arguments/environment to UTF-8 JSON bytes before the interceptors encrypt them. On create,
+///     <see cref="Enabled" /> is ignored and the registration is persisted disabled.
+/// </remarks>
 public sealed record McpServerInput
 {
     public required string Name { get; init; }

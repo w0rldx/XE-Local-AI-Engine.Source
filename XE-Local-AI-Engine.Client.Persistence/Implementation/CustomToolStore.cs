@@ -62,10 +62,8 @@ public sealed class CustomToolStore : ICustomToolStore
             return null;
         }
 
-        // Name, Description, Kind, Mode, the declared parameters and the kind-specific config are the surface the model
-        // sees or the tool runs on, so they drive the config hash and bump Version. The Enabled toggle only gates the
-        // offered set (already covered by membership in the hash) and Acknowledged is an authoring gate, not content —
-        // toggling either alone must NOT bump Version, mirroring the AgentDefinition/AgentSkill version rule.
+        // Name, Description, Kind, Mode, the declared parameters and the kind-specific config are the surface the model sees or the tool runs on, so they drive the config hash.
+        // Enabled only gates the offered set (already in the hash) and Acknowledged is an authoring gate; neither alone bumps Version, as for AgentDefinition and AgentSkill.
         var configChanged = !string.Equals(entity.Name, input.Name, StringComparison.Ordinal)
                             || !string.Equals(Decode(entity.Description), input.Description, StringComparison.Ordinal)
                             || entity.Kind != (int)input.Kind

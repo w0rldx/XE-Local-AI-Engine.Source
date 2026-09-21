@@ -24,22 +24,12 @@ public sealed partial class IntegrationExecutionStore
 
     /// <summary>
     ///     <inheritdoc cref="IIntegrationExecutionStore.AcceptAsync" />
-    ///     <para>
-    ///         <b>This method deliberately does not use EF.</b> <c>BEGIN IMMEDIATE</c> takes SQLite's write lock at
-    ///         statement one, so a second concurrent accept blocks (up to <c>busy_timeout</c>) instead of reading the
-    ///         same count and admitting alongside the first. An EF <c>SaveChanges</c> begins deferred, which is exactly
-    ///         the racy read that would leave the caps bounding nothing under a burst.
-    ///     </para>
-    ///     <para>
-    ///         <b>Nothing written here is encrypted, and that is load-bearing.</b> A raw-ADO write does not run
-    ///         <c>NodeEncryptionSaveChangesInterceptor</c> — that interceptor only walks change-tracker entries on a
-    ///         <c>SaveChanges</c>. Of the three rows written, only <c>integration_execution_events.detail_json</c> is an
-    ///         encrypted column, and the <c>execution.accepted</c> event carries NO detail, so there is nothing to seal.
-    ///         <b>If a later slice ever gives the accepted event a payload</b>, this path must seal it itself with
-    ///         <c>NodePayloadProtector.Encrypt(plaintext, dbContext.NodeEncryptionKey.Span, executionId, eventId,
-    ///         "integration_execution_event_detail_json")</c>, or the column silently stores plaintext.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <b>This method deliberately does not use EF.</b> <c>BEGIN IMMEDIATE</c> takes SQLite's write lock at statement one, so a second concurrent accept blocks
+    ///     (up to <c>busy_timeout</c>) instead of reading the same count and admitting alongside the first; an EF <c>SaveChanges</c> begins deferred, the racy read
+    ///     that would leave the caps bounding nothing under a burst. Nothing it writes is encrypted, which the insert of the accepted event explains.
+    /// </remarks>
     public async Task<bool> AcceptAsync(IntegrationAcceptCommand command,
         int maxActive,
         int maxActivePerPrincipal,
@@ -56,9 +46,8 @@ public sealed partial class IntegrationExecutionStore
             throw new ArgumentException("The accepted event must carry no detail: this path does not run the encryption interceptor.", nameof(command));
         }
 
-        // The command carries the same identity twice by design (see IntegrationAcceptCommand), so a caller that
-        // disagrees with itself would silently write an execution onto a session or an event onto an execution that
-        // neither names. Fail before the transaction opens rather than commit an unreachable row.
+        // The command carries the same identity twice by design (see IntegrationAcceptCommand), so a caller that disagrees with itself would silently write an
+        // execution onto a session, or an event onto an execution, that neither names. Fail before the transaction opens rather than commit an unreachable row.
         if (command.NewSession is { } declaredSession)
         {
             if (declaredSession.SessionId != command.SessionId)
@@ -161,11 +150,14 @@ public sealed partial class IntegrationExecutionStore
     }
 
     /// <summary>
-    ///     Maps a null to <see cref="DBNull" /> and otherwise binds the value as it is. A Guid is deliberately handed to
-    ///     the provider unconverted rather than as a "D" string: the rows this path writes are read back through EF, so
-    ///     the two Guid encodings have to agree, and the provider's own binding is what EF uses. (This is where
-    ///     <c>McpAgentRunStore.ToDb</c> differs — every read of its table is raw, so it is free to pick its own form.)
+    ///     Maps a null to <see cref="DBNull" /> and otherwise binds the value as it is.
     /// </summary>
+    /// <remarks>
+    ///     A Guid is deliberately handed to the provider unconverted rather than as a "D" string: the rows this path
+    ///     writes are read back through EF, so the two Guid encodings have to agree, and the provider's own binding is
+    ///     what EF uses. <c>McpAgentRunStore.ToDb</c> differs because every read of its table is raw, so it is free to
+    ///     pick its own form.
+    /// </remarks>
     private static object ToDb(object? value) =>
         value ?? DBNull.Value;
 
@@ -247,9 +239,8 @@ public sealed partial class IntegrationExecutionStore
 
         if (await update.ExecuteNonQueryAsync(cancellationToken) == 0)
         {
-            // Missing, another principal's, or closed. An unscoped UPDATE would have silently affected nothing and let
-            // the accept commit an execution onto a session that cannot host it; aborting here is what keeps the join
-            // checked. The transaction is disposed uncommitted, so nothing lands in any of the three tables.
+            // Missing, another principal's, or closed. An unscoped UPDATE would silently affect nothing and let the accept commit an execution onto a session that
+            // cannot host it; aborting here is what keeps the join checked, and the transaction is disposed uncommitted, so nothing lands in any of the three tables.
             throw new IntegrationSessionUnavailableException("The continuation's session is missing, not this principal's, or no longer active.");
         }
     }
@@ -287,6 +278,8 @@ public sealed partial class IntegrationExecutionStore
         IntegrationEventAppend acceptedEvent,
         CancellationToken cancellationToken)
     {
+        // A raw-ADO write never runs NodeEncryptionSaveChangesInterceptor, and detail_json is the one encrypted column among the three rows this method writes — the
+        // payload-free execution.accepted event leaves it NULL. Give it a payload and seal it here: NodePayloadProtector.Encrypt(…, executionId, eventId, "integration_execution_event_detail_json").
         await using var insert = CreateCommand(connection, transaction, """
                                                                         INSERT INTO integration_execution_events (id, execution_id, sequence, event_type, detail_json, occurred_at_utc)
                                                                         VALUES ($eventId, $executionId, $sequence, $eventType, NULL, $occurredAtUtc);

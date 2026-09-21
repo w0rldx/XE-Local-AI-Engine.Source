@@ -3,12 +3,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     One run that may be paired against another. <see cref="TaskCaseId" /> and <see cref="TaskInputHash" />
-///     are the identity of WHAT WAS ASKED: pairs form only inside one of them, because "which answer is better" is
-///     meaningless when the two answers are to different questions. In the current schema a project is one case, so
-///     both use the constant below and the grouping is a no-op. The columns retain the identity needed by a schema
-///     that supports multiple cases per project.
+///     One run that may be paired against another.
 /// </summary>
+/// <remarks>
+///     <see cref="TaskCaseId" /> and <see cref="TaskInputHash" /> are the identity of WHAT WAS ASKED: pairs form only
+///     inside one of them, because "which answer is better" is meaningless when the two answers are to different
+///     questions. In the current schema a project is one case, so both use the constant below and the grouping is a
+///     no-op; the columns retain the identity a schema with multiple cases per project needs.
+/// </remarks>
 public sealed class BenchmarkPairwiseCandidate
 {
     public required Guid RunId { get; init; }
@@ -148,10 +150,12 @@ public sealed class BenchmarkPairwiseFitCommand
 ///     One run's row inside a fit's <c>ScoresJson</c> — one entry per ELIGIBLE run, not per fitted one, because a run
 ///     the cap left out or the comparison graph stranded must be able to say why it has no score from this row alone.
 /// </summary>
+/// <remarks>
+///     A whole-fit refusal puts the same <paramref name="Reason" /> on every entry, so a refusal reaches the ranking
+///     read without it having to open a single comparison row.
+/// </remarks>
 /// <param name="Reason">
-///     Null when <paramref name="Score" /> ranks. Otherwise the <see cref="BenchmarkRunJudgeStates" /> pairwise reason:
-///     a whole-fit refusal puts the same one on every entry, so a refusal reaches the ranking read without it having
-///     to open a single comparison row.
+///     Null when <paramref name="Score" /> ranks, otherwise the <see cref="BenchmarkRunJudgeStates" /> pairwise reason.
 /// </param>
 public sealed record BenchmarkPairwiseScoreEntry(
     Guid RunId,

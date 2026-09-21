@@ -71,9 +71,8 @@ public sealed class McpServerStore : IMcpServerStore
         var argumentsJson = EncodeArguments(input.Arguments);
         var environmentJson = EncodeEnvironment(input.Environment);
 
-        // A change to anything that affects how the connection manager connects/launches the server bumps Version
-        // (transport, command, args, env, url) — plus the enable/disable toggle, which changes the connected set. A
-        // pure Name/Description edit does not. Compare decoded plaintext on both sides.
+        // A change to anything that affects how the connection manager connects or launches the server bumps Version (transport, command, args, env, url), plus the
+        // enable/disable toggle, which changes the connected set. A pure Name/Description edit does not. Compare decoded plaintext on both sides.
         var configChanged = entity.TransportKind != (int)input.TransportKind
                             || !string.Equals(entity.Command, input.Command, StringComparison.Ordinal)
                             || !ArgumentsEqual(DecodeArguments(entity.ArgumentsJson), input.Arguments)
@@ -117,9 +116,8 @@ public sealed class McpServerStore : IMcpServerStore
             return null;
         }
 
-        // Only the enabled flag (and timestamp/version) is touched. Because the secret byte columns are left
-        // unmodified, the SaveChanges encryption interceptor skips them — their on-disk ciphertext is untouched — and
-        // a no-op toggle does not bump Version, so an enable/disable cycle no longer over-invalidates resume.
+        // Only the enabled flag, timestamp and version are touched: the secret byte columns are left unmodified, so the SaveChanges encryption interceptor skips
+        // them and their on-disk ciphertext is untouched. A no-op toggle does not bump Version, so an enable/disable cycle does not over-invalidate resume.
         var changed = entity.Enabled != enabled;
         entity.Enabled = enabled;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();

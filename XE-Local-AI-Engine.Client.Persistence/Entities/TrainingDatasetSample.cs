@@ -12,9 +12,12 @@ internal sealed record class TrainingDatasetSample
 
     /// <summary>
     ///     Sample kind within the dataset's <see cref="TrainingDatasetKind" /> (the split is stratified by it and the
-    ///     evaluation aggregates group by it). Plaintext free-form string, not an enum: the tool-calling vocabulary is
-    ///     owned by the generation service, and a closed enum here would force a migration every time it grows.
+    ///     evaluation aggregates group by it). Plaintext free-form string, not an enum.
     /// </summary>
+    /// <remarks>
+    ///     The tool-calling vocabulary is owned by the generation service, and a closed enum here would force a
+    ///     migration every time it grows.
+    /// </remarks>
     public string Kind { get; set; } = string.Empty;
 
     public TrainingSampleLabel Label { get; set; }

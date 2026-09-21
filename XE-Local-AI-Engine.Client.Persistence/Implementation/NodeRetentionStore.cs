@@ -18,9 +18,8 @@ public sealed class NodeRetentionStore : INodeRetentionStore
 
     public async Task<IReadOnlyList<Guid>> ListExpiredConversationCandidatesAsync(long cutoffUtc, CancellationToken cancellationToken = default)
     {
-        // Read-only candidate selection: no lock and no delete here. Each candidate is re-checked and deleted under the
-        // conversation's exclusive write lock by the caller (see ConversationRetentionPurge), because a send or touch can
-        // make a candidate active again between this selection and its deletion.
+        // Read-only candidate selection: no lock and no delete here. Each candidate is re-checked and deleted under the conversation's exclusive write lock by the
+        // caller (see ConversationRetentionPurge), because a send or touch can make a candidate active again between this selection and its deletion.
         return await _dbContext.Conversations
                                .Where(conversation => conversation.Purged || conversation.LastSeenUtc <= cutoffUtc)
                                .Select(conversation => conversation.ConversationId)

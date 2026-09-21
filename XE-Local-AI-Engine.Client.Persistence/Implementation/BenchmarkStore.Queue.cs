@@ -73,9 +73,8 @@ public sealed partial class BenchmarkStore
             _dbContext.ChangeTracker.Clear();
             var work = await _dbContext.BenchmarkWorkItems.AsNoTracking().SingleAsync(entity => entity.QueueSequence == candidate.QueueSequence, cancellationToken);
             var run = await RequireRunAsync(work.RunId, tracking: true, cancellationToken);
-            // One explicit arm per kind. A bare `else` here would send a Fidelity or Comparison item down the judge
-            // path, where it would dereference a null JudgeAttemptId, throw InvalidJudgeTransition and stall the
-            // single-consumer queue behind an item it can never claim.
+            // One explicit arm per kind. A bare `else` here would send a Fidelity or Comparison item down the judge path, where it would dereference a null
+            // JudgeAttemptId, throw InvalidJudgeTransition and stall the single-consumer queue behind an item it can never claim.
             switch (work.Kind)
             {
                 case BenchmarkWorkKind.Primary:
@@ -142,11 +141,8 @@ public sealed partial class BenchmarkStore
                     throw new BenchmarkConflictException("UnknownWorkKind");
             }
 
-            // Every per-run kind bumps the run's version, so a reader polling the run sees that something about it
-            // changed. A comparison is NOT an event in a run's life: it names two runs and its work item names only
-            // the canonical first, so bumping that one invalidated its CAS token on every pairwise claim — scoring,
-            // deleting or re-measuring it returned VersionConflict throughout a tournament, and the other run of the
-            // pair never heard about it anyway. The fit's own publication is what refreshes a pairwise reader.
+            // Every per-run kind bumps the run's version, so a reader polling the run sees that something changed. A comparison is NOT an event in a run's life: it
+            // names two runs, so bumping the canonical first would invalidate its CAS token on every pairwise claim. The fit's own publication refreshes that reader.
             if (work.Kind != BenchmarkWorkKind.Comparison)
             {
                 run.Version++;
@@ -257,10 +253,8 @@ public sealed partial class BenchmarkStore
                     cancellationToken);
         }
 
-        // Seeded here rather than at freeze, for the judge attempt's own reason: a measurement is queued against an
-        // answer, so it must not exist until there IS one. The eligibility rule is the per-cell one shared with the
-        // freeze marker and with EnqueueMissingFidelityAsync — the current project settings decide it, because the
-        // fidelity settings deliberately write through the freeze.
+        // Seeded here rather than at freeze, for the judge attempt's own reason: a measurement is queued against an answer, so it must not exist until there IS one.
+        // The eligibility rule is the per-cell one shared with the freeze marker and EnqueueMissingFidelityAsync, decided by the settings, which write through freeze.
         if (settings is { FidelityEnabled: true } && await IsFidelityMeasuredCellAsync(run, cancellationToken))
         {
             _ = await AppendFidelityWorkAsync(run, settings.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity, now, cancellationToken);
@@ -279,17 +273,15 @@ public sealed partial class BenchmarkStore
 
     /// <summary>
     ///     The one run of a cell that a fidelity measurement is attached to: the repeat half above, plus the
-    ///     lowest-indexed task item of the cell. One rule, three callers — freeze's "skipped" marker, the seed on
-    ///     primary success, and the measure-existing sweep — because a cell measured by one of them and a cell measured
-    ///     by another must mean the same thing. Freeze decides it over its own batch (those rows are not saved yet) and
-    ///     <c>EnqueueMissingFidelityAsync</c> re-expresses it as an EF predicate; all three must change together.
-    ///     <para>
-    ///         The item half exists because perplexity and KL divergence measure the model file against a corpus, not
-    ///         the task: every item of one cell would otherwise queue an identical measurement at N times the cost.
-    ///         A pre-suite run carries a null <c>TaskItemIndex</c>, which no sibling can undercut, so nothing about it
-    ///         changes.
-    ///     </para>
+    ///     lowest-indexed task item of the cell.
     /// </summary>
+    /// <remarks>
+    ///     One rule, three callers — freeze's "skipped" marker, the seed on primary success, and the measure-existing
+    ///     sweep — because a cell measured by one and a cell measured by another must mean the same thing. Freeze
+    ///     decides it over its own batch (those rows are not saved yet) and <c>EnqueueMissingFidelityAsync</c>
+    ///     re-expresses it as an EF predicate; all three must change together. The item half exists because perplexity
+    ///     and KL divergence measure the model file against a corpus, not the task; a pre-suite run's null <c>TaskItemIndex</c> is one no sibling can undercut.
+    /// </remarks>
     private async Task<bool> IsFidelityMeasuredCellAsync(BenchmarkRun run, CancellationToken cancellationToken) =>
         IsFidelityMeasuredRepeat(run)
         && !await _dbContext.BenchmarkRuns.AsNoTracking()
@@ -348,9 +340,8 @@ public sealed partial class BenchmarkStore
                     attempt.ResultJson = command.JudgeResultJson.ToArray();
                     attempt.Score = command.Score;
 
-                    // A judging with no spawn never reached MarkJudgeLaunchReadyAsync, so its key is set here. NULL
-                    // stays the only thing this can fill: a measured identity is written once, at launch, and an
-                    // incomplete one must never be repaired into a rankable one afterwards.
+                    // A judging with no spawn never reached MarkJudgeLaunchReadyAsync, so its key is set here. NULL stays the only thing this can fill: a measured
+                    // identity is written once, at launch, and an incomplete one must never be repaired into a rankable one afterwards.
                     attempt.JudgeExecutionKey ??= command.VerifiedExecutionKey;
                     return promote;
                 },
@@ -400,8 +391,8 @@ public sealed partial class BenchmarkStore
     ///     the attempt, and the run only moves its version and stream sequence — a judging is not run state.
     /// </summary>
     /// <param name="apply">
-    ///     Writes the terminal payload onto the attempt and returns whether this outcome may claim the rank cohort.
-    ///     Only a success may: a failed or cancelled judging must never define what the ranked runs are compared to.
+    ///     Writes the terminal payload onto the attempt and returns whether this outcome may claim the rank cohort:
+    ///     only a success may.
     /// </param>
     private async Task<BenchmarkRunRecord> TerminalizeJudgeAsync(Guid runId,
         long expectedWorkVersion,

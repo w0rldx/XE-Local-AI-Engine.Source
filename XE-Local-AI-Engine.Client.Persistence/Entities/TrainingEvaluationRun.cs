@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     One model scored against a frozen hold-out membership. An evaluation is created FROM a training run — the base
-///     model and the tuned model are each evaluated against the SAME membership that run froze, which is what makes the
-///     two sides of a comparison comparable at all.
+///     One model scored against a frozen hold-out membership.
 /// </summary>
+/// <remarks>
+///     An evaluation is created FROM a training run — the base model and the tuned model are each evaluated against
+///     the SAME membership that run froze, which is what makes the two sides of a comparison comparable at all.
+/// </remarks>
 internal sealed record class TrainingEvaluationRun
 {
     public Guid Id { get; set; }

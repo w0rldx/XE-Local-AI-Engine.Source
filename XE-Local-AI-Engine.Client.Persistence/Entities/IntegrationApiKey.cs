@@ -10,10 +10,12 @@ internal sealed record class IntegrationApiKey
     public Guid Id { get; set; }
 
     /// <summary>
-    ///     The stable integrator identity this credential belongs to (ruling R4-6). Ownership of every session and
-    ///     execution, and request-id uniqueness, key on this and never on <see cref="KeyPrefix" />, so rotating a
-    ///     credential or issuing a second one does not strand in-flight work. Plaintext (structural).
+    ///     The stable integrator identity this credential belongs to (ruling R4-6). Plaintext (structural).
     /// </summary>
+    /// <remarks>
+    ///     Ownership of every session and execution, and request-id uniqueness, key on this and never on
+    ///     <see cref="KeyPrefix" />, so rotating a credential or issuing a second one does not strand in-flight work.
+    /// </remarks>
     public Guid PrincipalId { get; set; }
 
     /// <summary>Displayable prefix (<c>xeint_</c> plus eight characters); the auth lookup key. Plaintext (structural).</summary>
@@ -23,10 +25,13 @@ internal sealed record class IntegrationApiKey
     ///     One-way SHA-256 digest of the issued key as raw bytes. Plaintext while tracked in memory; encrypted at rest
     ///     by <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
     ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
-    ///     <c>integration_api_key_hash</c>. Required — a row without it would authenticate nothing — so it always
-    ///     encrypts. This is integrity, not confidentiality: a bare digest column lets anyone who can WRITE the
-    ///     database file substitute a digest whose preimage they know and take over the surface.
+    ///     <c>integration_api_key_hash</c>.
     /// </summary>
+    /// <remarks>
+    ///     Required — a row without it would authenticate nothing — so it always encrypts. This is integrity, not
+    ///     confidentiality: a bare digest column lets anyone who can WRITE the database file substitute a digest
+    ///     whose preimage they know and take over the surface.
+    /// </remarks>
     public byte[] KeyHash { get; set; } = [];
 
     /// <summary>Operator label for the credential. Plaintext (structural).</summary>

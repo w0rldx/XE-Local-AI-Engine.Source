@@ -35,12 +35,12 @@ public sealed class DevelopmentTemplateMaterializationSnapshot
 
 /// <summary>
 ///     The template registry and the provenance of repositories materialized from it.
-///     <para>
-///         Deliberately separate from <see cref="IDevelopmentStore" />: templates are node-scoped configuration with no
-///         project, task, attempt, operation key or event stream, so folding them into the operation-journalled
-///         Development store would give them a transactional shape they do not need.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Deliberately separate from <see cref="IDevelopmentStore" />: templates are node-scoped configuration with no
+///     project, task, attempt, operation key or event stream, so folding them into the operation-journalled
+///     Development store would give them a transactional shape they do not need.
+/// </remarks>
 public interface IDevelopmentTemplateStore
 {
     Task<IReadOnlyList<DevelopmentTemplateSnapshot>> ListAsync(CancellationToken cancellationToken = default);

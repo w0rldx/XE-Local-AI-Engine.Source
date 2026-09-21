@@ -2,12 +2,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     The persisted llama-server launch profile for one <c>(machine_key, model_name, role, backend)</c> key: the exact
-///     launch args plus the benchmark that justifies them. There is exactly one live config per key — re-exploring at a
-///     different quant/ctx OVERWRITES the single config (latest explore wins); benchmark history lives on
-///     <see cref="ModelFitBenchmark" /> rows, not here. All columns are plaintext structural data — no secrets, so this
-///     entity is NOT on the node encryption-interceptor path. The machine key is a local-only random id (never hardware
-///     derived, never emitted in telemetry/aggregates).
+///     launch args plus the benchmark that justifies them.
 /// </summary>
+/// <remarks>
+///     There is exactly one live config per key — re-exploring at a different quant/ctx OVERWRITES the single config
+///     (latest explore wins); benchmark history lives on <see cref="ModelFitBenchmark" /> rows, not here. All columns
+///     are plaintext structural data — no secrets, so this entity is NOT on the node encryption-interceptor path. The
+///     machine key is a local-only random id (never hardware derived, never emitted in telemetry/aggregates).
+/// </remarks>
 internal sealed record class InferenceProfile
 {
     public Guid Id { get; set; }
@@ -20,9 +22,12 @@ internal sealed record class InferenceProfile
 
     /// <summary>
     ///     The llama-server role this profile targets, stored as the integer value of <c>ModelRole</c> (Chat=0,
-    ///     Embedding=1). Persisted as a plain <see cref="int" /> because Persistence does not reference
-    ///     <c>Providers.LlamaServer</c>; the Application layer maps it to/from <c>ModelRole</c>. Part of the natural key.
+    ///     Embedding=1). Part of the natural key.
     /// </summary>
+    /// <remarks>
+    ///     Persisted as a plain <see cref="int" /> because Persistence does not reference
+    ///     <c>Providers.LlamaServer</c>; the Application layer maps it to/from <c>ModelRole</c>.
+    /// </remarks>
     public int Role { get; set; }
 
     /// <summary>Resolved backend (<c>cuda</c> | <c>vulkan</c> | <c>cpu</c>). Part of the natural key. Plaintext.</summary>

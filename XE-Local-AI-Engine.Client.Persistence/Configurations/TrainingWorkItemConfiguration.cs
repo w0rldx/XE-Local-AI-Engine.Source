@@ -23,11 +23,8 @@ internal sealed class TrainingWorkItemConfiguration : IEntityTypeConfiguration<T
         builder.Property(entity => entity.FinishedAtUtc).HasColumnName("finished_at_utc");
         builder.Property(entity => entity.ErrorMessage).HasColumnName("error_message").HasMaxLength(1024);
 
-        // No foreign key: the target is a run id or an evaluation id depending on the kind, and SQLite cannot express a
-        // polymorphic reference. The store checks the target exists before enqueueing.
-        //
-        // Same guarantee shape as ux_benchmark_work_items_run_kind — one work item per target per kind, ever. Since the
-        // row is deleted with its target, "at most one" also means "at most one non-terminal".
+        // No foreign key: the target is a run id or an evaluation id depending on the kind, and SQLite cannot express a polymorphic reference, so the store checks the
+        // target exists first. Same shape as ux_benchmark_work_items_run_kind — one per target per kind, ever; the row dies with its target, so also "at most one non-terminal".
         builder.HasIndex(entity => new
         {
             entity.TargetId,

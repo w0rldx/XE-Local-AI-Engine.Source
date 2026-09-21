@@ -19,11 +19,13 @@ public enum IntegrationSessionPolicy
 
 /// <summary>
 ///     Which input kinds a trigger accepts in an invoke body. A <c>[Flags]</c> combination, mapped as a plain
-///     <c>int</c> column rather than <c>.HasConversion&lt;string&gt;()</c>: a combined flags value has no stable,
-///     length-bounded string form — the text would depend on member declaration order and would grow past
-///     <c>HasMaxLength(32)</c> as soon as a third kind is added. <c>McpServerApiKey.Scope</c> is an <c>int</c> for the
-///     same reason.
+///     <c>int</c> column rather than <c>.HasConversion&lt;string&gt;()</c>.
 /// </summary>
+/// <remarks>
+///     A combined flags value has no stable, length-bounded string form — the text would depend on member
+///     declaration order and would grow past <c>HasMaxLength(32)</c> as soon as a third kind is added.
+///     <c>McpServerApiKey.Scope</c> is an <c>int</c> for the same reason.
+/// </remarks>
 [Flags]
 public enum IntegrationInputKinds
 {
@@ -45,39 +47,17 @@ public enum IntegrationSessionStatus
 }
 
 /// <summary>
-///     Lifecycle of an <c>integration_executions</c> row. The legal moves are exactly these, and nothing else
-///     (ruling R3-2, reproduced verbatim in ADR 0008):
-///     <list type="table">
-///         <listheader><term>From</term><description>To — when</description></listheader>
-///         <item><term><see cref="Accepted" /></term><description><see cref="Queued" /> — waits for the invocation lease</description></item>
-///         <item><term><see cref="Accepted" />, <see cref="Queued" /></term><description><see cref="Running" /> — lease held, runner about to be called</description></item>
-///         <item><term><see cref="Running" /></term><description><see cref="Completed" />, <see cref="Failed" />, <see cref="Cancelled" /> — the run reported a terminal state</description></item>
-///         <item><term><see cref="Accepted" />, <see cref="Queued" /></term><description><see cref="Cancelled" /> — cancelled before the run started</description></item>
-///         <item><term><see cref="Accepted" />, <see cref="Queued" /></term><description><see cref="Failed" /> — rejected before the run started</description></item>
-///     </list>
-///     <para>
-///         <see cref="Running" /> is never re-entered, and there is no move out of a terminal status.
-///         <see cref="Queued" /> is written <b>only</b> when an execution actually waits for the lease —
-///         <see cref="Accepted" /> → <see cref="Running" /> is legal, and so is <see cref="Accepted" /> or
-///         <see cref="Queued" /> → <see cref="Cancelled" />/<see cref="Failed" /> without ever running. That is
-///         written down here rather than only in the coordinator because cross-review found <see cref="Queued" />
-///         defined, counted, swept, streamed and rendered with no visible producer.
-///     </para>
-///     <para>
-///         Every move into a terminal status is made by <c>IIntegrationExecutionStore.TryTerminalizeAsync</c>, which
-///         writes the status and the matching terminal event in one transaction (ruling R5-4);
-///         <c>UpdateStatusAsync</c> makes the non-terminal moves and nothing else.
-///     </para>
-///     <para>
-///         <c>FailureCategory</c> is a <b>closed</b> vocabulary of exactly ten values — <c>trigger-unavailable</c>,
-///         <c>cloud-model-rejected</c>, <c>capacity-rejected</c>, <c>restart</c>, <c>queue-full</c>, <c>shutdown</c>,
-///         <c>internal-failure</c>, plus <c>approval-required</c> (an unattended run invoked an approval-gated tool),
-///         <c>queue-timeout</c> (a still-queued execution outlived <c>MaxQueueAgeSeconds</c>) and
-///         <c>session-policy</c> (historical: rows written before ADR 0008 R6-1 withdrew the caller-managed
-///         <c>ToolCategory.ReadLocal</c> restriction; no longer produced). An eleventh value is a bug, not an
-///         extension point.
-///     </para>
+///     Lifecycle of an <c>integration_executions</c> row. The legal moves are exactly these and nothing else (ruling
+///     R3-2, reproduced verbatim in ADR 0008); <see cref="Running" /> is never re-entered, and there is no move out
+///     of a terminal status.
 /// </summary>
+/// <remarks>
+///     <see cref="Accepted" /> → <see cref="Queued" /> (waits for the invocation lease); <see cref="Accepted" /> or
+///     <see cref="Queued" /> → <see cref="Running" /> (lease held, runner about to be called); <see cref="Running" />
+///     → <see cref="Completed" />/<see cref="Failed" />/<see cref="Cancelled" /> (the run reported a terminal state);
+///     <see cref="Accepted" /> or <see cref="Queued" /> → <see cref="Cancelled" />/<see cref="Failed" /> (cancelled
+///     or rejected before the run started). See docs/wiki/08-data-and-persistence.md ("The integration execution lifecycle").
+/// </remarks>
 public enum IntegrationExecutionStatus
 {
     /// <summary>Admitted and durable; the accept transaction has committed.</summary>

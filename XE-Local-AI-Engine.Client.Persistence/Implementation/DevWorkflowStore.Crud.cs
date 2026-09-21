@@ -52,12 +52,8 @@ internal sealed partial class DevWorkflowStore
             EnsureNotBlank(command.Request, nameof(command.Request));
         }
 
-        // Re-read and re-applied when the row moves underneath this edit. The version is a concurrency token and the
-        // RUNTIME is its other writer — a dispatcher tick that moves the item to Active mid-PATCH is correct behaviour,
-        // not a conflict, and the two writes touch disjoint fields because status is absent from this command by
-        // design. So the honest answer to losing that race is the caller's fields applied to the row as it now stands.
-        // Bounded at three, because a retry that never gave up would sit here for as long as the run kept moving; past
-        // that the caller gets a retryable conflict rather than the 500 an unmapped store exception would become.
+        // Re-read and re-applied when the row moves underneath this edit: the RUNTIME is the version token's other writer, a dispatcher tick moving the item to
+        // Active mid-PATCH is correct behaviour on disjoint fields (status is absent from this command by design), and past three tries the caller gets a 409.
         const int maxAttempts = 3;
         var attempt = 0;
         while (true)
@@ -170,10 +166,8 @@ internal sealed partial class DevWorkflowStore
                                          .Select(entity => entity.Id)
                                          .ToListAsync(cancellationToken);
 
-            // Inside the transaction, so a run that starts between a caller's check and this one still loses: deleting
-            // the rows under a live run would leave its executor holding a slot for work nothing will ever settle.
-            // The offending run is LOADED rather than merely counted, because this refusal is the operator's only
-            // instruction — "cancel that run first" needs to say which run, and it costs the same query.
+            // Inside the transaction, so a run that starts between a caller's check and this one still loses: deleting the rows under a live run would leave its
+            // executor holding a slot nothing will settle. The run is LOADED, not counted: "cancel that run first" has to name it, and it costs the same query.
             if (await _dbContext.DevWorkflowRuns.AsNoTracking()
                                 .Where(entity => entity.WorkItemId == workItemId
                                                  && entity.Status != DevWorkflowRunStatus.Completed
@@ -548,10 +542,8 @@ internal sealed partial class DevWorkflowStore
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
         ArgumentNullException.ThrowIfNull(verdicts);
 
-        // Every pass reads the world afresh. A caller that reconciles more than once holds one scope, and the identity
-        // map from its earlier pass would hand back run rows as they stood BEFORE whatever moved these node runs — so
-        // this would allocate sequence numbers that are already taken. Nothing outside can hold an entity of ours: the
-        // store answers snapshots.
+        // Every pass reads the world afresh: a caller that reconciles more than once holds one scope, and the identity map from its earlier pass would hand back run
+        // rows as they stood BEFORE whatever moved these node runs, allocating sequence numbers already taken. Nothing outside holds our entities — we answer snapshots.
         _dbContext.ChangeTracker.Clear();
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
@@ -578,10 +570,8 @@ internal sealed partial class DevWorkflowStore
                     continue;
                 }
 
-                // A row the caller did not judge, or judged as something it no longer is, is left exactly where it is:
-                // collapsing it would strand it at Pending with nobody left to decide what re-running it costs. The
-                // caller reads again and judges it on its next pass — or ends the matter with `unjudged`, which blocks
-                // it for a human off the row in front of us, where no snapshot can be stale.
+                // A row the caller did not judge, or judged as something it no longer is, is left exactly where it is: collapsing it would strand it at Pending
+                // with nobody to decide what re-running costs. The caller judges it next pass, or ends it with `unjudged`, which blocks it for a human off this row.
                 var matched = judged.TryGetValue(nodeRun.Id, out var verdict)
                               && verdict.ObservedStatus == nodeRun.Status
                               && verdict.ObservedAttempt == nodeRun.Attempt
@@ -628,11 +618,8 @@ internal sealed partial class DevWorkflowStore
             {
                 EnsureVersion(run, command.ExpectedVersion);
 
-                // Recovery's own admissions go through the same writer-lock count every other re-attempt does: the
-                // caller decided what it could afford from a read taken before this transaction opened, and a human
-                // Retry recorded since then would otherwise be spent twice. A refusal aborts the whole collapse,
-                // which is exactly the "recovery that dies before it commits" contract — nothing is half-repaired and
-                // the caller re-judges.
+                // Recovery's own admissions go through the same writer-lock count every other re-attempt does: the caller decided what it could afford from a read
+                // taken before this transaction, so a human Retry since would be spent twice. A refusal aborts the whole collapse — nothing half-repaired.
                 if (command is { MaxTotalAttempts: { } budget, IncrementAttempt: true })
                 {
                     await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken);
@@ -675,10 +662,13 @@ internal sealed partial class DevWorkflowStore
         };
 
     /// <summary>
-    ///     The node-runs a host death stranded. Only Queued and Running lost an executor: Pending was never dispatched,
-    ///     and WaitingForApproval/Blocked are durable human-wait states that a restart does not invalidate. Shared by
-    ///     the read and the write so the set the caller judged cannot differ from the set the collapse takes.
+    ///     The node-runs a host death stranded, shared by the read and the write so the set the caller judged cannot
+    ///     differ from the set the collapse takes.
     /// </summary>
+    /// <remarks>
+    ///     Only Queued and Running lost an executor: Pending was never dispatched, and WaitingForApproval/Blocked are
+    ///     durable human-wait states that a restart does not invalidate.
+    /// </remarks>
     private IOrderedQueryable<DevWorkflowNodeRun> StrandedNodeRuns() =>
         _dbContext.DevWorkflowNodeRuns
                   .Where(entity => entity.Status == DevWorkflowNodeRunStatus.Queued || entity.Status == DevWorkflowNodeRunStatus.Running)
@@ -687,13 +677,13 @@ internal sealed partial class DevWorkflowStore
 
     /// <summary>
     ///     Writes a definition edit under the row's version token.
-    ///     <para>
-    ///         The version check above answers the common stale PUT with the numbers the caller sent. This is the other
-    ///         half: two edits that each read version N both pass that check, and only the token stops the later one
-    ///         from overwriting the earlier without either caller ever learning of the other. Both refusals are the
-    ///         same 409, because from the client's side they are one story — somebody edited this definition first.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The version check above answers the common stale PUT with the numbers the caller sent. This is the other
+    ///     half: two edits that each read version N both pass that check, and only the token stops the later one from
+    ///     overwriting the earlier without either caller ever learning of the other. Both refusals are the same 409,
+    ///     because from the client's side they are one story — somebody edited this definition first.
+    /// </remarks>
     private async Task SaveDefinitionAsync(CancellationToken cancellationToken)
     {
         try
@@ -739,10 +729,12 @@ internal sealed partial class DevWorkflowStore
     }
 
     /// <summary>
-    ///     One query for every listed run's node-runs, projected to four fields and tallied in memory. A grouped SQL
-    ///     aggregate cannot also answer "which node-run is blocking", and the projection is small enough that pulling it
-    ///     is cheaper than a second round trip to find out.
+    ///     One query for every listed run's node-runs, projected to four fields and tallied in memory.
     /// </summary>
+    /// <remarks>
+    ///     A grouped SQL aggregate cannot also answer "which node-run is blocking", and the projection is small enough
+    ///     that pulling it is cheaper than a second round trip to find out.
+    /// </remarks>
     private async Task<Dictionary<Guid, DevWorkflowNodeCounters>> LoadNodeCountersAsync(IReadOnlyList<Guid> runIds, CancellationToken cancellationToken)
     {
         if (runIds.Count == 0)

@@ -261,14 +261,14 @@ internal sealed partial class AgentWorkSessionStore
     }
 
     /// <summary>
-    ///     Keeps the session's current-task pointer true as the plan changes. A task moved to <c>Active</c> becomes the
-    ///     current one; the pointer is cleared when the task it names is finished or dropped.
-    ///     <para>
-    ///         Without this the pointer only ever moved on a status transition, so it went stale for the rest of a
-    ///         multi-step run every time the agent switched tasks — and every reader outside the step loop (the REST
-    ///         detail, the checkpoint state) read the stale value.
-    ///     </para>
+    ///     Keeps the session's current-task pointer true as the plan changes: a task moved to <c>Active</c> becomes the
+    ///     current one, and the pointer is cleared when the task it names is finished or dropped.
     /// </summary>
+    /// <remarks>
+    ///     Moving the pointer only on a status transition would leave it stale for the rest of a multi-step run every
+    ///     time the agent switched tasks, and every reader outside the step loop — the REST detail, the checkpoint
+    ///     state — reads it.
+    /// </remarks>
     private static void TrackCurrentTask(AgentWorkSession session, Guid taskId, AgentWorkSessionTaskStatus status)
     {
         if (status == AgentWorkSessionTaskStatus.Active)

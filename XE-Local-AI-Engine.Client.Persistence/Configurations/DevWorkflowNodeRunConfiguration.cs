@@ -22,9 +22,8 @@ internal sealed class DevWorkflowNodeRunConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.PendingDecisionKind).HasColumnName("pending_decision_kind").HasConversion<string>().HasMaxLength(32);
         builder.Property(entity => entity.Sequence).HasColumnName("sequence");
 
-        // work_session_id, agent_definition_id, development_project_id and development_task_id all carry no foreign
-        // key on purpose: they point into other families whose purge paths are raw SQL, and a node-run whose session
-        // or task is gone must read back as recoverable state rather than fail the delete.
+        // work_session_id, agent_definition_id, development_project_id and development_task_id all carry no foreign key on purpose: they point into other families
+        // whose purge paths are raw SQL, and a node-run whose session or task is gone must read back as recoverable state rather than fail the delete.
         builder.Property(entity => entity.WorkSessionId).HasColumnName("work_session_id");
         builder.Property(entity => entity.AgentDefinitionId).HasColumnName("agent_definition_id");
         builder.Property(entity => entity.DevelopmentProjectId).HasColumnName("development_project_id");
@@ -38,10 +37,8 @@ internal sealed class DevWorkflowNodeRunConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.FailureClass).HasColumnName("failure_class").HasMaxLength(64);
         builder.Property(entity => entity.TerminalReason).HasColumnName("terminal_reason").HasMaxLength(1024);
 
-        // Cost telemetry: plaintext like every other structural column on this row. The three payload columns above are
-        // the only encrypted ones, and no interceptor entry is added for these — they are counts, a served model name,
-        // tool names and node keys. No index either: every read is by run_id, which ux_dev_workflow_node_runs_run_node
-        // already covers, or a whole-table rollup from the runbook.
+        // Cost telemetry: plaintext like every other structural column on this row. The three payload columns above are the only encrypted ones, and no interceptor
+        // entry is added for counts, a model name, tool names and node keys. No index: reads are by run_id (ux_dev_workflow_node_runs_run_node) or whole-table.
         builder.Property(entity => entity.InputTokens).HasColumnName("input_tokens");
         builder.Property(entity => entity.OutputTokens).HasColumnName("output_tokens");
         builder.Property(entity => entity.ReasoningTokens).HasColumnName("reasoning_tokens");

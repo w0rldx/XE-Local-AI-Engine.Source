@@ -2,9 +2,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     One row per <c>(run, node key)</c>. <see cref="Attempt" /> increments in place; there is no per-attempt row.
+/// </summary>
+/// <remarks>
 ///     Per-attempt history lives in the run event log, which is what makes the <c>(run_id, node_key)</c> unique index
 ///     the node run's identity rather than a secondary constraint.
-/// </summary>
+/// </remarks>
 internal sealed class GraphWorkflowNodeRun
 {
     public Guid Id { get; set; }

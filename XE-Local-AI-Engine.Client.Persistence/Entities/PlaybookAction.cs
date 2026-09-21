@@ -24,8 +24,10 @@ internal sealed record class PlaybookAction
     ///     Optional retrieval/trigger hint as UTF-8 bytes. Plaintext while tracked in memory; encrypted at rest by
     ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
     ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>trigger_condition</c>.
-    ///     Advisory/display only (not injected into the prompt); drives retrieval in later phases.
     /// </summary>
+    /// <remarks>
+    ///     Advisory/display only (not injected into the prompt); drives retrieval in later phases.
+    /// </remarks>
     public byte[]? TriggerCondition { get; set; }
 
     /// <summary>
@@ -39,10 +41,12 @@ internal sealed record class PlaybookAction
     public string? Scope { get; set; }
 
     /// <summary>
-    ///     Provenance for an analysis-proposed action: a JSON array of feedback message/conversation ids
-    ///     that drove this action. Null for manually-authored actions. Plaintext — these are ids only (no comment
-    ///     text), so they are not sensitive and are NOT encrypted.
+    ///     Provenance for an analysis-proposed action: a JSON array of feedback message/conversation ids that drove
+    ///     this action. Null for manually-authored actions.
     /// </summary>
+    /// <remarks>
+    ///     Plaintext — these are ids only (no comment text), so they are not sensitive and are NOT encrypted.
+    /// </remarks>
     public string? SourceFeedbackIds { get; set; }
 
     /// <summary>Analysis-agent confidence in [0,1] for an analysis-proposed action; null for manual actions. Plaintext (structural).</summary>
@@ -62,9 +66,12 @@ internal sealed record class PlaybookAction
     public long UpdatedAtUtc { get; set; }
 
     /// <summary>
-    ///     Unix-ms timestamp of the most recent transition into <c>Enabled</c>; the cohort-monitoring clock
-    ///     that splits feedback into before/after windows. Null until the action is first enabled; preserved (never
-    ///     cleared) on disable so the last-enabled instant survives. Plaintext (a timestamp, structural — not sensitive).
+    ///     Unix-ms timestamp of the most recent transition into <c>Enabled</c>; the cohort-monitoring clock that
+    ///     splits feedback into before/after windows. Plaintext (a timestamp, structural — not sensitive).
     /// </summary>
+    /// <remarks>
+    ///     Null until the action is first enabled; preserved (never cleared) on disable so the last-enabled instant
+    ///     survives.
+    /// </remarks>
     public long? EnabledAtUtc { get; set; }
 }

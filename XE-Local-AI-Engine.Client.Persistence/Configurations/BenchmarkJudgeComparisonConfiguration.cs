@@ -71,9 +71,7 @@ internal sealed class BenchmarkJudgeComparisonConfiguration : IEntityTypeConfigu
             entity.CohortGeneration
         }).HasDatabaseName("ix_benchmark_comparisons_project_generation");
 
-        // The two slot-uniqueness indexes are DELIBERATELY absent here and written as raw SQL by the migration.
-        // They index COALESCE(task_case_id, x'00'), and HasIndex() takes columns rather than expressions: declaring
-        // them here would emit an index on the bare nullable column, which SQLite lets repeat NULLs — i.e. exactly
-        // the uniqueness hole the COALESCE exists to close, reopened silently. See the migration's Sql() blocks.
+        // The two slot-uniqueness indexes are DELIBERATELY absent here and written as raw SQL by the migration. They index COALESCE(task_case_id, x'00'), and
+        // HasIndex takes columns not expressions, so declaring them here emits a bare-nullable-column index whose repeated NULLs reopen the hole COALESCE closes.
     }
 }

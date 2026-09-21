@@ -19,10 +19,13 @@ internal sealed class GraphWorkflowDefinition
     public string GraphHash { get; set; } = string.Empty;
 
     /// <summary>
-    ///     Denormalized node count, written alongside <see cref="GraphHash" /> at every save. The definition list
-    ///     promises never to load the graph blob, and counting at save time — where the graph is already in hand for
-    ///     hashing — is what keeps that promise true instead of decrypting every definition on every list call.
+    ///     Denormalized node count, written alongside <see cref="GraphHash" /> at every save.
     /// </summary>
+    /// <remarks>
+    ///     The definition list promises never to load the graph blob, and counting at save time — where the graph is
+    ///     already in hand for hashing — is what keeps that promise true instead of decrypting every definition on
+    ///     every list call.
+    /// </remarks>
     public int NodeCount { get; set; }
 
     /// <summary>The graph document's schema version, denormalized for the same reason as the node count.</summary>

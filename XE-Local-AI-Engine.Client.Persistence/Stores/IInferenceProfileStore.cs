@@ -1,33 +1,39 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for llama-server inference profiles. There is exactly one live config per
-///     <c>(machine_key, model_name, role, backend)</c> key: <see cref="CreateOrUpdateExploredAsync" /> upserts that single
-///     config (latest explore wins), and the status transitions promote it to <see cref="InferenceProfileStatus.Frozen" />
-///     or demote it to <see cref="InferenceProfileStatus.Stale" />. All columns are plaintext structural data; this store
-///     performs no validation and owns id/timestamp stamping. The freeze transition mirrors the transactional
-///     latest-successful promotion of <c>ModelFitSnapshotStore</c>.
+///     Node-scoped persistence for llama-server inference profiles, one live config per
+///     <c>(machine_key, model_name, role, backend)</c> key.
 /// </summary>
+/// <remarks>
+///     <see cref="CreateOrUpdateExploredAsync" /> upserts that single config (latest explore wins); the status
+///     transitions promote it to <see cref="InferenceProfileStatus.Frozen" /> or demote it to
+///     <see cref="InferenceProfileStatus.Stale" />. All columns are plaintext structural data; the store performs no
+///     validation and owns id/timestamp stamping. The freeze transition mirrors the transactional latest-successful
+///     promotion of <c>ModelFitSnapshotStore</c>.
+/// </remarks>
 public interface IInferenceProfileStore
 {
     /// <summary>
     ///     Upserts the single <see cref="InferenceProfileStatus.Explored" /> config for the natural key
-    ///     (<c>machine_key, model_name, role, backend</c>). When a row already exists for the key its drafted args are
-    ///     OVERWRITTEN and it is reset to <see cref="InferenceProfileStatus.Explored" /> (clearing any prior freeze
-    ///     justification); otherwise a new row is inserted with a fresh <c>Id</c>/<c>CreatedAtUtc</c>. Returns the stored
-    ///     profile.
+    ///     (<c>machine_key, model_name, role, backend</c>) and returns the stored profile.
     /// </summary>
+    /// <remarks>
+    ///     When a row already exists for the key its drafted args are OVERWRITTEN and it is reset to
+    ///     <see cref="InferenceProfileStatus.Explored" />, clearing any prior freeze justification; otherwise a new row
+    ///     is inserted with a fresh <c>Id</c>/<c>CreatedAtUtc</c>.
+    /// </remarks>
     Task<InferenceProfileRecord> CreateOrUpdateExploredAsync(InferenceProfileInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Transitions the profile with <paramref name="id" /> to <see cref="InferenceProfileStatus.Frozen" />, recording
-    ///     the justifying <paramref name="benchmarkSnapshotId" />, global free VRAM invalidation baseline, and
-    ///     process-specific VRAM budget diagnostic, in a single transaction (mirrors the transactional promotion of the
-    ///     snapshot store). Only
-    ///     a row currently in <see cref="InferenceProfileStatus.Explored" /> is frozen (the freeze gate): a successful
-    ///     benchmark is the only justification. Returns the updated profile, or <c>null</c> when no row has that id or it is
-    ///     not in <see cref="InferenceProfileStatus.Explored" />.
+    ///     Transitions the profile with <paramref name="id" /> to <see cref="InferenceProfileStatus.Frozen" />, or
+    ///     returns <c>null</c> when no row has that id or it is not <see cref="InferenceProfileStatus.Explored" />.
     /// </summary>
+    /// <remarks>
+    ///     Records the justifying <paramref name="benchmarkSnapshotId" />, the global free-VRAM invalidation baseline
+    ///     and the process-specific VRAM budget diagnostic in a single transaction, mirroring the transactional
+    ///     promotion of the snapshot store. Only a row currently in <see cref="InferenceProfileStatus.Explored" /> is
+    ///     frozen (the freeze gate): a successful benchmark is the only justification.
+    /// </remarks>
     Task<InferenceProfileRecord?> MarkFrozenAsync(Guid id,
         Guid benchmarkSnapshotId,
         long? globalFreeVramAtFreezeBytes,
@@ -55,11 +61,13 @@ public interface IInferenceProfileStore
 }
 
 /// <summary>
-///     The args/attributes an explore run drafts for one profile key. <see cref="Role" /> is the integer value of
-///     <c>ModelRole</c> (Chat=0, Embedding=1). The store owns <c>Id</c>, timestamps, <c>Status</c>,
-///     <c>BenchmarkSnapshotId</c> and the explicit global-free/process-budget VRAM fields (the last two are stamped on
-///     freeze, not here).
+///     The args/attributes an explore run drafts for one profile key.
 /// </summary>
+/// <remarks>
+///     <see cref="Role" /> is the integer value of <c>ModelRole</c> (Chat=0, Embedding=1). The store owns <c>Id</c>,
+///     timestamps, <c>Status</c>, <c>BenchmarkSnapshotId</c> and the explicit global-free/process-budget VRAM fields —
+///     the last two are stamped on freeze, not here.
+/// </remarks>
 public sealed class InferenceProfileInput
 {
     public required string MachineKey { get; init; }

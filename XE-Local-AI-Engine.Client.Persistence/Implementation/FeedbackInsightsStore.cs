@@ -8,11 +8,13 @@ using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Raw-SQL aggregate read over the node-local chat database. Mirrors the chat persistence read
-///     idiom (parameterized ADO over the scoped <see cref="NodeChatDbContext" /> connection) rather than EF entity
-///     materialization, because the aggregate touches only plaintext columns and spans every conversation — the
-///     per-conversation write key on the persistence writer is irrelevant to a whole-database read.
+///     Raw-SQL aggregate read over the node-local chat database.
 /// </summary>
+/// <remarks>
+///     Mirrors the chat persistence read idiom — parameterized ADO over the scoped <see cref="NodeChatDbContext" />
+///     connection rather than EF entity materialization — because the aggregate touches only plaintext columns and
+///     spans every conversation, so the per-conversation write key on the persistence writer is irrelevant to it.
+/// </remarks>
 public sealed class FeedbackInsightsStore : IFeedbackInsightsStore
 {
     private const string RatingDown = "down";
@@ -27,9 +29,8 @@ public sealed class FeedbackInsightsStore : IFeedbackInsightsStore
 
     public async Task<AgentFeedbackAggregate?> GetAgentFeedbackAggregateAsync(Guid agentDefinitionId, int exemplarCap, CancellationToken cancellationToken = default)
     {
-        // Resolve the agent name through EF (scalar projection — no entity is materialized, so the encrypted
-        // Instructions/Description are never decrypted) rather than raw SQL: this both avoids decryption and
-        // guarantees the id comparison uses EF's own Guid↔TEXT binding for the EF-written agent_definitions.id.
+        // Resolve the agent name through EF rather than raw SQL: a scalar projection materializes no entity, so the encrypted Instructions/Description are never
+        // decrypted, and the id comparison uses EF's own Guid↔TEXT binding for the EF-written agent_definitions.id.
         var agentName = await _dbContext.Set<AgentDefinition>()
                                         .AsNoTracking()
                                         .Where(agent => agent.Id == agentDefinitionId)

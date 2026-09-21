@@ -73,9 +73,8 @@ internal sealed partial class DevWorkflowStore
 
                 AddNodeRuns(run, command.NodeRuns, Now());
 
-                // A rewritten graph is the dynamic-expansion path: the run's pinned copy is the single source of
-                // routing truth, so it changes here — in the same transaction as the rows it explains — and the
-                // definition row is never touched, which is what keeps re-running a definition unaffected.
+                // A rewritten graph is the dynamic-expansion path: the run's pinned copy is the single source of routing truth, so it changes here, in the same
+                // transaction as the rows it explains. The definition row is never touched, which is what keeps re-running a definition unaffected.
                 if (command.GraphJson is { } rewritten)
                 {
                     EnsureNotBlank(rewritten, nameof(command.GraphJson));
@@ -83,9 +82,8 @@ internal sealed partial class DevWorkflowStore
                     run.GraphRevision++;
                 }
 
-                // The producer's route, re-recorded against the graph this expansion just wrote. It belongs in THIS
-                // transaction: the route and the edges it describes are one fact, and a separate write afterwards
-                // could leave a run whose expansion committed and whose route still denies it.
+                // The producer's route, re-recorded against the graph this expansion just wrote. It belongs in THIS transaction: the route and the edges it
+                // describes are one fact, and a separate write afterwards could leave a run whose expansion committed and whose route still denies it.
                 if (command.RouteJson is { } producerRoute && command.RouteNodeRunId is { } producerNodeRunId)
                 {
                     EnsureNotBlank(producerRoute, nameof(command.RouteJson));
@@ -109,10 +107,8 @@ internal sealed partial class DevWorkflowStore
             command.OperationId,
             async run =>
             {
-                // BEFORE the move, so the attempt this command is about to add is not counted as already spent. Only
-                // an automatic re-attempt sets a budget here; every other transition passes null and is unaffected.
-                // IncrementAttempt is part of the guard because the cost charged is one ATTEMPT: a budget-carrying
-                // command that spends none must not be refused for a slot it was never going to take.
+                // BEFORE the move, so the attempt this command is about to add is not counted as already spent. Only an automatic re-attempt sets a budget here.
+                // IncrementAttempt guards it because the cost charged is one ATTEMPT, and a budget-carrying command that spends none must not be refused a slot.
                 if (command is { MaxTotalAttempts: { } budget, IncrementAttempt: true })
                 {
                     await EnsureRetryBudgetAsync(run.Id, budget, cost: 1, cancellationToken);
@@ -125,9 +121,12 @@ internal sealed partial class DevWorkflowStore
 
     /// <summary>
     ///     One node-run status move against an already-loaded run row, without the transaction and event append around
-    ///     it. Factored out because restart recovery applies a batch of these inside ITS transaction, and two copies of
-    ///     what a transition writes would drift.
+    ///     it.
     /// </summary>
+    /// <remarks>
+    ///     Factored out because restart recovery applies a batch of these inside ITS transaction, and two copies of
+    ///     what a transition writes would drift.
+    /// </remarks>
     private async Task<MutationOutcome> ApplyNodeRunTransitionAsync(DevWorkflowRun run,
         TransitionDevWorkflowNodeRunCommand command,
         CancellationToken cancellationToken)
@@ -137,16 +136,8 @@ internal sealed partial class DevWorkflowStore
 
         if (command.WidenMaxAttempts)
         {
-            // An operator's Retry is allowed AT the cap and buys exactly one more attempt, so the cap moves with it.
-            // In place, like the attempt beside it: without this the row reads "attempt 4 of 3" — the runtime saying
-            // it broke its own budget where in fact a human granted one more try — and every automatic check that
-            // compares Attempt against MaxAttempts would refuse the attempt the person just paid for.
-            //
-            // From the ATTEMPT when that is already past the cap, which is the shape a row persisted before widening
-            // shipped can be in: an old operator Retry spent an attempt without moving the cap, so 4-of-3 incremented
-            // to 5-of-4 and stayed one over for ever. Catching the cap up first grants the attempt instead of chasing
-            // it. Saturating, because a definition may declare int.MaxValue and wrapping to negative would refuse
-            // every attempt the node has left rather than buying it one more.
+            // An operator's Retry is allowed AT the cap and buys one more attempt, so the cap moves with it in place; without this the row reads "attempt 4 of 3"
+            // and every Attempt-vs-MaxAttempts check refuses it. Floored on the ATTEMPT so a row past its cap is caught up, not chased; saturating at int.MaxValue.
             var floor = Math.Max(nodeRun.MaxAttempts, nodeRun.Attempt);
             nodeRun.MaxAttempts = floor < int.MaxValue ? floor + 1 : int.MaxValue;
         }
@@ -180,18 +171,16 @@ internal sealed partial class DevWorkflowStore
         }
         else if (command.TargetStatus == DevWorkflowNodeRunStatus.Pending)
         {
-            // A re-attempt starts from a clean slate. The timestamps, or the UI shows it queued since its first
-            // try; the failure fields too, or a node-run reports the previous attempt's failure while it runs
-            // again. What that attempt failed with is already on its node.failed event.
+            // A re-attempt starts from a clean slate: the timestamps go, or the UI shows it queued since its first try, and the failure fields too, or a node-run
+            // reports the previous attempt's failure while it runs again. What that attempt failed with is already on its node.failed event.
             nodeRun.QueuedAtUtc = null;
             nodeRun.StartedAtUtc = null;
             nodeRun.EndedAtUtc = null;
             nodeRun.FailureClass = null;
             nodeRun.TerminalReason = null;
 
-            // The cost columns go with them, and for the same reason: they describe the attempt that just failed, and
-            // leaving them would make the next attempt report the previous one's spend. What that attempt cost is
-            // captured onto its node.retry.scheduled event before this reset runs.
+            // The cost columns go with them, for the same reason: they describe the attempt that just failed, and leaving them would make the next attempt report
+            // the previous one's spend. What that attempt cost is captured onto its node.retry.scheduled event before this reset runs.
             ClearTelemetry(nodeRun);
         }
 
@@ -242,12 +231,14 @@ internal sealed partial class DevWorkflowStore
     }
 
     /// <summary>
-    ///     Writes the cost columns a settle collected. Member-wise and null-skipping, so a collector that could answer
-    ///     only half the question — an agent node whose envelopes are gone, a structural node that has a route and
-    ///     nothing else — leaves the rest of the row alone instead of blanking it. The two VRAM columns are the one
-    ///     exception: they are a PAIR from a single observation, written together by the first settle of the attempt
-    ///     that CARRIES one, and not rewritten after that.
+    ///     Writes the cost columns a settle collected, member-wise and null-skipping.
     /// </summary>
+    /// <remarks>
+    ///     A collector that could answer only half the question — an agent node whose envelopes are gone, a structural
+    ///     node that has a route and nothing else — leaves the rest of the row alone instead of blanking it. The two
+    ///     VRAM columns are the one exception: they are a PAIR from a single observation, written together by the first
+    ///     settle of the attempt that CARRIES one, and not rewritten after that.
+    /// </remarks>
     private static void ApplyTelemetry(DevWorkflowNodeRun nodeRun, DevWorkflowNodeTelemetry? telemetry)
     {
         if (telemetry is null)
@@ -266,13 +257,8 @@ internal sealed partial class DevWorkflowStore
         nodeRun.AgentTurnMs = telemetry.AgentTurnMs ?? nodeRun.AgentTurnMs;
         nodeRun.ModelReadinessMs = telemetry.ModelReadinessMs ?? nodeRun.ModelReadinessMs;
 
-        // NOT the null-coalescing merge the columns above use. These two are one reading of the BOX at the run's load,
-        // so they must come from a single observation and the first settle of an attempt that CARRIES a reading has to
-        // win: a later settle would otherwise splice in a reload that happened after the attempt's work, and a
-        // member-wise merge could pair one load's free-VRAM figure with another load's admitted figure. A settle that
-        // carries NEITHER member is not that settle — it leaves the pair open for a later one, exactly as it leaves
-        // every other column alone. A re-attempt's ClearTelemetry resets both to null, which is what re-opens the pair
-        // for the new attempt.
+        // NOT the null-coalescing merge the columns above use: these two are one reading of the BOX at the run's load, so the first settle of an attempt that CARRIES
+        // a reading wins; a later one would splice in a post-work reload. A settle carrying NEITHER leaves the pair open, which a re-attempt's ClearTelemetry re-opens.
         if (nodeRun.VramFreeAtLoadBytes is null
             && nodeRun.VramAdmittedBytes is null
             && (telemetry.VramFreeAtLoadBytes is not null || telemetry.VramAdmittedBytes is not null))
@@ -402,9 +388,8 @@ internal sealed partial class DevWorkflowStore
 
                 var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken);
 
-                // Lineage identity is (run, producing node key, name). Keying on (run, name) alone would make
-                // materialized siblings — which share a template and so a logical artifact name — version each other's
-                // work and mark unrelated consumers stale.
+                // Lineage identity is (run, producing node key, name). Keying on (run, name) alone would make materialized siblings — which share a template and
+                // so a logical artifact name — version each other's work and mark unrelated consumers stale.
                 var previous = await _dbContext.DevWorkflowArtifacts.AsNoTracking()
                                                .Where(entity => entity.RunId == run.Id
                                                                 && entity.ProducingNodeKey == nodeRun.NodeKey
@@ -528,9 +513,8 @@ internal sealed partial class DevWorkflowStore
                                                 .Select(entity => entity.NodeRunId)
                                                 .ToListAsync(cancellationToken);
 
-                // The superseding artifact is excluded explicitly: a re-attempt of a node that consumed its own prior
-                // version is a consumer of the thing it just replaced, so without this the new version marks itself
-                // stale the moment it lands.
+                // The superseding artifact is excluded explicitly: a re-attempt of a node that consumed its own prior version is a consumer of the thing it just
+                // replaced, so without this the new version marks itself stale the moment it lands.
                 var dependents = consumers.Count == 0
                     ? []
                     : await _dbContext.DevWorkflowArtifacts
@@ -578,9 +562,8 @@ internal sealed partial class DevWorkflowStore
                                                               + $"and {command.ExpectedStatus}.");
                 }
 
-                // One decision per node-run ATTEMPT: a node-run legitimately accumulates several over its life, but not
-                // two for the same try. The standing one is loaded rather than merely counted, because the caller that
-                // gets this refusal has to be able to say WHAT was already decided.
+                // One decision per node-run ATTEMPT: a node-run legitimately accumulates several over its life, but not two for the same try. The standing one is
+                // loaded rather than merely counted, because the caller that gets this refusal has to be able to say WHAT was already decided.
                 if (await _dbContext.DevWorkflowDecisions.AsNoTracking()
                                     .FirstOrDefaultAsync(entity => entity.NodeRunId == nodeRun.Id && entity.Attempt == nodeRun.Attempt, cancellationToken) is { } standing)
                 {

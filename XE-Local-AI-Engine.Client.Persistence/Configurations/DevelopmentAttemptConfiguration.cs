@@ -24,11 +24,8 @@ internal sealed class DevelopmentAttemptConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.OutputTokens).HasColumnName("output_tokens");
         builder.Property(entity => entity.StartOperationId).HasColumnName("start_operation_id");
 
-        // Deliberately PLAINTEXT, for the same reason as DevelopmentProject.CommandProfileJson: an encrypted column
-        // cannot be indexed, filtered, or digest-compared, and the command profile is non-secret operator-confirmed
-        // configuration (executable names, argument vectors, timeouts, glob patterns) — not credentials. Do not "fix"
-        // this to encrypted, and do not add it to NodeEncryptionSaveChangesInterceptor /
-        // NodeEncryptionMaterializationInterceptor.
+        // Deliberately PLAINTEXT, for the same reason as DevelopmentProject.CommandProfileJson: an encrypted column cannot be indexed, filtered or digest-compared, and the
+        // profile is non-secret operator-confirmed configuration — executable names, argument vectors, timeouts, glob patterns — not credentials.
         builder.Property(entity => entity.CommandProfileJson).HasColumnName("command_profile_json");
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.HasOne<DevelopmentTask>().WithMany().HasForeignKey(entity => entity.TaskId).OnDelete(DeleteBehavior.Cascade);

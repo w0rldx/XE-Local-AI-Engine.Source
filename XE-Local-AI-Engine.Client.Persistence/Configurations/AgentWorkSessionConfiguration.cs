@@ -29,9 +29,8 @@ internal sealed class AgentWorkSessionConfiguration : IEntityTypeConfiguration<A
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
 
-        // conversation_id and agent_definition_id carry no foreign key on purpose: the conversation purge path is raw
-        // ADO SQL, and a session whose conversation is gone must read back as recoverable state rather than fail the
-        // delete. NodeConversation.AgentDefinitionId is the same loose reference.
+        // conversation_id and agent_definition_id carry no foreign key on purpose: the conversation purge path is raw ADO SQL, and a session whose conversation is
+        // gone must read back as recoverable state rather than fail the delete. NodeConversation.AgentDefinitionId is the same loose reference.
         builder.HasIndex(entity => entity.ConversationId).IsUnique().HasDatabaseName("ux_agent_work_sessions_conversation_id");
         builder.HasIndex(entity => new
         {

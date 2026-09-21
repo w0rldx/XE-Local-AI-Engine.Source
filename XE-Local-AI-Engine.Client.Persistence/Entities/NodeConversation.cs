@@ -27,11 +27,13 @@ internal sealed record class NodeConversation
 
     /// <summary>
     ///     What created this conversation, and therefore whether the chat list shows it: one of
-    ///     <see cref="NodeConversationKind" />. Defaults to <c>chat</c>, and the migration backfills
-    ///     <c>work-session</c> onto every conversation an <see cref="AgentWorkSession" /> owns. The two
-    ///     conversation LIST queries filter on it; by-id reads, purge and retention stay unfiltered on purpose.
-    ///     Plaintext (structural).
+    ///     <see cref="NodeConversationKind" />. Plaintext (structural).
     /// </summary>
+    /// <remarks>
+    ///     Defaults to <c>chat</c>, and the migration backfills <c>work-session</c> onto every conversation an
+    ///     <see cref="AgentWorkSession" /> owns. The two conversation LIST queries filter on it; by-id reads, purge
+    ///     and retention stay unfiltered on purpose.
+    /// </remarks>
     public string Kind { get; set; } = NodeConversationKind.Chat;
 
     /// <summary>
@@ -42,36 +44,45 @@ internal sealed record class NodeConversation
     public Guid? BranchOfConversationId { get; set; }
 
     /// <summary>
-    ///     JSON metadata map of variantGroupId-&gt;selectedMessageId capturing which sibling variant is selected on each
-    ///     branched turn. Topology lives on the messages (parent/variant-group); this column is selection metadata only,
-    ///     so it is additive, nullable, and E2E-safe (never required to reconstruct the conversation tree).
+    ///     JSON metadata map of variantGroupId-&gt;selectedMessageId capturing which sibling variant is selected on
+    ///     each branched turn.
     /// </summary>
+    /// <remarks>
+    ///     Topology lives on the messages (parent/variant-group); this column is selection metadata only, so it is
+    ///     additive, nullable, and E2E-safe (never required to reconstruct the conversation tree).
+    /// </remarks>
     public string? SelectedPathJson { get; set; }
 
     /// <summary>
     ///     The node-local agent definition this conversation is bound to, or null for the implicit default persona.
+    /// </summary>
+    /// <remarks>
     ///     A loose nullable Guid with no enforced FK (mirrors <see cref="BranchOfConversationId" />): a binding that
     ///     points at a deleted definition is treated as null by the resolver rather than failing the read.
-    /// </summary>
+    /// </remarks>
     public Guid? AgentDefinitionId { get; set; }
 
     /// <summary>
-    ///     Temporary-chat (adaptive-memory write-only-suppression) flag. When true, the post-run memory-extraction seam
-    ///     skips this conversation entirely; it does NOT affect retrieval/injection (a temp chat still reads existing
-    ///     memory) or chat persistence (the conversation is still saved). Plaintext (a bool); default/backfill false.
-    ///     The conversation read/write paths use raw ADO SQL, so this property exists mainly so the EF model snapshot and
-    ///     EnsureCreated() track the column; the raw column-lists in NodeChatConversationCommands/NodeChatPersistenceSql
-    ///     are the actual reader/writer.
+    ///     Temporary-chat (adaptive-memory write-only-suppression) flag. Plaintext (a bool); default/backfill false.
     /// </summary>
+    /// <remarks>
+    ///     When true, the post-run memory-extraction seam skips this conversation entirely; it does NOT affect
+    ///     retrieval/injection (a temp chat still reads existing memory) or chat persistence (the conversation is
+    ///     still saved). The conversation read/write paths use raw ADO SQL, so this property exists mainly so the EF
+    ///     model snapshot and EnsureCreated() track the column; the raw column-lists in
+    ///     NodeChatConversationCommands/NodeChatPersistenceSql are the actual reader/writer.
+    /// </remarks>
     public bool MemoryExcluded { get; set; }
 
     /// <summary>
-    ///     Derived, non-destructive compaction synopsis: a local-model summary of the older turns, sent in their place so
-    ///     a long conversation keeps its gist within the context window without deleting the originals (which remain in
-    ///     <see cref="Messages" />). UTF-8 bytes encrypted at rest under AAD column name <c>compaction_summary</c> — same
-    ///     posture as <see cref="Title" />. Null until the user compacts the conversation. See
-    ///     <see cref="CompactionSummaryCoversToSequence" /> for which messages it folds in.
+    ///     Derived, non-destructive compaction synopsis: a local-model summary of the older turns, sent in their place
+    ///     so a long conversation keeps its gist within the context window. Null until the user compacts.
     /// </summary>
+    /// <remarks>
+    ///     The originals are not deleted and remain in <see cref="Messages" />. UTF-8 bytes encrypted at rest under
+    ///     AAD column name <c>compaction_summary</c> — same posture as <see cref="Title" />. See
+    ///     <see cref="CompactionSummaryCoversToSequence" /> for which messages it folds in.
+    /// </remarks>
     public byte[]? CompactionSummary { get; set; }
 
     /// <summary>

@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for the user-defined custom tool library. <c>Description</c> and the kind-specific
-///     <c>ConfigJson</c> (which carries the secret header/env values) are encrypted at rest by the node encryption
-///     interceptors; reads return them decrypted on the record types below. This store performs no content validation —
-///     that is the application-layer service's responsibility (MAF-safe name, executable denylist, SSRF guard, danger
-///     acknowledgement); it owns only id/version/timestamp stamping and the content-affecting version-bump rule.
+///     Node-scoped persistence for the user-defined custom tool library.
 /// </summary>
+/// <remarks>
+///     <c>Description</c> and the kind-specific <c>ConfigJson</c> (which carries the secret header/env values) are
+///     encrypted at rest by the node encryption interceptors; reads return them decrypted on the record types below.
+///     The store performs no content validation — that is the application-layer service's responsibility (MAF-safe
+///     name, executable denylist, SSRF guard, danger acknowledgement); it owns only id/version/timestamp stamping and
+///     the content-affecting version-bump rule.
+/// </remarks>
 public interface ICustomToolStore
 {
     /// <summary>
@@ -16,11 +19,13 @@ public interface ICustomToolStore
     Task<CustomToolRecord> CreateAsync(CustomToolInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Applies <paramref name="input" /> to the tool identified by <paramref name="id" />, stamping
-    ///     <c>UpdatedAtUtc</c> and incrementing <c>Version</c> only when a content-affecting field changed (Name,
-    ///     Description, Kind, Mode, parameters or config — never the <c>Enabled</c> or <c>Acknowledged</c> toggle).
-    ///     Returns the updated record, or <c>null</c> when no tool has that id.
+    ///     Applies <paramref name="input" /> to the tool identified by <paramref name="id" />, or returns <c>null</c>
+    ///     when no tool has that id.
     /// </summary>
+    /// <remarks>
+    ///     Stamps <c>UpdatedAtUtc</c> and increments <c>Version</c> only when a content-affecting field changed: Name,
+    ///     Description, Kind, Mode, parameters or config — never the <c>Enabled</c> or <c>Acknowledged</c> toggle.
+    /// </remarks>
     Task<CustomToolRecord?> UpdateAsync(Guid id, CustomToolInput input, CancellationToken cancellationToken = default);
 
     /// <summary>Removes the tool with <paramref name="id" />. Returns <c>true</c> when a row was deleted.</summary>
@@ -34,12 +39,14 @@ public interface ICustomToolStore
 }
 
 /// <summary>
-///     Decrypted, typed projection of a persisted custom tool. <see cref="Description" /> and <see cref="ConfigJson" />
-///     are returned in plaintext (decrypted on materialization); the store converts to and from this shape at the
-///     boundary so callers never touch the encrypted byte columns. <see cref="ConfigJson" /> still carries any secret
-///     header/env values in the clear on the read side — the CRUD read path is responsible for masking them before they
-///     reach an operator or the model.
+///     Decrypted, typed projection of a persisted custom tool.
 /// </summary>
+/// <remarks>
+///     <see cref="Description" /> and <see cref="ConfigJson" /> are returned in plaintext (decrypted on
+///     materialization); the store converts to and from this shape at the boundary so callers never touch the
+///     encrypted byte columns. <see cref="ConfigJson" /> still carries any secret header/env values in the clear on
+///     the read side — the CRUD read path is responsible for masking them before they reach an operator or the model.
+/// </remarks>
 public sealed class CustomToolRecord
 {
     public required Guid Id { get; init; }
@@ -68,11 +75,14 @@ public sealed class CustomToolRecord
 }
 
 /// <summary>
-///     Mutable fields of a custom tool supplied on create/update. Free text is passed as plaintext strings; the store
-///     encodes <see cref="Description" /> and <see cref="ConfigJson" /> to UTF-8 bytes before the interceptors encrypt
-///     them. <see cref="ParametersJson" /> and <see cref="ConfigJson" /> are opaque JSON to the store — the application
-///     service owns their shape and validation.
+///     Mutable fields of a custom tool supplied on create/update.
 /// </summary>
+/// <remarks>
+///     Free text is passed as plaintext strings; the store encodes <see cref="Description" /> and
+///     <see cref="ConfigJson" /> to UTF-8 bytes before the interceptors encrypt them. <see cref="ParametersJson" />
+///     and <see cref="ConfigJson" /> are opaque JSON to the store — the application service owns their shape and
+///     validation.
+/// </remarks>
 public sealed class CustomToolInput
 {
     public required string Name { get; init; }

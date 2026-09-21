@@ -2,10 +2,13 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     One Bradley–Terry fit over one cohort's pairwise verdicts, stored as ONE immutable row with ONE active pointer
-///     per <c>(revision, generation, case)</c>. A fit is a single object: publishing it by writing a score onto each
-///     run would let a crash leave a ranking that blends two fits, with every row internally consistent and the
-///     ordering wrong. Ranking reads the scores out of this row, so that state is not reachable.
+///     per <c>(revision, generation, case)</c>.
 /// </summary>
+/// <remarks>
+///     A fit is a single object: publishing it by writing a score onto each run would let a crash leave a ranking
+///     that blends two fits, with every row internally consistent and the ordering wrong. Ranking reads the scores
+///     out of this row, so that state is not reachable.
+/// </remarks>
 internal sealed record class BenchmarkPairwiseFit
 {
     public Guid Id { get; set; }
@@ -18,9 +21,11 @@ internal sealed record class BenchmarkPairwiseFit
 
     /// <summary>
     ///     <c>v1:</c> + 64 hex over the fit's whole identity: revision, generation, policy hash, both pairwise
-    ///     versions, the case, the promoted judge execution key and the comparison-set version. UNIQUE, so a duplicate
-    ///     publication violates and no-ops rather than minting a second fit of the same thing.
+    ///     versions, the case, the promoted judge execution key and the comparison-set version.
     /// </summary>
+    /// <remarks>
+    ///     UNIQUE, so a duplicate publication violates and no-ops rather than minting a second fit of the same thing.
+    /// </remarks>
     public string FitKey { get; set; } = string.Empty;
 
     /// <summary>

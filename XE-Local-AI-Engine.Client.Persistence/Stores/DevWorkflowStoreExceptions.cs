@@ -18,15 +18,15 @@ public class DevWorkflowInvalidTransitionException : InvalidOperationException
 
 /// <summary>
 ///     The one invalid transition that is an ACCOUNTING refusal rather than an illegal move: the run has no re-attempt
-///     left to spend on this act. Its own type because the automatic retry path converts it to a Blocked node run with
-///     the <c>BudgetExhausted</c> class, and catching the base type there would relabel every illegal move — a row
-///     settled terminal under the tick, say — as budget exhaustion on a run with its whole budget intact.
-///     <para>
-///         Derived rather than separate so every existing <c>catch</c> of the base type (endpoint mapping, validation
-///         translation) goes on behaving exactly as it does today. Public rather than internal because the retry
-///         policy that catches it lives in the application assembly.
-///     </para>
+///     left to spend on this act.
 /// </summary>
+/// <remarks>
+///     Its own type because the automatic retry path converts it to a Blocked node run with the
+///     <c>BudgetExhausted</c> class, and catching the base type there would relabel every illegal move — a row settled
+///     terminal under the tick, say — as budget exhaustion on a run with its whole budget intact. Derived rather than
+///     separate so every existing <c>catch</c> of the base type keeps behaving as it does, and public rather than
+///     internal because the retry policy that catches it lives in the application assembly.
+/// </remarks>
 public sealed class DevWorkflowRetryBudgetExceededException : DevWorkflowInvalidTransitionException
 {
     public DevWorkflowRetryBudgetExceededException(string message) : base(message)
@@ -55,11 +55,11 @@ public sealed class DevWorkflowRunInFlightException : InvalidOperationException
 /// <summary>
 ///     A second human act on a gate that is already answered — a NEW operation id arriving at a decided node-run,
 ///     which is not the idempotent replay a repeated one is.
-///     <para>
-///         <see cref="StandingDecision" /> travels with it so the API can tell the operator WHAT was decided instead
-///         of only that their click failed.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="StandingDecision" /> travels with it so the API can tell the operator WHAT was decided instead of
+///     only that their click failed.
+/// </remarks>
 public sealed class DevWorkflowGateAlreadyDecidedException : InvalidOperationException
 {
     public DevWorkflowGateAlreadyDecidedException(string message, DevWorkflowDecisionKind standingDecision) : base(message)

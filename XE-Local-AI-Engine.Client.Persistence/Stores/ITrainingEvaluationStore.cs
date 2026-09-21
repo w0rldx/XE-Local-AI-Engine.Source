@@ -5,20 +5,14 @@ using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Persistence boundary for evaluation runs and the comparison reports built from them. Same conventions as
-///     <see cref="ITrainingRunStore" /> — hand-bumped <c>Version</c> tokens, explicit SQLite transactions, explicit
-///     ordered deletes and the shared <see cref="TrainingStoreException" /> hierarchy. Evaluations ride the SAME durable
-///     queue as training runs (<c>training_work_items</c> with <see cref="TrainingWorkKind.EvaluationRun" />), so the
-///     claim, terminalize and recovery halves live in <see cref="ITrainingRunStore" /> and are not duplicated here.
+///     Persistence boundary for evaluation runs and the comparison reports built from them.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>Why the store owns the results merge.</strong> The per-sample verdicts are appended by a long loop
-///         that can be interrupted at any point, and the three aggregate columns must never disagree with the blob they
-///         summarize. Folding the by-sample-id merge and the aggregate recompute into one method makes that impossible
-///         to get wrong per caller, and makes "recompute the accuracy from the persisted results" — the reproducibility
-///         the comparison report rests on — a property of the data rather than of the writer.
-///     </para>
+///     Same conventions as <see cref="ITrainingRunStore" /> — hand-bumped <c>Version</c> tokens, explicit SQLite
+///     transactions, explicit ordered deletes, the shared <see cref="TrainingStoreException" /> hierarchy — and the
+///     SAME durable queue (<c>training_work_items</c> with <see cref="TrainingWorkKind.EvaluationRun" />), so the
+///     claim, terminalize and recovery halves live in <see cref="ITrainingRunStore" />. The store owns the results
+///     merge so the aggregates can never disagree with the blob they summarize: see <see cref="AppendResultsAsync" />.
 /// </remarks>
 public interface ITrainingEvaluationStore
 {
@@ -34,10 +28,14 @@ public interface ITrainingEvaluationStore
 
     /// <summary>
     ///     Merges verdicts into the results blob keyed by sample id and recomputes every aggregate from the merged set.
-    ///     A re-append of an already-scored sample is a silent no-op, which is what makes the resume path safe to
-    ///     re-enter after an interruption. Does not bump <c>Version</c>: it fires once per sample from the single
-    ///     executor that owns the evaluation, and bumping would invalidate that executor's expected version mid-loop.
     /// </summary>
+    /// <remarks>
+    ///     The verdicts are appended by a long loop that can be interrupted at any point, so folding the by-sample-id
+    ///     merge and the aggregate recompute into one method keeps "recompute the accuracy from the persisted
+    ///     results" — the reproducibility the comparison report rests on — a property of the data, not of the writer.
+    ///     A re-append of an already-scored sample is a silent no-op, which makes the resume path safe to re-enter.
+    ///     Does not bump <c>Version</c>: it fires once per sample from the evaluation's single executor.
+    /// </remarks>
     Task<TrainingEvaluationRecord> AppendResultsAsync(Guid evaluationId,
         IReadOnlyList<TrainingEvaluationResultEntry> entries,
         CancellationToken cancellationToken = default);
@@ -66,12 +64,15 @@ public interface ITrainingEvaluationStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Re-queues a terminated evaluation without discarding what it already scored. The frozen queue semantics pin
-    ///     attempt to 1 and never retry a work item in place, so resume REPLACES the terminal work item with a fresh
-    ///     queued one. Before continuing from the next unscored sample, the executor must bind byte-identical execution
-    ///     provenance to the partial attempt; a different runtime identity is refused rather than mixing verdicts.
-    ///     Refused while the evaluation is still in flight, and refused once it has finished scoring its whole membership.
+    ///     Re-queues a terminated evaluation without discarding what it already scored. Refused while it is still in
+    ///     flight, and refused once it has finished scoring its whole membership.
     /// </summary>
+    /// <remarks>
+    ///     The frozen queue semantics pin attempt to 1 and never retry a work item in place, so resume REPLACES the
+    ///     terminal work item with a fresh queued one. Before continuing from the next unscored sample the executor
+    ///     must bind byte-identical execution provenance to the partial attempt; a different runtime identity is
+    ///     refused rather than mixing verdicts.
+    /// </remarks>
     Task<TrainingEvaluationRecord> ResumeAsync(Guid evaluationId, long expectedVersion, CancellationToken cancellationToken = default);
 
     /// <summary>

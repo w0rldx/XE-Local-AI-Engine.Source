@@ -34,10 +34,13 @@ internal sealed record class BenchmarkTaskItem
     public int Revision { get; set; }
 
     /// <summary>
-    ///     <c>v1:</c> + SHA-256 over exactly what this item asks (kind, revision, and the four payloads). PLAINTEXT,
-    ///     because the ranking read compares a run's frozen copy of it against this column without ever decrypting a
-    ///     payload. Recomputed by the store on every write.
+    ///     <c>v1:</c> + SHA-256 over exactly what this item asks (kind, revision, and the four payloads). Recomputed
+    ///     by the store on every write.
     /// </summary>
+    /// <remarks>
+    ///     PLAINTEXT, because the ranking read compares a run's frozen copy of it against this column without ever
+    ///     decrypting a payload.
+    /// </remarks>
     public string InputHash { get; set; } = string.Empty;
 
     /// <summary>Whether this item enters the project's ranked mean. False for a probe measured on its own axis.</summary>
@@ -57,9 +60,11 @@ internal sealed record class BenchmarkTaskItem
 
     /// <summary>
     ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
-    ///     <c>benchmark_task_item_verifier_json</c>. Per-criterion overrides of the policy's verifier config — it can
-    ///     carry expected answers and test code, so it is never plaintext.
+    ///     <c>benchmark_task_item_verifier_json</c>. Per-criterion overrides of the policy's verifier config.
     /// </summary>
+    /// <remarks>
+    ///     It can carry expected answers and test code, so it is never plaintext at rest.
+    /// </remarks>
     public byte[]? VerifierConfigJson { get; set; }
 
     /// <summary>

@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Per-message feedback (thumbs/rating + optional free-text comment). Stored node-local only — feedback
-///     never syncs back to the platform, mirroring the Origin=Remote view-only posture. One row per message:
-///     the message id is the primary key, so re-submitting feedback overwrites the prior row.
+///     Per-message feedback (thumbs/rating + optional free-text comment). One row per message: the message id is the
+///     primary key, so re-submitting feedback overwrites the prior row.
 /// </summary>
+/// <remarks>
+///     Stored node-local only — feedback never syncs back to the platform, mirroring the Origin=Remote view-only
+///     posture.
+/// </remarks>
 internal sealed record class NodeMessageFeedback
 {
     public Guid MessageId { get; set; }

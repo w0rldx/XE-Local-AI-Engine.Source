@@ -39,10 +39,8 @@ public sealed partial class BenchmarkStore
             return ToRecord(entity, frozen: false);
         }
 
-        // The project, its judge and its items are ONE creation. Staged saves inside one transaction are what the
-        // circular project↔revision pointers force: project with a null pointer, then the revision, then the pointer.
-        // The items ride the same transaction so a project never exists without a question to ask — which is what lets
-        // every read path stop inventing one.
+        // The project, its judge and its items are ONE creation. Staged saves inside one transaction are what the circular project↔revision pointers force: project
+        // with a null pointer, then the revision, then the pointer. The items ride along so a project never exists without a question to ask, and no read invents one.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         _dbContext.BenchmarkProjects.Add(entity);
         await SaveAsync(cancellationToken);
@@ -134,20 +132,13 @@ public sealed partial class BenchmarkStore
     /// <summary>
     ///     Deletes a project with everything under it: every run and all the run-scoped evidence, then the
     ///     project-scoped rows, then the project.
-    ///     <para>
-    ///         Refused with <c>ActiveRun</c> while ANY of the project's runs is still in play — not terminal, or
-    ///         holding a queued/running work item, judge attempt or comparison. A finished run is deleted; a run the
-    ///         node is generating or judging is not, and the whole call is refused rather than partially applied, so
-    ///         the operator never loses half a project because one cell was still running.
-    ///     </para>
-    ///     <para>
-    ///         The version bump is the FIRST write on purpose. It reserves SQLite's single writer before the run set
-    ///         is read — the same idiom as <c>AcquireWorkCompletionAsync</c> — so a run started concurrently is either
-    ///         already committed and therefore seen by the guard below, or blocked behind this write and then refused
-    ///         by its own compare-and-swap in <c>StartRunsAsync</c>, which reads the project version inside its own
-    ///         transaction. Reading first and writing afterwards is what would let a run land in the gap.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Refused with <c>ActiveRun</c> while ANY run is still in play — not terminal, or holding a queued or running work item, judge attempt or comparison — and
+    ///     refused whole rather than partially applied, so the operator never loses half a project. The version bump is the FIRST write on purpose: it reserves
+    ///     SQLite's single writer before the run set is read, the same idiom as <c>AcquireWorkCompletionAsync</c>, so a concurrent run is either seen by the guard or
+    ///     refused by its own compare-and-swap in <c>StartRunsAsync</c>. Reading first would let a run land in the gap.
+    /// </remarks>
     public async Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
@@ -174,14 +165,8 @@ public sealed partial class BenchmarkStore
             }
         }
 
-        // The SAME per-run deletion the single-run delete performs, once per run, inside this one transaction — not a
-        // second routine that would drift from it. Every run is checked before any is deleted.
-        //
-        // Re-read one run at a time rather than reusing entities from the guard pass: `DeleteRunCoreAsync` clears the
-        // change tracker, so an instance materialized before it ran is detached by the next iteration and the write
-        // that severs its judge-attempt pointer would silently do nothing.
-        // ponytail: one pass per run, so a 400-run project issues a few thousand statements in one local transaction.
-        // Set-based deletes over the whole id list would be one pass each, if a project ever grows enough to notice.
+        // The SAME per-run deletion the single-run delete performs, once per run in this transaction, every run checked first. Re-read one at a time: DeleteRunCoreAsync
+        // clears the tracker, so a detached instance skips its judge-pointer write. ponytail: one pass per run (a few thousand statements for 400); set-based would be one.
         foreach (var run in runs)
         {
             await DeleteRunCoreAsync(await RequireRunAsync(run.Id, tracking: true, cancellationToken), cancellationToken);
@@ -193,10 +178,8 @@ public sealed partial class BenchmarkStore
         project.CurrentJudgePolicyRevisionId = null;
         await SaveAsync(cancellationToken);
 
-        // Every run-scoped child (work items, judge and fidelity attempts, comparisons) went with its run above. What
-        // is scoped to the PROJECT did not: task items hold encrypted prompts, reference answers and verifier
-        // overrides and outlive every run, and a pairwise fit is only DEACTIVATED when the runs it was fitted over are
-        // deleted. Both are children of the project row, so both go before it.
+        // Every run-scoped child (work items, judge and fidelity attempts, comparisons) went with its run above; what is scoped to the PROJECT did not. Task items
+        // hold encrypted prompts, answers and overrides and outlive every run, and a pairwise fit is only DEACTIVATED by a run delete. Both go before the project row.
         await _dbContext.BenchmarkTaskItems.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await _dbContext.BenchmarkPairwiseFits.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await _dbContext.BenchmarkJudgePolicyRevisions.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);

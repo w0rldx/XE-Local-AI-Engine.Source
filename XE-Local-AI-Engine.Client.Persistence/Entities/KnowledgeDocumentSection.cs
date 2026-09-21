@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Canonical structural node of a <see cref="KnowledgeDocument" /> — a section/heading carved out during extraction.
-///     Used for section/title metadata and parent-section context expansion at retrieval time. Rebuildable from the raw
-///     document, so a re-ingest replaces the section rows for the owning document.
+///     Canonical structural node of a <see cref="KnowledgeDocument" /> — a section/heading carved out during
+///     extraction. Used for section/title metadata and parent-section context expansion at retrieval time.
 /// </summary>
+/// <remarks>
+///     Rebuildable from the raw document, so a re-ingest replaces the section rows for the owning document.
+/// </remarks>
 internal sealed record class KnowledgeDocumentSection
 {
     public Guid SectionId { get; set; }

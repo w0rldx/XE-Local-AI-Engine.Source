@@ -63,10 +63,8 @@ internal sealed class NodeMessageConfiguration : IEntityTypeConfiguration<NodeMe
         builder.HasIndex(entity => entity.VariantGroupId);
         builder.HasIndex(entity => entity.AgentDefinitionId);
 
-        // A conversation's message sequences must be unique: two concurrent sends/regenerations once allocated the same
-        // MAX(sequence)+1 and both inserted, corrupting ordering. Allocation is now serialized under a per-conversation
-        // write lock, and this index is the database-level backstop that turns any residual collision into a retryable
-        // constraint error instead of a silent duplicate.
+        // A conversation's message sequences must be unique: two concurrent sends or regenerations allocating the same MAX(sequence)+1 and both inserting corrupts
+        // ordering. Allocation is serialized under a per-conversation write lock, and this index turns any residual collision into a retryable constraint error.
         builder.HasIndex(entity => new
                {
                    entity.ConversationId,

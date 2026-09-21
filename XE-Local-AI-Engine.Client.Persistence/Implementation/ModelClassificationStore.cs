@@ -5,10 +5,12 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Persistence boundary for local model classification data. The <c>model_classifications</c> table is keyed by
-///     model name with a <c>NOCASE</c> collation, so name lookups and the upsert key are case-insensitive without any
-///     LINQ-side comparer. No column is encrypted.
+///     Persistence boundary for local model classification data.
 /// </summary>
+/// <remarks>
+///     The <c>model_classifications</c> table is keyed by model name with a <c>NOCASE</c> collation, so name lookups
+///     and the upsert key are case-insensitive without any LINQ-side comparer. No column is encrypted.
+/// </remarks>
 public sealed class ModelClassificationStore : IModelClassificationStore
 {
     private readonly NodeChatDbContext _dbContext;

@@ -3,13 +3,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Persistence boundary for the local image-generation job registry (<c>image_jobs</c>). The prompt / negative-prompt
-///     columns are encrypted at rest by the node encryption interceptors, so every write goes through EF
-///     <see cref="Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(System.Threading.CancellationToken)" /> (never
-///     raw SQL) — the interceptor encrypts the prompt on insert and skips re-encrypting it on a status-only update
-///     (the property is unmodified), keeping the ciphertext intact. Reads decrypt via the materialization interceptor.
-///     Consumed by the singleton <c>ImageJobCoordinator</c> through a fresh DI scope per operation.
+///     Persistence boundary for the local image-generation job registry (<c>image_jobs</c>).
 /// </summary>
+/// <remarks>
+///     The prompt / negative-prompt columns are encrypted at rest, so every write goes through EF
+///     <see cref="Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(System.Threading.CancellationToken)" />,
+///     never raw SQL: the interceptor encrypts the prompt on insert and skips a status-only update (the property is
+///     unmodified), keeping the ciphertext intact; reads decrypt via the materialization interceptor. Consumed by the
+///     singleton <c>ImageJobCoordinator</c> through a fresh DI scope per operation.
+/// </remarks>
 public interface IImageJobStore
 {
     /// <summary>Inserts a new job in the <see cref="ImageJobStatus.Queued" /> state (encrypting the prompt at rest).</summary>
@@ -27,29 +29,29 @@ public interface IImageJobStore
     /// <summary>
     ///     Deletes one job together with its <c>generated_images</c> rows in a single transaction and returns the
     ///     storage paths of the blobs that are now unreferenced, or <see langword="null" /> when the job does not exist.
-    ///     <para>
-    ///         The caller unlinks those files best-effort. The blob files are deliberately NOT removed here: the rows
-    ///         are the record, so a file that could not be unlinked must leave an orphaned blob behind rather than
-    ///         resurrect the job an operator asked to delete.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The caller unlinks those files best-effort. The blob files are deliberately NOT removed here: the rows are
+    ///     the record, so a file that could not be unlinked must leave an orphaned blob behind rather than resurrect
+    ///     the job an operator asked to delete.
+    /// </remarks>
     Task<IReadOnlyList<string>?> DeleteAsync(Guid jobId, CancellationToken cancellationToken);
 
     /// <summary>Transitions a job to <see cref="ImageJobStatus.Generating" /> and records its start time.</summary>
     Task MarkGeneratingAsync(Guid jobId, long startedAtUtc, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Marks a job <see cref="ImageJobStatus.Succeeded" />, recording the produced image id, completion time, and
+    ///     Marks a job <see cref="ImageJobStatus.Succeeded" />, recording the produced image id, completion time and
     ///     duration, and overwriting <see cref="ImageJobView.Width" />/<see cref="ImageJobView.Height" /> with the
-    ///     dimensions of the image that was actually produced. The runtime rounds a requested size up to a multiple of
-    ///     64, so the requested numbers are frequently wrong about the output; a succeeded job must describe the PNG the
-    ///     operator can see, not the request that produced it.
-    ///     <para>
-    ///         <paramref name="resolvedSeed" /> is written back for the same reason: a job submitted with the random
-    ///         sentinel <c>-1</c> otherwise keeps <c>-1</c> forever and the seed that actually produced the image is
-    ///         lost, making the result impossible to reproduce.
-    ///     </para>
+    ///     dimensions actually produced.
     /// </summary>
+    /// <remarks>
+    ///     The runtime rounds a requested size up to a multiple of 64, so the requested numbers are frequently wrong
+    ///     about the output; a succeeded job must describe the PNG the operator can see, not the request that produced
+    ///     it. <paramref name="resolvedSeed" /> is written back for the same reason: a job submitted with the random
+    ///     sentinel <c>-1</c> otherwise keeps <c>-1</c> forever and the seed that actually produced the image is lost,
+    ///     making the result impossible to reproduce.
+    /// </remarks>
     Task MarkSucceededAsync(Guid jobId,
         Guid imageId,
         long completedAtUtc,
@@ -71,9 +73,11 @@ public interface IImageJobStore
     /// <summary>
     ///     Marks every non-terminal job (<see cref="ImageJobStatus.Queued" /> / <see cref="ImageJobStatus.Generating" />)
     ///     as <see cref="ImageJobStatus.Failed" /> with the given display-safe reason and returns the affected job ids.
-    ///     Used by startup reconciliation: after a process restart the in-memory job registry is gone, so nothing would
-    ///     ever transition those rows again.
     /// </summary>
+    /// <remarks>
+    ///     Used by startup reconciliation: after a process restart the in-memory job registry is gone, so nothing
+    ///     would ever transition those rows again.
+    /// </remarks>
     Task<IReadOnlyList<Guid>> MarkInterruptedFailedAsync(string sanitizedError, long completedAtUtc, CancellationToken cancellationToken);
 }
 

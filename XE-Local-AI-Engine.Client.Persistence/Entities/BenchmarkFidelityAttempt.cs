@@ -2,11 +2,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     One quant-fidelity measurement of one run — a perplexity pass, or a KL-divergence pass against a base model's
-///     logits. Immutable evidence in exactly the sense <see cref="BenchmarkJudgeAttempt" /> is: re-measuring inserts a
-///     new attempt rather than overwriting the previous one, so "what was this number measured against" survives a
+///     logits.
+/// </summary>
+/// <remarks>
+///     Immutable evidence in exactly the sense <see cref="BenchmarkJudgeAttempt" /> is: re-measuring inserts a new
+///     attempt rather than overwriting the previous one, so "what was this number measured against" survives a
 ///     corpus, chunk-count or base-model change. The run carries a denormalized projection of the LATEST succeeded
 ///     attempt so the listing stays a flat-column scan; this row is the audit record behind it.
-/// </summary>
+/// </remarks>
 internal sealed record class BenchmarkFidelityAttempt
 {
     public Guid Id { get; set; }
@@ -47,17 +50,22 @@ internal sealed record class BenchmarkFidelityAttempt
 
     /// <summary>
     ///     The comparability gate: <c>v1:</c> + 64 hex over the WHOLE base-logit cache key (base fingerprint, corpus
-    ///     sha, context tokens, chunks, KLD format version) — i.e. which file on disk these numbers came from. A KLD
-    ///     figure is displayed only while this equals the digest the project's current settings recompute.
+    ///     sha, context tokens, chunks, KLD format version) — i.e. which file on disk these numbers came from.
     /// </summary>
+    /// <remarks>
+    ///     A KLD figure is displayed only while this equals the digest the project's current settings recompute.
+    /// </remarks>
     public string? BaseLogitsDigest { get; set; }
 
     /// <summary>
     ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
-    ///     <c>benchmark_fidelity_receipt_json</c>. A REDUCED evidence block, never a launch receipt: llama-perplexity
-    ///     has no readiness probe, so there is no receipt to be had, and presenting one shape as the other is the
-    ///     drift the display-only axes exist to prevent.
+    ///     <c>benchmark_fidelity_receipt_json</c>.
     /// </summary>
+    /// <remarks>
+    ///     A REDUCED evidence block, never a launch receipt: llama-perplexity has no readiness probe, so there is no
+    ///     receipt to be had, and presenting one shape as the other is the drift the display-only axes exist to
+    ///     prevent.
+    /// </remarks>
     public byte[]? ReceiptJson { get; set; }
 
     public string? ErrorMessage { get; set; }

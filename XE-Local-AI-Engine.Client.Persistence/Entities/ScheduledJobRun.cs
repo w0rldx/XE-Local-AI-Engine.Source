@@ -5,10 +5,12 @@ internal sealed record class ScheduledJobRun
     public Guid Id { get; set; }
 
     /// <summary>
-    ///     The definition this run was fired from; indexed. Intentionally has NO enforced FK because a run outlives its
-    ///     definition (a soft-deleted/removed definition must not cascade away its run history) — same precedent as
-    ///     conversation->definition. Plaintext (structural).
+    ///     The definition this run was fired from; indexed. Intentionally has NO enforced FK. Plaintext (structural).
     /// </summary>
+    /// <remarks>
+    ///     A run outlives its definition: a soft-deleted or removed definition must not cascade away its run history
+    ///     — same precedent as conversation->definition.
+    /// </remarks>
     public Guid ScheduledJobId { get; set; }
 
     /// <summary>Template (handler) id captured at fire time, denormalized so history survives definition changes. Plaintext (structural).</summary>

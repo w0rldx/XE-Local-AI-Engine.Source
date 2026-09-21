@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     One uploaded knowledge-base document — the source of truth for a corpus file. The durable raw bytes live encrypted
-///     on disk under <c>INodeDataDirectory.Root/knowledge-base/documents/</c> (too large for the encrypted column path);
-///     this row holds only the metadata plus the encrypted display name. Chunk text, section structure, and embedding
-///     vectors are rebuildable projections keyed off <see cref="DocumentId" /> in the sibling knowledge tables.
+///     One uploaded knowledge-base document — the source of truth for a corpus file. This row holds only the metadata
+///     plus the encrypted display name.
 /// </summary>
+/// <remarks>
+///     The durable raw bytes live encrypted on disk under <c>INodeDataDirectory.Root/knowledge-base/documents/</c> —
+///     too large for the encrypted column path. Chunk text, section structure and embedding vectors are rebuildable
+///     projections keyed off <see cref="DocumentId" /> in the sibling knowledge tables.
+/// </remarks>
 internal sealed record class KnowledgeDocument
 {
     public Guid DocumentId { get; set; }
@@ -16,10 +19,12 @@ internal sealed record class KnowledgeDocument
     /// <summary>
     ///     UTF-8 display-name bytes. Encrypted at rest via the raw-SQL store path using
     ///     <c>NodeChatDbContext.EncryptKnowledgeFileName</c>/<c>DecryptKnowledgeFileName</c> (AAD column name
-    ///     <c>original_file_name</c>, bound to <c>(Guid.Empty, documentId)</c>). This column is display metadata only and
-    ///     is never searched, so it is deliberately kept OUT of the node-encryption interceptor loops — all writes flow
-    ///     through the store's raw-SQL path.
+    ///     <c>original_file_name</c>, bound to <c>(Guid.Empty, documentId)</c>).
     /// </summary>
+    /// <remarks>
+    ///     Display metadata only and never searched, so it is deliberately kept OUT of the node-encryption
+    ///     interceptor loops — all writes flow through the store's raw-SQL path.
+    /// </remarks>
     public byte[] OriginalFileName { get; set; } = [];
 
     public string MimeType { get; set; } = string.Empty;

@@ -5,10 +5,13 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Persistence boundary for downloaded base checkpoints. <c>files_json</c> and <c>license_json</c> are encrypted at
-///     rest by the node encryption interceptors; everything this store filters or orders by (id, repo, revision, status)
-///     is structural plaintext, so no query here can depend on a decrypted column.
+///     Persistence boundary for downloaded base checkpoints.
 /// </summary>
+/// <remarks>
+///     <c>files_json</c> and <c>license_json</c> are encrypted at rest by the node encryption interceptors; everything
+///     this store filters or orders by (id, repo, revision, status) is structural plaintext, so no query here can
+///     depend on a decrypted column.
+/// </remarks>
 public sealed class TrainingBaseArtifactStore : ITrainingBaseArtifactStore
 {
     private readonly NodeChatDbContext _dbContext;

@@ -2,9 +2,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     A named, externally addressable entry point that invokes one saved agent (ADR 0008). Modelled on
-///     <see cref="ScheduledJobDefinition" />; every column is plaintext structural, because the name is the external
-///     contract and the display fields are sorted and filtered on, exactly as <c>AgentWorkSession.Title</c> is.
+///     <see cref="ScheduledJobDefinition" />.
 /// </summary>
+/// <remarks>
+///     Every column is plaintext structural, because the name is the external contract and the display fields are
+///     sorted and filtered on, exactly as <c>AgentWorkSession.Title</c> is.
+/// </remarks>
 internal sealed record class IntegrationTrigger
 {
     public Guid Id { get; set; }

@@ -30,9 +30,8 @@ internal sealed class KnowledgeDocumentSectionConfiguration : IEntityTypeConfigu
         builder.Property(entity => entity.PageNumber)
                .HasColumnName("page_number");
 
-        // Cascade from the owning document. Configured without a navigation on the principal so KnowledgeDocument stays a
-        // bare metadata row. The cascade is enforced on the node connection; the raw-SQL purge path still removes rows
-        // explicitly so the FTS-trigger ordering is the purge's own decision rather than the database's.
+        // Cascade from the owning document, configured without a navigation on the principal so KnowledgeDocument stays a bare metadata row. The cascade is
+        // enforced; the raw-SQL purge still removes rows explicitly, so the FTS-trigger ordering is the purge's own decision rather than the database's.
         builder.HasOne<KnowledgeDocument>()
                .WithMany()
                .HasForeignKey(entity => entity.DocumentId)

@@ -5,13 +5,15 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Persistence boundary for llama-server inference profiles. Holds one live config per
-///     <c>(machine_key, model_name, role, backend)</c> key: an explore upsert overwrites the single config (latest explore
-///     wins), and freeze/stale transitions move its status. The freeze transition runs inside a single transaction and is
-///     gated on the row being <see cref="InferenceProfileStatus.Explored" />, mirroring the transactional promotion of
-///     <see cref="ModelFitSnapshotStore" />. All columns are plaintext (no secrets), so this store touches no encryption
-///     interceptor.
+///     Persistence boundary for llama-server inference profiles, one live config per
+///     <c>(machine_key, model_name, role, backend)</c> key.
 /// </summary>
+/// <remarks>
+///     An explore upsert overwrites the single config (latest explore wins), and freeze/stale transitions move its
+///     status. The freeze transition runs inside a single transaction, gated on the row being
+///     <see cref="InferenceProfileStatus.Explored" />, mirroring the transactional promotion of
+///     <see cref="ModelFitSnapshotStore" />. All columns are plaintext, so no encryption interceptor is involved.
+/// </remarks>
 public sealed class InferenceProfileStore : IInferenceProfileStore
 {
     private readonly NodeChatDbContext _dbContext;
@@ -78,9 +80,8 @@ public sealed class InferenceProfileStore : IInferenceProfileStore
         long? processBudgetVramAtFreezeBytes,
         CancellationToken cancellationToken = default)
     {
-        // Freezing is the meaningful promotion (analogue of a Succeeded snapshot), so it runs inside a single
-        // transaction. The freeze gate only promotes a row still in Explored — a successful benchmark is the sole
-        // justification; a re-explored or already-frozen row is left untouched.
+        // Freezing is the meaningful promotion (analogue of a Succeeded snapshot), so it runs inside a single transaction. The gate only promotes a row still in
+        // Explored — a successful benchmark is the sole justification, and a re-explored or already-frozen row is left untouched.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var entity = await _dbContext.InferenceProfiles

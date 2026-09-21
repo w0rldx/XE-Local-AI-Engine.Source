@@ -1,36 +1,38 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for the agent skill library. <c>Description</c>, <c>Body</c>, the optional frontmatter
-///     and every resource payload are encrypted at rest by the node encryption interceptors; reads return them
-///     decrypted on the record types below. This store performs no content validation — that is the application-layer
-///     service's responsibility; it owns only id/version/timestamp stamping, the content-affecting version-bump rule,
-///     and the two provenance invariants documented on <see cref="UpdateAsync" /> and <see cref="AgentSkillInput" />.
+///     Node-scoped persistence for the agent skill library.
 /// </summary>
+/// <remarks>
+///     <c>Description</c>, <c>Body</c>, the optional frontmatter and every resource payload are encrypted at rest by
+///     the node encryption interceptors; reads return them decrypted on the record types below. The store performs no
+///     content validation — that is the application-layer service's responsibility; it owns only
+///     id/version/timestamp stamping, the content-affecting version-bump rule, and the provenance invariants of
+///     docs/wiki/08-data-and-persistence.md ("Agent skill provenance").
+/// </remarks>
 public interface IAgentSkillStore
 {
     /// <summary>
     ///     Persists a new skill (assigning <c>Id</c>, <c>CreatedAtUtc</c>, <c>UpdatedAtUtc</c> and <c>Version = 1</c>)
-    ///     and returns the stored record with free-text columns decrypted. Resources are written separately via
-    ///     <see cref="ReplaceResourcesAsync" />, so the returned record always carries an empty resource list.
+    ///     and returns the stored record with free-text columns decrypted.
     /// </summary>
+    /// <remarks>
+    ///     Resources are written separately via <see cref="ReplaceResourcesAsync" />, so the returned record always
+    ///     carries an empty resource list.
+    /// </remarks>
     Task<AgentSkillRecord> CreateAsync(AgentSkillInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Applies <paramref name="input" /> to the skill identified by <paramref name="id" />, stamping
-    ///     <c>UpdatedAtUtc</c> and incrementing <c>Version</c> only when a content-affecting field changed (Name,
-    ///     Description, Body or frontmatter — never the <c>Enabled</c> toggle and never provenance alone). Returns the
-    ///     updated record, or <c>null</c> when no skill has that id.
-    ///     <para>
-    ///         Provenance is promote-only: an <see cref="AgentSkillOrigin.Imported" /> row stays imported even when the
-    ///         caller passes the <see cref="AgentSkillOrigin.Local" /> default. An operator edit that simply forgot to
-    ///         echo the provenance back would otherwise launder third-party content into trusted content — stripping
-    ///         the untrusted-content fence and re-enabling session-scoped approval for it. An input that DOES carry
-    ///         <see cref="AgentSkillOrigin.Imported" /> applies its SourceUri/ImportedAtUtc/ContentSha256 verbatim as
-    ///         one unit — including a null ContentSha256, which is what an AI-drafted ("generated") conversion sends,
-    ///         because the old archive payload hash must not survive onto rewritten content.
-    ///     </para>
+    ///     Applies <paramref name="input" /> to the skill identified by <paramref name="id" />, or returns
+    ///     <c>null</c> when no skill has that id.
     /// </summary>
+    /// <remarks>
+    ///     Stamps <c>UpdatedAtUtc</c> and increments <c>Version</c> only when a content-affecting field changed (Name,
+    ///     Description, Body or frontmatter — never the <c>Enabled</c> toggle and never provenance alone). Provenance
+    ///     is promote-only: an <see cref="AgentSkillOrigin.Imported" /> row stays imported even when the caller passes
+    ///     the <see cref="AgentSkillOrigin.Local" /> default, so an edit cannot launder third-party content into
+    ///     trusted content. Full rule: docs/wiki/08-data-and-persistence.md ("Agent skill provenance").
+    /// </remarks>
     Task<AgentSkillRecord?> UpdateAsync(Guid id, AgentSkillInput input, CancellationToken cancellationToken = default);
 
     /// <summary>Removes the skill with <paramref name="id" /> and, by cascade, its resources. Returns <c>true</c> when a row was deleted.</summary>
@@ -40,30 +42,38 @@ public interface IAgentSkillStore
     Task<AgentSkillRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Returns every skill in the library, ordered by Name (Ordinal) for a stable list. Resources are <em>not</em>
-    ///     loaded (the list view does not need to decrypt every bundled file); use <see cref="GetByIdAsync" /> or
-    ///     <see cref="ListResourcesAsync" /> for those.
+    ///     Returns every skill in the library, ordered by Name (Ordinal) for a stable list.
     /// </summary>
+    /// <remarks>
+    ///     Resources are <em>not</em> loaded — the list view does not need to decrypt every bundled file; use
+    ///     <see cref="GetByIdAsync" /> or <see cref="ListResourcesAsync" /> for those.
+    /// </remarks>
     Task<IReadOnlyList<AgentSkillRecord>> ListAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Resolver fast-path: the enabled skills whose <c>Id</c> is in <paramref name="ids" />, filtered to
-    ///     <c>Enabled == true</c> server-side, each with its resources loaded (the resolver hands them to MAF as the
-    ///     skill's level-3 payload). Ids that are missing or disabled are simply absent from the result; the resolver
-    ///     drops/logs them. Order is by Name (Ordinal) for a deterministic resolved set.
+    ///     Resolver fast-path: the enabled skills whose <c>Id</c> is in <paramref name="ids" />, each with its
+    ///     resources loaded, ordered by Name (Ordinal) for a deterministic resolved set.
     /// </summary>
+    /// <remarks>
+    ///     The enabled filter runs server-side and the resolver hands the resources to MAF as the skill's level-3
+    ///     payload. Ids that are missing or disabled are simply absent from the result; the resolver drops and logs
+    ///     them.
+    /// </remarks>
     Task<IReadOnlyList<AgentSkillRecord>> ListEnabledByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default);
 
     /// <summary>Returns the resources of <paramref name="skillId" /> with content decrypted, ordered by Name (Ordinal).</summary>
     Task<IReadOnlyList<AgentSkillResourceRecord>> ListResourcesAsync(Guid skillId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Adds a resource, or replaces the existing one with the same (case-insensitive) name. A replacement is a
-    ///     delete-and-reinsert rather than an in-place edit because the resource name is bound into the payload's AAD —
-    ///     the new row is sealed under its own id, so a stale ciphertext can never be read back under a name it was not
-    ///     written for. Bumps the owning skill's <c>Version</c> (resources are content the model sees, so an edit must
-    ///     invalidate resume). Returns the stored resource, or <c>null</c> when no skill has that id.
+    ///     Adds a resource, or replaces the existing one with the same (case-insensitive) name, or returns
+    ///     <c>null</c> when no skill has that id.
     /// </summary>
+    /// <remarks>
+    ///     A replacement is a delete-and-reinsert rather than an in-place edit because the resource name is bound into
+    ///     the payload's AAD — the new row is sealed under its own id, so a stale ciphertext can never be read back
+    ///     under a name it was not written for. Bumps the owning skill's <c>Version</c>: resources are content the
+    ///     model sees, so an edit must invalidate resume.
+    /// </remarks>
     Task<AgentSkillResourceRecord?> UpsertResourceAsync(Guid skillId, AgentSkillResourceInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -73,23 +83,28 @@ public interface IAgentSkillStore
     Task<bool> DeleteResourceAsync(Guid skillId, Guid resourceId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Replaces the skill's entire resource set in one save — the import shape, where the materialised preview
-    ///     payload is written wholesale and any file the new payload dropped has to disappear with it. Bumps the
-    ///     owning skill's <c>Version</c> once. Returns the stored resources, or <c>null</c> when no skill has that id.
+    ///     Replaces the skill's entire resource set in one save, bumping the owning skill's <c>Version</c> once, or
+    ///     returns <c>null</c> when no skill has that id.
     /// </summary>
+    /// <remarks>
+    ///     The import shape: the materialised preview payload is written wholesale, and any file the new payload
+    ///     dropped has to disappear with it.
+    /// </remarks>
     Task<IReadOnlyList<AgentSkillResourceRecord>?> ReplaceResourcesAsync(Guid skillId,
         IReadOnlyList<AgentSkillResourceInput> resources,
         CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-///     Decrypted, typed projection of a persisted agent skill. <see cref="Description" />, <see cref="Body" /> and the
-///     frontmatter fields are returned in plaintext (decrypted on materialization); the store converts to and from this
-///     shape at the boundary so callers never touch the encrypted byte columns or the frontmatter JSON.
-///     <see cref="Origin" />, <see cref="SourceUri" />, <see cref="ImportedAtUtc" /> and <see cref="ContentSha256" />
-///     expose the row's provenance for the UI "Imported" badge, the runtime fencing decision and re-import change
-///     detection.
+///     Decrypted, typed projection of a persisted agent skill.
 /// </summary>
+/// <remarks>
+///     <see cref="Description" />, <see cref="Body" /> and the frontmatter fields are returned in plaintext (decrypted
+///     on materialization); the store converts to and from this shape at the boundary so callers never touch the
+///     encrypted byte columns or the frontmatter JSON. <see cref="Origin" />, <see cref="SourceUri" />,
+///     <see cref="ImportedAtUtc" /> and <see cref="ContentSha256" /> expose the row's provenance for the UI "Imported"
+///     badge, the runtime fencing decision and re-import change detection.
+/// </remarks>
 public sealed class AgentSkillRecord
 {
     public required Guid Id { get; init; }
@@ -130,26 +145,15 @@ public sealed class AgentSkillRecord
 }
 
 /// <summary>
-///     Mutable fields of an agent skill supplied on create/update. Free text is passed as plaintext strings; the store
-///     encodes <see cref="Description" />, <see cref="Body" /> and the frontmatter to UTF-8 bytes before the
-///     interceptors encrypt them.
-///     <para>
-///         <see cref="AllowedTools" /> is the spec's space-delimited string, kept verbatim rather than split into a
-///         list — MAF consumes it in that form and round-tripping through a collection would only invent a canonical
-///         ordering the spec does not have.
-///     </para>
-///     <para>
-///         <see cref="SourceUri" /> is shape-checked at the store boundary: the literal <c>upload</c>, the literal
-///         <c>generated</c> (AI-drafted content) or <c>github:owner/repo</c>. An uploaded or drafted skill contributes
-///         its <em>kind</em> only — the operator's filename, or the model that drafted it, must not become the one
-///         unencrypted free-text string in this table.
-///     </para>
-///     <para>
-///         <see cref="GenerationMetadataJson" /> is set-if-present on update: <c>null</c> leaves the stored provenance
-///         alone rather than clearing it, so an ordinary operator edit that did not echo the block back cannot erase
-///         the record of how the skill was drafted (same reasoning as the promote-only provenance above).
-///     </para>
+///     Mutable fields of an agent skill supplied on create/update.
 /// </summary>
+/// <remarks>
+///     Free text is passed as plaintext strings; the store encodes <see cref="Description" />, <see cref="Body" /> and
+///     the frontmatter to UTF-8 bytes before the interceptors encrypt them. <see cref="AllowedTools" /> stays the
+///     spec's space-delimited string rather than a list, because MAF consumes it in that form and a collection would
+///     invent a canonical ordering the spec does not have. The <see cref="SourceUri" /> shape check and the
+///     set-if-present <see cref="GenerationMetadataJson" /> rule: wiki 08 ("Agent skill provenance").
+/// </remarks>
 public sealed record AgentSkillInput
 {
     public required string Name { get; init; }

@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Worker-side projection of a persisted <c>ModelLaunchArguments</c> row: the model name and the raw operator-entered
-///     extra <c>llama-server</c> argument string. Read on the cold spawn path to append the operator's experimentation
-///     flags to the launched process, and by the settings endpoint to render the current override.
+///     Worker-side projection of a persisted <c>ModelLaunchArguments</c> row: the model name and the raw
+///     operator-entered extra <c>llama-server</c> argument string.
 /// </summary>
+/// <remarks>
+///     Read on the cold spawn path to append the operator's experimentation flags to the launched process, and by the
+///     settings endpoint to render the current override.
+/// </remarks>
 public sealed class ModelLaunchArgumentsRecord
 {
     public required string ModelName { get; init; }

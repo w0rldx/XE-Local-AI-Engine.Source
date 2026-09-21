@@ -2,18 +2,24 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     One installed external application: the manifest it was installed with, the values it was configured with, and
-///     where its lifecycle currently stands. Every column is plaintext structural except <see cref="VariablesJson" />
-///     and <see cref="BridgeToken" />, which carry secrets and are the two encrypted columns in the family.
+///     where its lifecycle currently stands.
 /// </summary>
+/// <remarks>
+///     Every column is plaintext structural except <see cref="VariablesJson" /> and <see cref="BridgeToken" />, which
+///     carry secrets and are the two encrypted columns in the family.
+/// </remarks>
 internal sealed record class ExternalAppInstance
 {
     public Guid Id { get; set; }
 
     /// <summary>
-    ///     The catalog application this instance was installed from. Indexed but <b>not</b> unique: the schema stays
-    ///     N:1 on purpose, and the one-instance-per-application rule of V1 is enforced by the install gate, which holds
-    ///     the instance lease across the check and the insert. Plaintext (structural).
+    ///     The catalog application this instance was installed from. Indexed but <b>not</b> unique. Plaintext
+    ///     (structural).
     /// </summary>
+    /// <remarks>
+    ///     The schema stays N:1 on purpose, and the one-instance-per-application rule of V1 is enforced by the install
+    ///     gate, which holds the instance lease across the check and the insert.
+    /// </remarks>
     public string ApplicationId { get; set; } = string.Empty;
 
     /// <summary>The <c>manifestVersion</c> of <see cref="ManifestSnapshotJson" />. Plaintext (structural).</summary>
@@ -21,9 +27,12 @@ internal sealed record class ExternalAppInstance
 
     /// <summary>
     ///     The exact manifest this instance was installed or last updated with, verbatim as the catalog served it.
-    ///     Plaintext by design: the update flow diffs the catalog's manifest against this snapshot, and the detail view
-    ///     renders the instance's own manifest rather than the catalog's current one.
+    ///     Plaintext by design.
     /// </summary>
+    /// <remarks>
+    ///     The update flow diffs the catalog's manifest against this snapshot, and the detail view renders the
+    ///     instance's own manifest rather than the catalog's current one.
+    /// </remarks>
     public string ManifestSnapshotJson { get; set; } = string.Empty;
 
     /// <summary>The manifest's display name at install time. Plaintext (structural).</summary>
@@ -36,42 +45,43 @@ internal sealed record class ExternalAppInstance
     public ExternalAppDesiredState DesiredState { get; set; }
 
     /// <summary>
-    ///     An operator pin to one container runtime, as text rather than as an enum: this project references only
-    ///     <c>Providers.Abstractions</c> and cannot see the containers layer's <c>ContainerRuntimeSelection</c>, which
-    ///     the application layer parses this string with. <b>V1 never populates it</b> — the omission is a decision, not
-    ///     an oversight. Plaintext (structural).
+    ///     An operator pin to one container runtime, as text rather than as an enum. <b>V1 never populates it</b> —
+    ///     the omission is a decision, not an oversight. Plaintext (structural).
     /// </summary>
+    /// <remarks>
+    ///     Text because this project references only <c>Providers.Abstractions</c> and cannot see the containers
+    ///     layer's <c>ContainerRuntimeSelection</c>, which the application layer parses this string with.
+    /// </remarks>
     public string? RuntimeOverride { get; set; }
 
     /// <summary>The provider name the runtime resolved to on the last operation. Plaintext (structural).</summary>
     public string RuntimeProvider { get; set; } = string.Empty;
 
     /// <summary>
-    ///     The instance's configured variable values as a JSON object. The one column here that holds real content —
-    ///     a manifest's <c>secret</c> variables are the user's own credentials — so it is plaintext while tracked in
-    ///     memory and sealed at rest by <see cref="NodeEncryptionSaveChangesInterceptor" /> under AAD column name
-    ///     <c>external_app_instance_variables_json</c> with this row's own id in both the conversation and the record
-    ///     slot. Required: an instance with no declared variables stores <c>{}</c>.
+    ///     The instance's configured variable values as a JSON object. Required: an instance with no declared
+    ///     variables stores <c>{}</c>.
     /// </summary>
+    /// <remarks>
+    ///     The one column here that holds real content — a manifest's <c>secret</c> variables are the user's own
+    ///     credentials — so it is plaintext while tracked in memory and sealed at rest by
+    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> under AAD column name
+    ///     <c>external_app_instance_variables_json</c>, with this row's own id in both the conversation and the record
+    ///     slot.
+    /// </remarks>
     public byte[] VariablesJson { get; set; } = [];
 
     /// <summary>
-    ///     The container-bridge token minted for this instance at install, as plaintext while tracked in memory and
-    ///     sealed at rest by <see cref="NodeEncryptionSaveChangesInterceptor" /> under AAD column name
-    ///     <c>external_app_instance_bridge_token</c> with this row's own id in both the conversation and the record
-    ///     slot — the same binding <see cref="VariablesJson" /> carries, so a token copied onto another instance's row
-    ///     fails its tag check instead of granting that instance this one's access.
-    ///     <para>
-    ///         The PLAINTEXT is stored rather than a digest, and that is a deliberate departure from how the node
-    ///         stores its other credentials. A digest cannot be re-injected, and the token has to be: Start rebuilds
-    ///         an instance's containers from stored state, and a container's environment is immutable, so the engine
-    ///         must be able to put the SAME token back into the rebuilt container it put into the original.
-    ///     </para>
-    ///     <para>
-    ///         Nullable, and null on exactly one kind of row: an instance installed before the bridge existed. Such an
-    ///         instance has no bridge access until it is reinstalled; it is never a token that failed to mint.
-    ///     </para>
+    ///     The container-bridge token minted for this instance at install, stored as PLAINTEXT rather than a digest.
+    ///     Null on exactly one kind of row — an instance installed before the bridge existed — never on a mint that
+    ///     failed.
     /// </summary>
+    /// <remarks>
+    ///     Plaintext while tracked in memory and sealed at rest by <see cref="NodeEncryptionSaveChangesInterceptor" /> under AAD column name
+    ///     <c>external_app_instance_bridge_token</c> with this row's own id in both the conversation and the record slot — the binding
+    ///     <see cref="VariablesJson" /> carries, so a token copied onto another instance's row fails its tag check.
+    ///     A digest cannot be re-injected and the token has to be: Start rebuilds an instance's containers from stored
+    ///     state, and a container's environment is immutable, so the engine must put the SAME token back.
+    /// </remarks>
     public byte[]? BridgeToken { get; set; }
 
     /// <summary>
@@ -87,17 +97,23 @@ internal sealed record class ExternalAppInstance
     public ExternalAppFailureCategory? FailureCategory { get; set; }
 
     /// <summary>
-    ///     A short elaboration of <see cref="FailureCategory" />, or null. <b>Content-free by contract</b>: category
-    ///     prose, a service name and, for the resource gate, requested-versus-available figures — never a variable value
-    ///     and never a daemon message, which is what makes it safe to surface verbatim. Plaintext (structural).
+    ///     A short elaboration of <see cref="FailureCategory" />, or null. <b>Content-free by contract.</b> Plaintext
+    ///     (structural).
     /// </summary>
+    /// <remarks>
+    ///     Category prose, a service name and, for the resource gate, requested-versus-available figures — never a
+    ///     variable value and never a daemon message, which is what makes it safe to surface verbatim.
+    /// </remarks>
     public string? FailureSummary { get; set; }
 
     /// <summary>
-    ///     Set when the configured variables change and cleared when Start rebuilds the containers. A created
-    ///     container's environment is immutable, so a configure that only rewrote the row would leave the running
-    ///     containers on the old values with nothing recording the divergence. Plaintext (structural).
+    ///     Set when the configured variables change and cleared when Start rebuilds the containers. Plaintext
+    ///     (structural).
     /// </summary>
+    /// <remarks>
+    ///     A created container's environment is immutable, so a configure that only rewrote the row would leave the
+    ///     running containers on the old values with nothing recording the divergence.
+    /// </remarks>
     public bool NeedsRecreate { get; set; }
 
     /// <summary>Unix-ms instant the install row was created. Plaintext (structural).</summary>

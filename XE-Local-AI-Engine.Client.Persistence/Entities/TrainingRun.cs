@@ -2,9 +2,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     One training run. Everything a run needs to be reproducible is frozen into the row at creation — the exact
-///     sample membership, the resolved options, and the license confirmation — so a later dataset edit cannot
-///     retroactively change what a finished run was trained on.
+///     sample membership, the resolved options, and the license confirmation.
 /// </summary>
+/// <remarks>
+///     A later dataset edit therefore cannot retroactively change what a finished run was trained on.
+/// </remarks>
 internal sealed record class TrainingRun
 {
     public Guid Id { get; set; }
@@ -23,11 +25,13 @@ internal sealed record class TrainingRun
 
     /// <summary>
     ///     The freeze itself as UTF-8 JSON: the exact sample ids and labels, the train/hold-out split, and the SHA-256
-    ///     of the frozen blob. Plaintext while tracked in memory; encrypted at rest by
-    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
-    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
-    ///     <c>training_run_freeze_json</c>. Required.
+    ///     of the frozen blob. Required.
     /// </summary>
+    /// <remarks>
+    ///     Plaintext while tracked in memory; encrypted at rest by <see cref="NodeEncryptionSaveChangesInterceptor" />
+    ///     and decrypted by <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
+    ///     <c>training_run_freeze_json</c>.
+    /// </remarks>
     public byte[] FreezeJson { get; set; } = [];
 
     /// <summary>Base checkpoint. Real FK to <c>training_base_artifacts.id</c>, restricted delete; indexed.</summary>
@@ -65,16 +69,22 @@ internal sealed record class TrainingRun
 
     /// <summary>
     ///     Tail of the trainer's console output as UTF-8 text. Same treatment under AAD column name
-    ///     <c>training_run_log_tail</c>. Bounded by the store, not by a CHECK constraint — the column is ciphertext at
-    ///     rest, so SQLite cannot see the length being bounded.
+    ///     <c>training_run_log_tail</c>.
     /// </summary>
+    /// <remarks>
+    ///     Bounded by the store, not by a CHECK constraint — the column is ciphertext at rest, so SQLite cannot see
+    ///     the length being bounded.
+    /// </remarks>
     public byte[]? LogTail { get; set; }
 
     /// <summary>
     ///     What the host needs to identify and reap the trainer process: PID, process group id, executable realpath,
-    ///     process start time, run token and owned workdir, as UTF-8 JSON. Same treatment under AAD column name
-    ///     <c>training_run_launch_receipt_json</c>. Null before launch and after a clean exit.
+    ///     process start time, run token and owned workdir, as UTF-8 JSON.
     /// </summary>
+    /// <remarks>
+    ///     Same treatment under AAD column name <c>training_run_launch_receipt_json</c>. Null before launch and after
+    ///     a clean exit.
+    /// </remarks>
     public byte[]? LaunchReceiptJson { get; set; }
 
     /// <summary>Sanitized failure message. Plaintext and bounded — it is operator-facing, not trainer output.</summary>

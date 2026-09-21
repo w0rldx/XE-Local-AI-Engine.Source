@@ -7,9 +7,8 @@ public sealed partial class BenchmarkStore
 {
     public async Task<BenchmarkCellPage> ListCellsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
-        // ONE ranking, then one flat read of the runs it ranked — the same two reads the export makes, grouped by the
-        // key the ranking already decided rather than by re-deriving anything. Warm-ups never form a rankable cell, so
-        // they are absent here for the same reason they are absent from the denominator.
+        // ONE ranking, then one flat read of the runs it ranked — the same two reads the export makes, grouped by the key the ranking already decided rather than by
+        // re-deriving anything. Warm-ups never form a rankable cell, so they are absent here for the same reason they are absent from the denominator.
         var ranking = await LoadRankingAsync(projectId, cancellationToken);
         var rows = await _dbContext.BenchmarkRuns.AsNoTracking()
                                    .Where(entity => entity.ProjectId == projectId && !entity.IsWarmup)

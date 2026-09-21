@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for local model classifications. Stores the digest-keyed detection cache and the
-///     operator override, keyed by model name (case-insensitive). Not encrypted — model names, digests, capabilities
-///     and kinds are not secrets. This store performs no validation — that is the application-layer service's
-///     responsibility; the store only maps rows to records.
+///     Node-scoped persistence for local model classifications: the digest-keyed detection cache and the operator
+///     override, keyed by model name (case-insensitive).
 /// </summary>
+/// <remarks>
+///     Not encrypted — model names, digests, capabilities and kinds are not secrets. This store performs no
+///     validation, which is the application-layer service's responsibility; it only maps rows to records.
+/// </remarks>
 public interface IModelClassificationStore
 {
     /// <summary>Returns the classification for <paramref name="modelName" /> (case-insensitive), or <c>null</c> when none exists.</summary>

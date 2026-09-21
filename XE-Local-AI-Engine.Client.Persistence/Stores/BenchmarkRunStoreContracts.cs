@@ -96,14 +96,14 @@ public sealed record BenchmarkPrimarySuccessCommand
 
 /// <summary>
 ///     One run's separated throughput facts: how long the caller waited for the first token, and how the turn's tokens
-///     and milliseconds split between prompt processing (pp) and generation (tg). Persisted as plaintext numerics
-///     alongside the blended figures the columns already carried, never instead of them.
-///     <para>
-///         Display only, by operator decision: no member of this record is a ranking input. <see cref="CachedPromptTokens" />
-///         above zero means <see cref="PromptMs" /> measured a partially cached prefill rather than a cold one — it
-///         counts tokens served from the prompt cache across ALL of the turn's requests.
-///     </para>
+///     and milliseconds split between prompt processing (pp) and generation (tg).
 /// </summary>
+/// <remarks>
+///     Persisted as plaintext numerics alongside the blended figures the columns already carried, never instead of
+///     them. Display only, by operator decision: no member of this record is a ranking input.
+///     <see cref="CachedPromptTokens" /> above zero means <see cref="PromptMs" /> measured a partially cached prefill
+///     rather than a cold one — it counts tokens served from the prompt cache across ALL of the turn's requests.
+/// </remarks>
 public sealed record BenchmarkRunThroughput
 {
     public double? TtftMs { get; init; }
@@ -119,10 +119,12 @@ public sealed record BenchmarkRunThroughput
     public int? CachedPromptTokens { get; init; }
 
     /// <summary>
-    ///     How many provider requests the turn made, i.e. how many readings the sums are made of. Null on runs recorded
-    ///     before the column existed; 1 for a plain turn; more once the agent called tools, because each tool round is
-    ///     another request that re-sends the conversation and prefills again.
+    ///     How many provider requests the turn made, i.e. how many readings the sums are made of.
     /// </summary>
+    /// <remarks>
+    ///     Null on runs recorded before the column existed; 1 for a plain turn; more once the agent called tools,
+    ///     because each tool round is another request that re-sends the conversation and prefills again.
+    /// </remarks>
     public int? SegmentCount { get; init; }
 
     /// <summary>Prompt-processing throughput (pp) in tokens per second, or null when either input is absent.</summary>
@@ -230,10 +232,12 @@ public sealed record BenchmarkRunRecord
 }
 
 /// <summary>
-///     A run's quant-fidelity projection: a copy of the latest succeeded measurement. Display only — perplexity and
-///     KL divergence are never ranking inputs, and a KLD figure is shown only while
-///     <see cref="KldBaseLogitsDigest" /> equals the digest the project's current settings recompute.
+///     A run's quant-fidelity projection: a copy of the latest succeeded measurement.
 /// </summary>
+/// <remarks>
+///     Display only — perplexity and KL divergence are never ranking inputs, and a KLD figure is shown only while
+///     <see cref="KldBaseLogitsDigest" /> equals the digest the project's current settings recompute.
+/// </remarks>
 public sealed record BenchmarkRunFidelity
 {
     public required string? Status { get; init; }
@@ -331,10 +335,13 @@ public sealed record BenchmarkRunLaunchIntent
 
     /// <summary>
     ///     The <c>LlamaServerLaunchProjection.IdentitySchemeVersion</c> <see cref="IntendedLaunchIdentity" /> was
-    ///     computed under, stamped at freeze and never recomputed. <see langword="null" /> on a row frozen before the
-    ///     scheme was recorded, which reads as scheme <c>1</c>. A hash from one scheme says nothing about a hash from
-    ///     another, so work that straddles a change is failed rather than compared.
+    ///     computed under, stamped at freeze and never recomputed.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> on a row frozen before the scheme was recorded, which reads as scheme <c>1</c>. A
+    ///     hash from one scheme says nothing about a hash from another, so work that straddles a change is failed
+    ///     rather than compared.
+    /// </remarks>
     public int? LaunchIdentityScheme { get; init; }
 }
 
@@ -370,12 +377,11 @@ public sealed record BenchmarkRunLaunchEvidence
 
 /// <summary>
 ///     Everything a run's durable launch-ready checkpoint records about what actually launched: the provider-owned
-///     receipt and the pre-launch environment facts (both canonical JSON, encrypted at rest by the store), their
-///     hashes, and the flat columns the list/compare views read without decrypting a payload.
+///     receipt and the pre-launch environment facts (canonical JSON, encrypted at rest), their hashes and flat columns.
 /// </summary>
 /// <remarks>
-///     Deliberately strings, integers and flags only — the list view reads every column here without decrypting or
-///     parsing the receipt payload. The receipt is assembled in the llama-server provider and serialized
+///     Deliberately strings, integers and flags only — the list and compare views read every column here without
+///     decrypting or parsing the receipt payload. The receipt is assembled in the llama-server provider and serialized
 ///     before it reaches the store, so persisting it never drags a provider type through the store contract. Every
 ///     receipt-derived member is null together when the spawn failed before readiness.
 /// </remarks>

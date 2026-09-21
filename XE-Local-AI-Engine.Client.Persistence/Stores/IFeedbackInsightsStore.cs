@@ -1,20 +1,23 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Read-only aggregate over the node-local per-message feedback. Groups the
-///     <c>message_feedback</c> rows already persisted by the chat path (joined to
-///     <c>conversations.agent_definition_id</c>) into a per-agent shape so recurring patterns surface for the
-///     operator. Pure analytics: no feedback is collected here and no playbook action is written.
+///     Read-only aggregate over the node-local per-message feedback.
 /// </summary>
+/// <remarks>
+///     Groups the <c>message_feedback</c> rows already persisted by the chat path (joined to
+///     <c>conversations.agent_definition_id</c>) into a per-agent shape so recurring patterns surface for the operator.
+///     Pure analytics: no feedback is collected here and no playbook action is written.
+/// </remarks>
 public interface IFeedbackInsightsStore
 {
     /// <summary>
     ///     Returns the per-agent feedback aggregate — overall up/down counts, a per-tool breakdown, and up to
-    ///     <paramref name="exemplarCap" /> comment exemplars — or <c>null</c> when no agent definition has
-    ///     <paramref name="agentDefinitionId" />. Only feedback on conversations bound to that agent
-    ///     (<c>agent_definition_id</c>) and not purged is counted; archived conversations are included. All columns
-    ///     read are plaintext, so no decryption is involved.
+    ///     <paramref name="exemplarCap" /> comment exemplars — or <c>null</c> when no agent definition has that id.
     /// </summary>
+    /// <remarks>
+    ///     Only feedback on conversations bound to that agent (<c>agent_definition_id</c>) and not purged is counted;
+    ///     archived conversations are included. All columns read are plaintext, so no decryption is involved.
+    /// </remarks>
     Task<AgentFeedbackAggregate?> GetAgentFeedbackAggregateAsync(Guid agentDefinitionId, int exemplarCap, CancellationToken cancellationToken = default);
 }
 
@@ -35,11 +38,14 @@ public sealed class AgentFeedbackAggregate
 }
 
 /// <summary>
-///     Up/down feedback counts attributed to a tool. Attribution is <b>conversation-level</b>: a feedback row is
-///     counted for tool X when the conversation it belongs to recorded at least one <c>tool_events</c> row for X
-///     (<c>tool_events</c> has no message link). Counts use <c>COUNT(DISTINCT message_id)</c> so a conversation that
-///     used a tool many times still counts each rated message once.
+///     Up/down feedback counts attributed to a tool.
 /// </summary>
+/// <remarks>
+///     Attribution is <b>conversation-level</b>: a feedback row is counted for tool X when the conversation it belongs
+///     to recorded at least one <c>tool_events</c> row for X (<c>tool_events</c> has no message link). Counts use
+///     <c>COUNT(DISTINCT message_id)</c> so a conversation that used a tool many times still counts each rated
+///     message once.
+/// </remarks>
 public sealed class ToolFeedbackCount
 {
     public required string ToolName { get; init; }

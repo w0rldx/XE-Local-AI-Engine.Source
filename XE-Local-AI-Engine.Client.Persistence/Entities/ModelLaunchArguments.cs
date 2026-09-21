@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Persisted per-model override of extra <c>llama-server</c> command-line arguments a node operator typed under the
-///     developer/advanced settings. Keyed by model name (<c>NOCASE</c>). Stored as the RAW string the operator entered;
-///     tokenizing and stripping the reserved process-contract flags happens on the spawn path, not here. Not encrypted —
-///     llama.cpp flags are not secrets. This is a developer experimentation knob: it lets an operator try parameters the
-///     bundled launch policy does not expose (sampling, RoPE, batch, …) for ONE model without affecting any other.
+///     Persisted per-model override of extra <c>llama-server</c> command-line arguments a node operator typed under
+///     the developer/advanced settings. Keyed by model name (<c>NOCASE</c>).
 /// </summary>
+/// <remarks>
+///     Stored as the RAW string the operator entered; tokenizing and stripping the reserved process-contract flags
+///     happens on the spawn path, not here. Not encrypted — llama.cpp flags are not secrets. This is a developer
+///     experimentation knob: it lets an operator try parameters the bundled launch policy does not expose (sampling,
+///     RoPE, batch, …) for ONE model without affecting any other.
+/// </remarks>
 internal sealed record class ModelLaunchArguments
 {
     /// <summary>Model name (primary key, <c>NOCASE</c> collation). The stable per-model key.</summary>

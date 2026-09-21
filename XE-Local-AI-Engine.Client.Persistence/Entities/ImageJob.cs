@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     A persisted local image-generation job (create → status/progress → cancel → retrieve). Node-scoped. The
-///     <see cref="Prompt" />/<see cref="NegativePrompt" /> are stored encrypted at rest (AES-256-GCM, node key) exactly
-///     like other sensitive columns — see <c>NodeEncryptionSaveChangesInterceptor</c> /
-///     <c>NodeEncryptionMaterializationInterceptor</c> (AAD column names <c>image_prompt</c> / <c>image_negative_prompt</c>).
+///     A persisted local image-generation job (create → status/progress → cancel → retrieve). Node-scoped.
 /// </summary>
+/// <remarks>
+///     The <see cref="Prompt" />/<see cref="NegativePrompt" /> are stored encrypted at rest (AES-256-GCM, node key)
+///     exactly like other sensitive columns — see <c>NodeEncryptionSaveChangesInterceptor</c> /
+///     <c>NodeEncryptionMaterializationInterceptor</c> (AAD column names <c>image_prompt</c> /
+///     <c>image_negative_prompt</c>).
+/// </remarks>
 internal sealed record class ImageJob
 {
     /// <summary>Job identity (PK).</summary>

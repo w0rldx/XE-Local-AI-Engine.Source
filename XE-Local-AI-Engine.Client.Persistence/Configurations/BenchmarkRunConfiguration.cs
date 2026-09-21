@@ -62,9 +62,8 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.TaskItemId).HasColumnName("task_item_id");
         builder.Property(entity => entity.TaskItemIndex).HasColumnName("task_item_index");
         builder.Property(entity => entity.CellKey).HasColumnName("cell_key").HasMaxLength(64).IsRequired();
-        // The two hash stamps default to the legacy constant so the migration can make them NOT NULL over existing
-        // rows: a run frozen before task items existed is compared against the same constant on both axes and is
-        // therefore never read as stale. Every insert writes its own value, so the default only ever describes history.
+        // The two hash stamps default to the legacy constant so the migration can make them NOT NULL over existing rows: a run frozen before task items existed is
+        // compared against the same constant on both axes and is therefore never read as stale. Every insert writes its own value, so the default only describes history.
         builder.Property(entity => entity.TaskInputHash)
                .HasColumnName("task_input_hash")
                .HasMaxLength(67)

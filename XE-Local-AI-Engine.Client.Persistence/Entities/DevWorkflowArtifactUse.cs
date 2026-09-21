@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     A consumed-by edge, captured at node start. This is the mechanism of mark-only staleness: when a lineage gains a
-///     new version, every node-run that recorded a use of an earlier version has its own artifacts flagged. The row
-///     points at the exact <em>version</em> consumed, which is what makes "consumed v1, v2 exists" decidable.
+///     A consumed-by edge, captured at node start. This is the mechanism of mark-only staleness.
 /// </summary>
+/// <remarks>
+///     When a lineage gains a new version, every node-run that recorded a use of an earlier version has its own
+///     artifacts flagged. The row points at the exact <em>version</em> consumed, which is what makes "consumed v1,
+///     v2 exists" decidable.
+/// </remarks>
 internal sealed class DevWorkflowArtifactUse
 {
     public Guid Id { get; set; }

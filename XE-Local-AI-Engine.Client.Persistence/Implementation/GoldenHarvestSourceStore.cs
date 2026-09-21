@@ -45,9 +45,8 @@ public sealed class GoldenHarvestSourceStore : IGoldenHarvestSourceStore
                 continue;
             }
 
-            // Variant/branch simplification (documented MVP limitation): take the linear lower-Sequence completed
-            // user/assistant turns; variant siblings of the target are NOT path-filtered. Full selected-path
-            // reconstruction is out of MVP scope.
+            // Variant/branch simplification, a documented limitation: take the linear lower-Sequence completed user/assistant turns; variant siblings of the target
+            // are NOT path-filtered, and full selected-path reconstruction is out of scope.
             var priorTurns = messages
                              .Where(message => message.Sequence < target.Sequence
                                                && string.Equals(message.Status, NodeMessageStatus.Completed, StringComparison.Ordinal)

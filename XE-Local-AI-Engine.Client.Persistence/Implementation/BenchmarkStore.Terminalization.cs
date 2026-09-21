@@ -59,11 +59,13 @@ public sealed partial class BenchmarkStore
     }
 
     /// <summary>
-    ///     Inserts one judging of <paramref name="run" /> plus its work item, and repoints the run at it. A missing
-    ///     <paramref name="runtimeJson" /> means the judge runtime could not be resolved: the attempt goes in already
-    ///     Failed together with a terminal work item, so "attempt implies work item" holds without ever queueing work
-    ///     that no claimant could execute.
+    ///     Inserts one judging of <paramref name="run" /> plus its work item, and repoints the run at it.
     /// </summary>
+    /// <remarks>
+    ///     A missing <paramref name="runtimeJson" /> means the judge runtime could not be resolved: the attempt goes in
+    ///     already Failed together with a terminal work item, so "attempt implies work item" holds without ever
+    ///     queueing work that no claimant could execute.
+    /// </remarks>
     private async Task<BenchmarkJudgeAttempt> InsertJudgeAttemptAsync(BenchmarkRun run,
         BenchmarkJudgePolicyRevision revision,
         ReadOnlyMemory<byte>? runtimeJson,
@@ -149,9 +151,12 @@ public sealed partial class BenchmarkStore
 
     /// <summary>
     ///     Moves a fidelity attempt to its terminal state and returns it, or <see langword="null" /> when there is
-    ///     nothing to move. The run's fidelity projection is NOT touched here: a failed re-measurement must leave the
-    ///     numbers from the last attempt that succeeded exactly where they are.
+    ///     nothing to move.
     /// </summary>
+    /// <remarks>
+    ///     The run's fidelity projection is NOT touched here: a failed re-measurement must leave the numbers from the
+    ///     last attempt that succeeded exactly where they are.
+    /// </remarks>
     private async Task<BenchmarkFidelityAttempt?> TerminalizeFidelityAttemptAsync(Guid? attemptId,
         BenchmarkJudgeAttemptStatus status,
         string? errorMessage,
@@ -199,9 +204,8 @@ public sealed partial class BenchmarkStore
         comparison.CompletedAtUtc = now;
         comparison.Version++;
 
-        // The cohort's comparison-set version moves in the SAME transaction as the terminalization. Inserting and
-        // terminalizing are the only two ways the fitted set can change, so a published fit's staleness is one
-        // integer against this row rather than a re-hash of every verdict on every page read.
+        // The cohort's comparison-set version moves in the SAME transaction as the terminalization. Inserting and terminalizing are the only two ways the fitted set
+        // can change, so a published fit's staleness is one integer against this row rather than a re-hash of every verdict on every page read.
         var revision = await _dbContext.BenchmarkJudgePolicyRevisions
                                        .SingleOrDefaultAsync(entity => entity.Id == comparison.PolicyRevisionId, cancellationToken);
         if (revision is not null)
@@ -272,8 +276,10 @@ public sealed partial class BenchmarkStore
     }
 
     /// <summary>
-    ///     A run record carrying its derived judge view. Every path that returns a run uses this: the view is how a
-    ///     caller reads judge state now, and a record that silently omitted it would read as "no judging" to a caller
-    ///     that had just terminalized one.
+    ///     A run record carrying its derived judge view.
     /// </summary>
+    /// <remarks>
+    ///     Every path that returns a run uses this: the view is how a caller reads judge state now, and a record that
+    ///     silently omitted it would read as "no judging" to a caller that had just terminalized one.
+    /// </remarks>
 }

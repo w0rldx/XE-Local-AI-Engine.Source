@@ -21,9 +21,8 @@ using Microsoft.Extensions.Logging;
 /// </remarks>
 public static class NodeSqlitePragmas
 {
-    // Process-wide default consumed by the static raw-open helpers (which cannot take injected options). Swapped once at
-    // the composition root via Configure; volatile reference read/write is atomic. Defaults to the production values, so
-    // an unconfigured host (tests, design-time) still gets WAL + busy_timeout.
+    // Process-wide default consumed by the static raw-open helpers, which cannot take injected options. Swapped once at the composition root via Configure; a
+    // volatile reference read/write is atomic. Defaults to the production values, so an unconfigured host (tests, design-time) still gets WAL + busy_timeout.
     private static volatile NodeSqlitePragmaSettings _settings = NodeSqlitePragmaSettings.Default;
 
     /// <summary>The effective process-wide settings used by <see cref="OpenAndConfigureAsync" />.</summary>
@@ -161,12 +160,8 @@ public static class NodeSqlitePragmas
         return $"PRAGMA synchronous={settings.Synchronous.ToString().ToUpperInvariant()};";
     }
 
-    // WAL journaling is only safely settable on a writable, private-cache, on-disk connection. Skip it (rather than log a
-    // spurious warning on every open) for the three connection shapes that cannot switch into WAL. An in-memory database
-    // reports its journal mode as memory and never wal. A read-only connection refuses the write with SQLite error 8. A
-    // shared-cache connection (the Aspire dev integration sets one) collides with the sibling connections that other
-    // services open against the node database concurrently at startup, so the switch is refused with SQLite error 6 or 8.
-    // The desktop and packaged builds use a plain private-cache data source, so they still get WAL.
+    // WAL journaling is only safely settable on a writable, private-cache, on-disk connection, so the three shapes that cannot switch into it (in-memory,
+    // read-only, shared cache) are skipped rather than warned about on every open. What each one reports or refuses: docs/wiki/08-data-and-persistence.md.
     private static bool ShouldApplyWal(DbConnection connection, NodeSqlitePragmaSettings settings)
     {
         return settings.EnableWriteAheadLog && !IsWalIncompatibleConnection(connection);
@@ -192,9 +187,8 @@ public static class NodeSqlitePragmas
     {
         if (!string.Equals(mode, "wal", StringComparison.OrdinalIgnoreCase))
         {
-            // WAL is a persistent property that another connection sets once, so a later open that reads it back as wal is
-            // the norm. A non-wal result here means the switch could not be applied (e.g. an exclusive lock held by
-            // another process, or a read-only file); log and continue in whatever journal mode the file already has.
+            // WAL is a persistent property that another connection sets once, so a later open that reads it back as wal is the norm. A non-wal result here means
+            // the switch could not be applied (an exclusive lock held by another process, a read-only file); log and continue in the file's current journal mode.
             logger?.LogWarning("Node SQLite journal_mode is '{JournalMode}' after requesting WAL; continuing in the current mode.", mode ?? "unknown");
         }
     }

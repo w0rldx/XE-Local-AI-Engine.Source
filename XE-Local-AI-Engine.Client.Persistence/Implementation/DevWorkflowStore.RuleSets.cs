@@ -108,9 +108,9 @@ internal sealed partial class DevWorkflowStore
 
     /// <summary>
     ///     Bodies INCLUDED, unlike the list feed: the resolver snapshots the text of every rule set it matches onto the
-    ///     node run, so it needs the document and not merely its hash. Ordered by name, which is also the order every
-    ///     matching set is injected in.
+    ///     node run, so it needs the document and not merely its hash.
     /// </summary>
+    /// <remarks>Ordered by name, which is also the order every matching set is injected in.</remarks>
     public async Task<IReadOnlyList<DevWorkflowRuleSetSnapshot>> ListEnabledRuleSetsAsync(CancellationToken cancellationToken = default)
     {
         var ruleSets = await _dbContext.DevWorkflowRuleSets.AsNoTracking()

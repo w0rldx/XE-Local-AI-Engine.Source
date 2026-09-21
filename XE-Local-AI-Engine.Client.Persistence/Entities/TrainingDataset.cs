@@ -12,11 +12,14 @@ internal sealed record class TrainingDataset
 
     /// <summary>
     ///     The definition BODY as it stood when this dataset was created, copied in the same transaction that read
-    ///     <see cref="DefinitionVersion" />. Generation and evaluation read this snapshot, never the live definition row:
-    ///     an edit between creation and generation would otherwise change teacher/tools/instructions while the dataset
-    ///     still claimed the old version. Null only for a dataset created before pinning existed, which both executors
-    ///     refuse with a visible reason rather than silently falling back to the live body.
+    ///     <see cref="DefinitionVersion" />.
     /// </summary>
+    /// <remarks>
+    ///     Generation and evaluation read this snapshot, never the live definition row: an edit between creation and
+    ///     generation would otherwise change teacher/tools/instructions while the dataset still claimed the old
+    ///     version. Null only for a dataset created before pinning existed, which both executors refuse with a
+    ///     visible reason rather than silently falling back to the live body.
+    /// </remarks>
     public byte[]? DefinitionJson { get; set; }
 
     public string Name { get; set; } = string.Empty;

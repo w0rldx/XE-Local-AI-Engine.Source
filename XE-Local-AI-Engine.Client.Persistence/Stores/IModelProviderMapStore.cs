@@ -1,11 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for the per-model→provider map. Keyed by model name
-///     (case-insensitive). Not encrypted — model names and provider keys are not secrets. The store performs no
-///     validation and applies no routing default; the caller (the application-layer provider resolver) owns the
-///     "unmapped model → default provider" policy.
+///     Node-scoped persistence for the per-model→provider map, keyed by model name (case-insensitive).
 /// </summary>
+/// <remarks>
+///     Not encrypted — model names and provider keys are not secrets. The store performs no validation and applies no
+///     routing default; the application-layer provider resolver owns the "unmapped model → default provider" policy.
+/// </remarks>
 internal interface IModelProviderMapStore
 {
     /// <summary>

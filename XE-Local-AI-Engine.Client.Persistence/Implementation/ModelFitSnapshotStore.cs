@@ -6,11 +6,14 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Persistence boundary for model-fit snapshot data. The raw output / stderr / diagnostics columns are encrypted at
-///     rest by the node encryption interceptors; this store passes them as plaintext strings and never returns them on
-///     the summary projection — only <see cref="GetRawByIdAsync" /> decrypts them. Marking a run succeeded transactionally
-///     moves the latest-successful flag so concurrent refreshes can never leave two rows latest for one key.
+///     Persistence boundary for model-fit snapshot data.
 /// </summary>
+/// <remarks>
+///     The raw output, stderr and diagnostics columns are encrypted at rest by the node encryption interceptors; this
+///     store passes them as plaintext strings and never returns them on the summary projection — only
+///     <see cref="GetRawByIdAsync" /> decrypts them. Marking a run succeeded transactionally moves the
+///     latest-successful flag, so concurrent refreshes can never leave two rows latest for one key.
+/// </remarks>
 public sealed class ModelFitSnapshotStore : IModelFitSnapshotStore
 {
     private readonly NodeChatDbContext _dbContext;

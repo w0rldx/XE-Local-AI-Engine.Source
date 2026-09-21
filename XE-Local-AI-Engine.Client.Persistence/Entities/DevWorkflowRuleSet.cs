@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     A scoped markdown document the resolver injects into a node's context. Not a rule TABLE: v1's single job is
-///     context injection, so the rule set is the granular unit — which is also what makes "which rules applied"
-///     answerable from one recorded id.
+///     A scoped markdown document the resolver injects into a node's context. Not a rule TABLE.
 /// </summary>
+/// <remarks>
+///     v1's single job is context injection, so the rule set is the granular unit — which is also what makes "which
+///     rules applied" answerable from one recorded id.
+/// </remarks>
 internal sealed class DevWorkflowRuleSet
 {
     public Guid Id { get; set; }

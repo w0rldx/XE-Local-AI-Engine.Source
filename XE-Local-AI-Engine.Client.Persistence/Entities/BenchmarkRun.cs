@@ -40,11 +40,14 @@ internal sealed record class BenchmarkRun
     public double? TokensPerSecond { get; set; }
 
     /// <summary>
-    ///     The separated throughput measurement: time to first token (client-side wall clock), and the prompt-processing
-    ///     (pp) versus generation (tg) split of tokens and milliseconds as the runtime itself timed them. All null for
-    ///     runs frozen before these columns existed and for any runtime that reports no per-request timings — never
-    ///     inferred from the blended numbers. Display only: throughput is not a ranking input.
+    ///     The separated throughput measurement: time to first token (client-side wall clock), and the
+    ///     prompt-processing (pp) versus generation (tg) split of tokens and milliseconds as the runtime itself timed
+    ///     them.
     /// </summary>
+    /// <remarks>
+    ///     All null for runs frozen before these columns existed and for any runtime that reports no per-request
+    ///     timings — never inferred from the blended numbers. Display only: throughput is not a ranking input.
+    /// </remarks>
     public double? TtftMs { get; set; }
 
     public int? PromptTokens { get; set; }
@@ -93,10 +96,13 @@ internal sealed record class BenchmarkRun
 
     /// <summary>
     ///     The seed this run was frozen with, as the string the snapshot carries (a seed is an unconstrained 64-bit
-    ///     value). Plaintext, and duplicated out of the encrypted snapshot on purpose: the listing and the CSV export
-    ///     never decrypt a payload, and a group of answer-variance runs is unreadable without the one input that
-    ///     differs between them. Null on runs frozen before the column existed.
+    ///     value). Null on runs frozen before the column existed.
     /// </summary>
+    /// <remarks>
+    ///     Plaintext, and duplicated out of the encrypted snapshot on purpose: the listing and the CSV export never
+    ///     decrypt a payload, and a group of answer-variance runs is unreadable without the one input that differs
+    ///     between them.
+    /// </remarks>
     public string? SamplingSeed { get; set; }
 
     /// <summary>The temperature this run was frozen with, duplicated out of the snapshot for the same reason.</summary>
@@ -112,26 +118,33 @@ internal sealed record class BenchmarkRun
     public int? TaskItemIndex { get; set; }
 
     /// <summary>
-    ///     The measurement cell this run's per-item score aggregates into, stamped at freeze and NEVER null: a null
-    ///     would put every ungrouped run of a project into one anonymous bucket and average their scores together,
-    ///     silently. A run that is its own cell carries a singleton key derived from its own id.
+    ///     The measurement cell this run's per-item score aggregates into, stamped at freeze and NEVER null.
     /// </summary>
+    /// <remarks>
+    ///     A null would put every ungrouped run of a project into one anonymous bucket and average their scores
+    ///     together, silently. A run that is its own cell carries a singleton key derived from its own id.
+    /// </remarks>
     public string CellKey { get; set; } = string.Empty;
 
     /// <summary>
     ///     A copy of the leaf item's <see cref="BenchmarkTaskItem.InputHash" /> at freeze — exactly what this run was
-    ///     asked. A run whose stamp no longer matches its item answered a question that no longer exists, and the
-    ///     ranking read excludes it. Runs frozen before task items existed carry the legacy constant on both hash
-    ///     columns and are compared against the same constant, so they are never stale.
+    ///     asked.
     /// </summary>
+    /// <remarks>
+    ///     A run whose stamp no longer matches its item answered a question that no longer exists, and the ranking
+    ///     read excludes it. Runs frozen before task items existed carry the legacy constant on both hash columns and
+    ///     are compared against the same constant, so they are never stale.
+    /// </remarks>
     public string TaskInputHash { get; set; } = string.Empty;
 
     /// <summary>
     ///     A copy of the project's <see cref="BenchmarkProject.TaskItemSetHash" /> at freeze — what the whole question
-    ///     set was when this cell was measured. The only stamp that can answer "was this cell complete WHEN it was
-    ///     measured": completeness against the current item set turns a two-of-three cell into a two-of-two cell the
-    ///     moment the third item is deleted.
+    ///     set was when this cell was measured.
     /// </summary>
+    /// <remarks>
+    ///     The only stamp that can answer "was this cell complete WHEN it was measured": completeness against the
+    ///     current item set turns a two-of-three cell into a two-of-two cell the moment the third item is deleted.
+    /// </remarks>
     public string TaskItemSetHash { get; set; } = string.Empty;
 
     /// <summary>The judge attempt whose verdict this run currently shows. Null until the first attempt is enqueued.</summary>
@@ -140,10 +153,13 @@ internal sealed record class BenchmarkRun
     /// <summary>
     ///     The quant-fidelity projection: a denormalized copy of the LATEST succeeded
     ///     <see cref="BenchmarkFidelityAttempt" /> of this run, so the listing stays a flat-column scan and never
-    ///     decrypts. Plaintext numerics, same posture as <see cref="TokensPerSecond" />. Display only — perplexity and
+    ///     decrypts.
+    /// </summary>
+    /// <remarks>
+    ///     Plaintext numerics, same posture as <see cref="TokensPerSecond" />. Display only — perplexity and
     ///     KL-divergence are never ranking inputs. <see cref="FidelityAttemptId" /> is both the audit link back to the
     ///     attempt these numbers came from and the CAS target the refresh guards on.
-    /// </summary>
+    /// </remarks>
     public Guid? FidelityAttemptId { get; set; }
 
     public double? PerplexityMean { get; set; }
@@ -163,11 +179,13 @@ internal sealed record class BenchmarkRun
 
     /// <summary>
     ///     The comparability gate, copied from the attempt's <c>BaseLogitsDigest</c>: the digest over the WHOLE
-    ///     base-logit cache key. A KLD figure is displayed, and two are compared, only while this equals the digest
-    ///     recomputed from the project's current KLD settings — the base fingerprint alone would pass a number
-    ///     measured on 50 chunks off as comparable with one measured on 200. A mismatch renders a stale badge, never
-    ///     a number.
+    ///     base-logit cache key.
     /// </summary>
+    /// <remarks>
+    ///     A KLD figure is displayed, and two are compared, only while this equals the digest recomputed from the
+    ///     project's current KLD settings — the base fingerprint alone would pass a number measured on 50 chunks off
+    ///     as comparable with one measured on 200. A mismatch renders a stale badge, never a number.
+    /// </remarks>
     public string? KldBaseLogitsDigest { get; set; }
 
     /// <summary><c>queued</c>/<c>running</c>/<c>succeeded</c>/<c>failed</c>/<c>cancelled</c>/<c>skipped</c>.</summary>
@@ -218,9 +236,12 @@ internal sealed record class BenchmarkRun
 
     /// <summary>
     ///     Why the primary generation stopped, verbatim from the provider (<c>stop</c>, <c>length</c>,
-    ///     <c>tool_calls</c>, <c>content_filter</c>). Plaintext, not sensitive. Null on runs frozen before this column
-    ///     existed and on any run whose provider reported no finish reason — never inferred from the status.
+    ///     <c>tool_calls</c>, <c>content_filter</c>). Plaintext, not sensitive.
     /// </summary>
+    /// <remarks>
+    ///     Null on runs frozen before this column existed and on any run whose provider reported no finish reason —
+    ///     never inferred from the status.
+    /// </remarks>
     public string? PrimaryStopReason { get; set; }
 
     public string? PrimaryErrorMessage { get; set; }

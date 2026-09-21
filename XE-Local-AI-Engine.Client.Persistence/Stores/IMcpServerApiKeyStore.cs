@@ -1,15 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for the SINGLE inbound-MCP bearer credential. The store never sees the plaintext key —
-///     it persists only its SHA-256 digest, which the node encryption interceptors additionally seal at rest. This
-///     store owns only id/timestamp stamping and the singleton upsert rule; key generation, hashing and comparison are
-///     the application layer's responsibility.
-///     <para>
-///         Guards the INBOUND MCP endpoint. Unrelated to <see cref="IMcpServerStore" />, which describes OUTBOUND
-///         connections to third-party MCP servers.
-///     </para>
+///     Node-scoped persistence for the SINGLE inbound-MCP bearer credential.
 /// </summary>
+/// <remarks>
+///     The store never sees the plaintext key — it persists only its SHA-256 digest, which the node encryption
+///     interceptors additionally seal at rest. It owns only id/timestamp stamping and the singleton upsert rule; key
+///     generation, hashing and comparison are the application layer's responsibility. Guards the INBOUND MCP endpoint;
+///     unrelated to <see cref="IMcpServerStore" />, which describes OUTBOUND connections to third-party MCP servers.
+/// </remarks>
 public interface IMcpServerApiKeyStore
 {
     /// <summary>
@@ -19,10 +18,12 @@ public interface IMcpServerApiKeyStore
     Task<McpServerApiKeyRecord?> GetAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Upserts the singleton row, REPLACING any existing key, and returns the stored record. Replacing rather than
-    ///     appending is what makes an old key stop working the moment a new one is generated; there is deliberately no
-    ///     window in which both authenticate.
+    ///     Upserts the singleton row, REPLACING any existing key, and returns the stored record.
     /// </summary>
+    /// <remarks>
+    ///     Replacing rather than appending is what makes an old key stop working the moment a new one is generated;
+    ///     there is deliberately no window in which both authenticate.
+    /// </remarks>
     Task<McpServerApiKeyRecord> SetAsync(string prefix,
         ReadOnlyMemory<byte> keyHash,
         int scope,
@@ -39,10 +40,13 @@ public interface IMcpServerApiKeyStore
 }
 
 /// <summary>
-///     The stored inbound-MCP credential. <see cref="KeyHash" /> is a one-way SHA-256 digest, not the key: nothing on
-///     this record can be presented to the MCP endpoint, so no field here needs "reveal the key" handling. The
-///     plaintext key exists only in the return value of the generate call that minted it.
+///     The stored inbound-MCP credential.
 /// </summary>
+/// <remarks>
+///     <see cref="KeyHash" /> is a one-way SHA-256 digest, not the key: nothing on this record can be presented to the
+///     MCP endpoint, so no field here needs "reveal the key" handling. The plaintext key exists only in the return
+///     value of the generate call that minted it.
+/// </remarks>
 public sealed record McpServerApiKeyRecord
 {
     public required string Prefix { get; init; }

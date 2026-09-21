@@ -206,10 +206,13 @@ public sealed class NodeChatDbContext : DbContext
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
-    ///     Encrypts a conversation title string for raw-SQL persistence. Returns null when the title is null so the
-    ///     database column writes NULL. AAD mirrors the interceptor: conversationId appears as both conversation and
-    ///     record id, column name is "title".
+    ///     Encrypts a conversation title string for raw-SQL persistence, returning null when the title is null so the
+    ///     database column writes NULL.
     /// </summary>
+    /// <remarks>
+    ///     AAD mirrors the interceptor: conversationId appears as both conversation and record id, column name is
+    ///     "title".
+    /// </remarks>
     public byte[]? EncryptConversationTitle(string? title, Guid conversationId)
     {
         if (title is null)
@@ -222,9 +225,12 @@ public sealed class NodeChatDbContext : DbContext
     }
 
     /// <summary>
-    ///     Decrypts a raw title blob back to a string. Returns null when the blob is null. AAD mirrors the interceptor:
-    ///     conversationId appears as both conversation and record id, column name is "title".
+    ///     Decrypts a raw title blob back to a string, returning null when the blob is null.
     /// </summary>
+    /// <remarks>
+    ///     AAD mirrors the interceptor: conversationId appears as both conversation and record id, column name is
+    ///     "title".
+    /// </remarks>
     public string? DecryptConversationTitle(byte[]? encrypted, Guid conversationId)
     {
         if (encrypted is null)
@@ -237,10 +243,13 @@ public sealed class NodeChatDbContext : DbContext
     }
 
     /// <summary>
-    ///     Encrypts a conversation compaction synopsis for raw-SQL persistence. Returns null when the summary is null so
-    ///     the database column writes NULL. AAD mirrors <see cref="EncryptConversationTitle" /> but scopes the column name
-    ///     to <c>compaction_summary</c> so a title blob can never be substituted for a summary blob (or vice versa).
+    ///     Encrypts a conversation compaction synopsis for raw-SQL persistence, returning null when the summary is null
+    ///     so the database column writes NULL.
     /// </summary>
+    /// <remarks>
+    ///     AAD mirrors <see cref="EncryptConversationTitle" /> but scopes the column name to <c>compaction_summary</c>,
+    ///     so a title blob can never be substituted for a summary blob (or vice versa).
+    /// </remarks>
     public byte[]? EncryptConversationCompactionSummary(string? summary, Guid conversationId)
     {
         if (summary is null)
@@ -276,10 +285,13 @@ public sealed class NodeChatDbContext : DbContext
     }
 
     /// <summary>
-    ///     Decrypts a raw message content blob back to a string. Read-both: an enveloped blob is decrypted; a legacy
-    ///     plaintext blob (written before content encryption shipped) is returned verbatim. AAD = conversationId +
-    ///     messageId + "content", matching the interceptors.
+    ///     Decrypts a raw message content blob back to a string, read-both: an enveloped blob is decrypted, a legacy
+    ///     plaintext blob is returned verbatim.
     /// </summary>
+    /// <remarks>
+    ///     A legacy plaintext blob is one written before content encryption shipped. AAD = conversationId + messageId
+    ///     + "content", matching the interceptors.
+    /// </remarks>
     public string DecryptMessageContent(byte[] stored, Guid conversationId, Guid messageId)
     {
         ArgumentNullException.ThrowIfNull(stored);
@@ -320,9 +332,12 @@ public sealed class NodeChatDbContext : DbContext
 
     /// <summary>
     ///     Idempotently upgrades a stored message content blob to the encrypted envelope: an already-enveloped blob is
-    ///     returned unchanged, and a legacy plaintext blob (the bytes themselves are the plaintext) is encrypted. Used by
-    ///     the content-encryption migration so a re-run never re-encrypts an already-migrated row.
+    ///     returned unchanged, a legacy plaintext blob is encrypted.
     /// </summary>
+    /// <remarks>
+    ///     A legacy plaintext blob's bytes are themselves the plaintext. Used by the content-encryption migration, so a
+    ///     re-run never re-encrypts an already-migrated row.
+    /// </remarks>
     public byte[] EnsureMessageContentEncrypted(byte[] stored, Guid conversationId, Guid messageId)
     {
         ArgumentNullException.ThrowIfNull(stored);
@@ -349,10 +364,12 @@ public sealed class NodeChatDbContext : DbContext
     }
 
     /// <summary>
-    ///     Encrypts an uploaded file's display name for raw-SQL persistence by the conversation file store. Mirrors the
-    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> column posture so an EF-tracked save and this raw-SQL
-    ///     write produce interchangeable ciphertext. AAD = conversationId + fileId + "original_file_name".
+    ///     Encrypts an uploaded file's display name for raw-SQL persistence by the conversation file store.
     /// </summary>
+    /// <remarks>
+    ///     Mirrors the <see cref="NodeEncryptionSaveChangesInterceptor" /> column posture so an EF-tracked save and this
+    ///     raw-SQL write produce interchangeable ciphertext. AAD = conversationId + fileId + "original_file_name".
+    /// </remarks>
     public byte[] EncryptUploadedFileName(string originalFileName, Guid conversationId, Guid fileId)
     {
         ArgumentNullException.ThrowIfNull(originalFileName);
@@ -375,10 +392,12 @@ public sealed class NodeChatDbContext : DbContext
 
     /// <summary>
     ///     Encrypts a knowledge-base document's display name for raw-SQL persistence by the knowledge document store.
-    ///     Mirrors <see cref="EncryptUploadedFileName" /> but a knowledge document has no owning conversation, so the AAD
-    ///     binds to <c>(Guid.Empty, documentId, "original_file_name")</c>. The name is encrypted only on the store's
-    ///     raw-SQL insert path — this column is deliberately kept out of the node-encryption interceptor.
     /// </summary>
+    /// <remarks>
+    ///     Mirrors <see cref="EncryptUploadedFileName" />, but a knowledge document has no owning conversation, so the
+    ///     AAD binds to <c>(Guid.Empty, documentId, "original_file_name")</c>. The name is encrypted only on the store's
+    ///     raw-SQL insert path — this column is deliberately kept out of the node-encryption interceptor.
+    /// </remarks>
     public byte[] EncryptKnowledgeFileName(string originalFileName, Guid documentId)
     {
         ArgumentNullException.ThrowIfNull(originalFileName);

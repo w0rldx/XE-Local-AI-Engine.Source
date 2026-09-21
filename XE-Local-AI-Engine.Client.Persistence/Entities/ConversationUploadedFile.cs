@@ -1,10 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     A single file a user attached to a conversation. The durable bytes and the cached extracted Markdown live on disk
-///     under <c>INodeDataDirectory.Root/uploaded-files/conversations/{conversation_id}/</c> (too large for the encrypted
-///     column path); this row holds only the metadata plus the encrypted display name.
+///     A single file a user attached to a conversation. This row holds only the metadata plus the encrypted display
+///     name.
 /// </summary>
+/// <remarks>
+///     The durable bytes and the cached extracted Markdown live on disk under
+///     <c>INodeDataDirectory.Root/uploaded-files/conversations/{conversation_id}/</c> — too large for the encrypted
+///     column path.
+/// </remarks>
 internal sealed record class ConversationUploadedFile
 {
     public Guid FileId { get; set; }
@@ -16,9 +20,11 @@ internal sealed record class ConversationUploadedFile
     ///     UTF-8 display-name bytes. Plaintext while tracked in memory; encrypted at rest by
     ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
     ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>original_file_name</c>.
+    /// </summary>
+    /// <remarks>
     ///     The store writes/reads this column over the raw-SQL path via the matching
     ///     <c>NodeChatDbContext.EncryptUploadedFileName</c>/<c>DecryptUploadedFileName</c> helpers (same protector + AAD).
-    /// </summary>
+    /// </remarks>
     public byte[] OriginalFileName { get; set; } = [];
 
     public string MimeType { get; set; } = string.Empty;

@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     A human unblocking a node-run — a gate approval or a retries-exhausted intervention. One node-run legitimately
-///     accumulates several of these over its life (fail, <c>Retry</c> at attempt 1, <c>Approve</c> at attempt 2), which
-///     is why the uniqueness is per <c>(node run, attempt)</c> and not per node-run.
+///     A human unblocking a node-run — a gate approval or a retries-exhausted intervention.
 /// </summary>
+/// <remarks>
+///     One node-run legitimately accumulates several of these over its life (fail, <c>Retry</c> at attempt 1,
+///     <c>Approve</c> at attempt 2), which is why the uniqueness is per <c>(node run, attempt)</c> and not per
+///     node-run.
+/// </remarks>
 internal sealed class DevWorkflowDecision
 {
     public Guid Id { get; set; }

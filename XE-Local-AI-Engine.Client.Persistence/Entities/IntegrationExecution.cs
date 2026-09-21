@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     One external invocation of a trigger, from admission to a terminal state. Content-free: the seed and the
-///     assistant turns live in the owned conversation, and the only column here that could carry content —
-///     <see cref="FailureSummary" /> — is a category label by contract, exactly as <c>AgentExecutionLog.ErrorClass</c>
-///     is.
+///     One external invocation of a trigger, from admission to a terminal state. Content-free.
 /// </summary>
+/// <remarks>
+///     The seed and the assistant turns live in the owned conversation, and the only column here that could carry
+///     content — <see cref="FailureSummary" /> — is a category label by contract, exactly as
+///     <c>AgentExecutionLog.ErrorClass</c> is.
+/// </remarks>
 internal sealed record class IntegrationExecution
 {
     public Guid Id { get; set; }
@@ -73,11 +75,13 @@ internal sealed record class IntegrationExecution
 
     /// <summary>
     ///     Running total of <b>plaintext UTF-8 bytes</b> of the persisted <c>external.output</c> payloads (ruling
-    ///     R3-5) — never the encrypted column length. The stored BLOB is <c>nonce ‖ ciphertext ‖ tag</c>, so a SQL
-    ///     <c>SUM(length(detail_json))</c> would count the fixed AES-GCM envelope on every row on top of the payload;
-    ///     this column exists precisely so no such sum is ever needed. Maintained by <c>AppendOutputEventAsync</c> in
-    ///     the same save as the event insert. Plaintext (structural).
+    ///     R3-5) — never the encrypted column length. Plaintext (structural).
     /// </summary>
+    /// <remarks>
+    ///     The stored BLOB is <c>nonce ‖ ciphertext ‖ tag</c>, so a SQL <c>SUM(length(detail_json))</c> would count
+    ///     the fixed AES-GCM envelope on every row on top of the payload; this column exists precisely so no such sum
+    ///     is ever needed. Maintained by <c>AppendOutputEventAsync</c> in the same save as the event insert.
+    /// </remarks>
     public long OutputBytes { get; set; }
 
     /// <summary>The highest event sequence committed for this execution, maintained as a running maximum. Plaintext (structural).</summary>

@@ -6,11 +6,13 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Persistence boundary for measured model-fit benchmark rows. The raw output and diagnostics columns are encrypted
-///     at rest by the node encryption interceptors; this store passes them as plaintext strings and returns them
-///     decrypted on the record. The per-snapshot replace deletes the snapshot's existing rows and inserts the new set in
-///     one transaction.
+///     Persistence boundary for measured model-fit benchmark rows.
 /// </summary>
+/// <remarks>
+///     The raw output and diagnostics columns are encrypted at rest by the node encryption interceptors; this store
+///     passes them as plaintext strings and returns them decrypted on the record. The per-snapshot replace deletes the
+///     snapshot's existing rows and inserts the new set in one transaction.
+/// </remarks>
 public sealed class ModelFitBenchmarkStore : IModelFitBenchmarkStore
 {
     private readonly NodeChatDbContext _dbContext;

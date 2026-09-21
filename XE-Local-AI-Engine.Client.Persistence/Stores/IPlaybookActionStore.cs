@@ -1,12 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for playbook actions bound to an agent definition. <c>Behavior</c> and
-///     <c>TriggerCondition</c> are encrypted at rest by the node encryption interceptors; reads return them decrypted on
-///     the <see cref="PlaybookActionRecord" />. This store performs no content validation — that is the
-///     application-layer service's responsibility; it owns only id/version/timestamp stamping and the config-affecting
-///     version-bump rule.
+///     Node-scoped persistence for playbook actions bound to an agent definition.
 /// </summary>
+/// <remarks>
+///     <c>Behavior</c> and <c>TriggerCondition</c> are encrypted at rest by the node encryption interceptors; reads
+///     return them decrypted on the <see cref="PlaybookActionRecord" />. The store performs no content validation —
+///     that is the application-layer service's responsibility; it owns only id/version/timestamp stamping and the
+///     config-affecting version-bump rule.
+/// </remarks>
 public interface IPlaybookActionStore
 {
     /// <summary>
@@ -16,24 +18,26 @@ public interface IPlaybookActionStore
     Task<PlaybookActionRecord> AddAsync(PlaybookActionInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Applies <paramref name="input" /> to the action identified by <paramref name="id" />, stamping
-    ///     <c>UpdatedAtUtc</c> and incrementing <c>Version</c> only when a config-affecting field changed (Behavior,
-    ///     Priority or State — never Scope/TriggerCondition alone). Returns the updated record, or <c>null</c> when no
-    ///     action has that id.
+    ///     Applies <paramref name="input" /> to the action identified by <paramref name="id" />, or returns
+    ///     <c>null</c> when no action has that id.
     /// </summary>
+    /// <remarks>
+    ///     Stamps <c>UpdatedAtUtc</c> and increments <c>Version</c> only when a config-affecting field changed:
+    ///     Behavior, Priority or State — never Scope/TriggerCondition alone.
+    /// </remarks>
     Task<PlaybookActionRecord?> UpdateAsync(Guid id, PlaybookActionInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Compare-and-swap promotion of a <c>Suggested</c> action to <c>Enabled</c>, guarded against the promote-time
-    ///     TOCTOU. In a single transaction it (1) confirms the row still exists, is still <c>Suggested</c>, and still has
-    ///     <c>Version == <paramref name="expectedVersion" /></c> — so a concurrent edit (which bumps Version and clears
-    ///     the eval) or a concurrent promote (which moves it off <c>Suggested</c>) after the caller validated its snapshot
-    ///     makes the write fail rather than enabling on stale evidence; (2) re-checks the enabled-action count against
-    ///     <paramref name="maxEnabledActions" /> adjacent to the write, so two concurrent promotes cannot both observe a
-    ///     below-cap count and both enable; and only then (3) sets <c>Enabled</c>, records
-    ///     <paramref name="evalResult" />, stamps <c>EnabledAtUtc</c> and bumps <c>Version</c>. The returned
-    ///     <see cref="PlaybookPromotionCommit.Status" /> discriminates success from each guard failure.
+    ///     TOCTOU; <see cref="PlaybookPromotionCommit.Status" /> discriminates success from each guard failure.
     /// </summary>
+    /// <remarks>
+    ///     One transaction: the row must still exist, still be <c>Suggested</c> and still carry
+    ///     <paramref name="expectedVersion" />, so a concurrent edit (which bumps Version and clears the eval) or a
+    ///     concurrent promote fails the write instead of enabling on stale evidence; the enabled-action count is
+    ///     re-checked against <paramref name="maxEnabledActions" /> adjacent to the write, so two concurrent promotes
+    ///     cannot both see a below-cap count; only then are <c>Enabled</c>, the eval, <c>EnabledAtUtc</c> and <c>Version</c> written.
+    /// </remarks>
     Task<PlaybookPromotionCommit> PromoteSuggestedIfCurrentAsync(Guid id,
         int expectedVersion,
         int maxEnabledActions,

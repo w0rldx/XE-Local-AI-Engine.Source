@@ -24,9 +24,8 @@ public sealed partial class BenchmarkStore
             index: 0,
             now);
 
-        // The project's set hash is deliberately NOT written here. Materializing item 0 changes nothing about what the
-        // project asks, and moving the hash every historical run is compared against would unrank the whole project's
-        // history for a bookkeeping write. It moves on the first real item edit, where unranking is the correct answer.
+        // The project's set hash is deliberately NOT written here: materializing item 0 changes nothing about what the project asks, and moving the hash every
+        // historical run is compared against would unrank the whole history for a bookkeeping write. It moves on the first real item edit, where that is correct.
         _dbContext.BenchmarkTaskItems.Add(item);
         try
         {
@@ -34,9 +33,8 @@ public sealed partial class BenchmarkStore
         }
         catch (BenchmarkConflictException exception) when (string.Equals(exception.Code, "DuplicateWork", StringComparison.Ordinal))
         {
-            // Two concurrent readers of one legacy project both tried to materialize item 0. The unique
-            // (project_id, index) index turns that into a constraint violation rather than a second item 0, so the
-            // loser simply reads what the winner wrote.
+            // Two concurrent readers of one project can both try to materialize item 0. The unique (project_id, index) index turns that into a constraint violation
+            // rather than a second item 0, so the loser simply reads what the winner wrote.
             _dbContext.ChangeTracker.Clear();
             return await ListTaskItemsAsync(projectId, cancellationToken);
         }
@@ -114,10 +112,8 @@ public sealed partial class BenchmarkStore
         item.Version++;
         item.UpdatedAtUtc = now;
 
-        // A generator's cases are regenerated, not patched: the old rows go and the new ones are written in this same
-        // transaction, so no case is ever left describing parameters its generator no longer has. The replacements
-        // take fresh indices past the highest rather than reusing the vacated ones — the unique (project, index)
-        // index is enforced per statement, and a reused index collides with a row EF has not deleted yet.
+        // A generator's cases are regenerated, not patched: the old rows go and the new ones are written in this same transaction, so no case describes parameters
+        // its generator no longer has. Replacements take fresh indices past the highest — the unique (project, index) index is per statement, so a reused one collides.
         var survivors = items;
         if (children is not null)
         {
@@ -227,10 +223,13 @@ public sealed partial class BenchmarkStore
     }
 
     /// <summary>
-    ///     Keeps the project's core task and its FIRST item asking the same question. The project edit is refused once
-    ///     the project has runs, so this is only ever reached while there is no history to unrank — which is why it
-    ///     bumps the item's revision and the set hash without resetting a cohort that cannot exist yet.
+    ///     Keeps the project's core task and its FIRST item asking the same question.
     /// </summary>
+    /// <remarks>
+    ///     The project edit is refused once the project has runs, so this is only ever reached while there is no
+    ///     history to unrank — which is why it bumps the item's revision and the set hash without resetting a cohort
+    ///     that cannot exist yet.
+    /// </remarks>
     private async Task SyncFirstItemPromptAsync(BenchmarkProject project, ReadOnlyMemory<byte> coreTaskJson, long now, CancellationToken cancellationToken)
     {
         if (project.CoreTaskJson.AsSpan().SequenceEqual(coreTaskJson.Span))
@@ -255,9 +254,12 @@ public sealed partial class BenchmarkStore
 
     /// <summary>
     ///     Recomputes the project's item-set hash over <paramref name="items" /> and, when it MOVED, bumps the project
-    ///     version and resets the rank cohort — the same reset a judge-policy activation performs, and for the same
-    ///     reason: the project score is a mean over the item set, so a different set is a different score.
+    ///     version and resets the rank cohort.
     /// </summary>
+    /// <remarks>
+    ///     The same reset a judge-policy activation performs, and for the same reason: the project score is a mean over
+    ///     the item set, so a different set is a different score.
+    /// </remarks>
     private async Task ApplyItemSetChangeAsync(BenchmarkProject project,
         IReadOnlyCollection<BenchmarkTaskItem> items,
         long now,
@@ -280,10 +282,12 @@ public sealed partial class BenchmarkStore
     }
 
     /// <summary>
-    ///     Refuses an item write while any of the project's work is queued or running. The ranking read's staleness
-    ///     exclusions are a safety net for history; this is the primary guard, and it is what keeps a run from being
-    ///     frozen against one revision of an item and judged against another.
+    ///     Refuses an item write while any of the project's work is queued or running.
     /// </summary>
+    /// <remarks>
+    ///     The ranking read's staleness exclusions are a safety net for history; this is the primary guard, and it is
+    ///     what keeps a run from being frozen against one revision of an item and judged against another.
+    /// </remarks>
     private async Task EnsureNoActiveProjectWorkAsync(Guid projectId, CancellationToken cancellationToken)
     {
         var active = await (from work in _dbContext.BenchmarkWorkItems.AsNoTracking()
@@ -333,10 +337,13 @@ public sealed partial class BenchmarkStore
     }
 
     /// <summary>
-    ///     An absent optional payload is NULL, never an empty blob. The two are indistinguishable to a reader once
-    ///     encrypted, and "this item has no reference answer" is a different fact from "its reference answer is empty"
-    ///     — the second one participates in the input hash and would make an untouched item look edited.
+    ///     An absent optional payload is NULL, never an empty blob.
     /// </summary>
+    /// <remarks>
+    ///     The two are indistinguishable to a reader once encrypted, and "this item has no reference answer" is a
+    ///     different fact from "its reference answer is empty" — the second participates in the input hash and would
+    ///     make an untouched item look edited.
+    /// </remarks>
     private static byte[]? OptionalPayload(ReadOnlyMemory<byte>? payload) =>
         payload is { IsEmpty: false } value ? value.ToArray() : null;
 

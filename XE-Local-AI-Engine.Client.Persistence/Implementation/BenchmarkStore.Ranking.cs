@@ -18,9 +18,8 @@ public sealed partial class BenchmarkStore
     /// </summary>
     private static BenchmarkRunRecord ToRecordWithJudge(BenchmarkRun run, IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views)
     {
-        // The write paths that project a run they have just touched compare it against nothing: item edits are refused
-        // while any of the project's work is Queued or Running, so a row a write just moved cannot be stale. The
-        // ranking read and the single-run read do the real comparison.
+        // The write paths that project a run they have just touched compare it against nothing: item edits are refused while any of the project's work is Queued or
+        // Running, so a row a write just moved cannot be stale. The ranking read and the single-run read do the real comparison.
         var (judge, qualityScore, qualityScoreSource, _) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
             run.UserScore,
             run.IsWarmup,
@@ -57,17 +56,16 @@ public sealed partial class BenchmarkStore
     }
 
     /// <summary>
-    ///     The project's ranking, computed once per request from flat columns only. Dense rank, descending, ties
-    ///     sharing a rank. Recompute per request rather than maintain a rollup: a project's run count stays small.
-    ///     <para>
-    ///         The unit that ranks is a CELL — one model, one KV type, one repeat of the whole task-item suite — and a
-    ///         cell is ranked only when every scorable item in it produced a rankable score. Partial credit is
-    ///         rejected: it would let a model that ran out of budget on the hardest item be scored on the easy ones
-    ///         only and outrank one that attempted everything, which is the same reason a truncated run is excluded
-    ///         outright rather than scored low. A single-item project has one run per cell and the numbers are
-    ///         identical to what they always were.
-    ///     </para>
+    ///     The project's ranking, computed once per request from flat columns only: dense rank, descending, ties
+    ///     sharing a rank.
     /// </summary>
+    /// <remarks>
+    ///     Recomputed per request rather than maintained as a rollup: a project's run count stays small. The unit that
+    ///     ranks is a CELL — one model, one KV type, one repeat of the whole task-item suite — and it ranks only when
+    ///     every scorable item in it produced a rankable score. Partial credit is rejected: it would let a model that
+    ///     ran out of budget on the hardest item outrank one that attempted everything, the same reason a truncated run
+    ///     is excluded outright rather than scored low. A single-item project has one run per cell.
+    /// </remarks>
     private async Task<BenchmarkProjectRanking> LoadRankingAsync(Guid projectId, CancellationToken cancellationToken)
     {
         var scored = await _dbContext.BenchmarkRuns.AsNoTracking()
@@ -139,10 +137,8 @@ public sealed partial class BenchmarkStore
             runs[run.Id] = new BenchmarkRunRanking { Judge = judge, QualityScore = qualityScore, Source = source, Rank = null, CellQuality = null };
         }
 
-        // Warm-ups are dropped BEFORE grouping. A warm-up sits at repeat index 0, so it forms a cell of its own that
-        // could only ever be complete if every leaf item also got a warm-up run — and it would then sit in the
-        // denominator forever. It is not a contender at cell granularity for exactly the reason it is not one at run
-        // granularity.
+        // Warm-ups are dropped BEFORE grouping: one sits at repeat index 0, so it forms a cell of its own that could only ever be complete if every leaf item also
+        // got a warm-up run, and would then sit in the denominator forever. Not a contender at cell granularity, for the reason it is not one at run granularity.
         var cells = new Dictionary<string, CellRanking>(StringComparer.Ordinal);
         foreach (var cell in scored.Where(static run => !run.IsWarmup).GroupBy(static run => run.CellKey, StringComparer.Ordinal))
         {
@@ -171,10 +167,8 @@ public sealed partial class BenchmarkStore
                 continue;
             }
 
-            // A project whose every leaf is excluded from the mean — a pure long-context probe, where recall is
-            // reported on its own axis — has nothing to rank, which is not the same as a cell missing an item. Saying
-            // "incomplete" here would send the operator looking for a question that was never asked; the runs still
-            // carry their own scores, and those are what the recall axis reads.
+            // A project whose every leaf is excluded from the mean — a pure long-context probe, where recall is reported on its own axis — has nothing to rank, which
+            // is not a cell missing an item: "incomplete" would send the operator hunting a question never asked. The runs keep their own scores for the recall axis.
             if (scorableItemIds.Count == 0)
             {
                 cells[cell.Key] = new CellRanking { Quality = null, Reason = BenchmarkRunJudgeStates.ReasonNoScore, Countable = false };
@@ -202,9 +196,8 @@ public sealed partial class BenchmarkStore
             };
         }
 
-        // Dense rank over CELLS: equal scores share a position and the next distinct score is the next integer, so
-        // "rank 2" is always "the second-best score in this project", however many cells tie above it. Every run of a
-        // cell reports its cell's rank and its cell's mean; its own quality score stays its own.
+        // Dense rank over CELLS: equal scores share a position and the next distinct score is the next integer, so "rank 2" is always "the second-best score in this
+        // project", however many cells tie above it. Every run of a cell reports its cell's rank and its cell's mean; its own quality score stays its own.
         var ordered = cells.Values.Where(static entry => entry.Quality is not null)
                            .Select(static entry => entry.Quality!.Value)
                            .Distinct()
@@ -251,28 +244,18 @@ public sealed partial class BenchmarkStore
     }
 
     /// <summary>
-    ///     The two RUN-level exclusions — the ones that come from the run itself rather than from its judging — plus the
-    ///     resulting quality score. Every path that hands back a run record routes through here, which is the whole
-    ///     point: when only the ranking applied them, the single-run read and every write-returning path reported the
-    ///     judge-derived <c>no-score</c> on a truncated run whose only problem was truncation.
-    ///     <para>
-    ///         Outermost first. A WARM-UP outranks even the operator override: it exists to absorb the first-launch
-    ///         cost the runs after it should not pay, so ranking it against them would rank the very thing it controls
-    ///         for. TRUNCATION and the SILENT-INCOMPLETE it sits beside come next — before every judge-derived reason,
-    ///         after the operator override: a run cut off at the token budget, and a run that finished cleanly without
-    ///         emitting an answer at all, are both real measurements of a non-answer, so their judge score stays visible
-    ///         but never ranks, while an operator who scored one anyway still wins. Both are read off the persisted stop
-    ///         reason, never inferred from the status.
-    ///     </para>
+    ///     The two RUN-level exclusions — those that come from the run itself rather than from its judging — plus the resulting quality score.
     /// </summary>
-    /// <param name="Rankable">
-    ///     Whether a score on this run could ever rank it. Returned rather than re-derived by the caller so the
-    ///     ranking's denominator cannot drift from the exclusions themselves.
-    /// </param>
+    /// <remarks>
+    ///     Every path that hands back a run record routes through here, so the single-run read and the write-returning paths cannot report a judge-derived
+    ///     <c>no-score</c> on a run whose only problem is truncation. Outermost first: a WARM-UP outranks even the operator override, since ranking it would rank
+    ///     the first-launch cost it controls for. TRUNCATION and the SILENT-INCOMPLETE beside it follow, before every judge-derived reason and after the override —
+    ///     their score stays visible but never ranks, read off the persisted stop reason, not the status.
+    /// </remarks>
+    /// <param name="Rankable">Whether a score could ever rank this run, returned rather than re-derived so the ranking's denominator cannot drift.</param>
     /// <param name="pairwise">
-    ///     This run's place in the project's active pairwise fit, or <see langword="null" /> when the project judges
-    ///     pointwise. In pairwise mode the run's rank exclusion is entirely a property of the fit — there is no judge
-    ///     attempt behind a pairwise score to derive one from.
+    ///     This run's place in the project's active pairwise fit, or <see langword="null" /> when judging is pointwise;
+    ///     there no judge attempt exists and the fit alone decides the exclusion.
     /// </param>
     private static (BenchmarkRunJudgeView Judge, int? QualityScore, string Source, bool Rankable) ApplyRunExclusions(BenchmarkRunJudgeView judge,
         int? userScore,
@@ -281,10 +264,8 @@ public sealed partial class BenchmarkStore
         BenchmarkRunIdentity identity,
         PairwiseRunView? pairwise = null)
     {
-        // The stale stamps sit ABOVE the operator override, and truncation still sits below it. An operator who read a
-        // truncated answer and scored it anyway has overruled the machine about a fact they could see; an operator who
-        // scored an answer to a question that has since been edited, or to one item of a suite whose membership has
-        // since changed, has not — they had no way to know either moved.
+        // The stale stamps sit ABOVE the operator override, truncation still below it: an operator who read a truncated answer and scored it anyway has overruled
+        // the machine about a fact they could see, while one who scored an answer to a since-edited question, or to an item of a since-changed suite, could not.
         var revised = identity.Revised;
         var setRevised = identity.SetRevised;
         var stale = revised || setRevised;
@@ -328,15 +309,14 @@ public sealed partial class BenchmarkStore
     /// <summary>
     ///     What a run was asked, against what the project asks now. Both sides are plaintext, so the ranking read still
     ///     never decrypts anything.
-    ///     <para>
-    ///         The two axes fail differently and neither implies the other. <see cref="TaskInputHash" /> answers
-    ///         "was this run's own question edited"; every run of an untouched item passes it.
-    ///         <see cref="TaskItemSetHash" /> answers "was this cell measured against the suite the project now
-    ///         claims" — and the deletion case is the one nothing else catches: delete the item a cell never answered
-    ///         and its two surviving runs keep matching their own item hashes, satisfy every per-item check, and now
-    ///         constitute a COMPLETE two-item cell whose mean is over a suite the model was never scored on.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The two axes fail differently and neither implies the other. <see cref="TaskInputHash" /> answers "was this
+    ///     run's own question edited"; every run of an untouched item passes it. <see cref="TaskItemSetHash" /> answers
+    ///     "was this cell measured against the suite the project now claims", and catches the deletion case nothing
+    ///     else does: delete the item a cell never answered and its surviving runs still match their own item hashes,
+    ///     now forming a COMPLETE cell whose mean is over a suite the model was never scored on.
+    /// </remarks>
     private sealed record BenchmarkRunIdentity
     {
         public required string? TaskInputHash { get; init; }
@@ -386,10 +366,12 @@ public sealed partial class BenchmarkStore
             : run;
 
     /// <summary>
-    ///     The run's ranking value: the operator's override when set, otherwise the judge score — but only while that
-    ///     judging is in the project's current cohort. A score from an outdated policy or a different judge runtime is
-    ///     still shown, it just does not rank.
+    ///     The run's ranking value: the operator's override when set, otherwise the judge score, but only while that
+    ///     judging is in the project's current cohort.
     /// </summary>
+    /// <remarks>
+    ///     A score from an outdated policy or a different judge runtime is still shown, it just does not rank.
+    /// </remarks>
     private static (int? QualityScore, string Source) ComputeQuality(int? userScore, BenchmarkRunJudgeView judge, PairwiseRunView? pairwise = null)
     {
         if (userScore is { } operatorScore)
@@ -397,9 +379,8 @@ public sealed partial class BenchmarkStore
             return (operatorScore, BenchmarkQualityScoreSources.User);
         }
 
-        // Pairwise mode ranks through the cohort's active fit and NEVER through a judge attempt: there are no
-        // pointwise attempts in such a cohort, and a leftover one from a previous revision is exactly what the fit
-        // scope exists to keep out of the ranking.
+        // Pairwise mode ranks through the cohort's active fit and NEVER through a judge attempt: there are no pointwise attempts in such a cohort, and a leftover
+        // one from a previous revision is exactly what the fit scope exists to keep out of the ranking.
         if (pairwise is not null)
         {
             return pairwise.Score is { } fitted ? (fitted, BenchmarkQualityScoreSources.Pairwise) : (null, BenchmarkQualityScoreSources.None);
@@ -431,19 +412,14 @@ public sealed partial class BenchmarkStore
 
     /// <summary>
     ///     The project's pairwise ranking input, or <see langword="null" /> when it does not judge pairwise.
-    ///     <para>
-    ///         Whether a project judges pairwise is read off the revision's <c>ComparisonSetVersion</c>: it is bumped
-    ///         by the first comparison this revision ever enqueues and never returns to zero, and switching modes
-    ///         changes the policy hash, which mints a different revision starting again at zero. That keeps the mode
-    ///         question on a row the ranking already loads instead of decrypting a policy blob per page fetch.
-    ///     </para>
-    ///     <para>
-    ///         Staleness is the fit's stored <c>ComparisonSetVersion</c> against the revision's current one, plus the
-    ///         promoted execution key. No comparison row is read: the other inputs to the fit key — the policy hash and
-    ///         both pairwise versions — cannot move without minting a revision, which changes the scope this lookup
-    ///         runs in.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Whether a project judges pairwise is read off the revision's <c>ComparisonSetVersion</c>: the first comparison
+    ///     a revision enqueues bumps it, it never returns to zero, and a mode switch changes the policy hash, minting a
+    ///     revision that starts at zero — so the mode question stays on a row the ranking already loads instead of
+    ///     decrypting a policy blob per fetch. Staleness is the fit's stored version against the revision's current one
+    ///     plus the promoted execution key; no comparison row is read, as the fit key's other inputs mint a revision.
+    /// </remarks>
     private async Task<PairwiseRanking?> LoadPairwiseRankingAsync(BenchmarkJudgePolicyRevisionRecord? current, CancellationToken cancellationToken)
     {
         if (current is null || current.ComparisonSetVersion == 0)
@@ -593,10 +569,13 @@ public sealed partial class BenchmarkStore
     }
 
     /// <summary>
-    ///     Rank membership is decided at read time: an operator score always ranks; a judge score ranks only
-    ///     under the project's current policy revision, in that revision's live cohort generation, with the execution
-    ///     key the cohort was claimed with. Anything else is honestly unranked, with a reason the UI can act on.
+    ///     Rank membership is decided at read time: an operator score always ranks, a judge score only under the
+    ///     project's current policy revision.
     /// </summary>
+    /// <remarks>
+    ///     A judge score must also sit in that revision's live cohort generation, with the execution key the cohort was
+    ///     claimed with. Anything else is honestly unranked, with a reason the UI can act on.
+    /// </remarks>
     private static BenchmarkRunJudgeView BuildJudgeView(JudgeViewRow row)
     {
         var state = row.Status switch
@@ -638,10 +617,8 @@ public sealed partial class BenchmarkStore
         return row.Status switch
         {
             BenchmarkJudgeAttemptStatus.Queued or BenchmarkJudgeAttemptStatus.Running => BenchmarkRunJudgeStates.ReasonJudgePending,
-            // A judging that failed because a verifier could not RUN is not the same fact as one whose judge model
-            // failed: the run is unranked either way, but only one of them is fixed by an operator action on the node.
-            // Nor is one refused because the item's override named a criterion the rubric does not have — that one is
-            // fixed by editing the item or the rubric.
+            // A judging that failed because a verifier could not RUN is not the same fact as one whose judge model failed: unranked either way, but only one is fixed
+            // by an operator action on the node. Nor is one refused because the item's override named a criterion the rubric lacks — that is fixed by editing either.
             BenchmarkJudgeAttemptStatus.Failed => FailedReason(row.ErrorMessage),
             BenchmarkJudgeAttemptStatus.Cancelled => BenchmarkRunJudgeStates.ReasonJudgeCancelled,
             _ when row.Score is null => BenchmarkRunJudgeStates.ReasonNoScore,
@@ -701,7 +678,9 @@ public sealed partial class BenchmarkStore
 
     /// <summary>
     ///     Applies a project write's judge half to the tracked project: null policy disables, an unchanged hash is a
-    ///     no-op, anything else get-or-creates the revision, resets its cohort and repoints the project. Returns the
-    ///     revision the project ends up on, or <see langword="null" /> when judging was turned off.
+    ///     no-op, anything else get-or-creates the revision, resets its cohort and repoints the project.
     /// </summary>
+    /// <returns>
+    ///     The revision the project ends up on, or <see langword="null" /> when judging was turned off.
+    /// </returns>
 }

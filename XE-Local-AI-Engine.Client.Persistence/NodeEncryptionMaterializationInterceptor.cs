@@ -53,9 +53,8 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 skill.GenerationMetadataJson = DecryptIfPresent(skill.GenerationMetadataJson, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "generation_metadata_json");
                 break;
             case AgentSkillResource resource:
-                // Skill id in the conversation slot and the resource name in the column name — see the matching block in
-                // NodeEncryptionSaveChangesInterceptor. A row re-parented onto another skill, or renamed underneath its
-                // ciphertext, fails the tag check here rather than reaching a model as that skill's content.
+                // Skill id in the conversation slot, resource name in the column name — the matching block is in NodeEncryptionSaveChangesInterceptor. A row
+                // re-parented onto another skill, or renamed underneath its ciphertext, fails the tag check rather than reaching a model as that skill's content.
                 resource.Content = NodePayloadProtector.Decrypt(resource.Content, context.NodeEncryptionKey.Span, resource.SkillId, resource.Id,
                     AgentSkillResource.ContentColumnName(resource.Name));
                 break;

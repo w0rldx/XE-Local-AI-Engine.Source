@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Worker-side projection of a persisted <c>ModelClassification</c> row. Carries the raw stored fields; the
-///     application-layer classification service computes the effective kind (<c>override ?? detected ?? Unknown</c>)
-///     — it is intentionally not precomputed here.
+///     Worker-side projection of a persisted <c>ModelClassification</c> row, carrying the raw stored fields.
 /// </summary>
+/// <remarks>
+///     The application-layer classification service computes the effective kind
+///     (<c>override ?? detected ?? Unknown</c>); it is intentionally not precomputed here.
+/// </remarks>
 public sealed record ModelClassificationRecord
 {
     public required string ModelName { get; init; }

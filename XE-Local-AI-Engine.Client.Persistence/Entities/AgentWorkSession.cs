@@ -14,10 +14,12 @@ internal sealed class AgentWorkSession
     public Guid? LastCheckpointId { get; set; }
 
     /// <summary>
-    ///     The session's single monotonic change watermark. Every child insert and every task/artifact mutation takes a
-    ///     fresh value from here inside the transaction that owns the session row, so one number answers "what changed
-    ///     since?" across all five child tables.
+    ///     The session's single monotonic change watermark.
     /// </summary>
+    /// <remarks>
+    ///     Every child insert and every task/artifact mutation takes a fresh value from here inside the transaction
+    ///     that owns the session row, so one number answers "what changed since?" across all five child tables.
+    /// </remarks>
     public long LastSequence { get; set; }
 
     public int ConfigVersion { get; set; }

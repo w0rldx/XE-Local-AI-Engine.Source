@@ -25,11 +25,14 @@ public sealed record BenchmarkJudgeAttemptSeed
     public BenchmarkRunLaunchIntent? LaunchIntent { get; init; }
 
     /// <summary>
-    ///     Whether a cohort-wide reset inserts one POINTWISE attempt per eligible run. False for a pairwise policy, whose
-    ///     cohort is judged by comparisons the planner enqueues instead: a pairwise cohort carrying pointwise attempts
-    ///     judges every run a second way and ranks off whichever source answered. The seed is still supplied, because
-    ///     <see cref="ExpectedJudgePolicyRevisionId" /> is what pins the revision the caller resolved against.
+    ///     Whether a cohort-wide reset inserts one POINTWISE attempt per eligible run.
     /// </summary>
+    /// <remarks>
+    ///     False for a pairwise policy, whose cohort is judged by comparisons the planner enqueues instead: a pairwise
+    ///     cohort carrying pointwise attempts judges every run a second way and ranks off whichever source answered.
+    ///     The seed is still supplied, because <see cref="ExpectedJudgePolicyRevisionId" /> pins the revision the
+    ///     caller resolved against.
+    /// </remarks>
     public bool SeedPointwiseAttempts { get; init; } = true;
 }
 
@@ -191,33 +194,36 @@ public static class BenchmarkPrimaryStopReasons
 
     /// <summary>
     ///     Generation ran out of budget while still inside its reasoning: <see cref="Length" />, and not one visible
-    ///     answer token was emitted. Truncated for every consumer (<see cref="IsTruncated" /> covers it), but it names
-    ///     the reasoning budget as the thing to raise rather than the output budget, which is the whole difference
-    ///     between a run an operator can fix and one they cannot explain.
+    ///     answer token was emitted.
     /// </summary>
+    /// <remarks>
+    ///     Truncated for every consumer (<see cref="IsTruncated" /> covers it), but it names the reasoning budget as
+    ///     the thing to raise rather than the output budget, which is the whole difference between a run an operator
+    ///     can fix and one they cannot explain.
+    /// </remarks>
     public const string ReasoningLength = "reasoning-length";
 
     /// <summary>
     ///     The invocation ended cleanly but produced no answer: the turn stopped on an unanswered tool call, or every
-    ///     token it emitted was reasoning. Node-derived, not a provider token — llama-server reports <c>stop</c> or
-    ///     <c>tool_calls</c> for both shapes, which read as a finished answer everywhere downstream and let a run that
-    ///     answered NOTHING be judged and ranked against runs that did.
+    ///     token it emitted was reasoning.
     /// </summary>
+    /// <remarks>
+    ///     Node-derived, not a provider token — llama-server reports <c>stop</c> or <c>tool_calls</c> for both shapes,
+    ///     which read as a finished answer everywhere downstream and would let a run that answered NOTHING be judged
+    ///     and ranked against runs that did.
+    /// </remarks>
     public const string Incomplete = "incomplete";
 
     /// <summary>
-    ///     Whether the primary generation stopped because it ran out of budget. <see cref="Length" /> is the
-    ///     OpenAI-compatible token for BOTH causes llama-server reports it for — <c>n_predict</c> exhausted and the
-    ///     context window full (<c>stopped_limit</c>) — and both mean the same thing here: the answer is cut off.
-    ///     <see cref="ReasoningLength" /> is the node's narrowing of the same fact and is therefore also truncated;
-    ///     splitting them here would exclude one and rank the other.
-    ///     <para>
-    ///         One implementation on purpose. Ranking (<c>BenchmarkStore.ApplyRunExclusions</c>) and judging
-    ///         (<c>BenchmarkJudgeExecutor</c>) live in different assemblies and used to hold byte-identical private
-    ///         copies; a second truncation token added to only one of them would make ranking exclude a run the judge
-    ///         was never told was cut off.
-    ///     </para>
+    ///     Whether the primary generation stopped because it ran out of budget.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="Length" /> is the OpenAI-compatible token for BOTH causes llama-server reports it for —
+    ///     <c>n_predict</c> exhausted and the context window full (<c>stopped_limit</c>) — and both mean the answer is
+    ///     cut off; <see cref="ReasoningLength" /> narrows the same fact and is therefore also truncated. ONE
+    ///     implementation on purpose: ranking (<c>BenchmarkStore.ApplyRunExclusions</c>) and judging
+    ///     (<c>BenchmarkJudgeExecutor</c>) are in different assemblies, and a token added to only one would make ranking exclude a run the judge was never told was cut off.
+    /// </remarks>
     public static bool IsTruncated(string? primaryStopReason) =>
         string.Equals(primaryStopReason, Length, StringComparison.OrdinalIgnoreCase)
         || string.Equals(primaryStopReason, ReasoningLength, StringComparison.OrdinalIgnoreCase);
@@ -255,24 +261,31 @@ public static class BenchmarkRunJudgeStates
 
     /// <summary>
     ///     The primary generation was cut off by the token budget or the context ceiling (<c>finish_reason=length</c>).
+    /// </summary>
+    /// <remarks>
     ///     The measurement is still a real one — the run stays <c>Succeeded</c> — but an incomplete answer must not be
     ///     ranked against complete ones, whatever the judge scored it. An operator score still overrides.
-    /// </summary>
+    /// </remarks>
     public const string ReasonTruncated = "truncated";
 
     /// <summary>
     ///     The primary generation finished cleanly but produced no answer at all — it stopped on an unanswered tool
-    ///     call, or emitted only reasoning. Excluded for the same reason as <see cref="ReasonTruncated" /> and with the
-    ///     same operator override: there is nothing for a rubric to grade, so whatever a judge scored it cannot rank
-    ///     against runs that answered.
+    ///     call, or emitted only reasoning.
     /// </summary>
+    /// <remarks>
+    ///     Excluded for the same reason as <see cref="ReasonTruncated" /> and with the same operator override: there
+    ///     is nothing for a rubric to grade, so whatever a judge scored it cannot rank against runs that answered.
+    /// </remarks>
     public const string ReasonIncomplete = "incomplete";
 
     /// <summary>
-    ///     A warm-up run. It is a real measurement, kept and shown, but it is exactly the first-launch cost the repeats
-    ///     after it were meant NOT to pay — ranking it against them would rank the thing being controlled for. Unlike
-    ///     every other reason here, an operator score does not override it: a warm-up is not a contender.
+    ///     A warm-up run: a real measurement, kept and shown, but exactly the first-launch cost the repeats after it
+    ///     were meant NOT to pay.
     /// </summary>
+    /// <remarks>
+    ///     Ranking it against them would rank the thing being controlled for. Unlike every other reason here, an
+    ///     operator score does not override it: a warm-up is not a contender.
+    /// </remarks>
     public const string ReasonWarmup = "warmup";
 
     /// <summary>Pairwise mode, comparisons of this cohort still outstanding. Waiting is all it needs.</summary>
@@ -300,10 +313,12 @@ public static class BenchmarkRunJudgeStates
     public const string ReasonPairwiseCrossCase = "pairwise-cross-case";
 
     /// <summary>
-    ///     A comparison in the fitted set was judged by a runtime other than the one the cohort was claimed with. The
-    ///     whole fit is refused rather than fitted over the matching subset: dropping comparisons changes the graph and
-    ///     can disconnect it, publishing a number over a set the operator never chose. Re-judging heals it.
+    ///     A comparison in the fitted set was judged by a runtime other than the one the cohort was claimed with.
     /// </summary>
+    /// <remarks>
+    ///     The whole fit is refused rather than fitted over the matching subset: dropping comparisons changes the
+    ///     graph and can disconnect it, publishing a number over a set the operator never chose. Re-judging heals it.
+    /// </remarks>
     public const string ReasonPairwiseExecutionMismatch = "pairwise-execution-mismatch";
 
     /// <summary>Nothing has promoted a reference execution key yet, so no fit can be shown to belong to a cohort.</summary>

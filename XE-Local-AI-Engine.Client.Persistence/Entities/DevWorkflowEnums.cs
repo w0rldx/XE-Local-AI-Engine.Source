@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Where a work item stands. Written by the workflow runtime inside the transaction that transitions a run, never by
-///     a client: a run start makes the item <c>Active</c>, a run waiting on a human makes it <c>Blocked</c>, and a
-///     <em>failed</em> run also maps to <c>Blocked</c> — a failed run needs attention, it is not done.
+///     Where a work item stands. Written by the workflow runtime inside the transaction that transitions a run, never
+///     by a client.
 /// </summary>
+/// <remarks>
+///     A run start makes the item <c>Active</c>, a run waiting on a human makes it <c>Blocked</c>, and a
+///     <em>failed</em> run also maps to <c>Blocked</c> — a failed run needs attention, it is not done.
+/// </remarks>
 public enum DevWorkflowWorkItemStatus
 {
     Draft,
@@ -22,10 +25,13 @@ public enum DevWorkflowDefinitionSource
 
 /// <summary>
 ///     A run's lifecycle. There is deliberately no <c>Interrupted</c>: runs auto-resume after a host restart and only
-///     node-runs reconcile. <c>Pausing</c> and <c>Cancelling</c> exist because every runtime command is
-///     fire-and-forget — the endpoint commits an intent and returns, so the UI has to be able to say "cancelling"
-///     rather than claim a cancellation that has not landed.
+///     node-runs reconcile.
 /// </summary>
+/// <remarks>
+///     <c>Pausing</c> and <c>Cancelling</c> exist because every runtime command is fire-and-forget — the endpoint
+///     commits an intent and returns, so the UI has to be able to say "cancelling" rather than claim a cancellation
+///     that has not landed.
+/// </remarks>
 public enum DevWorkflowRunStatus
 {
     Pending,
@@ -40,10 +46,12 @@ public enum DevWorkflowRunStatus
 }
 
 /// <summary>
-///     A node-run's lifecycle. <c>Queued</c> and <c>Running</c> are separate states on purpose: the node has one agent
-///     slot, so a node-run admitted to the queue is not yet executing and the UI must not draw it as if it were.
-///     <c>Skipped</c> covers both a gate's not-taken branch and a human <c>Skip</c> intervention.
+///     A node-run's lifecycle. <c>Queued</c> and <c>Running</c> are separate states on purpose.
 /// </summary>
+/// <remarks>
+///     The node has one agent slot, so a node-run admitted to the queue is not yet executing and the UI must not draw
+///     it as if it were. <c>Skipped</c> covers both a gate's not-taken branch and a human <c>Skip</c> intervention.
+/// </remarks>
 public enum DevWorkflowNodeRunStatus
 {
     Pending,
@@ -88,9 +96,11 @@ public enum DevWorkflowArtifactKind
 
 /// <summary>
 ///     One enum for both halves of the same human act: a gate decision (<c>Approve</c>, <c>Reject</c>,
-///     <c>RequestChanges</c>) and a retries-exhausted intervention (<c>Retry</c>, <c>Skip</c>, <c>Abandon</c>). They
-///     share a table and an endpoint because they are the same thing — a human unblocking a node-run.
+///     <c>RequestChanges</c>) and a retries-exhausted intervention (<c>Retry</c>, <c>Skip</c>, <c>Abandon</c>).
 /// </summary>
+/// <remarks>
+///     They share a table and an endpoint because they are the same thing — a human unblocking a node-run.
+/// </remarks>
 public enum DevWorkflowDecisionKind
 {
     Approve,

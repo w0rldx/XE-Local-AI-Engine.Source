@@ -61,9 +61,8 @@ public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
             Id = Guid.NewGuid(),
             RecordKind = (int)AgentExecutionLogRecordKind.ApprovalDecision,
             SchemaVersion = 0,
-            // Approval-decision rows are NOT per-agent telemetry: bind to Guid.Empty so they share one retention bucket
-            // and never surface in the per-agent diagnostics view (which filters kind 0) or the run-envelope ledger
-            // (which filters kind 1). Metadata only — every value below is a non-sensitive category label or id.
+            // Approval-decision rows are NOT per-agent telemetry: bind to Guid.Empty so they share one retention bucket and never surface in the per-agent
+            // diagnostics view (kind 0) or the run-envelope ledger (kind 1). Metadata only — every value below is a non-sensitive category label or id.
             AgentDefinitionId = Guid.Empty,
             InvocationId = input.InvocationId,
             // Reuse existing columns without a schema change: tool name → model_name, tool risk category → config_hash,
@@ -90,11 +89,13 @@ public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
     }
 
     /// <summary>
-    ///     The kind-3 row's whole shape, in one place. <see cref="IntegrationExecutionStore.TryTerminalizeAsync" />
-    ///     builds it too — it adds the row to the SAME <c>SaveChanges</c> as the terminal status and the terminal
-    ///     event, so a required audit row cannot be lost to a database failure after a committed terminal — and two
-    ///     copies of this mapping would drift the moment either column moved.
+    ///     The kind-3 row's whole shape, in one place.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="IntegrationExecutionStore.TryTerminalizeAsync" /> builds it too, adding the row to the SAME
+    ///     <c>SaveChanges</c> as the terminal status and the terminal event so a required audit row cannot be lost to a
+    ///     database failure after a committed terminal; two copies of this mapping would drift the moment a column moved.
+    /// </remarks>
     internal static AgentExecutionLog BuildIntegrationInvocation(IntegrationInvocationAuditInput input, long createdAtUtc)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -104,14 +105,11 @@ public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
             Id = Guid.NewGuid(),
             RecordKind = (int)AgentExecutionLogRecordKind.IntegrationInvocation,
             SchemaVersion = 0,
-            // Same reason kind 2 binds Guid.Empty: an integration invocation is not per-agent telemetry, so it shares
-            // one retention bucket and never surfaces in the per-agent diagnostics view (kind 0) or the run-envelope
-            // ledger (kind 1).
+            // Same reason kind 2 binds Guid.Empty: an integration invocation is not per-agent telemetry, so it shares one retention bucket and never surfaces in
+            // the per-agent diagnostics view (kind 0) or the run-envelope ledger (kind 1).
             AgentDefinitionId = Guid.Empty,
-            // ConversationId stays null even though every execution owns a conversation. ConversationFootprintPurge
-            // deletes execution logs by conversation_id, so a null keeps a conversation purge from reaching the audit
-            // row; these age out with the execution-log retention sweep instead. Every value on the row is a trigger
-            // name, a key prefix, an id or a status, so nothing content-bearing survives that choice.
+            // ConversationId stays null even though every execution owns a conversation: ConversationFootprintPurge deletes execution logs by conversation_id, so a
+            // null keeps a purge off the audit row, which ages out with the retention sweep instead. Every value on it is a name, key prefix, id or status.
             ConversationId = null,
             InvocationId = input.InvocationId,
             RequestId = input.RequestId,
@@ -185,12 +183,8 @@ public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
         long? toEpochMsExclusive,
         CancellationToken cancellationToken = default)
     {
-        // Aggregate over the run-envelope ledger only (kind 1): those rows carry the full token set (prompt / completion
-        // / reasoning / total). Memory-diagnostics rows (kind 0) are a separate producer with no reasoning/total and are
-        // excluded. The group key is (model name, provider, UTC day). The day bucket is an integer division of the
-        // unix-ms timestamp — SQLite translates it to a GROUP BY expression, so the whole aggregation runs set-based
-        // server-side with no client-side materialization of individual rows. The per-provider rollup and grand totals
-        // are folded from these buckets by the caller (the mapper), so no second query is issued.
+        // Aggregate over the run-envelope ledger only (kind 1), whose rows carry the full token set; kind-0 memory-diagnostics rows have no reasoning or total and
+        // are excluded. Grouped by (model name, provider, UTC day), the day an integer division SQLite turns into a GROUP BY, so the whole aggregation is set-based.
         var query = _dbContext.AgentExecutionLogs
                               .AsNoTracking()
                               .Where(log => log.RecordKind == ChatRunEnvelopeKind);
@@ -250,10 +244,8 @@ public sealed class AgentExecutionLogStore : IAgentExecutionLogStore
             return 0;
         }
 
-        // Set-based per-agent cap: a row is over the cap when at least maxPerAgent strictly-newer rows exist for the same
-        // agent (ranked by CreatedAtUtc, newest kept). Counting newer rows lets the rank filter run as a single
-        // ExecuteDeleteAsync without client-side materialization. Ties on CreatedAtUtc are kept together (never split by a
-        // Guid comparison, which SQLite cannot translate) — at unix-ms granularity retention exactness on a tie is moot.
+        // Set-based per-agent cap: a row is over the cap when at least maxPerAgent strictly-newer rows exist for the same agent (ranked by CreatedAtUtc, newest kept),
+        // which lets the rank filter run as one ExecuteDeleteAsync. Ties are kept together — SQLite cannot translate a Guid comparison, and at unix-ms they are moot.
         return await _dbContext.AgentExecutionLogs
                                .Where(log => _dbContext.AgentExecutionLogs.Count(newer =>
                                                  newer.AgentDefinitionId == log.AgentDefinitionId

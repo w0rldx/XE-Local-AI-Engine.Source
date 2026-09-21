@@ -54,9 +54,8 @@ public sealed partial class BenchmarkStore
             comparison.AnswerATruncated = success.AnswerATruncated;
             comparison.AnswerBTruncated = success.AnswerBTruncated;
 
-            // The cohort is claimed by the first SUCCESS of the live generation, exactly as a pointwise attempt claims
-            // it — and it MUST be claimed here, because a pairwise cohort has no judge attempts to claim it instead:
-            // an unclaimed reference key refuses every fit over the cohort as execution-identity-incomplete.
+            // The cohort is claimed by the first SUCCESS of the live generation, exactly as a pointwise attempt claims it — and it MUST be claimed here, because a
+            // pairwise cohort has no judge attempts to claim it instead: an unclaimed reference key refuses every fit over the cohort as execution-identity-incomplete.
             if (comparison.JudgeExecutionKey is { Length: > 0 } executionKey)
             {
                 _ = await TryPromoteReferenceExecutionKeyAsync(comparison.PolicyRevisionId, comparison.CohortGeneration, executionKey, cancellationToken);
@@ -162,9 +161,8 @@ public sealed partial class BenchmarkStore
                                        })
                                        .ToArrayAsync(cancellationToken);
 
-        // A slot is taken while it holds a live-or-succeeded comparison. A terminal FAILED one leaves it free, which
-        // is the whole reason the live-slot uniqueness index is filtered on status: a cancelled comparison must be
-        // re-enqueueable at the next attempt sequence, or its cohort never completes and never publishes a score.
+        // A slot is taken while it holds a live-or-succeeded comparison; a terminal FAILED one leaves it free, which is the whole reason the live-slot uniqueness
+        // index is filtered on status: a cancelled comparison must be re-enqueueable at the next attempt sequence, or its cohort never completes and never scores.
         var taken = existing.Where(static entry => entry.Status is BenchmarkJudgeAttemptStatus.Queued
                                 or BenchmarkJudgeAttemptStatus.Running
                                 or BenchmarkJudgeAttemptStatus.Succeeded)

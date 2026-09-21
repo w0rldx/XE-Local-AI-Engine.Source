@@ -3,12 +3,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Node-scoped persistence for scheduled job run history. <c>DetailsJson</c> is encrypted at rest by the node
-///     encryption interceptors; reads return it decrypted on the <see cref="ScheduledJobRunRecord" />. Runs intentionally
-///     have no enforced FK to their definition so history outlives the definition; their events cascade. This store owns
-///     id/timestamp stamping, idempotent fire-instance upsert, lifecycle transitions, startup reconciliation, and the
-///     retention sweep.
+///     Node-scoped persistence for scheduled job run history.
 /// </summary>
+/// <remarks>
+///     <c>DetailsJson</c> is encrypted at rest by the node encryption interceptors; reads return it decrypted on the
+///     <see cref="ScheduledJobRunRecord" />. Runs intentionally have no enforced FK to their definition so history
+///     outlives the definition, while their events cascade. This store owns id and timestamp stamping, the idempotent
+///     fire-instance upsert, lifecycle transitions, startup reconciliation and the retention sweep.
+/// </remarks>
 public interface IScheduledJobRunStore
 {
     /// <summary>
@@ -59,10 +61,13 @@ public interface IScheduledJobRunStore
 
     /// <summary>
     ///     Stamps <c>CancellationRequestedAtUtc</c> on the run with <paramref name="id" /> without changing its
-    ///     <c>Status</c> (the run stays active until its handler observes the cancellation and the dispatcher records a
-    ///     terminal state). Returns the updated record, or <c>null</c> when no run has that id. Idempotent: re-stamping
-    ///     simply overwrites the timestamp.
+    ///     <c>Status</c>.
     /// </summary>
+    /// <remarks>
+    ///     The run stays active until its handler observes the cancellation and the dispatcher records a terminal
+    ///     state. Idempotent: re-stamping simply overwrites the timestamp.
+    /// </remarks>
+    /// <returns>The updated record, or <c>null</c> when no run has that id.</returns>
     Task<ScheduledJobRunRecord?> RequestCancellationAsync(Guid id, long requestedAtUtc, CancellationToken cancellationToken = default);
 
     /// <summary>

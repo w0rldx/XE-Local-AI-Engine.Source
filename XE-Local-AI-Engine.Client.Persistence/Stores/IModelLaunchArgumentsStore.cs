@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for the per-model extra <c>llama-server</c> argument override. Keyed by model name
-///     (case-insensitive). Not encrypted — llama.cpp flags are not secrets. The store persists the raw operator string
-///     verbatim and performs no tokenizing or flag validation; the caller (the settings endpoint on write, the spawn-path
-///     resolver on read) owns parsing and stripping the reserved process-contract flags.
+///     Node-scoped persistence for the per-model extra <c>llama-server</c> argument override, keyed by model name
+///     (case-insensitive).
 /// </summary>
+/// <remarks>
+///     Not encrypted — llama.cpp flags are not secrets. The store persists the raw operator string verbatim and
+///     performs no tokenizing or flag validation; the caller — the settings endpoint on write, the spawn-path resolver
+///     on read — owns parsing and stripping the reserved process-contract flags.
+/// </remarks>
 public interface IModelLaunchArgumentsStore
 {
     /// <summary>

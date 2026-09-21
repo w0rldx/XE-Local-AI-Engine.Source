@@ -116,9 +116,8 @@ public sealed class AgentDefinitionStore : IAgentDefinitionStore
         var allowedSkillIdsJson = SerializeSkillIds(input.AllowedSkillIds);
         var toolApprovalsJson = SerializeApprovals(input.ToolApprovals);
 
-        // AllowedToolNames stays order-sensitive (order feeds the offer list and thus the config hash), but
-        // ToolApprovals only reach the config hash via each tool's RequiresApproval in offer order, so a pure key
-        // reorder must NOT count as a config change. Compare a key-sorted canonical projection on both sides.
+        // AllowedToolNames stays order-sensitive (order feeds the offer list and thus the config hash), but ToolApprovals only reach the hash via each tool's
+        // RequiresApproval in offer order, so a pure key reorder must NOT count as a config change. Compare a key-sorted canonical projection on both sides.
         var approvalsChanged = !string.Equals(CanonicalizeApprovals(DeserializeApprovals(entity.ToolApprovalsJson)),
             CanonicalizeApprovals(input.ToolApprovals),
             StringComparison.Ordinal);
@@ -159,9 +158,8 @@ public sealed class AgentDefinitionStore : IAgentDefinitionStore
         // MemoryExtractionEnabled gates post-run extraction only (retrieval/injection stays gated on PlaybookEnabled),
         // so like PlaybookEnabled it is excluded from configChanged and never bumps Version.
         entity.MemoryExtractionEnabled = input.MemoryExtractionEnabled;
-        // Set-if-present: the AI provenance block only travels with a save that came out of the assist dialog, so an
-        // ordinary edit omitting it must leave the stored record intact rather than clear it. Not config-affecting —
-        // deliberately absent from configChanged above, so it never bumps Version.
+        // Set-if-present: the AI provenance block only travels with a save that came out of the assist dialog, so an ordinary edit omitting it must leave the stored
+        // record intact rather than clear it. Not config-affecting — deliberately absent from configChanged above, so it never bumps Version.
         entity.GenerationMetadataJson = EncodeOptional(input.GenerationMetadataJson) ?? entity.GenerationMetadataJson;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 

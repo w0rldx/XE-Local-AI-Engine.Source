@@ -38,8 +38,7 @@ internal sealed class BenchmarkPairwiseFitConfiguration : IEntityTypeConfigurati
             entity.IsActive
         }).HasDatabaseName("ix_benchmark_pairwise_fits_project");
 
-        // ux_benchmark_pairwise_fits_active is DELIBERATELY absent here — see the note in
-        // BenchmarkJudgeComparisonConfiguration. It indexes COALESCE(task_case_id, x'00') and is raw SQL in the
-        // migration; declaring it here would emit a bare-column index that lets two active fits coexist.
+        // ux_benchmark_pairwise_fits_active is DELIBERATELY absent here — see the note in BenchmarkJudgeComparisonConfiguration. It indexes
+        // COALESCE(task_case_id, x'00') and is raw SQL in the migration; declaring it here would emit a bare-column index that lets two active fits coexist.
     }
 }

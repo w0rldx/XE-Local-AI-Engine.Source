@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Metadata for one generated image blob. The image bytes themselves live encrypted on disk (AES-256-GCM, node key)
-///     under <c>{NodeDataDirectory.Root}/generated-images/{jobId}/</c> — this row only carries the pointer + dimensions,
-///     mirroring <c>ConversationUploadedFile</c>. Cascade-deleted with its owning <see cref="ImageJob" />.
+///     Metadata for one generated image blob. Cascade-deleted with its owning <see cref="ImageJob" />.
 /// </summary>
+/// <remarks>
+///     The image bytes themselves live encrypted on disk (AES-256-GCM, node key) under
+///     <c>{NodeDataDirectory.Root}/generated-images/{jobId}/</c> — this row only carries the pointer + dimensions,
+///     mirroring <c>ConversationUploadedFile</c>.
+/// </remarks>
 internal sealed record class GeneratedImage
 {
     /// <summary>Image identity (PK).</summary>

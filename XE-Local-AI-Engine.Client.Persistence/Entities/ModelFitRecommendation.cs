@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     A single normalized recommendation row projected from a recommendation snapshot's raw output. All columns are
-///     plaintext — model metadata and fit scores are not secrets; the sensitive raw output stays in the parent
-///     snapshot's encrypted columns. Cascades when its parent snapshot is deleted.
+///     A single normalized recommendation row projected from a recommendation snapshot's raw output. Cascades when
+///     its parent snapshot is deleted.
 /// </summary>
+/// <remarks>
+///     All columns are plaintext — model metadata and fit scores are not secrets; the sensitive raw output stays in
+///     the parent snapshot's encrypted columns.
+/// </remarks>
 internal sealed record class ModelFitRecommendation
 {
     public Guid Id { get; set; }

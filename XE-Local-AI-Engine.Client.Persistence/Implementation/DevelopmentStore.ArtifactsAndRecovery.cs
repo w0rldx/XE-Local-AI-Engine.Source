@@ -57,9 +57,8 @@ public sealed partial class DevelopmentStore
 
         var projectId = await ProjectIdForTaskAsync(taskId, cancellationToken);
 
-        // Keyed on the ATTEMPT id rather than a fresh operation id, which is what makes it idempotent: a task's
-        // workspace is prepared once by the coder and again by validation, and the same finding recorded twice would
-        // read as two separate discoveries.
+        // Keyed on the ATTEMPT id rather than a fresh operation id, which is what makes it idempotent: a task's workspace is prepared once by the coder and again
+        // by validation, and the same finding recorded twice would read as two separate discoveries.
         return await ExecuteOperationAsync(projectId,
             attemptId,
             WorkspaceSecretsOperationPhase,
@@ -95,10 +94,8 @@ public sealed partial class DevelopmentStore
         ArgumentNullException.ThrowIfNull(policyText);
         ArgumentNullException.ThrowIfNull(ruleSets);
 
-        // Blank text is the CLEAR, and it is the whole event vocabulary this needs: the snapshot query answers off the
-        // LATEST row, so a row saying "nothing applies" is exactly a row that revokes the one before it. A second event
-        // type would have to be understood by that query, by the docs catalog and by every reader of the log to say the
-        // same thing. What a clear must NOT do is name rule sets it is not applying.
+        // Blank text is the CLEAR, and the whole event vocabulary this needs: the snapshot query answers off the LATEST row, so a row saying "nothing applies"
+        // revokes the one before it, where a second event type would have to be understood by that query, the catalog and every reader. A clear names no rule sets.
         var cleared = string.IsNullOrWhiteSpace(policyText);
         if (cleared ? ruleSets.Count != 0 : ruleSets.Count == 0)
         {
@@ -108,9 +105,8 @@ public sealed partial class DevelopmentStore
 
         var projectId = await ProjectIdForTaskAsync(taskId, cancellationToken);
 
-        // Keyed on the caller's own deterministic operation id, which is what makes it idempotent: a workflow re-binds
-        // its node run to the same task after a crash, and the same policy recorded twice would read as two separate
-        // injections and be replayed to the coder as the later one.
+        // Keyed on the caller's own deterministic operation id, which is what makes it idempotent: a workflow re-binds its node run to the same task after a crash,
+        // and the same policy recorded twice would read as two separate injections and be replayed to the coder as the later one.
         return await ExecuteOperationAsync(projectId,
             operationId,
             WorkflowPolicyOperationPhase,

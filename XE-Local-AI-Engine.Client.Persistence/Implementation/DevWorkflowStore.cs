@@ -22,16 +22,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 internal sealed partial class DevWorkflowStore : IDevWorkflowStore
 {
     /// <summary>
-    ///     camelCase, matching the Application layer — which has always serialized its own event details with the Web
-    ///     defaults — and every other document this product puts on a wire.
-    ///     <para>
-    ///         Not optional and not cosmetic: these payloads are READ by name. Serialized with the framework default
-    ///         the store wrote <c>{"WorkSessionId":…,"Attempt":1}</c> while the client looked for
-    ///         <c>workSessionId</c> / <c>attempt</c>, so the attempt walk and the transcript link silently saw nothing
-    ///         at all. The log is append-only, so rows written before this stay PascalCase for ever and the readers
-    ///         take either spelling.
-    ///     </para>
+    ///     camelCase, matching the Application layer — which serializes its own event details with the Web defaults —
+    ///     and every other document this product puts on a wire.
     /// </summary>
+    /// <remarks>
+    ///     Not optional and not cosmetic: these payloads are READ by name, and the framework default writes
+    ///     <c>{"WorkSessionId":…,"Attempt":1}</c> where the client looks for <c>workSessionId</c> / <c>attempt</c>, so
+    ///     the attempt walk and the transcript link silently see nothing at all. The log is append-only, so rows
+    ///     written before FX-D stay PascalCase for ever and the readers take either spelling.
+    /// </remarks>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly NodeChatDbContext _dbContext;
@@ -58,11 +57,13 @@ internal sealed partial class DevWorkflowStore : IDevWorkflowStore
             cancellationToken);
 
     /// <summary>
-    ///     One transaction covering SEVERAL events, for a decision that is not one row's. The operation id goes on the
-    ///     FIRST event and the result names its sequence, so a replay answers exactly what the first call answered and
-    ///     every later row the same decision wrote sits after that watermark, where a subscriber replaying from it
-    ///     still sees them.
+    ///     One transaction covering SEVERAL events, for a decision that is not one row's.
     /// </summary>
+    /// <remarks>
+    ///     The operation id goes on the FIRST event and the result names its sequence, so a replay answers exactly what
+    ///     the first call answered, and every later row the same decision wrote sits after that watermark, where a
+    ///     subscriber replaying from it still sees them.
+    /// </remarks>
     private async Task<DevWorkflowMutationResult> ExecuteMutationAsync(Guid runId,
         long expectedVersion,
         Guid? operationId,
@@ -111,12 +112,8 @@ internal sealed partial class DevWorkflowStore : IDevWorkflowStore
         {
             await RollbackAsync(transaction);
 
-            // Belt to the in-transaction check's braces. On SQLite that check already wins every real race — EF opens
-            // transactions as BEGIN IMMEDIATE, so a second writer blocks on the writer lock and sees the recorded
-            // operation before writing anything, and this branch is measurably never entered. It stays because it is
-            // the honest answer to the question the catch asks: if the write that beat us used the SAME operation id,
-            // the caller wants that result, not an exception. Only a real version mismatch, or a different operation,
-            // still throws.
+            // Belt to the in-transaction check's braces: EF opens transactions as BEGIN IMMEDIATE, so on SQLite a second writer blocks on the writer lock and sees
+            // the recorded operation first. It stays because a write that beat us under the SAME operation id owes the caller that result; a mismatch still throws.
             if (operationId is { } contested && await FindOperationAsync(runId, contested, cancellationToken) is { } settled)
             {
                 return settled;
@@ -132,10 +129,13 @@ internal sealed partial class DevWorkflowStore : IDevWorkflowStore
     }
 
     /// <summary>
-    ///     What a node-run seed has to satisfy before any of them is written. Shared by the run start and by dynamic
-    ///     expansion, and checked outside the transaction: these are caller mistakes, and letting one reach the unique
-    ///     index would surface as a lost race rather than as the argument error it is.
+    ///     What a node-run seed has to satisfy before any of them is written, shared by the run start and by dynamic
+    ///     expansion.
     /// </summary>
+    /// <remarks>
+    ///     Checked outside the transaction: these are caller mistakes, and letting one reach the unique index would
+    ///     surface as a lost race rather than as the argument error it is.
+    /// </remarks>
     private static void EnsureSeedsValid(IReadOnlyList<DevWorkflowNodeRunSeed> seeds, string parameterName)
     {
         foreach (var seed in seeds)
@@ -146,9 +146,8 @@ internal sealed partial class DevWorkflowStore : IDevWorkflowStore
                 throw new ArgumentOutOfRangeException(parameterName, "A node run must allow at least one attempt.");
             }
 
-            // A seed lands a row either waiting to be dispatched or already finished, and nothing between: a live status
-            // is a lane's own claim that it holds the row, and creating one with no lane behind it writes a Running row
-            // with no start time that nobody is coming back for.
+            // A seed lands a row either waiting to be dispatched or already finished, and nothing between: a live status is a lane's own claim that it holds the
+            // row, and creating one with no lane behind it writes a Running row with no start time that nobody is coming back for.
             if (seed.Status != DevWorkflowNodeRunStatus.Pending && !IsTerminal(seed.Status))
             {
                 throw new ArgumentException($"Node run seed '{seed.NodeKey}' is seeded {seed.Status}, which is a live status no lane has taken. "
@@ -198,9 +197,8 @@ internal sealed partial class DevWorkflowStore : IDevWorkflowStore
                 MaterializationIndex = seed.MaterializationIndex,
                 CreatedAtUtc = now,
 
-                // A row seeded terminal never passes through a transition, so the two timestamps a reader reads a
-                // duration off are stamped here instead — both at the create, because the work it stands for took no
-                // time: it is the record that there was nothing to do.
+                // A row seeded terminal never passes through a transition, so the two timestamps a reader reads a duration off are stamped here instead — both at
+                // the create, because the work it stands for took no time: it is the record that there was nothing to do.
                 StartedAtUtc = IsTerminal(seed.Status) ? now : null,
                 EndedAtUtc = IsTerminal(seed.Status) ? now : null
             });
@@ -208,28 +206,15 @@ internal sealed partial class DevWorkflowStore : IDevWorkflowStore
     }
 
     /// <summary>
-    ///     Admits a Retry against the run-wide re-attempt budget, inside the transaction that records it — which is the
-    ///     only place the count can be true.
-    ///     <para>
-    ///         Spent is Σ(Attempt − 1) over the run's node runs: the re-attempts that have actually happened. A Retry
-    ///         that is recorded but not yet settled has spent none of that sum and would be invisible to it, so it
-    ///         counts as a RESERVATION — the dispatcher turns it into an attempt on a later tick, and until then it is
-    ///         an attempt this run has already promised. Settled has one definition here: the node run's <c>Attempt</c>
-    ///         has moved past the attempt its decision was recorded against.
-    ///     </para>
-    ///     <para>
-    ///         The decision endpoint checks the same budget first, for the message an operator reads. This is the
-    ///         authority: two people answering two blocked node runs in the same tick window both pass a check taken
-    ///         before either decision exists, and only a count taken under the writer lock refuses the second. The
-    ///         automatic retry path checks it here for the same reason, on the same count, since a human's Retry and a
-    ///         policy's re-attempt spend the same budget (FU3-4).
-    ///     </para>
-    ///     <para>
-    ///         <paramref name="cost" /> is how many re-attempts the act being admitted makes. One for a decision or a
-    ///         single re-attempt; a routed fix loop costs the whole cascade it resets, because admitting a fan-out one
-    ///         attempt at a time is how a run overspends its budget by the width of its graph.
-    ///     </para>
+    ///     Admits a Retry against the run-wide re-attempt budget, inside the transaction that records it — the only place the count can be true.
     /// </summary>
+    /// <remarks>
+    ///     Spent is Σ(Attempt − 1) over the run's node runs. A Retry recorded but not yet settled has spent none of that sum, so it counts as a RESERVATION; settled
+    ///     means the node run's <c>Attempt</c> has moved past the attempt its decision was recorded against. The decision endpoint's own check is for the operator's
+    ///     message — this is the authority, because only a count taken under the writer lock refuses the second of two decisions taken in one tick window. A human's
+    ///     Retry and a policy's re-attempt spend the same budget (FU3-4).
+    /// </remarks>
+    /// <param name="cost">How many re-attempts the admitted act makes: one for a decision or a single re-attempt, the whole cascade a routed fix loop resets.</param>
     private async Task EnsureRetryBudgetAsync(Guid runId, int maxTotalAttempts, int cost, CancellationToken cancellationToken)
     {
         var attempts = await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
@@ -279,10 +264,13 @@ internal sealed partial class DevWorkflowStore : IDevWorkflowStore
     }
 
     /// <summary>
-    ///     The superseded id a recorded artifact append reported, read back off its event. Without it a replayed append
-    ///     answers <see langword="null" /> where the first call answered an id, and the caller that owns the blob store
-    ///     would skip a sweep it still has to do — a replay has to return the recorded result, not a thinner one.
+    ///     The superseded id a recorded artifact append reported, read back off its event.
     /// </summary>
+    /// <remarks>
+    ///     Without it a replayed append answers <see langword="null" /> where the first call answered an id, and the
+    ///     caller that owns the blob store would skip a sweep it still has to do: a replay has to return the recorded
+    ///     result, not a thinner one.
+    /// </remarks>
     private static Guid? RecordedSupersededArtifactId(DevWorkflowRunEvent recorded)
     {
         if (recorded.EventType != DevWorkflowEventTypes.ArtifactSuperseded || recorded.DetailJson is null)
@@ -290,10 +278,8 @@ internal sealed partial class DevWorkflowStore : IDevWorkflowStore
             return null;
         }
 
-        // The SAME options the write uses, and the reason is the read rather than the write: the Web defaults are
-        // case-INSENSITIVE, so this binds a row written before FX-D (PascalCase) and one written after (camelCase)
-        // alike. The log is append-only — a case-sensitive read here would answer null for every artifact superseded
-        // before the casing was fixed, and a replay answering null skips a blob sweep it still owes.
+        // The SAME options the write uses, for the read's sake rather than the write's: the Web defaults are case-INSENSITIVE, so this binds a row written before
+        // FX-D (PascalCase) and one after (camelCase) alike. The log is append-only, and a case-sensitive read answering null would skip a blob sweep it still owes.
         return JsonSerializer.Deserialize<ArtifactSupersessionDetail>(recorded.DetailJson, JsonOptions)?.SupersededArtifactId;
     }
 
@@ -379,13 +365,13 @@ internal sealed partial class DevWorkflowStore : IDevWorkflowStore
 
     /// <summary>
     ///     The event a run status move records.
-    ///     <para>
-    ///         The two <c>-ing</c> statuses get the event of the thing they have BEGUN, not a generic one: a reader
-    ///         following the log has to see the pause or the cancel at the moment it was asked for, and the settled
-    ///         status that follows is the run row's business rather than a second event. <c>Running</c> is the one
-    ///         genuinely ambiguous move — a first start and a resume differ only by whether the run has started before.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     The two <c>-ing</c> statuses get the event of the thing they have BEGUN, not a generic one: a reader
+    ///     following the log has to see the pause or the cancel at the moment it was asked for, and the settled status
+    ///     that follows is the run row's business rather than a second event. <c>Running</c> is the one genuinely
+    ///     ambiguous move — a first start and a resume differ only by whether the run has started before.
+    /// </remarks>
     private static string EventTypeFor(DevWorkflowRunStatus status, bool isFirstStart) =>
         status switch
         {
@@ -401,11 +387,13 @@ internal sealed partial class DevWorkflowStore : IDevWorkflowStore
         };
 
     /// <summary>
-    ///     The outcome a run status move records, from the closed lowercase set the runtime owns — or null, which is
-    ///     the honest answer for a move whose event type already says everything: a run that is now Running has no
-    ///     "outcome" yet, and stamping one outside the closed set puts a token in the durable log that no consumer of
-    ///     that vocabulary can read.
+    ///     The outcome a run status move records, from the closed lowercase set the runtime owns — or null.
     /// </summary>
+    /// <remarks>
+    ///     Null is the honest answer for a move whose event type already says everything: a run that is now Running has
+    ///     no "outcome" yet, and stamping one outside the closed set puts a token in the durable log that no consumer
+    ///     of that vocabulary can read.
+    /// </remarks>
     private static string? OutcomeFor(DevWorkflowRunStatus status) =>
         status switch
         {

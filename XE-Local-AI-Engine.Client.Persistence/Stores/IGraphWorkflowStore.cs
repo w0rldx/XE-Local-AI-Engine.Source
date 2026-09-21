@@ -53,10 +53,13 @@ public sealed class GraphWorkflowDefinitionSnapshot
 
 /// <summary>
 ///     The canonical node-run field set: one row of <c>graph_workflow_node_runs</c> with its encrypted columns decoded
-///     to text. The state machine reads <see cref="NodeKey" />, <see cref="Kind" />, <see cref="Status" /> and
+///     to text.
+/// </summary>
+/// <remarks>
+///     The state machine reads <see cref="NodeKey" />, <see cref="Kind" />, <see cref="Status" /> and
 ///     <see cref="OutputJson" />; the rest is what a run-detail read returns. It lives here rather than in the
 ///     Application layer so the run store can return it without an Application reference this assembly may not have.
-/// </summary>
+/// </remarks>
 public sealed record GraphWorkflowNodeRunSnapshot
 {
     public required Guid Id { get; init; }
@@ -95,11 +98,14 @@ public sealed record GraphWorkflowNodeRunSnapshot
 }
 
 /// <summary>
-///     The sentinel <see cref="Any" /> version. The dispatcher moves node-run status while a human HTTP action may be
-///     writing a cancel on the same run, so an ordinary status move — which has no lost update to protect against,
-///     because a replayed tick re-derives the same answer from unchanged rows — passes <see cref="Any" /> and never
-///     loses that race. A run-level write that must NOT lose it passes the version it read.
+///     The sentinel <see cref="Any" /> version.
 /// </summary>
+/// <remarks>
+///     The dispatcher moves node-run status while a human HTTP action may be writing a cancel on the same run, so an
+///     ordinary status move — which has no lost update to protect against, because a replayed tick re-derives the
+///     same answer from unchanged rows — passes <see cref="Any" /> and never loses that race. A run-level write that
+///     must NOT lose it passes the version it read.
+/// </remarks>
 public static class GraphWorkflowVersions
 {
     public const long Any = -1;
@@ -164,12 +170,12 @@ public sealed class GraphWorkflowRunEventSnapshot
 
 /// <summary>
 ///     What one mutation committed: the run it belongs to and the watermark its event took.
-///     <para>
-///         Deliberately NOT the post-commit version. A caller that needs one re-reads the run immediately before its
-///         next run-level write, because this tick's own node-run writes have already moved it — a version carried out
-///         of here would be stale by the time anything used it.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Deliberately NOT the post-commit version. A caller that needs one re-reads the run immediately before its next
+///     run-level write, because this tick's own node-run writes have already moved it — a version carried out of here
+///     would be stale by the time anything used it.
+/// </remarks>
 public sealed class GraphWorkflowMutationResult
 {
     public required Guid RunId { get; init; }
@@ -178,14 +184,14 @@ public sealed class GraphWorkflowMutationResult
 }
 
 /// <summary>
-///     One node run to create at start. There is one per node of the pinned graph and they are all <c>Pending</c>:
-///     every node run of a graph workflow exists from the moment the run does, which is what lets admission be a pure
-///     function of rows.
-///     <para>
-///         No attempt cap travels here. The node's <c>maxAttempts</c> lives in the pinned graph and the retry stage
-///         reads it from there, so a column beside it could only ever disagree with the document the run executes.
-///     </para>
+///     One node run to create at start: one per node of the pinned graph, all <c>Pending</c>.
 /// </summary>
+/// <remarks>
+///     Every node run of a graph workflow exists from the moment the run does, which is what lets admission be a pure
+///     function of rows. No attempt cap travels here: the node's <c>maxAttempts</c> lives in the pinned graph and the
+///     retry stage reads it from there, so a column beside it could only ever disagree with the document the run
+///     executes.
+/// </remarks>
 public sealed class GraphWorkflowNodeRunSeed
 {
     public required Guid NodeRunId { get; init; }
@@ -200,12 +206,12 @@ public sealed class GraphWorkflowNodeRunSeed
 /// <summary>
 ///     A run start, as ONE transaction: the run row, one <c>Pending</c> node run per graph node, and the
 ///     <c>run.created</c> event.
-///     <para>
-///         The definition's existence and version are re-checked INSIDE that transaction — the obligation
-///         <see cref="IGraphWorkflowStore.DeleteDefinitionAsync" /> names. A start that read the definition in one
-///         transaction and inserted here in another could pin a definition a delete has already removed.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The definition's existence and version are re-checked INSIDE that transaction — the obligation
+///     <see cref="IGraphWorkflowStore.DeleteDefinitionAsync" /> names. A start that read the definition in one
+///     transaction and inserted here in another could pin a definition a delete has already removed.
+/// </remarks>
 public sealed class StartGraphWorkflowRunCommand
 {
     public required Guid RunId { get; init; }
@@ -227,16 +233,13 @@ public sealed class StartGraphWorkflowRunCommand
 
 /// <summary>
 ///     A run status move.
-///     <para>
-///         <see cref="SanitizedReason" /> has no column on the run row and is not meant to: it travels into the event's
-///         detail, where a reader following the log finds it beside the move it explains.
-///     </para>
-///     <para>
-///         The cancel-requested instant is deliberately NOT a member: the store stamps it from its own
-///         <see cref="TimeProvider" /> on the move to <c>Cancelling</c>, like every other timestamp on these rows, so a
-///         caller's clock cannot disagree with the row's.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <see cref="SanitizedReason" /> has no column on the run row and is not meant to: it travels into the event's
+///     detail, where a reader following the log finds it beside the move it explains. The cancel-requested instant is
+///     deliberately NOT a member either: the store stamps it from its own <see cref="TimeProvider" /> on the move to
+///     <c>Cancelling</c>, like every other timestamp on these rows, so a caller's clock cannot disagree with the row's.
+/// </remarks>
 public sealed class TransitionGraphWorkflowRunCommand
 {
     public required Guid RunId { get; init; }
@@ -253,22 +256,16 @@ public sealed class TransitionGraphWorkflowRunCommand
 }
 
 /// <summary>
-///     A node-run status move. <see cref="IncrementAttempt" /> is the retry-in-place path; the row is never duplicated,
-///     and the per-attempt history lives in the event log.
-///     <para>
-///         <see cref="QueueReason" /> and <see cref="TerminalReason" /> both land in the row's ONE reason column: why a
-///         row is queued and why it ended are the same question asked at different moments, and the row is only ever in
-///         one of those states. A move back to <c>Pending</c> clears it, because a re-attempt must not report the
-///         previous attempt's outcome while it runs.
-///     </para>
-///     <para>
-///         <see cref="EventType" /> overrides the token derived from <see cref="TargetStatus" />, for the one move the
-///         status alone cannot express — a re-attempt, which is <c>node.retried</c> rather than the generic
-///         <c>Pending</c> collapse the reconciler writes. <see cref="DetailJson" /> replaces the detail this move would
-///         otherwise derive from <see cref="TerminalReason" />, for that same move: it has cleared the failure it is
-///         re-attempting because of.
-///     </para>
+///     A node-run status move. <see cref="IncrementAttempt" /> is the retry-in-place path; the row is never
+///     duplicated, and the per-attempt history lives in the event log.
 /// </summary>
+/// <remarks>
+///     <see cref="QueueReason" /> and <see cref="TerminalReason" /> both land in the row's ONE reason column — why a
+///     row is queued and why it ended are one question at different moments — and a move back to <c>Pending</c> clears
+///     it, because a re-attempt must not report the previous attempt's outcome while it runs.
+///     <see cref="EventType" /> and <see cref="DetailJson" /> override what the status would derive, for the one move
+///     it cannot express: a re-attempt is <c>node.retried</c>, and it has cleared the failure it re-attempts for.
+/// </remarks>
 public sealed class TransitionGraphWorkflowNodeRunCommand
 {
     public required Guid RunId { get; init; }
@@ -303,18 +300,14 @@ public sealed class TransitionGraphWorkflowNodeRunCommand
 /// <summary>
 ///     A pause's answer, as ONE conditional write. Keyed by the node run rather than by the node key because the
 ///     Application layer has already read the row it validated the answer against.
-///     <para>
-///         The store applies it only while the row is still <c>WaitingForApproval</c> with no decision on it — the
-///         compare-and-set that makes two concurrent decides settle as one. A caller whose write finds no such row is
-///         told so by a <see langword="null" /> result rather than by an exception, because losing that race is an
-///         ordinary outcome the caller answers by re-reading, not a failure.
-///     </para>
-///     <para>
-///         <see cref="OutputJson" /> arrives composed. The Application layer owns the one document composer, and a
-///         second spelling of a pause's routing document here is how a pre-flight check and a real run come to
-///         disagree about which out-edge fires.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The store applies it only while the row is still <c>WaitingForApproval</c> with no decision on it — the
+///     compare-and-set that makes two concurrent decides settle as one; a write that finds no such row is told so by
+///     a <see langword="null" /> result, because losing that race is answered by re-reading, not a failure.
+///     <see cref="OutputJson" /> arrives composed: the Application layer owns the one document composer, and a second
+///     spelling of a pause's routing document here is how a pre-flight check and a real run disagree on an out-edge.
+/// </remarks>
 public sealed record DecideGraphWorkflowNodeRunCommand
 {
     public required Guid RunId { get; init; }
@@ -347,9 +340,11 @@ public sealed class AppendGraphWorkflowEventCommand
 
 /// <summary>
 ///     One row a host death stranded, carrying what the runtime needs to judge it without a follow-up read per row.
+/// </summary>
+/// <remarks>
 ///     <see cref="Status" /> is what the row held BEFORE the collapse — what it was doing is the useful fact, since
 ///     where it lands is always <c>Pending</c> unless a repair moves it further.
-/// </summary>
+/// </remarks>
 public sealed record GraphWorkflowReconciledNodeRun
 {
     public required Guid NodeRunId { get; init; }
@@ -367,14 +362,15 @@ public sealed record GraphWorkflowReconciledNodeRun
 
 /// <summary>
 ///     One judged node run: the row as the caller observed it, and what to do with it once the collapse has confirmed
-///     it is still that row. A verdict is only true of the state it was decided from, so a row that moved under the
-///     caller is left exactly as it is rather than repaired from stale evidence.
-///     <para>
-///         Every command in <see cref="Repairs" /> MUST carry <see cref="GraphWorkflowVersions.Any" />: the collapse
-///         bumps its run's version once per stranded row before any repair is applied, so a repair naming the version
-///         its caller read is stale by construction and fails the whole recovery transaction rather than its own row.
-///     </para>
+///     it is still that row.
 /// </summary>
+/// <remarks>
+///     A verdict is only true of the state it was decided from, so a row that moved under the caller is left exactly
+///     as it is rather than repaired from stale evidence. Every command in <see cref="Repairs" /> MUST carry
+///     <see cref="GraphWorkflowVersions.Any" />: the collapse bumps its run's version once per stranded row before any
+///     repair is applied, so a repair naming the version its caller read is stale by construction and fails the whole
+///     recovery transaction rather than its own row.
+/// </remarks>
 public sealed class GraphWorkflowNodeRunVerdict
 {
     public required Guid NodeRunId { get; init; }
@@ -388,9 +384,12 @@ public sealed class GraphWorkflowNodeRunVerdict
 
 /// <summary>
 ///     Turns a reconciliation into a SETTLING pass: every stranded node run no verdict matched is failed rather than
-///     left where it is. Pass it on the last pass only — walking away strands a row nothing downstream picks up again,
-///     and v1 has no <c>Blocked</c> state to park it in.
+///     left where it is.
 /// </summary>
+/// <remarks>
+///     Pass it on the last pass only — walking away strands a row nothing downstream picks up again, and there is no
+///     <c>Blocked</c> state to park it in.
+/// </remarks>
 public sealed class GraphWorkflowUnjudgedNodeRunSettlement
 {
     public required GraphWorkflowFailureClass FailureClass { get; init; }
@@ -416,16 +415,14 @@ public sealed class CreateGraphWorkflowDefinitionCommand
 /// <summary>
 ///     A partial edit: every optional member left null means "leave it alone", which is what lets a rename travel
 ///     without the caller re-sending a graph it never read.
-///     <para>
-///         With ONE exception: <see cref="NodeCount" /> and <see cref="GraphJson" /> travel TOGETHER or not at all, and
-///         either one without the other is refused with an <see cref="ArgumentException" />. The count is denormalized
-///         so the definition list never decrypts a blob, which makes both halves of that the same lie: a new graph
-///         beside the old graph's count, or a new count beside the graph it was not taken from. The count is derived,
-///         never edited. <see cref="SchemaVersion" /> stays optional: this node understands one schema version and the
-///         parser refuses every other, so a graph that reached the store IS that version and the stored value already
-///         says so.
-///     </para>
 /// </summary>
+/// <remarks>
+///     With ONE exception: <see cref="NodeCount" /> and <see cref="GraphJson" /> travel TOGETHER or not at all, and
+///     either without the other is refused with an <see cref="ArgumentException" />. The count is denormalized so the
+///     definition list never decrypts a blob, which makes both halves the same lie: a new graph beside the old count,
+///     or a new count beside a graph it was not taken from. <see cref="SchemaVersion" /> stays optional: this node
+///     understands one version and the parser refuses every other, so a graph that reached the store IS that version.
+/// </remarks>
 public sealed class UpdateGraphWorkflowDefinitionCommand
 {
     public required Guid DefinitionId { get; init; }
@@ -465,30 +462,28 @@ public interface IGraphWorkflowStore
 
     /// <summary>
     ///     A hard delete, refused with <see cref="GraphWorkflowDefinitionConflictException" /> while any run that pins
-    ///     this definition is still live — checked INSIDE the transaction. Terminal runs are unaffected: each pinned
-    ///     its own copy of the graph at start, so history survives the row.
-    ///     <para>
-    ///         The transaction makes delete-vs-start safe only UNDER A PRECONDITION the run store owes: run start must
-    ///         re-read the definition's existence and version inside the SAME transaction that inserts the run row. A
-    ///         start that reads the definition first and inserts afterwards, in a second transaction, can insert a run
-    ///         pinned to a definition this delete has already removed — the live-run count here would have seen
-    ///         nothing, because the run did not exist yet. Nothing in S0 starts runs; S1's run store carries the
-    ///         obligation.
-    ///     </para>
+    ///     this definition is still live — checked INSIDE the transaction.
     /// </summary>
+    /// <remarks>
+    ///     Terminal runs are unaffected: each pinned its own copy of the graph at start, so history survives the row.
+    ///     The transaction makes delete-vs-start safe only UNDER A PRECONDITION the run store owes: run start must
+    ///     re-read the definition's existence and version inside the SAME transaction that inserts the run row. A
+    ///     start that reads first and inserts in a second transaction can pin a run to a definition this delete has
+    ///     already removed, because the live-run count here saw nothing — the run did not exist yet.
+    /// </remarks>
     Task DeleteDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Starts a run: the run row, one <c>Pending</c> node run per seed and the <c>run.created</c> event, in one
     ///     transaction that re-reads the definition first.
-    ///     <para>
-    ///         <b>The insert IS the idempotency guarantee.</b> A caller's check-then-act on
-    ///         <see cref="FindRunByRequestAsync" /> can be raced by a genuinely concurrent identical start, so this
-    ///         inserts first and catches the unique-index violation on <c>request_id</c>: on that catch it rolls back,
-    ///         re-reads by request id and answers with the run that WON. The index is the lock; no application-level
-    ///         gate is added on top of it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <b>The insert IS the idempotency guarantee.</b> A caller's check-then-act on
+    ///     <see cref="FindRunByRequestAsync" /> can be raced by a genuinely concurrent identical start, so this
+    ///     inserts first and catches the unique-index violation on <c>request_id</c>: on that catch it rolls back,
+    ///     re-reads by request id and answers with the run that WON. The index is the lock; no application-level gate
+    ///     is added on top of it.
+    /// </remarks>
     Task<GraphWorkflowRunSnapshot> StartRunAsync(StartGraphWorkflowRunCommand command, CancellationToken cancellationToken = default);
 
     /// <summary>The run a caller-minted request id already started, or <see langword="null" />. Never throws for an unknown id.</summary>
@@ -501,15 +496,14 @@ public interface IGraphWorkflowStore
 
     /// <summary>
     ///     How many runs are EXECUTING — <c>Running</c>, <c>WaitingForApproval</c> or <c>Cancelling</c> — counted no
-    ///     further than <paramref name="probeLimit" /> rows. The question the concurrency cap asks is "are there
-    ///     already N of them", so counting past N is work nobody reads.
-    ///     <para>
-    ///         <c>Pending</c> is NOT counted, which is what makes this a different question from "does a live run pin
-    ///         this definition". Pending is the queue admission draws from: counting it would count the run asking to
-    ///         start against its own admission, so a cap of one would admit nothing and a Pending backlog at the cap
-    ///         would block every start on the node.
-    ///     </para>
+    ///     further than <paramref name="probeLimit" /> rows.
     /// </summary>
+    /// <remarks>
+    ///     The concurrency cap asks "are there already N of them", so counting past N is work nobody reads.
+    ///     <c>Pending</c> is NOT counted, which makes this a different question from "does a live run pin this
+    ///     definition": Pending is the queue admission draws from, so counting it would count the run asking to start
+    ///     against its own admission, a cap of one would admit nothing, and a Pending backlog would block every start.
+    /// </remarks>
     Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default);
 
     Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default);
@@ -524,19 +518,21 @@ public interface IGraphWorkflowStore
     /// <summary>
     ///     Answers a pause: the node run moves <c>WaitingForApproval → Succeeded</c> carrying its decision columns and
     ///     its composed output, and a <c>gate.decided</c> event is appended, in one transaction.
-    ///     <para>
-    ///         <see langword="null" /> means the conditional write matched no row — the pause was decided or moved
-    ///         between the caller's read and this write. Re-read and answer from what the row now says; it is not an
-    ///         error, which is why it is not an exception.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> means the conditional write matched no row — the pause was decided or moved between
+    ///     the caller's read and this write. Re-read and answer from what the row now says; it is not an error, which
+    ///     is why it is not an exception.
+    /// </remarks>
     Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The node run one operation id already decided on this run, or <see langword="null" />. Run-WIDE, which is the
-    ///     scope the filtered unique index enforces: an id reused on a second pause of the same run has to be seen as
-    ///     the conflict it is, before a write turns it into a unique-index violation instead.
+    ///     The node run one operation id already decided on this run, or <see langword="null" />.
     /// </summary>
+    /// <remarks>
+    ///     Run-WIDE, which is the scope the filtered unique index enforces: an id reused on a second pause of the same
+    ///     run has to be seen as the conflict it is, before a write turns it into a unique-index violation instead.
+    /// </remarks>
     Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default);
 
     Task<GraphWorkflowMutationResult> AppendEventAsync(AppendGraphWorkflowEventCommand command, CancellationToken cancellationToken = default);
@@ -548,27 +544,25 @@ public interface IGraphWorkflowStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The node runs a restart has to judge: everything left <c>Queued</c> or <c>Running</c>, read without writing
-    ///     anything. Exactly that set and no wider — <c>WaitingForApproval</c> is a durable human wait that a restart
-    ///     does not invalidate, and <c>Pending</c> was never dispatched.
+    ///     The node runs a restart has to judge: everything left <c>Queued</c> or <c>Running</c>, read without writing.
     /// </summary>
+    /// <remarks>
+    ///     Exactly that set and no wider — <c>WaitingForApproval</c> is a durable human wait that a restart does not
+    ///     invalidate, and <c>Pending</c> was never dispatched.
+    /// </remarks>
     Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Restart recovery, as ONE transaction. Runs auto-resume, so no run row is touched; only the <c>Queued</c> and
-    ///     <c>Running</c> node runs collapse back to <c>Pending</c>, each with a <c>node.interrupted</c> event, and the
-    ///     caller's per-row repairs are applied in the same commit. A host that dies mid-recovery leaves the rows as it
-    ///     found them.
-    ///     <para>
-    ///         The NAME is inherited from the development-workflow original and is a misnomer there too: the set is
-    ///         <c>Queued ∪ Running</c>, never "non-terminal". It is kept so the two modules' recovery paths read alike.
-    ///     </para>
-    ///     <para>
-    ///         Only rows whose live state still matches their verdict are collapsed; a row that moved under the caller
-    ///         is left for the next pass. A non-null <paramref name="unjudged" /> makes this the LAST pass and settles
-    ///         whatever is left, decided against the row in front of it where no snapshot can be stale.
-    ///     </para>
+    ///     Restart recovery, as ONE transaction: the <c>Queued</c> and <c>Running</c> node runs collapse back to
+    ///     <c>Pending</c>, each with a <c>node.interrupted</c> event, with the caller's repairs in the same commit.
     /// </summary>
+    /// <remarks>
+    ///     Runs auto-resume, so no run row is touched, and a host that dies mid-recovery leaves the rows as it found
+    ///     them. The NAME is a misnomer inherited from the development-workflow original — the set is
+    ///     <c>Queued ∪ Running</c> — kept so the two modules' recovery paths read alike. Only rows whose live state
+    ///     still matches their verdict are collapsed; a non-null <paramref name="unjudged" /> makes this the LAST pass
+    ///     and settles the rest, decided against the row in front of it where no snapshot can be stale.
+    /// </remarks>
     Task<IReadOnlyList<GraphWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
         IReadOnlyList<GraphWorkflowNodeRunVerdict> verdicts,
         GraphWorkflowUnjudgedNodeRunSettlement? unjudged = null,
@@ -583,10 +577,13 @@ public sealed class GraphWorkflowNotFoundException : InvalidOperationException
 }
 
 /// <summary>
-///     Both ways a definition write can lose, under one type because from the client's side they are one story —
-///     somebody else got there first: a stale <c>version</c> on an update, and a delete refused while a live run pins
-///     the definition. Maps to a 409 through <c>ConflictExceptionHandler</c>.
+///     Both ways a definition write can lose: a stale <c>version</c> on an update, and a delete refused while a live
+///     run pins the definition.
 /// </summary>
+/// <remarks>
+///     One type, because from the client's side they are one story — somebody else got there first. Maps to a 409
+///     through <c>ConflictExceptionHandler</c>.
+/// </remarks>
 public sealed class GraphWorkflowDefinitionConflictException : InvalidOperationException
 {
     public GraphWorkflowDefinitionConflictException(string message, Exception? innerException = null) : base(message, innerException)
@@ -595,15 +592,15 @@ public sealed class GraphWorkflowDefinitionConflictException : InvalidOperationE
 }
 
 /// <summary>
-///     The rejection channel for a run write the store refuses: a move the state machine forbids, a stale
-///     <c>ExpectedVersion</c>, and the concurrency token losing a race are all one story from the caller's side —
-///     the row is not what you thought it was, so re-read it.
-///     <para>
-///         The store deliberately does not judge LEGALITY: the transition tables live in the Application layer, which
-///         this assembly may not reference. What is checked here is what the database can see — the version, the
-///         identity of the rows, and the unique indexes.
-///     </para>
+///     The rejection channel for a run write the store refuses: a forbidden move, a stale <c>ExpectedVersion</c>, or
+///     the concurrency token losing a race.
 /// </summary>
+/// <remarks>
+///     One story from the caller's side — the row is not what you thought it was, so re-read it.
+///     The store deliberately does not judge LEGALITY: the transition tables live in the Application layer, which
+///     this assembly may not reference. What is checked here is what the database can see — the version, the identity
+///     of the rows, and the unique indexes.
+/// </remarks>
 public sealed class GraphWorkflowInvalidTransitionException : InvalidOperationException
 {
     public GraphWorkflowInvalidTransitionException(string message, Exception? innerException = null) : base(message, innerException)

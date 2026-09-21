@@ -2,9 +2,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Node-scoped persistence for normalized model-fit recommendation rows projected from a recommendation snapshot.
-///     All columns are plaintext (model metadata, not secret). This store performs no validation; it owns id stamping
-///     and the per-snapshot replace.
 /// </summary>
+/// <remarks>
+///     All columns are plaintext model metadata, not secrets. This store performs no validation; it owns id stamping
+///     and the per-snapshot replace.
+/// </remarks>
 public interface IModelFitRecommendationStore
 {
     /// <summary>

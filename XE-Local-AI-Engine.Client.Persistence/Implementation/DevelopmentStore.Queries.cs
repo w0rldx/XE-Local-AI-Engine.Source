@@ -80,9 +80,8 @@ public sealed partial class DevelopmentStore
             ModelId = snapshot.Attempt.ModelId,
             Provider = snapshot.Attempt.Provider,
             AttemptVersion = snapshot.Attempt.Version,
-            // The attempt's own immutable snapshot wins. Falling back to the project only when the attempt has none
-            // keeps attempts that predate the column behaving exactly as before, and lets a project whose profile was
-            // backfilled after the attempt started still resolve one.
+            // The attempt's own immutable snapshot wins. Falling back to the project only when the attempt has none keeps attempts that predate the column behaving
+            // exactly as before, and lets a project whose profile was backfilled after the attempt started still resolve one.
             CommandProfileJson = snapshot.Attempt.CommandProfileJson ?? snapshot.Project.CommandProfileJson,
             PreviousRoundFeedback = await PreviousRoundFeedbackAsync(snapshot.Task.Id, cancellationToken),
             WorkflowPolicyText = await WorkflowPolicyTextAsync(snapshot.Task.Id, cancellationToken),
@@ -93,23 +92,14 @@ public sealed partial class DevelopmentStore
     /// <summary>
     ///     The reason the last request for changes on this task gave, so the next coder round is told what was wrong
     ///     with the last one instead of being asked for the same work again.
-    ///     <para>
-    ///         One row, off the task's own append-only log: the LATEST event that carries a reason, whichever of the
-    ///         three writes it — the reviewer's <c>ReviewFinalized</c>, the deterministic gate's
-    ///         <c>ValidationFinalized</c>, or a workflow's own <c>TaskTransitioned</c>. Latest rather than
-    ///         reviewer-first, because a validation failure AFTER a reviewer's round is the newer fact, and answering
-    ///         with the reviewer's sentence would replay round N-1's complaint over a round the gate has since judged.
-    ///     </para>
-    ///     <para>
-    ///         The recorded status is what qualifies it: only an event that left the task where a coder round runs is
-    ///         feedback for one. A block, an apply, and a validation that PASSED all carry reasons and none of them are.
-    ///     </para>
-    ///     <para>
-    ///         A transition a PERSON asked for is excluded, because it answers <see cref="OperatorInstructionAsync" />
-    ///         instead. The two are disjoint by construction so a prompt that ranks the operator above the reviewer
-    ///         cannot render the same sentence twice, once under each heading.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     One row off the task's append-only log: the LATEST event carrying a reason, from the reviewer's
+    ///     <c>ReviewFinalized</c>, the gate's <c>ValidationFinalized</c> or a workflow's <c>TaskTransitioned</c>.
+    ///     Latest, because a validation failure after a reviewer's round is the newer fact. Only an event that left the
+    ///     task where a coder round runs qualifies, and a transition a PERSON asked for is excluded: that answers
+    ///     <see cref="OperatorInstructionAsync" />, disjoint so no prompt renders the same sentence twice.
+    /// </remarks>
     private async Task<string?> PreviousRoundFeedbackAsync(Guid taskId, CancellationToken cancellationToken)
     {
         var latest = await _dbContext.DevelopmentEvents.AsNoTracking()
@@ -167,19 +157,13 @@ public sealed partial class DevelopmentStore
 
     /// <summary>
     ///     The rule-set text a workflow injected onto this task, or nothing when no workflow drives it.
-    ///     <para>
-    ///         One row, off the task's own append-only log, exactly as <see cref="PreviousRoundFeedbackAsync" /> reads
-    ///         its sentence — so it costs no migration and no column, and a task nothing injected policy onto answers
-    ///         null rather than empty. LATEST wins: a node run re-bound to the same task records again, and the newer
-    ///         resolution is the one that governs the round about to run.
-    ///     </para>
-    ///     <para>
-    ///         A latest row with BLANK text is the workflow saying nothing applies any more, and answers null. That is
-    ///         what bounds the snapshot in time: the executor records on EVERY dispatch — an empty resolution
-    ///         included — and again when it settles the node run, so neither a workflow that resolved no policy nor one
-    ///         that has finished governs the rounds that come after it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     One row off the task's append-only log, exactly as <see cref="PreviousRoundFeedbackAsync" /> reads its
+    ///     sentence, so it costs no migration and no column. LATEST wins: a node run re-bound to the same task records
+    ///     again. A latest row with BLANK text is the workflow saying nothing applies any more and answers null, which
+    ///     is what bounds the snapshot in time — the executor records on EVERY dispatch and again when it settles.
+    /// </remarks>
     private async Task<string?> WorkflowPolicyTextAsync(Guid taskId, CancellationToken cancellationToken)
     {
         var latest = await _dbContext.DevelopmentEvents.AsNoTracking()
@@ -210,28 +194,14 @@ public sealed partial class DevelopmentStore
     /// <summary>
     ///     The last thing a PERSON told this task to do differently: the latest transition whose outcome is
     ///     <see cref="OperatorTransitionOutcome" />, and nothing when nobody has ever asked.
-    ///     <para>
-    ///         No STATUS gate, which is what separates it from <see cref="PreviousRoundFeedbackAsync" />. A Dev Mode
-    ///         task's requirements cannot be edited, so an operator's retry reason is the only channel that can amend
-    ///         one — and an amendment that stopped governing at the next event would be undone by the reviewer round it
-    ///         was written to correct.
-    ///     </para>
-    ///     <para>
-    ///         It is bounded the same way <see cref="WorkflowPolicyTextAsync" /> is, and by the same row: only an
-    ///         instruction written AFTER the latest <c>WorkflowPolicyApplied</c> governs. The executor writes one on
-    ///         every dispatch and again when it settles the node run, so an instruction dies with the node-run attempt
-    ///         that carried it and cannot outlive the workflow into a second node run or an operator's own later
-    ///         rounds. A task no workflow ever drove has no such row, no boundary, and keeps the unbounded reading.
-    ///     </para>
-    ///     <para>
-    ///         A BLANK-reason operator row is the retraction, which is why there is no <c>DetailJson</c> filter here:
-    ///         "a person asked for something and said nothing" is an operator row that says nothing, not a row that is
-    ///         not an operator's. It shadows the older instruction the same way a newer sentence replaces one, and
-    ///         <see cref="ReasonOf" /> answers null for it, so the round it governs is told nothing rather than told
-    ///         the withdrawn sentence. Filtering the row out instead made the instruction unwithdrawable WITHIN the
-    ///         dispatch that wrote it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     No STATUS gate, which separates it from <see cref="PreviousRoundFeedbackAsync" />: a Dev Mode task's
+    ///     requirements cannot be edited, so an operator's retry reason is the only channel that can amend one. Only an
+    ///     instruction written AFTER the latest <c>WorkflowPolicyApplied</c> governs, so it dies with the node-run
+    ///     attempt; a task no workflow drove has no such row and keeps the unbounded reading. A BLANK-reason operator
+    ///     row is the retraction, so there is no <c>DetailJson</c> filter — <see cref="ReasonOf" /> answers null for it.
+    /// </remarks>
     private async Task<string?> OperatorInstructionAsync(Guid taskId, CancellationToken cancellationToken)
     {
         var boundary = await _dbContext.DevelopmentEvents.AsNoTracking()
@@ -309,9 +279,8 @@ public sealed partial class DevelopmentStore
                                       .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
                       ?? throw new DevelopmentNotFoundException($"Development project '{projectId}' was not found.");
 
-        // Fill-only. An existing profile is the operator-confirmed agreement for the life of the project, so a backfill
-        // pass must return it untouched rather than replace it — this is what makes a second pass, or two racing
-        // passes, harmless.
+        // Fill-only. An existing profile is the operator-confirmed agreement for the life of the project, so a backfill pass must return it untouched rather than
+        // replace it — this is what makes a second pass, or two racing passes, harmless.
         if (!string.IsNullOrWhiteSpace(project.CommandProfileJson))
         {
             return ProjectSnapshot(project);

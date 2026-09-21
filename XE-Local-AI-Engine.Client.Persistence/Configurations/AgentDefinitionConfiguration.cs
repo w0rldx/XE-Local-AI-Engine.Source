@@ -56,31 +56,26 @@ internal sealed class AgentDefinitionConfiguration : IEntityTypeConfiguration<Ag
                .HasColumnName("playbook_enabled")
                .HasDefaultValue(false);
 
-        // Base-instruction-scaffold opt-out — additive structural column. Plaintext (a bool); default and backfill
-        // false so a pre-scaffold definition keeps getting the scaffold (the intended default for every agent).
-        // Non-config-affecting (like playbook_enabled): toggling it changes the resolved prompt directly, which
-        // already drives the runtime config hash, so it never needs to bump this definition's own Version.
+        // Base-instruction-scaffold opt-out — additive structural column. Plaintext (a bool); default and backfill false so a pre-scaffold definition keeps getting
+        // the scaffold. Non-config-affecting, like playbook_enabled: toggling it changes the resolved prompt, which already drives the runtime config hash.
         builder.Property(entity => entity.DisableBaseScaffold)
                .HasColumnName("disable_base_scaffold")
                .HasDefaultValue(false);
 
-        // Tool-relevance opt-out — additive structural column. Plaintext (a bool); default and backfill false so every
-        // existing definition follows the node setting. Non-config-affecting: the filter narrows only the provider-bound
-        // tools array, never the offer or the resolved prompt, so it never bumps this definition's own Version.
+        // Tool-relevance opt-out — additive structural column. Plaintext (a bool); default and backfill false so every existing definition follows the node setting.
+        // Non-config-affecting: the filter narrows only the provider-bound tools array, never the offer or the resolved prompt, so it never bumps this Version.
         builder.Property(entity => entity.DisableToolRelevanceFilter)
                .HasColumnName("disable_tool_relevance_filter")
                .HasDefaultValue(false);
 
-        // Per-agent default-temporary-chat flag — additive structural column. Plaintext (a bool); default and backfill
-        // false so a pre-feature definition reads as non-temporary. Non-config-affecting (like playbook_enabled): gates
-        // post-run memory extraction only, never the runtime config hash.
+        // Per-agent default-temporary-chat flag — additive structural column. Plaintext (a bool); default and backfill false so a pre-feature definition reads as
+        // non-temporary. Non-config-affecting, like playbook_enabled: it gates post-run memory extraction only, never the runtime config hash.
         builder.Property(entity => entity.DefaultTemporaryChat)
                .HasColumnName("default_temporary_chat")
                .HasDefaultValue(false);
 
-        // Per-agent memory-extraction toggle — additive structural column. Plaintext (a bool); default and backfill
-        // true so a pre-feature definition keeps learning from its runs. Non-config-affecting (like playbook_enabled):
-        // gates post-run extraction only (false = retrieval-only memory), never the runtime config hash.
+        // Per-agent memory-extraction toggle — additive structural column. Plaintext (a bool); default and backfill true so a pre-feature definition keeps learning
+        // from its runs. Non-config-affecting, like playbook_enabled: it gates post-run extraction only — false leaves retrieval-only memory — never the config hash.
         builder.Property(entity => entity.MemoryExtractionEnabled)
                .HasColumnName("memory_extraction_enabled")
                .HasDefaultValue(true);
@@ -106,9 +101,8 @@ internal sealed class AgentDefinitionConfiguration : IEntityTypeConfiguration<Ag
         // Name is a human label, not a key: index it for list/search but do not enforce uniqueness.
         builder.HasIndex(entity => entity.Name);
 
-        // The seed slug is the idempotency key for a re-import, so it is unique — but only among seeded rows that
-        // actually carry one (manual rows leave it null), hence the filtered unique index. This is the DB-level guard
-        // beneath the service-level skip.
+        // The seed slug is the idempotency key for a re-import, so it is unique — but only among seeded rows that actually carry one (manual rows leave it null),
+        // hence the filtered unique index. This is the DB-level guard beneath the service-level skip.
         builder.HasIndex(entity => entity.SeedSlug)
                .IsUnique()
                .HasFilter("\"seed_slug\" IS NOT NULL");

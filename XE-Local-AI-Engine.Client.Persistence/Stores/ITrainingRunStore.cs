@@ -3,29 +3,26 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Persistence boundary for training runs, their durable queue and their staged artifacts. Same conventions as
-///     <see cref="ITrainingDatasetStore" /> — hand-bumped <c>Version</c> concurrency tokens compared against a
-///     caller-supplied <c>expectedVersion</c>, explicit SQLite transactions around every multi-row mutation, explicit
-///     ordered child deletes, and the shared <see cref="TrainingStoreException" /> hierarchy.
+///     Persistence boundary for training runs, their durable queue and their staged artifacts.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <strong>What <c>Version</c> guards.</strong> It guards operator-visible transitions — status changes,
-///         deletes, artifact state. The three telemetry writers (<see cref="UpdateProgressAsync" />,
-///         <see cref="AppendLogTailAsync" />, <see cref="SetLaunchReceiptAsync" />) deliberately leave it alone: they
-///         fire many times per run from the single executor that owns the run, and bumping the token there would
-///         invalidate the caller's expected version between every progress tick.
-///     </para>
+///     Same conventions as <see cref="ITrainingDatasetStore" /> — hand-bumped <c>Version</c> tokens against a caller-supplied
+///     <c>expectedVersion</c>, explicit SQLite transactions, explicit ordered child deletes, the shared
+///     <see cref="TrainingStoreException" /> hierarchy. <c>Version</c> guards operator-visible transitions (status, deletes,
+///     artifact state); <see cref="UpdateProgressAsync" />, <see cref="AppendLogTailAsync" /> and <see cref="SetLaunchReceiptAsync" />
+///     leave it alone: they fire many times per run from the run's single executor and would invalidate its expected version.
 /// </remarks>
 public interface ITrainingRunStore
 {
     /// <summary>
-    ///     Creates the run and its single queued work item in one transaction. The dataset's content fingerprint and
-    ///     revision are read inside that transaction and copied onto the run — that copy IS the freeze, so a concurrent
-    ///     sample edit cannot slip between the read and the insert. Refuses a dataset that is not
-    ///     <see cref="TrainingDatasetStatus.Ready" />, a base artifact that is not
-    ///     <see cref="TrainingBaseArtifactStatus.Ready" />, and a command with no license confirmation.
+    ///     Creates the run and its single queued work item in one transaction.
     /// </summary>
+    /// <remarks>
+    ///     The dataset's content fingerprint and revision are read inside that transaction and copied onto the run —
+    ///     that copy IS the freeze, so a concurrent sample edit cannot slip between the read and the insert. Refuses a
+    ///     dataset that is not <see cref="TrainingDatasetStatus.Ready" />, a base artifact that is not
+    ///     <see cref="TrainingBaseArtifactStatus.Ready" />, and a command with no license confirmation.
+    /// </remarks>
     Task<TrainingRunRecord> CreateAndEnqueueAsync(TrainingRunEnqueueCommand command, CancellationToken cancellationToken = default);
 
     Task<TrainingRunRecord?> GetAsync(Guid runId, CancellationToken cancellationToken = default);
@@ -36,19 +33,24 @@ public interface ITrainingRunStore
     Task<TrainingWorkClaim?> ClaimNextAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The same claim, scoped to one work kind. The consumer acquires the exclusivity a kind needs BEFORE it
-    ///     claims, so it has to be able to say "claim only what I am holding the right locks for": an unscoped claim
-    ///     that returned the other kind would be running with the wrong locks and could not be handed back, because
-    ///     attempt is pinned to 1 and there is no retry.
+    ///     The same claim, scoped to one work kind.
     /// </summary>
+    /// <remarks>
+    ///     The consumer acquires the exclusivity a kind needs BEFORE it claims, so it has to be able to say "claim
+    ///     only what I am holding the right locks for": an unscoped claim that returned the other kind would be
+    ///     running with the wrong locks and could not be handed back, because attempt is pinned to 1 and there is no
+    ///     retry.
+    /// </remarks>
     Task<TrainingWorkClaim?> ClaimNextAsync(TrainingWorkKind onlyKind, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The kind of the work item a claim would take next, without taking it. The consumer needs it to decide which
-    ///     exclusivity to acquire; the head cannot be overtaken because queue sequences only ever increase and there is
-    ///     one consumer, and a head that terminalizes between the peek and the claim only makes the scoped claim return
-    ///     null. Null when the queue is empty.
+    ///     The kind of the work item a claim would take next, without taking it. Null when the queue is empty.
     /// </summary>
+    /// <remarks>
+    ///     The consumer needs it to decide which exclusivity to acquire. The head cannot be overtaken — queue
+    ///     sequences only ever increase and there is one consumer — and a head that terminalizes between the peek and
+    ///     the claim only makes the scoped claim return null.
+    /// </remarks>
     Task<TrainingWorkKind?> PeekNextKindAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -127,12 +129,14 @@ public interface ITrainingRunStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Marks the artifact promoted under a registry name, or clears the promotion with null once the registry entry
-    ///     has been removed — without that, a promoted artifact and the run behind it could never be deleted. Promoting
-    ///     is refused while smoke is still <see cref="TrainingArtifactSmokeState.Pending" /> or
-    ///     <see cref="TrainingArtifactSmokeState.Failed" />: staged is inert, and only a passed (or explicitly skipped)
-    ///     smoke lets an artifact out.
+    ///     Marks the artifact promoted under a registry name, or clears the promotion with null once the registry
+    ///     entry has been removed — without that, a promoted artifact and the run behind it could never be deleted.
     /// </summary>
+    /// <remarks>
+    ///     Promoting is refused while smoke is still <see cref="TrainingArtifactSmokeState.Pending" /> or
+    ///     <see cref="TrainingArtifactSmokeState.Failed" />: staged is inert, and only a passed (or explicitly
+    ///     skipped) smoke lets an artifact out.
+    /// </remarks>
     Task<TrainingArtifactRecord> SetArtifactCommittedNameAsync(Guid artifactId,
         long expectedVersion,
         string? committedModelName,

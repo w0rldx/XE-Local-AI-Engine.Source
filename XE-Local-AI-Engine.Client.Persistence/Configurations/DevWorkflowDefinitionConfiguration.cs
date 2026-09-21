@@ -22,9 +22,8 @@ internal sealed class DevWorkflowDefinitionConfiguration : IEntityTypeConfigurat
         builder.Property(entity => entity.SeedSlug).HasColumnName("seed_slug").HasMaxLength(128);
         builder.Property(entity => entity.Archived).HasColumnName("archived");
 
-        // A concurrency token, exactly as the work-item and run rows are: the store's read-then-check is a fast answer
-        // for the common stale PUT, but two edits that both read the same version pass it together, and without the
-        // token the later one would silently overwrite the earlier instead of being told it lost.
+        // A concurrency token, exactly as the work-item and run rows are: the store's read-then-check is a fast answer for the common stale PUT, but two edits that
+        // both read the same version pass it together, and without the token the later one would silently overwrite the earlier instead of being told it lost.
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");

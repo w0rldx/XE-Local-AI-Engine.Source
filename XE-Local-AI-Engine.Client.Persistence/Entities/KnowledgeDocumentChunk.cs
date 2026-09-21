@@ -1,13 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Source-of-truth retrieval unit — a plaintext chunk of a <see cref="KnowledgeDocument" />. The FTS5 external-content
-///     index (<c>chunk_fts</c>, added by the raw-SQL migration) keys on <see cref="Rowid" />, so this table intentionally
-///     uses an explicit <c>INTEGER PRIMARY KEY</c> rowid alias rather than the <see cref="ChunkId" /> GUID: a SQLite table
-///     has exactly one primary key, and an implicit rowid would be reassigned by <c>VACUUM</c>, silently breaking the
-///     FTS↔content alignment. <see cref="ChunkId" /> is the stable public identifier and a UNIQUE alternate key that the
-///     vector index foreign-keys to.
+///     Source-of-truth retrieval unit — a plaintext chunk of a <see cref="KnowledgeDocument" />. It intentionally uses
+///     an explicit <c>INTEGER PRIMARY KEY</c> rowid alias rather than the <see cref="ChunkId" /> GUID.
 /// </summary>
+/// <remarks>
+///     The FTS5 external-content index (<c>chunk_fts</c>, added by the raw-SQL migration) keys on
+///     <see cref="Rowid" />: a SQLite table has exactly one primary key, and an implicit rowid would be reassigned by
+///     <c>VACUUM</c>, silently breaking the FTS↔content alignment. <see cref="ChunkId" /> is the stable public
+///     identifier and a UNIQUE alternate key that the vector index foreign-keys to.
+/// </remarks>
 internal sealed record class KnowledgeDocumentChunk
 {
     /// <summary>

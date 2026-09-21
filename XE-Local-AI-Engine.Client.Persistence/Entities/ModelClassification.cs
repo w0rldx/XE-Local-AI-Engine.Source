@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Persisted classification for a single local model, keyed by model name. Not encrypted — a model name,
-///     content digest, detected capabilities and kind are not secrets. The detected fields are a digest-keyed cache
-///     refreshed on re-pull; the override is operator-set and intentionally survives a re-pull (keyed by name).
+///     Persisted classification for a single local model, keyed by model name. Not encrypted — a model name, content
+///     digest, detected capabilities and kind are not secrets.
 /// </summary>
+/// <remarks>
+///     The detected fields are a digest-keyed cache refreshed on re-pull; the override is operator-set and
+///     intentionally survives a re-pull (keyed by name).
+/// </remarks>
 internal sealed record class ModelClassification
 {
     /// <summary>Model name (primary key, <c>NOCASE</c> collation). The stable override key — survives re-pull.</summary>

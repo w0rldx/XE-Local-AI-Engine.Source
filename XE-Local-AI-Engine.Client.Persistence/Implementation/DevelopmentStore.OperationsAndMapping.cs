@@ -11,21 +11,14 @@ public sealed partial class DevelopmentStore
 {
     /// <summary>
     ///     How many times one operation re-runs after losing its write before that is answered as a conflict.
-    ///     <para>
-    ///         A project's event sequence is <c>MAX(sequence) + 1</c> under a unique index, so two writers on the SAME
-    ///         project — which is what a decomposition's children are, now that a project may carry more than one task —
-    ///         can compute the same number, and one of them must lose. Losing that way is not a conflict about anything:
-    ///         nothing was overwritten, the whole transaction rolled back, and a re-run reads a sequence that has moved
-    ///         on. The same is true of the commoner cause, a busy database refusing the write outright.
-    ///     </para>
-    ///     <para>
-    ///         Measured, so this claims no more than it should: on this store's SQLite connection the collision is hard
-    ///         to provoke, because the file lock serializes the whole read-then-write and four concurrent creators land
-    ///         four distinct sequences with or without this. It is the answer to the case that DOES get through rather
-    ///         than a fix for one seen in the wild — and it is bounded, because a re-run that keeps losing is a caller
-    ///         under real contention, whose honest answer is the exception this always threw.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A project's event sequence is <c>MAX(sequence) + 1</c> under a unique index, so two writers on the SAME
+    ///     project — a decomposition's children — can compute the same number and one must lose. Nothing is
+    ///     overwritten, the transaction rolls back and a re-run reads a moved sequence; likewise for a busy database.
+    ///     Measured: the file lock serializes the whole read-then-write, so four concurrent creators land four distinct
+    ///     sequences either way. Bounded, because a re-run that keeps losing is a caller under real contention.
+    /// </remarks>
     private const int MaxOperationAttempts = 5;
 
     private async Task<DevelopmentOperationResult> ExecuteOperationAsync(Guid projectId,
@@ -62,9 +55,8 @@ public sealed partial class DevelopmentStore
             {
                 await transaction.RollbackAsync(CancellationToken.None);
 
-                // Cleared before anything is re-read, and before the mutation is composed again: every one of them
-                // loads what it needs INSIDE itself, so a second pass reads the state the winner left rather than the
-                // state this one lost against.
+                // Cleared before anything is re-read, and before the mutation is composed again: every one of them loads what it needs INSIDE itself, so a second
+                // pass reads the state the winner left rather than the state this one lost against.
                 _dbContext.ChangeTracker.Clear();
                 existing = await FindOperationCoreAsync(projectId, operationId, phase, CancellationToken.None);
                 if (existing is not null)
@@ -138,11 +130,14 @@ public sealed partial class DevelopmentStore
     }
 
     /// <summary>
-    ///     The project a task belongs to. <see cref="DevelopmentNotFoundException" /> rather than the
-    ///     <c>InvalidOperationException</c> a <c>SingleAsync</c> would throw for a task deleted underneath a caller:
-    ///     that is the family the global DevelopmentNotFoundExceptionHandler answers as a 404, and an untyped escape
-    ///     from a recording path leaves its row unresolvable.
+    ///     The project a task belongs to.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="DevelopmentNotFoundException" /> rather than the <c>InvalidOperationException</c> a
+    ///     <c>SingleAsync</c> would throw for a task deleted underneath a caller: that is the family the global
+    ///     DevelopmentNotFoundExceptionHandler answers as a 404, and an untyped escape from a recording path leaves its
+    ///     row unresolvable.
+    /// </remarks>
     private async Task<Guid> ProjectIdForTaskAsync(Guid taskId, CancellationToken cancellationToken)
     {
         return await _dbContext.DevelopmentTasks.AsNoTracking()

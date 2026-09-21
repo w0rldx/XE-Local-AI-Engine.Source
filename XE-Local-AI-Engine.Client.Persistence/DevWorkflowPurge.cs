@@ -3,27 +3,27 @@ namespace XE_Local_AI_Engine.Client.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
-///     Single source of truth for the complete DB footprint of a dev-workflow work item and of one run. The run's own
-///     children declare a cascade the node connection enforces, so listing them here is belt-and-braces; what the
-///     schema cannot do is reach the rows that hang off a work item through other families, which is why the whole
-///     footprint is enumerated in one place rather than left to the database.
+///     Single source of truth for the complete DB footprint of a dev-workflow work item and of one run.
 /// </summary>
 /// <remarks>
-///     Deletes DB rows only; the caller owns the enclosing transaction, the on-disk artifact-blob teardown
-///     (<c>IDevWorkflowArtifactBlobStore.DeleteRun</c> after the commit) and the work sessions the agent node-runs own —
-///     deleting a work item does <em>not</em> cascade into <c>agent_work_sessions</c>, which has its own store and its
-///     own ordered delete. Deleting rows that are already gone is a harmless no-op, so both operations are idempotent.
+///     The run's own children declare a cascade the node connection enforces, so listing them here is belt-and-braces;
+///     what the schema cannot do is reach the rows that hang off a work item through other families. Deletes DB rows
+///     only: the caller owns the enclosing transaction, the on-disk artifact-blob teardown
+///     (<c>IDevWorkflowArtifactBlobStore.DeleteRun</c> after the commit) and the work sessions the agent node-runs
+///     own, since deleting a work item does <em>not</em> cascade into <c>agent_work_sessions</c>, which has its own store and its own ordered delete.
 /// </remarks>
 public static class DevWorkflowPurge
 {
     /// <summary>
     ///     Every <c>dev_workflow_*</c> table below the work-item root that <see cref="DeleteWorkItemAsync" /> deletes
-    ///     from, excluding the root <c>dev_workflow_work_items</c> itself. Exists so a test can enumerate every
-    ///     work-item-scoped table in the EF model and assert it appears here — catching the drift this class's remarks
-    ///     warn about. <c>dev_workflow_definitions</c> is deliberately absent: a definition is not work-item-scoped and
-    ///     survives by design. Whenever a <c>DELETE FROM</c> statement below is added, removed, or changed, update this
-    ///     list to match.
+    ///     from, excluding the root <c>dev_workflow_work_items</c> itself.
     /// </summary>
+    /// <remarks>
+    ///     Exists so a test can enumerate every work-item-scoped table in the EF model and assert it appears here,
+    ///     catching the drift this class's remarks warn about. <c>dev_workflow_definitions</c> is deliberately absent:
+    ///     a definition is not work-item-scoped and survives by design. Whenever a <c>DELETE FROM</c> statement below
+    ///     is added, removed or changed, update this list to match.
+    /// </remarks>
     internal static readonly IReadOnlyList<string> CoveredChildTables =
     [
         "dev_workflow_artifact_uses",

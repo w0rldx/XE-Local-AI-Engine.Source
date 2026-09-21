@@ -18,9 +18,12 @@ internal sealed record class IntegrationSession
 
     /// <summary>
     ///     The owned conversation's id, pre-minted by the caller <b>before</b> the accept transaction (ruling R4-1).
-    ///     For the width of the gap between that commit and the conversation insert this points at a row that does not
-    ///     exist yet, on purpose, which is one reason it carries no foreign key. Plaintext (structural).
+    ///     Plaintext (structural).
     /// </summary>
+    /// <remarks>
+    ///     For the width of the gap between that commit and the conversation insert this points at a row that does
+    ///     not exist yet, on purpose, which is one reason it carries no foreign key.
+    /// </remarks>
     public Guid ConversationId { get; set; }
 
     /// <summary>The saved agent the session's executions run. Loose reference with no FK. Plaintext (structural).</summary>
@@ -40,8 +43,11 @@ internal sealed record class IntegrationSession
 
     /// <summary>
     ///     The newest persisted event's sequence, as an activity indicator the UI renders — never an ordering key.
-    ///     Sequences restart at 1 per execution, so this is a plain assignment and not a running maximum. Written by
-    ///     <c>AppendEventAsync</c> and by <c>TryTerminalizeAsync</c>, and by nothing else. Plaintext (structural).
+    ///     Plaintext (structural).
     /// </summary>
+    /// <remarks>
+    ///     Sequences restart at 1 per execution, so this is a plain assignment and not a running maximum. Written by
+    ///     <c>AppendEventAsync</c> and by <c>TryTerminalizeAsync</c>, and by nothing else.
+    /// </remarks>
     public long LastSequence { get; set; }
 }

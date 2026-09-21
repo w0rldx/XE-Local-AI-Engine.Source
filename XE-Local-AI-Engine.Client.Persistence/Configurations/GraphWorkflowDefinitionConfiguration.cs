@@ -21,9 +21,8 @@ internal sealed class GraphWorkflowDefinitionConfiguration : IEntityTypeConfigur
         builder.Property(entity => entity.NodeCount).HasColumnName("node_count");
         builder.Property(entity => entity.SchemaVersion).HasColumnName("schema_version");
 
-        // A concurrency token, exactly as the run row is: the store's read-then-check is a fast answer for the common
-        // stale PUT, but two edits that both read the same version pass it together, and without the token the later
-        // one would silently overwrite the earlier instead of being told it lost.
+        // A concurrency token, exactly as the run row is: the store's read-then-check is a fast answer for the common stale PUT, but two edits that both read the
+        // same version pass it together, and without the token the later one would silently overwrite the earlier instead of being told it lost.
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");

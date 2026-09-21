@@ -3,23 +3,21 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Append-only metadata log of a single agent run. FOUR producers share this table, distinguished by
-///     <see cref="RecordKind" />: adaptive-memory diagnostics (kind 0, one row per memory-enabled run), the durable
-///     per-invocation run envelope (kind 1, one content-free row per ordinary chat invocation at terminalization),
-///     the tool-approval decision audit (kind 2) and the external-integration invocation audit (kind 3).
-///     Every read and aggregate must filter by <see cref="RecordKind" />, because column meanings are overloaded
-///     across the four.
-///     Holds NO message content — only latency/token/status telemetry plus ids that link back to the
-///     already-encrypted chat tables. The whole row is plaintext (structural) and is NEVER encrypted;
-///     <see cref="ErrorClass" /> is an exception type name (memory rows) or a <c>FailureCategory</c> enum name (envelope
-///     rows) only, never the exception message or any transcript text.
+///     Append-only, content-free metadata log of a single agent run. FOUR producers share this table, distinguished
+///     by <see cref="RecordKind" />. The whole row is plaintext (structural) and is NEVER encrypted.
 /// </summary>
+/// <remarks>
+///     Kind 0 = adaptive-memory diagnostics, 1 = the durable per-invocation run envelope written at terminalization,
+///     2 = the tool-approval decision audit, 3 = the external-integration invocation audit. Every read and aggregate
+///     must filter by <see cref="RecordKind" />: column meanings are overloaded across the four. The row holds no
+///     message content — only latency/token/status telemetry plus ids that link back to the encrypted chat tables.
+/// </remarks>
 internal sealed record class AgentExecutionLog
 {
     public Guid Id { get; set; }
 
     /// <summary>
-    ///     Discriminates the row's producer: 0 = adaptive-memory diagnostics, 1 = chat run envelope,
+    ///     The row's producer: 0 = adaptive-memory diagnostics, 1 = chat run envelope,
     ///     2 = tool-approval decision audit, 3 = integration invocation. Mirrors <c>AgentExecutionLogRecordKind</c>.
     ///     Existing rows backfill to 0. Plaintext (structural).
     /// </summary>
@@ -29,11 +27,13 @@ internal sealed record class AgentExecutionLog
     public int SchemaVersion { get; set; }
 
     /// <summary>
-    ///     Agent definition the run executed under. For memory rows this is the real agent id. For envelope rows it is
-    ///     the bound agent id copied from the winning assistant-message write when an agent was bound (so the envelope
-    ///     can never disagree with the row), or <see cref="System.Guid.Empty" /> when the run had no bound agent.
-    ///     Indexed (with <see cref="CreatedAtUtc" />). Plaintext (structural).
+    ///     Agent definition the run executed under. Indexed (with <see cref="CreatedAtUtc" />). Plaintext (structural).
     /// </summary>
+    /// <remarks>
+    ///     For memory rows this is the real agent id. For envelope rows it is the bound agent id copied from the
+    ///     winning assistant-message write when an agent was bound (so the envelope can never disagree with the row),
+    ///     or <see cref="System.Guid.Empty" /> when the run had no bound agent.
+    /// </remarks>
     public Guid AgentDefinitionId { get; set; }
 
     /// <summary>Conversation the run belonged to, or <c>null</c> when not run inside a conversation. Plaintext (structural).</summary>
@@ -46,11 +46,14 @@ internal sealed record class AgentExecutionLog
     public string ModelName { get; set; } = string.Empty;
 
     /// <summary>
-    ///     Fine-grained runtime provider that served the run (a non-sensitive category label): <c>local</c> (llama.cpp),
-    ///     <c>ollama</c>, <c>codex</c>, <c>azure</c>, or <c>unknown</c> (fallback / rows written before the dimension
-    ///     existed). Never encrypted — a category label like <see cref="ModelName" />, not content. Existing rows and any
-    ///     envelope written without a resolved provider backfill to <c>unknown</c> via the column default. Plaintext (structural).
+    ///     Fine-grained runtime provider that served the run (a non-sensitive category label): <c>local</c>
+    ///     (llama.cpp), <c>ollama</c>, <c>codex</c>, <c>azure</c>, or <c>unknown</c>. Plaintext (structural).
     /// </summary>
+    /// <remarks>
+    ///     Never encrypted — a category label like <see cref="ModelName" />, not content. <c>unknown</c> is the
+    ///     fallback for rows written before the dimension existed: they, and any envelope written without a resolved
+    ///     provider, backfill to it via the column default.
+    /// </remarks>
     public string Provider { get; set; } = AgentUsageProviders.Unknown;
 
     /// <summary>Runtime-package config hash for the run. Plaintext (structural).</summary>
@@ -69,8 +72,9 @@ internal sealed record class AgentExecutionLog
     public bool Success { get; set; }
 
     /// <summary>
-    ///     Exception type name only when the run failed (e.g. <c>HttpRequestException</c>), or <c>null</c> on success.
-    ///     NEVER the exception message or any transcript text. Plaintext (structural).
+    ///     Exception type name (e.g. <c>HttpRequestException</c>) on a failed memory row, or a <c>FailureCategory</c>
+    ///     enum name on a failed envelope row; <c>null</c> on success. NEVER the exception message or any transcript
+    ///     text. Plaintext (structural).
     /// </summary>
     public string? ErrorClass { get; set; }
 
@@ -110,10 +114,12 @@ internal sealed record class AgentExecutionLog
 
     /// <summary>
     ///     Estimated tool-schema tokens the turn spent, CUMULATIVE across its provider rounds, or <c>null</c> when the
-    ///     seam reported none (a memory row, or an envelope written by the restart-recovery backfill). A
-    ///     <c>long</c> because its source is: the budgeter accumulates it with <c>Interlocked.Add</c> over every round.
-    ///     Plaintext (structural) — a count, never a tool name.
+    ///     seam reported none (a memory row, or an envelope written by the restart-recovery backfill).
     /// </summary>
+    /// <remarks>
+    ///     A <c>long</c> because its source is: the budgeter accumulates it with <c>Interlocked.Add</c> over every
+    ///     round. Plaintext (structural) — a count, never a tool name.
+    /// </remarks>
     public long? ToolSchemaTokens { get; set; }
 
     /// <summary>
@@ -138,10 +144,12 @@ internal sealed record class AgentExecutionLog
 
     /// <summary>
     ///     How many of <see cref="LatencyMs" /> the turn spent making a LOCAL runtime ready — launching
-    ///     <c>llama-server</c> and loading the model — rather than generating, or <c>null</c> when no local warm
-    ///     happened (a remote provider, Ollama, an already-resident model) and on every pre-migration row. The
-    ///     whole-turn latency starts before the warm, so <c>latency_ms - model_readiness_ms</c> is the warm-equivalent
-    ///     turn time and the only way a cold arm compares with a warm one. Plaintext (structural) — a duration.
+    ///     <c>llama-server</c> and loading the model — rather than generating. Plaintext (structural) — a duration.
     /// </summary>
+    /// <remarks>
+    ///     <c>null</c> when no local warm happened (a remote provider, Ollama, an already-resident model) and on every
+    ///     pre-migration row. The whole-turn latency starts before the warm, so <c>latency_ms - model_readiness_ms</c>
+    ///     is the warm-equivalent turn time and the only way a cold arm compares with a warm one.
+    /// </remarks>
     public long? ModelReadinessMs { get; set; }
 }

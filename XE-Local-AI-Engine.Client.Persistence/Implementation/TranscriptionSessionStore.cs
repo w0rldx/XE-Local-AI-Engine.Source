@@ -6,12 +6,13 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     EF-backed <see cref="ITranscriptionSessionStore" />. Every write goes through
-///     <see cref="NodeChatDbContext.SaveChangesAsync" /> so the node encryption interceptor encrypts the title, config,
-///     error pair and segment text at rest; the status transitions load the row tracked and touch only plaintext
-///     columns, so the interceptor skips the encrypted ones and their ciphertext is preserved. Scoped: one instance per
-///     DI scope, matching the DbContext lifetime.
+///     EF-backed <see cref="ITranscriptionSessionStore" />, scoped to the DbContext lifetime.
 /// </summary>
+/// <remarks>
+///     Every write goes through <see cref="NodeChatDbContext.SaveChangesAsync" /> so the node encryption interceptor
+///     encrypts the title, config, error pair and segment text at rest; the status transitions load the row tracked
+///     and touch only plaintext columns, so the interceptor skips the encrypted ones and their ciphertext is preserved.
+/// </remarks>
 public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
 {
     private readonly NodeChatDbContext _dbContext;
@@ -86,9 +87,8 @@ public sealed class TranscriptionSessionStore : ITranscriptionSessionStore
             return false;
         }
 
-        // The declared ON DELETE CASCADE does fire on the node connection, but the transcript is still deleted
-        // set-based: loading the segments to let EF cascade would decrypt every one of them only to throw the plaintext
-        // away. The two statements share one transaction so a session never survives its own transcript.
+        // The declared ON DELETE CASCADE does fire on the node connection, but the transcript is still deleted set-based: loading the segments to let EF cascade
+        // would decrypt every one of them only to throw the plaintext away. One transaction, so a session never outlives its transcript.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         _ = await _dbContext.TranscriptSegments

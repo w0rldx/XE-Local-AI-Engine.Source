@@ -104,9 +104,8 @@ public sealed class McpServerApiKeyStore : IMcpServerApiKeyStore
         long timestampUtc,
         CancellationToken cancellationToken = default)
     {
-        // ExecuteUpdate rather than a tracked save: it touches ONLY last_used_at_utc, so the sealed hash column is
-        // never re-read, re-encrypted or rewritten on the authentication hot path. A tracked save would round-trip the
-        // credential through the interceptors on every single authenticated MCP request.
+        // ExecuteUpdate rather than a tracked save: it touches ONLY last_used_at_utc, so the sealed hash column is never re-read, re-encrypted or rewritten on the
+        // authentication hot path. A tracked save would round-trip the credential through the interceptors on every single authenticated MCP request.
         var updated = await _dbContext.McpServerApiKeys
                                       .Where(row => row.Id == McpServerApiKey.SingletonId && row.GenerationId == generationId)
                                       .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastUsedAtUtc, timestampUtc), cancellationToken);

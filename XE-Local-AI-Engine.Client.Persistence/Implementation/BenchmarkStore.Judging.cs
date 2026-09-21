@@ -69,9 +69,8 @@ public sealed partial class BenchmarkStore
         var project = await RequireProjectAsync(projectId, cancellationToken);
         EnsureVersion(project.Version, expectedProjectVersion);
 
-        // No freeze check, on purpose. See IBenchmarkStore: a frozen project refuses edits to what its runs were
-        // measured AGAINST; these settings decide what gets measured next, and every stored number keeps the
-        // comparability digest it was measured under, so a change here makes old figures stale rather than wrong.
+        // No freeze check, on purpose. See IBenchmarkStore: a frozen project refuses edits to what its runs were measured AGAINST, while these settings decide what
+        // gets measured next, and every stored number keeps the comparability digest it was measured under, so a change here makes old figures stale, not wrong.
         var now = Now();
         project.FidelityEnabled = input.FidelityEnabled;
         project.FidelityKldEnabled = input.FidelityKldEnabled;
@@ -91,11 +90,13 @@ public sealed partial class BenchmarkStore
     }
 
     /// <summary>
-    ///     Queues one fidelity measurement per succeeded cell that has none. The eligibility rule is freeze's own —
-    ///     non-warm-up, first of its repeat group — because a cell measured here and a cell measured at freeze must
-    ///     mean the same thing. Runs that already have an attempt are skipped rather than re-measured: a re-measure is
-    ///     the per-run route's job and costs GPU the operator did not ask for here.
+    ///     Queues one fidelity measurement per succeeded cell that has none.
     /// </summary>
+    /// <remarks>
+    ///     The eligibility rule is freeze's own — non-warm-up, first of its repeat group — because a cell measured here
+    ///     and a cell measured at freeze must mean the same thing. Runs that already have an attempt are skipped rather
+    ///     than re-measured: a re-measure is the per-run route's job and costs GPU the operator did not ask for here.
+    /// </remarks>
     private async Task<IReadOnlyList<Guid>> EnqueueMissingFidelityAsync(BenchmarkProject project, long now, CancellationToken cancellationToken)
     {
         var kind = project.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity;
@@ -112,9 +113,8 @@ public sealed partial class BenchmarkStore
                                          .ToListAsync(cancellationToken);
         foreach (var run in candidates)
         {
-            // AppendFidelityWorkAsync already sets the projection to 'queued' and clears the error, which is exactly
-            // what an enqueued measurement is. Resetting it to null here undid that in the same transaction and left
-            // the run reading as "fidelity was never asked for" while its item sat in the queue.
+            // AppendFidelityWorkAsync already sets the projection to 'queued' and clears the error, which is exactly what an enqueued measurement is. Resetting it
+            // to null here would undo that in the same transaction and leave the run reading as "fidelity was never asked for" while its item sat in the queue.
             _ = await AppendFidelityWorkAsync(run, kind, now, cancellationToken);
             run.Version++;
             run.UpdatedAtUtc = now;

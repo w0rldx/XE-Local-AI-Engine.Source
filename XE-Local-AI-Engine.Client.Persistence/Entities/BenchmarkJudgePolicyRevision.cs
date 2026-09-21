@@ -35,10 +35,12 @@ internal sealed record class BenchmarkJudgePolicyRevision
 
     /// <summary>
     ///     Bumped in the same transaction that inserts or terminalizes any pairwise comparison in this revision's
-    ///     <c>(revision, generation)</c> scope — the only two ways the fitted set can change. A published fit stamps
-    ///     the value it was fit at, so staleness is one integer comparison against this row rather than a re-hash of
-    ///     every comparison on each page read.
+    ///     <c>(revision, generation)</c> scope — the only two ways the fitted set can change.
     /// </summary>
+    /// <remarks>
+    ///     A published fit stamps the value it was fit at, so staleness is one integer comparison against this row
+    ///     rather than a re-hash of every comparison on each page read.
+    /// </remarks>
     public int ComparisonSetVersion { get; set; }
 
     public long CreatedAtUtc { get; set; }

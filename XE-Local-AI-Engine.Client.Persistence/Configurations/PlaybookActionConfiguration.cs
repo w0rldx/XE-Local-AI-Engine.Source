@@ -66,9 +66,8 @@ internal sealed class PlaybookActionConfiguration : IEntityTypeConfiguration<Pla
 
         builder.HasIndex(entity => entity.AgentDefinitionId);
 
-        // A playbook action is meaningless without its owning agent, so the FK cascades: deleting an agent removes its
-        // actions. (Contrast conversation->definition, which is intentionally no-FK because a conversation outlives its
-        // definition.)
+        // A playbook action is meaningless without its owning agent, so the FK cascades: deleting an agent removes its actions. Contrast conversation->definition,
+        // which is intentionally no-FK because a conversation outlives its definition.
         builder.HasOne<AgentDefinition>()
                .WithMany()
                .HasForeignKey(entity => entity.AgentDefinitionId)

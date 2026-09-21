@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     One transcript row of a <see cref="TranscriptionSession" />. Append-only: <see cref="Seq" /> is allocated by the
-///     caller and a unique <c>(session_id, seq)</c> index stops a double allocation. <see cref="Text" /> is stored
-///     encrypted at rest (AAD column name <c>transcript_segment_text</c>, binding the session id and the segment id), so
-///     a row moved to another session fails its tag check instead of surfacing as that session's transcript.
+///     One transcript row of a <see cref="TranscriptionSession" />. Append-only: <see cref="Seq" /> is allocated by
+///     the caller and a unique <c>(session_id, seq)</c> index stops a double allocation.
 /// </summary>
+/// <remarks>
+///     <see cref="Text" /> is stored encrypted at rest (AAD column name <c>transcript_segment_text</c>, binding the
+///     session id and the segment id), so a row moved to another session fails its tag check instead of surfacing as
+///     that session's transcript.
+/// </remarks>
 internal sealed record class TranscriptSegment
 {
     /// <summary>Segment identity (PK).</summary>

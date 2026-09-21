@@ -89,9 +89,8 @@ public sealed class LocalModelProxyApiKeyStore : ILocalModelProxyApiKeyStore
 
     public async Task TouchLastUsedAsync(long timestampUtc, CancellationToken cancellationToken = default)
     {
-        // ExecuteUpdate rather than a tracked save: it touches ONLY last_used_at_utc, so the sealed hash column is
-        // never re-read, re-encrypted or rewritten on the authentication hot path. A tracked save would round-trip the
-        // credential through the interceptors on every single authenticated proxy request.
+        // ExecuteUpdate rather than a tracked save: it touches ONLY last_used_at_utc, so the sealed hash column is never re-read, re-encrypted or rewritten on the
+        // authentication hot path. A tracked save would round-trip the credential through the interceptors on every single authenticated proxy request.
         _ = await _dbContext.LocalModelProxyApiKeys
                             .Where(row => row.Id == LocalModelProxyApiKey.SingletonId)
                             .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.LastUsedAtUtc, timestampUtc), cancellationToken);

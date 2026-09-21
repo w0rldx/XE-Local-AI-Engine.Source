@@ -5,10 +5,12 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Persistence boundary for the per-model extra <c>llama-server</c> argument override. The
-///     <c>model_launch_arguments</c> table is keyed by model name with a <c>NOCASE</c> collation, so name lookups and the
-///     upsert key are case-insensitive without any LINQ-side comparer. No column is encrypted.
+///     Persistence boundary for the per-model extra <c>llama-server</c> argument override.
 /// </summary>
+/// <remarks>
+///     The <c>model_launch_arguments</c> table is keyed by model name with a <c>NOCASE</c> collation, so name lookups
+///     and the upsert key are case-insensitive without any LINQ-side comparer. No column is encrypted.
+/// </remarks>
 public sealed class ModelLaunchArgumentsStore : IModelLaunchArgumentsStore
 {
     private readonly NodeChatDbContext _dbContext;

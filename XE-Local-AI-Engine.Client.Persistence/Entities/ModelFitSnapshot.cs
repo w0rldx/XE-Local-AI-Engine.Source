@@ -1,14 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     A single model-fit utility run snapshot (recommendation or benchmark). The raw utility output, captured stderr
-///     and detailed diagnostics are sensitive by default (provider metadata, host topology, local paths, unexpected
-///     stderr) and are stored as encrypted UTF-8 byte columns — encrypted at rest by
-///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
-///     <see cref="NodeEncryptionMaterializationInterceptor" /> with per-column AAD. List/latest projections omit them;
-///     only an explicit operator-diagnostics read returns them. A run intentionally has NO enforced FK to its scheduler
-///     run (<see cref="CreatedByRunId" />): runs outlive definitions — same no-FK precedent as scheduled_job_runs.
+///     A single model-fit utility run snapshot (recommendation or benchmark).
 /// </summary>
+/// <remarks>
+///     The raw utility output, captured stderr and detailed diagnostics are sensitive by default (provider metadata,
+///     host topology, local paths, unexpected stderr) and are stored as encrypted UTF-8 byte columns — encrypted at rest by
+///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by <see cref="NodeEncryptionMaterializationInterceptor" /> with per-column
+///     AAD. List/latest projections omit them; only an explicit operator-diagnostics read returns them. A run
+///     intentionally has NO enforced FK to its scheduler run (<see cref="CreatedByRunId" />): runs outlive definitions — same no-FK precedent as scheduled_job_runs.
+/// </remarks>
 internal sealed record class ModelFitSnapshot
 {
     public Guid Id { get; set; }

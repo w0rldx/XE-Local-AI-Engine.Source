@@ -33,23 +33,27 @@ internal sealed record class AgentSkill
 
     /// <summary>
     ///     Optional spec frontmatter as a single UTF-8 JSON object — <c>{license, compatibility, allowedTools,
-    ///     metadata}</c>. One column rather than four because the fields are optional, sparsely used, and
-    ///     <c>metadata</c> is arbitrary operator- or third-party-supplied content. Plaintext while tracked in memory;
-    ///     encrypted at rest by <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
-    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>frontmatter_json</c>. Null
-    ///     when every field is absent.
+    ///     metadata}</c>. Null when every field is absent.
     /// </summary>
+    /// <remarks>
+    ///     One column rather than four because the fields are optional, sparsely used, and <c>metadata</c> is
+    ///     arbitrary operator- or third-party-supplied content. Plaintext while tracked in memory; encrypted at rest
+    ///     by <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
+    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>frontmatter_json</c>.
+    /// </remarks>
     public byte[]? FrontmatterJson { get; set; }
 
     /// <summary>
     ///     AI-generation provenance for a drafted skill as a UTF-8 JSON object, or <c>null</c> for a row with no AI
-    ///     provenance. Plaintext while tracked in memory; encrypted at rest by
-    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
-    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
+    ///     provenance.
+    /// </summary>
+    /// <remarks>
+    ///     Plaintext while tracked in memory; encrypted at rest by <see cref="NodeEncryptionSaveChangesInterceptor" />
+    ///     and decrypted by <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
     ///     <c>generation_metadata_json</c>. Informational only: on a single-operator node the operator supplies most of
     ///     it, so it records what a draft claimed, not a tamper-proof attestation. Deliberately not part of
     ///     <see cref="FrontmatterJson" /> — that is spec surface the model sees, and provenance stays out of the prompt.
-    /// </summary>
+    /// </remarks>
     public byte[]? GenerationMetadataJson { get; set; }
 
     /// <summary>
@@ -61,13 +65,15 @@ internal sealed record class AgentSkill
 
     /// <summary>
     ///     Where an <see cref="AgentSkillOrigin.Imported" /> row came from, or <c>null</c> for a local skill.
-    ///     Deliberately plaintext: provenance is shown in the UI and has to be greppable in logs. For that reason it
-    ///     carries the <em>kind only</em> (<c>upload</c> for an uploaded archive, <c>generated</c> for AI-drafted
-    ///     content) — an operator-chosen filename must not
-    ///     become the one unencrypted free-text string in a table where everything else is AEAD-sealed. A GitHub source
-    ///     keeps its full <c>github:owner/repo</c> value, which is already public. Shape is enforced at the store
-    ///     boundary.
+    ///     Deliberately plaintext: provenance is shown in the UI and has to be greppable in logs.
     /// </summary>
+    /// <remarks>
+    ///     For that reason it carries the <em>kind only</em> (<c>upload</c> for an uploaded archive, <c>generated</c>
+    ///     for AI-drafted content) — an operator-chosen filename must not become the one unencrypted free-text string
+    ///     in a table where everything else is AEAD-sealed. A GitHub source keeps its full <c>github:owner/repo</c>
+    ///     value, which is already public. Shape is enforced at the store boundary; see
+    ///     docs/wiki/08-data-and-persistence.md ("Agent skill provenance").
+    /// </remarks>
     public string? SourceUri { get; set; }
 
     /// <summary>Epoch-millisecond stamp of the import that created or last replaced this row; <c>null</c> for a local skill.</summary>
@@ -82,10 +88,12 @@ internal sealed record class AgentSkill
 
     /// <summary>
     ///     Bumped on a content-affecting edit (Name/Description/Body/frontmatter, and any resource add, edit or
-    ///     removal); drives the runtime config hash so editing a skill invalidates resume. <see cref="Enabled" />
-    ///     toggles do not bump it (membership in the resolved set already covers that in the hash), and neither does
-    ///     provenance. Default <c>1</c>.
+    ///     removal); drives the runtime config hash so editing a skill invalidates resume. Default <c>1</c>.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="Enabled" /> toggles do not bump it (membership in the resolved set already covers that in the
+    ///     hash), and neither does provenance.
+    /// </remarks>
     public int Version { get; set; }
 
     public long CreatedAtUtc { get; set; }

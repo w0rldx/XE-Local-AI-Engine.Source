@@ -11,9 +11,8 @@ internal sealed class BenchmarkTaskItemConfiguration : IEntityTypeConfiguration<
     {
         builder.ToTable("benchmark_task_items", table =>
         {
-            // The whole kind vocabulary, including the generator kinds no writer produces yet: a CHECK that has to be
-            // rewritten to admit a new kind is a SQLite table rebuild, and admitting the vocabulary up front costs
-            // nothing while the store is the thing that decides what may actually be written.
+            // The whole kind vocabulary, including the generator kinds no writer produces yet: a CHECK that has to be rewritten to admit a new kind is a SQLite
+            // table rebuild, and admitting the vocabulary up front costs nothing while the store is the thing that decides what may actually be written.
             table.HasCheckConstraint("CK_benchmark_task_items_kind",
                 $"kind IN ('{BenchmarkTaskItemKinds.Prompt}', '{BenchmarkTaskItemKinds.Niah}', '{BenchmarkTaskItemKinds.NiahCase}')");
             table.HasCheckConstraint("CK_benchmark_task_items_index", "\"index\" >= 0");

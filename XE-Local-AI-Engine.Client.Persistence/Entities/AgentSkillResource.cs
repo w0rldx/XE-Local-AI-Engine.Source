@@ -13,10 +13,12 @@ internal sealed record class AgentSkillResource
 
     /// <summary>
     ///     Lookup key the model uses, stored as the skill-root-relative path (<c>references/FAQ.md</c>) because MAF
-    ///     tells the model to pass the name exactly as listed. Plaintext; NOCASE-unique per skill. Immutable for the
-    ///     life of a row: it is bound into the content AAD, so an edit is a delete-and-reinsert (which re-seals the
-    ///     payload under the new name) rather than an in-place rename.
+    ///     tells the model to pass the name exactly as listed. Plaintext; NOCASE-unique per skill.
     /// </summary>
+    /// <remarks>
+    ///     Immutable for the life of a row: it is bound into the content AAD, so an edit is a delete-and-reinsert
+    ///     (which re-seals the payload under the new name) rather than an in-place rename.
+    /// </remarks>
     public string Name { get; set; } = string.Empty;
 
     /// <summary>Short label shown to the model alongside the name so it can decide whether to fetch this file. Plaintext.</summary>
@@ -28,13 +30,15 @@ internal sealed record class AgentSkillResource
     /// <summary>
     ///     The file's UTF-8 text. Plaintext while tracked in memory; encrypted at rest by
     ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
-    ///     <see cref="NodeEncryptionMaterializationInterceptor" />. The AAD binds <see cref="SkillId" /> and
-    ///     <see cref="Name" /> in addition to this row's own id — every other encrypted column in this schema binds only
-    ///     the row id, which would be wrong here for the same reason it would be wrong for the inbound-MCP key hash:
-    ///     the threat is a database <em>writer</em>, not a reader. Without the skill id in the AAD, anyone who could
-    ///     edit the file could re-parent a resource row onto a different skill and have its content injected into
-    ///     another agent's context without ever forging a ciphertext or a tag.
+    ///     <see cref="NodeEncryptionMaterializationInterceptor" />.
     /// </summary>
+    /// <remarks>
+    ///     The AAD binds <see cref="SkillId" /> and <see cref="Name" /> in addition to this row's own id — every other
+    ///     encrypted column in this schema binds only the row id, which would be wrong here for the same reason it
+    ///     would be wrong for the inbound-MCP key hash: the threat is a database <em>writer</em>, not a reader.
+    ///     Without the skill id in the AAD, anyone who could edit the file could re-parent a resource row onto a
+    ///     different skill and have its content injected into another agent's context without forging a ciphertext or a tag.
+    /// </remarks>
     public byte[] Content { get; set; } = [];
 
     /// <summary>Plaintext UTF-8 byte length, kept alongside the ciphertext so list views and caps do not have to decrypt. Plaintext.</summary>

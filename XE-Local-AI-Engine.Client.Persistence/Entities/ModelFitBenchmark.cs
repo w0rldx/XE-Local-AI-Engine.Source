@@ -1,13 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     A single measured benchmark row projected from a benchmark snapshot. The structural metrics are plaintext; the
-///     raw benchmark output and detailed diagnostics are sensitive and stored as encrypted UTF-8 byte columns —
-///     encrypted at rest by <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
-///     <see cref="NodeEncryptionMaterializationInterceptor" />. The AAD column names are deliberately distinct from the
-///     snapshot's (<c>bench_raw_json</c>/<c>bench_diagnostics_json</c>) to avoid cross-entity AAD collision. Cascades
-///     when its parent snapshot is deleted.
+///     A single measured benchmark row projected from a benchmark snapshot. Cascades when its parent snapshot is
+///     deleted.
 /// </summary>
+/// <remarks>
+///     The structural metrics are plaintext; the raw benchmark output and detailed diagnostics are sensitive and
+///     stored as encrypted UTF-8 byte columns — encrypted at rest by
+///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
+///     <see cref="NodeEncryptionMaterializationInterceptor" />. The AAD column names are deliberately distinct from
+///     the snapshot's (<c>bench_raw_json</c>/<c>bench_diagnostics_json</c>) to avoid cross-entity AAD collision.
+/// </remarks>
 internal sealed record class ModelFitBenchmark
 {
     public Guid Id { get; set; }
@@ -120,9 +123,8 @@ internal sealed record class ModelFitBenchmark
     /// <summary>Whether flash-attention (<c>-fa</c>) was enabled for the bench, or null for legacy rows. Plaintext.</summary>
     public bool? FlashAttn { get; set; }
 
-    // Profile revision binding (additive, nullable — legacy rows predate it). The freeze gate qualifies a benchmark
-    // only when this matches the profile being frozen AND the row's launch args still match the profile's current
-    // args, so a benchmark taken before a re-explore can never freeze the changed configuration.
+    // Profile revision binding (additive, nullable — legacy rows predate it). The freeze gate qualifies a benchmark only when this
+    // matches the profile being frozen AND the row's launch args still match the profile's current args, so a benchmark taken before a re-explore can never freeze the changed configuration.
 
     /// <summary>The inference profile revision this benchmark measured, or null for legacy rows. Plaintext (structural).</summary>
     public Guid? ProfileId { get; set; }

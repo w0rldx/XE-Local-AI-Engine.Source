@@ -11,10 +11,8 @@ internal sealed class KnowledgeDocumentChunkConfiguration : IEntityTypeConfigura
         // knowledge_ prefix: see KnowledgeDocumentConfiguration — avoids clashing with the shared node-chat schema.
         builder.ToTable("knowledge_document_chunks");
 
-        // KEY NUANCE: a SQLite table has exactly one primary key. The integer rowid alias is the key here because it is
-        // stable across a database vacuum and is the row reference the chunk_fts external-content index aligns on. ChunkId
-        // is a unique alternate key rather than a second primary key. The generated migration must keep rowid as a plain
-        // integer rowid-alias primary key (a normal rowid table) so full-text external content stays valid.
+        // KEY NUANCE: a SQLite table has exactly one primary key. The integer rowid alias is the key here because it is stable across a vacuum and is the row
+        // reference chunk_fts aligns on; ChunkId is a unique alternate key. The migration must keep rowid a plain integer-alias PK so FTS external content stays valid.
         builder.HasKey(entity => entity.Rowid);
 
         builder.Property(entity => entity.Rowid)

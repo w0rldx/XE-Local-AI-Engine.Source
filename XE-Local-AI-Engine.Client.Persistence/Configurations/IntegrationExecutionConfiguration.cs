@@ -30,9 +30,8 @@ internal sealed class IntegrationExecutionConfiguration : IEntityTypeConfigurati
         builder.Property(entity => entity.LastSequence).HasColumnName("last_sequence");
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
 
-        // Uniqueness is PER PRINCIPAL, not global (ruling R4-6): one integrator must not be able to preclaim another's
-        // request id and force it a permanent 409. principal_id leading is deliberate — this index is also the access
-        // path for the accept transaction's per-principal active count, so no second index is added for it.
+        // Uniqueness is PER PRINCIPAL, not global (ruling R4-6): one integrator must not be able to preclaim another's request id and force it a permanent 409.
+        // principal_id leading is deliberate — this index is also the access path for the accept transaction's per-principal active count, so no second is added.
         builder.HasIndex(entity => new
         {
             entity.PrincipalId,

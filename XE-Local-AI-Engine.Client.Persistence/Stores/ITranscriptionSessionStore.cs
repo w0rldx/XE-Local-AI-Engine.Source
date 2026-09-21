@@ -4,17 +4,15 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Persistence boundary for transcription sessions (<c>transcription_sessions</c>) and their transcript rows
-///     (<c>transcript_segments</c>). The title, config, error pair and every segment's text are encrypted at rest by the
-///     node encryption interceptors, so every write goes through EF
-///     <see cref="Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(System.Threading.CancellationToken)" /> and
-///     never raw SQL — a status-only update leaves the encrypted properties unmodified, so the interceptor skips them and
-///     the stored ciphertext survives. Reads decrypt through the materialization interceptor. Scoped: one
-///     <see cref="NodeChatDbContext" /> per operation.
-///     <para>
-///         No member of this contract carries audio. A session records what was said, never what was heard: the uploaded
-///         bytes live in a temp file the caller owns for the duration of one transcription and are deleted with it.
-///     </para>
+///     (<c>transcript_segments</c>). Scoped: one <see cref="NodeChatDbContext" /> per operation.
 /// </summary>
+/// <remarks>
+///     The title, config, error pair and every segment's text are encrypted at rest, so every write goes through EF
+///     <see cref="Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(System.Threading.CancellationToken)" /> and
+///     never raw SQL: a status-only update leaves those properties unmodified, so the interceptor skips them and the
+///     ciphertext survives; reads decrypt on materialization. No member of this contract carries audio — a session
+///     records what was said, never what was heard, and the uploaded bytes die with the caller's temp file.
+/// </remarks>
 public interface ITranscriptionSessionStore
 {
     /// <summary>Inserts a new session in the <see cref="TranscriptionSessionStatus.Created" /> state.</summary>
@@ -27,12 +25,14 @@ public interface ITranscriptionSessionStore
     Task<TranscriptionSessionDetailView?> GetWithSegmentsAsync(Guid sessionId, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     One page of sessions, newest first, without their transcript rows. Ordered by
-    ///     <see cref="TranscriptionSessionSummaryView.CreatedAtUtc" /> descending and then by id descending, so two
-    ///     sessions created in the same millisecond keep a stable order across pages.
-    ///     <see cref="TranscriptionSessionSummaryView.SegmentCount" /> is counted in the database, so the list shows how
-    ///     long a transcript is without decrypting a single row of it.
+    ///     One page of sessions, newest first, without their transcript rows.
     /// </summary>
+    /// <remarks>
+    ///     Ordered by <see cref="TranscriptionSessionSummaryView.CreatedAtUtc" /> descending and then by id descending,
+    ///     so two sessions created in the same millisecond keep a stable order across pages.
+    ///     <see cref="TranscriptionSessionSummaryView.SegmentCount" /> is counted in the database, so the list shows
+    ///     how long a transcript is without decrypting a single row of it.
+    /// </remarks>
     Task<IReadOnlyList<TranscriptionSessionSummaryView>> ListAsync(int limit, int offset, CancellationToken cancellationToken);
 
     /// <summary>The total number of sessions, ignoring paging.</summary>
@@ -93,28 +93,27 @@ public interface ITranscriptionSessionStore
     Task<bool> FailAsync(Guid sessionId, string errorCode, string errorMessage, long updatedAtUtc, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Appends transcript rows and bumps the session's <c>updated_at_utc</c> in one <c>SaveChangesAsync</c>.
+    ///     Appends transcript rows and bumps the session's <c>updated_at_utc</c> in one <c>SaveChangesAsync</c>. False
+    ///     when the session does not exist, and nothing is written.
+    /// </summary>
+    /// <remarks>
     ///     <see cref="TranscriptSegmentWrite.Seq" /> is allocated by the caller; the unique <c>(session_id, seq)</c>
     ///     index is what stops two writers double-allocating, so a repeated sequence throws rather than silently
-    ///     interleaving.
-    ///     <para>
-    ///         False when the session does not exist, and nothing is written. The existence check is what turns an
-    ///         unknown session id into that <c>false</c>; the foreign key would otherwise raise a constraint violation
-    ///         out of the insert instead.
-    ///     </para>
-    /// </summary>
+    ///     interleaving. The existence check is what turns an unknown session id into that <c>false</c>; the foreign
+    ///     key would otherwise raise a constraint violation out of the insert instead.
+    /// </remarks>
     Task<bool> AppendSegmentsAsync(Guid sessionId, IReadOnlyList<TranscriptSegmentWrite> segments, long updatedAtUtc, CancellationToken cancellationToken);
 
     /// <summary>
     ///     One page of transcript rows after a watermark, ordered by <see cref="TranscriptSegmentView.Seq" /> and
-    ///     decrypted. <paramref name="afterSeq" /> is an EXCLUSIVE lower bound, so a subscriber resuming from the last
-    ///     sequence it saw does not receive that row a second time; an unknown session returns an empty page rather
-    ///     than throwing.
-    ///     <para>
-    ///         Unlike <see cref="GetWithSegmentsAsync" /> this bounds the read in SQL. A live session's replay has to
-    ///         answer "what did I miss" without decrypting a transcript that may already run to thousands of rows.
-    ///     </para>
+    ///     decrypted; an unknown session returns an empty page rather than throwing.
     /// </summary>
+    /// <remarks>
+    ///     <paramref name="afterSeq" /> is an EXCLUSIVE lower bound, so a subscriber resuming from the last sequence it
+    ///     saw does not receive that row a second time. Unlike <see cref="GetWithSegmentsAsync" /> this bounds the read
+    ///     in SQL: a live session's replay has to answer "what did I miss" without decrypting a transcript that may
+    ///     already run to thousands of rows.
+    /// </remarks>
     Task<IReadOnlyList<TranscriptSegmentView>> ListSegmentsAfterAsync(Guid sessionId, long afterSeq, int limit, CancellationToken cancellationToken);
 }
 
@@ -163,14 +162,14 @@ public sealed record TranscriptSegmentView
 
 /// <summary>
 ///     A decrypted, transport-neutral view of a session without its transcript rows — what the session list renders.
-///     It deliberately carries no error pair: a list of sessions has no use for one, and leaving it off keeps the
-///     failure detail behind an explicit read of one session.
-///     <para>
-///         <see cref="ConfigJson" /> rides along because it is free: every read that produces this view materializes
-///         the whole entity, so the interceptor has already decrypted that column. The list DTO still does not
-///         expose it — the live-start path is what needs it, and it needs it without loading a transcript.
-///     </para>
 /// </summary>
+/// <remarks>
+///     It deliberately carries no error pair: a list of sessions has no use for one, and leaving it off keeps the
+///     failure detail behind an explicit read of one session. <see cref="ConfigJson" /> rides along because it is
+///     free — every read that produces this view materializes the whole entity, so the interceptor has already
+///     decrypted that column. The list DTO still does not expose it; the live-start path is what needs it, and it
+///     needs it without loading a transcript.
+/// </remarks>
 public sealed record TranscriptionSessionSummaryView
 {
     public required Guid Id { get; init; }

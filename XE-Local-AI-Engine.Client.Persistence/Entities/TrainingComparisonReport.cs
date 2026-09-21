@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Base versus tuned, bound to the two evaluations it was computed from. The deltas are stored rather than derived
-///     on read so a report keeps meaning after its inputs are re-run — but they stay REPRODUCIBLE from the bound
-///     evaluations' persisted results, which is what the reproducibility test pins.
+///     Base versus tuned, bound to the two evaluations it was computed from.
 /// </summary>
+/// <remarks>
+///     The deltas are stored rather than derived on read so a report keeps meaning after its inputs are re-run — but
+///     they stay REPRODUCIBLE from the bound evaluations' persisted results, which is what the reproducibility test
+///     pins.
+/// </remarks>
 internal sealed record class TrainingComparisonReport
 {
     public Guid Id { get; set; }

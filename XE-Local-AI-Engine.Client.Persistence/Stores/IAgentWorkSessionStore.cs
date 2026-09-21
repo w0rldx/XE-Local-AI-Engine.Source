@@ -3,11 +3,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     The sentinel <see cref="Any" /> version. Two writers touch one session per step by design — the supervisor moves
-///     the status while tool handlers write tasks, findings and artifacts from inside the invocation loop — so a
-///     supervisor-owned status transition or step advance, which has no lost update to protect against, passes
-///     <see cref="Any" /> and never loses the race to a content write.
+///     The sentinel <see cref="Any" /> version.
 /// </summary>
+/// <remarks>
+///     Two writers touch one session per step by design — the supervisor moves the status while tool handlers write
+///     tasks, findings and artifacts from inside the invocation loop — so a supervisor-owned status transition or step
+///     advance, which has no lost update to protect against, passes <see cref="Any" /> and never loses the race to a
+///     content write.
+/// </remarks>
 public static class WorkSessionVersions
 {
     public const long Any = -1;
@@ -317,14 +320,14 @@ public sealed class AppendWorkSessionEventCommand
 }
 
 /// <summary>
-///     What one mutation committed: the watermark it allocated for its event, the session's step, and the session row's
-///     post-commit version, status and current task.
-///     <para>
-///         <see cref="SupersededArtifactId" /> is set only by <see cref="IAgentWorkSessionStore.AppendArtifactAsync" />
-///         when the write replaced an artifact of the same name. Its bytes are still on disk: the caller that owns the
-///         blob store deletes them after the commit, because the schema project cannot reach the blob layer.
-///     </para>
+///     What one mutation committed: the watermark it allocated for its event, the session's step, and the session
+///     row's post-commit version, status and current task.
 /// </summary>
+/// <remarks>
+///     <see cref="SupersededArtifactId" /> is set only by <see cref="IAgentWorkSessionStore.AppendArtifactAsync" />
+///     when the write replaced an artifact of the same name. Its bytes are still on disk: the caller that owns the
+///     blob store deletes them after the commit, because the schema project cannot reach the blob layer.
+/// </remarks>
 public sealed class WorkSessionMutationResult
 {
     public required Guid SessionId { get; init; }
@@ -345,13 +348,13 @@ public sealed class WorkSessionMutationResult
 /// <summary>
 ///     The durable substrate for agent work sessions: one monotonic sequence per session, an append-only event log, and
 ///     optimistic concurrency on the session row.
-///     <para>
-///         Every mutation runs in one transaction that loads the session row, checks <c>ExpectedVersion</c> (unless it
-///         is <see cref="WorkSessionVersions.Any" />), allocates sequence values from the session's counter, appends one
-///         event, and bumps the version. A non-null operation id resolves query-first: an operation already recorded
-///         returns without writing, so a replayed step cannot double-append.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Every mutation runs in one transaction that loads the session row, checks <c>ExpectedVersion</c> (unless it is
+///     <see cref="WorkSessionVersions.Any" />), allocates sequence values from the session's counter, appends one
+///     event, and bumps the version. A non-null operation id resolves query-first: an operation already recorded
+///     returns without writing, so a replayed step cannot double-append.
+/// </remarks>
 public interface IAgentWorkSessionStore
 {
     Task<AgentWorkSessionSnapshot> CreateAsync(CreateWorkSessionCommand command, CancellationToken cancellationToken = default);
@@ -361,10 +364,12 @@ public interface IAgentWorkSessionStore
     Task<AgentWorkSessionSnapshot> TransitionStatusAsync(TransitionWorkSessionStatusCommand command, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Removes the session and every child row in explicit dependency order, and answers how many rows went. The
-    ///     order is load-bearing: findings declare <c>Restrict</c> on their task, so a task cannot go first, and the
-    ///     row count has to be observed rather than inferred from what the cascades would have removed.
+    ///     Removes the session and every child row in explicit dependency order, and answers how many rows went.
     /// </summary>
+    /// <remarks>
+    ///     The order is load-bearing: findings declare <c>Restrict</c> on their task, so a task cannot go first, and
+    ///     the row count has to be observed rather than inferred from what the cascades would have removed.
+    /// </remarks>
     Task<int> DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<AgentWorkSessionSnapshot>> ListAsync(CancellationToken cancellationToken = default);
@@ -384,10 +389,12 @@ public interface IAgentWorkSessionStore
     Task<IReadOnlyList<WorkSessionEventSnapshot>> ListEventsAsync(Guid sessionId, long sinceSequence = 0, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The newest event of one type, or <see langword="null" /> when the session recorded none. One ordered read
-    ///     instead of the whole log: a caller asking "what did this session last declare" used to materialize and
-    ///     decrypt every event ever written to it just to keep the final row.
+    ///     The newest event of one type, or <see langword="null" /> when the session recorded none.
     /// </summary>
+    /// <remarks>
+    ///     One ordered read instead of the whole log: asking "what did this session last declare" by listing events
+    ///     materializes and decrypts every event ever written to it just to keep the final row.
+    /// </remarks>
     Task<WorkSessionEventSnapshot?> FindLatestEventAsync(Guid sessionId, string eventType, CancellationToken cancellationToken = default);
 
     Task<WorkSessionArtifactSnapshot> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default);
@@ -399,10 +406,13 @@ public interface IAgentWorkSessionStore
     Task<WorkSessionMutationResult> AppendFindingAsync(AppendWorkSessionFindingCommand command, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Records an artifact, replacing any artifact already carrying the same name on the session. The replaced row
-    ///     goes in the same transaction and its managed reference is recorded on the event detail; deleting its bytes is
-    ///     the caller's job (see <see cref="WorkSessionMutationResult.SupersededArtifactId" />).
+    ///     Records an artifact, replacing any artifact already carrying the same name on the session.
     /// </summary>
+    /// <remarks>
+    ///     The replaced row goes in the same transaction and its managed reference is recorded on the event detail;
+    ///     deleting its bytes is the caller's job (see
+    ///     <see cref="WorkSessionMutationResult.SupersededArtifactId" />).
+    /// </remarks>
     Task<WorkSessionMutationResult> AppendArtifactAsync(AppendWorkSessionArtifactCommand command, CancellationToken cancellationToken = default);
 
     Task<WorkSessionMutationResult> AppendCheckpointAsync(AppendWorkSessionCheckpointCommand command, CancellationToken cancellationToken = default);

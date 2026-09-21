@@ -3,11 +3,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Node-scoped persistence for golden conversation cases bound to an agent definition. <c>InputTurns</c>,
-///     <c>Assertion</c> and <c>Rubric</c> are encrypted at rest by the node encryption interceptors; reads return them
-///     decrypted on the <see cref="GoldenConversationRecord" />. This store performs no content validation — that is the
-///     application-layer service's responsibility; it owns only id/timestamp stamping.
+///     Node-scoped persistence for golden conversation cases bound to an agent definition.
 /// </summary>
+/// <remarks>
+///     <c>InputTurns</c>, <c>Assertion</c> and <c>Rubric</c> are encrypted at rest by the node encryption
+///     interceptors; reads return them decrypted on the <see cref="GoldenConversationRecord" />. This store performs no
+///     content validation, which is the application-layer service's responsibility, and owns only id and timestamp
+///     stamping.
+/// </remarks>
 public interface IGoldenConversationStore
 {
     /// <summary>
@@ -46,10 +49,13 @@ public interface IGoldenConversationStore
 }
 
 /// <summary>
-///     Decrypted, typed projection of a persisted golden conversation case. <see cref="InputTurns" />,
-///     <see cref="Assertion" /> and <see cref="Rubric" /> are returned in plaintext (decrypted on materialization); the
-///     store converts to and from this shape at the boundary so callers never touch the encrypted byte columns.
+///     Decrypted, typed projection of a persisted golden conversation case.
 /// </summary>
+/// <remarks>
+///     <see cref="InputTurns" />, <see cref="Assertion" /> and <see cref="Rubric" /> are returned in plaintext,
+///     decrypted on materialization; the store converts to and from this shape at the boundary so callers never touch
+///     the encrypted byte columns.
+/// </remarks>
 public sealed class GoldenConversationRecord
 {
     public required Guid Id { get; init; }

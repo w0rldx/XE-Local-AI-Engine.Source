@@ -171,14 +171,8 @@ public sealed partial class DevelopmentStore
                     task.Status = DevelopmentTaskStatus.InProgress;
                     task.ApprovedSubjectHash = null;
 
-                    // The sentence that asked for this round stops being the CURRENT one the moment the round starts.
-                    // This is the choke point every coder round goes through to reach InProgress without passing
-                    // through TransitionTaskAsync — which already clears the column for every target status of its own
-                    // — so it is the one place the rework reason could survive the round it asked for. It did: the
-                    // Development overview renders blocked_reason with no status gate, so a task actively being
-                    // reworked showed the gate failure or the operator's change request that started it. The cost is
-                    // named and accepted: the reason leaves the overview when the round starts rather than lingering
-                    // until the next verdict, and the event timeline keeps it either way.
+                    // The sentence that asked for this round stops being CURRENT the moment the round starts: this is the one choke point a coder round passes to
+                    // reach InProgress without TransitionTaskAsync, which clears the column for its own targets. Accepted cost: the ungated overview loses it here.
                     task.BlockedReason = null;
                     await _dbContext.DevelopmentArtifacts
                                     .Where(entity => entity.TaskId == task.Id
@@ -209,20 +203,14 @@ public sealed partial class DevelopmentStore
 
     /// <summary>
     ///     The command profile to freeze onto a new attempt.
-    ///     <para>
-    ///         A Coder attempt takes the project's profile as it stands right now. A Reviewer attempt instead inherits
-    ///         the profile of the latest succeeded Coder attempt on the same task — the attempt whose result it is
-    ///         reviewing. That is what keeps one evidence chain (coder → validation → review → apply) judged under a
-    ///         single profile: without it, a profile edit landing between the coder attempt and its review would make
-    ///         the reviewer re-run different commands than the ones that produced the patch, and the apply gate would
-    ///         then reject on a digest mismatch that describes an edit rather than a defect.
-    ///     </para>
-    ///     <para>
-    ///         Returning null is meaningful and safe: it marks an attempt with no snapshot, and every reader falls back
-    ///         to the project's current profile, which is precisely the behaviour before this column existed. That is
-    ///         what makes the migration a no-op for rows that predate it.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A Coder attempt takes the project's profile as it stands; a Reviewer attempt inherits the profile of the
+    ///     latest succeeded Coder attempt on the same task, whose result it reviews, so one evidence chain
+    ///     (coder → validation → review → apply) is judged under a single profile. Otherwise a profile edit landing
+    ///     between them would make the reviewer run different commands, and the apply gate would reject on a digest
+    ///     mismatch describing an edit, not a defect. Null marks an attempt with no snapshot: readers fall back.
+    /// </remarks>
     private async Task<string?> ResolveAttemptCommandProfileAsync(Guid projectId,
         Guid taskId,
         DevelopmentAttemptRole role,
@@ -310,10 +298,8 @@ public sealed partial class DevelopmentStore
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 EnsureLegalTransition(task.Status, command.TargetStatus);
 
-                // The widening is what PAYS for the edge out of Blocked, so the two are checked together. A rework
-                // asked of a task at its round cap without one runs a whole coder attempt — its tokens and its
-                // duration — and is stood down again by StartNextActionAsync before it can reach a review, which is
-                // exactly the two-second no-op loop this edge exists to end.
+                // The widening is what PAYS for the edge out of Blocked, so the two are checked together: a rework asked of a task at its round cap without one runs
+                // a whole coder attempt — its tokens and its duration — and is stood down by StartNextActionAsync before a review, the no-op loop this edge ends.
                 if (task.Status == DevelopmentTaskStatus.Blocked && !command.WidenReviewRounds)
                 {
                     throw new DevelopmentInvalidTransitionException("A blocked development task can only be reworked by a retry that widens its review-round cap.");
@@ -328,21 +314,16 @@ public sealed partial class DevelopmentStore
                 task.Status = command.TargetStatus;
                 task.UpdatedAtUtc = now;
                 task.Version++;
-                // A task asked for rework carries WHY it was asked, the same way a stood-down one carries why it was
-                // stood down: the caller computes a real sentence for both (DevWorkflowDevTaskExecutor.RequestChangesAsync
-                // for the rework), and gating this on Blocked alone discarded it into the event log only. The column is
-                // named for the case that came first; every reader of it is gated on Status, so the widening reaches the
-                // UI field and nothing that means "blocked". BlockedAtUtc stays Blocked-only — it times a stand-down.
+                // A task asked for rework carries WHY it was asked, as a stood-down one does: DevWorkflowDevTaskExecutor.RequestChangesAsync computes the rework's
+                // sentence, and gating on Blocked alone discarded it to the event log. Every reader is Status-gated; BlockedAtUtc stays Blocked-only, timing a stand-down.
                 task.BlockedReason = command.TargetStatus is DevelopmentTaskStatus.Blocked or DevelopmentTaskStatus.ChangesRequested
                     ? command.Reason
                     : null;
                 task.BlockedAtUtc = command.TargetStatus == DevelopmentTaskStatus.Blocked ? now : null;
                 task.ApprovedSubjectHash = command.ApprovedSubjectHash ?? task.ApprovedSubjectHash;
 
-                // A task asked for rework is not an approved one, so it stops carrying the approved subject the moment
-                // it is asked rather than when the next coder attempt starts. Defence in depth: the apply port already
-                // refuses anything that is not AwaitingApply before it reads this (DevelopmentApplyService), so the
-                // stale hash is inert either way — it is simply state that has stopped being true.
+                // A task asked for rework is not an approved one, so it stops carrying the approved subject the moment it is asked rather than when the next coder
+                // attempt starts. Defence in depth: DevelopmentApplyService already refuses anything that is not AwaitingApply before reading this.
                 if (command.TargetStatus is DevelopmentTaskStatus.InProgress or DevelopmentTaskStatus.ChangesRequested)
                 {
                     task.ApprovedSubjectHash = null;
@@ -377,11 +358,8 @@ public sealed partial class DevelopmentStore
                     DevelopmentOperationPhases.Completed,
                     "TaskTransitioned",
 
-                    // The outcome, not the event type and not a new member of the detail document, is what separates a
-                    // person's sentence from a reviewer's. The event type stays "TaskTransitioned" because the task did
-                    // transition, the detail document stays byte-for-byte what it was, and the discriminator lands in a
-                    // column the snapshot query can filter on in SQL — a flag inside the JSON blob could only be found
-                    // by reading rows back and parsing them.
+                    // The outcome, not the event type and not a new member of the detail document, separates a person's sentence from a reviewer's: the type stays
+                    // "TaskTransitioned", the detail stays byte-for-byte, and the discriminator lands in a column the snapshot query can filter on in SQL.
                     command.OperatorDirected ? OperatorTransitionOutcome : "Transitioned",
                     task.Status.ToString(),
                     task.Version,

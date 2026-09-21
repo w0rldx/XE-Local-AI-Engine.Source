@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Enumerates the persisted classification of a local model. Drives the chat picker filter (only
-///     <see cref="Chat" /> is offered) and the Model Management type display. The numeric values are persisted,
-///     so existing values must never be renumbered — future kinds (Vision, Reranker, CodeCompletion, Moderation)
-///     append new values only.
+///     The persisted classification of a local model.
 /// </summary>
+/// <remarks>
+///     Drives the chat picker filter (only <see cref="Chat" /> is offered) and the Model Management type display. The
+///     numeric values are persisted, so existing values must never be renumbered — future kinds (Vision, Reranker,
+///     CodeCompletion, Moderation) append new values only.
+/// </remarks>
 public enum ModelKind
 {
     Unknown = 0,

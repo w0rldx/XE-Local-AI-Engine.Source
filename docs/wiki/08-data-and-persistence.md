@@ -93,6 +93,16 @@ Encrypted columns are mapped as `BLOB` in the entity configurations and model sn
 
 > **Uploaded-file blobs are encrypted off the column path.** The `ConversationUploadedFile` row only encrypts the display name (`original_file_name`) through the interceptor; the bulk payloads — the raw file bytes and the cached extracted Markdown — are **too large for the column path** and live on disk under `INodeDataDirectory.Root/uploaded-files/conversations/{conversation_id}/`, AES-256-GCM-encrypted by `UploadedFileBlobProtector` (`Client.Application/Services/DocumentIngestion/UploadedFileBlobProtector.cs`). That protector lives in the application layer (the DB-column `NodePayloadProtector` is `internal` to Persistence), so it re-uses the public `AesGcmNodeAeadCipher` primitive and replicates the exact `nonce ‖ ciphertext ‖ tag` framing + AAD layout, binding each blob with a distinct column name (`file_bytes`, `file_md`) so a bytes blob can never be swapped for an extracted-text blob under the same key. See [Security & Privacy](12-security-and-privacy.md).
 
+### The content envelope
+
+*Encrypted and legacy plaintext rows in one column.*
+
+The message `content` and `metadata_json` columns are the only encrypted columns that already have **legacy plaintext rows on disk**: the raw-ADO persistence path wrote them as raw UTF-8 before content encryption shipped. Their reader therefore has to tell an encrypted blob from a legacy plaintext blob without guessing, and `NodeChatContentProtection` (`Cryptography/NodeChatContentProtection.cs`) is that reader.
+
+It prepends a two-byte header — `0xFE` marker, `0x01` format version — to the ordinary `NodePayloadProtector` payload (`nonce ‖ ciphertext ‖ tag`). `0xFE` is never a valid UTF-8 lead byte, and both columns are always produced from a .NET string via `Encoding.UTF8.GetBytes`, so the header can never collide with the start of a legacy plaintext blob. The second byte lets the framing evolve.
+
+Reads are **read-both**: a blob carrying the header is decrypted, a blob without it is a legacy plaintext row and is returned verbatim. A table can therefore be migrated incrementally and stays fully readable throughout. The inner ciphertext uses the identical primitive and AAD (`conversationId ‖ messageId ‖ column`) as every other encrypted column, so the header is a pure prefix: an envelope-wrapped row is byte-compatible with `NodePayloadProtector` once the header is stripped. The raw persistence path, the EF materialization interceptor and the content-encryption migration all read through this one path.
+
 ## Entity inventory
 
 Entities live in `Entities/` with mapping in the matching `Configurations/*Configuration.cs`. Every set on `NodeChatDbContext` is `internal` — `grep 'DbSet<' NodeChatDbContext.cs` is the current inventory, and the table below names them by area rather than counting them. `NodeIdentityDbContext` exposes refresh tokens in addition to the Identity sets:
@@ -147,9 +157,115 @@ Entities live in `Entities/` with mapping in the matching `Configurations/*Confi
 
 Adaptive agent memory was added by migration `20260622215652_AddAdaptiveAgentMemory`: it adds memory flags/scope to conversations, agent definitions, and playbook actions, plus the `agent_execution_logs` table (later shared with durable run envelopes). It does not create a separate family of memory entity tables.
 
+### Run-envelope schema versions
+
+`agent_execution_logs` rows of kind `ChatRunEnvelope` carry a `schema_version`, so a reader can tell envelope shapes apart as the field set grows. `AgentRunEnvelope.CurrentSchemaVersion` (`Stores/IAgentExecutionLogStore.cs`) is the single source of truth the store writer and the startup recovery backfill both stamp. Every column a version added is nullable, and reads null on older rows:
+
+| Version | Added | Null when |
+|---|---|---|
+| 2 | reasoning/total tokens, `started_at_utc` lifecycle fields, the deterministic message-id upsert key | — |
+| 3 | written atomically inside the terminalize transaction, with the bound agent id taken from the winning message row | — |
+| 4 | `tool_schema_tokens` / `max_tool_schema_tokens` — the per-turn tool-schema token estimate | on rows written by the restart-recovery backfill, which supplies no generation detail |
+| 5 | `dispatched_tier` / `authored_effort` — what reasoning effort `auto` resolved to for the turn | on every turn not authored `auto`, and on restart-recovery backfill rows |
+| 6 | `model_readiness_ms` — how much of `latency_ms` was the local runtime warming rather than generating | on every turn that warmed no local runtime, and on restart-recovery backfill rows |
+
+A **filtered UNIQUE index on `message_id`** gives each envelope a deterministic identity: exactly one row per terminalized assistant message. It is the DB-level guard behind the `WHERE NOT EXISTS` that the atomic terminalize write and the startup reconcile both use, so a retry or a crash-recovery backfill can never duplicate a row, and a crash between the message commit and the envelope write leaves a recoverable key. The filter scopes the index to run-envelope rows, leaving the memory-diagnostics rows — which may repeat a message id — unaffected. SQLite treats null message ids as distinct, so an envelope missing one never trips it.
+
+### Agent skill provenance
+
+`AgentSkillStore` enforces three provenance rules at the store boundary, because the row's origin decides whether the runtime fences the skill's content as untrusted and whether approval may be granted per session.
+
+- **Provenance is promote-only.** An `Imported` row stays imported even when the caller passes the `Local` default. An operator edit that simply forgot to echo the provenance back would otherwise launder third-party content into trusted content — stripping the untrusted-content fence and re-enabling session-scoped approval for it. An input that *does* carry `Imported` applies its `SourceUri`/`ImportedAtUtc`/`ContentSha256` verbatim as one unit, including a null `ContentSha256`, which is what an AI-drafted ("generated") conversion sends, because the old archive payload hash must not survive onto rewritten content.
+- **`SourceUri` is shape-checked**: the literal `upload`, the literal `generated` (AI-drafted content), or `github:owner/repo`. An uploaded or drafted skill contributes its *kind* only — the operator's filename, or the model that drafted it, must not become the one unencrypted free-text string in this table.
+- **`GenerationMetadataJson` is set-if-present on update**: `null` leaves the stored provenance alone rather than clearing it, so an ordinary operator edit that did not echo the block back cannot erase the record of how the skill was drafted. `AgentDefinitionInput` carries the same rule for agent definitions.
+
+`Origin`, `SourceUri`, `ImportedAtUtc` and `ContentSha256` are what the UI's "Imported" badge, the runtime fencing decision and re-import change detection all read.
+
+### The integration admission transaction
+
+`IntegrationExecutionStore.AcceptAsync` reserves admission and writes the durable accept in ONE `BEGIN IMMEDIATE` transaction: re-read the key row for revocation, count the node's active executions, count the principal's, insert the session (or bump the existing one's counters), insert the execution, insert the `execution.accepted` event, commit.
+
+- It returns **false** when the credential was revoked between authentication and admission — nothing is written, and the caller answers the same generic 401 it uses for any other invalid credential.
+- It throws **`IntegrationQueueFullException`** when either cap is full — nothing is written, and the caller answers 503 with a `Retry-After`. Both caps are method parameters rather than command fields, because they are policy numbers the caller reads from `IntegrationOptions`, not part of the row being written.
+- On a continuation (`NewSession` null) the session bump is scoped to the caller's own `Active` session and throws **`IntegrationSessionUnavailableException`** when it matches no row. The caller has already pre-checked ownership and status under its per-session semaphore and answers the proper 404/409 there; this is the race-free backstop for the window between that check and this transaction, not the place a caller learns which of the three it was.
+
+**After it returns**, the caller creates the owned `NodeConversation` at the pre-minted `NewSession.ConversationId` and writes the seed message. A failure there terminalises the execution `Failed` / `internal-failure` through the coordinator's ordinary path. Because the conversation is created after the durable rows, no orphan conversation can exist and the feature carries no orphan sweep.
+
+### The integration execution lifecycle
+
+`IntegrationExecutionStatus` (`Entities/IntegrationEnums.cs`) carries the legal moves of an `integration_executions` row — ruling R3-2, reproduced verbatim in ADR [0008](../adr/0008-external-integrations.md). `Running` is never re-entered and no move leaves a terminal status.
+
+| From | To — when |
+|---|---|
+| `Accepted` | `Queued` — waits for the invocation lease |
+| `Accepted`, `Queued` | `Running` — lease held, runner about to be called |
+| `Running` | `Completed`, `Failed`, `Cancelled` — the run reported a terminal state |
+| `Accepted`, `Queued` | `Cancelled` — cancelled before the run started |
+| `Accepted`, `Queued` | `Failed` — rejected before the run started |
+
+`Queued` is written **only** when an execution actually waits for the lease: `Accepted → Running` is legal, and so is `Accepted`/`Queued → Cancelled`/`Failed` without ever running. It is written down rather than left to the coordinator because cross-review found `Queued` defined, counted, swept, streamed and rendered with no visible producer.
+
+Every move into a terminal status is made by `IIntegrationExecutionStore.TryTerminalizeAsync`, which writes the status and the matching terminal event in one transaction (ruling R5-4); `UpdateStatusAsync` makes the non-terminal moves and nothing else.
+
+`FailureCategory` is a **closed** vocabulary of exactly ten values — `trigger-unavailable`, `cloud-model-rejected`, `capacity-rejected`, `restart`, `queue-full`, `shutdown`, `internal-failure`, plus `approval-required` (an unattended run invoked an approval-gated tool), `queue-timeout` (a still-queued execution outlived `MaxQueueAgeSeconds`) and `session-policy` (historical: rows written before ADR 0008 R6-1 withdrew the caller-managed `ToolCategory.ReadLocal` restriction; no longer produced). An eleventh value is a bug, not an extension point.
+
+### The conversation-list index: why `archived` sorts last
+
+The conversation list runs in two variants — `purged = 0` and `purged = 0 AND archived = 0` — both ordered by `is_pinned DESC, last_seen_utc DESC LIMIT n`. In `NodeConversationConfiguration`'s covering index, `archived` is the trailing column on purpose.
+
+Putting it second serves the active-only query perfectly, but leaves the show-all query, which does not constrain it, with a TEMP B-TREE over every non-purged conversation. Because the list join runs a correlated last-message subquery per row, that sort costs one subquery per conversation instead of `limit` of them. Trailing, `archived` is still an index-resident filter for the active query, while both queries take the ordered reverse scan.
+
+### Purging a conversation's footprint
+
+`ConversationFootprintPurge` is the single source of truth for the complete DB footprint of a conversation, and both the interactive immediate-purge path and the retention sweeper delete through it, so the table set can never drift between them.
+
+Messages, tool events and uploaded-file rows declare a cascade the node connection enforces. Most of the footprint does not: feedback, tombstones, `agent_execution_logs`, and the work-session and integration families are keyed by conversation id with **no foreign key on purpose**, so those tables go only when this list names them — otherwise their rows orphan, which is a privacy gap.
+
+- **`agent_execution_logs`** carries plaintext conversation/message correlation ids on both the adaptive-memory diagnostics rows and the durable run envelopes. Without the delete, those correlations would survive an immediate conversation purge for the separate execution-log retention period. Deleting on `conversation_id` covers both record kinds.
+- **A work session owns its conversation**, so purging the conversation takes the session and its whole subtree: the objective, plan, findings and checkpoints are all conversation-derived encrypted content. Only `agent_work_sessions` carries `conversation_id`, so its five child tables resolve through a subselect on it and must go FIRST — once the session row is gone the subselect finds nothing.
+- **An integration session owns its conversation** on the same terms, taking the session, its executions and their events. Only `integration_sessions` carries `conversation_id`, so the two descendant tables likewise resolve through a subselect and go first. `integration_triggers` and `integration_api_keys` are node-scoped and correctly untouched.
+
+Those session-subtree tables are deliberately absent from `CoveredChildTables`, which mirrors what its test discovers: conversation- and message-keyed tables only. A session's artifact bytes live encrypted on disk under `work-sessions/artifacts/{sessionId:N}/`; the row purge removes neither those files nor upload blobs, and the caller owns both teardown paths.
+
+### Dev-workflow restart recovery
+
+`IDevWorkflowStore.ReconcileNonTerminalNodeRunsAsync` is restart recovery as ONE transaction. Runs auto-resume, so no run-level status moves; only node-runs the host left `Queued` or `Running` collapse back to `Pending` so the dispatcher can re-admit them, each with one `node.interrupted` event. `WaitingForApproval` and `Blocked` are durable human-wait states and survive untouched. It is idempotent by construction: a second pass finds none of those states and returns empty.
+
+- The caller's per-row **verdicts** — an attempt spent, a human needed — are applied IN ORDER inside the same transaction as the collapse. A recovery that commits the collapse alone is one the next boot cannot finish: those rows read as ordinary `Pending` and would be re-run with no attempt or budget accounting at all. Committing both together makes recovery all-or-nothing, so any number of crashes during startup still repairs every interrupted node-run exactly once.
+- **ONLY the rows whose live state still matches their verdict are collapsed.** A stranded row with no verdict, or one whose status, attempt or work session moved since the verdict was decided, is left untouched for the caller's next pass — which is what makes the method safe against a writer the caller did not expect, such as a second process sharing the database. Repairs run under `DevWorkflowVersions.Any`: the run's version has by then moved by one event per collapsed row, and the per-row match is the check that matters.
+- A non-null **`unjudged`** makes this the caller's LAST pass: the rows it could not judge are blocked for a human rather than left, decided against the live row inside this transaction and so immune to the drift that stranded them. Pass it when walking away is worse than a human wait — which it is at startup, because nothing downstream picks a stranded row up again.
+
+`ListInterruptedNodeRunsAsync` is the read half: everything left `Queued` or `Running`, read without writing anything.
+
+### Dev-workflow node-run transitions
+
+`TransitionDevWorkflowNodeRunCommand` (`Stores/DevWorkflowStoreContracts.cs`) carries three members whose rules are not obvious from their names.
+
+- **`ClearWorkSession`** releases the session the row was driving, and pairs ONLY with a `TargetStatus` of `Pending` — it belongs to a re-attempt, and a retry gets a NEW session, because resuming the one that just failed resumes its poisoned context. It is also what tells a still-attached session apart from a finished one: a node run back at `Pending` with a session still on it is one the host died under, and that session's answer still counts. Releasing it on any other target would throw away the only pointer to the transcript the row's own result came from.
+- **`InputJson`** rewrites what the node run is asked to do, which only the cross-node fix loop does: a re-attempt routed to an upstream node carries the failure that sent it there.
+- **`DetailJson`** replaces the event detail the move would otherwise derive from `TerminalReason`, for the one move whose evidence is not on the row afterwards — a re-attempt clears the failure fields it is re-attempting because of, so its `node.retry.scheduled` event is the only place that failure survives.
+
 ### Stores are the boundary
 
 Application code never touches `DbSet`s directly — it calls **store** classes in `Implementation/` behind interfaces in `Stores/` (e.g. `AgentDefinitionStore`, `GoldenConversationStore`, `ModelProviderMapStore`, `ScheduledJobRunStore`, and the newer `InferenceProfileStore`/`IInferenceProfileStore` for launch profiles). The chat upload store is the one exception that lives **above** the schema project: `ConversationUploadedFileStore` (`Client.Application/Services/DocumentIngestion/`) owns both the DB row and the encrypted on-disk blobs, so it sits in the application layer rather than `Persistence/Implementation/`. Read queries use `AsNoTracking()` (e.g. `ModelProviderMapStore.GetProviderForModelAsync`) and flow `CancellationToken` to every EF async call. This is the one-way dependency the schema project enforces: callers depend on store contracts, not on EF or on entity internals (most `DbSet`s are `internal`).
+
+## Connection pragmas
+
+*WAL, `busy_timeout` and `synchronous`.*
+
+`NodeSqlitePragmas` (`Sqlite/NodeSqlitePragmas.cs`) applies the node's connection pragmas right after a connection opens; `NodeSqliteOptions`, bound from the `NodeSqlite` configuration section, holds their values. Both open mechanisms on the node database route through it — EF-initiated opens (migrations, EF queries/saves, health probes) via `NodeSqliteConnectionInterceptor`, and raw-ADO opens on the EF context's `DbConnection` via the shared open-if-needed helpers. Applying on every physical open is idempotent and cheap, so the result is correct regardless of `Microsoft.Data.Sqlite`'s connection pooling: a pooled handle keeps its pragma state, a fresh one gets it here.
+
+The defaults are chosen for a single-file desktop database with several concurrent in-process writers (per-conversation chat writes, KB ingestion, memory extraction, the scheduler):
+
+- **WAL** lets readers run without blocking the single writer, which is the dominant contention pattern here (frequent reads racing occasional writes). It is a persistent, file-level property, so enabling it once covers every connection to the file, including the shared Quartz job store's — see [Scheduler](06-scheduler.md) ("Concurrency posture — the scheduler shares `node.sqlite`").
+- **`busy_timeout` = 5000 ms** makes a writer that meets a held write lock wait-and-retry inside SQLite for up to five seconds instead of failing instantly with `SQLITE_BUSY`. Five seconds comfortably covers a checkpoint or a large encrypted batch write while still surfacing a genuine deadlock or stall rather than hanging a request indefinitely.
+- **`synchronous` = NORMAL** is the standard WAL pairing: durable across application crashes, and on OS or power loss it can only lose transactions committed since the last checkpoint, never corrupt the database. That trade is appropriate for a local chat database and is the SQLite-recommended default under WAL.
+
+WAL is only safely settable on a writable, private-cache, on-disk connection, so `ShouldApplyWal` skips it — rather than logging a spurious warning on every open — for the three connection shapes that cannot switch into it. An in-memory database reports its journal mode as `memory` and never `wal`. A read-only connection refuses the write with SQLite error 8. A shared-cache connection (the Aspire dev integration sets one) collides with the sibling connections other services open against the node database concurrently at startup, so the switch is refused with SQLite error 6 or 8. The desktop and packaged builds use a plain private-cache data source, so they do get WAL.
+
+**Foreign keys are enforced.** They were long believed to be off here: the node builds a bare `Data Source=` connection string, and `SqliteConnectionStringBuilder.ForeignKeys` defaults to null, so `Microsoft.Data.Sqlite` sends no pragma of its own. But the bundled `e_sqlite3` is compiled with `DEFAULT_FOREIGN_KEYS`, so SQLite's own default is on and every declared `ON DELETE CASCADE` has always fired. Resting referential integrity on a native build's compile flag is not a decision anyone made, so the connection string now says `Foreign Keys=True` and `NodeSqlitePragmas` emits `PRAGMA foreign_keys=ON` on every open — the pragma covers connection strings this process does not build itself (the Aspire dev integration's, or an operator-supplied one), and it is emitted *before* the WAL guard so it also reaches the connection shapes that cannot switch into WAL. It is also the one pragma that never degrades: `busy_timeout`, `journal_mode` and `synchronous` log a warning and carry on when SQLite rejects them, while a failure to apply `foreign_keys` fails the connection open, so no caller ever gets an unchecked connection.
+
+The store delete paths still issue explicit ordered child deletes. With enforcement on, that order is what makes the delete legal: the references that block a parent delete declare `Restrict`, so the children have to go first.
 
 ## Migrations and schema milestones (forward-only)
 
@@ -213,7 +329,7 @@ They are deliberately **outside** the encryption interceptor's tracked set, and 
 
 `agent_turn_ms` is whole-turn time — each envelope's duration spans the provider rounds and the tool loop between them — so `run_ms - agent_turn_ms` is time outside the turns, never tool time.
 
-The two VRAM columns are the odd pair here: every other column counts what the attempt SPENT, while these two READ the box at one moment. They are the free-VRAM figure the capacity gate measured just before the most recent successful load of the serving model that carried a capacity admission, and the GPU bytes it reserved for that process — carried from the admission through the load observation to a process-lifetime record, never re-probed. An unadmitted reload clears the reading: a direct, profiling or variant-moved spawn measures nothing but replaces the process those figures described, so the record drops the entry instead of letting it go stale. Unlike every other cost column, which merges member-wise on each settle, the two are written together and only once per attempt — by the first settle that carries a reading, never rewritten by a later one — so they can never pair one load's free-VRAM figure with another load's admitted bytes; a settle with no reading leaves the pair open, and a re-attempt clears it. A **warm** run therefore reports an EARLIER load's figures, and `model_readiness_ms` is what tells the two apart. Because they are readings rather than quantities they are excluded from the retry snapshot's additive vector alongside the route, the served model and the tool names.
+The two VRAM columns are the odd pair here: every other column counts what the attempt SPENT, while these two READ the box at one moment. They are the free-VRAM figure the capacity gate measured just before the most recent successful load of the serving model that carried a capacity admission, and the GPU bytes it reserved for that process — carried from the admission through the load observation to a process-lifetime record, never re-probed. An unadmitted reload clears the reading: a direct, profiling or variant-moved spawn measures nothing but replaces the process those figures described, so the record drops the entry instead of letting it go stale. Unlike every other cost column, which merges member-wise on each settle, the two are written together and only once per attempt — by the first settle that carries a reading, never rewritten by a later one — so they can never pair one load's free-VRAM figure with another load's admitted bytes; a settle with no reading leaves the pair open, and a re-attempt clears it. A **warm** run therefore reports an EARLIER load's figures, and `model_readiness_ms` is what tells the two apart: a SMALL readiness there means the warmer waited for nothing, so the load these bytes describe predates the run and the box may have looked different by the time it started, while a null readiness is unmeasured and settles nothing either way. A null on the VRAM columns themselves means nobody measured — a remote or Ollama model, a model the node never loaded itself, a host with no readable global-free figure (non-NVIDIA or CPU-only), or a row written before the columns existed. Because they are readings rather than quantities they are excluded from the retry snapshot's additive vector alongside the route, the served model and the tool names.
 
 Two reading traps a query must respect. The columns hold the **last attempt only** — a `Pending` re-attempt clears them, and the failing attempt's ten additive numbers are merged into that reset's `node.retry.scheduled` event detail instead — so a node's true total is `row + retry snapshots`. And a null is "nobody reported it", never zero: a structural node, a row from before the migration, and a collection that could not run all read the same way. The [cost telemetry runbook](../runbooks/agent-unit-cost-telemetry-runbook.md) carries the full recipe, including the reasons every number is a lower bound.
 

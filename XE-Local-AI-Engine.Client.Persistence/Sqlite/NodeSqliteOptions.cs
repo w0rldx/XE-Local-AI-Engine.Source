@@ -1,39 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Sqlite;
 
 /// <summary>
-///     Connection-time pragmas applied to every node SQLite connection (chat/identity EF contexts, the raw-ADO
-///     persistence helpers, and — transitively, since WAL is a file-level property — the shared Quartz job store).
-///     Bound from the <c>NodeSqlite</c> configuration section.
+///     Connection-time pragmas applied to every node SQLite connection, bound from the <c>NodeSqlite</c> configuration
+///     section.
 /// </summary>
 /// <remarks>
-///     Defaults are chosen for a single-file desktop database with several concurrent in-process writers (per-conversation
-///     chat writes, KB ingestion, memory extraction, the scheduler):
-///     <list type="bullet">
-///         <item>
-///             <b>WAL</b> lets readers run without blocking the single writer, which is the dominant contention pattern
-///             here (frequent reads racing occasional writes). It is a persistent database property, so enabling it once
-///             covers every connection to the file, including Quartz's.
-///         </item>
-///         <item>
-///             <b>busy_timeout = 5000 ms</b> makes a writer that meets a held write lock wait-and-retry inside SQLite for
-///             up to five seconds instead of failing instantly with <c>SQLITE_BUSY</c>. Five seconds comfortably covers a
-///             checkpoint or a large encrypted batch write while still surfacing a genuine deadlock/stall rather than
-///             hanging a request indefinitely.
-///         </item>
-///         <item>
-///             <b>synchronous = NORMAL</b> is the standard WAL pairing: durable across application crashes, and on OS/power
-///             loss it can only lose transactions committed since the last checkpoint (never corrupt the database). That
-///             trade is appropriate for a local chat database and is the SQLite-recommended default under WAL.
-///         </item>
-///     </list>
-///     Foreign-key enforcement is ON, and is emitted explicitly. It was long believed to be off here, because the node
-///     builds a bare <c>Data Source=</c> connection string and <c>SqliteConnectionStringBuilder.ForeignKeys</c> defaults
-///     to null, so Microsoft.Data.Sqlite sends no pragma of its own. The bundled <c>e_sqlite3</c> is compiled with
-///     <c>DEFAULT_FOREIGN_KEYS</c>, so SQLite's own default is on and every declared <c>ON DELETE CASCADE</c> has always
-///     fired. Resting referential integrity on a native build's compile flag is not a decision anyone made, so the
-///     connection string now says <c>Foreign Keys=True</c> and <see cref="NodeSqlitePragmas" /> emits
-///     <c>PRAGMA foreign_keys=ON</c> on every open — the latter covers connection strings this process does not build
-///     itself (the Aspire dev integration's, or an operator-supplied one).
+///     Covers the chat/identity EF contexts, the raw-ADO persistence helpers and — transitively, since WAL is a
+///     file-level property — the shared Quartz job store. The defaults suit a single-file desktop database with several
+///     concurrent in-process writers. Foreign keys are enforced: the connection string says <c>Foreign Keys=True</c>
+///     and <see cref="NodeSqlitePragmas" /> emits <c>PRAGMA foreign_keys=ON</c>, so the declared cascades never rest on
+///     the native build's default. Per-pragma rationale: docs/wiki/08-data-and-persistence.md ("Connection pragmas").
 /// </remarks>
 public sealed class NodeSqliteOptions
 {

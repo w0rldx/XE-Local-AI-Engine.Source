@@ -95,9 +95,12 @@ public interface ITrainingBaseArtifactStore
     Task<bool> DeleteAsync(Guid artifactId, long expectedVersion, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Terminalizes rows left <c>Downloading</c> by a process that died mid-transfer. A download has no work-item
-    ///     row to claim, so nothing else would ever move them off <c>Downloading</c> and the delete guard would refuse
-    ///     forever. Returns how many rows were terminalized.
+    ///     Terminalizes rows left <c>Downloading</c> by a process that died mid-transfer.
     /// </summary>
+    /// <remarks>
+    ///     A download has no work-item row to claim, so nothing else would ever move them off <c>Downloading</c> and
+    ///     the delete guard would refuse forever.
+    /// </remarks>
+    /// <returns>How many rows were terminalized.</returns>
     Task<int> RecoverOnStartupAsync(CancellationToken cancellationToken = default);
 }

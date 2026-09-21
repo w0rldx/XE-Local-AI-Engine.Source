@@ -37,9 +37,8 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.ModelName)
                .HasColumnName("model_name");
 
-        // Fine-grained runtime provider (non-sensitive category label). Non-null with a DB-level default so existing rows
-        // and any envelope written without a resolved provider backfill to 'unknown' — the envelope INSERT omits this
-        // column from its explicit column list, so SQLite applies this default on write.
+        // Fine-grained runtime provider (non-sensitive category label). Non-null with a DB-level default so existing rows and any envelope written without a
+        // resolved provider backfill to 'unknown' — the envelope INSERT omits this column from its explicit column list, so SQLite applies this default on write.
         builder.Property(entity => entity.Provider)
                .HasColumnName("provider")
                .HasDefaultValue(AgentUsageProviders.Unknown);
@@ -100,36 +99,29 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.MaxToolSchemaTokens)
                .HasColumnName("max_tool_schema_tokens");
 
-        // Adaptive-effort dispatch telemetry, both nullable with no backfill: a pre-migration envelope row, and every
-        // turn that was not authored `auto`, simply reports null. Closed-vocabulary labels, so no length constraint
-        // buys anything the writer does not already guarantee.
+        // Adaptive-effort dispatch telemetry, both nullable with no backfill: a pre-migration envelope row, and every turn that was not authored `auto`, simply
+        // reports null. Closed-vocabulary labels, so no length constraint buys anything the writer does not already guarantee.
         builder.Property(entity => entity.DispatchedTier)
                .HasColumnName("dispatched_tier");
 
         builder.Property(entity => entity.AuthoredEffort)
                .HasColumnName("authored_effort");
 
-        // Cold-start telemetry, nullable with no backfill: a pre-migration row, and every turn that warmed no local
-        // runtime, simply reports null — which is why it must NOT default to zero, since zero would claim the turn
-        // proved a warm start.
+        // Cold-start telemetry, nullable with no backfill: a pre-migration row, and every turn that warmed no local runtime, simply reports null — which is why it
+        // must NOT default to zero, since zero would claim the turn proved a warm start.
         builder.Property(entity => entity.ModelReadinessMs)
                .HasColumnName("model_readiness_ms");
 
-        // The paged list-by-agent read filters by agent and orders newest-first, so index the pair. No FK to
-        // agent_definitions: a run log is diagnostic telemetry that should outlive the definition (mirrors the no-FK
-        // conversation->definition choice), so deleting an agent must not cascade-delete its execution history.
+        // The paged list-by-agent read filters by agent and orders newest-first, so index the pair. No FK to agent_definitions: a run log is diagnostic telemetry
+        // that should outlive the definition (mirroring the no-FK conversation->definition choice), so deleting an agent must not cascade-delete its history.
         builder.HasIndex(entity => new
         {
             entity.AgentDefinitionId,
             entity.CreatedAtUtc
         });
 
-        // Deterministic identity for a run envelope: exactly one envelope row per terminalized assistant message. The
-        // filtered UNIQUE index is the DB-level guard behind the WHERE NOT EXISTS the atomic terminalize write and the
-        // startup reconcile both use (a retry or a crash-recovery backfill can never duplicate), and gives a crash
-        // between the message commit and the envelope write a recoverable key. The
-        // filter scopes it to run-envelope rows so the memory-diagnostics rows, which may repeat a message id, are
-        // unaffected. SQLite treats null message ids as distinct, so an envelope missing one (should not occur) never trips it.
+        // Deterministic identity for a run envelope: exactly one envelope row per terminalized assistant message, and a recoverable key for a crash between the
+        // message commit and the envelope write. What the filter and the null handling buy: docs/wiki/08-data-and-persistence.md ("Run-envelope schema versions").
         builder.HasIndex(entity => entity.MessageId)
                .IsUnique()
                .HasFilter($"record_kind = {(int)AgentExecutionLogRecordKind.ChatRunEnvelope}")

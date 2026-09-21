@@ -82,9 +82,8 @@ internal sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.UpdatedAtUtc)
                .HasColumnName("updated_at_utc");
 
-        // Ordinary uploads dedupe by collection + content hash. Repository documents deliberately do not: identical
-        // bytes at two paths are two sources, while collection + source kind + source id + path gives a changed file
-        // stable identity without allowing two repositories in one collection to overwrite each other.
+        // Ordinary uploads dedupe by collection + content hash. Repository documents deliberately do not: identical bytes at two paths are two sources, while
+        // collection + source kind + source id + path gives a changed file stable identity without letting two repositories in one collection overwrite each other.
         builder.HasIndex(entity => new
                {
                    entity.CollectionId,

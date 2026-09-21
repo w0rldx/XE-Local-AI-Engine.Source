@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     The <c>conversations.kind</c> discriminator: what created a conversation, and therefore whether the chat list
-///     should show it. Shaped on <see cref="NodeChatOrigin" />, minus its <c>All</c> set — nothing needs a kind set
-///     yet, and <c>NodeChatOrigin.All</c> has no consumer anywhere in the tree.
+///     should show it. Shaped on <see cref="NodeChatOrigin" /> minus its <c>All</c> set: nothing needs a kind set
+///     yet, and <c>NodeChatOrigin.All</c> has no consumer in the tree.
 /// </summary>
 /// <remarks>
 ///     <b>Public on purpose, and not because the Application readers need it.</b> Persistence already grants that

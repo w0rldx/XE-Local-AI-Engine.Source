@@ -24,9 +24,8 @@ internal sealed class DevWorkflowDecisionConfiguration : IEntityTypeConfiguratio
 
         builder.HasOne<DevWorkflowRun>().WithMany().HasForeignKey(entity => entity.RunId).OnDelete(DeleteBehavior.Cascade);
 
-        // One decision per node-run ATTEMPT, not per node-run: a node-run legitimately accumulates several over its
-        // life (fail, Retry at attempt 1, Approve at attempt 2), and uniqueness on node_run_id alone would reject the
-        // second one.
+        // One decision per node-run ATTEMPT, not per node-run: a node-run legitimately accumulates several over its life (fail, Retry at attempt 1, Approve at
+        // attempt 2), and uniqueness on node_run_id alone would reject the second one.
         builder.HasIndex(entity => new
         {
             entity.NodeRunId,

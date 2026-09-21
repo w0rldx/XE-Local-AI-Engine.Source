@@ -33,9 +33,8 @@ internal sealed class ExternalAppInstanceConfiguration : IEntityTypeConfiguratio
         builder.Property(entity => entity.LastSequence).HasColumnName("last_sequence");
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
 
-        // NOT unique. The schema stays N:1 (decision D13) so a later release can host two instances of one application
-        // without a migration; the V1 one-per-application rule is the install gate's, which holds the instance lease
-        // across the already-installed check and the insert and is therefore race-free without an index.
+        // NOT unique. The schema stays N:1 (decision D13) so a later release can host two instances of one application without a migration; the one-per-application
+        // rule is the install gate's, which holds the instance lease across the already-installed check and the insert and is therefore race-free without an index.
         builder.HasIndex(entity => entity.ApplicationId).HasDatabaseName("ix_external_app_instances_application");
 
         // Leading `status` serves the boot reconciler's and the observer's sweeps as well as the instance list.

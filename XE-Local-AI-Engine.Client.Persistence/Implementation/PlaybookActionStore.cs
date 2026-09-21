@@ -44,9 +44,8 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
-            // Cohort-monitoring clock: a create-as-Enabled action gets its clock stamped now; otherwise it carries
-            // whatever the caller supplied (null for a fresh Suggested/Disabled action). Centralizing the stamp here and
-            // in UpdateAsync makes the store the single source of truth — every Enabled action gets an EnabledAtUtc.
+            // Cohort-monitoring clock: a create-as-Enabled action is stamped now, otherwise it carries what the caller supplied (null for a fresh
+            // Suggested/Disabled action). Stamping here and in UpdateAsync makes the store the single source of truth — every Enabled action gets an EnabledAtUtc.
             EnabledAtUtc = input.State == PlaybookActionState.Enabled ? now : input.EnabledAtUtc
         };
 
@@ -70,23 +69,19 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
             return null;
         }
 
-        // Only Behavior (injected text), Priority (injection order) and State (injection membership) change what the
-        // resolver folds into the prompt; Scope/TriggerCondition/Source are not injected, so editing them alone
-        // must not bump Version.
+        // Only Behavior (injected text), Priority (injection order) and State (injection membership) change what the resolver folds into the prompt.
+        // Scope/TriggerCondition/Source are not injected, so editing them alone must not bump Version.
         var configChanged = !string.Equals(Decode(entity.Behavior), input.Behavior, StringComparison.Ordinal)
                             || entity.Priority != input.Priority
                             || entity.State != (int)input.State;
 
-        // Cohort-monitoring clock: detect a transition INTO Enabled (read the pre-mutation state, before the
-        // assignment below). The eval-gated promote (Suggested->Enabled) and a manual Disabled->Enabled toggle both
-        // stamp the clock; an edit/eval-record/reject that stays out of Enabled carries the caller's value through.
-        // Never cleared on disable — the last-enabled instant is preserved.
+        // Cohort-monitoring clock: detect a transition INTO Enabled from the pre-mutation state, before the assignment below. The eval-gated promote and a manual
+        // Disabled->Enabled toggle both stamp it; anything staying out of Enabled carries the caller's value through, and disabling never clears it.
         var enabledNow = (int)PlaybookActionState.Enabled;
         var transitioningIntoEnabled = entity.State != enabledNow && input.State == PlaybookActionState.Enabled;
 
-        // AgentDefinitionId is deliberately NOT reassigned: an action never moves agents. The application service
-        // already rejects a cross-agent update, and leaving the FK column untouched is defense-in-depth even if a
-        // future caller bypasses that guard.
+        // AgentDefinitionId is deliberately NOT reassigned: an action never moves agents. The application service already rejects a cross-agent update, and
+        // leaving the FK column untouched is defense-in-depth even if a future caller bypasses that guard.
         entity.State = (int)input.State;
         entity.Source = (int)input.Source;
         // MemoryScope is non-injected metadata (like Scope/Source/Confidence), so it is excluded from configChanged
@@ -104,10 +99,8 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
         entity.EvalResult = input.EvalResult;
         entity.Priority = input.Priority;
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        // EnabledAtUtc is a pure timestamp, so like EvalResult it is excluded from configChanged and never bumps
-        // Version on its own; a co-occurring State change bumps Version on its own merit. Stamp now when transitioning
-        // into Enabled, otherwise carry the caller's value through so an edit/eval-record/reject preserves the
-        // last-enabled instant.
+        // EnabledAtUtc is a pure timestamp, so like EvalResult it is excluded from configChanged and never bumps Version on its own; a co-occurring State change
+        // bumps it on its own merit. Stamped now on a transition into Enabled, otherwise carried through so an edit, eval record or reject preserves the instant.
         entity.EnabledAtUtc = transitioningIntoEnabled ? now : input.EnabledAtUtc;
         entity.UpdatedAtUtc = now;
 
@@ -127,9 +120,8 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
         string? evalResult,
         CancellationToken cancellationToken = default)
     {
-        // Serialize the version/state guard, the cap re-check and the Enabled write into one transaction so a concurrent
-        // edit/promote cannot slip between the checks and the write. Any early return disposes the transaction, rolling
-        // back with nothing written.
+        // Serialize the version/state guard, the cap re-check and the Enabled write into one transaction so a concurrent edit or promote cannot slip between the
+        // checks and the write. Any early return disposes the transaction, rolling back with nothing written.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var entity = await _dbContext.PlaybookActions
@@ -139,9 +131,8 @@ public sealed class PlaybookActionStore : IPlaybookActionStore
             return new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.NotFound, Record = null };
         }
 
-        // Optimistic-concurrency guard: the row must still be the exact snapshot the caller validated. A concurrent
-        // UpdateSuggestedAsync bumps Version (and clears the eval); a concurrent promote moves State off Suggested —
-        // either way the recorded eval evidence no longer proves this content, so refuse rather than enable on it.
+        // Optimistic-concurrency guard: the row must still be the exact snapshot the caller validated. A concurrent UpdateSuggestedAsync bumps Version and clears
+        // the eval, a concurrent promote moves State off Suggested — either way the eval evidence no longer proves this content, so refuse rather than enable on it.
         if (entity.Version != expectedVersion || entity.State != (int)PlaybookActionState.Suggested)
         {
             return new PlaybookPromotionCommit { Status = PlaybookPromotionCommitStatus.VersionConflict, Record = null };

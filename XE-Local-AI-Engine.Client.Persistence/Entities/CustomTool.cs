@@ -25,30 +25,37 @@ internal sealed record class CustomTool
     public int Mode { get; set; }
 
     /// <summary>
-    ///     Declared input parameters as a single UTF-8 JSON array — <c>[{name,type,description,required}]</c> — compiled
-    ///     downstream into a GBNF-safe schema when <see cref="Mode" /> is Parameterized, and empty (<c>[]</c>) for a Fixed
-    ///     tool. Plaintext (structural — a parameter declaration carries no secret): the shape the model fills in is not
-    ///     sensitive, only the values substituted at run time are. Config-affecting (bumps <see cref="Version" />).
+    ///     Declared input parameters as a single UTF-8 JSON array — <c>[{name,type,description,required}]</c> —
+    ///     compiled downstream into a GBNF-safe schema when <see cref="Mode" /> is Parameterized, and empty
+    ///     (<c>[]</c>) for a Fixed tool.
     /// </summary>
+    /// <remarks>
+    ///     Plaintext (structural — a parameter declaration carries no secret): the shape the model fills in is not
+    ///     sensitive, only the values substituted at run time are. Config-affecting (bumps <see cref="Version" />).
+    /// </remarks>
     public string ParametersJson { get; set; } = "[]";
 
     /// <summary>
-    ///     Kind-specific configuration as a single UTF-8 JSON object. For HttpFetch:
-    ///     <c>{method, urlTemplate, headers[{name,value,isSecret}], bodyTemplate, allowedHosts[]}</c>. For Command:
-    ///     <c>{executable, argsTemplate[], workingDirectory, timeoutSeconds, env[{name,value,isSecret}]}</c>. This column
-    ///     carries the secret header/env values, so the whole column is encrypted at rest by
-    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
-    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>custom_tool_config_json</c> —
-    ///     the same posture as the secret-bearing MCP <c>env</c>/<c>arguments</c> columns. Required; config-affecting
-    ///     (bumps <see cref="Version" />).
+    ///     Kind-specific configuration as a single UTF-8 JSON object. Required; config-affecting (bumps
+    ///     <see cref="Version" />).
     /// </summary>
+    /// <remarks>
+    ///     For HttpFetch: <c>{method, urlTemplate, headers[{name,value,isSecret}], bodyTemplate, allowedHosts[]}</c>.
+    ///     For Command: <c>{executable, argsTemplate[], workingDirectory, timeoutSeconds, env[{name,value,isSecret}]}</c>.
+    ///     This column carries the secret header/env values, so the whole column is encrypted at rest by
+    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by <see cref="NodeEncryptionMaterializationInterceptor" />
+    ///     using AAD column name <c>custom_tool_config_json</c> — the posture the secret-bearing MCP <c>env</c>/<c>arguments</c> columns use.
+    /// </remarks>
     public byte[] ConfigJson { get; set; } = [];
 
     /// <summary>
-    ///     Library-wide on/off switch. Plaintext (structural). A disabled tool is never offered even when still assigned
-    ///     to an agent. Default <c>true</c>; toggling it does NOT bump <see cref="Version" /> — membership in the offered
-    ///     set already covers it in the runtime config hash, mirroring <see cref="AgentSkill.Enabled" />.
+    ///     Library-wide on/off switch. Plaintext (structural). A disabled tool is never offered even when still
+    ///     assigned to an agent. Default <c>true</c>.
     /// </summary>
+    /// <remarks>
+    ///     Toggling it does NOT bump <see cref="Version" /> — membership in the offered set already covers it in the
+    ///     runtime config hash, mirroring <see cref="AgentSkill.Enabled" />.
+    /// </remarks>
     public bool Enabled { get; set; } = true;
 
     /// <summary>

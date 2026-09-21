@@ -4,11 +4,14 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Persistence boundary for the training dataset module: definitions, datasets, samples, tool mocks and the durable
-///     generation queue. Mirrors <see cref="IBenchmarkStore" />'s conventions — hand-bumped <c>Version</c> concurrency
-///     tokens compared against a caller-supplied <c>expectedVersion</c>, explicit SQLite transactions around every
-///     multi-row mutation, and explicit ordered child deletes (the references that block a delete declare
-///     <c>Restrict</c>, and the node connection enforces them, so the order is what makes the delete legal).
+///     generation queue.
 /// </summary>
+/// <remarks>
+///     Mirrors <see cref="IBenchmarkStore" />'s conventions — hand-bumped <c>Version</c> concurrency tokens compared
+///     against a caller-supplied <c>expectedVersion</c>, explicit SQLite transactions around every multi-row mutation,
+///     and explicit ordered child deletes: the references that block a delete declare <c>Restrict</c> and the node
+///     connection enforces them, so the order is what makes the delete legal.
+/// </remarks>
 public interface ITrainingDatasetStore
 {
     Task<TrainingDefinitionRecord> CreateDefinitionAsync(TrainingDefinitionInput input, CancellationToken cancellationToken = default);
@@ -23,10 +26,12 @@ public interface ITrainingDatasetStore
     Task DeleteDefinitionAsync(Guid definitionId, long expectedVersion, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Creates the dataset row and its single queued work item in one transaction (freeze-before-enqueue). The
-    ///     definition BODY is snapshotted onto the dataset in that same transaction, so a later edit cannot re-shape a
-    ///     dataset that already claims an older <c>DefinitionVersion</c>.
+    ///     Creates the dataset row and its single queued work item in one transaction (freeze-before-enqueue).
     /// </summary>
+    /// <remarks>
+    ///     The definition BODY is snapshotted onto the dataset in that same transaction, so a later edit cannot
+    ///     re-shape a dataset that already claims an older <c>DefinitionVersion</c>.
+    /// </remarks>
     Task<TrainingDatasetRecord> CreateDatasetAndEnqueueAsync(TrainingDatasetEnqueueCommand command, CancellationToken cancellationToken = default);
 
     Task<TrainingDatasetRecord?> GetDatasetAsync(Guid datasetId, CancellationToken cancellationToken = default);

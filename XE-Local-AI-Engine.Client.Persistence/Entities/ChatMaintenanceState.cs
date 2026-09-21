@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Durable node-local key/value flags for one-shot database maintenance that must survive a restart — currently the
-///     content-encryption backfill's "plaintext residue reclamation still owed" marker. Not encrypted: a task name and a
-///     presence flag are not secrets. Kept as its own tiny table so a maintenance flag stays consistent with the data it
-///     guards and is preserved verbatim by <c>VACUUM</c>.
+///     Durable node-local key/value flags for one-shot database maintenance that must survive a restart — currently
+///     the content-encryption backfill's "plaintext residue reclamation still owed" marker.
 /// </summary>
+/// <remarks>
+///     Not encrypted: a task name and a presence flag are not secrets. Kept as its own tiny table so a maintenance
+///     flag stays consistent with the data it guards and is preserved verbatim by <c>VACUUM</c>.
+/// </remarks>
 internal sealed record class ChatMaintenanceState
 {
     /// <summary>Maintenance task key (primary key).</summary>

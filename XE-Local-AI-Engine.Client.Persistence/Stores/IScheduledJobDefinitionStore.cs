@@ -3,11 +3,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Node-scoped persistence for scheduled job definitions. <c>ParameterJson</c> is encrypted at rest by the node
-///     encryption interceptors; reads return it decrypted on the <see cref="ScheduledJobDefinitionRecord" />. This store
-///     performs no schedule validation — that is the application-layer service's responsibility; it owns only
-///     id/timestamp stamping and the soft-delete/enable lifecycle.
+///     Node-scoped persistence for scheduled job definitions.
 /// </summary>
+/// <remarks>
+///     <c>ParameterJson</c> is encrypted at rest by the node encryption interceptors; reads return it decrypted on the
+///     <see cref="ScheduledJobDefinitionRecord" />. This store performs no schedule validation — that is the
+///     application-layer service's responsibility — and owns only id and timestamp stamping plus the
+///     soft-delete/enable lifecycle.
+/// </remarks>
 public interface IScheduledJobDefinitionStore
 {
     /// <summary>

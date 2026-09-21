@@ -19,9 +19,8 @@ internal sealed class AgentSkillResourceConfiguration : IEntityTypeConfiguration
 
         builder.Property(entity => entity.Name)
                .HasColumnName("name")
-               // Case-insensitive collation so the per-skill unique index below treats two resources whose paths differ
-               // only in case as the same file — a case-only duplicate would give the model two entries it cannot tell
-               // apart, and the second would shadow the first on lookup.
+               // Case-insensitive collation so the per-skill unique index below treats two resources whose paths differ only in case as the same file — a case-only
+               // duplicate would give the model two entries it cannot tell apart, and the second would shadow the first on lookup.
                .UseCollation("NOCASE");
 
         builder.Property(entity => entity.Description)

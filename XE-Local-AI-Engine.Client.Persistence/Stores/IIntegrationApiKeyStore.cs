@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     One credential as a reader sees it. <see cref="KeyHash" /> travels as <see cref="ReadOnlyMemory{T}" /> — a
-///     carrier, never compared by value here; the constant-time comparison belongs to the authentication handler.
-///     <see cref="PrincipalId" /> is the integrator identity every ownership question keys on;
-///     <see cref="KeyPrefix" /> only names which credential was used.
+///     One credential as a reader sees it.
 /// </summary>
+/// <remarks>
+///     <see cref="KeyHash" /> travels as <see cref="ReadOnlyMemory{T}" />, a carrier never compared by value here: the
+///     constant-time comparison belongs to the authentication handler. <see cref="PrincipalId" /> is the integrator
+///     identity every ownership question keys on; <see cref="KeyPrefix" /> only names which credential was used.
+/// </remarks>
 public sealed record IntegrationApiKeySnapshot
 {
     public required Guid Id { get; init; }

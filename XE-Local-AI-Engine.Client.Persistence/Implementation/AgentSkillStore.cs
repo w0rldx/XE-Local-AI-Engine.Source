@@ -74,10 +74,8 @@ public sealed partial class AgentSkillStore : IAgentSkillStore
             return null;
         }
 
-        // Name, Description, Body and the frontmatter are the content the model sees / loads, so they drive the config
-        // hash and bump Version. The Enabled toggle only gates resolution (already covered by resolved-set membership
-        // in the hash), so toggling it alone must NOT bump Version — mirrors the PlaybookAction/AgentDefinition version
-        // rule. Provenance is not content either: re-stamping where a skill came from changes nothing the model reads.
+        // Name, Description, Body and the frontmatter are the content the model sees, so they drive the config hash and bump Version. The Enabled toggle only gates
+        // resolution (already in the hash via resolved-set membership), so it must NOT bump Version, as for PlaybookAction/AgentDefinition; nor does provenance.
         var frontmatterJson = SerializeFrontmatter(input);
         var configChanged = !string.Equals(entity.Name, input.Name, StringComparison.Ordinal)
                             || !string.Equals(Decode(entity.Description), input.Description, StringComparison.Ordinal)
@@ -90,23 +88,20 @@ public sealed partial class AgentSkillStore : IAgentSkillStore
         entity.FrontmatterJson = Encode(frontmatterJson);
         entity.Enabled = input.Enabled;
 
-        // Provenance is promote-only, and absent values leave the stored provenance alone: an operator edit that did
-        // not echo the import fields back must not launder an imported skill into a local one, because Origin is what
-        // decides whether the body gets fenced as untrusted content downstream. When the input DOES carry Imported
-        // provenance (a re-import, or the AI-drafted "generated" demotion), the whole unit is applied VERBATIM —
-        // including a null ContentSha256, which is the correct value for a generated row: keeping the old
-        // archive/GitHub payload hash on content the model just rewrote would poison re-import change detection.
+        // Provenance is promote-only, and absent values leave the stored provenance alone: an operator edit that did not echo the import fields back must not
+        // launder an imported skill into a local one, because Origin decides whether the body gets fenced as untrusted content downstream.
         if (input.Origin == AgentSkillOrigin.Imported)
         {
+            // Imported input (a re-import, or the AI-drafted "generated" demotion) applies the whole unit VERBATIM, including a null ContentSha256, the correct
+            // value for a generated row: the old archive/GitHub payload hash on content the model just rewrote would poison re-import change detection.
             entity.Origin = (int)AgentSkillOrigin.Imported;
             entity.SourceUri = input.SourceUri;
             entity.ImportedAtUtc = input.ImportedAtUtc;
             entity.ContentSha256 = input.ContentSha256;
         }
 
-        // Same set-if-present rule, and for the same reason: the AI provenance block only travels with a save that came
-        // out of the assist dialog, so an ordinary edit omitting it must leave the stored record intact. Not content —
-        // it is deliberately absent from configChanged above and never bumps Version.
+        // The same set-if-present rule, for the same reason: the AI provenance block only travels with a save that came out of the assist dialog, so an ordinary
+        // edit omitting it must leave the stored record intact. Not content — deliberately absent from configChanged above, and it never bumps Version.
         entity.GenerationMetadataJson = Encode(input.GenerationMetadataJson) ?? entity.GenerationMetadataJson;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
@@ -166,9 +161,8 @@ public sealed partial class AgentSkillStore : IAgentSkillStore
             return [];
         }
 
-        // Materialize the requested ids into a hash set so the EF Contains translates to a single IN (...) query and
-        // duplicate ids in the picklist collapse. Filter to Enabled server-side; missing/disabled ids simply do not
-        // appear in the result (the resolver drops + logs them).
+        // Materialize the requested ids into a hash set so the EF Contains translates to a single IN (...) query and duplicate ids in the picklist collapse. Filter
+        // to Enabled server-side; missing or disabled ids simply do not appear in the result (the resolver drops and logs them).
         var idSet = ids.ToHashSet();
 
         var entities = await _dbContext.AgentSkills
@@ -214,9 +208,8 @@ public sealed partial class AgentSkillStore : IAgentSkillStore
             return null;
         }
 
-        // The name column collates NOCASE, so this comparison is server-side case-insensitive and matches the unique
-        // index. Any row it finds is removed rather than updated in place: the name is bound into the content AAD, so a
-        // fresh row (fresh id, fresh seal) is the only way an edit stays readable.
+        // The name column collates NOCASE, so this comparison is server-side case-insensitive and matches the unique index. Any row it finds is removed rather than
+        // updated in place: the name is bound into the content AAD, so a fresh row (fresh id, fresh seal) is the only way an edit stays readable.
         var superseded = await _dbContext.AgentSkillResources
                                          .Where(resource => resource.SkillId == skillId && resource.Name == input.Name)
                                          .ToListAsync(cancellationToken);
@@ -314,9 +307,8 @@ public sealed partial class AgentSkillStore : IAgentSkillStore
         };
     }
 
-    // A resource add, edit or removal is content-affecting: it changes what the model can fetch, so it has to move the
-    // skill's Version and through it the runtime config hash, which is what invalidates a resumed run. Resource content
-    // itself is deliberately NOT folded into the hash — the version bump already carries the whole invalidation.
+    // A resource add, edit or removal is content-affecting: it changes what the model can fetch, so it has to move the skill's Version and through it the runtime
+    // config hash, which is what invalidates a resumed run. Resource content itself is deliberately NOT folded into the hash — the version bump carries it all.
     private void BumpVersion(AgentSkill skill)
     {
         skill.Version++;
@@ -364,9 +356,8 @@ public sealed partial class AgentSkillStore : IAgentSkillStore
         };
     }
 
-    // The four optional frontmatter fields share one encrypted column, so they are serialized and compared as a unit.
-    // Metadata keys are sorted so the same frontmatter always produces the same bytes: without that, dictionary
-    // ordering alone would look like a content edit and bump Version on every save.
+    // The four optional frontmatter fields share one encrypted column, so they are serialized and compared as a unit. Metadata keys are sorted so the same
+    // frontmatter always produces the same bytes: without that, dictionary ordering alone would look like a content edit and bump Version on every save.
     private static string? SerializeFrontmatter(AgentSkillInput input)
     {
         var metadata = input.Metadata is null || input.Metadata.Count == 0
@@ -386,10 +377,8 @@ public sealed partial class AgentSkillStore : IAgentSkillStore
         return frontmatterJson is null or { Length: 0 } ? null : JsonSerializer.Deserialize<SkillFrontmatter>(frontmatterJson, SerializerOptions);
     }
 
-    // Uploads contribute their kind only. An operator-chosen archive filename would otherwise be the single
-    // unencrypted free-text string in a table where the description, the body, the frontmatter and every resource are
-    // AEAD-sealed — and it is plaintext precisely because provenance has to be greppable in logs and rendered in the
-    // approval card, which is the wrong place for a filename off the operator's disk.
+    // Uploads contribute their kind only: an operator-chosen archive filename would otherwise be the single unencrypted free-text string in a table where the
+    // description, body, frontmatter and every resource are AEAD-sealed — and provenance is plaintext to be greppable in logs, no place for a filename off a disk.
     private static void ValidateSourceUri(string? sourceUri)
     {
         if (sourceUri is null)

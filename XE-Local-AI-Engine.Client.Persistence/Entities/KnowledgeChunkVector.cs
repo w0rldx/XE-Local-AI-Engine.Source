@@ -1,13 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Rebuildable embedding index for a <see cref="KnowledgeDocumentChunk" /> (managed cosine-search path). One row per
-///     chunk; the <see cref="Embedding" /> BLOB is a <c>float32</c> array laid out in the platform's native byte order
-///     (little-endian on the shipped x64/ARM64 targets; a store moved to a big-endian host would need re-embedding).
-///     Vectors are always compared only within a single <see cref="EmbeddingModel" /> (same-dimension, same-model), so
-///     the model id is stored alongside the blob as the search filter key. Fully derivable from
-///     <c>knowledge_document_chunks</c> by re-embedding.
+///     Rebuildable embedding index for a <see cref="KnowledgeDocumentChunk" /> (managed cosine-search path). One row
+///     per chunk, fully derivable from <c>knowledge_document_chunks</c> by re-embedding.
 /// </summary>
+/// <remarks>
+///     The <see cref="Embedding" /> BLOB is a <c>float32</c> array laid out in the platform's native byte order
+///     (little-endian on the shipped x64/ARM64 targets; a store moved to a big-endian host would need re-embedding).
+///     Vectors are always compared only within a single <see cref="EmbeddingModel" /> (same-dimension, same-model),
+///     so the model id is stored alongside the blob as the search filter key.
+/// </remarks>
 internal sealed record class KnowledgeChunkVector
 {
     /// <summary>Owning chunk. Primary key and foreign key to <c>knowledge_document_chunks.chunk_id</c> (cascade delete).</summary>

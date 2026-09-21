@@ -42,10 +42,13 @@ internal sealed record class McpServerRegistration
 
     /// <summary>
     ///     Backing int for <see cref="McpTrustTier" />. Plaintext (structural): the sandbox backend selector reads it
-    ///     before any key is available, and a tier is not a secret. Existing rows migrate to
-    ///     <see cref="McpTrustTier.Sandboxed" /> — see <c>docs/security/mcp-trust-tiers.md</c> for why that is the
-    ///     column default rather than the tier that would have preserved the old behaviour silently.
+    ///     before any key is available, and a tier is not a secret.
     /// </summary>
+    /// <remarks>
+    ///     Existing rows migrate to <see cref="McpTrustTier.Sandboxed" /> — see
+    ///     <c>docs/security/mcp-trust-tiers.md</c> for why that is the column default rather than the tier that would
+    ///     have preserved the old behaviour silently.
+    /// </remarks>
     public int TrustTier { get; set; }
 
     /// <summary>False on register; the user must explicitly enable a server before the connection manager connects it.</summary>

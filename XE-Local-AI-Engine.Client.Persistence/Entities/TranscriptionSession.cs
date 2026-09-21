@@ -1,12 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     A persisted transcription session (create → transcribe → complete/fail/cancel). Node-scoped. The audio itself is
-///     never persisted — only the derived transcript rows in <see cref="Segments" />. <see cref="Title" />,
-///     <see cref="ConfigJson" />, <see cref="ErrorCode" /> and <see cref="ErrorMessage" /> are stored encrypted at rest
-///     (AES-256-GCM, node key) — see <c>NodeEncryptionSaveChangesInterceptor</c> /
-///     <c>NodeEncryptionMaterializationInterceptor</c> (AAD column names <c>transcription_session_*</c>).
+///     A persisted transcription session (create → transcribe → complete/fail/cancel). Node-scoped. The audio itself
+///     is never persisted — only the derived transcript rows in <see cref="Segments" />.
 /// </summary>
+/// <remarks>
+///     <see cref="Title" />, <see cref="ConfigJson" />, <see cref="ErrorCode" /> and <see cref="ErrorMessage" /> are
+///     stored encrypted at rest (AES-256-GCM, node key) — see <c>NodeEncryptionSaveChangesInterceptor</c> /
+///     <c>NodeEncryptionMaterializationInterceptor</c> (AAD column names <c>transcription_session_*</c>).
+/// </remarks>
 internal sealed record class TranscriptionSession
 {
     /// <summary>Session identity (PK).</summary>
@@ -35,9 +37,11 @@ internal sealed record class TranscriptionSession
 
     /// <summary>
     ///     UTF-8 JSON bytes of the session's resolved transcription configuration (language mode, translate flag, …).
-    ///     Plaintext while tracked; encrypted at rest using AAD column name
-    ///     <c>transcription_session_config_json</c>. Required — a session with no options stores <c>{}</c>, never null.
+    ///     Plaintext while tracked; encrypted at rest using AAD column name <c>transcription_session_config_json</c>.
     /// </summary>
+    /// <remarks>
+    ///     Required — a session with no options stores <c>{}</c>, never null.
+    /// </remarks>
     public byte[] ConfigJson { get; set; } = [];
 
     /// <summary>The language the runtime detected, as a BCP-47-ish short code, or <see langword="null" />. Structural, so plaintext.</summary>

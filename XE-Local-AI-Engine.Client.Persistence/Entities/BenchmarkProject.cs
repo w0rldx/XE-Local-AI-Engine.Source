@@ -58,9 +58,12 @@ internal sealed record class BenchmarkProject
     /// <summary>
     ///     <c>v1:</c> + SHA-256 over this project's LEAF task items, ordered by their immutable
     ///     <see cref="BenchmarkTaskItem.Id" /> rather than by index — so adding or deleting an item moves the hash and
-    ///     reordering does not. <see langword="null" /> until the project's first item write. Plaintext, and the value
-    ///     every run copies at freeze so a cell can say which question set it was measured against.
+    ///     reordering does not.
     /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> until the project's first item write. Plaintext, and the value every run copies at
+    ///     freeze so a cell can say which question set it was measured against.
+    /// </remarks>
     public string? TaskItemSetHash { get; set; }
 
     public long Version { get; set; }

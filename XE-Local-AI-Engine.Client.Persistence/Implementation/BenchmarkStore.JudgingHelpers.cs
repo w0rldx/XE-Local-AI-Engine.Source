@@ -62,15 +62,15 @@ public sealed partial class BenchmarkStore
 
     /// <summary>
     ///     The project's eligible runs and — with a seed — one fresh Queued attempt each, inserted inside the caller's
-    ///     transaction. Enqueuing here rather than in a follow-up loop is what makes a cohort reset all-or-nothing: a
-    ///     reset that committed with only some attempts enqueued would rank a cohort against runs never re-judged.
-    ///     No already-applied guard: the caller has just reset the cohort, and every eligible run belongs to it.
-    ///     <para>
-    ///         A seed that clears <see cref="BenchmarkJudgeAttemptSeed.SeedPointwiseAttempts" /> reports the same
-    ///         eligible set and inserts nothing: a pairwise cohort is judged by comparisons, and a pointwise attempt
-    ///         queued beside them is a judging the mode never asked for.
-    ///     </para>
+    ///     transaction.
     /// </summary>
+    /// <remarks>
+    ///     Enqueuing here rather than in a follow-up loop is what makes a cohort reset all-or-nothing: a reset that
+    ///     committed with only some attempts enqueued would rank a cohort against runs never re-judged. No
+    ///     already-applied guard, because the caller has just reset the cohort. A seed that clears
+    ///     <see cref="BenchmarkJudgeAttemptSeed.SeedPointwiseAttempts" /> reports the same eligible set and inserts
+    ///     nothing: a pairwise cohort is judged by comparisons, not by pointwise attempts queued beside them.
+    /// </remarks>
     private async Task<IReadOnlyList<Guid>> EnqueueCohortAttemptsAsync(Guid projectId,
         BenchmarkJudgePolicyRevision revision,
         BenchmarkJudgeAttemptSeed? seed,

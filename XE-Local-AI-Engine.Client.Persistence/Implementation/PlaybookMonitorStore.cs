@@ -7,12 +7,14 @@ using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Raw-SQL cohort monitor over the node-local chat database. Mirrors
-///     <see cref="FeedbackInsightsStore" />: parameterized ADO over the scoped <see cref="NodeChatDbContext" />
-///     connection rather than EF entity materialization, because the aggregate touches only plaintext columns and
-///     spans every conversation for the agent — the per-conversation write key on the persistence writer is irrelevant
-///     to a whole-database read. Computed on read; there is no snapshot table.
+///     Raw-SQL cohort monitor over the node-local chat database, computed on read — there is no snapshot table.
 /// </summary>
+/// <remarks>
+///     Mirrors <see cref="FeedbackInsightsStore" />: parameterized ADO over the scoped
+///     <see cref="NodeChatDbContext" /> connection rather than EF entity materialization, because the aggregate
+///     touches only plaintext columns and spans every conversation for the agent, so the per-conversation write key on
+///     the persistence writer is irrelevant to it.
+/// </remarks>
 public sealed class PlaybookMonitorStore : IPlaybookMonitorStore
 {
     private const string RatingDown = "down";
@@ -59,9 +61,8 @@ public sealed class PlaybookMonitorStore : IPlaybookMonitorStore
 
     private static async Task<CohortComparison> ReadByToolAsync(DbConnection connection, Guid agentDefinitionId, long enabledAtUtc, string toolScope, CancellationToken cancellationToken)
     {
-        // Facet path: restrict to conversations that recorded a tool_events row for the scoped tool. tool_events has no
-        // message link, so attribution is conversation-level — COUNT(DISTINCT message_id) keeps a tool used many times
-        // in a conversation from inflating each rated message beyond one (the conversation-level attribution limit).
+        // Facet path: restrict to conversations that recorded a tool_events row for the scoped tool. tool_events has no message link, so attribution is
+        // conversation-level — COUNT(DISTINCT message_id) keeps a tool used many times in a conversation from inflating each rated message beyond one.
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               SELECT

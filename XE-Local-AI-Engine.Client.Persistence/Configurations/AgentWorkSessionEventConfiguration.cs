@@ -26,9 +26,8 @@ internal sealed class AgentWorkSessionEventConfiguration : IEntityTypeConfigurat
             entity.Sequence
         }).IsUnique().HasDatabaseName("ux_agent_work_session_events_session_sequence");
 
-        // One event per operation id. Unlike development_events there is no third phase column: a phase with exactly
-        // one value per operation is a column nobody reads, so the caller derives a distinct operation id per event
-        // instead and the store resolves it query-first.
+        // One event per operation id. Unlike development_events there is no third phase column: a phase with exactly one value per operation is a column nobody
+        // reads, so the caller derives a distinct operation id per event instead and the store resolves it query-first.
         builder.HasIndex(entity => new
                {
                    entity.SessionId,

@@ -53,6 +53,17 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Encrypts every registered plaintext column on the tracked graph in place, remembering each original so
+    ///     <see cref="RestoreTrackedPayloads" /> can put it back.
+    /// </summary>
+    /// <remarks>
+    ///     Three AAD conventions run through the registrations. A node-scoped row binds <c>Guid.Empty</c> in the
+    ///     conversation slot plus its own id and the column name; a child row binds its OWNER's id in the conversation
+    ///     slot, so a database writer who re-parents the row fails the tag check instead of reading it back as the new
+    ///     owner's; and every encrypted column of a row gets a distinct AAD column name, so no blob is presentable as
+    ///     another column's. See <see cref="NodePayloadProtector" /> for the associated-data layout.
+    /// </remarks>
     private void EncryptTrackedPayloads(DbContext? context)
     {
         if (context is not NodeChatDbContext nodeContext)
@@ -62,9 +73,7 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
 
         var trackedProperties = new List<TrackedEncryptedProperty>();
 
-        // Conversation titles are conversation-scoped: AAD binds the conversation's own id as both the
-        // conversation id and the record id, plus the column name. Title is optional (null until the first
-        // user message is received).
+        // Conversation-scoped: the conversation's own id fills both AAD slots. Title is optional — null until the first user message is received.
         foreach (var entry in nodeContext.ChangeTracker.Entries<NodeConversation>())
         {
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Title), entry.Entity.ConversationId, entry.Entity.ConversationId, "title", trackedProperties);
@@ -72,9 +81,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
 
         foreach (var entry in nodeContext.ChangeTracker.Entries<NodeMessage>())
         {
-            // Content and metadata are the only encrypted columns with legacy plaintext rows on disk, so they carry the
-            // versioned read-both envelope (NodeChatContentProtection) instead of the bare protector. This keeps an
-            // EF-tracked save byte-compatible with the raw-ADO persistence path.
+            // The only encrypted columns with legacy plaintext rows on disk, so they carry the versioned read-both envelope (NodeChatContentProtection) instead of
+            // the bare protector — which is what keeps an EF-tracked save byte-compatible with the raw-ADO persistence path.
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Content), entry.Entity.ConversationId, entry.Entity.MessageId, "content", trackedProperties,
                 NodeChatContentProtection.Protect);
             EncryptOptionalProperty(entry, entry.Property(entity => entity.MetadataJson), entry.Entity.ConversationId, entry.Entity.MessageId, "metadata_json", trackedProperties,
@@ -94,9 +102,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptRequiredProperty(entry, entry.Property(entity => entity.HostPath), Guid.Empty, entry.Entity.Id, "host_path", trackedProperties);
         }
 
-        // Development templates and the provenance of repositories materialized from them both carry host paths, so
-        // they get exactly the selected-folder treatment: node-scoped AAD binding the empty conversation id to the
-        // row's own id plus the column name.
+        // Development templates and the provenance of repositories materialized from them both carry host paths, so they get exactly the selected-folder
+        // treatment: node-scoped AAD.
         foreach (var entry in nodeContext.ChangeTracker.Entries<DevelopmentTemplate>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.HostPath), Guid.Empty, entry.Entity.Id, "host_path", trackedProperties);
@@ -116,9 +123,7 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.GenerationMetadataJson), Guid.Empty, entry.Entity.Id, "generation_metadata_json", trackedProperties);
         }
 
-        // Agent skills are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
-        // skill's own id plus the column name — same layout as agent definitions. Both the description and the SKILL.md
-        // body are required encrypted columns.
+        // Node-scoped, same layout as agent definitions. Both the description and the SKILL.md body are required encrypted columns.
         foreach (var entry in nodeContext.ChangeTracker.Entries<AgentSkill>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
@@ -127,39 +132,29 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.GenerationMetadataJson), Guid.Empty, entry.Entity.Id, "generation_metadata_json", trackedProperties);
         }
 
-        // Skill resources are the one place in this schema where the row id alone is the wrong AAD binding. The threat
-        // is a database WRITER, not a reader (same reasoning as the MCP key hash below): with only the row id bound,
-        // anyone who could edit the file could point an existing resource row at another skill and have its content
-        // injected into a different agent's context, without forging a ciphertext or a tag. So the skill id takes the
-        // conversation slot and the resource name rides in the column name — moving a row, or renaming it underneath
-        // its ciphertext, now fails the tag check. Renames therefore go through delete-and-reinsert in the store.
+        // With only the row id bound, a database WRITER (not a reader) could point a resource row at another skill and inject its content into a different
+        // agent's context without forging a tag, so the skill id takes the conversation slot and the name the column name. Renames go delete-and-reinsert.
         foreach (var entry in nodeContext.ChangeTracker.Entries<AgentSkillResource>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Content), entry.Entity.SkillId, entry.Entity.Id, AgentSkillResource.ContentColumnName(entry.Entity.Name), trackedProperties);
         }
 
-        // Custom tools are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
-        // tool's own id plus the column name — same layout as agent skills. Description is required; the kind-specific
-        // config (which carries the secret header/env values) is a required encrypted column under a distinct AAD column
-        // name so a config blob can never be substituted for a description blob.
+        // Node-scoped, same layout as agent skills. Description is required; so is the kind-specific config, which carries the secret header/env values and
+        // takes a distinct AAD column name so a config blob can never be substituted for a description blob.
         foreach (var entry in nodeContext.ChangeTracker.Entries<CustomTool>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
             EncryptRequiredProperty(entry, entry.Property(entity => entity.ConfigJson), Guid.Empty, entry.Entity.Id, "custom_tool_config_json", trackedProperties);
         }
 
-        // Playbook actions are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
-        // action's own id plus the column name — same layout as agent definitions. Behavior is required; the optional
-        // trigger condition only encrypts when present.
+        // Node-scoped, same layout as agent definitions. Behavior is required; the optional trigger condition only encrypts when present.
         foreach (var entry in nodeContext.ChangeTracker.Entries<PlaybookAction>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Behavior), Guid.Empty, entry.Entity.Id, "behavior", trackedProperties);
             EncryptOptionalProperty(entry, entry.Property(entity => entity.TriggerCondition), Guid.Empty, entry.Entity.Id, "trigger_condition", trackedProperties);
         }
 
-        // Golden conversations are node-scoped (no conversation/message), so the AAD binds the empty conversation id to
-        // the case's own id plus the column name — same layout as playbook actions. InputTurns is required; the optional
-        // assertion/rubric only encrypt when present.
+        // Node-scoped, same layout as playbook actions. InputTurns is required; the optional assertion/rubric only encrypt when present.
         foreach (var entry in nodeContext.ChangeTracker.Entries<GoldenConversation>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.InputTurns), Guid.Empty, entry.Entity.Id, "input_turns", trackedProperties);
@@ -183,40 +178,28 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 SlashCommand.ActionConfigurationColumnName(entry.Entity.Name), trackedProperties);
         }
 
-        // The inbound-MCP bearer credential is node-scoped, so the AAD binds the empty conversation id to the row's own
-        // (constant, singleton) id plus the column name. The stored value is a one-way SHA-256 digest, not the key, so
-        // this is not protecting a secret from a reader — it is protecting the digest from a WRITER. Without the
-        // AAD-bound AEAD, anyone who could edit the database file could drop in the hash of a key they chose and
-        // authenticate against an agent-execution surface. The hash is required — a row without it would authenticate
-        // nothing — so it always encrypts.
+        // Node-scoped singleton row. The stored value is a one-way SHA-256 digest, not the key, so the AAD-bound AEAD protects no secret from a reader: it stops
+        // a database-file WRITER dropping in the hash of a key they chose and authenticating against the agent-execution surface. Required, so it always encrypts.
         foreach (var entry in nodeContext.ChangeTracker.Entries<McpServerApiKey>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.KeyHash), Guid.Empty, entry.Entity.Id, "mcp_api_key_hash", trackedProperties);
         }
 
-        // The inbound model-proxy bearer credential is guarded on the same terms as the MCP key above: the stored value
-        // is a one-way SHA-256 digest, so the AAD-bound AEAD protects the digest from a database-file WRITER who would
-        // otherwise substitute the hash of a key they chose and take over the model-proxy surface. Required, so it
-        // always encrypts. A distinct AAD column name binds it to this table.
+        // The inbound model-proxy bearer credential on the same terms as the MCP key above: a WRITER who substituted the hash of a key they chose would take over
+        // the model-proxy surface. Required, so it always encrypts, and a distinct AAD column name binds it to this table.
         foreach (var entry in nodeContext.ChangeTracker.Entries<LocalModelProxyApiKey>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.KeyHash), Guid.Empty, entry.Entity.Id, "local_model_proxy_api_key_hash", trackedProperties);
         }
 
-        // The external-integration bearer credentials are guarded on the same terms as the two singleton key rows
-        // above: the stored value is a one-way SHA-256 digest, so the AAD-bound AEAD protects the digest from a
-        // database-file WRITER who would otherwise substitute the hash of a key they chose and invoke every trigger
-        // on the node. Required, so it always encrypts. A distinct AAD column name binds it to this table; unlike
-        // the two above, a node holds MANY of these rows, so the record id is the row's own id rather than a
-        // singleton's.
+        // The external-integration bearer credentials on the same terms as the two singleton key rows above: a WRITER who substituted their own digest would invoke
+        // every trigger on the node. Required, own AAD column name; unlike those two, a node holds MANY of these rows, so the record id is the row's own id.
         foreach (var entry in nodeContext.ChangeTracker.Entries<IntegrationApiKey>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.KeyHash), Guid.Empty, entry.Entity.Id, "integration_api_key_hash", trackedProperties);
         }
 
-        // Scheduled job definitions are node-scoped (no conversation/message), so the AAD binds the empty conversation
-        // id to the definition's own id plus the column name. Only the opaque job parameters are encrypted; they are
-        // optional, so they encrypt only when present.
+        // Node-scoped. Only the opaque job parameters are encrypted, and they are optional, so they encrypt only when present.
         foreach (var entry in nodeContext.ChangeTracker.Entries<ScheduledJobDefinition>())
         {
             EncryptOptionalProperty(entry, entry.Property(entity => entity.ParameterJson), Guid.Empty, entry.Entity.Id, "parameter_json", trackedProperties);
@@ -245,28 +228,23 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.DiagnosticsJson), Guid.Empty, entry.Entity.Id, "diagnostics_json", trackedProperties);
         }
 
-        // Model-fit benchmark rows are node-scoped, so the AAD binds the empty conversation id to the row's own id plus
-        // the column name. Distinct AAD column names (bench_*) avoid cross-entity collision with the snapshot columns.
-        // The raw benchmark output and diagnostics are sensitive and optional.
+        // Node-scoped. Distinct AAD column names (bench_*) avoid cross-entity collision with the snapshot columns; the raw benchmark output and diagnostics are
+        // sensitive and optional.
         foreach (var entry in nodeContext.ChangeTracker.Entries<ModelFitBenchmark>())
         {
             EncryptOptionalProperty(entry, entry.Property(entity => entity.RawJson), Guid.Empty, entry.Entity.Id, "bench_raw_json", trackedProperties);
             EncryptOptionalProperty(entry, entry.Property(entity => entity.DiagnosticsJson), Guid.Empty, entry.Entity.Id, "bench_diagnostics_json", trackedProperties);
         }
 
-        // Uploaded files are conversation-scoped: the AAD binds the owning conversation id to the file's own id plus the
-        // column name — same layout as conversation titles. Only the display name is encrypted (the durable bytes and
-        // extracted text are encrypted on disk by the file store, not in a column). The store's raw-SQL write path uses
-        // NodeChatDbContext.EncryptUploadedFileName with the identical protector/AAD, so an EF save (used by tests) and
-        // the raw-SQL write are interchangeable; this guard keeps the column encrypted for any EF-tracked save.
+        // Conversation-scoped, same layout as conversation titles. Only the display name is encrypted — the durable bytes and extracted text are encrypted on disk
+        // by the file store. NodeChatDbContext.EncryptUploadedFileName gives the raw-SQL write path the identical protector and AAD, so the two are interchangeable.
         foreach (var entry in nodeContext.ChangeTracker.Entries<ConversationUploadedFile>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.OriginalFileName), entry.Entity.ConversationId, entry.Entity.FileId, "original_file_name", trackedProperties);
         }
 
-        // Image jobs are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the job's
-        // own id plus the column name — same layout as agent definitions. The prompt is required; the negative prompt
-        // only encrypts when present. Distinct AAD column names (image_*) avoid cross-entity collision.
+        // Node-scoped, same layout as agent definitions. The prompt is required, the negative prompt encrypts only when present, and distinct AAD column names
+        // (image_*) avoid cross-entity collision.
         foreach (var entry in nodeContext.ChangeTracker.Entries<ImageJob>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Prompt), Guid.Empty, entry.Entity.Id, "image_prompt", trackedProperties);
@@ -407,9 +385,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
-        // The fidelity receipt is encrypted for the same reason the launch receipts are: its argv carries host
-        // filesystem paths. The measured numbers themselves stay plaintext on the attempt, so the listing sorts
-        // without decrypting.
+        // The fidelity receipt is encrypted for the same reason the launch receipts are: its argv carries host filesystem paths. The measured numbers themselves
+        // stay plaintext on the attempt, so the listing sorts without decrypting.
         foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkFidelityAttempt>())
         {
             EncryptOptionalProperty(entry,
@@ -420,9 +397,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
-        // A distinct AAD column name per column, as on the judge attempt: a writer cannot present an environment
-        // capture as a receipt, or a rationale as a runtime. The verdict token stays plaintext — it is the rankable
-        // signal, and ranking is a SQL sort.
+        // A distinct AAD column name per column, as on the judge attempt: a writer cannot present an environment capture as a receipt, or a rationale as a runtime.
+        // The verdict token stays plaintext — it is the rankable signal, and ranking is a SQL sort.
         foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkJudgeComparison>())
         {
             EncryptOptionalProperty(entry,
@@ -475,9 +451,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
-        // Dataset samples take the skill-resource treatment rather than the flat one: the owning dataset id goes in the
-        // conversation slot so a database WRITER cannot re-parent a sample row onto another dataset and have its content
-        // and verdicts fed into a different training run. Moving a row now fails the tag check.
+        // The skill-resource treatment rather than the flat one: the owning dataset id goes in the conversation slot, so a database WRITER cannot re-parent a sample
+        // row onto another dataset and have its content and verdicts fed into a different training run.
         foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingDatasetSample>())
         {
             EncryptRequiredProperty(entry,
@@ -494,9 +469,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
-        // Tool mocks are node-scoped. The mock body and the verifier's verdict carry distinct AAD column names so a mock
-        // blob can never be substituted for a verdict blob — the same separation custom tools draw between their
-        // description and their config.
+        // Node-scoped. The mock body and the verifier's verdict carry distinct AAD column names so a mock blob can never be substituted for a verdict blob — the
+        // same separation custom tools draw between their description and their config.
         foreach (var entry in nodeContext.ChangeTracker.Entries<ToolMockDefinition>())
         {
             EncryptRequiredProperty(entry,
@@ -531,9 +505,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
-        // Runs are node-scoped, so the AAD binds the empty conversation id to the run's own id plus the column name.
-        // Every column gets a distinct name: the freeze, the options and the license confirmation are the three
-        // documents an audit reads back, and a writer must not be able to swap one for another.
+        // Node-scoped, with a distinct AAD column name per column: the freeze, the options and the license confirmation are the three documents an audit reads
+        // back, and a writer must not be able to swap one for another.
         foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingRun>())
         {
             EncryptRequiredProperty(entry,
@@ -574,9 +547,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
-        // Evaluations and comparison reports are node-scoped, same flat layout as runs. The membership and the verdicts
-        // carry distinct AAD column names so a writer cannot present one as the other: the membership is what makes a
-        // comparison's two sides comparable, and the verdicts are what the deltas are computed from.
+        // Evaluations and comparison reports are node-scoped, same flat layout as runs. Membership and verdicts carry distinct AAD column names: membership is what
+        // makes a comparison's two sides comparable, and the verdicts are what the deltas are computed from.
         foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingEvaluationRun>())
         {
             EncryptRequiredProperty(entry,
@@ -619,9 +591,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
-        // Work sessions take the Development layout exactly: the session's own id fills both AAD slots on the session
-        // row, and the owning session id fills the conversation slot on every child row so a writer cannot re-parent a
-        // task, finding, checkpoint or event onto another session and have its text read back as that session's work.
+        // The Development layout exactly: the session's own id fills both AAD slots on the session row, and the owning session id the conversation slot on every
+        // child row, so a writer cannot re-parent a task, finding, checkpoint or event onto another session and have its text read back as that session's work.
         foreach (var entry in nodeContext.ChangeTracker.Entries<AgentWorkSession>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Objective), entry.Entity.Id, entry.Entity.Id, "work_session_objective", trackedProperties);
@@ -666,9 +637,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailJson), entry.Entity.SessionId, entry.Entity.Id, "work_session_event_detail_json", trackedProperties);
         }
 
-        // Dev workflows take the work-session layout: the row's own id fills both AAD slots on a root row, and the
-        // owning id fills the conversation slot on every child row so a writer cannot re-parent a run onto another work
-        // item, or a node-run onto another run, and have the blob read back as that owner's.
+        // The work-session layout: a root row's own id fills both AAD slots, and the owning id the conversation slot on every child row, so a writer cannot
+        // re-parent a run onto another work item, or a node-run onto another run, and have the blob read back as that owner's.
         foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowWorkItem>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Request), entry.Entity.Id, entry.Entity.Id, "dev_workflow_work_item_request", trackedProperties);
@@ -693,9 +663,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptRequiredProperty(entry, entry.Property(entity => entity.GraphJson), entry.Entity.WorkItemId, entry.Entity.Id, "dev_workflow_run_graph_json", trackedProperties);
         }
 
-        // Three distinct AAD column names on one row, and not cosmetically: a Gate node's decision is a function of
-        // output_json, so if these shared a name a database writer could swap a policy or input blob into the output
-        // column and flip a gate without forging a ciphertext or a tag.
+        // Three distinct AAD column names on one row, and not cosmetically: a Gate node's decision is a function of output_json, so if these shared a name a
+        // database writer could swap a policy or input blob into the output column and flip a gate without forging a ciphertext or a tag.
         foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowNodeRun>())
         {
             EncryptOptionalProperty(entry, entry.Property(entity => entity.InputJson), entry.Entity.RunId, entry.Entity.Id, "dev_workflow_node_run_input_json", trackedProperties);
@@ -721,19 +690,16 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailJson), entry.Entity.RunId, entry.Entity.Id, "dev_workflow_run_event_detail_json", trackedProperties);
         }
 
-        // The one column in the integration family that holds real content: an external.output event carries the
-        // tool's payload verbatim. The owning execution fills the conversation slot of the AAD, so a re-parented
-        // event row fails its tag check instead of reading back as another execution's output. Optional — phase
-        // events carry no detail, which is what lets the raw-ADO accept path skip encryption entirely.
+        // The one column in the integration family that holds real content: an external.output event carries the tool's payload verbatim, under the owning
+        // execution's id. Optional — phase events carry no detail, which is what lets the raw-ADO accept path skip encryption entirely.
         foreach (var entry in nodeContext.ChangeTracker.Entries<IntegrationExecutionEvent>())
         {
             EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailJson), entry.Entity.ExecutionId, entry.Entity.Id, "integration_execution_event_detail_json",
                 trackedProperties);
         }
 
-        // Graph Workflows take the same layout. The definition is node-scoped, so the empty conversation id plus its
-        // own id; the run binds its DEFINITION, and node runs and events bind their run, so a re-parented row fails
-        // authenticated decryption rather than reading back as another owner's.
+        // Graph Workflows take the same layout: the definition is node-scoped, the run binds its DEFINITION, and node runs and events bind their run, so a
+        // re-parented row fails authenticated decryption rather than reading back as another owner's.
         foreach (var entry in nodeContext.ChangeTracker.Entries<GraphWorkflowDefinition>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.GraphJson), Guid.Empty, entry.Entity.Id, "graph_workflow_definition_graph_json", trackedProperties);
@@ -749,9 +715,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
-        // Four distinct AAD column names on one row, and not cosmetically: an edge condition routes on output_json, so
-        // if these shared a name a database writer could swap an input, an error or a decider into the output column
-        // and reroute a run without forging a ciphertext or a tag.
+        // Four distinct AAD column names on one row, and not cosmetically: an edge condition routes on output_json, so if these shared a name a database writer
+        // could swap an input, an error or a decider into the output column and reroute a run without forging a ciphertext or a tag.
         foreach (var entry in nodeContext.ChangeTracker.Entries<GraphWorkflowNodeRun>())
         {
             EncryptOptionalProperty(entry, entry.Property(entity => entity.InputJson), entry.Entity.RunId, entry.Entity.Id, "graph_workflow_node_run_input_json",
@@ -769,10 +734,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
-        // An external app's configured variables are the user's own credentials — a database password, an API key —
-        // and are the one encrypted column in that family. The instance's own id fills BOTH AAD slots, so a row copied
-        // onto another instance fails its tag check instead of handing that instance another's secrets. Required: an
-        // application with no declared variables stores `{}`, never null.
+        // An external app's configured variables are the user's own credentials — a database password, an API key — and the one encrypted column in that family.
+        // The instance's own id fills BOTH AAD slots, so a copied row cannot hand another instance its secrets. Required: no declared variables stores an empty object.
         foreach (var entry in nodeContext.ChangeTracker.Entries<ExternalAppInstance>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.VariablesJson), entry.Entity.Id, entry.Entity.Id, "external_app_instance_variables_json",
@@ -787,9 +750,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         // The two artifact tables add nothing here on purpose: the bytes live on disk under the blob store's own AAD
         // column (dev_workflow_artifact_blob), and every column that stays in the row is structural.
 
-        // Transcription sessions are session-scoped: the AAD binds the session's own id as both the session and record
-        // component, the same self-consistent layout a conversation title uses. The config blob is required (a session
-        // with no options stores `{}`); title and the error pair only encrypt when present.
+        // Session-scoped: the session's own id fills both AAD slots, the same self-consistent layout a conversation title uses. The config blob is required (a
+        // session with no options stores an empty object); title and the error pair only encrypt when present.
         foreach (var entry in nodeContext.ChangeTracker.Entries<TranscriptionSession>())
         {
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Title), entry.Entity.Id, entry.Entity.Id, "transcription_session_title", trackedProperties);
@@ -831,9 +793,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         }
     }
 
-    // The at-rest transform for one column. Both the bare protector (NodePayloadProtector.Encrypt, the default for
-    // every column that shipped encrypted from creation) and the versioned read-both envelope
-    // (NodeChatContentProtection.Protect, used for message content/metadata) match this shape.
+    // The at-rest transform for one column. Both the bare protector (NodePayloadProtector.Encrypt, the default for every column that shipped encrypted from
+    // creation) and the versioned read-both envelope (NodeChatContentProtection.Protect, used for message content/metadata) match this shape.
     private delegate byte[] PayloadProtector(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> key, Guid conversationId, Guid recordId, string columnName);
 
     private static void EncryptRequiredProperty<TEntity>(EntityEntry<TEntity> entry,

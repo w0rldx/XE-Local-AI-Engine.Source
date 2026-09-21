@@ -31,9 +31,8 @@ internal sealed class KnowledgeChunkVectorConfiguration : IEntityTypeConfigurati
                .HasColumnName("vector_identity")
                .HasDefaultValue("legacy:unversioned");
 
-        // Cascade from the owning chunk. The principal key is the chunk's UNIQUE alternate key (chunk_id), not its rowid
-        // primary key. The raw-SQL purge path still deletes vectors explicitly and first, because the ORDER is what keeps
-        // the external-content FTS index aligned when the chunk rows go.
+        // Cascade from the owning chunk. The principal key is the chunk's UNIQUE alternate key (chunk_id), not its rowid primary key. The raw-SQL purge path still
+        // deletes vectors explicitly and first, because the ORDER is what keeps the external-content FTS index aligned when the chunk rows go.
         builder.HasOne<KnowledgeDocumentChunk>()
                .WithOne()
                .HasForeignKey<KnowledgeChunkVector>(entity => entity.ChunkId)

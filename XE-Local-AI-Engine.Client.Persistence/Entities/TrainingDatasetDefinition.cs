@@ -10,12 +10,14 @@ internal sealed record class TrainingDatasetDefinition
     public TrainingDatasetKind Kind { get; set; }
 
     /// <summary>
-    ///     The whole definition body as UTF-8 JSON (tool-schema snapshot, sample-kind mix, size target, teacher agent and
-    ///     model, teacher output mode, critic toggle, hold-out fraction, seed policy). Plaintext while tracked in memory;
-    ///     encrypted at rest by <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
-    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
-    ///     <c>training_definition_json</c>. Required.
+    ///     The whole definition body as UTF-8 JSON (tool-schema snapshot, sample-kind mix, size target, teacher agent
+    ///     and model, teacher output mode, critic toggle, hold-out fraction, seed policy). Required.
     /// </summary>
+    /// <remarks>
+    ///     Plaintext while tracked in memory; encrypted at rest by <see cref="NodeEncryptionSaveChangesInterceptor" />
+    ///     and decrypted by <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
+    ///     <c>training_definition_json</c>.
+    /// </remarks>
     public byte[] DefinitionJson { get; set; } = [];
 
     /// <summary>

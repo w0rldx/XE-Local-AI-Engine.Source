@@ -204,9 +204,8 @@ public sealed partial class BenchmarkStore
             attempt.Version++;
         }
 
-        // Two sibling sweeps, for the same reason: a fidelity attempt or a comparison left Running by a killed
-        // process whose work item a previous partial recovery already terminalized would otherwise stay Running
-        // forever, with nothing left to reach it.
+        // Two sibling sweeps, for the same reason: a fidelity attempt or a comparison left Running by a killed process whose work item a previous partial recovery
+        // already terminalized would otherwise stay Running forever, with nothing left to reach it.
         var interruptedFidelity = await _dbContext.BenchmarkFidelityAttempts
                                                   .Where(entity => entity.Status == BenchmarkJudgeAttemptStatus.Running)
                                                   .ToListAsync(cancellationToken);
@@ -217,10 +216,8 @@ public sealed partial class BenchmarkStore
             attempt.CompletedAtUtc = now;
             attempt.Version++;
 
-            // The run's fidelity NUMBERS are deliberately untouched — the last attempt that actually succeeded still
-            // stands. Its STATUS is not: left reading 'queued'/'running' with no attempt and no work item behind it,
-            // every API reports an active measurement forever, the poller never stops and the UI keeps re-measure
-            // disabled on a run nothing is measuring.
+            // The run's fidelity NUMBERS are deliberately untouched — the last attempt that actually succeeded still stands. Its STATUS is not: left reading queued
+            // or running with no attempt and no work item behind it, every API reports an active measurement forever, the poller never stops and the UI keeps re-measure disabled.
             var owner = await _dbContext.BenchmarkRuns.SingleAsync(entity => entity.Id == attempt.RunId, cancellationToken);
             owner.FidelityStatus = ToFidelityStatus(BenchmarkJudgeAttemptStatus.Failed);
             owner.FidelityErrorMessage = InterruptedMessage;
@@ -309,15 +306,15 @@ public sealed partial class BenchmarkStore
 
     /// <summary>
     ///     Whether the run is still in play, and therefore whether deleting it would pull the ground out from under
-    ///     something the node is about to do. This is the ONE definition of "active" — the per-run delete and the
-    ///     project cascade both ask it, so the two can never drift into refusing different things.
-    ///     <para>
-    ///         A comparison names TWO runs and its work item names only the canonical first, so a work-item guard sees
-    ///         a live comparison when this run is the A side and is blind to it when the run is the B side. Asking the
-    ///         comparison rows themselves is the only guard that covers both. <c>CancelRequested</c> is deliberately
-    ///         not terminal: the cancel has been asked for and not yet observed by the child process.
-    ///     </para>
+    ///     something the node is about to do.
     /// </summary>
+    /// <remarks>
+    ///     The ONE definition of "active": the per-run delete and the project cascade both ask it, so the two can never
+    ///     drift into refusing different things. A comparison names TWO runs and its work item only the canonical
+    ///     first, so a work-item guard is blind to a live comparison when this run is the B side — asking the
+    ///     comparison rows themselves is the only guard covering both. <c>CancelRequested</c> is deliberately not
+    ///     terminal: the cancel has been asked for and not yet observed by the child process.
+    /// </remarks>
     private async Task<bool> IsRunActiveAsync(Guid runId, BenchmarkPrimaryStatus primaryStatus, CancellationToken cancellationToken) =>
         !IsPrimaryTerminal(primaryStatus)
         || await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
@@ -331,15 +328,16 @@ public sealed partial class BenchmarkStore
 
     /// <summary>
     ///     Deletes one run and everything scoped to it, inside a transaction the CALLER owns and after the caller has
-    ///     established that the run is not active. Split out of <see cref="DeleteRunAsync" /> so the project cascade
-    ///     reuses this exact order instead of growing a second deletion routine that would drift from it.
+    ///     established that the run is not active.
     /// </summary>
+    /// <remarks>
+    ///     Split out of <see cref="DeleteRunAsync" /> so the project cascade reuses this exact order instead of growing
+    ///     a second deletion routine that would drift from it.
+    /// </remarks>
     private async Task DeleteRunCoreAsync(BenchmarkRun run, CancellationToken cancellationToken)
     {
-        // The order below IS the delete: work items, judge and fidelity attempts all declare Restrict on the run, and
-        // the node connection enforces foreign keys, so removing the run before them is rejected outright. Comparisons
-        // declare no relationship to either run they name, so nothing removes them but this list — leave one out and it
-        // outlives its run for good. The run stops pointing at its attempt first, then children, then the run itself.
+        // The order below IS the delete: the run stops pointing at its attempt, then comparisons, work items, judge and fidelity attempts, then the run. Foreign keys are
+        // enforced and the children declare Restrict, so an out-of-order delete is rejected; comparisons declare no relationship to the runs they name — omit one here and it outlives its run.
         var runId = run.Id;
         var projectId = run.ProjectId;
         run.CurrentJudgeAttemptId = null;
@@ -348,9 +346,8 @@ public sealed partial class BenchmarkStore
         await _dbContext.BenchmarkWorkItems.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
         await _dbContext.BenchmarkJudgeAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
         await _dbContext.BenchmarkFidelityAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken);
-        // The deletes intentionally bypass the tracker: this scope may have materialized the required work/run
-        // relationship earlier, and mixing ExecuteDelete for the child with tracked Remove for the parent makes EF
-        // interpret the already-deleted child as a severed required association.
+        // The deletes intentionally bypass the tracker: this scope may have materialized the required work/run relationship earlier, and mixing ExecuteDelete for
+        // the child with tracked Remove for the parent makes EF interpret the already-deleted child as a severed required association.
         _dbContext.ChangeTracker.Clear();
         _ = await _dbContext.BenchmarkRuns.Where(entity => entity.Id == runId).ExecuteDeleteAsync(cancellationToken);
 
@@ -366,14 +363,14 @@ public sealed partial class BenchmarkStore
     ///     Removes every comparison the run took part in — as the A side or the B side — together with the work items
     ///     that carry them, then bumps each affected revision's <c>ComparisonSetVersion</c> and retires the project's
     ///     active fits.
-    ///     <para>
-    ///         Deleting only by <see cref="BenchmarkWorkItem.RunId" /> stranded half of them: a comparison's work item
-    ///         names the canonical FIRST run, so deleting the B side left comparison rows pointing at a run that no
-    ///         longer exists and a published fit ranking it. The version bump is what makes the surviving fit read
-    ///         stale; deactivating it is what makes the next planner pass re-fit the cohort that is actually left,
-    ///         because a fit whose fitted set names a deleted run is not a ranking of anything.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Deleting only by <see cref="BenchmarkWorkItem.RunId" /> strands half of them: a comparison's work item names
+    ///     the canonical FIRST run, so deleting the B side would leave comparison rows pointing at a run that no longer
+    ///     exists and a published fit ranking it. The version bump is what makes the surviving fit read stale;
+    ///     deactivating it is what makes the next planner pass re-fit the cohort that is actually left, because a fit
+    ///     whose fitted set names a deleted run is not a ranking of anything.
+    /// </remarks>
     private async Task DeleteComparisonsOfAsync(Guid runId, Guid projectId, CancellationToken cancellationToken)
     {
         var affected = await _dbContext.BenchmarkComparisons.AsNoTracking()

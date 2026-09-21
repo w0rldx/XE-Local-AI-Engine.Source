@@ -23,12 +23,14 @@ internal sealed record class AgentDefinition
 
     /// <summary>
     ///     AI-generation provenance for a drafted definition as a UTF-8 JSON object, or <c>null</c> for a row with no
-    ///     AI provenance. Plaintext while tracked in memory; encrypted at rest by
-    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
-    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
+    ///     AI provenance.
+    /// </summary>
+    /// <remarks>
+    ///     Plaintext while tracked in memory; encrypted at rest by <see cref="NodeEncryptionSaveChangesInterceptor" />
+    ///     and decrypted by <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name
     ///     <c>generation_metadata_json</c>. Informational only: on a single-operator node the operator supplies most of
     ///     it, so it records what a draft claimed, not a tamper-proof attestation.
-    /// </summary>
+    /// </remarks>
     public byte[]? GenerationMetadataJson { get; set; }
 
     /// <summary>Pinned model profile, or <c>null</c> to use the node default. Plaintext (structural).</summary>
@@ -57,44 +59,59 @@ internal sealed record class AgentDefinition
 
     /// <summary>
     ///     Whether this agent's enabled playbook actions are folded into its resolved system prompt. Plaintext
-    ///     (structural). Gates injection only — it is NOT a config-affecting field for the agent's own version bump,
-    ///     because the injected playbook content drives the runtime package config hash directly.
+    ///     (structural).
     /// </summary>
+    /// <remarks>
+    ///     Gates injection only — it is NOT a config-affecting field for the agent's own version bump, because the
+    ///     injected playbook content drives the runtime package config hash directly.
+    /// </remarks>
     public bool PlaybookEnabled { get; set; }
 
     /// <summary>
-    ///     Opt-out for the versioned, app-owned base instruction scaffold (identity/grounding/tool/output discipline)
-    ///     normally prepended ahead of this definition's <see cref="Instructions" /> when composing the resolved
-    ///     prompt. Plaintext (structural). Default <c>false</c> (scaffold ON). Non-config-affecting for this
-    ///     definition's own <see cref="Version" /> bump — like <see cref="PlaybookEnabled" /> — because toggling it
-    ///     changes the resolved prompt directly, which already drives the runtime package config hash.
+    ///     Opt-out for the app-owned base instruction scaffold (identity/grounding/tool/output discipline) normally
+    ///     prepended ahead of this definition's <see cref="Instructions" /> in the resolved prompt. Plaintext
+    ///     (structural). Default <c>false</c> (scaffold ON).
     /// </summary>
+    /// <remarks>
+    ///     The scaffold is versioned. Non-config-affecting for this definition's own <see cref="Version" /> bump — like
+    ///     <see cref="PlaybookEnabled" /> — because toggling it changes the resolved prompt directly, which already
+    ///     drives the runtime package config hash.
+    /// </remarks>
     public bool DisableBaseScaffold { get; set; }
 
     /// <summary>
-    ///     Per-agent opt-out from the send-time tool-relevance filter: with this set, every offered tool is put in front
-    ///     of the model on every round even when the node has the filter enabled and the agent carries more tools than
-    ///     the threshold. Plaintext (structural). Default <c>false</c> (follow the node setting). Non-config-affecting:
-    ///     the filter narrows only the array handed to the provider, never the offer, the resolved prompt or the runtime
-    ///     package's config hash, so toggling it can never invalidate a resume.
+    ///     Per-agent opt-out from the send-time tool-relevance filter. Plaintext (structural). Default <c>false</c>
+    ///     (follow the node setting).
     /// </summary>
+    /// <remarks>
+    ///     With this set, every offered tool is put in front of the model on every round even when the node has the
+    ///     filter enabled and the agent carries more tools than the threshold. Non-config-affecting: the filter narrows
+    ///     only the array handed to the provider, never the offer, the resolved prompt or the runtime package's config
+    ///     hash, so toggling it can never invalidate a resume.
+    /// </remarks>
     public bool DisableToolRelevanceFilter { get; set; }
 
     /// <summary>
     ///     Per-agent default for the temporary-chat (memory write-only-suppression) flag a new conversation inherits.
-    ///     Plaintext (structural). Non-config-affecting (exactly like <see cref="PlaybookEnabled" />): it gates post-run
-    ///     memory extraction only and must NOT enter the runtime package config hash or bump the agent's own version.
+    ///     Plaintext (structural).
     /// </summary>
+    /// <remarks>
+    ///     Non-config-affecting (exactly like <see cref="PlaybookEnabled" />): it gates post-run memory extraction only
+    ///     and must NOT enter the runtime package config hash or bump the agent's own version.
+    /// </remarks>
     public bool DefaultTemporaryChat { get; set; }
 
     /// <summary>
-    ///     Whether this agent mines its completed runs into NEW candidate memories (post-run extraction). Default
-    ///     <c>true</c> so opting into <see cref="PlaybookEnabled" /> preserves today's learn-from-runs behaviour. When
-    ///     <c>false</c> the agent is RETRIEVAL-ONLY: it still injects its existing enabled memory (gated on
-    ///     <see cref="PlaybookEnabled" />) but its runs never trigger the extraction round-trip. Plaintext (structural).
-    ///     Non-config-affecting (exactly like <see cref="PlaybookEnabled" />): it gates extraction only and must NOT enter
-    ///     the runtime package config hash or bump the agent's own version.
+    ///     Whether this agent mines its completed runs into NEW candidate memories (post-run extraction). Plaintext
+    ///     (structural).
     /// </summary>
+    /// <remarks>
+    ///     Default <c>true</c>, so opting into <see cref="PlaybookEnabled" /> preserves the learn-from-runs behaviour.
+    ///     When <c>false</c> the agent is RETRIEVAL-ONLY: it still injects its existing enabled memory (gated on
+    ///     <see cref="PlaybookEnabled" />) but its runs never trigger the extraction round-trip. Non-config-affecting
+    ///     (exactly like <see cref="PlaybookEnabled" />): it gates extraction only and must NOT enter the runtime
+    ///     package config hash or bump the agent's own version.
+    /// </remarks>
     public bool MemoryExtractionEnabled { get; set; } = true;
 
     /// <summary>

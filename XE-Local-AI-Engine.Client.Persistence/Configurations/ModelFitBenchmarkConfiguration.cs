@@ -130,9 +130,8 @@ internal sealed class ModelFitBenchmarkConfiguration : IEntityTypeConfiguration<
 
         builder.HasIndex(entity => entity.SnapshotId);
 
-        // Backs the freeze gate's per-profile lookup of the latest successful benchmark. No enforced FK to
-        // inference_profiles: a profile is re-explored (overwriting args) or deleted while its benchmark rows persist,
-        // the same intentional no-FK precedent as inference_profiles -> model_fit_snapshots.
+        // Backs the freeze gate's per-profile lookup of the latest successful benchmark. No enforced FK to inference_profiles: a profile is re-explored (overwriting
+        // args) or deleted while its benchmark rows persist, the same intentional no-FK precedent as inference_profiles -> model_fit_snapshots.
         builder.HasIndex(entity => entity.ProfileId);
 
         // A benchmark row is meaningless without its parent snapshot, so the FK cascades: deleting a snapshot removes

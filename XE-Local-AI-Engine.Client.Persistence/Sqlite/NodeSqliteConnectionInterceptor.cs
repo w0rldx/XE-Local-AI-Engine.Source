@@ -6,10 +6,12 @@ using Microsoft.Extensions.Logging;
 
 /// <summary>
 ///     Applies the node SQLite pragmas whenever EF Core opens a node database connection (migrations, EF queries/saves,
-///     the health probe's <c>OpenConnectionAsync</c>). Raw-ADO opens on the same <see cref="DbConnection" /> bypass EF's
-///     interceptor pipeline and are covered separately by the shared open-if-needed helpers, which route through
-///     <see cref="NodeSqlitePragmas.OpenAndConfigureAsync" />.
+///     the health probe's <c>OpenConnectionAsync</c>).
 /// </summary>
+/// <remarks>
+///     Raw-ADO opens on the same <see cref="DbConnection" /> bypass EF's interceptor pipeline and are covered separately
+///     by the shared open-if-needed helpers, which route through <see cref="NodeSqlitePragmas.OpenAndConfigureAsync" />.
+/// </remarks>
 public sealed class NodeSqliteConnectionInterceptor : DbConnectionInterceptor
 {
     private readonly NodeSqlitePragmaSettings _settings;

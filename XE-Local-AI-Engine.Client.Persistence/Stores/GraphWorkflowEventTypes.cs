@@ -2,18 +2,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     The closed <c>event_type</c> catalog of a graph workflow run — a contract, not a convenience.
-///     <para>
-///         Sixteen tokens, extended by amendment and never silently: the run event feed is append-only and durable, so
-///         a token written once is a token every later reader has to understand. It lives beside
-///         <see cref="IGraphWorkflowStore" /> for the same reason <c>DevWorkflowEventTypes</c> lives beside its own
-///         store — the writer of the column and the vocabulary of the column are one file apart.
-///     </para>
-///     <para>
-///         <see cref="RunWaiting" /> and the two <c>gate.*</c> tokens ship unwritten: the pause node that produces them
-///         lands in the next slice, and shipping the vocabulary now means that slice adds behaviour rather than
-///         contract.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Extended by amendment and never silently: the run event feed is append-only and durable, so a token written
+///     once is a token every later reader has to understand. It lives beside <see cref="IGraphWorkflowStore" /> for the
+///     same reason <c>DevWorkflowEventTypes</c> lives beside its own store — the writer of the column and the
+///     vocabulary of the column are one file apart. <see cref="RunWaiting" /> and the two <c>gate.*</c> tokens ship
+///     unwritten, so the pause node that produces them adds behaviour rather than contract.
+/// </remarks>
 public static class GraphWorkflowEventTypes
 {
     public const string RunCreated = "run.created";

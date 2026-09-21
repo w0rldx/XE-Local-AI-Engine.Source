@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for AgentHome selected folders. The host path is encrypted at rest via the node
-///     encryption interceptors; reads return it decrypted in <see cref="SelectedFolderRecord.HostPath" />. This store
-///     performs no path/alias validation — that is the application-layer resolver's responsibility; the store only
-///     enforces the unique-alias backstop.
+///     Node-scoped persistence for AgentHome selected folders.
 /// </summary>
+/// <remarks>
+///     The host path is encrypted at rest via the node encryption interceptors; reads return it decrypted in
+///     <see cref="SelectedFolderRecord.HostPath" />. This store performs no path or alias validation — that is the
+///     application-layer resolver's responsibility — and only enforces the unique-alias backstop.
+/// </remarks>
 public interface INodeSelectedFolderStore
 {
     /// <summary>Persists a new selected folder and returns the stored record (host path decrypted).</summary>

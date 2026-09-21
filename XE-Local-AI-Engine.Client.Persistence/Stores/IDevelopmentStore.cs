@@ -136,15 +136,15 @@ public sealed class DevelopmentTransitionTaskCommand
 
     /// <summary>
     ///     Raises the task's <c>MaxReviewRounds</c> by one, and is the ONLY thing that opens the single edge out of
-    ///     <c>Blocked</c>. A person who retries a workflow node stopped at "all N rounds used" is buying the task the
-    ///     round it needs, the same way that click already buys the node one more attempt — and a task let out of
-    ///     Blocked without one would spend a whole coder round to be stood down again on the same sentence.
-    ///     <para>
-    ///         CALLER-TRUSTED: the store applies this without verifying that an operator did anything, so only an
-    ///         operator-DECISION path may set it — today <c>DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync</c>,
-    ///         gated on <c>DevWorkflowNodeInputs.IsOperatorRetry</c>. A new caller must be gated the same way.
-    ///     </para>
+    ///     <c>Blocked</c>.
     /// </summary>
+    /// <remarks>
+    ///     A person retrying a workflow node stopped at "all N rounds used" is buying the task the round it needs, the
+    ///     same way that click already buys the node one more attempt; a task let out of Blocked without one would
+    ///     spend a whole coder round to be stood down again on the same sentence. CALLER-TRUSTED: the store verifies
+    ///     no operator did anything, so only an operator-DECISION path may set it — today
+    ///     <c>DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync</c>, gated on <c>IsOperatorRetry</c>.
+    /// </remarks>
     public bool WidenReviewRounds { get; init; }
 }
 
@@ -293,10 +293,12 @@ public sealed class DevelopmentEventSnapshot
 
     /// <summary>
     ///     The sentence the event was written with, when it carries one — why a task was blocked, why validation
-    ///     failed, why a workflow's fix loop sent an approved task back. The only member of the detail document that
-    ///     leaves this store: it is authored or sanitized and bounded at every write site, which the rest of the
-    ///     document is not.
+    ///     failed, why a workflow's fix loop sent an approved task back.
     /// </summary>
+    /// <remarks>
+    ///     The only member of the detail document that leaves this store: it is authored or sanitized and bounded at
+    ///     every write site, which the rest of the document is not.
+    /// </remarks>
     public string? Reason { get; init; }
 }
 
@@ -352,43 +354,36 @@ public sealed record DevelopmentExecutionSnapshot
 
     /// <summary>
     ///     What the last request for changes on this task said, or nothing when it has never been asked for rework.
-    ///     Resolved from the task's own event log rather than from a column, so it costs no migration and reads the same
-    ///     sentence a reviewer wrote and a workflow's fix loop wrote.
     /// </summary>
+    /// <remarks>
+    ///     Resolved from the task's own event log rather than from a column, so it costs no migration and reads the
+    ///     same sentence a reviewer wrote and a workflow's fix loop wrote.
+    /// </remarks>
     public string? PreviousRoundFeedback { get; init; }
 
     /// <summary>
     ///     The rule-set text a Development workflow injected onto this task, or nothing when no workflow drives it.
-    ///     Resolved from the task's own event log rather than from a column, exactly as
-    ///     <see cref="PreviousRoundFeedback" /> is, so it costs no migration and reaches the coder and the reviewer
-    ///     through the one channel both already read.
-    ///     <para>
-    ///         Bounded by the node run that applied it, not by the task: the workflow records its resolution on every
-    ///         dispatch — an EMPTY one included — and records an empty one again when it settles the node run. So a
-    ///         later workflow that resolves no policy, and a manual Dev Mode round after the workflow has finished,
-    ///         both answer nothing rather than replaying a snapshot nothing is enforcing any more.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Resolved from the task's own event log exactly as <see cref="PreviousRoundFeedback" /> is, so it costs no
+    ///     migration and reaches the coder and the reviewer through the one channel both already read. Bounded by the
+    ///     node run that applied it, not by the task: the workflow records its resolution on every dispatch — an EMPTY
+    ///     one included — and an empty one again when it settles the node run, so a later workflow that resolves no
+    ///     policy and a manual round afterwards both answer nothing rather than replaying a dead snapshot.
+    /// </remarks>
     public string? WorkflowPolicyText { get; init; }
 
     /// <summary>
     ///     The last thing a PERSON told this task to do differently, or nothing. Read from the task's own event log
-    ///     like the two above, and disjoint from <see cref="PreviousRoundFeedback" />: whichever of the two a row is,
-    ///     it is never both.
-    ///     <para>
-    ///         Free of the STATUS gate <see cref="PreviousRoundFeedback" /> carries, and that is the difference. A Dev
-    ///         Mode task's requirements are immutable — there is no PUT and no PATCH — so an operator's retry reason is
-    ///         the ONLY way to amend a task that was mis-specified, and an amendment that expired at the next event
-    ///         would be undone by the very next reviewer round. Live on 2026-09-04 that is exactly what happened: the
-    ///         operator moved a test out of a base-committed file the test-write policy protects, and the reviewer,
-    ///         reading only the original requirements, sent it straight back in.
-    ///     </para>
-    ///     <para>
-    ///         Bounded in time by the same row <see cref="WorkflowPolicyText" /> is bounded by, so the two fields on
-    ///         this record have one lifetime rather than two: an instruction stops governing when the node-run attempt
-    ///         that carried it stops driving the task. It does not follow the task into a second node run.
-    ///     </para>
+    ///     like the two above, and disjoint from <see cref="PreviousRoundFeedback" />: a row is never both.
     /// </summary>
+    /// <remarks>
+    ///     It carries no STATUS gate, and that is the difference. A Dev Mode task's requirements are immutable — no
+    ///     PUT, no PATCH — so an operator's retry reason is the ONLY way to amend a mis-specified task, and an
+    ///     amendment that expired at the next event would be undone by the very next reviewer round. It is bounded in
+    ///     time by the same row <see cref="WorkflowPolicyText" /> is: an instruction stops governing when the node-run
+    ///     attempt that carried it stops driving the task, and does not follow the task into a second node run.
+    /// </remarks>
     public string? OperatorInstruction { get; init; }
 }
 
@@ -542,15 +537,15 @@ public interface IDevelopmentStore
 
     /// <summary>
     ///     Adds a task to an existing project. INTERNAL: no endpoint reaches this — the caller is workflow
-    ///     decomposition, which gives every implementation child its own task inside the project the run was already
-    ///     authorised against.
-    ///     <para>
-    ///         Idempotent on <see cref="DevelopmentCreateTaskCommand.OperationId" /> like every other Development
-    ///         mutation, and that is what makes it safe to call before the pointer to the new task is written: a caller
-    ///         that crashes in between re-asks with the same operation identity and is handed the SAME task rather than
-    ///         orphaning it and creating another.
-    ///     </para>
+    ///     decomposition.
     /// </summary>
+    /// <remarks>
+    ///     Decomposition gives every implementation child its own task inside the project the run was already
+    ///     authorised against. Idempotent on <see cref="DevelopmentCreateTaskCommand.OperationId" /> like every other
+    ///     Development mutation, which is what makes it safe to call before the pointer to the new task is written: a
+    ///     caller that crashes in between re-asks with the same operation identity and is handed the SAME task rather
+    ///     than orphaning it and creating another.
+    /// </remarks>
     /// <exception cref="DevelopmentNotFoundException">The project does not exist.</exception>
     Task<DevelopmentOperationResult> CreateTaskAsync(DevelopmentCreateTaskCommand command, CancellationToken cancellationToken = default);
 
@@ -572,17 +567,14 @@ public interface IDevelopmentStore
     /// <summary>
     ///     Records that the managed workspace for <paramref name="attemptId" /> carries COMMITTED files whose names
     ///     mark them as credential-bearing, as an operator-visible event. Non-blocking: the attempt proceeds.
-    ///     <para>
-    ///         Idempotent per attempt — the operation is keyed on the attempt id and its own phase, so a second prepare
-    ///         of the same attempt (validation re-prepares the coder's workspace) returns the first result rather than
-    ///         writing a duplicate event.
-    ///     </para>
-    ///     <para>
-    ///         The paths go into the event's encrypted detail. On a backend with no mount layer this event is the WHOLE
-    ///         control: the engine can see the committed secret but cannot stop the repository's own build from reading
-    ///         it, so making it visible is all it can honestly do.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Idempotent per attempt — the operation is keyed on the attempt id and its own phase, so a second prepare of
+    ///     the same attempt (validation re-prepares the coder's workspace) returns the first result rather than
+    ///     writing a duplicate event. The paths go into the event's encrypted detail. On a backend with no mount layer
+    ///     this event is the WHOLE control: the engine can see the committed secret but cannot stop the repository's
+    ///     own build from reading it, so making it visible is all it can honestly do.
+    /// </remarks>
     Task<DevelopmentOperationResult> RecordWorkspaceSecretsAsync(Guid taskId,
         Guid attemptId,
         IReadOnlyList<string> repositoryRelativePaths,
@@ -591,22 +583,14 @@ public interface IDevelopmentStore
     /// <summary>
     ///     Records the rule-set text a Development workflow resolved for the node run that drives
     ///     <paramref name="taskId" />, as the channel the coder and reviewer prompts read it back through.
-    ///     <para>
-    ///         Idempotent per <paramref name="operationId" />, which the caller derives deterministically from its run
-    ///         and node — so a node run re-bound to the same task after a crash returns the first result rather than
-    ///         appending a second injection of the same policy.
-    ///     </para>
-    ///     <para>
-    ///         The text goes into the event's encrypted detail. It is a SNAPSHOT the node run already made: this store
-    ///         never reads a rule set, and what it is handed is what the workflow's audit permanently names by hash.
-    ///     </para>
-    ///     <para>
-    ///         A BLANK <paramref name="policyText" /> with no rule sets is the clear, and the snapshot reads the latest
-    ///         row — so recording one revokes the policy for every round after it. That is how the injection is bounded
-    ///         in time without a second event type: a workflow that resolves nothing, and one that has settled its node
-    ///         run, both say so on the same log the injection was written to.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     Idempotent per <paramref name="operationId" />, derived deterministically from the run and node, so a node
+    ///     run re-bound to the same task after a crash appends no second injection. The text goes into the event's
+    ///     encrypted detail: a SNAPSHOT the node run already made, since this store never reads a rule set and what it
+    ///     is handed is what the workflow's audit names by hash. A BLANK text with no rule sets is the clear, and the
+    ///     snapshot reads the latest row — recording one revokes the policy for every round after it, bounding the injection without a second event type.
+    /// </remarks>
     Task<DevelopmentOperationResult> RecordWorkflowPolicyAsync(Guid taskId,
         Guid operationId,
         string policyText,
@@ -624,14 +608,14 @@ public interface IDevelopmentStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Writes a command profile onto a project created before the profile column existed, and bumps its configuration
-    ///     version so the change is visible to anything tracking project configuration.
-    ///     <para>
-    ///         Only ever fills a null. A project that already carries a profile is returned untouched, because that
-    ///         profile is the operator-confirmed agreement for the life of the project and a backfill must never be able
-    ///         to replace it — including when two backfill passes race.
-    ///     </para>
+    ///     Writes a command profile onto a project created before the profile column existed, and bumps its
+    ///     configuration version so the change is visible to anything tracking project configuration.
     /// </summary>
+    /// <remarks>
+    ///     Only ever fills a null. A project that already carries a profile is returned untouched, because that
+    ///     profile is the operator-confirmed agreement for the life of the project and a backfill must never be able
+    ///     to replace it — including when two backfill passes race.
+    /// </remarks>
     Task<DevelopmentProjectSnapshot> BackfillCommandProfileAsync(Guid projectId,
         string commandProfileJson,
         CancellationToken cancellationToken = default);

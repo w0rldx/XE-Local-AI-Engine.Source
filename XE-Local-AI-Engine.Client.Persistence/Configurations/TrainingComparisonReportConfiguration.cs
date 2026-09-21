@@ -22,9 +22,8 @@ internal sealed class TrainingComparisonReportConfiguration : IEntityTypeConfigu
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
 
-        // Restricted on the two evaluations: a report whose inputs vanished would carry deltas nothing can reproduce.
-        // The benchmark ids carry no foreign key on purpose — a benchmark run has its own lifecycle and deleting one
-        // must degrade the report's throughput section, not block the delete.
+        // Restricted on the two evaluations: a report whose inputs vanished would carry deltas nothing can reproduce. The benchmark ids carry no foreign key on
+        // purpose — a benchmark run has its own lifecycle, and deleting one must degrade the report's throughput section rather than block the delete.
         builder.HasOne<TrainingEvaluationRun>()
                .WithMany()
                .HasForeignKey(entity => entity.BaseEvaluationRunId)

@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     One pairwise judging of two runs against each other, in one presentation order. The pair itself is unordered —
-///     <see cref="RunAId" /> is always the smaller GUID — and <see cref="Order" /> records which side the judge saw
-///     first, so position bias is measured rather than assumed away. Immutable in exactly the sense
-///     <see cref="BenchmarkJudgeAttempt" /> is: a retry inserts a row at the next <see cref="AttemptSequence" />.
+///     One pairwise judging of two runs against each other, in one presentation order.
 /// </summary>
+/// <remarks>
+///     The pair itself is unordered — <see cref="RunAId" /> is always the smaller GUID — and <see cref="Order" />
+///     records which side the judge saw first, so position bias is measured rather than assumed away. Immutable in
+///     exactly the sense <see cref="BenchmarkJudgeAttempt" /> is: a retry inserts a row at the next
+///     <see cref="AttemptSequence" />.
+/// </remarks>
 internal sealed record class BenchmarkJudgeComparison
 {
     public Guid Id { get; set; }

@@ -236,18 +236,16 @@ public sealed class TrainingRunStore : ITrainingRunStore
                 {
                     run.Status = TrainingRunStatus.Failed;
                     run.ErrorMessage = "The training run was interrupted by a host restart.";
-                    // The receipt is deliberately NOT cleared here. Terminalizing the row says nothing about the
-                    // trainer: it may still be running, and the receipt is the only thing that can identify it. Only
-                    // TrainingRunStartupReaper clears one, and only after it has killed or ruled out the process.
+                    // The receipt is deliberately NOT cleared here: terminalizing the row says nothing about the trainer, which may still be running, and the receipt
+                    // is the only thing that can identify it. Only TrainingRunStartupReaper clears one, and only after it has killed or ruled out the process.
                     run.Version++;
                     run.UpdatedAtUtc = now;
                 }
             }
             else if (work.Kind == TrainingWorkKind.EvaluationRun)
             {
-                // Evaluations recover the same way — the work item is failed, never retried in place. What they keep
-                // that a run cannot is their scored prefix, so an operator can resume from the next unscored sample
-                // (ITrainingEvaluationStore.ResumeAsync) instead of paying for the whole hold-out set again.
+                // Evaluations recover the same way — the work item is failed, never retried in place. What they keep that a run cannot is their scored prefix, so an
+                // operator can resume from the next unscored sample (ITrainingEvaluationStore.ResumeAsync) instead of paying for the whole hold-out set again.
                 var evaluation = await _dbContext.TrainingEvaluationRuns
                                                  .FirstOrDefaultAsync(item => item.Id == work.TargetId, cancellationToken);
                 if (evaluation is not null && evaluation.Status is not (TrainingEvaluationStatus.Succeeded or TrainingEvaluationStatus.Failed

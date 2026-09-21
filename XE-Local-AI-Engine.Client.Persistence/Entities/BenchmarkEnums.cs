@@ -59,8 +59,10 @@ public enum BenchmarkRepeatMode
 
     /// <summary>
     ///     Answer variance: a non-zero temperature and a seed that advances with the repeat index, so the repeats
-    ///     differ in exactly one input and the spread of answers is the measurement. Throughput numbers from such a
-    ///     group are still real, but they are no longer a controlled comparison.
+    ///     differ in exactly one input and the spread of answers is the measurement.
     /// </summary>
+    /// <remarks>
+    ///     Throughput numbers from such a group are still real, but they are no longer a controlled comparison.
+    /// </remarks>
     AnswerVariance
 }

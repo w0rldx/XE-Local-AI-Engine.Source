@@ -9,14 +9,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Persistence boundary for integration executions and their event feed.
-///     <para>
-///         Every method here goes through EF so both encryption interceptors run — the terminal event's
-///         <c>detail_json</c> is an encrypted column, and only a <c>SaveChanges</c> seals it. The single exception is
-///         <see cref="AcceptAsync" /> in the sibling partial file, which opens its own connection and takes SQLite's
-///         write lock with <c>BEGIN IMMEDIATE</c> because it is the only method that needs a hard bound rather than a
-///         racy read.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Every method here goes through EF so both encryption interceptors run — the terminal event's <c>detail_json</c>
+///     is an encrypted column, and only a <c>SaveChanges</c> seals it. The single exception is
+///     <see cref="AcceptAsync" /> in the sibling partial file, which opens its own connection and takes SQLite's write
+///     lock with <c>BEGIN IMMEDIATE</c> because it is the only method that needs a hard bound rather than a racy read.
+/// </remarks>
 public sealed partial class IntegrationExecutionStore : IIntegrationExecutionStore
 {
     /// <summary>
@@ -165,9 +164,8 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         }
         catch (DbUpdateConcurrencyException)
         {
-            // The query-first check alone is not atomic; the version's concurrency-token mapping is what makes two
-            // concurrent compare-and-swaps resolve to exactly one winner, and the loser must learn it lost without a
-            // try/catch of its own.
+            // The query-first check alone is not atomic: the version's concurrency-token mapping is what makes two concurrent compare-and-swaps resolve to
+            // exactly one winner, and the loser must learn it lost without a try/catch of its own.
             _dbContext.ChangeTracker.Clear();
             return false;
         }
@@ -220,9 +218,8 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             _ = _dbContext.AgentExecutionLogs.Add(AgentExecutionLogStore.BuildIntegrationInvocation(audit, command.EndedAtUtc));
         }
 
-        // ONE transaction around the status CAS, the terminal event, the audit row and both watermarks: the watermarks
-        // move through SQL rather than through a loaded value, so two writers racing on the same row cannot each apply
-        // their own stale MAX and lose the higher one.
+        // ONE transaction around the status CAS, the terminal event, the audit row and both watermarks: the watermarks move through SQL rather than through a
+        // loaded value, so two writers racing on the same row cannot each apply their own stale MAX and lose the higher one.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         try
@@ -238,10 +235,8 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         }
         catch (Exception)
         {
-            // EVERYTHING inside the transaction, not just the save: a watermark update or the commit that throws rolls
-            // the database back while EF still holds the saved terminal entity as committed, and the next call on this
-            // scoped context — the fault handler's own terminalization — then compare-and-swaps against that stale
-            // identity-map version and loses forever, stranding the row non-terminal with its admission slot held.
+            // EVERYTHING inside the transaction, not just the save: a watermark update or a commit that throws rolls the database back while EF still holds the
+            // terminal entity as committed, and the fault handler's own terminalization then CASes against that stale version and strands the row non-terminal.
             _dbContext.ChangeTracker.Clear();
             throw;
         }
@@ -286,9 +281,8 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         }
         catch (Exception)
         {
-            // A duplicate execution-and-sequence pair is a caller bug and rethrows, but the failed event stays
-            // tracked; without this clear, the next append on the same scoped context replays it. The boundary covers
-            // the watermarks and the commit too, for the same reason it does in TryTerminalizeAsync.
+            // A duplicate execution-and-sequence pair is a caller bug and rethrows, but the failed event stays tracked; without this clear, the next append on the
+            // same scoped context replays it. The boundary covers the watermarks and the commit too, for the same reason it does in TryTerminalizeAsync.
             _dbContext.ChangeTracker.Clear();
             throw;
         }
@@ -351,9 +345,8 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
         }
         catch (Exception)
         {
-            // The mutated entity and the pending event stay tracked otherwise, and the next call on this scoped context
-            // would replay them on its own save. Widened past the save for the same reason as the terminal path: a
-            // rolled-back watermark update must not leave this row's counters tracked as committed.
+            // The mutated entity and the pending event stay tracked otherwise, and the next call on this scoped context would replay them on its own save. Widened
+            // past the save for the same reason as the terminal path: a rolled-back watermark update must not leave this row's counters tracked as committed.
             _dbContext.ChangeTracker.Clear();
             throw;
         }
@@ -395,17 +388,15 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
 
     /// <summary>
     ///     Both watermarks, in SQL, inside the caller's open transaction — never through a value loaded before the
-    ///     event was written. Two writers on one execution (the stream mapper's pump and <c>emit_output</c>) each read
-    ///     their own <c>LastSequence</c>, applied <c>Math.Max</c> in memory and saved through separate contexts, so the
-    ///     slower one overwrote the higher watermark with its own stale number. Recovery then seeded the replay ring
-    ///     below a sequence that already had a row.
-    ///     <para>
-    ///         The execution's watermark is a running MAXIMUM computed by the database. The session's stays a plain
-    ///         assignment: sequences restart at 1 per execution, so a maximum across a session's executions would
-    ///         freeze at the deepest old stream and never move again — it is the activity indicator the UI renders,
-    ///         not an ordering key, and last-writer-wins is the behaviour it wants.
-    ///     </para>
+    ///     event was written.
     /// </summary>
+    /// <remarks>
+    ///     Two writers on one execution (the stream mapper's pump and <c>emit_output</c>) reading their own
+    ///     <c>LastSequence</c> and applying <c>Math.Max</c> in memory would let the slower overwrite the higher
+    ///     watermark, seeding recovery's replay ring below a sequence that already has a row. The execution's watermark
+    ///     is therefore a running MAXIMUM computed by the database; the session's stays a plain assignment, because
+    ///     sequences restart at 1 per execution and it is the UI's activity indicator, not an ordering key.
+    /// </remarks>
     private async Task MoveWatermarksAsync(Guid executionId, Guid sessionId, long sequence, long atUtc, CancellationToken cancellationToken)
     {
         // A CASE expression rather than Math.Max: it is the shape every provider translates, and the comparison has to

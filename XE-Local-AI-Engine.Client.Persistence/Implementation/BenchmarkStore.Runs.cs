@@ -35,10 +35,8 @@ public sealed partial class BenchmarkStore
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         var project = await RequireProjectAsync(projectId, cancellationToken);
 
-        // ONE compare-and-swap for the whole group, and one commit. A per-run CAS chained on its own predecessor let a
-        // concurrent writer land between run i and run i+1: the caller saw a VersionConflict and no ids while the runs
-        // already inserted stayed queued and ran. All-or-nothing is also what lets a batch caller advance its expected
-        // version by the returned count.
+        // ONE compare-and-swap for the whole group, and one commit: a per-run CAS chained on its own predecessor lets a concurrent writer land between run i and i+1,
+        // so the caller sees a VersionConflict and no ids while the runs already inserted stay queued and run. All-or-nothing also lets a caller advance by the count.
         EnsureVersion(project.Version, expectedProjectVersion);
 
         // Distinct by reference: a repeat group shares one guard instance, and re-running its dependency read once per
@@ -108,19 +106,13 @@ public sealed partial class BenchmarkStore
                 EnqueuedAtUtc = now
             });
 
-            // Fidelity is NOT queued here. A measurement enqueued at freeze outlives the run it belongs to: when the
-            // primary then fails or is cancelled, hours of GPU work stay queued against a run that has no answer to
-            // measure. It is seeded on primary SUCCESS instead, exactly where the judge attempt is seeded.
-            //
+            // Fidelity is NOT queued here: a measurement enqueued at freeze outlives the run it belongs to, and when the primary then fails or is cancelled, hours
+            // of GPU work stay queued against a run with no answer to measure. It is seeded on primary SUCCESS instead, exactly where the judge attempt is seeded.
             runs.Add(run);
         }
 
-        // What freeze does record is the cells that will never be measured. One fidelity item per measured CELL, not
-        // per repeat and not per ITEM: perplexity and KL divergence measure the model file against a corpus, so they
-        // are identical for every repeat and every task item of one cell and would otherwise cost N times the GPU
-        // hours (and, for KLD, N times ~25 GB of base logits) to produce N copies of one number. A warm-up is never
-        // measured at all — it exists to absorb first-launch costs, not to be compared. Decided over the batch rather
-        // than by a query because these rows are not saved yet.
+        // What freeze DOES record is the cells that will never be measured: one fidelity item per measured CELL, not per repeat and not per ITEM, since perplexity
+        // and KL divergence would cost N times the GPU hours (for KLD, N times ~25 GB of base logits) for one number. A warm-up absorbs first-launch cost, so never.
         if (project.FidelityEnabled)
         {
             var measured = runs.Where(IsFidelityMeasuredRepeat)
@@ -182,9 +174,8 @@ public sealed partial class BenchmarkStore
     /// <inheritdoc />
     public async Task<BenchmarkRunPage> ListAllRunsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
-        // ONE ranking for the whole export. Paging through ListRunsAsync recomputed it per page, and the ranking is a
-        // whole-project scan plus a judge-view join across three more tables — work that is identical every time,
-        // because a run's rank is a property of the project rather than of the page it lands on.
+        // ONE ranking for the whole export: paging through ListRunsAsync recomputes it per page, and the ranking is a whole-project scan plus a judge-view join
+        // across three more tables — identical work every time, because a run's rank is a property of the project rather than of the page it lands on.
         var ranking = await LoadRankingAsync(projectId, cancellationToken);
         return await PageAsync(ranking, projectId, skip: 0, int.MaxValue, modelContentFingerprint: null, includeUnscored: true, cancellationToken);
     }
@@ -212,17 +203,11 @@ public sealed partial class BenchmarkStore
 
         var totalCount = await runs.CountAsync(cancellationToken);
 
-        // Column projection, not entity materialization: the four encrypted payload columns are never read, so the
-        // materialization interceptor has nothing to decrypt and a 200-row page costs no crypto at all. Everything a
-        // summary shows is a flat column. The nested records are rebuilt from their own flat columns — presence is
-        // decided by a non-payload member of each block, since both blocks are always written whole.
-        // A local, not `default` inline: EF rejects a ReadOnlyMemory<byte> constant in a client projection.
+        // Column projection, not entity materialization: the four encrypted payload columns are never read, so a 200-row page costs no crypto and every summary field
+        // is flat. Nested records are rebuilt from flat columns, presence decided per block. A local, not inline: EF rejects a ReadOnlyMemory constant in a projection.
         var noPayload = default(ReadOnlyMemory<byte>);
-        // Newest first, but a repeat group ASCENDING by repeat index inside its millisecond: every run of a group is
-        // inserted by one freeze, so `Now()` is the same value for all of them and the Id tiebreak alone returned a
-        // group in Guid order — the table rendered `#3, #1, warm-up, #4, #2`. The client re-sorts by rank, and a
-        // group's unranked rows (the warm-up above all) tie there too, so this server order is what the reader sees.
-        // The Id tiebreak stays LAST and keeps paging deterministic.
+        // Newest first, but a repeat group ASCENDING by repeat index inside its millisecond: one freeze inserts every run of a group, so Now() is identical and the
+        // Id tiebreak alone renders them in Guid order. The client re-sorts by rank and unranked rows tie, so this order is what a reader sees; the Id tiebreak is LAST.
         var items = await runs.OrderByDescending(entity => entity.CreatedAtUtc)
                               .ThenBy(entity => entity.RepeatIndex)
                               .ThenByDescending(entity => entity.Id)
@@ -286,12 +271,8 @@ public sealed partial class BenchmarkStore
                                   QualityScore = null,
                                   QualityScoreSource = null,
                                   Rank = null,
-                                  // Inline rather than through ToThroughput: this is a server-side projection, and a
-                                  // helper call would not translate. Absence is decided by all SEVEN columns being
-                                  // NULL, and every one of them is projected — the same rule and the same members the
-                                  // entity-materializing ToThroughput uses. Omitting one here empties that column in
-                                  // the runs table, the CSV export and the repeat statistics, while a single-run read
-                                  // keeps showing it.
+                                  // Inline rather than through ToThroughput: a helper call would not translate in a server-side projection.
+                                  // Absence is all SEVEN columns NULL, every one projected — the rule ToThroughput uses; omitting one empties that column everywhere.
                                   Throughput = entity.TtftMs == null
                                   && entity.PromptTokens == null
                                   && entity.PromptMs == null

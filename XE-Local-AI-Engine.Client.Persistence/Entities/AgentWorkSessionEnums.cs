@@ -6,10 +6,13 @@ public enum AgentWorkSessionKind
     Research,
 
     /// <summary>
-    ///     Reserved, and now permanently so: this member was held for the Dev Mode to chat series, which the Development
-    ///     Workflows module supersedes. Nothing will claim it, but removing it would touch merged, migrated rows for no
-    ///     gain, so the store keeps rejecting it at creation. New workflow-driven sessions use <see cref="Workflow" />.
+    ///     Reserved, and now permanently so: this member was held for the Dev Mode to chat series, which the
+    ///     Development Workflows module supersedes. The store keeps rejecting it at creation.
     /// </summary>
+    /// <remarks>
+    ///     Nothing will claim it, but removing it would touch merged, migrated rows for no gain. New workflow-driven
+    ///     sessions use <see cref="Workflow" />.
+    /// </remarks>
     Development,
 
     /// <summary>

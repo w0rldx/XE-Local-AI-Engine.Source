@@ -2,9 +2,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     One row per <c>(run, node key)</c>. <see cref="Attempt" /> increments in place; there is no per-attempt row.
+/// </summary>
+/// <remarks>
 ///     Per-attempt history — prior session ids, prior failures — lives in the run event log, which is what makes the
 ///     <c>(run_id, node_key)</c> unique index the node-run's identity rather than a secondary constraint.
-/// </summary>
+/// </remarks>
 internal sealed class DevWorkflowNodeRun
 {
     public Guid Id { get; set; }
@@ -31,10 +33,12 @@ internal sealed class DevWorkflowNodeRun
     public DevWorkflowDecisionKind? PendingDecisionKind { get; set; }
 
     /// <summary>
-    ///     Allocated from the run watermark at insert only. This is a stable creation order, not a change watermark: a
-    ///     node-run that changes status eight times keeps its original sequence, so node-runs are deliberately not a
-    ///     <c>sinceSeq</c> feed. Status changes are observed through the event log and a run-detail refetch.
+    ///     Allocated from the run watermark at insert only. This is a stable creation order, not a change watermark.
     /// </summary>
+    /// <remarks>
+    ///     A node-run that changes status eight times keeps its original sequence, so node-runs are deliberately not a
+    ///     <c>sinceSeq</c> feed. Status changes are observed through the event log and a run-detail refetch.
+    /// </remarks>
     public long Sequence { get; set; }
 
     /// <summary>The work session this agent node-run owns. Loose reference, no foreign key: a purged session must read back as recoverable state.</summary>
@@ -64,12 +68,8 @@ internal sealed class DevWorkflowNodeRun
     public string? FailureClass { get; set; }
     public string? TerminalReason { get; set; }
 
-    // Cost telemetry: fifteen nullable, plaintext, metadata-only columns saying what this node run SPENT and where it
-    // routed — counts, a served model name, structural node keys and tool NAMES, never a prompt, an argument, a result
-    // or a transcript. Written once, at the terminal-or-blocked transition, through the one store decorator every call
-    // site crosses; nothing reads them to decide anything. Attempt increments in place, so they describe the LAST
-    // attempt only — the earlier attempts ride on their own node.retry.scheduled events, which is exactly why the
-    // Pending reset below clears every one of them.
+    // Cost telemetry, fifteen nullable plaintext columns: docs/wiki/08-data-and-persistence.md ("Node-run cost telemetry: fifteen plaintext columns, and why they are not encrypted").
+    // Metadata only, read by nothing to decide anything: never a prompt, argument, result or transcript. Written once at the terminal-or-blocked settle, describing the LAST attempt only.
 
     /// <summary>Provider-reported prompt tokens, summed over the attempt's chat-run envelopes; over its attempts on a DevTask node.</summary>
     public long? InputTokens { get; set; }
@@ -94,57 +94,60 @@ internal sealed class DevWorkflowNodeRun
 
     /// <summary>
     ///     Up to sixteen distinct tool NAMES this attempt called, as an ordinal-sorted JSON string array. Names only —
-    ///     never arguments, never results. Agent path only: null on a DevTask node run and on every structural row,
-    ///     where it means "there were no step rows to read", never "this node called no tools".
+    ///     never arguments, never results.
     /// </summary>
+    /// <remarks>
+    ///     Agent path only: null on a DevTask node run and on every structural row, where it means "there were no step
+    ///     rows to read", never "this node called no tools".
+    /// </remarks>
     public string? ToolNamesJson { get; set; }
 
     /// <summary>
     ///     WHOLE agent turns, summed: every chat-run envelope's own duration, which spans the provider rounds AND the
-    ///     tool loop between them. It is deliberately not called provider time — nothing this attempt persists
-    ///     separates the two, so subtracting this from the node's runtime leaves what happened OUTSIDE the turns
-    ///     (queueing before the session started, the node's own settle work), not the tool loop.
+    ///     tool loop between them.
     /// </summary>
+    /// <remarks>
+    ///     It is deliberately not called provider time — nothing this attempt persists separates the two, so
+    ///     subtracting this from the node's runtime leaves what happened OUTSIDE the turns (queueing before the
+    ///     session started, the node's own settle work), not the tool loop.
+    /// </remarks>
     public long? AgentTurnMs { get; set; }
 
     /// <summary>
     ///     How much of <see cref="AgentTurnMs" /> was a LOCAL runtime warming — <c>llama-server</c> launching and the
     ///     model loading — summed over the same envelopes, so <c>AgentTurnMs - ModelReadinessMs</c> is the
-    ///     warm-equivalent turn time. Null means unmeasured: no turn of this attempt went through the local-runtime
-    ///     warmer at all, or the row predates the column. Non-null is the warmer's measured wall time — it times EVERY
-    ///     call, cache reuse included, and the sum truncates to whole milliseconds — so an already-resident model
-    ///     measures near zero (live: 0) and zero itself proves only "under 1 ms", never residency on its own.
+    ///     warm-equivalent turn time.
     /// </summary>
+    /// <remarks>
+    ///     Null means unmeasured: no turn of this attempt went through the local-runtime warmer at all, or the row
+    ///     predates the column. Non-null is the warmer's measured wall time — it times EVERY call, cache reuse
+    ///     included, and the sum truncates to whole milliseconds — so an already-resident model measures near zero
+    ///     (live: 0) and zero itself proves only "under 1 ms", never residency on its own.
+    /// </remarks>
     public long? ModelReadinessMs { get; set; }
 
     /// <summary>
     ///     Machine-global free VRAM in bytes as the capacity gate measured it just before the most recent SUCCESSFUL
     ///     load of the model that served this run THAT CARRIED A CAPACITY ADMISSION — not necessarily a load this run
-    ///     caused, and an unadmitted reload since (a direct, profiling or variant-moved spawn) clears the reading
-    ///     rather than letting it describe the process that reload replaced.
-    ///     <para>
-    ///         <b>A warm run reports the EARLIER load's figures.</b> <see cref="ModelReadinessMs" /> is what separates
-    ///         the two: a SMALL readiness there means the warmer waited for nothing, so the load these bytes describe
-    ///         predates the run and the box may have looked different by the time it started; null there is
-    ///         unmeasured, which settles nothing either way. Null here means
-    ///         nobody measured — a remote or Ollama model, a model the node never loaded itself, a host with no
-    ///         readable global-free figure (non-NVIDIA or CPU-only), or a row written before this column existed.
-    ///     </para>
-    ///     <para>
-    ///         Written ONCE per attempt, and with <see cref="VramAdmittedBytes" /> as one pair: the first settle of the
-    ///         attempt that carries a reading writes both, and no later settle rewrites them, so the two members can
-    ///         never come from different loads. A settle carrying neither member is not that settle — it leaves the
-    ///         pair open for a later one. A re-attempt clears both, which is what re-opens the pair.
-    ///     </para>
+    ///     caused.
     /// </summary>
+    /// <remarks>
+    ///     An unadmitted reload since (a direct, profiling or variant-moved spawn) clears the reading rather than
+    ///     letting it describe the process that reload replaced. <b>A warm run reports the EARLIER load's figures</b>;
+    ///     <see cref="ModelReadinessMs" /> is what separates the two. Null here means nobody measured. Written ONCE
+    ///     per attempt with <see cref="VramAdmittedBytes" /> as one pair: the first settle of the attempt that CARRIES
+    ///     a reading writes both, a re-attempt clears both, and that is what re-opens the pair.
+    /// </remarks>
     public long? VramFreeAtLoadBytes { get; set; }
 
     /// <summary>
-    ///     The GPU bytes the capacity gate RESERVED for that same load's process. NOT llama.cpp's own
-    ///     <c>--list-devices</c> process budget, which is a different axis and is not read on this path. Zero is a real
-    ///     answer for a CPU-placed allocation; null carries the same "nobody measured" meaning as
-    ///     <see cref="VramFreeAtLoadBytes" />, and the same warm-run caveat applies.
+    ///     The GPU bytes the capacity gate RESERVED for that same load's process.
     /// </summary>
+    /// <remarks>
+    ///     NOT llama.cpp's own <c>--list-devices</c> process budget, which is a different axis and is not read on this
+    ///     path. Zero is a real answer for a CPU-placed allocation; null carries the same "nobody measured" meaning as
+    ///     <see cref="VramFreeAtLoadBytes" />, and the same warm-run caveat applies.
+    /// </remarks>
     public long? VramAdmittedBytes { get; set; }
 
     /// <summary>What the provider actually SERVED, off the envelope. Beside the authored pin, never instead of it: a pin is a request, not a receipt.</summary>
@@ -153,8 +156,10 @@ internal sealed class DevWorkflowNodeRun
     /// <summary>
     ///     Which of this node's out-edges its settle satisfied and which it killed, as the state machine itself judged
     ///     them — <c>{"satisfied":[…],"dead":[…],"gateAnswer":…,"truncated":…}</c> over plaintext structural node keys.
-    ///     Null on a row that is not terminal: a node that has not finished has routed nowhere yet.
     /// </summary>
+    /// <remarks>
+    ///     Null on a row that is not terminal: a node that has not finished has routed nowhere yet.
+    /// </remarks>
     public string? RouteJson { get; set; }
 
     /// <summary>How many steps the owned work session had taken when this node run settled.</summary>

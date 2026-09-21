@@ -6,10 +6,12 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Persistence boundary for the per-model→provider map. The <c>model_provider_map</c> table is keyed by model
-///     name with a <c>NOCASE</c> collation, so name lookups and the upsert key are case-insensitive without any
-///     LINQ-side comparer. No column is encrypted.
+///     Persistence boundary for the per-model→provider map.
 /// </summary>
+/// <remarks>
+///     The <c>model_provider_map</c> table is keyed by model name with a <c>NOCASE</c> collation, so name lookups and
+///     the upsert key are case-insensitive without any LINQ-side comparer. No column is encrypted.
+/// </remarks>
 internal sealed class ModelProviderMapStore : IModelProviderMapStore
 {
     private readonly NodeChatDbContext _dbContext;

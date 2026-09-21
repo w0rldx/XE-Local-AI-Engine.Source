@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for measured model-fit benchmark rows projected from a benchmark snapshot. The structural
-///     metrics are plaintext; the raw output and diagnostics are encrypted at rest by the node encryption interceptors
-///     and returned decrypted on the record. This store performs no validation; it owns id stamping and the per-snapshot
-///     replace.
+///     Node-scoped persistence for measured model-fit benchmark rows projected from a benchmark snapshot.
 /// </summary>
+/// <remarks>
+///     The structural metrics are plaintext; the raw output and diagnostics are encrypted at rest by the node
+///     encryption interceptors and returned decrypted on the record. This store performs no validation; it owns id
+///     stamping and the per-snapshot replace.
+/// </remarks>
 public interface IModelFitBenchmarkStore
 {
     // The disabled benchmark operation has no live caller. This interface preserves its persistence contract.
@@ -20,11 +22,14 @@ public interface IModelFitBenchmarkStore
     Task<IReadOnlyList<ModelFitBenchmarkRecord>> ListForSnapshotAsync(Guid snapshotId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Returns the most recent SUCCESSFUL benchmark row bound to <paramref name="profileId" /> (its parent snapshot is
-    ///     <c>Succeeded</c>), newest first by the snapshot's creation instant, or <c>null</c> when the profile has no
-    ///     successful benchmark. Legacy rows with a null <c>ProfileId</c> never match. Backs the freeze gate's revision
-    ///     binding, so a benchmark taken for a different profile revision is never returned here.
+    ///     Returns the most recent SUCCESSFUL benchmark row bound to <paramref name="profileId" /> — its parent snapshot
+    ///     is <c>Succeeded</c> — newest first by the snapshot's creation instant.
     /// </summary>
+    /// <remarks>
+    ///     Rows with a null <c>ProfileId</c> never match. Backs the freeze gate's revision binding, so a benchmark
+    ///     taken for a different profile revision is never returned here.
+    /// </remarks>
+    /// <returns>The row, or <c>null</c> when the profile has no successful benchmark.</returns>
     Task<ModelFitBenchmarkRecord?> GetLatestSuccessfulForProfileAsync(Guid profileId, CancellationToken cancellationToken = default);
 }
 

@@ -8,10 +8,13 @@ internal sealed class DevWorkflowWorkItem
     public DevWorkflowWorkItemStatus Status { get; set; }
 
     /// <summary>
-    ///     The one Dev-Mode project this work item builds in, or null. Nullable because a research- or plan-only
-    ///     workflow binds no repository; a run whose graph carries repo-bound nodes against a project-less work item is
-    ///     rejected at run start by the runtime, not by the schema.
+    ///     The one Dev-Mode project this work item builds in, or null.
     /// </summary>
+    /// <remarks>
+    ///     Nullable because a research- or plan-only workflow binds no repository; a run whose graph carries
+    ///     repo-bound nodes against a project-less work item is rejected at run start by the runtime, not by the
+    ///     schema.
+    /// </remarks>
     public Guid? DevelopmentProjectId { get; set; }
 
     public long CreatedAtUtc { get; set; }

@@ -10,9 +10,12 @@ internal sealed class DevWorkflowRun
 
     /// <summary>
     ///     The executed graph and the single source of routing truth: nodes, edges, conditions, join policies and
-    ///     materialization templates. Pinned at start and rewritten in place when materialization expands it; the
-    ///     definition row is never mutated, so re-running a definition is unaffected.
+    ///     materialization templates.
     /// </summary>
+    /// <remarks>
+    ///     Pinned at start and rewritten in place when materialization expands it; the definition row is never
+    ///     mutated, so re-running a definition is unaffected.
+    /// </remarks>
     public byte[] GraphJson { get; set; } = [];
 
     /// <summary>Zero at start, incremented per graph rewrite. The dispatcher's parsed-graph cache key is (run, revision).</summary>
@@ -21,10 +24,12 @@ internal sealed class DevWorkflowRun
     public DevWorkflowRunStatus Status { get; set; }
 
     /// <summary>
-    ///     The run's single monotonic change watermark. Every node-run, event, artifact and decision insert takes a
-    ///     fresh value from here inside the transaction that owns the run row, so one number answers "what changed
-    ///     since?" across the whole subtree.
+    ///     The run's single monotonic change watermark.
     /// </summary>
+    /// <remarks>
+    ///     Every node-run, event, artifact and decision insert takes a fresh value from here inside the transaction
+    ///     that owns the run row, so one number answers "what changed since?" across the whole subtree.
+    /// </remarks>
     public long LastSequence { get; set; }
 
     public string? FailureClass { get; set; }

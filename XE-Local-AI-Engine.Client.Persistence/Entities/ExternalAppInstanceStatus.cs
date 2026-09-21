@@ -3,10 +3,13 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 /// <summary>
 ///     Lifecycle of an <c>external_app_instances</c> row. Six of the ten are <b>transient</b> —
 ///     <see cref="Installing" />, <see cref="Starting" />, <see cref="Stopping" />, <see cref="Updating" />,
-///     <see cref="Resetting" /> and <see cref="Uninstalling" /> — and accept no operation but Cancel; the transition
-///     table itself is owned by the application layer's <c>ExternalAppService</c> and mirrored in the SPA, never by
-///     this store, which polices no transition and only compares against the expected set a caller hands it.
+///     <see cref="Resetting" /> and <see cref="Uninstalling" /> — and accept no operation but Cancel.
 /// </summary>
+/// <remarks>
+///     The transition table itself is owned by the application layer's <c>ExternalAppService</c> and mirrored in the
+///     SPA, never by this store, which polices no transition and only compares against the expected set a caller
+///     hands it.
+/// </remarks>
 public enum ExternalAppInstanceStatus
 {
     /// <summary>The row exists and the install pipeline is pulling, creating and starting its containers.</summary>

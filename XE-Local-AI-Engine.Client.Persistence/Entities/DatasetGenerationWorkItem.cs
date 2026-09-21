@@ -2,9 +2,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Durable FIFO row for the dataset-generation queue — the <see cref="BenchmarkWorkItem" /> pattern duplicated
-///     rather than generalized. Dataset generation has a single work kind, so the benchmark's <c>kind</c> column and its
-///     <c>(run_id, kind)</c> uniqueness collapse into one work item per dataset.
+///     rather than generalized.
 /// </summary>
+/// <remarks>
+///     Dataset generation has a single work kind, so the benchmark's <c>kind</c> column and its
+///     <c>(run_id, kind)</c> uniqueness collapse into one work item per dataset.
+/// </remarks>
 internal sealed record class DatasetGenerationWorkItem
 {
     public long QueueSequence { get; set; }

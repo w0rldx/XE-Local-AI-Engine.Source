@@ -3,11 +3,13 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Node-scoped persistence for scheduled job run events (the per-run progress/log timeline). <c>DataJson</c> is
-///     encrypted at rest by the node encryption interceptors; reads return it decrypted on the
-///     <see cref="ScheduledJobRunEventRecord" />. Events cascade-delete with their owning run. This store owns only
-///     id/timestamp stamping.
+///     Node-scoped persistence for scheduled job run events, the per-run progress and log timeline.
 /// </summary>
+/// <remarks>
+///     <c>DataJson</c> is encrypted at rest by the node encryption interceptors; reads return it decrypted on the
+///     <see cref="ScheduledJobRunEventRecord" />. Events cascade-delete with their owning run, and this store owns
+///     only id and timestamp stamping.
+/// </remarks>
 public interface IScheduledJobRunEventStore
 {
     /// <summary>

@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for model-fit snapshot runs. The raw output, stderr excerpt and detailed diagnostics are
-///     encrypted at rest by the node encryption interceptors; they are SANITIZED-BY-DEFAULT at this boundary — the
-///     list/latest projections (<see cref="ModelFitSnapshotSummaryRecord" />) never carry them, and only the explicit
-///     operator-diagnostics read (<see cref="GetRawByIdAsync" />) returns them decrypted. This store performs no
-///     validation; it owns id/timestamp stamping and the transactional latest-successful replacement.
+///     Node-scoped persistence for model-fit snapshot runs.
 /// </summary>
+/// <remarks>
+///     The raw output, stderr excerpt and detailed diagnostics are encrypted at rest by the node encryption
+///     interceptors and are SANITIZED-BY-DEFAULT at this boundary: the list and latest projections
+///     (<see cref="ModelFitSnapshotSummaryRecord" />) never carry them, and only the explicit operator-diagnostics read
+///     (<see cref="GetRawByIdAsync" />) returns them decrypted. This store performs no validation; it owns id and
+///     timestamp stamping and the transactional latest-successful replacement.
+/// </remarks>
 public interface IModelFitSnapshotStore
 {
     /// <summary>
@@ -17,12 +20,15 @@ public interface IModelFitSnapshotStore
 
     /// <summary>
     ///     Moves the run with <paramref name="id" /> to a terminal status, stamping the supplied fields and storing the
-    ///     (plaintext) raw output / stderr / diagnostics for at-rest encryption. When the terminal status is
-    ///     <see cref="ModelFitRunStatus.Succeeded" />, this runs in a single transaction that clears
+    ///     plaintext raw output, stderr and diagnostics for at-rest encryption.
+    /// </summary>
+    /// <remarks>
+    ///     A terminal <see cref="ModelFitRunStatus.Succeeded" /> runs in a single transaction that clears
     ///     <c>is_latest_successful</c> on the prior latest row for the SAME key
     ///     (<c>operation, use_case, provider_name, model_name</c>) and sets it on this row, so two refreshes can never
-    ///     leave two rows latest for one key. Returns the updated summary, or <c>null</c> when no run has that id.
-    /// </summary>
+    ///     leave two rows latest for one key.
+    /// </remarks>
+    /// <returns>The updated summary, or <c>null</c> when no run has that id.</returns>
     Task<ModelFitSnapshotSummaryRecord?> MarkTerminalAsync(Guid id,
         ModelFitRunStatus status,
         int? exitCode,

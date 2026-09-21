@@ -6,12 +6,14 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     EF-backed <see cref="IImageJobStore" />. Writes go through <see cref="NodeChatDbContext.SaveChangesAsync" /> so the
-///     node encryption interceptor encrypts the prompt / negative prompt at rest on insert; a status-only update leaves
-///     the prompt property unmodified, so the interceptor skips it and the stored ciphertext is preserved. Reads use the
-///     no-tracking path (the materialization interceptor decrypts the prompt columns either way). Scoped: one instance per
-///     DI scope, matching the DbContext lifetime.
+///     EF-backed <see cref="IImageJobStore" />, scoped to the DbContext lifetime.
 /// </summary>
+/// <remarks>
+///     Writes go through <see cref="NodeChatDbContext.SaveChangesAsync" /> so the node encryption interceptor encrypts
+///     the prompt and negative prompt at rest on insert; a status-only update leaves the prompt property unmodified,
+///     so the interceptor skips it and the stored ciphertext is preserved. Reads use the no-tracking path, and the
+///     materialization interceptor decrypts the prompt columns either way.
+/// </remarks>
 public sealed class ImageJobStore : IImageJobStore
 {
     private readonly NodeChatDbContext _dbContext;
@@ -86,9 +88,8 @@ public sealed class ImageJobStore : IImageJobStore
             return null;
         }
 
-        // The declared ON DELETE CASCADE does fire on the node connection, but the delete is still explicit and
-        // set-based: the storage paths have to be read before the rows go, or the blob teardown has nothing to unlink.
-        // The two statements share one transaction so a job never survives its own images.
+        // The declared ON DELETE CASCADE does fire on the node connection, but the delete is still explicit and set-based: the storage paths have to be read
+        // before the rows go, or the blob teardown has nothing to unlink. The two statements share one transaction so a job never survives its own images.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var storagePaths = await _dbContext.GeneratedImages
@@ -149,9 +150,8 @@ public sealed class ImageJobStore : IImageJobStore
             entity.Height = outputHeight;
         }
 
-        // Same reasoning for the seed: a request carrying the random sentinel -1 must record the seed the runtime
-        // actually drew, or the image can never be reproduced. Guarded so a runtime that reported no seed (negative)
-        // leaves the requested value alone rather than overwriting it with another sentinel.
+        // Same reasoning for the seed: a request carrying the random sentinel -1 must record the seed the runtime actually drew, or the image can never be
+        // reproduced. Guarded so a runtime that reported no seed (negative) leaves the requested value alone rather than overwriting it with another sentinel.
         if (resolvedSeed >= 0)
         {
             entity.Seed = resolvedSeed;

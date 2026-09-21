@@ -123,9 +123,8 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
         {
             Id = Guid.NewGuid(),
             DefinitionId = definition.Id,
-            // The dataset pins the artifact version, not the concurrency token — and, read in this same transaction,
-            // the BODY that version names. Generation and evaluation read the copy, so an edit that lands between
-            // creation and either of them cannot re-shape a dataset that still claims the old version.
+            // The dataset pins the artifact version, not the concurrency token — and, read in this same transaction, the BODY that version names. Generation and
+            // evaluation read the copy, so an edit landing between creation and either of them cannot re-shape a dataset that still claims the old version.
             DefinitionVersion = definition.DefinitionVersion,
             DefinitionJson = definition.DefinitionJson.ToArray(),
             Name = command.Name.Trim(),
@@ -190,9 +189,8 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
             throw new TrainingConflictException("GenerationActive");
         }
 
-        // A run froze its own copy of this dataset, but its FreezeJson still names the dataset it came from. Deleting
-        // the dataset out from under a run would leave that lineage pointing at nothing, so it is refused for as long
-        // as any run — including a finished one — references it.
+        // A run froze its own copy of this dataset, but its FreezeJson still names the dataset it came from. Deleting the dataset out from under a run would leave
+        // that lineage pointing at nothing, so it is refused for as long as any run — including a finished one — references it.
         if (await _dbContext.TrainingRuns.AnyAsync(item => item.DatasetId == datasetId, cancellationToken))
         {
             throw new TrainingConflictException("DatasetReferenced");
@@ -589,9 +587,12 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
 
     /// <summary>
     ///     <c>v1:</c> + SHA-256 hex over the samples in canonical order (ascending <see cref="TrainingDatasetSample.Sequence" />),
-    ///     each contributing sequence, kind, label, review state and the raw decrypted content bytes. Review state
-    ///     participates because it decides membership: an approve/reject changes what a run would freeze.
+    ///     each contributing sequence, kind, label, review state and the raw decrypted content bytes.
     /// </summary>
+    /// <remarks>
+    ///     Review state participates because it decides membership: an approve or reject changes what a run would
+    ///     freeze.
+    /// </remarks>
     private async Task<string> ComputeFingerprintAsync(Guid datasetId, CancellationToken cancellationToken)
     {
         var samples = await _dbContext.TrainingDatasetSamples.AsNoTracking()
