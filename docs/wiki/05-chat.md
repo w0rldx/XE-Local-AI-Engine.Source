@@ -368,6 +368,8 @@ shipped defaults clear it with room to spare.
 
 `NodeChatPersistenceService` (`Services/Chat/Implementation/NodeChatPersistenceService.cs`) is a facade over focused collaborators (`NodeChatConversationCommands`, `NodeChatReadModel`, `NodeChatMessageCommands`, `NodeChatVariantBranchService`, `NodeChatFeedbackStore`), all composed from one `NodeChatPersistenceWriter` that owns per-conversation/per-message write-key serialization. It uses a **raw-ADO** path (`NodeChatPersistenceSql`) for the hot streaming writes.
 
+These collaborators hold `NodeChatDbContext` directly, and that is a **permanent** exception to the rule that database access lives behind a store in `Client.Persistence` (operator decision 2026-09-21; see `docs/wiki/16-code-conventions.md`). The writer already is the store seam, and the SQL binds the chat vocabulary — `NodeChatMessageStatusValues`, `NodeChatMessageCorrelation` — that the rest of the chat, work-session and integration code also uses. `Architecture/DbContextUserAllowlist.txt` names the eight types one by one, so a new chat type that takes a context still fails the fence.
+
 Message lifecycle (from `NodeChatMessageCommands.cs`): `PersistUserMessageAsync` inserts a Completed user row; `CreateAssistantPlaceholderAsync` inserts a Pending assistant row carrying the agent attribution + effort; `MarkAssistantQueued/Streaming`, `FlushAssistantPartialAsync` (append or replace content/reasoning deltas), then `TerminalizeAssistantMessageAsync` writes the final status, token counts, ordered `parts`, and `generationDurationMs`.
 
 ### The persistence lock hierarchy

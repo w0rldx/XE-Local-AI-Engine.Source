@@ -40,6 +40,12 @@ public sealed class NodeIdentityStore : INodeIdentityStore
         return await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
     }
 
+    public Task ReloadAsync(NodeUser user, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        return _dbContext.Entry(user).ReloadAsync(cancellationToken);
+    }
+
     public Task<NodeRefreshToken?> FindRefreshTokenAsync(string tokenHash, CancellationToken cancellationToken)
     {
         return _dbContext.RefreshTokens.SingleOrDefaultAsync(token => token.TokenHash == tokenHash, cancellationToken);

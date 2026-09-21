@@ -185,6 +185,14 @@ Identity's `AddEntityFrameworkStores<T>` generic argument), the **health check**
 (backup, migration recovery, the encryption backfills, the downgrade safety check). Every other holder is
 migration debt.
 
+The **chat persistence path** is legitimate too, by an operator decision of 2026-09-21 rather than by the rule
+above: `NodeChatPersistenceWriter` already is the store seam — it owns the scope that resolves the context and
+the conversation-scoped write lock its collaborators route through — and relocating the SQL would carry the chat
+domain vocabulary into `Client.Persistence` with it, because the raw statements bind
+`NodeChatMessageStatusValues` members as parameters and take `NodeChatMessageCorrelation` in every correlated
+write. The permanent entries name the eight types individually, so a *new* chat type that takes a context is
+unlisted and still fails.
+
 **Knowledge retrieval and ingestion** is a further reasoned exception, ruled permanent rather than migrated: its
 status vocabulary is bound as a SQL parameter *and* shipped as an OpenAPI schema id and a SignalR parameter, two
 of its transactions stay open across application-layer work (an embedding-model staleness decision; an encrypted
@@ -216,7 +224,9 @@ those shapes, naming a live holder per shape. Compiler-generated nested types fo
 them, so an entry names something a reader can go and edit.
 
 *Migration status:* slice **S7a** installed the fence and migrated the image rows, the conversation-upload rows
-and the identity queries. A store that an endpoint injects directly cannot simply be relocated into
+and the identity queries; **S7c** migrated the tutorial state and ruled the chat path permanent; **S7d** ruled
+knowledge permanent, which leaves the `migrate` section empty. A store that an
+endpoint injects directly cannot simply be relocated into
 `Client.Persistence` — `EndpointDependencyTests` forbids a `Persistence.*` constructor parameter anywhere in the
 host — so such a store stays in `Client.Application` and the rows move behind a narrow `*RowStore` beneath it.
 

@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.Tutorial.Implementation;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Identity-backed onboarding tour state. Persists the JSON array on <see cref="NodeUser.TutorialState" />
@@ -15,17 +15,17 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private static readonly SemaphoreSlim PersistenceLock = new(initialCount: 1, maxCount: 1);
 
-    private readonly NodeIdentityDbContext _dbContext;
+    private readonly INodeIdentityStore _identityStore;
     private readonly ILogger<NodeTutorialStateService> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly UserManager<NodeUser> _userManager;
 
-    public NodeTutorialStateService(NodeIdentityDbContext dbContext,
+    public NodeTutorialStateService(INodeIdentityStore identityStore,
         UserManager<NodeUser> userManager,
         TimeProvider timeProvider,
         ILogger<NodeTutorialStateService> logger)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _identityStore = identityStore ?? throw new ArgumentNullException(nameof(identityStore));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -60,9 +60,9 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
                 return false;
             }
 
-            // Authentication can load the user into this request's scoped DbContext before it reaches this lock. Refresh that tracked entity so every serialized
+            // Authentication can load the user into this request's scoped context before it reaches this lock. Refresh that tracked entity so every serialized
             // write merges against the latest tutorial JSON and concurrency stamp rather than the snapshot captured while parallel requests were authorizing.
-            await _dbContext.Entry(user).ReloadAsync(cancellationToken);
+            await _identityStore.ReloadAsync(user, cancellationToken);
 
             var trimmedKey = key.Trim();
             var currentEntries = Deserialize(user.TutorialState);

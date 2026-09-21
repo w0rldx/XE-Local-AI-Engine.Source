@@ -30,6 +30,14 @@ public interface INodeIdentityStore
     /// <summary>Opens a serializable transaction over the identity context, covering Identity's own writes too.</summary>
     Task<IDbContextTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken);
 
+    /// <summary>Re-reads one tracked user from the database, overwriting the entity's current values.</summary>
+    /// <remarks>
+    ///     Authentication can load the user into this scope's context before a caller reaches its own serialization
+    ///     lock, so a refresh is what makes a serialized read-modify-write merge against the latest row and
+    ///     concurrency stamp rather than the snapshot captured while parallel requests were authorizing.
+    /// </remarks>
+    Task ReloadAsync(NodeUser user, CancellationToken cancellationToken);
+
     /// <summary>The stored refresh token with this hash, tracked, or <see langword="null" /> when none matches.</summary>
     Task<NodeRefreshToken?> FindRefreshTokenAsync(string tokenHash, CancellationToken cancellationToken);
 

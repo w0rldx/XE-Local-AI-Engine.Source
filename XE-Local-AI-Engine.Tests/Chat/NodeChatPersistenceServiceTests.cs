@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -1489,6 +1490,49 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Equal("first", branched.Messages[0].Content);
         // Copies are fresh rows: the branch does not reuse the source message ids.
         AssertEx.False(branched.Messages.Any(message => message.MessageId == first.MessageId || message.MessageId == assistantId));
+    }
+
+    /// <summary>
+    ///     A branch copy's content blob is re-encrypted under the NEW (conversation, message) pair, not carried over.
+    /// </summary>
+    /// <remarks>
+    ///     The at-rest envelope is AEAD-bound to that pair, so a copy encrypted under its own decrypts there and
+    ///     nowhere else. Asserting the ciphertext merely DIFFERS would prove nothing — a fresh nonce differs on every
+    ///     write — so the negative half, that the source's pair cannot open it, is what distinguishes a genuine
+    ///     re-encryption from reusing the source row's bytes or encrypting under the old AAD.
+    /// </remarks>
+    [Test]
+    public async Task BranchConversationAsync_ReEncryptsEachCopyUnderTheNewConversationAndMessageAad()
+    {
+        await using var provider = await BuildProviderAsync("branch-aad.sqlite");
+        var service = CreateService(provider);
+        const string secret = "branch-aad-canary-plaintext";
+
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Source", UserId = "node", CreatedAtUtc = 900 });
+        var sourceMessage = await service
+                                  .PersistUserMessageAsync(new NodeChatPersistUserMessageRequest { ConversationId = source.ConversationId, MessageId = Guid.NewGuid(), Content = secret, CreatedAtUtc = 901 });
+
+        var branch = AssertEx.NotNull(await service.BranchConversationAsync(new NodeChatBranchConversationRequest
+        {
+            ConversationId = source.ConversationId,
+            MessageId = sourceMessage.MessageId,
+            CreatedAtUtc = 910
+        }));
+
+        var branched = AssertEx.NotNull(await service.GetConversationAsync(branch.BranchedConversationId));
+        var copy = branched.Messages.Single();
+        AssertEx.Equal(secret, copy.Content);
+        AssertEx.False(copy.MessageId == sourceMessage.MessageId, "A branch copy must be a fresh row, not the source message id.");
+
+        var copyRaw = await ReadRawMessageContentAsync(provider, copy.MessageId);
+        AssertEx.True(copyRaw.Length >= 2 && copyRaw[0] == 0xFE && copyRaw[1] == 0x01, "A branch copy's content must be encrypted at rest.");
+        AssertEx.False(ContainsSubsequence(copyRaw, Encoding.UTF8.GetBytes(secret)), "A branch copy's content must not leak plaintext.");
+
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        AssertEx.Equal(secret, dbContext.DecryptMessageContent(copyRaw, branch.BranchedConversationId, copy.MessageId));
+        _ = AssertEx.Throws<CryptographicException>(() => dbContext.DecryptMessageContent(copyRaw, source.ConversationId, sourceMessage.MessageId),
+            "A branch copy encrypted under the source's conversation/message pair would survive a purge of the branch and defeat the per-record AAD.");
     }
 
     [Test]

@@ -32,15 +32,25 @@ XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeSqliteHealthCh
 XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeBlobOrphanSweeper|permanent|One-shot startup sweep reclaiming document blobs whose row is gone, the knowledge counterpart of the retention sweeper's orphaned-upload resweep; its only query is an existence probe.
 XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeVectorNormalizationBackfillService|permanent|One-time vector-normalization backfill, recording completion in the same chat_maintenance_state marker table the content-encryption backfill uses.
 
-# ---------------------------------------------------------------- migrate: Chat
-XE_Local_AI_Engine.Client.Services.Chat.NodeChatPersistenceWriter|migrate|Owns the conversation-scoped write lock and the scope that resolves the context; the seam the other eight Chat holders route through.
-XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatConversationCommands|migrate|Raw-ADO conversation commands plus the bulk purge-cancel transaction.
-XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatFeedbackStore|migrate|Reads and writes message_feedback through the writer's callback.
-XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatMessageCommands|migrate|Raw-ADO message commands and the run-envelope writes, across two transactions.
-XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatPersistenceSql|migrate|The shared raw-ADO read and probe queries every Chat collaborator reuses.
-XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatReadModel|migrate|Conversation and message reads through the writer's callback.
-XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatRestartRecoveryService|migrate|Recovers rows left mid-turn by a crash, in one transaction.
-XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatVariantBranchService|migrate|Branch-copy and edit-and-resend, two transactions plus the context's own content-encryption helpers.
+# ---------------------------------------------------------------- permanent: chat persistence
+# Operator decision 2026-09-21. NodeChatPersistenceWriter already IS the store seam: it owns the scope that
+# resolves the context and the conversation-scoped write lock every other holder routes through, and that lock
+# hierarchy is documented architecture (docs/wiki/05-chat.md, "The persistence lock hierarchy") rather than an
+# accident of where the code landed. Moving the SQL into Client.Persistence would drag the chat domain
+# vocabulary down with it — the SQL binds NodeChatMessageStatusValues members as parameters and takes
+# NodeChatMessageCorrelation in every correlated write — for an import change in roughly a hundred files that
+# relocates no persistence concern. Measured in Plans/csharp-baseline-2026-09-17/progress/S7c-analysis.md.
+#
+# Permanent covers these eight types, by name. A NEW Services/Chat type that takes a context is unlisted and
+# fails the fence, which is the half of this decision that has to keep biting.
+XE_Local_AI_Engine.Client.Services.Chat.NodeChatPersistenceWriter|permanent|Owns the conversation-scoped write lock and the scope that resolves the context; the seam the other seven Chat holders route through.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatConversationCommands|permanent|Raw-ADO conversation commands plus the bulk purge-cancel transaction, inside the writer's callback.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatFeedbackStore|permanent|Reads and writes message_feedback through the writer's callback.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatMessageCommands|permanent|Raw-ADO message commands and the run-envelope writes; its terminalize transaction is opened only for a terminal status.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatPersistenceSql|permanent|The shared raw-ADO read and probe queries every Chat collaborator reuses, as pure functions over a caller-supplied context.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatReadModel|permanent|Conversation and message reads through the writer's callback.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatRestartRecoveryService|permanent|Recovers rows left mid-turn by a crash, in one transaction on the shared Guid.Empty gate.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatVariantBranchService|permanent|Branch-copy and variant minting, two transactions plus the context's own content-encryption helpers, which bind the at-rest AAD per row.
 
 # ---------------------------------------------------------------- permanent: knowledge persistence
 # Operator decision, 2026-09-21: the knowledge retrieval and ingestion lane stays in the application layer, on three
@@ -61,6 +71,3 @@ XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeIndexWriter|permanent|Writ
 XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeIngestionService|permanent|The ingestion state machine: its reads and status writes interleave with the extractor, chunker, embedder and notifier the persistence layer cannot reference.
 XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeSearchService|permanent|Hybrid retrieval: fusion, rerank budget and hydration around the chunk reads, driven by provider-layer collaborators; a host endpoint injects its interface.
 XE_Local_AI_Engine.Client.Services.Knowledge.ManagedCosineVectorSearch|permanent|Cosine-similarity scan over the packed-float vector column, allocation-free over a pooled buffer and recording application-layer retrieval metrics.
-
-# ---------------------------------------------------------------- migrate: Tutorial
-XE_Local_AI_Engine.Client.Services.Tutorial.Implementation.NodeTutorialStateService|migrate|Single-entity tutorial state on the identity context.
