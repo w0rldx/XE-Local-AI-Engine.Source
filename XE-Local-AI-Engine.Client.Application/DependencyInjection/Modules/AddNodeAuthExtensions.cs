@@ -1,6 +1,8 @@
 ﻿namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.Caching.Memory;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -24,6 +26,9 @@ internal static class AddNodeAuthExtensions
         builder.Services.AddSingleton<INodeOperatorSecretProvider, NodeOperatorSecretProvider>();
         builder.Services.AddSingleton<INodeJwtKeyProvider, NodeJwtKeyProvider>();
         builder.Services.AddSingleton<INodeTokenService, NodeTokenService>();
+        // Persistence boundary for the identity database. Scoped, and sharing its scope's context with Identity's own
+        // UserManager/SignInManager stores: that is what puts an Identity write inside the auth service's transaction.
+        builder.Services.AddScoped<INodeIdentityStore, NodeIdentityStore>();
         builder.Services.AddScoped<INodeAuthService, NodeAuthService>();
         builder.Services.AddScoped<INodeTutorialStateService, NodeTutorialStateService>();
         builder.Services.AddSingleton<NodeIdentityInitializationService>();

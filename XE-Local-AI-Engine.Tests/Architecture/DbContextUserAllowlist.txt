@@ -1,0 +1,58 @@
+# Application-layer types that still depend on a node DbContext (operator decision D5).
+#
+# Format: <type full name>|<section>|<reason>
+# Sections:
+#   permanent - composition, migration bootstrap, or a documented maintenance job. It stays.
+#   migrate   - a query that belongs behind a *Store in XE-Local-AI-Engine.Client.Persistence. A later
+#               sub-slice deletes its group.
+#
+# Shrink-only in both directions, like CommentBudgetAllowlist.txt and PositionalRecordAllowlist.txt beside it:
+# an unlisted holder fails the fence, and a listed type that no longer holds a context fails as stale. Enforced by
+# Architecture/ApplicationDbContextFenceTests.cs. Rule: docs/wiki/16-code-conventions.md.
+#
+# A compiler-generated closure or async state machine is folded onto the type that declares it, so an entry names a
+# type a reader can go and edit.
+
+# ---------------------------------------------------------------- permanent: composition
+XE_Local_AI_Engine.Client.DependencyInjection.Modules.AddNodeModelRuntimeExtensions|permanent|The AddDbContext<T> registration itself: the composition root that hands every store its context, not a query site.
+
+# ---------------------------------------------------------------- permanent: migration bootstrap
+XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import.CanvasWorkflowImport|permanent|Startup-only pre/post-migration shim: reads the about-to-be-dropped canvas_workflows table before migrations run, then writes through IGraphWorkflowStore after. Its only caller is the host's Program.Startup.
+XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeChatMigrationRecoveryService|permanent|Migration-recovery machinery: drops a stuck EF migrations-history lock table so the migration run can proceed. It repairs the schema a store would depend on.
+
+# ---------------------------------------------------------------- permanent: retention sweeper
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.RetentionSweeperService|permanent|Operator decision D5 names the retention sweeper a documented legitimate user, beside the composition root, the health check and the migration bootstrap.
+
+# ---------------------------------------------------------------- permanent: maintenance jobs
+XE_Local_AI_Engine.Client.Services.Persistence.Implementation.KnowledgeDowngradeSafetyService|permanent|Maintenance: version-checks and VACUUM INTOs the file itself over its own read-only connection, below the entity layer a store exposes.
+XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeChatContentEncryptionBackfillService|permanent|Maintenance backfill: rewrites legacy plaintext message rows to ciphertext, a one-time schema-wide sweep rather than a feature query.
+XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeChatTitleEncryptionBackfillService|permanent|Maintenance backfill: rewrites legacy plaintext conversation titles to ciphertext.
+XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeDbBackupService|permanent|Maintenance backup: VACUUM INTO over the live database file, an operation on the file rather than on any entity.
+XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeSqliteHealthCheck|permanent|Health check: probes that the connection behind the context is alive. Its subject IS the context, so a store between them would hide what it checks.
+
+# ---------------------------------------------------------------- migrate: Chat
+XE_Local_AI_Engine.Client.Services.Chat.NodeChatPersistenceWriter|migrate|Owns the conversation-scoped write lock and the scope that resolves the context; the seam the other eight Chat holders route through.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatConversationCommands|migrate|Raw-ADO conversation commands plus the bulk purge-cancel transaction.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatFeedbackStore|migrate|Reads and writes message_feedback through the writer's callback.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatMessageCommands|migrate|Raw-ADO message commands and the run-envelope writes, across two transactions.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatPersistenceSql|migrate|The shared raw-ADO read and probe queries every Chat collaborator reuses.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatReadModel|migrate|Conversation and message reads through the writer's callback.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatRestartRecoveryService|migrate|Recovers rows left mid-turn by a crash, in one transaction.
+XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatVariantBranchService|migrate|Branch-copy and edit-and-resend, two transactions plus the context's own content-encryption helpers.
+
+# ---------------------------------------------------------------- migrate: Knowledge
+XE_Local_AI_Engine.Client.Services.Knowledge.ContextExpansionService|migrate|Expands a chunk hit into its neighbours over the raw connection.
+XE_Local_AI_Engine.Client.Services.Knowledge.FtsSearch|migrate|The chunk_fts MATCH query; FTS5 is not expressible in LINQ, so it stays raw ADO wherever it lands.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeBlobOrphanSweeper|migrate|Probes document existence before deleting an orphaned blob.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeChunkEmbeddingReuseStore|migrate|Embedding-reuse cache lookup.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeDocumentBlobStore|migrate|Encrypted document-blob storage, one transaction.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeDocumentCatalogService|migrate|Document CRUD and listing, two transactions.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeDocumentPurgeService|migrate|Document purge, one transaction.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeIndexWriter|migrate|Writes chunk and vector rows, one transaction.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeIngestionService|migrate|The ingestion pipeline's own reads and writes.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeSearchService|migrate|Orchestrates FTS and vector search and hydrates the chunks.
+XE_Local_AI_Engine.Client.Services.Knowledge.KnowledgeVectorNormalizationBackfillService|migrate|One-time vector-normalization backfill; unlike the maintenance jobs above it works on knowledge rows a store will own.
+XE_Local_AI_Engine.Client.Services.Knowledge.ManagedCosineVectorSearch|migrate|Cosine-similarity scan over the packed-float vector column.
+
+# ---------------------------------------------------------------- migrate: Tutorial
+XE_Local_AI_Engine.Client.Services.Tutorial.Implementation.NodeTutorialStateService|migrate|Single-entity tutorial state on the identity context.

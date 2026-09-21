@@ -42,7 +42,10 @@ internal static class AddNodeImagesExtensions
         // encrypted at rest by the node encryption interceptor on save).
         builder.Services.AddScoped<IImageJobStore, ImageJobStore>();
 
-        // Encrypted-at-rest generated-image blob store. Singleton: it opens its own DbContext scope per operation and depends only
+        // Persistence boundary for the generated-image metadata rows. Scoped: it owns a NodeChatDbContext per operation.
+        builder.Services.AddScoped<IGeneratedImageRowStore, GeneratedImageRowStore>();
+
+        // Encrypted-at-rest generated-image blob store. Singleton: it opens a scope per row operation and depends only
         // on singletons (data directory, sqlite key holder, time provider) — the same posture as the uploaded-file store.
         builder.Services.AddSingleton<IGeneratedImageStore, GeneratedImageStore>();
 

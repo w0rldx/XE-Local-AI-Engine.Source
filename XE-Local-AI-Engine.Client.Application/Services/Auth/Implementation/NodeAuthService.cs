@@ -1,13 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 
-using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 public sealed class NodeAuthService : INodeAuthService
@@ -24,7 +22,7 @@ public sealed class NodeAuthService : INodeAuthService
     /// </remarks>
     private static readonly TimeSpan RotationGraceWindow = TimeSpan.FromSeconds(10);
 
-    private readonly NodeIdentityDbContext _dbContext;
+    private readonly INodeIdentityStore _identity;
     private readonly ILogger<NodeAuthService> _logger;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly IOptions<NodeAuthOptions> _options;
@@ -33,7 +31,7 @@ public sealed class NodeAuthService : INodeAuthService
     private readonly INodeTokenService _tokenService;
     private readonly UserManager<NodeUser> _userManager;
 
-    public NodeAuthService(NodeIdentityDbContext dbContext,
+    public NodeAuthService(INodeIdentityStore identity,
         UserManager<NodeUser> userManager,
         SignInManager<NodeUser> signInManager,
         INodeTokenService tokenService,
@@ -42,7 +40,7 @@ public sealed class NodeAuthService : INodeAuthService
         TimeProvider timeProvider,
         ILogger<NodeAuthService> logger)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
         _signInManager = signInManager ?? throw new ArgumentNullException(nameof(signInManager));
         _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
@@ -56,9 +54,7 @@ public sealed class NodeAuthService : INodeAuthService
     {
         ArgumentNullException.ThrowIfNull(principal);
 
-        var hasAdminUser = await _dbContext.Users
-                                           .AsNoTracking()
-                                           .AnyAsync(user => user.SetupCompleted, cancellationToken);
+        var hasAdminUser = await _identity.HasCompletedSetupAsync(cancellationToken);
 
         return new NodeAuthStatus { SetupRequired = !hasAdminUser, Authenticated = principal.Identity?.IsAuthenticated == true };
     }
@@ -84,8 +80,7 @@ public sealed class NodeAuthService : INodeAuthService
                 return new NodeSetupResult { Succeeded = false, AlreadyInitialized = true, Errors = [] };
             }
 
-            await using var transaction = await _dbContext.Database
-                                                          .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            await using var transaction = await _identity.BeginSerializableTransactionAsync(cancellationToken);
 
             if (await HasCompletedSetupAsync(cancellationToken))
             {
@@ -170,11 +165,9 @@ public sealed class NodeAuthService : INodeAuthService
         }
 
         var refreshTokenHash = _tokenService.HashRefreshToken(refreshToken);
-        await using var transaction = await _dbContext.Database
-                                                      .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        await using var transaction = await _identity.BeginSerializableTransactionAsync(cancellationToken);
 
-        var storedToken = await _dbContext.RefreshTokens
-                                          .SingleOrDefaultAsync(token => token.TokenHash == refreshTokenHash, cancellationToken);
+        var storedToken = await _identity.FindRefreshTokenAsync(refreshTokenHash, cancellationToken);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         if (storedToken is null || storedToken.ExpiresAtUtc <= now)
@@ -211,8 +204,7 @@ public sealed class NodeAuthService : INodeAuthService
         }
         else
         {
-            storedToken.RevokedAtUtc = now;
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _identity.RevokeAsync(storedToken, now, cancellationToken);
         }
 
         var result = await CreateTokenResultAsync(user, now, cancellationToken);
@@ -228,7 +220,7 @@ public sealed class NodeAuthService : INodeAuthService
             return;
         }
 
-        await RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+        await _identity.RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
     }
 
     public async Task<NodePasswordChangeResult> ChangePasswordAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken)
@@ -248,7 +240,7 @@ public sealed class NodeAuthService : INodeAuthService
             return new NodePasswordChangeResult { Succeeded = false, Errors = ToErrorList(result) };
         }
 
-        await RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+        await _identity.RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
         return new NodePasswordChangeResult { Succeeded = true, Errors = [] };
     }
 
@@ -270,8 +262,7 @@ public sealed class NodeAuthService : INodeAuthService
 
         // RemovePassword + AddPassword is the no-old-password reset primitive (Identity has no token-less ResetPassword, and no reset-token
         // provider is registered). Both go in a serializable transaction — as in SetupAsync — so a rejected new password never leaves the account passwordless.
-        await using var transaction = await _dbContext.Database
-                                                      .BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        await using var transaction = await _identity.BeginSerializableTransactionAsync(cancellationToken);
 
         var removeResult = await _userManager.RemovePasswordAsync(user);
         if (!removeResult.Succeeded)
@@ -292,7 +283,7 @@ public sealed class NodeAuthService : INodeAuthService
         await _userManager.ResetAccessFailedCountAsync(user);
         await _userManager.SetLockoutEndDateAsync(user, lockoutEnd: null);
 
-        await RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+        await _identity.RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         _logger.LogWarning("Node admin password reset for user {UserId}; refresh tokens revoked and the rotated security "
@@ -317,12 +308,7 @@ public sealed class NodeAuthService : INodeAuthService
             return Task.FromResult(false);
         }
 
-        return _dbContext.RefreshTokens
-                         .AnyAsync(token => token.UserId == userId
-                                            && token.RevokedAtUtc == null
-                                            && token.ExpiresAtUtc > now
-                                            && token.CreatedAtUtc == revokedAtUtc,
-                             cancellationToken);
+        return _identity.HasActiveTokenCreatedAtAsync(userId, revokedAtUtc, now, cancellationToken);
     }
 
     private async Task<NodeAuthTokenResult> CreateTokenResultAsync(NodeUser user, DateTime now, CancellationToken cancellationToken)
@@ -332,39 +318,17 @@ public sealed class NodeAuthService : INodeAuthService
         var refreshToken = _tokenService.CreateRefreshTokenRaw();
         var refreshTokenExpiresAtUtc = now.AddDays(_options.Value.RefreshTokenDays);
 
-        await RevokeActiveTokensAsync(user.Id, now, cancellationToken);
-        _dbContext.RefreshTokens.Add(new NodeRefreshToken
-        {
-            UserId = user.Id,
-            TokenHash = _tokenService.HashRefreshToken(refreshToken),
-            ExpiresAtUtc = refreshTokenExpiresAtUtc,
-            CreatedAtUtc = now
-        });
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _identity.RevokeActiveTokensAsync(user.Id, now, cancellationToken);
+        await _identity.AddRefreshTokenAsync(new NodeRefreshToken
+            {
+                UserId = user.Id,
+                TokenHash = _tokenService.HashRefreshToken(refreshToken),
+                ExpiresAtUtc = refreshTokenExpiresAtUtc,
+                CreatedAtUtc = now
+            },
+            cancellationToken);
 
         return new NodeAuthTokenResult { Succeeded = true, AccessToken = accessToken, AccessTokenExpiresAtUtc = accessTokenExpiresAtUtc, RefreshToken = refreshToken, RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc };
-    }
-
-    /// <summary>
-    ///     Revokes every live refresh token of <paramref name="userId" />, stamping <paramref name="now" />. The caller
-    ///     supplies the instant so that rotation's revoke-and-reissue share one — the clock read that
-    ///     <see cref="WasReplacedByRotationAsync" /> reads back as "this token was replaced, not logged out".
-    /// </summary>
-    private async Task RevokeActiveTokensAsync(string userId, DateTime now, CancellationToken cancellationToken)
-    {
-        var activeTokens = await _dbContext.RefreshTokens
-                                           .Where(token => token.UserId == userId && token.RevokedAtUtc == null)
-                                           .ToListAsync(cancellationToken);
-
-        foreach (var token in activeTokens)
-        {
-            token.RevokedAtUtc = now;
-        }
-
-        if (activeTokens.Count > 0)
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
     }
 
     private async Task<NodeUser?> ResolveLoginUserAsync(string? email, CancellationToken cancellationToken)
@@ -374,13 +338,12 @@ public sealed class NodeAuthService : INodeAuthService
             return await _userManager.FindByEmailAsync(email.Trim());
         }
 
-        return await _dbContext.Users
-                               .SingleOrDefaultAsync(user => user.SetupCompleted, cancellationToken);
+        return await _identity.FindCompletedSetupUserAsync(cancellationToken);
     }
 
     private Task<bool> HasCompletedSetupAsync(CancellationToken cancellationToken)
     {
-        return _dbContext.Users.AnyAsync(user => user.SetupCompleted, cancellationToken);
+        return _identity.HasCompletedSetupAsync(cancellationToken);
     }
 
     /// <summary>

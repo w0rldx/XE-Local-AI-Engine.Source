@@ -16,9 +16,6 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 /// </remarks>
 public sealed class CompareBenchmarkCellsEndpoint : Endpoint<CompareBenchmarkCellsRequest, CompareBenchmarkCellsResponse>
 {
-    private const int MinimumCells = 2;
-    private const int MaximumCells = 6;
-
     private readonly BenchmarkRecordService _records;
 
     public CompareBenchmarkCellsEndpoint(BenchmarkRecordService records)
@@ -38,19 +35,10 @@ public sealed class CompareBenchmarkCellsEndpoint : Endpoint<CompareBenchmarkCel
     {
         ArgumentNullException.ThrowIfNull(req);
         var requested = req.CellKeys ?? [];
-        if (requested.Count is < MinimumCells or > MaximumCells)
-        {
-            await RefuseAsync($"Provide between {MinimumCells} and {MaximumCells} cellKeys to compare.");
-            return;
-        }
 
-        if (requested.Distinct(StringComparer.Ordinal).Count() != requested.Count)
-        {
-            // A cell against itself is a delta of exactly zero with a zero-width interval — a true statement that
-            // reads as a finding. Refused rather than served.
-            await RefuseAsync("The cellKeys to compare must be distinct.");
-            return;
-        }
+        // Throws BenchmarkValidationException, which the global handler maps through the same mapper RefuseAsync uses
+        // below — so the refusal body is the one this endpoint has always sent.
+        BenchmarkPairedBootstrap.ValidateCellSelection(requested);
 
         if (await _records.GetProjectAsync(req.ProjectId, ct) is null)
         {

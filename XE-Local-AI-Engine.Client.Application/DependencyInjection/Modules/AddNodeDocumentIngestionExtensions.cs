@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 
 internal static class AddNodeDocumentIngestionExtensions
@@ -16,8 +18,12 @@ internal static class AddNodeDocumentIngestionExtensions
         // simultaneous uploads cannot aggregate to an out-of-memory condition. Singleton — the semaphore is shared.
         builder.Services.AddSingleton<IDocumentExtractionAdmissionGate, DocumentExtractionAdmissionGate>();
 
-        // Durable per-conversation uploaded-file store. Singleton: it opens its own DbContext scope per operation and depends only on
-        // singletons (data directory, sqlite key holder, time provider), so the singleton chat persistence service can hook delete cleanup.
+        // Persistence boundary for the metadata rows, including the display-name encryption. Scoped: it owns a
+        // NodeChatDbContext per operation.
+        builder.Services.AddScoped<IConversationUploadedFileRowStore, ConversationUploadedFileRowStore>();
+
+        // Durable per-conversation uploaded-file store: the encrypted on-disk bytes plus the staging snapshot. Singleton: it opens a scope per
+        // row operation and depends only on singletons, so the singleton chat persistence service can hook delete cleanup.
         builder.Services.AddSingleton<IConversationUploadedFileStore, ConversationUploadedFileStore>();
 
         // Gate → buffer → extract → persist orchestration behind the conversation upload endpoint. Singleton: stateless

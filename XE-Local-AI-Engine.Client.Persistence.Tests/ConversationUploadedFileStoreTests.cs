@@ -5,6 +5,8 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -214,6 +216,39 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         AssertEx.False(Directory.Exists(hostPath), "Disposing the snapshot should remove the staging directory.");
     }
 
+    /// <summary>
+    ///     The row store answers a delete with the extension it removed, or null when there was no row.
+    /// </summary>
+    /// <remarks>
+    ///     That nullable string is what the blob store reads as "row existed": it names the on-disk blob the caller
+    ///     must unlink next, so a store that answered a missing row with an empty extension would have the caller
+    ///     hunting a file that was never written, and one that answered a real row with null would strand its bytes.
+    /// </remarks>
+    [Test]
+    public async Task RowStore_DeleteAsync_ReturnsTheStoredExtension_AndNullForAnUnknownFile()
+    {
+        var databasePath = GetDatabasePath("row-delete.sqlite");
+        var uploadRoot = Path.Combine(_rootPath, "row-delete-data");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var provider = await BuildProviderAsync(databasePath, keyHolder);
+        var store = CreateStore(provider, uploadRoot, keyHolder);
+        var service = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), store);
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest { Title = "Title", UserId = "user", CreatedAtUtc = 1000 });
+        var file = await AddSampleFileAsync(store, conversation.ConversationId, "report.txt");
+
+        await using var scope = provider.CreateAsyncScope();
+        var rows = scope.ServiceProvider.GetRequiredService<IConversationUploadedFileRowStore>();
+
+        AssertEx.Equal(".txt", await rows.DeleteAsync(conversation.ConversationId, file.FileId, CancellationToken.None),
+            "Deleting a stored row must answer with the normalized extension the blob was named with.");
+        AssertEx.Null(await rows.DeleteAsync(conversation.ConversationId, file.FileId, CancellationToken.None),
+            "Deleting the same row twice must answer null the second time: there is no blob left to unlink.");
+        AssertEx.Null(await rows.DeleteAsync(conversation.ConversationId, Guid.NewGuid(), CancellationToken.None),
+            "Deleting a file id that was never stored must answer null rather than an empty extension.");
+    }
+
     [Test]
     public async Task Migrate_CreatesConversationUploadedFilesTableWithForeignKeyAndIndex()
     {
@@ -246,10 +281,10 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
             "conversation_uploaded_files.conversation_id should be indexed.");
     }
 
-    private static async Task AddSampleFileAsync(IConversationUploadedFileStore store, Guid conversationId, string fileName)
+    private static async Task<ConversationUploadedFileInfo> AddSampleFileAsync(IConversationUploadedFileStore store, Guid conversationId, string fileName)
     {
         var content = Encoding.UTF8.GetBytes("body-of-" + fileName);
-        _ = await store.AddAsync(new ConversationUploadedFileInput
+        return await store.AddAsync(new ConversationUploadedFileInput
         {
             ConversationId = conversationId,
             FileId = Guid.NewGuid(),
@@ -279,6 +314,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         services.AddDbContext<NodeChatDbContext>(options => options
                                                             .UseSqlite($"Data Source={databasePath}")
                                                             .UseInternalServiceProvider(SharedEfServiceProvider));
+        services.AddScoped<IConversationUploadedFileRowStore, ConversationUploadedFileRowStore>();
         services.AddSingleton<NodeChatPersistenceWriter>();
 
         var provider = services.BuildServiceProvider(validateScopes: true);

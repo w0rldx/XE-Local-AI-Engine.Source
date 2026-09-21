@@ -349,6 +349,7 @@ public sealed class GeneratedImageStoreTests : IDisposable
         // has. The delete test below stays meaningful under the real posture because the cascade cannot produce the
         // storage paths `DeleteAsync` returns, and those paths are the whole point of the explicit ordered delete.
         services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath};Foreign Keys=True"));
+        services.AddScoped<IGeneratedImageRowStore, GeneratedImageRowStore>();
 
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();

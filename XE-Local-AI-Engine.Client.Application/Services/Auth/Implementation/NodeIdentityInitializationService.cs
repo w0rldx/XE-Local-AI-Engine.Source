@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed class NodeIdentityInitializationService
 {
@@ -20,30 +18,13 @@ public sealed class NodeIdentityInitializationService
     public async Task MigrateAndSeedAsync(CancellationToken cancellationToken = default)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeIdentityDbContext>();
+        var identity = scope.ServiceProvider.GetRequiredService<INodeIdentityStore>();
 
-        await dbContext.Database.MigrateAsync(cancellationToken);
-        await EnsureAdminRoleAsync(dbContext, cancellationToken);
-    }
+        await identity.MigrateAsync(cancellationToken);
 
-    private async Task EnsureAdminRoleAsync(NodeIdentityDbContext dbContext, CancellationToken cancellationToken)
-    {
-        var normalizedRoleName = AdminRoleName.ToUpperInvariant();
-        var roleExists = await dbContext.Roles
-                                        .AnyAsync(role => role.NormalizedName == normalizedRoleName, cancellationToken);
-
-        if (roleExists)
+        if (await identity.EnsureRoleAsync(AdminRoleName, cancellationToken))
         {
-            return;
+            _logger.LogInformation("Seeded node identity role {RoleName}.", AdminRoleName);
         }
-
-        dbContext.Roles.Add(new IdentityRole(AdminRoleName)
-        {
-            NormalizedName = normalizedRoleName,
-            ConcurrencyStamp = Guid.NewGuid().ToString("N")
-        });
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("Seeded node identity role {RoleName}.", AdminRoleName);
     }
 }

@@ -388,6 +388,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         var services = new ServiceCollection();
         services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
         services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
+        services.AddScoped<IConversationUploadedFileRowStore, ConversationUploadedFileRowStore>();
         services.AddSingleton<NodeChatPersistenceWriter>();
         services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(_rootPath));
         services.AddSingleton(TimeProvider.System);

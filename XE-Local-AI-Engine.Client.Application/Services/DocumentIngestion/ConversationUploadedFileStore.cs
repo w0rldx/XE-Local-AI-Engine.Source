@@ -2,18 +2,17 @@ namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions;
-using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>Durable per-conversation uploaded-file store.</summary>
 /// <remarks>
-///     Metadata rows are written and read over the raw-SQL path, matching the node chat persistence path, with the display
-///     name encrypted via the matching <see cref="NodeChatDbContext" /> helper; the bytes and cached extracted Markdown are
-///     encrypted on disk by <see cref="UploadedFileBlobProtector" /> under
-///     <c>INodeDataDirectory.Root/uploaded-files/conversations/</c>. The store is a singleton opening a fresh scope per
-///     database operation: uploaded files have unique ids, so no per-conversation write serialization is required.
+///     The metadata rows live behind <see cref="IConversationUploadedFileRowStore" />, which also encrypts the display
+///     name. What stays here is what the database does not hold: the bytes and cached Markdown, encrypted on disk by
+///     <see cref="UploadedFileBlobProtector" />, and the plaintext staging snapshot the agent sandbox copies from.
+///     Singleton, opening a fresh scope per row operation — uploaded files have unique ids, so no per-conversation
+///     write serialization is required.
 /// </remarks>
 public sealed class ConversationUploadedFileStore : IConversationUploadedFileStore
 {
@@ -64,27 +63,22 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         var storagePath = string.Concat(input.ConversationId.ToString("D"), "/", input.FileId.ToString("D"), extension);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var rows = scope.ServiceProvider.GetRequiredService<IConversationUploadedFileRowStore>();
 
-        var encryptedName = dbContext.EncryptUploadedFileName(input.OriginalFileName, input.ConversationId, input.FileId);
-
-        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-        command.CommandText = """
-                              INSERT INTO conversation_uploaded_files (file_id, conversation_id, original_file_name, mime_type, extension, size_bytes, extraction_status, extracted_chars, storage_path, created_at_utc)
-                              VALUES ($file_id, $conversation_id, $original_file_name, $mime_type, $extension, $size_bytes, $extraction_status, $extracted_chars, $storage_path, $created_at_utc);
-                              """;
-        AddParameter(command, "$file_id", input.FileId);
-        AddParameter(command, "$conversation_id", input.ConversationId);
-        AddParameter(command, "$original_file_name", encryptedName);
-        AddParameter(command, "$mime_type", input.MimeType);
-        AddParameter(command, "$extension", extension);
-        AddParameter(command, "$size_bytes", input.SizeBytes);
-        AddParameter(command, "$extraction_status", input.ExtractionStatus.ToString());
-        AddParameter(command, "$extracted_chars", input.ExtractedChars);
-        AddParameter(command, "$storage_path", storagePath);
-        AddParameter(command, "$created_at_utc", createdAtUtc);
-        await OpenIfNeededAsync(command.Connection, cancellationToken);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        await rows.InsertAsync(new ConversationUploadedFileRow
+            {
+                FileId = input.FileId,
+                ConversationId = input.ConversationId,
+                OriginalFileName = input.OriginalFileName,
+                MimeType = input.MimeType,
+                Extension = extension,
+                SizeBytes = input.SizeBytes,
+                ExtractionStatus = input.ExtractionStatus.ToString(),
+                ExtractedChars = input.ExtractedChars,
+                CreatedAtUtc = createdAtUtc
+            },
+            storagePath,
+            cancellationToken);
 
         return new ConversationUploadedFileInfo
         {
@@ -103,42 +97,22 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
     public async Task<IReadOnlyList<ConversationUploadedFileInfo>> ListAsync(Guid conversationId, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var rows = scope.ServiceProvider.GetRequiredService<IConversationUploadedFileRowStore>();
 
-        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-        command.CommandText = """
-                              SELECT file_id, conversation_id, original_file_name, mime_type, extension, size_bytes, extraction_status, extracted_chars, created_at_utc
-                              FROM conversation_uploaded_files
-                              WHERE conversation_id = $conversation_id
-                              ORDER BY created_at_utc ASC, file_id ASC;
-                              """;
-        AddParameter(command, "$conversation_id", conversationId);
-        await OpenIfNeededAsync(command.Connection, cancellationToken);
-
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var files = new List<ConversationUploadedFileInfo>();
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            var fileId = Guid.Parse(reader.GetString(0));
-            var ownerConversationId = Guid.Parse(reader.GetString(1));
-            var nameBytes = await reader.GetFieldValueAsync<byte[]>(ordinal: 2, cancellationToken);
-            var originalFileName = dbContext.DecryptUploadedFileName(nameBytes, ownerConversationId, fileId);
-
-            files.Add(new ConversationUploadedFileInfo
-            {
-                FileId = fileId,
-                ConversationId = ownerConversationId,
-                OriginalFileName = originalFileName,
-                MimeType = reader.GetString(3),
-                Extension = reader.GetString(4),
-                SizeBytes = reader.GetInt64(5),
-                ExtractionStatus = ParseStatus(reader.GetString(6)),
-                ExtractedChars = await reader.IsDBNullAsync(ordinal: 7, cancellationToken) ? null : reader.GetInt32(7),
-                CreatedAtUtc = reader.GetInt64(8)
-            });
-        }
-
-        return files;
+        var files = await rows.ListAsync(conversationId, cancellationToken);
+        return files.Select(static row => new ConversationUploadedFileInfo
+                     {
+                         FileId = row.FileId,
+                         ConversationId = row.ConversationId,
+                         OriginalFileName = row.OriginalFileName,
+                         MimeType = row.MimeType,
+                         Extension = row.Extension,
+                         SizeBytes = row.SizeBytes,
+                         ExtractionStatus = ParseStatus(row.ExtractionStatus),
+                         ExtractedChars = row.ExtractedChars,
+                         CreatedAtUtc = row.CreatedAtUtc
+                     })
+                    .ToArray();
     }
 
     public async Task<string?> ReadExtractedMarkdownAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken)
@@ -172,33 +146,13 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
     public async Task<bool> DeleteAsync(Guid conversationId, Guid fileId, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        var connection = dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken);
+        var rows = scope.ServiceProvider.GetRequiredService<IConversationUploadedFileRowStore>();
 
-        // Read the stored extension so the server-named bytes file can be located precisely; a missing row means there
-        // is nothing to delete.
-        string extension;
-        await using (var lookup = connection.CreateCommand())
+        // The store returns the stored extension so the server-named bytes file can be located precisely; null means
+        // there was no row, and therefore nothing to delete.
+        if (await rows.DeleteAsync(conversationId, fileId, cancellationToken) is not { } extension)
         {
-            lookup.CommandText = "SELECT extension FROM conversation_uploaded_files WHERE conversation_id = $conversation_id AND file_id = $file_id;";
-            AddParameter(lookup, "$conversation_id", conversationId);
-            AddParameter(lookup, "$file_id", fileId);
-            var result = await lookup.ExecuteScalarAsync(cancellationToken);
-            if (result is null or DBNull)
-            {
-                return false;
-            }
-
-            extension = result as string ?? string.Empty;
-        }
-
-        await using (var delete = connection.CreateCommand())
-        {
-            delete.CommandText = "DELETE FROM conversation_uploaded_files WHERE conversation_id = $conversation_id AND file_id = $file_id;";
-            AddParameter(delete, "$conversation_id", conversationId);
-            AddParameter(delete, "$file_id", fileId);
-            await delete.ExecuteNonQueryAsync(cancellationToken);
+            return false;
         }
 
         var conversationDirectory = ConversationDirectory(conversationId);

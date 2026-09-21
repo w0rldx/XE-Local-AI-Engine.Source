@@ -180,13 +180,31 @@ method, not a reason to inject `NodeChatDbContext`/`NodeIdentityDbContext` into 
 
 A `DbContext` outside `Client.Persistence` is legitimate only where the code creates or owns its scope for
 infrastructure reasons rather than doing domain work: the **composition root** (DI registration, ASP.NET
-Identity's `AddEntityFrameworkStores<T>` generic argument), the **health check**, the **migration bootstrap** and
-the **retention sweeper**. Every other holder is migration debt.
+Identity's `AddEntityFrameworkStores<T>` generic argument), the **health check**, the **migration bootstrap**, the
+**retention sweeper**, and the **database-maintenance jobs** whose subject is the file or the schema itself
+(backup, migration recovery, the encryption backfills, the downgrade safety check). Every other holder is
+migration debt.
 
-*Migration status:* slice **S7** fences this with a shrink-only architecture test whose allowlist is the
-authoritative list of remaining holders, then migrates them behind stores. The database-maintenance services
-under `Services/Persistence/` (backup, migration recovery, encryption backfill) are decided there case by case:
-move into `Client.Persistence`, or join the legitimate set.
+`ApplicationDbContextFenceTests` in `XE-Local-AI-Engine.Tests/Architecture/` fails the build for any application
+type that depends on either context, on an `IDbContextFactory<>` of one, or on the raw ADO reached through one,
+unless `Architecture/DbContextUserAllowlist.txt` lists it. That file is the authoritative list of holders — read
+it rather than trusting this page — and it has two sections: `permanent` for the legitimate set above, `migrate`
+for what a later sub-slice still has to move, grouped by feature area. Each entry states its reason. It is
+shrink-only in both directions: an unlisted holder fails, and a listed type that no longer holds a context fails
+as stale, so a migration deletes its line in the same commit.
+
+The fence is type-based rather than a text scan, which is not a stylistic preference: the measurement it was
+built from found files whose only mention of the context is a lowercase `dbContext` lambda parameter, and most
+holders resolve it inside a method body instead of by constructor. NetArchTest reads IL through Mono.Cecil, so a
+constructor parameter, a body resolution inside an async state machine, a lambda parameter inside a display
+class, a static method parameter and a generic argument all count; the guard asserts that it still sees each of
+those shapes, naming a live holder per shape. Compiler-generated nested types fold onto the type that declares
+them, so an entry names something a reader can go and edit.
+
+*Migration status:* slice **S7a** installed the fence and migrated the image rows, the conversation-upload rows
+and the identity queries. A store that an endpoint injects directly cannot simply be relocated into
+`Client.Persistence` — `EndpointDependencyTests` forbids a `Persistence.*` constructor parameter anywhere in the
+host — so such a store stays in `Client.Application` and the rows move behind a narrow `*RowStore` beneath it.
 
 ### DI + class house style
 

@@ -155,6 +155,11 @@ public sealed class BenchmarkCompareEndpointTests
         AssertEx.Equal(6d, delta.GetProperty("ciHigh").GetDouble());
     }
 
+    /// <summary>The whole refusal body, not just its status, because the rules behind it no longer live here.</summary>
+    /// <remarks>
+    ///     They answer as a <c>BenchmarkValidationException</c>, the pipe every other benchmark refusal uses, so
+    ///     <c>code</c> and <c>detail</c> are as much of the contract as the 400 is.
+    /// </remarks>
     [Test]
     [Arguments("cellKeys=cell:one")]
     [Arguments("")]
@@ -166,7 +171,7 @@ public sealed class BenchmarkCompareEndpointTests
         var (status, content) = await GetAsync(context, query);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
-        AssertEx.Contains(content, "Provide between 2 and 6 cellKeys", StringComparison.Ordinal);
+        AssertProblem(content, "Provide between 2 and 6 cellKeys to compare.");
     }
 
     [Test]
@@ -177,7 +182,18 @@ public sealed class BenchmarkCompareEndpointTests
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:one");
 
         AssertEx.Equal(HttpStatusCode.BadRequest, status);
-        AssertEx.Contains(content, "must be distinct", StringComparison.Ordinal);
+        AssertProblem(content, "The cellKeys to compare must be distinct.");
+    }
+
+    /// <summary>Asserts the RFC 7807 body a BenchmarkValidationException produces, field by field.</summary>
+    private static void AssertProblem(string content, string detail)
+    {
+        using var document = JsonDocument.Parse(content);
+        var root = document.RootElement;
+
+        AssertEx.Equal(400, root.GetProperty("status").GetInt32());
+        AssertEx.Equal("InvalidRequest", root.GetProperty("code").GetString());
+        AssertEx.Equal(detail, root.GetProperty("detail").GetString());
     }
 
     [Test]

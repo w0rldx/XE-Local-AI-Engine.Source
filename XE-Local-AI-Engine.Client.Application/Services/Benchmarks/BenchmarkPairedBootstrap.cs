@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 /// <summary>
 ///     The paired difference between two measurement cells over the items they SHARE, with a percentile bootstrap
 ///     interval around it.
@@ -40,7 +42,36 @@ public static class BenchmarkPairedBootstrap
     /// </summary>
     public const int MinimumSharedItems = 3;
 
+    /// <summary>Fewer than two cells is not a comparison; beyond six the pairwise grid stops being readable.</summary>
+    public const int MinimumCells = 2;
+
+    public const int MaximumCells = 6;
+
     public const int DefaultReplicates = 2000;
+
+    /// <summary>
+    ///     The precondition on the cells a caller asks to compare: two to six of them, each named once.
+    /// </summary>
+    /// <remarks>
+    ///     Here rather than at the transport edge, beside <see cref="MinimumSharedItems" />, because it is the same
+    ///     kind of bound on the same estimate. A cell compared against itself is refused rather than served: the
+    ///     answer would be a delta of exactly zero with a zero-width interval — a true statement that reads as a
+    ///     finding.
+    /// </remarks>
+    public static void ValidateCellSelection(IReadOnlyList<string> cellKeys)
+    {
+        ArgumentNullException.ThrowIfNull(cellKeys);
+
+        if (cellKeys.Count is < MinimumCells or > MaximumCells)
+        {
+            throw new BenchmarkValidationException($"Provide between {MinimumCells} and {MaximumCells} cellKeys to compare.");
+        }
+
+        if (cellKeys.Distinct(StringComparer.Ordinal).Count() != cellKeys.Count)
+        {
+            throw new BenchmarkValidationException("The cellKeys to compare must be distinct.");
+        }
+    }
 
     /// <summary>
     ///     The paired delta and its 95 % percentile interval, or <see langword="null" /> when fewer than
