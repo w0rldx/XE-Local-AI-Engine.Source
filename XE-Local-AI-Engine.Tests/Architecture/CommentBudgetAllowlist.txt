@@ -383,7 +383,6 @@ XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchExportGitHardeningTests.cs|run|
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchExportGitHardeningTests.cs|summary|7
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchServiceTests.cs|summary|2
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeRunLoggerTests.cs|summary|3
-XE-Local-AI-Engine.Tests/AgentHome/AgentHomeServiceTests.cs|run|1
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeServiceTests.cs|summary|2
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeToolGatewayTests.cs|run|2
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeToolGatewayTests.cs|summary|1

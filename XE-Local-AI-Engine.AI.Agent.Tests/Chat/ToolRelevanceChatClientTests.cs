@@ -364,6 +364,53 @@ public sealed class ToolRelevanceChatClientTests
         }
     }
 
+    /// <summary>
+    ///     The capture the race test reads its verdict from survives concurrent sends.
+    /// </summary>
+    /// <remarks>
+    ///     <c>GetResponseAsync_WhenTwoRoundsRaceOnOneToolArray_CallsTheSelectorExactlyOnce</c> releases two rounds
+    ///     together and both record here, so an unsynchronised <c>List&lt;T&gt;.Add</c> would let "exactly once" be
+    ///     decided by a corrupted list rather than by the single-flight store. Two rounds never lost an entry in 320
+    ///     runs under load; dedicated threads released by a <see cref="Barrier" /> lose one every time.
+    /// </remarks>
+    [Test]
+    public async Task CapturingChatClient_WhenSendsRaceEachOther_RecordsEveryOneExactlyOnce()
+    {
+        const int senders = 64;
+        const int sendsPerSender = 50;
+
+        using var inner = new CapturingChatClient();
+        var conversation = Conversation();
+        var sends = new Task<ChatResponse>[senders * sendsPerSender];
+
+        // Dedicated threads, not the thread pool: the pool injects threads gradually, so pool tasks arrive staggered
+        // and never overlap inside Add. The barrier releases all 64 into the same instant.
+        using var release = new Barrier(senders);
+        var threads = new Thread[senders];
+        for (var sender = 0; sender < senders; sender++)
+        {
+            var offset = sender * sendsPerSender;
+            threads[sender] = new Thread(() =>
+            {
+                release.SignalAndWait();
+                for (var index = 0; index < sendsPerSender; index++)
+                {
+                    sends[offset + index] = inner.GetResponseAsync(conversation);
+                }
+            });
+            threads[sender].Start();
+        }
+
+        foreach (var thread in threads)
+        {
+            thread.Join();
+        }
+
+        _ = await Task.WhenAll(sends);
+
+        AssertEx.Equal(senders * sendsPerSender, inner.ReceivedOptions.Count, "every send must appear exactly once in the capture");
+    }
+
     [Test]
     public async Task GetResponseAsync_WhenTheSelectorThrows_SendsTheUnfilteredOptionsInstance()
     {
@@ -833,13 +880,32 @@ public sealed class ToolRelevanceChatClientTests
         }
     }
 
+    /// <summary>
+    ///     Records the options instance each send reached the provider with.
+    /// </summary>
+    /// <remarks>
+    ///     The capture is locked and handed out as a snapshot because the race test releases two rounds together off
+    ///     the thread pool and both land here: an unsynchronised <see cref="List{T}" /> can drop or duplicate an entry
+    ///     under a concurrent <c>Add</c>, which would make "exactly once" report on corrupted evidence.
+    /// </remarks>
     private sealed class CapturingChatClient : IChatClient
     {
-        public List<ChatOptions?> ReceivedOptions { get; } = [];
+        private readonly List<ChatOptions?> _receivedOptions = [];
+
+        public IReadOnlyList<ChatOptions?> ReceivedOptions
+        {
+            get
+            {
+                lock (_receivedOptions)
+                {
+                    return [.. _receivedOptions];
+                }
+            }
+        }
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            ReceivedOptions.Add(options);
+            Capture(options);
             return Task.FromResult(new ChatResponse());
         }
 
@@ -848,7 +914,7 @@ public sealed class ToolRelevanceChatClientTests
             [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
-            ReceivedOptions.Add(options);
+            Capture(options);
             await Task.Yield();
             yield break;
         }
@@ -861,6 +927,14 @@ public sealed class ToolRelevanceChatClientTests
         public void Dispose()
         {
             GC.SuppressFinalize(this);
+        }
+
+        private void Capture(ChatOptions? options)
+        {
+            lock (_receivedOptions)
+            {
+                _receivedOptions.Add(options);
+            }
         }
     }
 }

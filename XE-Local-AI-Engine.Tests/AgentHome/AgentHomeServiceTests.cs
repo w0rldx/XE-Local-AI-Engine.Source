@@ -415,6 +415,17 @@ public sealed class AgentHomeServiceTests : IDisposable
         AssertEx.True(third.Completed, "the guard must be released so a later run for the same owner-node succeeds");
     }
 
+    /// <summary>
+    ///     The guard is keyed by owner-node, so two owners run at once. One lease manager — the subject — is shared,
+    ///     and each owner gets its own <c>AgentHomeOptions.RootPath</c>.
+    /// </summary>
+    /// <remarks>
+    ///     One <c>agent-home</c> tree exists per root, keyed by neither owner nor node, and an owner mismatch wipes it
+    ///     recursively. Driving both owners at one root therefore had the second owner's prepare delete the first
+    ///     owner's LIVE run directory from under its logger, which is the intermittent <c>Directory not empty</c> this
+    ///     test failed the gate with. The guard key is the subject, so each owner gets its own root and the first
+    ///     owner's run directory is asserted to survive.
+    /// </remarks>
     [Test]
     public async Task RunLifecycleAsync_WhenDifferentOwnerNode_NotBlockedByConcurrentRun()
     {
@@ -424,25 +435,26 @@ public sealed class AgentHomeServiceTests : IDisposable
         var folderId = Guid.NewGuid();
         resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
-        var identity = new MutableIdentityProvider("owner-a", "node-1");
+        var leases = new AgentHomeExecutionLeaseManager();
         var loop = GateableGoalExecutor.Create();
-        using var harness = CreateHarness(clock, provider, resolver, identity, goalExecutor: loop.Executor);
+        using var ownerA = CreateHarness(clock, provider, resolver, new MutableIdentityProvider("owner-a", "node-1"), leaseManager: leases, goalExecutor: loop.Executor);
+        using var ownerB = CreateHarness(clock, provider, resolver, new MutableIdentityProvider("owner-b", "node-2"), leaseManager: leases, goalExecutor: loop.Executor);
 
         using var firstCancellation = new CancellationTokenSource();
-        var first = harness.Service.RunLifecycleAsync(NewLifecycle(folderId), firstCancellation.Token);
+        var first = ownerA.Service.RunLifecycleAsync(NewLifecycle(folderId), firstCancellation.Token);
         await loop.WaitForEntryAsync(count: 1);
+        var firstRunLogDirectory = SingleRunLogDirectory(ownerA.RootPath);
 
-        // A different owner-node keys a different guard, so its run is not rejected. Use a distinct node id too so the
-        // two runs do not contend on the same node-scoped manifest/sandbox; the point is the guard key differs. Assert
-        // it got past the guard (a SECOND goal loop is running) rather than throwing AgentHomeBusy.
-        identity.OwnerUserId = "owner-b";
-        identity.NodeId = "node-2";
+        // A different owner-node keys a different guard, so its run is not rejected. Assert it got past the guard
+        // (a SECOND goal loop is running) rather than throwing AgentHomeBusy.
         using var secondCancellation = new CancellationTokenSource();
-        var second = harness.Service.RunLifecycleAsync(NewLifecycle(folderId), secondCancellation.Token);
+        var second = ownerB.Service.RunLifecycleAsync(NewLifecycle(folderId), secondCancellation.Token);
         await loop.WaitForEntryAsync(count: 2);
 
         AssertEx.False(second.IsFaulted, "a different owner-node must not be rejected by the first owner's guard");
         AssertEx.False(first.IsFaulted, "the first run is still inside its goal loop, not faulted");
+        AssertEx.True(Directory.Exists(firstRunLogDirectory),
+            $"the first owner's run is still live, so nothing the second owner does may delete '{firstRunLogDirectory}' from under its logger");
 
         // Drain both blocked runs to leave no orphan (cancellation is cleanup here, not the assertion).
         await firstCancellation.CancelAsync();
@@ -1119,7 +1131,20 @@ public sealed class AgentHomeServiceTests : IDisposable
             clock,
             NullLogger<AgentHomeService>.Instance);
 
-        return new ServiceHarness(service, manifestService, serviceProvider);
+        return new ServiceHarness(service, manifestService, serviceProvider, root);
+    }
+
+    /// <summary>
+    ///     The <c>logs</c> directory of the one run a harness has minted so far, so a test can name the directory a
+    ///     live run's logger is writing into.
+    /// </summary>
+    private static string SingleRunLogDirectory(string harnessRoot)
+    {
+        var runsRoot = Path.Combine(harnessRoot, AgentHomeRunPaths.AgentHomeDirectoryName, AgentHomeRunPaths.RunsDirectoryName);
+        var runDirectories = Directory.GetDirectories(runsRoot);
+
+        AssertEx.Equal(expected: 1, runDirectories.Length, $"expected exactly one run directory under '{runsRoot}'");
+        return Path.Combine(runDirectories[0], "logs");
     }
 
     /// <summary>
@@ -1255,14 +1280,18 @@ public sealed class AgentHomeServiceTests : IDisposable
         private readonly AgentHomeManifestService _manifestService;
         private readonly ServiceProvider _serviceProvider;
 
-        public ServiceHarness(AgentHomeService service, AgentHomeManifestService manifestService, ServiceProvider serviceProvider)
+        public ServiceHarness(AgentHomeService service, AgentHomeManifestService manifestService, ServiceProvider serviceProvider, string rootPath)
         {
             Service = service;
             _manifestService = manifestService;
             _serviceProvider = serviceProvider;
+            RootPath = rootPath;
         }
 
         public AgentHomeService Service { get; }
+
+        /// <summary>The temp directory this harness's <c>AgentHomeOptions.RootPath</c> points at.</summary>
+        public string RootPath { get; }
 
         public void Dispose()
         {

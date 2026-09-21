@@ -45,22 +45,33 @@ internal static class ExternalAppCatalogSeed
     ///     an unbounded walk finds the MAIN checkout's catalog and the parity test then passes against a file this
     ///     branch never touched. A root without the dist file is a broken checkout, not a reason to skip.
     /// </summary>
-    internal static string? FindDistPath(string startDirectory)
+    /// <param name="startDirectory">The directory the walk starts at, inclusive.</param>
+    /// <param name="highestDirectory">The last directory the walk may inspect; <see langword="null" /> walks on to the filesystem root.</param>
+    /// <remarks>
+    ///     The production caller passes no boundary. A caller that owns only part of the chain passes the top of what
+    ///     it owns: the OS temp root is shared, so a <c>.git</c> another process leaves above a temp directory would
+    ///     otherwise pull an unbounded walk into a checkout the caller never created.
+    /// </remarks>
+    internal static string? FindDistPath(string startDirectory, string? highestDirectory = null)
     {
+        var boundary = highestDirectory is null ? null : Path.TrimEndingDirectorySeparator(highestDirectory);
         for (var directory = new DirectoryInfo(startDirectory); directory is not null; directory = directory.Parent)
         {
             // `.git` is a directory in a clone and a file in a linked worktree; either spelling marks the root.
             var gitPath = Path.Combine(directory.FullName, ".git");
-            if (!Directory.Exists(gitPath) && !File.Exists(gitPath))
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
             {
-                continue;
+                var candidate = Path.Combine(directory.FullName, "catalog", "external-apps", "dist", "applications.json");
+                return File.Exists(candidate)
+                    ? candidate
+                    : throw new InvalidOperationException(
+                        $"The checkout at '{directory.FullName}' has no catalog/external-apps/dist/applications.json; regenerate it with catalog/external-apps/tools/build_catalog.py.");
             }
 
-            var candidate = Path.Combine(directory.FullName, "catalog", "external-apps", "dist", "applications.json");
-            return File.Exists(candidate)
-                ? candidate
-                : throw new InvalidOperationException(
-                    $"The checkout at '{directory.FullName}' has no catalog/external-apps/dist/applications.json; regenerate it with catalog/external-apps/tools/build_catalog.py.");
+            if (boundary is not null && string.Equals(Path.TrimEndingDirectorySeparator(directory.FullName), boundary, StringComparison.Ordinal))
+            {
+                break;
+            }
         }
 
         return null;

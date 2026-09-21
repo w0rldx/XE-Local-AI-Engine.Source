@@ -53,12 +53,41 @@ public sealed class ShippedCatalogSeedTests
     [Test]
     public void FindDistPath_OutsideAnyCheckout_ReturnsNullInsteadOfWalkingOn()
     {
+        // The walk is bounded to the directory this test created. Unbounded it would leave the temp root the test owns
+        // and read whatever the shared OS temp root's ancestors happen to carry, which no test can guarantee.
         var root = Directory.CreateTempSubdirectory("xe-external-apps-dist-scope");
         try
         {
             var nested = Directory.CreateDirectory(Path.Combine(root.FullName, "bin", "Release"));
 
-            AssertEx.Null(ExternalAppCatalogSeed.FindDistPath(nested.FullName), "no checkout encloses a temp directory, so there is nothing to compare against.");
+            AssertEx.Null(ExternalAppCatalogSeed.FindDistPath(nested.FullName, root.FullName), "no checkout encloses a temp directory, so there is nothing to compare against.");
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///     The boundary is load-bearing, not decoration: the same tree resolves to the enclosing checkout's dist file
+    ///     when the walk is unbounded and to <see langword="null" /> when it stops below that checkout's root.
+    /// </summary>
+    [Test]
+    public async Task FindDistPath_WhenTheBoundarySitsBelowTheCheckoutRoot_StopsBeforeReachingIt()
+    {
+        var root = Directory.CreateTempSubdirectory("xe-external-apps-dist-boundary");
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root.FullName, ".git"), "gitdir: /nowhere", CancellationToken.None);
+            var dist = Directory.CreateDirectory(Path.Combine(root.FullName, "catalog", "external-apps", "dist"));
+            var expected = Path.Combine(dist.FullName, "applications.json");
+            await File.WriteAllTextAsync(expected, "{}", CancellationToken.None);
+            var child = Directory.CreateDirectory(Path.Combine(root.FullName, "child"));
+            var nested = Directory.CreateDirectory(Path.Combine(child.FullName, "bin", "Release"));
+
+            AssertEx.Equal(expected, ExternalAppCatalogSeed.FindDistPath(nested.FullName));
+            AssertEx.Null(ExternalAppCatalogSeed.FindDistPath(nested.FullName, child.FullName),
+                "a walk bounded below the checkout root must not reach that root's dist file.");
         }
         finally
         {
@@ -78,7 +107,7 @@ public sealed class ShippedCatalogSeedTests
             await File.WriteAllTextAsync(Path.Combine(root.FullName, ".git"), "gitdir: /nowhere", CancellationToken.None);
             var nested = Directory.CreateDirectory(Path.Combine(root.FullName, "bin", "Release"));
 
-            var failure = AssertEx.Throws<InvalidOperationException>(() => _ = ExternalAppCatalogSeed.FindDistPath(nested.FullName));
+            var failure = AssertEx.Throws<InvalidOperationException>(() => _ = ExternalAppCatalogSeed.FindDistPath(nested.FullName, root.FullName));
 
             AssertEx.Contains(failure.Message, "catalog/external-apps/dist/applications.json");
         }
