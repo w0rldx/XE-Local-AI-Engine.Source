@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 
@@ -40,7 +41,18 @@ public sealed class DevelopmentAttemptHub : Hub
         Guid taskId,
         Guid attemptId)
     {
-        var task = await _managementService.GetTaskAsync(projectId, taskId, Context.ConnectionAborted);
+        // Translate the not-found family the way every other subscribing hub does. Without this the miss reached the
+        // client as SignalR's generic invocation error, which says nothing about which of the three ids was wrong.
+        DevelopmentTaskAggregate task;
+        try
+        {
+            task = await _managementService.GetTaskAsync(projectId, taskId, Context.ConnectionAborted);
+        }
+        catch (DevelopmentNotFoundException)
+        {
+            throw new HubException("The Development project or task was not found.");
+        }
+
         var attempt = task.Attempts.SingleOrDefault(candidate => candidate.Id == attemptId)
                       ?? throw new HubException("The Development attempt does not belong to the requested project and task.");
         if (attempt.Status is not (DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running))

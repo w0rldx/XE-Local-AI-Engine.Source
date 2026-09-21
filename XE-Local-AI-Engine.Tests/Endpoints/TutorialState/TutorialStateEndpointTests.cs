@@ -105,6 +105,47 @@ public sealed class TutorialStateEndpointTests
         }
     }
 
+    /// <summary>
+    ///     Pins the request-shape refusals: both keys, both messages, and the order they arrive in.
+    /// </summary>
+    /// <remarks>
+    ///     The key and status checks report TOGETHER rather than stopping at the first, and the key's own two rules
+    ///     (required, then length) stop at the first. That is the exact shape the move into a
+    ///     <c>Validator&lt;SaveTutorialStateRequest&gt;</c> had to preserve, so these ran green on the hand-written
+    ///     handler checks before the move.
+    /// </remarks>
+    [Test]
+    public async Task Put_WhenKeyIsBlankAndStatusIsUnknown_ReportsBothErrorsKeyedAndInOrder()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        await SeedAdminUserAsync(factory);
+
+        var errors = await PostInvalidAsync(factory, client, key: "   ", status: "paused");
+
+        AssertEx.Equal(expected: 2, errors.GetArrayLength());
+        AssertEx.Equal("key", errors[0].GetProperty("name").GetString());
+        AssertEx.Equal("Key is required.", errors[0].GetProperty("reason").GetString());
+        AssertEx.Equal("status", errors[1].GetProperty("name").GetString());
+        AssertEx.Equal("Status must be 'completed' or 'skipped'.", errors[1].GetProperty("reason").GetString());
+    }
+
+    [Test]
+    public async Task Put_WhenKeyIsTooLong_ReportsTheLengthErrorAndNotTheRequiredError()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        await SeedAdminUserAsync(factory);
+
+        var errors = await PostInvalidAsync(factory, client, key: new string('k', count: 129), status: "completed");
+
+        AssertEx.Equal(expected: 1, errors.GetArrayLength());
+        AssertEx.Equal("key", errors[0].GetProperty("name").GetString());
+        AssertEx.Equal("Key must be 128 characters or fewer.", errors[0].GetProperty("reason").GetString());
+    }
+
     [Test]
     public async Task Put_WhenUnauthenticated_IsRejected()
     {
@@ -174,6 +215,30 @@ public sealed class TutorialStateEndpointTests
 
         using var response = await client.SendAsync(request);
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    private static async Task<JsonElement> PostInvalidAsync(TestServerWebAppFactory factory,
+        HttpClient client,
+        string key,
+        string status)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Put, Route)
+        {
+            Content = JsonContent.Create(new
+            {
+                key,
+                status
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var payload = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(payload);
+        return document.RootElement.GetProperty("errors").Clone();
     }
 
     private static async Task<TutorialStateResponseDto> GetAsync(TestServerWebAppFactory factory, HttpClient client)

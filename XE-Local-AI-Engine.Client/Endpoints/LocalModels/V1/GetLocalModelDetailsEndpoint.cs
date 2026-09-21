@@ -5,7 +5,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Client.Services.Validation;
 
 /// <summary>
 ///     Reports one model's details.
@@ -19,16 +18,12 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 public sealed class GetLocalModelDetailsEndpoint : Endpoint<GetLocalModelDetailsRequest, LocalModelDetailsResponse>
 {
     private readonly ILocalModelDetailsResolver _detailsResolver;
-    private readonly ModelNameValidator _modelNameValidator;
 
     public GetLocalModelDetailsEndpoint(
-        ILocalModelDetailsResolver detailsResolver,
-        ModelNameValidator modelNameValidator)
+        ILocalModelDetailsResolver detailsResolver)
     {
         ArgumentNullException.ThrowIfNull(detailsResolver);
-        ArgumentNullException.ThrowIfNull(modelNameValidator);
         _detailsResolver = detailsResolver;
-        _modelNameValidator = modelNameValidator;
     }
 
     public override void Configure()
@@ -39,14 +34,9 @@ public sealed class GetLocalModelDetailsEndpoint : Endpoint<GetLocalModelDetails
 
     public override async Task HandleAsync(GetLocalModelDetailsRequest req, CancellationToken ct)
     {
-        // Decode FIRST: the bound route value may still contain literal %2F (see ModelRouteName), so validate and probe
-        // the decoded canonical name to keep "validated name == probed name" true.
+        // Decode again here: GetLocalModelDetailsRequestValidator already ran the grammar over the decoded name, and
+        // probing the same decoded name keeps "validated name == probed name" true. See ModelRouteName.
         var decodedModelName = ModelRouteName.Decode(req.ModelName);
-        if (!await ValidateModelNameAsync(decodedModelName, ct))
-        {
-            return;
-        }
-
         var modelName = decodedModelName!.Trim();
         var resolution = await _detailsResolver.ResolveAsync(modelName, ct);
 
@@ -65,18 +55,5 @@ public sealed class GetLocalModelDetailsEndpoint : Endpoint<GetLocalModelDetails
                 await Send.NotFoundAsync(ct);
                 return;
         }
-    }
-
-    private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)
-    {
-        var validationError = _modelNameValidator.GetValidationError(modelName);
-        if (validationError is null)
-        {
-            return true;
-        }
-
-        AddError(validationError);
-        await Send.ErrorsAsync(cancellation: ct);
-        return false;
     }
 }

@@ -372,6 +372,24 @@ internal static class LocalModelsMapper
         };
     }
 
+    /// <summary>
+    ///     Parses the wire kind of a classification override, refusing anything that is not a defined name.
+    /// </summary>
+    /// <remarks>
+    ///     <c>Enum.TryParse</c> accepts numeric strings for undefined values (for example "99"), so
+    ///     <c>Enum.IsDefined</c> guards it. <c>Unknown</c> is allowed: it is the operator's explicit "I don't know".
+    ///     The request validator and the handler read the same parse, so the value that was accepted is the value that
+    ///     is stored.
+    /// </remarks>
+    public static bool TryParseKind(string? value, out ModelKind kind)
+    {
+        kind = ModelKind.Unknown;
+
+        return !string.IsNullOrWhiteSpace(value)
+               && Enum.TryParse(value, ignoreCase: true, out kind)
+               && Enum.IsDefined(kind);
+    }
+
     private static ModelClassificationResult UnknownClassification(string modelName)
     {
         return new ModelClassificationResult { ModelName = modelName, Kind = ModelKind.Unknown, DetectedKind = ModelKind.Unknown, Capabilities = [], IsOverridden = false };

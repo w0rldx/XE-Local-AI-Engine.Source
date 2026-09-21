@@ -4,7 +4,6 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Client.Services.Validation;
 
 /// <summary>
 ///     Gracefully evicts a model from the local runtimes' memory, wherever it is resident.
@@ -18,16 +17,12 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 /// </remarks>
 public sealed class UnloadLocalModelEndpoint : Endpoint<UnloadLocalModelRequest, UnloadLocalModelResponse>
 {
-    private readonly ModelNameValidator _modelNameValidator;
     private readonly IModelUnloadCoordinator _unloadCoordinator;
 
     public UnloadLocalModelEndpoint(
-        IModelUnloadCoordinator unloadCoordinator,
-        ModelNameValidator modelNameValidator)
+        IModelUnloadCoordinator unloadCoordinator)
     {
-        ArgumentNullException.ThrowIfNull(modelNameValidator);
         ArgumentNullException.ThrowIfNull(unloadCoordinator);
-        _modelNameValidator = modelNameValidator;
         _unloadCoordinator = unloadCoordinator;
     }
 
@@ -42,13 +37,9 @@ public sealed class UnloadLocalModelEndpoint : Endpoint<UnloadLocalModelRequest,
 
     public override async Task HandleAsync(UnloadLocalModelRequest req, CancellationToken ct)
     {
-        // Decode FIRST: the bound route value may still contain literal %2F (see ModelRouteName), so validate and unload
-        // the decoded canonical name to keep "validated name == unloaded name" true.
+        // Decode again here: UnloadLocalModelRequestValidator already ran the grammar over the decoded name, and
+        // unloading the same decoded name keeps "validated name == unloaded name" true. See ModelRouteName.
         var decodedModelName = ModelRouteName.Decode(req.ModelName);
-        if (!await ValidateModelNameAsync(decodedModelName, ct))
-        {
-            return;
-        }
 
         var modelName = decodedModelName!.Trim();
         var unloaded = await _unloadCoordinator.UnloadAsync(modelName, ct);
@@ -58,18 +49,5 @@ public sealed class UnloadLocalModelEndpoint : Endpoint<UnloadLocalModelRequest,
             ModelName = modelName,
             Unloaded = unloaded
         }, ct);
-    }
-
-    private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)
-    {
-        var validationError = _modelNameValidator.GetValidationError(modelName);
-        if (validationError is null)
-        {
-            return true;
-        }
-
-        AddError(validationError);
-        await Send.ErrorsAsync(cancellation: ct);
-        return false;
     }
 }

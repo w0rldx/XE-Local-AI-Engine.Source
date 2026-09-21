@@ -4,21 +4,16 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Client.Services.Validation;
 
 public sealed class DeleteLocalModelEndpoint : Endpoint<DeleteLocalModelRequest, DeleteLocalModelResponse>
 {
     private readonly ILocalModelAdministrationService _administrationService;
-    private readonly ModelNameValidator _modelNameValidator;
 
     public DeleteLocalModelEndpoint(
-        ILocalModelAdministrationService administrationService,
-        ModelNameValidator modelNameValidator)
+        ILocalModelAdministrationService administrationService)
     {
         ArgumentNullException.ThrowIfNull(administrationService);
-        ArgumentNullException.ThrowIfNull(modelNameValidator);
         _administrationService = administrationService;
-        _modelNameValidator = modelNameValidator;
     }
 
     public override void Configure()
@@ -35,14 +30,9 @@ public sealed class DeleteLocalModelEndpoint : Endpoint<DeleteLocalModelRequest,
 
     public override async Task HandleAsync(DeleteLocalModelRequest req, CancellationToken ct)
     {
-        // Decode FIRST: the bound route value may still contain literal %2F (see ModelRouteName), so validate and delete
-        // the decoded canonical name to keep "validated name == deleted name" true.
+        // Decode again here: DeleteLocalModelRequestValidator already ran the grammar over the decoded name, and
+        // deleting the same decoded name keeps "validated name == deleted name" true. See ModelRouteName.
         var decodedModelName = ModelRouteName.Decode(req.ModelName);
-        if (!await ValidateModelNameAsync(decodedModelName, ct))
-        {
-            return;
-        }
-
         var result = await _administrationService.DeleteAsync(decodedModelName, ct);
 
         await Send.OkAsync(new DeleteLocalModelResponse
@@ -50,18 +40,5 @@ public sealed class DeleteLocalModelEndpoint : Endpoint<DeleteLocalModelRequest,
             ModelName = result.ModelName!,
             Deleted = result.Deleted
         }, ct);
-    }
-
-    private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)
-    {
-        var validationError = _modelNameValidator.GetValidationError(modelName);
-        if (validationError is null)
-        {
-            return true;
-        }
-
-        AddError(validationError);
-        await Send.ErrorsAsync(cancellation: ct);
-        return false;
     }
 }

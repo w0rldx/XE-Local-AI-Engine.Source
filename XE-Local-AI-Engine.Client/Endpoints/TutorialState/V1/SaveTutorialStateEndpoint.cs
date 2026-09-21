@@ -24,26 +24,11 @@ public sealed class SaveTutorialStateEndpoint : Endpoint<SaveTutorialStateReques
         Description(static descriptor => descriptor.AutoTagOverride("Tutorial"));
     }
 
-    // Bounds the persisted key so an authenticated operator cannot bloat the identity row with an oversized key.
-    private const int MaxKeyLength = 128;
-
     public override async Task HandleAsync(SaveTutorialStateRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Key))
-        {
-            AddError(r => r.Key, "Key is required.");
-        }
-        else if (req.Key.Trim().Length > MaxKeyLength)
-        {
-            AddError(r => r.Key, $"Key must be {MaxKeyLength} characters or fewer.");
-        }
-
-        if (!TutorialStateMapper.TryParseStatus(req.Status, out var status))
-        {
-            AddError(r => r.Status, "Status must be 'completed' or 'skipped'.");
-        }
-
-        ThrowIfAnyErrors();
+        // SaveTutorialStateRequestValidator already refused every status the mapper cannot parse, so this reads the
+        // same parse it read rather than a second copy of the rule.
+        _ = TutorialStateMapper.TryParseStatus(req.Status, out var status);
 
         var saved = await _tutorialStateService.SaveEntryAsync(User, req.Key, status, ct);
         if (!saved)

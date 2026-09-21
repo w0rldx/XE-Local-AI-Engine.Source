@@ -66,17 +66,47 @@ public sealed class DevelopmentAttemptHubTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    /// <summary>
+    ///     A missing project or task must say so, not arrive as SignalR's generic invocation error.
+    /// </summary>
+    /// <remarks>
+    ///     The store throws <c>DevelopmentNotFoundException</c> for this miss. Every other subscribing hub translates
+    ///     its own not-found family into a <c>HubException</c> carrying a message; this hub did not, so the client saw
+    ///     the same opaque text for a wrong id as for a defect. Asserting the message is what makes the translation
+    ///     observable — a plain <c>ThrowsAsync&lt;HubException&gt;</c> passes either way.
+    /// </remarks>
     [Test]
-    public async Task SubscribeAsync_WhenProjectDoesNotOwnTask_RejectsSubscription()
+    public async Task SubscribeAsync_WhenProjectDoesNotOwnTask_RejectsSubscriptionWithTheNotFoundMessage()
     {
         var service = Substitute.For<IDevelopmentManagementService>();
         service.GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>())
-               .Returns<Task<DevelopmentTaskAggregate>>(_ => throw new KeyNotFoundException("task is not on project"));
+               .Returns<Task<DevelopmentTaskAggregate>>(_ => throw new DevelopmentNotFoundException("task is not on project"));
         await using var factory = EnabledFactory(service);
         await using var connection = CreateConnection(factory);
         await connection.StartAsync();
 
-        await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
+        var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
+
+        AssertEx.Contains(exception.Message, "was not found");
+    }
+
+    /// <summary>
+    ///     The translation is typed: an unrelated defect must NOT be dressed up as a missing resource.
+    /// </summary>
+    [Test]
+    public async Task SubscribeAsync_WhenTheServiceFaultsForAnotherReason_DoesNotReportItAsNotFound()
+    {
+        var service = Substitute.For<IDevelopmentManagementService>();
+        service.GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>())
+               .Returns<Task<DevelopmentTaskAggregate>>(_ => throw new InvalidOperationException("an unrelated defect"));
+        await using var factory = EnabledFactory(service);
+        await using var connection = CreateConnection(factory);
+        await connection.StartAsync();
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(() => connection.InvokeAsync<DevelopmentAttemptSubscriptionSnapshot>("SubscribeAsync", ProjectId, TaskId, AttemptId));
+
+        AssertEx.False(exception.Message.Contains("was not found", StringComparison.Ordinal),
+            "A defect that is not a missing resource must not be reported as one.");
     }
 
     [Test]

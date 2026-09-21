@@ -5,25 +5,20 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest, SelectLocalModelResponse>
 {
     private readonly ILocalModelAdministrationService _administrationService;
-    private readonly ModelNameValidator _modelNameValidator;
     private readonly IModelTrustResolver _modelTrustResolver;
 
     public SelectLocalModelEndpoint(
         ILocalModelAdministrationService administrationService,
-        IModelTrustResolver modelTrustResolver,
-        ModelNameValidator modelNameValidator)
+        IModelTrustResolver modelTrustResolver)
     {
         ArgumentNullException.ThrowIfNull(administrationService);
-        ArgumentNullException.ThrowIfNull(modelNameValidator);
         ArgumentNullException.ThrowIfNull(modelTrustResolver);
         _administrationService = administrationService;
-        _modelNameValidator = modelNameValidator;
         _modelTrustResolver = modelTrustResolver;
     }
 
@@ -35,11 +30,6 @@ public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest,
 
     public override async Task HandleAsync(SelectLocalModelRequest req, CancellationToken ct)
     {
-        if (!await ValidateModelNameAsync(req.ModelName, ct))
-        {
-            return;
-        }
-
         if (!await ValidateExternalRegistrationAsync(req.ModelName, ct))
         {
             return;
@@ -52,19 +42,6 @@ public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest,
         {
             SelectedModelName = result.SelectedModelName!
         }, ct);
-    }
-
-    private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)
-    {
-        var validationError = _modelNameValidator.GetValidationError(modelName);
-        if (validationError is null)
-        {
-            return true;
-        }
-
-        AddError(validationError);
-        await Send.ErrorsAsync(cancellation: ct);
-        return false;
     }
 
     /// <summary>

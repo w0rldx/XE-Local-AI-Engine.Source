@@ -32,16 +32,9 @@ public sealed class SetModelLaunchArgumentsRequestValidator : Validator<SetModel
         // field it came from, and the cascade stops at the first failing rule, as returning after the first AddError did.
         ClassLevelCascadeMode = CascadeMode.Stop;
 
-        // Decoded FIRST: the bound route value may still carry a literal %2F (see ModelRouteName), whose '%' the
-        // name validator rejects.
-        RuleFor(static request => request.ModelName)
-            .Custom((modelName, context) =>
-            {
-                if (Resolve<ModelNameValidator>().GetValidationError(ModelRouteName.Decode(modelName)) is { } error)
-                {
-                    context.AddFailure(new ValidationFailure(GeneralErrorsField, error));
-                }
-            });
+        // The name arrives in a route segment, so the shared rule decodes it before the grammar runs — the same
+        // decode the handler does, and the reason a body-bound name uses the other form.
+        this.AddRouteBoundModelNameRule(static request => request.ModelName);
 
         RuleFor(static request => request.RawArguments)
             .Custom(static (rawArguments, context) =>
