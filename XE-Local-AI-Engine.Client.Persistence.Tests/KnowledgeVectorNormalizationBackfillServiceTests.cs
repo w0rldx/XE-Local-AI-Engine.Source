@@ -179,11 +179,14 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
     private static async Task<Guid> InsertAsync(SqliteConnection connection, float[] vector)
     {
         var chunkId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
+        await KnowledgeVectorParents.EnsureAsync(connection, chunkId, documentId);
+
         await using var command = connection.CreateCommand();
         command.CommandText =
             "INSERT INTO knowledge_chunk_vectors (chunk_id, document_id, dim, embedding, embedding_model) VALUES ($cid, $did, $dim, $blob, $model);";
         command.Parameters.AddWithValue("$cid", chunkId);
-        command.Parameters.AddWithValue("$did", Guid.NewGuid());
+        command.Parameters.AddWithValue("$did", documentId);
         command.Parameters.AddWithValue("$dim", vector.Length);
         command.Parameters.AddWithValue("$blob", MemoryMarshal.AsBytes<float>(vector).ToArray());
         command.Parameters.AddWithValue("$model", EmbeddingModel);
@@ -218,20 +221,7 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
-        await EnsureForeignKeysOffAsync(connection);
         return connection;
-    }
-
-    private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
-    {
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync();
-        }
-
-        await using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

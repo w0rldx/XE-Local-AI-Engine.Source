@@ -68,7 +68,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var service = CreateIngestionService(context);
             await service.RunAsync(documentId, CancellationToken.None);
         }
@@ -106,7 +105,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         IReadOnlyList<KnowledgeDocumentSummary> documents;
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             documents = await CreateCatalogService(context).ListAsync(CancellationToken.None);
         }
 
@@ -135,7 +133,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         IReadOnlyList<Guid> reset;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             reset = await CreateCatalogService(context).ResetStaleDocumentsToPendingAsync(CancellationToken.None);
         }
 
@@ -158,7 +155,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         IReadOnlyList<Guid> reset;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var options = Options.Create(new KnowledgeBaseOptions());
             var catalog = new KnowledgeDocumentCatalogService(context,
                 CreateOutageProviderResolver(),
@@ -184,7 +180,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         IReadOnlyList<KnowledgeDocumentSummary> documents;
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             documents = await CreateCatalogService(context, KnowledgeEmbeddingVectorMode.Native)
                               .ListAsync(CancellationToken.None);
         }
@@ -427,7 +422,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         IReadOnlyList<KnowledgeDocumentSummary> documents;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var catalogService = new KnowledgeDocumentCatalogService(context,
                 CreateOutageProviderResolver(),
                 new EmbeddingModelResolver(options),
@@ -585,7 +579,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
-        await EnsureForeignKeysOffAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -640,7 +633,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
-        await EnsureForeignKeysOffAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -740,19 +732,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             MaxContextTokens = null,
             Capabilities = []
         };
-    }
-
-    // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not.
-    private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
-    {
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync();
-        }
-
-        await using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

@@ -116,7 +116,7 @@ public sealed class TrainingRunEncryptionTests : IDisposable
         await SeedAsync(databasePath, keyHolder);
 
         // The AAD binds each column to its own run id, so a writer cannot copy one run's freeze onto another row and
-        // have it read back as that run's frozen membership.
+        // have it read back as that run's frozen membership. Foreign keys off models that raw writer, not the node.
         await using (var connection = new SqliteConnection($"Data Source={databasePath};Foreign Keys=False"))
         {
             await connection.OpenAsync();

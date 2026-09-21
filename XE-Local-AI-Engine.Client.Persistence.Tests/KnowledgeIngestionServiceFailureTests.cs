@@ -51,7 +51,6 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var service = CreateService(context);
             await service.RunAsync(documentId, CancellationToken.None);
         }
@@ -126,7 +125,6 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
-        await EnsureForeignKeysOffAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -149,7 +147,6 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
-        await EnsureForeignKeysOffAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT status, failure_reason FROM knowledge_documents WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
@@ -157,20 +154,6 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         _ = await reader.ReadAsync();
         var failureReason = await reader.IsDBNullAsync(1) ? null : reader.GetString(1);
         return (reader.GetString(0), failureReason);
-    }
-
-    // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not,
-    // so every KB test connection is aligned to that runtime mode.
-    private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
-    {
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync();
-        }
-
-        await using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

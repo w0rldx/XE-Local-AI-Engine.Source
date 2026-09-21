@@ -216,6 +216,8 @@ public sealed class ServiceProviderValidationTests
         {
             // The host was never started, so there is nothing to stop.
             await App.DisposeAsync();
+            // Process-global: this host opened its database through the composition root, so no single connection
+            // string is in hand here; the pooled handles have to go before the files below can be deleted.
             SqliteConnection.ClearAllPools();
             TryDelete(_webRoot);
             TryDelete(_nodeDataDirectory);

@@ -234,11 +234,14 @@ inheriting it from a native build: `DesktopBootstrap.EnsureLocalDataConfiguratio
 `ForeignKeys = true` (the configuration value is what the Quartz job store sees, and it resolves its connection by
 name without passing through the pragma applier), and `NodeSqlitePragmas` issues `PRAGMA foreign_keys=ON` on every
 node connection (which is what reaches an Aspire- or operator-supplied string this process did not build). Neither
-layer alone covers both. Read the posture with `PRAGMA foreign_keys`; never quote it from a comment, a fixture or
+layer alone covers both. That pragma does NOT share the degrade-and-continue wrapper the three tuning pragmas
+(`busy_timeout`, `journal_mode`, `synchronous`) use: a failure fails the open, the owning caller disposes the
+connection and retries, and no connection is ever handed back with its posture unchecked. Read the posture with `PRAGMA foreign_keys`; never quote it from a comment, a fixture or
 this file. **Failure prevented:** a whole audit slice scoped on the inverse belief — "the fixtures hide missing
 child deletes" — plus two store bugs that do not exist; and the inverse failure, a fixture pinned to
 `Foreign Keys=False`, which tests a database the node never has. **Authority:** `NodeSqlitePragmasTests`, one test
-per layer plus one through the production path. The per-layer tests exist because a native default masks a deleted
+per layer, one through the production path, and a pair that pins the split — a failing `foreign_keys` propagates on
+both the sync and async paths while a failing tuning pragma still logs a warning and lets the rest apply. The per-layer tests exist because a native default masks a deleted
 setting: the string test PARSES and never opens a connection, and the applier test opens both its connections with
 `Foreign Keys=False` so only the pragma can flip them. Fixture rule: `docs/wiki/17-writing-tests.md`.
 
@@ -247,8 +250,10 @@ the relationship declares `Restrict` — most of the benchmark and training fami
 delete that still has children, so the order is what makes the delete legal at all. Where no foreign key is declared
 (`integration_executions.session_id`; the conversation → work-session and integration links `ConversationFootprintPurge`
 names; the polymorphic `training_work_items.target_id`) nothing but the explicit delete reaches the rows. And where a
-cascade or SET NULL does fire, it promises no ORDER: knowledge chunks go before sections so the
-`knowledge_document_chunks_ad` trigger keeps the external-content FTS index aligned. A declared cascade otherwise does
+cascade or SET NULL does fire, it promises no ORDER: knowledge chunks go before sections because chunk → section is
+SET NULL and would otherwise rewrite rows on their way out. Not for the FTS index — SQLite runs an AFTER DELETE row
+trigger for a row an `ON DELETE CASCADE` removed too (measured on the migrated schema, pinned by a test), so
+`knowledge_document_chunks_ad` keeps `chunk_fts` aligned on the cascade path as well. A declared cascade otherwise does
 the work, so do not write a delete to substitute for one.
 
 ### Running backend tests
@@ -1740,7 +1745,7 @@ registration in `AddNodeModelRuntimeExtensions`.
 
 ### Knowledge base / RAG
 
-- Vectors, chunks and sections cascade from the document and the node DOES enforce it — delete them explicitly anyway, vectors → chunks (FTS trigger) → sections → document → file: the chunk delete is what fires the external-content FTS trigger, and a cascade promises no order. EF graph tests can false-pass.
+- Vectors, chunks and sections cascade from the document and the node DOES enforce it — delete them explicitly anyway, vectors → chunks → sections → document → file: chunk → section is SET NULL, and the purge reads file locations and returns counts a cascade cannot give it. NOT for the FTS index: a cascade-removed chunk fires `knowledge_document_chunks_ad` too (measured). EF graph tests can false-pass.
 - Vector search is managed brute-force cosine by design; sqlite-vec was slower through 100k rows.
 - Ingest/query share one `EmbeddingModelResolver` result. Reset staleness only when `IsConfident`.
 - Vector identity is model + transform + width. Both paths apply `KnowledgeEmbeddingVectorPolicy`; rows, filters, stale checks, and RAM cache use the canonical identity. Rollback: switch to Native, fully reindex, verify no stale docs, then downgrade binary.
@@ -1749,7 +1754,7 @@ registration in `AddNodeModelRuntimeExtensions`.
 - **A pooled (embedding/rerank) forward pass must fit in ONE physical micro-batch.** Emit `-b/-ub = effective context` for Embedding/Reranker only; default 512 is too small for ordinary chunks. llama.cpp clamps to context. The chars/4 estimator remains optimistic for markdown.
 
 
-**Delete/reindex ordering is explicit because the FTS index is external-content, not because of foreign keys:** vectors → chunks (so the FTS sync trigger runs) → sections → document → file. The declared cascades are enforced, but they promise nothing about this order. A test that deletes an attached EF graph can false-pass.
+**Delete/reindex ordering is explicit because chunk → section is SET NULL and the purge needs each row's file location and count — not because of the FTS index:** vectors → chunks → sections → document → file. The FTS trigger fires for a cascade-removed chunk as well (measured on the migrated schema), so alignment is no longer a reason. The declared cascades are enforced, but they promise nothing about this order. A test that deletes an attached EF graph can false-pass.
 
 `EmbeddingModelResolution.IsConfident` gates corpus-wide stale/reset decisions. A transient provider failure must never reinterpret a healthy corpus under a fallback model. Canonical vector identity includes model, transform, and width; the RAM query cache also includes identity + query hash and never persists sensitive query vectors. For vector-mode rollback, set Native, fully reindex, verify no stale documents, **then** deploy an older binary; reversing that order lets older code misread transformed rows.
 

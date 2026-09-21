@@ -42,7 +42,6 @@ public sealed class KnowledgeIndexWriterRevisionTests : IDisposable
         bool written;
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
             var writer = new KnowledgeIndexWriter(context, TimeProvider.System);
             written = await writer.WriteAsync(StaleInput(documentId), CancellationToken.None);
         }
@@ -98,7 +97,6 @@ public sealed class KnowledgeIndexWriterRevisionTests : IDisposable
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
-        await EnsureForeignKeysOffAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -146,17 +144,5 @@ public sealed class KnowledgeIndexWriterRevisionTests : IDisposable
         command.CommandText = "SELECT COUNT(*) FROM knowledge_document_chunks WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
         return Convert.ToInt32(await command.ExecuteScalarAsync());
-    }
-
-    private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
-    {
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync();
-        }
-
-        await using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync();
     }
 }

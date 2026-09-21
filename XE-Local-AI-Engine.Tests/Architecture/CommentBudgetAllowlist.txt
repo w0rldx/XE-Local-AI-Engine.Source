@@ -318,7 +318,7 @@ XE-Local-AI-Engine.Client.Persistence.Tests/Knowledge/RetrievalEval/RetrievalEva
 XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeBlobOrphanSweeperTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeDocumentBlobStoreDedupeTests.cs|run|2
 XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeDocumentBlobStoreDedupeTests.cs|summary|1
-XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeDocumentPurgeServiceTests.cs|run|2
+XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeDocumentPurgeServiceTests.cs|run|1
 XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeDocumentPurgeServiceTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeEmbeddingModelIdentityTests.cs|run|2
 XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeEmbeddingModelIdentityTests.cs|summary|1

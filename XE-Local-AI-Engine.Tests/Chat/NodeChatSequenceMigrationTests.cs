@@ -50,6 +50,7 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
         await migrator.MigrateAsync(previousMigration);
 
         var conversationId = Guid.NewGuid();
+        await InsertConversationAsync(dbContext, conversationId);
         await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 5, createdAtUtc: 100);
         await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 5, createdAtUtc: 101);
         await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 6, createdAtUtc: 102);
@@ -82,6 +83,7 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
         await dbContext.Database.MigrateAsync();
 
         var conversationId = Guid.NewGuid();
+        await InsertConversationAsync(dbContext, conversationId);
         await InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 0, createdAtUtc: 1);
         var conflict = await AssertEx.ThrowsAsync<SqliteException>(() => InsertRawMessageAsync(dbContext, conversationId, Guid.NewGuid(), sequence: 0, createdAtUtc: 2));
         AssertEx.Equal(expected: 2067, conflict.SqliteExtendedErrorCode);
@@ -98,7 +100,9 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
         return services.BuildServiceProvider(true);
     }
 
-    private static async Task InsertRawMessageAsync(NodeChatDbContext dbContext, Guid conversationId, Guid messageId, int sequence, long createdAtUtc)
+    // The messages table declares a conversation parent and the node enforces it, so the duplicate-sequence scenario
+    // is seeded the way production always had it: real messages under a real conversation row.
+    private static async Task InsertConversationAsync(NodeChatDbContext dbContext, Guid conversationId)
     {
         var connection = dbContext.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open)
@@ -106,12 +110,18 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
             await connection.OpenAsync();
         }
 
-        // The node runs with foreign-key enforcement OFF (no PRAGMA foreign_keys=ON on its connection); EF's provider
-        // turns it on by default in tests, so disable it here to seed orphan message rows exactly like production.
-        await using (var pragma = connection.CreateCommand())
+        await using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO conversations (conversation_id, created_at_utc, last_seen_utc, purged) VALUES ($conversation_id, 0, 0, 0);";
+        AddParameter(command, "$conversation_id", conversationId.ToString());
+        _ = await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task InsertRawMessageAsync(NodeChatDbContext dbContext, Guid conversationId, Guid messageId, int sequence, long createdAtUtc)
+    {
+        var connection = dbContext.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
         {
-            pragma.CommandText = "PRAGMA foreign_keys = OFF;";
-            await pragma.ExecuteNonQueryAsync();
+            await connection.OpenAsync();
         }
 
         await using var command = connection.CreateCommand();

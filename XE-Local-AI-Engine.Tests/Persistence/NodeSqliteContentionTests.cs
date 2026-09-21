@@ -25,6 +25,7 @@ public sealed class NodeSqliteContentionTests : IDisposable
 
     public void Dispose()
     {
+        // Process-global: this suite opens several databases under _dir, so there is no one pool to scope to.
         SqliteConnection.ClearAllPools();
         try
         {

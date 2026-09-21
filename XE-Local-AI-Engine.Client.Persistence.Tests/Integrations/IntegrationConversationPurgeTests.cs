@@ -52,8 +52,8 @@ public sealed class IntegrationConversationPurgeTests
             await ConversationFootprintPurge.DeleteAsync(context, purgedConversationId, CancellationToken.None);
         }
 
-        // Raw COUNT(*), not an EF-graph assertion: the node connection runs without PRAGMA foreign_keys, so a
-        // cascade-based delete would false-pass through the change tracker while leaving every child row on disk.
+        // Raw COUNT(*), not an EF-graph assertion: the change tracker reports a removed graph even for rows that are
+        // still on disk, so only a query that goes back to the file can tell the purge from a false pass.
         AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_sessions"));
         AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_executions"));
         AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_execution_events"));

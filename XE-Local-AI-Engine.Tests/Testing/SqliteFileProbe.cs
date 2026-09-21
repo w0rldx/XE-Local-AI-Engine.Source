@@ -18,10 +18,16 @@ using Microsoft.Data.Sqlite;
 /// </summary>
 internal static class SqliteFileProbe
 {
-    /// <summary>Releases pooled handles, then reads the database file's raw bytes.</summary>
+    /// <summary>Releases this database's pooled handles, then reads the database file's raw bytes.</summary>
     public static async Task<byte[]> ReadAllBytesAsync(string databasePath)
     {
-        SqliteConnection.ClearAllPools();
+        // Scoped to THIS database, never the process-global ClearAllPools that closes every parallel sibling's pooled
+        // handles too. Every caller opens the file with this same bare connection string.
+        using (var poolKey = new SqliteConnection($"Data Source={databasePath}"))
+        {
+            SqliteConnection.ClearPool(poolKey);
+        }
+
         return await File.ReadAllBytesAsync(databasePath);
     }
 

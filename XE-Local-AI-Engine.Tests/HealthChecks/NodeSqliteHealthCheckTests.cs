@@ -131,6 +131,7 @@ public sealed class NodeSqliteHealthCheckTests
                 _ = await rollback.ExecuteNonQueryAsync();
             }
 
+            // Process-global: the health check opens its own connections, so their strings are not in hand here.
             SqliteConnection.ClearAllPools();
         }
         finally

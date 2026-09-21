@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
-using System.Data;
 using System.Data.Common;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
@@ -16,8 +15,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     heap. These tests exercise the real BLOB round-trip on the runtime SQLite connection and assert the optimized
 ///     search returns the IDENTICAL ranking (ids, order, scores within 1e-5) as a naive reference cosine — on both the
 ///     cosine path (before the normalization backfill) and the dot-product path (after it), including legacy unnormalized
-///     rows, top-k boundaries, ties, zero vectors, and cancellation. Foreign-key enforcement is OFF at runtime, so orphan
-///     vector rows are a valid minimal fixture here.
+///     rows, top-k boundaries, ties, zero vectors, and cancellation. The node enforces foreign keys, so every vector row is
+///     seeded with the parent document and chunk the schema declares — an orphan vector row is not a shape production
+///     can produce.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ManagedCosineVectorSearchTests : IDisposable
@@ -267,7 +267,6 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         await SeedDeterministicCorpusAsync(databasePath, count: 20, dimension: 8, seed: 3);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
         var search = new ManagedCosineVectorSearch(context, CompleteState());
 
         using var cts = new CancellationTokenSource();
@@ -296,7 +295,6 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     private async Task<IReadOnlyList<VectorSearchHit>> RunSearchAsync(string databasePath, bool normalized, float[] query, int limit)
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        await EnsureForeignKeysOffAsync(context.Database.GetDbConnection());
         var search = new ManagedCosineVectorSearch(context, normalized ? CompleteState() : new KnowledgeVectorNormalizationState());
         return await search.SearchAsync(query,
             EmbeddingModel,
@@ -416,6 +414,8 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
 
     private static async Task InsertVectorAsync(SqliteConnection connection, Guid chunkId, Guid documentId, byte[] embedding, DbTransaction? transaction = null)
     {
+        await KnowledgeVectorParents.EnsureAsync(connection, chunkId, documentId, transaction);
+
         await using var command = connection.CreateCommand();
         if (transaction is not null)
         {
@@ -445,22 +445,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
-        await EnsureForeignKeysOffAsync(connection);
         return connection;
-    }
-
-    // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not,
-    // and an orphan vector row (no parent document/chunk) is a valid minimal fixture only under that runtime mode.
-    private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
-    {
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync();
-        }
-
-        await using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = await command.ExecuteNonQueryAsync();
     }
 
     private string GetDatabasePath(string fileName)

@@ -347,14 +347,9 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
             await store.DeleteProjectAsync(projectId, await CurrentVersionAsync(store, projectId));
         }
 
-        // Foreign keys off is the real node configuration, so nothing catches an orphan for us.
+        // Raw COUNT(*) over every table: an EF-graph assertion would pass on the change tracker alone.
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
-        await using (var pragma = connection.CreateCommand())
-        {
-            pragma.CommandText = "PRAGMA foreign_keys = OFF;";
-            _ = await pragma.ExecuteNonQueryAsync();
-        }
 
         AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_work_items;"));
         AssertEx.Equal(expected: 0L, await CountAsync(connection, "SELECT COUNT(*) FROM benchmark_judge_attempts;"));

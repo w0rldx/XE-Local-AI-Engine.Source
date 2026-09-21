@@ -189,13 +189,11 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
     private ServiceProvider BuildProvider(string databasePath)
     {
         var services = new ServiceCollection();
-        services.AddScoped(_ => CreateContextWithForeignKeysOff(databasePath));
+        services.AddScoped(_ => CreateContext(databasePath));
         return services.BuildServiceProvider();
     }
 
-    // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not, so
-    // every knowledge-base test connection is aligned to that runtime mode.
-    private NodeChatDbContext CreateContextWithForeignKeysOff(string databasePath)
+    private NodeChatDbContext CreateContext(string databasePath)
     {
         var options = new DbContextOptionsBuilder<NodeChatDbContext>()
                       .UseSqlite($"Data Source={databasePath}")
@@ -203,13 +201,7 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
                       .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
                       .Options;
 
-        var context = new NodeChatDbContext(options, _keyHolder);
-        var connection = context.Database.GetDbConnection();
-        connection.Open();
-        using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = command.ExecuteNonQuery();
-        return context;
+        return new NodeChatDbContext(options, _keyHolder);
     }
 
     // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises the sweep

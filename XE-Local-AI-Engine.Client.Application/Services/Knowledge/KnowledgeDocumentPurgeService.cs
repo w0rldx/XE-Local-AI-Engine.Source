@@ -10,10 +10,10 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 ///     child-to-parent order inside one transaction rather than left to the declared cascades.
 /// </summary>
 /// <remarks>
-///     The chunk delete is what fires the FTS sync trigger (and whether a cascade would fire it is unmeasured), and
-///     chunks must precede sections because that relationship is SET NULL. The chunk delete keeps the external-content
-///     <c>chunk_fts</c> index aligned; the vectors are deleted first because they reference the chunk rows. Only after
-///     the rows commit are the on-disk encrypted bytes removed, with the path derived from the document id plus its
+///     Chunks must precede sections because that relationship is SET NULL, and the method reads each document's file
+///     location and returns counts, which a cascade cannot give it. FTS alignment is not a reason: a cascade-removed
+///     chunk fires the sync trigger too (pinned by a test). The vectors go first because they reference the chunk rows. Only
+///     after the rows commit are the on-disk encrypted bytes removed, with the path derived from the document id plus its
 ///     stored extension — never from the display-only <c>storage_path</c> column.
 /// </remarks>
 public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeService
@@ -47,8 +47,8 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
             return false;
         }
 
-        // FK cascade is OFF, so delete every dependent row explicitly, child-to-parent, in one transaction:
-        // vectors → chunks (fires the FTS delete trigger) → sections → the document row.
+        // Explicit, child-to-parent, in one transaction: vectors → chunks → sections → the document row. The cascade
+        // would remove them, but not in an order SET NULL survives, and not with the counts this method returns.
         await using (var vectorsCommand = connection.CreateCommand())
         {
             vectorsCommand.Transaction = transaction;

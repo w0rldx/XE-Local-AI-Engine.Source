@@ -6,10 +6,9 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 /// </summary>
 /// <remarks>
 ///     Vectors, chunks and sections declare a cascade the node connection does enforce, but the deletes stay explicit and ordered
-///     (vectors → chunks → sections → document row) in one transaction, for two reasons the schema cannot cover. The chunk delete
-///     is what fires <c>knowledge_document_chunks_ad</c>, the AFTER DELETE trigger keeping <c>chunk_fts</c> aligned — whether SQLite
-///     fires a row trigger for a cascade-removed row is UNMEASURED here, the failure mode being a silently stale search index, not
-///     an error. And chunk → section is SET NULL, so chunks precede sections or the rows get rewritten on their way out.
+///     (vectors → chunks → sections → document row) in one transaction. Not for the FTS index: SQLite fires
+///     <c>knowledge_document_chunks_ad</c> for a cascade-removed chunk too (pinned by a test). Chunk → section is SET NULL, so
+///     chunks precede sections or the rows get rewritten on their way out, and the method needs file locations and counts.
 /// </remarks>
 public interface IKnowledgeDocumentPurgeService
 {

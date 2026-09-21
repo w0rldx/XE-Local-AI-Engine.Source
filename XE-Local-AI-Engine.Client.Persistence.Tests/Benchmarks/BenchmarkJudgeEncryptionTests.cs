@@ -245,7 +245,8 @@ public sealed class BenchmarkJudgeEncryptionTests : IDisposable
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
 
-        // Substituting ciphertext deliberately breaks referential integrity; the AEAD tag is what must catch it.
+        // Foreign keys off for this rewrite only: it models a raw writer outside the node moving ciphertext between
+        // rows, which the declared references would refuse before the AEAD tag — the thing under test — ever ran.
         await using (var pragma = connection.CreateCommand())
         {
             pragma.CommandText = "PRAGMA foreign_keys = OFF;";

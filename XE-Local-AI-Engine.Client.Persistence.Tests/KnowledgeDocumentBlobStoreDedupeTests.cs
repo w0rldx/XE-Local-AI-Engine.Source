@@ -456,7 +456,7 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
     private ServiceProvider BuildProvider(string databasePath)
     {
         var services = new ServiceCollection();
-        services.AddScoped(_ => CreateContextWithForeignKeysOff(databasePath));
+        services.AddScoped(_ => CreateContext(databasePath));
         return services.BuildServiceProvider();
     }
 
@@ -471,19 +471,6 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
                       .Options;
 
         return new NodeChatDbContext(options, _keyHolder);
-    }
-
-    // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not,
-    // so every KB test connection is aligned to that runtime mode even where this store's inserts have no FK to trip.
-    private NodeChatDbContext CreateContextWithForeignKeysOff(string databasePath)
-    {
-        var context = CreateContext(databasePath);
-        var connection = context.Database.GetDbConnection();
-        connection.Open();
-        using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA foreign_keys = OFF;";
-        _ = command.ExecuteNonQuery();
-        return context;
     }
 
     // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises the blob

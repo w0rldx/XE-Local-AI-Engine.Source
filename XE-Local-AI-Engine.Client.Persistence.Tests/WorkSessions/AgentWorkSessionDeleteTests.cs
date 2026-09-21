@@ -25,8 +25,8 @@ public sealed class AgentWorkSessionDeleteTests
             AssertEx.True(removed >= 6, $"A populated session should remove at least one row per table; removed {removed}.");
         }
 
-        // Raw COUNT(*), not an EF-graph assertion: the connection runs without PRAGMA foreign_keys, so a cascade-based
-        // delete would false-pass through the change tracker while leaving every child row on disk.
+        // Raw COUNT(*), not an EF-graph assertion: the change tracker reports a removed graph even for rows that are
+        // still on disk, so only a query that goes back to the file can tell the delete from a false pass.
         foreach (var (table, column) in Tables)
         {
             AssertEx.Equal(expected: 0L, await fixture.RawCountAsync(table, column, doomedId), $"{table} must be empty for the deleted session.");
