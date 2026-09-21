@@ -3,26 +3,37 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 using System.Globalization;
 
 /// <summary>
-///     Where a run's artifacts live on the worker host, and how a run directory name maps back to the instant the
-///     node minted it. Shared by the retention sweep and the run list, which must agree on both.
+///     Where the agent-home layout and a run's artifacts live, and how a run directory name maps back to the
+///     instant it was minted. The only place either root is derived: a second spelling of <c>agent-home</c> or
+///     <c>runs</c> is a divergence nothing catches.
 /// </summary>
 internal static class AgentHomeRunPaths
 {
+    /// <summary>The directory the layout root always ends with — <c>WipeAgentHome</c>'s guard reads this name.</summary>
+    public const string AgentHomeDirectoryName = "agent-home";
+
+    /// <summary>The runs directory inside the agent-home root.</summary>
+    public const string RunsDirectoryName = "runs";
+
     private const string DefaultRootDirectoryName = "agent-home-state";
-    private const string AgentHomeDirectoryName = "agent-home";
-    private const string RunsDirectoryName = "runs";
 
     /// <summary>The prefix <c>AgentHomeService.CreateRunId</c> stamps on every run id.</summary>
     private const string RunIdPrefix = "run-";
 
-    /// <summary>The absolute <c>&lt;root&gt;/agent-home/runs</c> directory for the configured options.</summary>
-    public static string ResolveRunsRoot(AgentHomeOptions options, string dataDirectoryRoot)
+    /// <summary>The absolute <c>&lt;root&gt;/agent-home</c> layout root for the configured options.</summary>
+    public static string ResolveAgentHomeRoot(AgentHomeOptions options, string dataDirectoryRoot)
     {
         ArgumentNullException.ThrowIfNull(options);
         var baseRoot = string.IsNullOrWhiteSpace(options.RootPath)
             ? Path.Combine(dataDirectoryRoot, DefaultRootDirectoryName)
             : options.RootPath;
-        return Path.Combine(baseRoot, AgentHomeDirectoryName, RunsDirectoryName);
+        return Path.Combine(baseRoot, AgentHomeDirectoryName);
+    }
+
+    /// <summary>The absolute <c>&lt;root&gt;/agent-home/runs</c> directory for the configured options.</summary>
+    public static string ResolveRunsRoot(AgentHomeOptions options, string dataDirectoryRoot)
+    {
+        return Path.Combine(ResolveAgentHomeRoot(options, dataDirectoryRoot), RunsDirectoryName);
     }
 
     /// <summary>

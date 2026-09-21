@@ -79,12 +79,13 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             ["diff", "--cached", "--no-textconv", "--no-ext-diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."],
             cancellationToken);
 
-        // Name-status summary used to build changed-files.json.
+        // Name-status summary used to build changed-files.json. -z is load-bearing: without it git C-quotes any
+        // path holding a quote, a backslash, a tab or a newline, and a tab-delimited parse then cuts it in half.
         var statusResult = await RunGitAsync(handle,
             request,
             $"{request.RunId}-patch-status",
             commandTimeout,
-            ["diff", "--cached", "--no-textconv", "--no-ext-diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."],
+            ["diff", "--cached", "--no-textconv", "--no-ext-diff", "--name-status", "-z", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."],
             cancellationToken);
 
         if (!IsSuccessful(stageResult) || !IsSuccessful(patchResult) || !IsSuccessful(statusResult))
@@ -410,14 +411,62 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
     /// <summary>Every path the name-status output names, destination and rename source alike.</summary>
     private static HashSet<string> ExportedPaths(string nameStatusOutput)
     {
-        return new HashSet<string>(nameStatusOutput
-                                   .Split('\n')
-                                   .Select(static line => line.TrimEnd('\r'))
-                                   .Where(static line => line.Length > 0)
-                                   .Select(static line => line.Split('\t'))
-                                   .Where(static fields => fields.Length >= 2)
-                                   .SelectMany(static fields => fields.Skip(count: 1)),
-            StringComparer.Ordinal);
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var record in ParseNameStatus(nameStatusOutput))
+        {
+            paths.Add(record.Path);
+            if (record.SourcePath is not null)
+            {
+                paths.Add(record.SourcePath);
+            }
+        }
+
+        return paths;
+    }
+
+    /// <summary>
+    ///     Walks the NUL-separated <c>--name-status -z</c> stream positionally: status, path, and for the rename
+    ///     and copy statuses a source path ahead of the destination.
+    /// </summary>
+    /// <remarks>
+    ///     The only delimiter is the NUL because that is the point of <c>-z</c>: a path comes back verbatim and may
+    ///     hold a double quote, a backslash, a tab or a newline. Splitting on a tab or a newline instead cuts such a
+    ///     path in half or leaves git's C-quoting in the name, and the entry then fails its alias split and is
+    ///     dropped from <c>changed-files.json</c> — a genuinely changed file missing from the run's review surface.
+    /// </remarks>
+    private static List<NameStatusRecord> ParseNameStatus(string nameStatusOutput)
+    {
+        var records = new List<NameStatusRecord>();
+        var tokens = nameStatusOutput.Split('\0');
+        var index = 0;
+        while (index < tokens.Length)
+        {
+            var status = tokens[index++];
+            if (status.Length == 0)
+            {
+                // The stream is NUL-TERMINATED, so the split always ends on an empty token.
+                continue;
+            }
+
+            if (index >= tokens.Length)
+            {
+                // A trailing status with no path names no file; there is nothing to report about it.
+                break;
+            }
+
+            var path = tokens[index++];
+            string? sourcePath = null;
+            if (status[0] is 'R' or 'C' && index < tokens.Length)
+            {
+                // The destination is the changed file; the source is still a path the run touched.
+                sourcePath = path;
+                path = tokens[index++];
+            }
+
+            records.Add(new NameStatusRecord(status, path, sourcePath));
+        }
+
+        return records;
     }
 
     private static IEnumerable<string> SplitNul(string output)
@@ -504,26 +553,15 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
                         .GroupBy(folder => folder.Alias, StringComparer.Ordinal)
                         .ToDictionary(group => group.Key, group => group.First().Id.ToString(), StringComparer.Ordinal);
 
-        return nameStatusOutput
-               .Split('\n')
-               .Select(line => line.TrimEnd('\r'))
-               .Where(line => line.Length > 0)
-               .Select(line => TryMapEntry(line, aliasToId))
+        return ParseNameStatus(nameStatusOutput)
+               .Select(record => TryMapEntry(record, aliasToId))
                .OfType<ChangedFileEntry>()
                .ToList();
     }
 
-    private ChangedFileEntry? TryMapEntry(string line, IReadOnlyDictionary<string, string> aliasToId)
+    private ChangedFileEntry? TryMapEntry(NameStatusRecord record, IReadOnlyDictionary<string, string> aliasToId)
     {
-        var fields = line.Split('\t');
-        if (fields.Length < 2)
-        {
-            return null;
-        }
-
-        var status = fields[0];
-        var path = ResolveChangedPath(status, fields);
-
+        var path = record.Path;
         var separator = path.IndexOf(value: '/', StringComparison.Ordinal);
         if (separator <= 0)
         {
@@ -544,19 +582,8 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             SelectedFolderId = folderId,
             Alias = alias,
             RelativePath = relativePath,
-            ChangeType = MapChangeType(status)
+            ChangeType = MapChangeType(record.Status)
         };
-    }
-
-    private static string ResolveChangedPath(string status, string[] fields)
-    {
-        // Rename/copy lines carry "<status>\t<old>\t<new>"; the destination (new) path is the changed file.
-        if ((status.StartsWith('R') || status.StartsWith('C')) && fields.Length >= 3)
-        {
-            return fields[2];
-        }
-
-        return fields[1];
     }
 
     private static string MapChangeType(string status)
@@ -609,4 +636,10 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             ChangedFilesRelativePath = null
         };
     }
+
+    /// <summary>
+    ///     One <c>--name-status -z</c> record: the status letters, the path the change lands on, and the path a
+    ///     rename or copy moved it from.
+    /// </summary>
+    private readonly record struct NameStatusRecord(string Status, string Path, string? SourcePath);
 }

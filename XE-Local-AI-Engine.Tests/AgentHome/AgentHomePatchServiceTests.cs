@@ -28,6 +28,20 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     /// <summary>The written paths the classification test leaves out of its diff, in the order the export asks about them.</summary>
     private static readonly string[] MissingPaths = ["repo-01/hidden.txt", "repo-01/gone.tmp", "repo-01/same.cs", "repo-01/unstaged.txt", "repo-01/assumed.cs"];
 
+    /// <summary>
+    ///     The path shapes git C-quotes in the tab-delimited <c>--name-status</c> format and emits verbatim under
+    ///     <c>-z</c>, each paired with the folder-relative name the entry must carry once the alias is stripped.
+    /// </summary>
+    private static readonly (string WorkspacePath, string RelativePath)[] QuotablePaths =
+    [
+        ("repo-01/say \"hi\".txt", "say \"hi\".txt"),
+        ("repo-01/back\\slash.txt", "back\\slash.txt"),
+        ("repo-01/tab\there.txt", "tab\there.txt"),
+        ("repo-01/new\nline.txt", "new\nline.txt"),
+        ("repo-01/grüße-日本.txt", "grüße-日本.txt"),
+        ("repo-01/ padded .txt", " padded .txt")
+    ];
+
     /// <summary>One patch carrying every block shape the line walk has to tell apart.</summary>
     private const string MixedShapePatch = """
         diff --git a/repo-01/src/App.cs b/repo-01/src/App.cs
@@ -93,7 +107,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\trepo-01/src/App.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("M", "repo-01/src/App.cs"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
         var service = CreateService(provider);
 
@@ -105,9 +119,10 @@ public sealed class AgentHomePatchServiceTests : IDisposable
                                                  && command.WorkingDirectory == "/agent-home/workspace/selected"),
             "the patch diff runs with --binary, the hardened -c flags, and the workspace working directory");
         AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("--name-status")
+                                                 && command.Arguments.Contains("-z")
                                                  && HasHardenedFlags(command.Arguments)
                                                  && command.WorkingDirectory == "/agent-home/workspace/selected"),
-            "the name-status diff runs with the hardened -c flags and the workspace working directory");
+            "the name-status diff runs with -z, the hardened -c flags and the workspace working directory");
     }
 
     /// <summary>
@@ -120,7 +135,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "A\trepo-01/docs/notes.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("A", "repo-01/docs/notes.md"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
         var service = CreateService(provider);
 
@@ -165,12 +180,11 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
-        var nameStatus = string.Join(separator: '\n',
-            "M\trepo-01/src/Program.cs",
-            "A\trepo-01/src/New.cs",
-            "D\trepo-01/old/Gone.cs",
-            "R100\trepo-01/a.txt\trepo-01/b.txt",
-            "M\trepo-02/lib/X.cs");
+        var nameStatus = NameStatusZ("M", "repo-01/src/Program.cs",
+            "A", "repo-01/src/New.cs",
+            "D", "repo-01/old/Gone.cs",
+            "R100", "repo-01/a.txt", "repo-01/b.txt",
+            "M", "repo-02/lib/X.cs");
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatus);
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/repo-01/src/Program.cs b/repo-01/src/Program.cs\n");
         var service = CreateService(provider);
@@ -209,7 +223,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\trepo-01/src/App.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("M", "repo-01/src/App.cs"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, new string(c: 'x', count: 4096));
         var service = CreateService(provider, maxPatchBytes: 16);
 
@@ -268,10 +282,9 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
-        var nameStatus = string.Join(separator: '\n',
-            "M\trepo-01/keep.cs", // mapped
-            "M\tunknown-alias/skip.cs", // alias not in the prepared workspace → skipped
-            "M\trootfile.txt"); // no alias segment → skipped
+        var nameStatus = NameStatusZ("M", "repo-01/keep.cs", // mapped
+            "M", "unknown-alias/skip.cs", // alias not in the prepared workspace → skipped
+            "M", "rootfile.txt"); // no alias segment → skipped
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatus);
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/repo-01/keep.cs b/repo-01/keep.cs\n");
         var service = CreateService(provider);
@@ -296,12 +309,11 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
-        var nameStatus = string.Join(separator: '\n',
-            "M\trepo-01/src/App.cs",
-            "R100\trepo-01/old.txt\trepo-01/new.txt",
-            "A\trepo-01/data.bin",
-            "A\trepo-01/empty.txt",
-            "D\trepo-01/gone.txt");
+        var nameStatus = NameStatusZ("M", "repo-01/src/App.cs",
+            "R100", "repo-01/old.txt", "repo-01/new.txt",
+            "A", "repo-01/data.bin",
+            "A", "repo-01/empty.txt",
+            "D", "repo-01/gone.txt");
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatus);
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, MixedShapePatch);
         var service = CreateService(provider);
@@ -317,7 +329,9 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\trepo-01/src/App.cs\nR100\trepo-01/old.txt\trepo-01/new.txt\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus,
+            exitCode: 0,
+            NameStatusZ("M", "repo-01/src/App.cs", "R100", "repo-01/old.txt", "repo-01/new.txt"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
         var service = CreateService(provider);
 
@@ -339,7 +353,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\trepo-01/kept.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("M", "repo-01/kept.cs"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
         provider.RegisterCommand(GitDiffCommandKeys.CheckIgnore, exitCode: 0, "repo-01/hidden.txt\0");
         provider.RegisterCommand(GitDiffCommandKeys.LsFiles(MissingPaths),
@@ -378,7 +392,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\trepo-01/kept.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("M", "repo-01/kept.cs"));
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
         provider.RegisterCommand(GitDiffCommandKeys.CheckIgnore, exitCode: 128, string.Empty, "fatal: pathspec is in submodule");
         var service = CreateService(provider);
@@ -391,6 +405,106 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         AssertEx.Equal(expected: 0, export.WrittenGap.IgnoredCount);
         AssertEx.Equal(expected: 1, export.ChangedFileCount, "a classification that failed must not fail the export");
         AssertEx.True(File.Exists(Path.Combine(runDir, "patches", "changes.patch")), "the patch is still written");
+    }
+
+    /// <summary>
+    ///     Such a path has to reach <c>TryMapEntry</c> whole and unquoted: C-quoted or cut in half by a tab split
+    ///     it fails its alias parse, and a genuinely changed file goes missing from the run's review surface.
+    /// </summary>
+    [Test]
+    public async Task ExportPatchAsync_KeepsChangedPathsGitWouldCQuote()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+
+        string[] modifications = [.. QuotablePaths.SelectMany(static entry => new[] { "M", entry.WorkspacePath })];
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus,
+            exitCode: 0,
+            NameStatusZ([.. modifications, "R100", "repo-01/plain.txt", "repo-01/re\"named\".txt"]));
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        var service = CreateService(provider);
+
+        var repo01 = Folder("repo-01");
+        var runDir = NewTempDir();
+        var export = await service.ExportPatchAsync(handle, Request("run-quoted", runDir, repo01));
+
+        AssertEx.Equal(QuotablePaths.Length + 1, export.ChangedFileCount, "no quotable path is dropped from the export");
+
+        var entries = JsonSerializer.Deserialize<ChangedFileEntry[]>(await File.ReadAllTextAsync(Path.Combine(runDir, "patches", "changed-files.json")),
+            JsonOptions)!;
+
+        foreach (var (_, relativePath) in QuotablePaths)
+        {
+            AssertEntry(entries, repo01.Id.ToString(), "repo-01", relativePath, "modified");
+        }
+
+        AssertEntry(entries, repo01.Id.ToString(), "repo-01", "re\"named\".txt", "renamed");
+    }
+
+    /// <summary>
+    ///     <c>T</c> and <c>U</c> share the two-token shape of <c>M</c>/<c>A</c>/<c>D</c>, so the change type each
+    ///     maps to is pinned rather than inferred from the branch they share.
+    /// </summary>
+    [Test]
+    public async Task ExportPatchAsync_MapsTypechangeAndUnmergedRecords()
+    {
+        var repo01 = Folder("repo-01");
+
+        var entries = await ExportChangedFilesAsync("run-tu",
+            NameStatusZ("T", "repo-01/became-a-link", "U", "repo-01/conflicted.cs", "M", "repo-01/plain.cs"),
+            repo01);
+
+        AssertEx.Equal(expected: 3, entries.Length);
+        AssertEntry(entries, repo01.Id.ToString(), "repo-01", "became-a-link", "typechanged");
+        AssertEntry(entries, repo01.Id.ToString(), "repo-01", "conflicted.cs", "unmerged");
+        AssertEntry(entries, repo01.Id.ToString(), "repo-01", "plain.cs", "modified");
+    }
+
+    /// <summary>
+    ///     A cut-off stream must not throw and must not consume the tokens of the records that did arrive. Both
+    ///     shapes are pinned at the END of the stream, the only place a cut lands.
+    /// </summary>
+    [Test]
+    public async Task ExportPatchAsync_WithATruncatedNameStatusTail_KeepsTheWholeRecordsAndDropsTheRest()
+    {
+        var repo01 = Folder("repo-01");
+
+        var danglingStatus = await ExportChangedFilesAsync("run-trunc-status",
+            NameStatusZ("M", "repo-01/good.cs") + "D",
+            repo01);
+
+        AssertEx.Equal(expected: 1, danglingStatus.Length, "a status with no path names no file, and takes no other record's path");
+        AssertEntry(danglingStatus, repo01.Id.ToString(), "repo-01", "good.cs", "modified");
+
+        var renameWithoutDestination = await ExportChangedFilesAsync("run-trunc-rename",
+            NameStatusZ("M", "repo-01/good.cs", "R100", "repo-01/only.txt"),
+            repo01);
+
+        AssertEx.Equal(expected: 1, renameWithoutDestination.Length, "a rename missing its destination is dropped, not paired with the record before it");
+        AssertEntry(renameWithoutDestination, repo01.Id.ToString(), "repo-01", "good.cs", "modified");
+    }
+
+    /// <summary>
+    ///     The reconciliation reads the same stream: a quotable written path the diff DOES name has to be found in
+    ///     the exported set, or <c>ls-files</c> labels it "unchanged" — a false gap over a file the patch carries.
+    /// </summary>
+    [Test]
+    public async Task ExportPatchAsync_WhenAQuotableWrittenPathIsInTheDiff_ReportsNoGap()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+
+        var written = QuotablePaths[0].WorkspacePath;
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, NameStatusZ("M", written));
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+        var service = CreateService(provider);
+
+        var export = await service.ExportPatchAsync(handle, Request("run-quoted-gap", NewTempDir(), [written], Folder("repo-01")));
+
+        AssertEx.Equal(expected: 0, export.WrittenGap.Total, "the diff names this path, so it is exported and not a gap");
+        AssertEx.Equal(expected: 0, export.WrittenGap.UnchangedCount, "a real export must never be reported as an unchanged file");
+        AssertEx.False(provider.ExecutedCommands.Any(command => command.Arguments.Contains("ls-files")),
+            "a run with no gap pays for no classification commands");
     }
 
     /// <summary>
@@ -414,6 +528,30 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         AssertEx.Equal(expected: 0, export.ChangedFileCount);
         AssertEx.Equal(expected: 1, export.WrittenGap.UnexplainedCount,
             "a write that reached neither the index nor the diff is exactly the silence this reconciliation ends");
+    }
+
+    /// <summary>
+    ///     The NUL-terminated stream <c>git diff --name-status -z</c> emits: every field its own token, each one
+    ///     closed by a NUL. Status and path are separate tokens — under <c>-z</c> there is no tab between them.
+    /// </summary>
+    private static string NameStatusZ(params string[] fields)
+    {
+        return string.Concat(fields.Select(static field => field + '\0'));
+    }
+
+    /// <summary>Runs one export over a scripted name-status stream and reads back the entries it wrote.</summary>
+    private async Task<ChangedFileEntry[]> ExportChangedFilesAsync(string runId, string nameStatusOutput, ResolvedSelectedFolder folder)
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatusOutput);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
+
+        var runDir = NewTempDir();
+        await CreateService(provider).ExportPatchAsync(handle, Request(runId, runDir, folder));
+
+        return JsonSerializer.Deserialize<ChangedFileEntry[]>(await File.ReadAllTextAsync(Path.Combine(runDir, "patches", "changed-files.json")),
+            JsonOptions)!;
     }
 
     private static void AssertEntry(ChangedFileEntry[] entries, string folderId, string alias, string relativePath, string changeType)

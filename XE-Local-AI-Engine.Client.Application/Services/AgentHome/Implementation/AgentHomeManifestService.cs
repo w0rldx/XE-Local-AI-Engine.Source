@@ -18,8 +18,6 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </remarks>
 internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDisposable
 {
-    private const string AgentHomeDirectoryName = "agent-home";
-    private const string DefaultRootDirectoryName = "agent-home-state";
     private const string ManifestFileName = "manifest.json";
     private const string PolicyFileName = "policy.json";
     private const string ReadmeFileName = "README.agent-home.md";
@@ -89,7 +87,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
 
     private async Task<AgentHomeLayout> InitializeCoreAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken)
     {
-        var agentHomeRoot = ResolveAgentHomeRoot();
+        var agentHomeRoot = AgentHomeRunPaths.ResolveAgentHomeRoot(_options, _dataDirectoryRoot);
         Directory.CreateDirectory(agentHomeRoot);
 
         var existing = await TryReadManifestAsync(agentHomeRoot, cancellationToken);
@@ -185,14 +183,6 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         }
 
         WipeAgentHome(agentHomeRoot);
-    }
-
-    private string ResolveAgentHomeRoot()
-    {
-        var baseRoot = string.IsNullOrWhiteSpace(_options.RootPath)
-            ? Path.Combine(_dataDirectoryRoot, DefaultRootDirectoryName)
-            : _options.RootPath;
-        return Path.Combine(baseRoot, AgentHomeDirectoryName);
     }
 
     private bool IsStale(AgentHomeManifest manifest)
@@ -357,7 +347,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
 
     private static void WipeAgentHome(string agentHomeRoot)
     {
-        if (!agentHomeRoot.EndsWith(AgentHomeDirectoryName, StringComparison.Ordinal))
+        if (!agentHomeRoot.EndsWith(AgentHomeRunPaths.AgentHomeDirectoryName, StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"Refusing to wipe a path that is not an agent-home root: '{agentHomeRoot}'.");
         }

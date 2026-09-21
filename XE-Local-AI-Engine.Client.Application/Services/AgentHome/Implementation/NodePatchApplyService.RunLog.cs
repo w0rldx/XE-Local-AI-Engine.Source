@@ -38,7 +38,7 @@ internal sealed partial class NodePatchApplyService
         // surface after a successful host mutation. A caller-token cancellation propagates from the caller's own await.
         try
         {
-            var logDirectory = Path.Combine(ResolveAgentHomeRoot(), RunsDirectoryName, runId, "logs");
+            var logDirectory = Path.Combine(ResolveRunDirectory(runId), "logs");
             if (!Directory.Exists(logDirectory))
             {
                 return;

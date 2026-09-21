@@ -25,10 +25,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 internal sealed partial class NodePatchApplyService : INodePatchApplyService
 {
     private const string PatchFileName = "changes.patch";
-    private const string RunsDirectoryName = "runs";
     private const string PatchesDirectoryName = "patches";
-    private const string DefaultRootDirectoryName = "agent-home-state";
-    private const string AgentHomeDirectoryName = "agent-home";
     private const string DiffHeaderPrefix = "diff --git ";
     private const string ProviderName = "host-patch-apply";
 
@@ -364,7 +361,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         }
 
         // Resolve the patch path and gate on changes.patch presence (never changed-files.json).
-        var patchPath = Path.Combine(ResolveAgentHomeRoot(), RunsDirectoryName, request.RunId, PatchesDirectoryName, PatchFileName);
+        var patchPath = Path.Combine(ResolveRunDirectory(request.RunId), PatchesDirectoryName, PatchFileName);
         var fileInfo = new FileInfo(patchPath);
         if (!fileInfo.Exists)
         {
@@ -628,12 +625,9 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         return !string.IsNullOrEmpty(runId) && RunIdRegex().IsMatch(runId);
     }
 
-    private string ResolveAgentHomeRoot()
+    private string ResolveRunDirectory(string runId)
     {
-        var baseRoot = string.IsNullOrWhiteSpace(_options.RootPath)
-            ? Path.Combine(_dataDirectoryRoot, DefaultRootDirectoryName)
-            : _options.RootPath;
-        return Path.Combine(baseRoot, AgentHomeDirectoryName);
+        return Path.Combine(AgentHomeRunPaths.ResolveRunsRoot(_options, _dataDirectoryRoot), runId);
     }
 
     private static string Redact(string text, string resolvedRoot)

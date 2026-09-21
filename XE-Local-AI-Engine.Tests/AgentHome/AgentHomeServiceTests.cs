@@ -209,7 +209,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
         // The fake has no real git, so script the two diff commands: one changed file and a small patch body.
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\tselected-project/README.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\0selected-project/README.md\0");
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
 
         using var harness = CreateHarness(clock, provider, resolver);
@@ -613,7 +613,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         // Script the diff commands so a patch WOULD export if the gate let it; AllowedActions omits export_patch, so it
         // must be skipped despite a real baseline.
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\tselected-project/README.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\0selected-project/README.md\0");
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
 
         using var harness = CreateHarness(clock, provider, resolver);

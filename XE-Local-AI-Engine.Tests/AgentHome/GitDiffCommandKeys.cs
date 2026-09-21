@@ -17,7 +17,7 @@ internal static class GitDiffCommandKeys
 
     public static string PatchDiff => CommandKey(AgentHomeGit.WorkspaceArguments("diff", "--cached", "--no-textconv", "--no-ext-diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."));
 
-    public static string NameStatus => CommandKey(AgentHomeGit.WorkspaceArguments("diff", "--cached", "--no-textconv", "--no-ext-diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."));
+    public static string NameStatus => CommandKey(AgentHomeGit.WorkspaceArguments("diff", "--cached", "--no-textconv", "--no-ext-diff", "--name-status", "-z", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."));
 
     public static string CheckIgnore => CommandKey(AgentHomeGit.WorkspaceArguments("check-ignore", "-z", "--stdin"));
 

@@ -381,7 +381,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         // Re-check cancellation before touching the host filesystem so an early cancel leaves no orphaned run dir.
         cancellationToken.ThrowIfCancellationRequested();
-        var runDirectory = Path.Combine(request.Prepared.Layout.RootPath, "runs", runId);
+        var runDirectory = Path.Combine(request.Prepared.Layout.RootPath, AgentHomeRunPaths.RunsDirectoryName, runId);
         var logDirectory = Path.Combine(runDirectory, "logs");
         Directory.CreateDirectory(logDirectory);
 

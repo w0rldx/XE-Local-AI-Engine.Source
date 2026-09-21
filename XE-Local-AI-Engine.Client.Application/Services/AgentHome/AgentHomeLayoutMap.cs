@@ -31,6 +31,8 @@ internal static class AgentHomeLayoutMap
         Path.Combine("artifacts", "screenshots"),
         "patches",
         "logs",
-        "runs"
+
+        // The same directory AgentHomeRunPaths.ResolveRunsRoot derives; created empty here, filled per run.
+        AgentHomeRunPaths.RunsDirectoryName
     ];
 }
