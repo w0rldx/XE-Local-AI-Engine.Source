@@ -41,28 +41,6 @@ public sealed class CreateImageJobEndpoint : Endpoint<CreateImageJobRequest, Ima
 
     public override async Task HandleAsync(CreateImageJobRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.ModelName))
-        {
-            AddError("A model name is required.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(req.Prompt))
-        {
-            AddError("A prompt is required.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
-        // The seed rides the wire as a precision-safe string; reject a non-integer value with a 400 before enqueue.
-        if (!SeedValue.TryParse(req.Seed, out _, out var seedError))
-        {
-            AddError(seedError!);
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
         Guid jobId;
         try
         {

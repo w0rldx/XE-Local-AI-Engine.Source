@@ -35,30 +35,13 @@ public sealed class SearchKnowledgeEndpoint : Endpoint<SearchKnowledgeRequest, S
 
     public override async Task HandleAsync(SearchKnowledgeRequest req, CancellationToken ct)
     {
-        var validation = KnowledgeQueryLimits.ValidateAndNormalize(req.Query, out var normalizedQuery);
-        if (validation == KnowledgeQueryValidation.Empty)
-        {
-            AddError("A search query is required.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
-        if (validation == KnowledgeQueryValidation.TooLong)
-        {
-            AddError($"The search query must be {KnowledgeQueryLimits.MaxQueryLength} characters or fewer.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
+        // The validator refused an empty, oversized or unusable value already; both helpers are pure, so they are
+        // re-run here for the normalized forms the search takes.
+        _ = KnowledgeQueryLimits.ValidateAndNormalize(req.Query, out var normalizedQuery);
+        _ = KnowledgeCollectionScope.TryNormalize(req.CollectionId, out var collectionId);
 
         var limit = req.Limit <= 0 ? DefaultLimit : Math.Clamp(req.Limit, MinLimit, MaxLimit);
-        if (!KnowledgeCollectionScope.TryNormalize(req.CollectionId, out var collectionId))
-        {
-            AddError("The collection id is invalid.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
-        var request = new KnowledgeSearchRequest { Query = normalizedQuery, Limit = limit, DocumentId = req.DocumentId, ExpandNeighbors = req.ExpandNeighbors, CollectionId = collectionId };
+        var request = new KnowledgeSearchRequest { Query = normalizedQuery, Limit = limit, DocumentId = req.DocumentId, ExpandNeighbors = req.ExpandNeighbors, CollectionId = collectionId! };
         var result = await _searchService.SearchAsync(request, ct);
 
         await Send.OkAsync(new SearchKnowledgeResponse

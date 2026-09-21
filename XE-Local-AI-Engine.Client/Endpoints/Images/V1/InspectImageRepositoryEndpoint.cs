@@ -38,14 +38,7 @@ public sealed class InspectImageRepositoryEndpoint : Endpoint<InspectImageReposi
 
     public override async Task HandleAsync(InspectImageRepositoryRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.RepoId))
-        {
-            AddError("A repository id is required.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
-        var repoId = req.RepoId.Trim();
+        var repoId = req.RepoId!.Trim();
 
         try
         {

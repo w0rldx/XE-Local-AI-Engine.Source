@@ -26,13 +26,6 @@ public sealed class ListEligibleBenchmarkAgentsEndpoint : Endpoint<EligibleBench
 
     public override async Task HandleAsync(EligibleBenchmarkAgentsRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.ModelName))
-        {
-            AddError("A model name is required.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
         var agents = await _catalog.ListEligibleAgentsAsync(req.ModelName, ct);
         await Send.OkAsync(new ListEligibleBenchmarkAgentsResponse
                   {

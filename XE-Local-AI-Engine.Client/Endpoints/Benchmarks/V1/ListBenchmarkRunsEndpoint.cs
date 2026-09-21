@@ -27,13 +27,6 @@ public sealed class ListBenchmarkRunsEndpoint : Endpoint<ListBenchmarkRunsReques
 
     public override async Task HandleAsync(ListBenchmarkRunsRequest req, CancellationToken ct)
     {
-        if (req.Page < 1 || req.PageSize is < 1 or > 200)
-        {
-            AddError("Page must be positive and pageSize must be between 1 and 200.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
         var project = await _records.GetProjectAsync(req.ProjectId, ct);
         if (project is null)
         {

@@ -29,13 +29,6 @@ public sealed class StartBenchmarkRunEndpoint : Endpoint<StartBenchmarkRunReques
 
     public override async Task HandleAsync(StartBenchmarkRunRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.ModelName))
-        {
-            AddError("A primary model is required.");
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
         // Absent/blank is Auto and stays null; anything outside the allow-list is the caller's mistake, not an
         // unsupported runtime, so it is a 400 here rather than the 422 an unlaunchable-but-known type gets.
         if (!BenchmarkKvCacheType.TryNormalize(req.KvCacheType, out var kvCacheType))

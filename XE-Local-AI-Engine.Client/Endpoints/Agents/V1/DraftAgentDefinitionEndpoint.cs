@@ -12,9 +12,6 @@ using XE_Local_AI_Engine.Client.Services.Drafting;
 /// </summary>
 public sealed class DraftAgentDefinitionEndpoint : Endpoint<DraftAgentDefinitionRequest, AgentDraftResponse>
 {
-    private const int MaxExistingDescriptionLength = 2000;
-    private const int MaxExistingNameLength = 120;
-
     private readonly IConfigDraftService _configDraftService;
 
     public DraftAgentDefinitionEndpoint(IConfigDraftService configDraftService)
@@ -37,21 +34,6 @@ public sealed class DraftAgentDefinitionEndpoint : Endpoint<DraftAgentDefinition
     public override async Task HandleAsync(DraftAgentDefinitionRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-
-        var validationError = DraftEndpointSupport.ValidateRequest(req.ModelName,
-            req.Brief,
-            req.ExistingName,
-            req.ExistingDescription,
-            req.ExistingContent,
-            MaxExistingNameLength,
-            MaxExistingDescriptionLength);
-
-        if (validationError is not null)
-        {
-            AddError(validationError);
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
 
         var result = await _configDraftService
                            .DraftAgentDefinitionAsync(new ConfigDraftRequest

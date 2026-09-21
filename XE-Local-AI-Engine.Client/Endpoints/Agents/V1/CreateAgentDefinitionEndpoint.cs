@@ -29,14 +29,6 @@ public sealed class CreateAgentDefinitionEndpoint : Endpoint<CreateAgentDefiniti
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        // The echoed provenance block is operator input like any other field, so it is bounded here, not trusted.
-        if (GenerationProvenance.Validate(req.GenerationMetadata) is { } metadataError)
-        {
-            AddError(metadataError);
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
         var record = await _agentDefinitionService.CreateAsync(req.ToInput(_timeProvider.GetUtcNow()), ct);
         await Send.CreatedAtAsync<GetAgentDefinitionEndpoint>(new
             {

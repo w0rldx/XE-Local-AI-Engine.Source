@@ -33,25 +33,8 @@ public sealed class StartImageModelDownloadEndpoint : Endpoint<StartImageModelDo
 
     public override async Task HandleAsync(StartImageModelDownloadRequest req, CancellationToken ct)
     {
-        var validation = StartImageModelDownloadWireValidator.Validate(req);
-        if (!validation.IsValid)
-        {
-            AddError(validation.Error!);
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
-
-        var request = StartImageModelDownloadRequestMapper.ToServiceRequest(validation.Values!);
-
-        // File-set shape (diffusion part present, one file per role) is owned by ImageModelFileSetRules next to the
-        // download coordinator, because the rules come from what the launch-argument builder can emit.
-        var fileSetError = ImageModelFileSetRules.Validate(request.Parts);
-        if (fileSetError is not null)
-        {
-            AddError(fileSetError);
-            await Send.ErrorsAsync(cancellation: ct);
-            return;
-        }
+        // The validator already refused an unparseable wire shape and an unusable file-set, so these values parse.
+        var request = StartImageModelDownloadRequestMapper.ToServiceRequest(StartImageModelDownloadWireValidator.Validate(req).Values!);
 
         // The coordinator owns the detached transfer and records its terminal phase, so a failure is reported rather than logged and forgotten. The request token is
         // deliberately not involved: it is cancelled the instant the 202 is written, while the download outlives this request.
