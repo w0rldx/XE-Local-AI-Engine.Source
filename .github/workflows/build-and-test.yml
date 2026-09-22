@@ -482,9 +482,10 @@ jobs:
       - name: Check dependency licenses
         run: pnpm run licenses:check
 
-      # `validate` is a superset of `lint`: tsc --noEmit + biome + stylelint, then the knip
-      # dead-code baseline, the SignalR proxy/hub-registration sync check (reads Program.cs from
-      # this checkout — no running backend) and the dependency-cruiser baseline. All static.
+      # `acceptance` = `validate` → `test:coverage:check` → `test:tooling` → `build:bundle`, the
+      # static checks once. `validate` is a superset of `lint`: tsc --noEmit + biome + stylelint,
+      # then the knip dead-code baseline, the SignalR proxy/hub-registration sync check (reads
+      # Program.cs from this checkout — no running backend) and the dependency-cruiser baseline.
       # `pnpm run spellCheck` is deliberately NOT here: it reports ~1.7k unknown words on the
       # current tree, so it is a dictionary task, not a gate.
       - name: Frontend acceptance (validate, coverage, tooling, bundle)

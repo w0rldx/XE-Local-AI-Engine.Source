@@ -34,11 +34,11 @@ Non-loopback proxy targets are rejected. The development certificate plugin may 
 Before committing, run:
 
 ```sh
-pnpm validate
-pnpm test
-pnpm run test:tooling
-pnpm run build
+pnpm run acceptance
 ```
+
+It runs `validate`, the coverage gate, the tooling tests and `build:bundle` in order, with the static checks once.
+While iterating, run `pnpm run validate`, `pnpm test` and `pnpm run test:tooling` on their own.
 
 ## Dependency update validation
 

@@ -155,9 +155,7 @@ next to data written under a different secret, it says so and names what to dele
 scripts/run-backend-tests.sh              # the backend gate: one Release build, every enrolled test project
 
 cd XE-Local-AI-Engine.Client.React
-pnpm run validate                         # lint, typecheck, knip, SignalR and dependency checks
-pnpm test                                 # the vitest suite
-pnpm run build
+pnpm run acceptance                       # validate + coverage thresholds + tooling tests + production bundle
 ```
 
 [AGENTS.md §Validation](AGENTS.md#validation) is authoritative for the full gate set, including analyzer requirements,
