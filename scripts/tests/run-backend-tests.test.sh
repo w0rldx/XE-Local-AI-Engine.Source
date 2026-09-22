@@ -49,7 +49,11 @@ EOF
 
 cat >"$FAKE/scripts/run-tests-memory-safe.sh" <<'EOF'
 #!/usr/bin/env bash
-echo "runner NO_BUILD=${NO_BUILD:-} COVERAGE_DIR=${COVERAGE_DIR:-}" >>"$FAKE_LOG"
+echo "runner NO_BUILD=${NO_BUILD:-} COVERAGE_DIR=${COVERAGE_DIR:-} JOBS=${JOBS:-} PAR=${PAR:-}" >>"$FAKE_LOG"
+if [[ -n "${FAKE_RECORD_ORDER:-}" ]]; then
+  echo runner-start >>"$FAKE_LOG"
+  echo runner-end >>"$FAKE_LOG"
+fi
 # Slow AND deliberately TERM-resistant: only the KILL escalation can end this one. An ignored
 # disposition is inherited, so its sleep resists TERM too.
 if [[ -n "${FAKE_RUNNER_SLEEP:-}" ]]; then
@@ -78,6 +82,10 @@ while (($#)); do
   esac
 done
 echo "test project=$project max=$max results=$results coverage=$coverage" >>"$FAKE_LOG"
+if [[ -n "${FAKE_RECORD_ORDER:-}" ]]; then
+  echo "test-start $project" >>"$FAKE_LOG"
+  echo "test-end $project" >>"$FAKE_LOG"
+fi
 # Slow mode for the cancellation case: register this process AND a grandchild, then block. The
 # grandchild is the point — it proves the signal reached the whole process group, not just the lane.
 if [[ -n "${FAKE_SLEEP:-}" ]]; then
@@ -163,6 +171,37 @@ run_gate width-default env XE_TEST_WIDTH_DEFAULT=2
 run_gate width-invalid env XE_TEST_WIDTH_DEFAULT=nope
 [[ "$status" -eq 2 ]]
 grep -Fq 'must be a positive integer' <<<"$output"
+
+# --- low-memory profile: conservative defaults and no overlap across any project lane ---
+run_gate low-memory env XE_TEST_PROFILE=low-memory FAKE_RECORD_ORDER=1
+[[ "$status" -eq 0 ]]
+grep -Fq 'runner NO_BUILD=1 COVERAGE_DIR= JOBS=1 PAR=1' "$TMP/low-memory.log"
+[[ "$(grep -c ' max=1 ' "$TMP/low-memory.log")" -eq 2 ]]
+mapfile -t lane_receipts < <(grep -E '^(runner|test)-(start|end)' "$TMP/low-memory.log")
+[[ "${#lane_receipts[@]}" -eq 6 ]]
+for ((i = 0; i < 6; i += 2)); do
+  [[ "${lane_receipts[i]}" == *-start* && "${lane_receipts[i+1]}" == *-end* ]]
+done
+
+# Explicit tuning still wins inside the profile.
+run_gate low-memory-overrides env XE_TEST_PROFILE=low-memory JOBS=2 PAR=3 XE_TEST_WIDTH_DEFAULT=4
+[[ "$status" -eq 0 ]]
+grep -Fq 'runner NO_BUILD=1 COVERAGE_DIR= JOBS=2 PAR=3' "$TMP/low-memory-overrides.log"
+[[ "$(grep -c ' max=4 ' "$TMP/low-memory-overrides.log")" -eq 2 ]]
+
+run_gate low-memory-project-override env XE_TEST_PROFILE=low-memory XE_TEST_WIDTH_AI_Agent_Tests=3
+[[ "$status" -eq 0 ]]
+grep -q '^test project=XE-Local-AI-Engine.AI.Agent.Tests/.* max=3 ' "$TMP/low-memory-project-override.log"
+grep -q '^test project=XE-Local-AI-Engine.Client.Persistence.Tests/.* max=1 ' "$TMP/low-memory-project-override.log"
+
+# A red lane is recorded, but does not prevent the remaining project lanes from running.
+run_gate low-memory-red env XE_TEST_PROFILE=low-memory FAKE_RUNNER_EXIT=1
+[[ "$status" -eq 1 ]]
+[[ "$(grep -c '^test project=' "$TMP/low-memory-red.log")" -eq 2 ]]
+
+run_gate profile-invalid env XE_TEST_PROFILE=small
+[[ "$status" -eq 2 ]]
+grep -Fq "XE_TEST_PROFILE must be 'low-memory' or unset" <<<"$output"
 
 # --- coverage mode: reports per project, and the siblings run UNguarded (static instrumentation) ---
 run_gate coverage env COVERAGE_DIR="$TMP/cov"
@@ -259,6 +298,44 @@ cancel_case_cleanup() {
   kill -KILL -- "-$PUBLIC" 2>/dev/null || true
   return 0
 }
+
+# The serialized profile waits inside the launch loop. Cancellation must terminate that active
+# lane and exit without launching either later sibling.
+: >"$PIDS_FILE"
+: >"$TMP/low-cancel.log"
+set -m
+FAKE_LOG="$TMP/low-cancel.log" FAKE_PIDS="$PIDS_FILE" FAKE_RUNNER_SLEEP=120 NO_BUILD=1 \
+  XE_TEST_PROFILE=low-memory BUILD_LOCK_FILE="$LOCK" XE_GATE_CANCEL_GRACE=2 \
+  "$FAKE/scripts/run-backend-tests.sh" >"$TMP/low-cancel.out" 2>&1 &
+PUBLIC=$!
+set +m
+deadline=$((SECONDS + 60))
+while [[ "$(wc -l <"$PIDS_FILE")" -lt 2 ]]; do
+  (( SECONDS <= deadline )) || { echo "serialized lane never started" >&2; cancel_case_cleanup; exit 1; }
+  # real-timer: the subject is a real OS process group registering its child PIDs.
+  sleep 0.2
+done
+mapfile -t LOW_LANE_PROCS <"$PIDS_FILE"
+kill -TERM -- "-$PUBLIC"
+set +e
+wait "$PUBLIC"
+low_cancel_status=$?
+set -e
+[[ "$low_cancel_status" -eq 143 ]] || { echo "low-memory cancel status was $low_cancel_status" >&2; cancel_case_cleanup; exit 1; }
+refute_grep '^test project=' "$TMP/low-cancel.log"
+deadline=$((SECONDS + 60))
+while :; do
+  survivors=()
+  for pid in "${LOW_LANE_PROCS[@]}"; do kill -0 "$pid" 2>/dev/null && survivors+=("$pid"); done
+  [[ "${#survivors[@]}" -eq 0 ]] && break
+  (( SECONDS <= deadline )) || { echo "serialized lane survived cancellation: ${survivors[*]}" >&2; cancel_case_cleanup; exit 1; }
+  # real-timer: the assertion waits for real OS processes to disappear after KILL escalation.
+  sleep 0.5
+done
+
+# The parallel case below owns a fresh receipt set. Keeping the serialized case's two dead PIDs
+# would let its six-PID readiness check pass after only four of the six new processes registered.
+: >"$PIDS_FILE"
 
 set -m
 FAKE_LOG="$TMP/cancel.log" FAKE_PIDS="$PIDS_FILE" FAKE_SLEEP=120 FAKE_RUNNER_SLEEP=120 NO_BUILD=1 \

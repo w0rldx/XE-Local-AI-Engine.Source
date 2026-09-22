@@ -84,6 +84,24 @@ write_namespaces XE_Local_AI_Engine.Tests.Ordinary
 run_case ordinary env
 grep -Fqx 'max=1 html=1 filter=/*/XE_Local_AI_Engine.Tests.Ordinary/*/*' "$TMP/ordinary.log"
 
+output="$(FAKE_LOG="$TMP/profile.log" NO_BUILD=1 XE_TEST_PROFILE=low-memory \
+  "$FAKE/scripts/run-tests-memory-safe.sh")"
+grep -Fq 'Running namespace batches (JOBS=1' <<<"$output"
+grep -Fqx 'max=1 html=1 filter=/*/XE_Local_AI_Engine.Tests.Ordinary/*/*' "$TMP/profile.log"
+
+output="$(FAKE_LOG="$TMP/profile-override.log" NO_BUILD=1 XE_TEST_PROFILE=low-memory JOBS=2 PAR=3 \
+  "$FAKE/scripts/run-tests-memory-safe.sh")"
+grep -Fq 'Running namespace batches (JOBS=2' <<<"$output"
+grep -Fqx 'max=3 html=1 filter=/*/XE_Local_AI_Engine.Tests.Ordinary/*/*' "$TMP/profile-override.log"
+
+set +e
+invalid_output="$(FAKE_LOG="$TMP/profile-invalid.log" NO_BUILD=1 XE_TEST_PROFILE=small \
+  "$FAKE/scripts/run-tests-memory-safe.sh" 2>&1)"
+invalid_status=$?
+set -e
+[[ "$invalid_status" -eq 2 ]]
+grep -Fq "XE_TEST_PROFILE must be 'low-memory' or unset" <<<"$invalid_output"
+
 write_namespaces XE_Local_AI_Engine.Tests.DevWorkflows XE_Local_AI_Engine.Tests.Ordinary
 run_case grouped env TEST_GROUPS=1
 grep -Fqx 'max=1 html=1 filter=/*/(XE_Local_AI_Engine.Tests.DevWorkflows|XE_Local_AI_Engine.Tests.Ordinary)/*/*' \

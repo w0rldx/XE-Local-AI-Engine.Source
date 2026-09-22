@@ -39,6 +39,10 @@ acquired and nothing ran. Exit `75` means the result was contaminated and is voi
 runs the siblings **unguarded** — coverage rewrites their assemblies in place, so the guard would call every such run
 contaminated — which means a sibling coverage run cannot detect an unwrapped concurrent build.
 
+For a memory-constrained development machine, run `XE_TEST_PROFILE=low-memory scripts/run-backend-tests.sh`.
+This serializes project lanes and defaults batch concurrency and test widths to one, while preserving explicit
+overrides and running the same tests and checks. It trades elapsed time for lower concurrent memory demand.
+
 Frontend CI gates (run `dotnet tool restore --tool-manifest dotnet-tools.json` once from the repository root, then run
 these commands from `XE-Local-AI-Engine.Client.React/`):
 
@@ -46,12 +50,12 @@ these commands from `XE-Local-AI-Engine.Client.React/`):
 pnpm install --frozen-lockfile
 pnpm run openapi:check
 pnpm run licenses:check
-pnpm run lint
-pnpm run test:coverage:check
-pnpm run build
+pnpm run acceptance
 pnpm audit --prod --audit-level=high
 ```
 
+`acceptance` runs `validate`, the coverage gate, tooling tests and the production bundle in order, with static
+checks once. Standalone `build` still runs the lint chain before bundling; `build:bundle` alone is not a gate.
 `pnpm run lint` is the frontend typecheck. `openapi:check` validates the generated client against the committed spec;
 after a backend contract change, follow the live-spec regeneration rules in [`AGENTS.md`](AGENTS.md#validation) before
 trusting that drift check.

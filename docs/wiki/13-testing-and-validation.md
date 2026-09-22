@@ -128,6 +128,12 @@ themselves — and wraps each sibling in the assembly guard. `NO_BUILD=1` skips 
 batched module (the shape CI's `siblings` leg uses, through this same script), and `COVERAGE_DIR` adds Cobertura +
 TRX per project.
 
+For a memory-constrained development machine, use
+`XE_TEST_PROFILE=low-memory scripts/run-backend-tests.sh`. The same gate runs project lanes serially and
+defaults `JOBS`, `PAR` and `XE_TEST_WIDTH_DEFAULT` to 1. Explicit overrides still win, including per-project
+widths. The standalone memory-safe runner also accepts the profile. Normal and CI defaults are unchanged;
+the profile trades elapsed time for lower concurrent memory demand without dropping tests or guards.
+
 Two operating rules for that script are stated once, in [AGENTS.md](../../AGENTS.md) §Validation, and not repeated
 here: what `COVERAGE_DIR` costs you in contamination detection, and how to cancel a non-interactive run without
 orphaning its lanes.
@@ -163,10 +169,12 @@ category, or with two, breaks that sum, and `TestCategoryConventionTests` fails 
 # React client
 cd XE-Local-AI-Engine.Client.React
 pnpm install --frozen-lockfile
-pnpm run lint     # tsc --noEmit + CheckEventCurrentTargetInUpdaters.mjs + biome lint + stylelint
-pnpm test         # vitest run
-pnpm run build    # lint chain + vite build
+pnpm run acceptance  # validate + coverage thresholds + tooling tests + production bundle
 ```
+
+`acceptance` runs static checks once and then tests and `build:bundle` on the same unchanged source tree.
+Standalone `build` still runs the full lint chain before `build:bundle`; the latter alone is not a gate.
+Use `pnpm run lint` and `pnpm test` for the focused inner loop.
 
 ```bash
 # Python (tools/training + scripts/**) — the same gate CI's python-quality job runs
@@ -237,7 +245,7 @@ more than a local Release build.
 - **`release-contracts` (ubuntu-latest)** — runs [`scripts/run-release-contract-tests.sh`](../../scripts/run-release-contract-tests.sh) plus `scripts/lint-release-scripts.sh --no-behavior --bootstrap`. Contract discovery is **auto-enrolling** across `scripts/tests`, `scripts/compliance/tests`, and `scripts/performance/tests`, matching `*.test.sh`, `*.test.py`, and `test_*.py` — a new script test needs no workflow edit. The Pester leg of `lint-release-scripts.sh` covers `publish/tests` and `scripts/performance/tests`; **zero discovered Pester tests is a failure, not a pass**.
 - **`backend-tests` (ubuntu-latest, five-leg matrix)** — the backend gate, one runner per leg: `siblings` runs every enrolled test project except `XE-Local-AI-Engine.Tests`, and `tests-0`…`tests-3` each run one `TEST_SHARD` quarter of that module through [`scripts/run-tests-memory-safe.sh`](../../scripts/run-tests-memory-safe.sh) at `TEST_GROUPS=16`. Every leg does its own checkout, restore and `build -c Release --no-restore`; the built test output tree is over 1 GB, so it is rebuilt per leg rather than passed between them. The live OpenAPI comparison ([`scripts/openapi-live-check.sh`](../../scripts/openapi-live-check.sh)) runs only on `siblings`. No leg pulls an image or sets `XE_REQUIRE_DOCKER_TESTS`: the real-daemon suites are opt-in and skip here, and their wire-shape half runs daemon-free against the fake Docker server. Every project emits **Cobertura** coverage into its own `--results-directory`, because MTP resolves `--coverage-output` relative to it and a shared directory would let concurrent modules overwrite each other's report. The `siblings` leg runs [`scripts/run-backend-tests.sh`](../../scripts/run-backend-tests.sh) `--siblings-only` — the same script as the local gate, so the enrolment rule, the per-project results directory, the concurrency and the **hollow-gate guard** (a `Passed!`/`Failed!` summary must appear, catching a silent green where zero suites enrolled) are one implementation with two callers rather than two copies that drift. The `--maximum-parallel-tests` cap stays at **2** here, passed as `XE_TEST_WIDTH_DEFAULT`, because TUnit otherwise runs every test in parallel and leaves the concurrency level to the .NET thread pool — its docs state no formula and no ceiling — which is what made concurrent modules time out on shared runners. The script's local defaults are higher because they were measured on a 32-core box; raising CI's is a separate, measured change. `fail-fast: false`, so one red leg does not cancel the evidence from the others. Each leg uploads its reports as **`backend-test-results-<leg>`**.
 - **`build-and-test` (ubuntu-latest)** — the merge gate over every `backend-tests` leg, and the job that must keep this exact id: `build-and-test` is the required status check configured on `develop`'s branch protection, and a matrix job reports as `backend-tests (siblings)`, which can never satisfy it. It downloads every leg's artifact unmerged, then cross-checks before merging — the sibling reports number one per enrolled project minus the batched module (re-derived from the solution, not hard-coded), each shard leg produced one Cobertura report per line of its `units.txt`, and the group indices parsed from every leg's unit names, sorted, equal `0`…`GROUPS-1` exactly. That last check is the one that proves the shards **partition** the module — every group run, and run once. Checking only for duplicates would pass a run that silently *skipped* groups (three legs dividing by four leave four groups unrun), and [`scripts/merge-cobertura.py`](../../scripts/merge-cobertura.py) can see neither failure: it unions by `(filename, line)`, so a gap and an overlap both merge to a perfectly plausible percentage. It then merges the reports without double-counting shared source lines and enforces the floor in [`scripts/backend-coverage-baseline.txt`](../../scripts/backend-coverage-baseline.txt) — currently **90.50**.
-- **`client-react` (ubuntu-latest)** — pnpm + Node 22, the `global.json` SDK, a .NET 8 runtime, and the restored pinned repository tools; then `install --frozen-lockfile`, `openapi:check`, `licenses:check`, **`pnpm run validate`** (`lint` → `knip` → `signalr:check` → `depcruise` — not bare `lint`), `test:coverage:check`, `test:tooling`, `build`, and `pnpm audit --prod --audit-level=high` in order. `spellCheck` exists as a script but is **not** a gate. A clean local clone must run `dotnet tool restore --tool-manifest dotnet-tools.json` before `licenses:check`.
+- **`client-react` (ubuntu-latest)** — pnpm + Node 22, the `global.json` SDK, a .NET 8 runtime, and the restored pinned repository tools; then `install --frozen-lockfile`, `openapi:check`, `licenses:check`, **`pnpm run acceptance`** (`validate` → `test:coverage:check` → `test:tooling` → `build:bundle`), and `pnpm audit --prod --audit-level=high` in order. `validate` includes `lint`, `knip`, `signalr:check` and `depcruise`; the combined gate runs those static checks once. `spellCheck` exists as a script but is **not** a gate. A clean local clone must run `dotnet tool restore --tool-manifest dotnet-tools.json` before `licenses:check`.
 
 #### Measuring what the daemon-free backend legs cost
 

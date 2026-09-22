@@ -93,6 +93,7 @@
 #
 # Usage:
 #   scripts/run-tests-memory-safe.sh                # build (Release) + run every namespace batch
+#   XE_TEST_PROFILE=low-memory scripts/run-tests-memory-safe.sh # JOBS=1, PAR=1 unless overridden
 #   NO_BUILD=1 scripts/run-tests-memory-safe.sh     # skip the build (bin must be current)
 #   JOBS=1 PAR=1 scripts/run-tests-memory-safe.sh   # old behavior: batches and tests fully serialized
 #   PAR=4 scripts/run-tests-memory-safe.sh          # allow N parallel tests per batch (faster, may reintroduce flakes)
@@ -100,6 +101,8 @@
 #   TEST_GROUPS=16 TEST_SHARD=2/4 scripts/run-tests-memory-safe.sh   # run only groups 2, 6, 10, 14
 #
 # Env knobs:
+#   XE_TEST_PROFILE low-memory defaults JOBS and PAR to 1; explicit JOBS/PAR still win. Unset uses
+#                   the measured defaults below.
 #   JOBS            how many namespace batch PROCESSES run concurrently (1 = sequential). Default 16 on a
 #                   host with >= 32 CPUs, 10 below that — the two measured points above, not a formula.
 #   PAR             max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake)
@@ -154,9 +157,14 @@ if [[ -z "${XE_BUILD_LOCK_HELD:-}" && -z "${NO_BUILD_LOCK:-}" ]]; then
 fi
 PROJ="$REPO/XE-Local-AI-Engine.Tests"
 EXE="$PROJ/bin/Release/net10.0/XE-Local-AI-Engine.Tests"
-PAR="${PAR:-1}"
 NPROC="$(nproc 2>/dev/null || echo 4)"
-JOBS="${JOBS:-$(( NPROC >= 32 ? 16 : 10 ))}"
+case "${XE_TEST_PROFILE:-}" in
+  "") DEFAULT_JOBS=$(( NPROC >= 32 ? 16 : 10 )) ;;
+  low-memory) DEFAULT_JOBS=1 ;;
+  *) echo "ERROR: XE_TEST_PROFILE must be 'low-memory' or unset, got '${XE_TEST_PROFILE}'." >&2; exit 2 ;;
+esac
+PAR="${PAR:-1}"
+JOBS="${JOBS:-$DEFAULT_JOBS}"
 AVAIL_FLOOR="${AVAIL_FLOOR:-800}"
 
 # Parsed here rather than next to the packer so a malformed value fails before the Release build

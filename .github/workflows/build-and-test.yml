@@ -487,17 +487,8 @@ jobs:
       # this checkout — no running backend) and the dependency-cruiser baseline. All static.
       # `pnpm run spellCheck` is deliberately NOT here: it reports ~1.7k unknown words on the
       # current tree, so it is a dictionary task, not a gate.
-      - name: Validate (lint, knip, SignalR proxy sync, dependency baseline)
-        run: pnpm run validate
-
-      - name: Test
-        run: pnpm run test:coverage:check
-
-      - name: Test build and compliance tooling
-        run: pnpm run test:tooling
-
-      - name: Build
-        run: pnpm run build
+      - name: Frontend acceptance (validate, coverage, tooling, bundle)
+        run: pnpm run acceptance
 
       - name: Audit production dependencies
         # high/critical block the build; moderate/low are advisory-only and must not red an unrelated PR.

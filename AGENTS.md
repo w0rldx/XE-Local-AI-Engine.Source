@@ -5,9 +5,10 @@ loopback-only `/api/local/v1` endpoints and SignalR hubs, persists to SQLite wit
 supervises `llama-server` / `sd-server` child processes for local inference. .NET 10 + Aspire, React 19 +
 Vite + pnpm, Python (uv) for training tooling.
 
-This file is instructions, not documentation. Read `docs/agent-knowledge.md` before your first non-trivial
-change: it records the invariants and traps that the code does not tell you, and lists beliefs that are now
-false. `docs/wiki/` is the code-grounded architecture reference; start at `docs/wiki/Home.md`.
+This file is instructions, not documentation. Before a non-trivial change, use the navigation in
+`docs/agent-knowledge.md` to read §0, the relevant numbered sections, and the corrected stale beliefs.
+Follow its evidence links when changing a rule or investigating the same failure. For architecture, start
+at `docs/wiki/Home.md` and read the pages for the affected subsystem.
 
 ## Working rules
 
@@ -102,6 +103,9 @@ scripts/run-backend-tests.sh
   each sibling pinned to a measured `--maximum-parallel-tests` (`XE_TEST_WIDTH_DEFAULT`,
   `XE_TEST_WIDTH_<Project>`). `NO_BUILD=1` skips the build, `--siblings-only` skips the batched module,
   `COVERAGE_DIR` adds Cobertura + TRX per project. CI's `siblings` leg calls the same script.
+- On a memory-constrained development machine, use `XE_TEST_PROFILE=low-memory scripts/run-backend-tests.sh`.
+  It runs project lanes serially and defaults `JOBS`, `PAR` and `XE_TEST_WIDTH_DEFAULT` to 1. Explicit width
+  overrides still win; all enrolled tests, the Release build, locks and guards remain required.
 - Never overlap a build with a `--no-build` test run. The script takes the build lock once for the whole gate and
   runs each sibling under the assembly guard. The lock serializes cooperating shells (exit **69** = lock
   not acquired, nothing ran); the guard detects an uncooperative build (exit **75** = CONTAMINATED, result void,
@@ -123,12 +127,11 @@ Frontend (`XE-Local-AI-Engine.Client.React/`):
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run validate            # lint (tsc + biome + stylelint + guards) + knip + signalr:check + depcruise
-pnpm run test:coverage:check # full vitest run with thresholds (pnpm test = same suite, no coverage, inner loop)
-pnpm run test:tooling
-pnpm run build
+pnpm run acceptance         # validate + coverage thresholds + tooling tests + production bundle
 ```
 
+`acceptance` runs the static checks once, then tests and `build:bundle` on the same unchanged source tree.
+Standalone `pnpm run build` still runs the full lint chain before bundling. `build:bundle` alone is not a gate.
 `pnpm run lint` is the typecheck; the E2E fixture's `build:e2e` is a bare `vite build`, so a green E2E run does
 not prove types. After any backend contract change run `pnpm run openapi:check` (regenerates the hey-api client,
 fails on drift) and commit the output. `pnpm run licenses:check` after a dependency change.

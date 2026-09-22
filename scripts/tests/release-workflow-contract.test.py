@@ -36,12 +36,13 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
             self.assertIn(prerequisite, body)
             self.assertLess(body.index(prerequisite), license_gate)
 
-    def test_frontend_ci_runs_tooling_regressions_before_build(self) -> None:
+    def test_frontend_ci_uses_the_shared_acceptance_gate(self) -> None:
         client_job = re.search(r"\n  client-react:\n(?P<body>.*)", self.build_source, re.DOTALL)
         self.assertIsNotNone(client_job)
         body = client_job.group("body")
-        self.assertIn("pnpm run test:tooling", body)
-        self.assertLess(body.index("pnpm run test:tooling"), body.index("pnpm run build"))
+        self.assertEqual(1, body.count("run: pnpm run acceptance"))
+        self.assertNotIn("run: pnpm run build", body)
+        self.assertNotIn("run: pnpm run validate", body)
 
     def test_cross_platform_release_job_pins_python_and_uses_python_command(self) -> None:
         build_job = re.search(r"\n  build-pack:\n(?P<body>.*?)(?=\n  prepare-release-draft:)", self.source, re.DOTALL)

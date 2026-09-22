@@ -2,7 +2,7 @@
 
 Hard-won rules, invariants, and traps for this repository. `docs/wiki/` explains how the system is built; this file records failures that are easy to repeat even after reading the code.
 
-**Required reading:** read the relevant numbered section before a non-trivial change. Keep the numbered sections and named headings stable; code comments and runbooks cite them.
+**Required reading:** use the navigation below to read §0, the relevant numbered sections, and [Stale beliefs corrected](#stale-beliefs-corrected) before a non-trivial change. Follow cross-references when a change spans subsystems. Keep existing section anchors stable; code comments and runbooks cite them.
 
 **Evidence:** measurements, dated investigations, and volatile environment observations live in [agent-knowledge-evidence.md](agent-knowledge-evidence.md). Follow that link when changing a rule or diagnosing the same failure.
 
@@ -24,7 +24,7 @@ Hard-won rules, invariants, and traps for this repository. `docs/wiki/` explains
 
 ## 0. Repo orientation
 
-- This is a standalone repository with remote **`public`** pointing to **`w0rldx/XE-Local-AI-Engine.Source`**. There is no `origin`, parent-repository pointer, or `w0rldx/XE-Local-AI-Engine` remote.
+- **Rule:** discover this checkout's remotes with `git remote -v` and branch tracking with `git branch -vv`; do not assume a remote name or URL. **Prevents:** review, fetch or integration commands targeting a stale remote copied from another checkout. **Authority:** the current Git configuration; `AGENTS.md` requires branching from and targeting `develop`.
 - Old references to `C0re.slnx`, `C0re.Client.React.Web`, `C0re.Tests.IntegrationTests`, or a C0re-parent Docker context are invalid. Current names are `XE-Local-AI-Engine.slnx`, `XE-Local-AI-Engine.Client.React/`, the three in-repo unit-test projects, `XE-Local-AI-Engine.Tests.E2ETests`, and `XE-Local-AI-Engine.AI.Contracts`.
 
 ### Cite symbols, not `file:line`, for anything under active development
@@ -863,9 +863,10 @@ One Kestrel process serves API and UI via `UseStaticFiles` and `MapFallbackToFil
 
 ### Review tooling that auto-detects the default branch fails here — pass the base explicitly
 
-The remote here is `public`, not `origin` (§0), so any review or diff tool that infers the default branch from
-`origin` reports that it cannot detect one. Pass the base branch explicitly (`--base develop` or the tool's
-equivalent); do not add an `origin` remote alias to work around it. Operator ruling 2026-09-05.
+**Rule:** pass the review base explicitly (`--base develop` or the tool's equivalent), using the remotes
+discovered in §0 when a remote-qualified ref is needed. Do not add a remote alias to satisfy auto-detection.
+**Prevents:** a missing or incorrect review base when checkout remote names differ. **Authority:**
+`AGENTS.md` branch policy; operator ruling 2026-09-05 on explicit review bases.
 
 ### PROPOSED (awaiting operator approval): a Windows-only NuGet needs no Windows TFM — reference the LEAF package and guard with attributes
 
@@ -2220,9 +2221,11 @@ Since S7 the parser still raises it for every Agent node, and `GraphWorkflowDefi
 
 **Rule:** the two modules carry two copies of the same relational-comparison ladder, and a change to either copy is a change to **both** — edit both files and run both `GraphWorkflowConditionTests` and `DevWorkflowConditionTests`. There is no shared evaluator and no `GraphCore` library to move one into: the S7 graph-core extraction was assessed and **shelved**, so the duplication is the standing decision rather than debt awaiting a refactor. **Prevents:** fixing a comparison bug in one module and shipping the other module still wrong, with a green suite in both — each copy has its own tests, so neither notices the other drifted. **Authority:** operator ruling R7-1, 2026-09-07, extraction plan §6.2; the `Mirrors GraphWorkflowCondition.Order` comment in `DevWorkflowCondition`.
 
-### Dev Workflows stays source-plus-agent-knowledge only — there is no wiki page for it
+<a id="dev-workflows-stays-source-plus-agent-knowledge-only--there-is-no-wiki-page-for-it"></a>
 
-**Rule:** do not write one, and do not re-open the question unless a slice touches the module materially. What is durable about Dev Workflows lives in §4 here and in the XML docs on `DevWorkflowGraph`, `DevWorkflowStateMachine` and `DevWorkflowOptions`. `docs/wiki/22-workflow-engines-divergence-register.md` is not that page — it records where the two engines differ, not how either one works. **Prevents:** a second architecture reference that describes a module nobody is currently changing, drifting silently against the copy in the code, and paying `docs-inventory-check.py` upkeep for it. **Authority:** operator ruling R7-4, 2026-09-07.
+### Dev Workflows has a runtime reference and a separate divergence register
+
+**Rule:** read [Development Workflows](wiki/25-dev-workflows.md) for the runtime and [Workflow Engines Divergence Register](wiki/22-workflow-engines-divergence-register.md) for differences from Graph Workflows. Keep failure-prevention rules here and consult the XML docs on `DevWorkflowGraph`, `DevWorkflowStateMachine` and `DevWorkflowOptions` for implementation contracts. **Prevents:** acting on the superseded no-wiki-page restriction or treating the divergence register as the runtime reference. **Authority:** `docs/wiki/Home.md`, which now indexes both pages, and `docs/wiki/25-dev-workflows.md`.
 
 ### A fix in one workflow engine is not automatically engine-local
 
@@ -2582,7 +2585,7 @@ Agent Skills resources/assets are live and encrypted with AAD bound to both skil
 
 **Sandbox status:** fake is the CI floor; process is the normal AgentHome/Coder provider; Development Docker is opt-in. OpenSandbox/MXC is not silently selected and the existing SPI remains because Docker is interim, not proof of a hard security boundary.
 
-**Memory boundaries:** playbook injection is embedding-ranked with lexical fallback and rides the resolved prompt so resume config hashing stays stable. Adaptive extraction is per-agent only. Attachments are not indexed into RAG; image/OCR and STT remain unbuilt. Do not describe browser Web Speech TTS as a shipped local speech model.
+**Memory boundaries:** playbook injection is embedding-ranked with lexical fallback and rides the resolved prompt so resume config hashing stays stable. Adaptive extraction is per-agent only. Attachments are not indexed into RAG; image/OCR remains unbuilt. Speech-to-text ships through `IWhisperTranscriber` and `TranscriptionHub`; see [Audio Transcription](wiki/24-audio-transcription.md). Do not describe browser Web Speech TTS as a shipped local speech model.
 
 ---
 

@@ -9,8 +9,8 @@
 <!-- Tick what you ran (see CONTRIBUTING.md / AGENTS.md for the full commands). -->
 
 - [ ] Backend: `scripts/run-backend-tests.sh` passes (one **Release** build plus every enrolled test project)
-- [ ] Frontend (`XE-Local-AI-Engine.Client.React/`): `pnpm run validate`, `pnpm run test:coverage:check`,
-      `pnpm run build` pass
+- [ ] Frontend (`XE-Local-AI-Engine.Client.React/`): `pnpm run acceptance` passes
+      (validation, coverage thresholds, tooling tests and production bundle)
 - [ ] `pnpm openapi:check` run (if a backend contract changed)
 - [ ] E2E run (`scripts/run-e2e-local.sh`), if the change affects end-to-end behavior
 

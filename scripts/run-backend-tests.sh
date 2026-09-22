@@ -68,11 +68,15 @@
 #
 # Usage:
 #   scripts/run-backend-tests.sh                     # build Release, then both lanes
+#   XE_TEST_PROFILE=low-memory scripts/run-backend-tests.sh # serialize test lanes; width 1 unless overridden
 #   NO_BUILD=1 scripts/run-backend-tests.sh          # skip the build (bin must be current)
 #   scripts/run-backend-tests.sh --siblings-only     # skip the batched module (the CI `siblings` leg)
 #   COVERAGE_DIR=/tmp/cov scripts/run-backend-tests.sh   # + Cobertura/TRX per project, unguarded
 #
 # Env knobs:
+#   XE_TEST_PROFILE   unset: measured parallel defaults below; low-memory: default JOBS=1, PAR=1
+#                     and sibling width 1, and run every project lane sequentially. Explicit JOBS,
+#                     PAR and XE_TEST_WIDTH_* values still win.
 #   NO_BUILD          skip the Release build
 #   NO_BUILD_LOCK     do NOT take the cross-process build lock (escape hatch; detection only)
 #   COVERAGE_DIR      per-project Cobertura + TRX land under <COVERAGE_DIR>/<module>/, and the batched
@@ -129,6 +133,18 @@ if [[ -n "${COVERAGE_DIR:-}" && "$COVERAGE_DIR" != /* ]]; then
   export COVERAGE_DIR
 fi
 cd "$REPO" || { echo "ERROR: cannot enter the repository root $REPO." >&2; exit 2; }
+
+LOW_MEMORY=""
+case "${XE_TEST_PROFILE:-}" in
+  "") ;;
+  low-memory)
+    LOW_MEMORY=1
+    export JOBS="${JOBS:-1}"
+    export PAR="${PAR:-1}"
+    export XE_TEST_WIDTH_DEFAULT="${XE_TEST_WIDTH_DEFAULT:-1}"
+    ;;
+  *) echo "ERROR: XE_TEST_PROFILE must be 'low-memory' or unset, got '${XE_TEST_PROFILE}'." >&2; exit 2 ;;
+esac
 
 # Take the lock once, for the whole gate — see "Locking" above. Re-exec rather than lock inline so
 # the wrapper can close the lock fd in this child: MSBuild's node-reuse daemons would otherwise
@@ -364,6 +380,7 @@ if [[ -z "$SIBLINGS_ONLY" ]]; then
   LANE_PIDS["$BATCHED_MODULE"]=$!
   LAUNCHING=0
   (( CANCEL_STATUS )) && finish_cancel
+  [[ -z "$LOW_MEMORY" ]] || wait "${LANE_PIDS[$BATCHED_MODULE]}"
 fi
 for module in "${!MODULE_PROJECTS[@]}"; do
   echo ">> Lane: $module at --maximum-parallel-tests ${MODULE_WIDTHS[$module]}"
@@ -373,6 +390,7 @@ for module in "${!MODULE_PROJECTS[@]}"; do
   LANE_PIDS["$module"]=$!
   LAUNCHING=0
   (( CANCEL_STATUS )) && finish_cancel
+  [[ -z "$LOW_MEMORY" ]] || wait "${LANE_PIDS[$module]}"
 done
 set +m
 

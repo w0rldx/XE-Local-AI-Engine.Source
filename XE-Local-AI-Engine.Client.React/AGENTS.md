@@ -11,13 +11,13 @@ Run from this directory; `dotnet tool restore --tool-manifest ../dotnet-tools.js
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run validate              # lint + knip + signalr:check + depcruise (what CI runs; not bare lint)
-pnpm run test:coverage:check   # full vitest run with thresholds (pnpm test = same suite without coverage)
-pnpm run test:tooling          # node --test scripts/*.test.mjs
-pnpm run build
+pnpm run acceptance          # validate + coverage thresholds + tooling tests + production bundle
 pnpm audit --prod --audit-level=high
 ```
 
+- `pnpm run build` remains a checked standalone build (lint + production bundle). The acceptance gate runs lint
+  once through `validate`; `build:bundle` is its already-validated bundling step, including licenses and size checks.
+- Use `pnpm run validate`, `pnpm run test:coverage:check` and `pnpm run test:tooling` independently while iterating.
 - `pnpm run lint` is the typecheck (`tsc --noEmit` + Biome + Stylelint + the `currentTarget` guard).
 - After a backend contract change: `pnpm run openapi:check` regenerates the hey-api client and fails on drift.
   Commit the regenerated `openapi/` and `src/core/api/generated/`; never hand-edit them. Against a running
