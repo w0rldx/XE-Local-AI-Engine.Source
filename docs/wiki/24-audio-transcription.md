@@ -628,8 +628,10 @@ operator is still making.
 - **`StopAsync` cancels and returns — it never awaits the capture task.** A `PushAudioAsync` blocked behind inference
   would otherwise hold the registry's bounded producer-stop wait. `StopAsync_ReturnsWhileAPushIsBlockedBehindInference`
   is the proof: adding an `await` on the capture task turns it red.
-- **The coordinator never ends a session and names no session status.** Stopping capture and ending a live session are
-  different acts; the second belongs to the registry's single `EndAsync` path.
+- **The coordinator ends a session only when its capture died unexpectedly, and only through the registry.** A
+  requested stop (`StopAsync`, a cancelled producer token, `DisposeAsync`) cancels and detaches without naming a status;
+  a recorder that returns or throws without a stop request is detached and then handed to the registry's single
+  `EndAsync(Failed)` path. See "An unexpected capture end fails the session" below.
 - **`DisposeAsync`** stops and detaches every capture, then bounds the drain at three seconds on the injected
   `TimeProvider` — a bound on shutdown, not a wait for an event, so one wedged capture cannot hold the process open.
 

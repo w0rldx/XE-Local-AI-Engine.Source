@@ -40,9 +40,10 @@ Framework pins, while the wiki covers architecture.
 
 ### Invariants worth knowing
 
-- **The Open Canvas import runs once and cannot be undone.** Saved canvases from the removed Open Canvas
-  (Preview) builder are converted into Graph Workflow definitions automatically, on the first start of the
-  build that removed it. Read [§9 of the Graph Workflows page](21-graph-workflows.md#9-the-open-canvas-import)
+- **The Open Canvas import runs automatically at startup and stops startup if it fails.** Saved canvases from the
+  removed Open Canvas (Preview) builder are converted into Graph Workflow definitions on the first start of the
+  build that removed it; the encrypted source is staged so an interrupted or failed conversion retries on the next
+  start instead of being lost. Read [§9 of the Graph Workflows page](21-graph-workflows.md#9-the-open-canvas-import)
   before upgrading a node whose canvases matter.
 - **A doc or comment claiming "no Docker anywhere" predates ADR 0004 and is stale**; one claiming Docker on the
   inference path is stale the other way. The bullet above is the current rule.
