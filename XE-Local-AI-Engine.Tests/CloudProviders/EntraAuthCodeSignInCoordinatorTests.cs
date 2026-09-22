@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Web;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
@@ -96,6 +97,38 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
             TimeSpan.FromSeconds(5),
             "sign-in should fail once AAD reports an error.");
         AssertEx.Equal(0, redeemer.CallCount);
+    }
+
+    /// <summary>
+    ///     The callback's <c>error</c> fields are attacker-reachable — a crafted authorize URL or a compromised
+    ///     gateway supplies them — so no line terminator in one may survive into the log record.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_WhenTheAadErrorCarriesLineTerminators_LogsThemEscaped()
+    {
+        var port = GetFreeLoopbackPort();
+        var config = CreateConfig(redirectUri: $"http://127.0.0.1:{port}/signin-oidc");
+        var logger = new RecordingLogger<EntraAuthCodeSignInCoordinator>();
+        using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config), redeemer: null, logger);
+
+        var handle = await coordinator.StartAsync(CancellationToken.None);
+        var state = ExtractQueryValue(handle.AuthorizeUrl, "state");
+        await SendCallbackAsync(port,
+            code: null,
+            state: state,
+            error: "access_denied\r\nforged",
+            errorDescription: "declined\u2028next\u0085tail");
+
+        await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
+            TimeSpan.FromSeconds(5),
+            "sign-in should fail once AAD reports an error.");
+
+        var message = AssertEx.NotNull(logger.Entries.SingleOrDefault(entry =>
+            entry.Message.Contains("was rejected", StringComparison.Ordinal))).Message;
+        AssertEx.False(message.Any(static character => character is '\r' or '\n' or '\u2028' or '\u0085'),
+            $"A rejected sign-in must log the AAD error with no line terminator left in it, but it logged: {message}");
+        AssertEx.Contains(message, "access_denied\\u000D\\u000Aforged", StringComparison.Ordinal);
+        AssertEx.Contains(message, "declined\\u2028next\\u0085tail", StringComparison.Ordinal);
     }
 
     [Test]
@@ -193,13 +226,15 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
         AssertEx.Equal(EntraAuthCodeSignInState.None, coordinator.GetStatus().State);
     }
 
-    private static EntraAuthCodeSignInCoordinator CreateCoordinator(ICloudCredentialStore credentialStore, IEntraAuthCodeRedeemer? redeemer = null)
+    private static EntraAuthCodeSignInCoordinator CreateCoordinator(ICloudCredentialStore credentialStore,
+        IEntraAuthCodeRedeemer? redeemer = null,
+        ILogger<EntraAuthCodeSignInCoordinator>? logger = null)
     {
         return new EntraAuthCodeSignInCoordinator(credentialStore,
             new FakeEntraAuthCodeAccountStore(),
             new EntraLiveCredentialCache(),
             redeemer ?? new RecordingRedeemer(),
-            NullLogger<EntraAuthCodeSignInCoordinator>.Instance,
+            logger ?? NullLogger<EntraAuthCodeSignInCoordinator>.Instance,
             TimeProvider.System);
     }
 

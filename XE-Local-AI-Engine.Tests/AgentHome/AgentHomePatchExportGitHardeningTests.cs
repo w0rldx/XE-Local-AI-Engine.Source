@@ -1000,6 +1000,14 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         /// <summary>Runs the whole lifecycle — copy, baseline, the scripted inner loop, export — on the real jail.</summary>
         public async Task<AgentHomeRunResult> RunAsync(params (string Tool, Dictionary<string, object?> Arguments)[] script)
         {
+            // run_command is offered only behind a filesystem boundary the provider advertises; a host without the
+            // bubblewrap chain (a hosted CI runner) withholds it, so skip visibly here, as the goal-loop tests do.
+            if (Array.Exists(script, static step => string.Equals(step.Tool, "run_command", StringComparison.Ordinal))
+                && !_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))
+            {
+                Skip.Test("BLOCKED: this host cannot deliver SandboxIsolationMode.Filesystem, so run_command is withheld and the negative control cannot be driven here.");
+            }
+
             _chatClient.Script = script;
 
             // The ambient root a real chat turn seeds; without it the executor refuses to run at all.

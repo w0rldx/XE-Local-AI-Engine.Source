@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text;
+using XE_Local_AI_Engine.Client.Services.Common;
 
 /// <summary>The outcome of waiting for the single AAD redirect callback.</summary>
 internal enum LoopbackCallbackOutcome
@@ -179,8 +180,8 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
         }
     }
 
-    // Truncates and strips line breaks from an AAD-supplied error value before it is ever logged, so a crafted redirect
-    // (an operator pasting a malicious authorize URL, or a compromised gateway) cannot inject multi-line or oversized content into the server log.
+    // Escapes every control character and truncates an AAD-supplied error before it is logged, so a crafted redirect
+    // cannot inject records: stripping CR and LF alone leaves U+0085, U+2028 and U+2029 ending a line for some readers.
     private static string? SanitizeSingleLine(string? value)
     {
         if (string.IsNullOrEmpty(value))
@@ -188,7 +189,7 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
             return value;
         }
 
-        var singleLine = value.Replace('\r', ' ').Replace('\n', ' ');
+        var singleLine = LogValueSanitizer.Sanitize(value);
         return singleLine.Length > 200 ? singleLine[..200] : singleLine;
     }
 

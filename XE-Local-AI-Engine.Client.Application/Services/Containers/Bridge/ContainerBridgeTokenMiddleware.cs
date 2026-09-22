@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using System.Net.Mime;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
+using XE_Local_AI_Engine.Client.Services.Common;
 
 /// <summary>Requires a per-instance bearer token on every bridge route, and stashes the caller it identifies for the routes behind it.</summary>
 /// <remarks>
@@ -70,7 +71,11 @@ public sealed class ContainerBridgeTokenMiddleware : IMiddleware
     {
         // The reason is logged, never returned: a caller learning WHICH half failed learns whether an instance id
         // exists, and this surface answers every failure identically.
-        _logger.LogWarning("The container bridge refused a request to {Path}: {Reason}.", context.Request.Path, reason);
+
+        // Kestrel decodes a percent-encoded CR/LF into PathString, so the path is escaped before it reaches the log.
+        _logger.LogWarning("The container bridge refused a request to {Path}: {Reason}.",
+            LogValueSanitizer.Sanitize(context.Request.Path.Value),
+            reason);
 
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         context.Response.Headers[HeaderNames.WWWAuthenticate] = "Bearer";

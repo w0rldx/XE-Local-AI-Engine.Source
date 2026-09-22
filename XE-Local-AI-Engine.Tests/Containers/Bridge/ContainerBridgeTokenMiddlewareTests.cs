@@ -120,15 +120,34 @@ public sealed class ContainerBridgeTokenMiddlewareTests
         AssertEx.NotNull(context.Features.Get<ContainerBridgeCaller>());
     }
 
+    /// <summary>
+    ///     A refused caller must not be able to write the log it is refused in. Kestrel decodes a percent-encoded
+    ///     CR/LF into <c>PathString</c>, so the path is attacker-controlled by the time the refusal logs it.
+    /// </summary>
+    [Test]
+    public async Task Bridge_WhenTheRefusedPathCarriesLineTerminators_LogsThemEscaped()
+    {
+        var verifier = Substitute.For<IContainerBridgeTokenVerifier>();
+        var logger = new RecordingLogger<ContainerBridgeTokenMiddleware>();
+        var context = CreateContext(header: null, path: "/llm/v1\r\nforged\u2028entry\u0085tail");
+
+        await new ContainerBridgeTokenMiddleware(verifier, logger).InvokeAsync(context, static _ => Task.CompletedTask);
+
+        var message = AssertEx.NotNull(logger.Entries.SingleOrDefault()).Message;
+        AssertEx.False(message.Any(static character => character is '\r' or '\n' or '\u2028' or '\u0085'),
+            $"A refused path must reach the log with no line terminator left in it, but it logged: {message}");
+        AssertEx.Contains(message, "/llm/v1\\u000D\\u000Aforged\\u2028entry\\u0085tail", StringComparison.Ordinal);
+    }
+
     private static ContainerBridgeTokenMiddleware CreateMiddleware(IContainerBridgeTokenVerifier verifier)
     {
         return new ContainerBridgeTokenMiddleware(verifier, NullLogger<ContainerBridgeTokenMiddleware>.Instance);
     }
 
-    private static DefaultHttpContext CreateContext(string? header)
+    private static DefaultHttpContext CreateContext(string? header, string path = "/llm/v1/chat/completions")
     {
         var context = new DefaultHttpContext();
-        context.Request.Path = "/llm/v1/chat/completions";
+        context.Request.Path = path;
         if (header is not null)
         {
             context.Request.Headers.Authorization = header;

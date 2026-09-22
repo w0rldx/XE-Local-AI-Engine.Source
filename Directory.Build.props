@@ -36,6 +36,11 @@
          family is cleaned; none of them was ever enforced before, so nothing regressed by listing them. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PublishDocumentationFiles>false</PublishDocumentationFiles>
+    <!-- And out of bin/ as well, not only the publish folder: FastEndpoints and NJsonSchema read an .xml that sits next
+         to an assembly unconditionally, so the first build after GenerateDocumentationFile pushed 250 endpoint and DTO
+         /// blocks into the live OpenAPI document and openapi:check:live went red against the committed contract. The
+         compiler still writes the file under obj/, which is all IDE0005 and the /// shape rules need. -->
+    <CopyDocumentationFileToOutputDirectory>false</CopyDocumentationFileToOutputDirectory>
     <NoWarn>$(NoWarn);CS1591;CS1573;CS1572;CS1574;CS0419;CS1587;CS1734</NoWarn>
   </PropertyGroup>
 
