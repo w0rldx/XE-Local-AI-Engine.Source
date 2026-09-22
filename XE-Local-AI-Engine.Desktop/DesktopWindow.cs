@@ -14,9 +14,6 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     private Task<GtkDesktopBridge>? _linuxInitialization;
     private GtkDesktopBridge? _linux;
     private bool _disposed;
-    private bool _closeReady;
-    private bool _closing;
-
 
     internal DesktopWindow(DesktopLaunchOptions options)
     {
@@ -97,21 +94,8 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         catch (Exception exception) { _ready.TrySetException(exception); }
     }
 
-    protected override void OnClosing(WindowClosingEventArgs e)
-    {
-        base.OnClosing(e);
-        if (e.Cancel || _closeReady || _disposed) { return; }
-        e.Cancel = true;
-        if (!_closing) { _closing = true; _ = FinishCloseAsync(); }
-    }
-
-    private async Task FinishCloseAsync()
-    {
-        await DisposeAsync();
-        _closeReady = true;
-        Close();
-    }
-
+    /// <summary>The single close and dispose entry point: DesktopApplication cancels the window's Closing event and
+    ///     disposes this window itself before the real close, so there is no second teardown path here.</summary>
     public async ValueTask DisposeAsync()
     {
         if (_disposed) { return; }

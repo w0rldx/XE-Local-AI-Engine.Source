@@ -25,7 +25,11 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     private bool _failed;
     private bool _disposed;
 
-    internal DesktopApplication(DesktopStartupOptions options) => _options = options;
+    internal DesktopApplication(DesktopStartupOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+    }
 
     public override void Initialize() => Styles.Add(new FluentTheme());
 
@@ -53,6 +57,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         base.OnFrameworkInitializationCompleted();
     }
 
+    // Windows-only by operator decision (docs/roadmaps/native-desktop-1.0.md): Linux tray hiding stays unavailable
+    // rather than hiding the window behind a tray host that may offer no way to restore it.
     private bool TrayAvailable => OperatingSystem.IsWindows() && _tray?.NativeMenuExporter is not null;
 
     private async Task InitializeDesktopAsync()
@@ -92,7 +98,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             startupWindow.Closing -= OnClosing;
             startupWindow.Close();
             await mainWindow.WaitUntilReadyAsync(_stopping.Token);
-            if (_engine.EngineExited is { } exit)
+            if (_engine.WaitForEngineExitAsync() is { } exit)
             {
                 _ = ExitWithEngineAsync(exit);
             }
@@ -101,11 +107,14 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         {
             // Quit waits for initialization before disposing its owned resources.
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            DesktopStartupDiagnostics.Record($"Desktop startup failed ({exception.GetType().Name}). {exception.Message}");
             await Console.Error.WriteLineAsync("Desktop startup failed; inspect the engine log and installed prerequisites.");
             if (_window is DesktopWindow failedWindow) { await failedWindow.DisposeAsync(); }
-            ShowFailure(OperatingSystem.IsLinux() && _window is DesktopWindow ? Linux.GtkDesktopBridge.FailureText : DesktopText.StartupFailed,
+            var reason = OperatingSystem.IsLinux() && _window is DesktopWindow ? Linux.GtkDesktopBridge.FailureText : DesktopText.StartupFailed;
+            // The engine's own last words (a missing shared runtime, a port conflict) are the only actionable part.
+            ShowFailure($"{reason}{Environment.NewLine}{Environment.NewLine}{exception.Message}",
                 includeWebViewLink: OperatingSystem.IsWindows());
         }
     }
@@ -371,7 +380,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         var quit = new Button { Content = DesktopText.Quit, HorizontalAlignment = HorizontalAlignment.Left };
         quit.Click += (_, _) => _ = QuitAsync();
         panel.Children.Add(quit);
-        _window.Content = panel;
+        // The engine's error tail can outgrow the startup window, and an unreachable Quit button is a hang.
+        _window.Content = new ScrollViewer { Content = panel };
         _window.Show();
         _window.Activate();
     }

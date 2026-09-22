@@ -182,6 +182,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             }
             catch (Exception exception)
             {
+                // Do not attach the exception to the log: downloader errors may include the feed URL or local paths.
                 _logger.LogWarning("Applying the app self-update failed.");
                 throw new AppUpdateException("The update could not be applied. Please try again later.", exception);
             }
@@ -220,6 +221,8 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             return new FileStream(Path.Combine(_hostContext.DataDirectory, DesktopShellLeaseFileName),
                 FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         }
+        // A lock another process holds is the expected answer, not a fault: Windows reports ERROR_SHARING_VIOLATION
+        // (0x80070020) or ERROR_LOCK_VIOLATION (0x80070021), Linux reports EAGAIN (11) from the advisory lock.
         catch (IOException exception) when (exception.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021) or 11)
         {
             throw new AppUpdateException("Close the native XE window, then apply this update from your browser.");

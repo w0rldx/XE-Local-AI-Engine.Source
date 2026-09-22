@@ -4,6 +4,10 @@ using System.Globalization;
 
 internal sealed class DesktopStartupOptions
 {
+    // Mirrors DesktopBootstrap.ApplicationDataFolderName in the managed Client (a separate assembly this shell does
+    // not reference); kept in sync by hand so both processes use the same per-user root.
+    internal const string ApplicationDataFolderName = "XE-Local-AI-Engine";
+
     public required string DataDirectory { get; init; }
     public required string ProfileDirectory { get; init; }
     public int? Port { get; init; }
@@ -23,8 +27,8 @@ internal sealed class DesktopStartupOptions
         while (index < args.Length)
         {
             var argument = args[index++];
-            if (string.Equals(argument, "--desktop", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(argument, "--no-browser", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(argument, DesktopEngineSession.DesktopArgument, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(argument, DesktopEngineSession.NoBrowserArgument, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -49,7 +53,7 @@ internal sealed class DesktopStartupOptions
         }
 
         var data = NormalizeDirectory(string.IsNullOrWhiteSpace(dataOverride)
-            ? Path.Combine(localApplicationData, "XE-Local-AI-Engine")
+            ? Path.Combine(localApplicationData, ApplicationDataFolderName)
             : dataOverride);
         return new DesktopStartupOptions { DataDirectory = data, ProfileDirectory = Path.Combine(data, "desktop-profile"), Port = port };
     }

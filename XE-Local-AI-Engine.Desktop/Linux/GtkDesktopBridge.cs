@@ -31,6 +31,9 @@ internal sealed class GtkDesktopBridge : IAsyncDisposable
     private bool _notifying;
     private long _bridgeGeneration;
 
+    // Mirrored by SAVE_TIMEOUT_MS in DownloadBridge.js, which cancels the page-side half of the same save.
+    internal static readonly TimeSpan SaveTimeout = TimeSpan.FromSeconds(90);
+
     private GtkDesktopBridge(GtkNativeApi api, nint view, Uri origin, NativeWebView webView, Window owner)
     {
         _api = api;
@@ -144,7 +147,7 @@ internal sealed class GtkDesktopBridge : IAsyncDisposable
             _seen.Enqueue(intent.Id);
             _activeSaveId = intent.Id;
             _saving = CancellationTokenSource.CreateLinkedTokenSource(_stopping.Token);
-            _saving.CancelAfter(TimeSpan.FromSeconds(90));
+            _saving.CancelAfter(SaveTimeout);
             _saveTask = SaveAsync(intent, _bridgeGeneration, _saving.Token);
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException) { /* Reject malformed native-only messages. */ }

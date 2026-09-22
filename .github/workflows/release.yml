@@ -200,6 +200,9 @@ jobs:
             --raw "$RAW_BUNDLE_INPUTS" \
             --output "${{ matrix.publish-dir }}/bundle-inputs.json"
 
+      # The shell publishes into the SAME publish-dir as the Client payload on purpose: vpk packs one tree, so the
+      # window and the engine it supervises must ship as one install. package-rc.sh and package-tester-win.ps1
+      # layer the two publishes the same way.
       - name: Publish native shell (${{ matrix.rid }})
         shell: bash
         run: |

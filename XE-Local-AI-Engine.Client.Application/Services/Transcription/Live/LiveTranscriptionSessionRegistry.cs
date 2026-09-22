@@ -536,8 +536,13 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             lock (session.Gate)
             {
                 session.Finalized = true;
-                var gracefulFailure = session.EndReason == LiveEndReason.Completed && !finalizedCleanly;
-                return (gracefulFailure ? LiveEndReason.Failed : session.EndReason, gracefulFailure);
+
+                // EndReason is written under this same gate, together with EndTask, before the task that runs this
+                // method exists; reaching here unset would mean the end pipeline started without an end.
+                var selected = session.EndReason
+                               ?? throw new InvalidOperationException("The live transcription session ended without a reason.");
+                var gracefulFailure = selected == LiveEndReason.Completed && !finalizedCleanly;
+                return (gracefulFailure ? LiveEndReason.Failed : selected, gracefulFailure);
             }
         }
         finally
@@ -816,7 +821,12 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
         public Task? EndTask { get; set; }
 
-        public LiveEndReason EndReason { get; set; }
+        /// <summary>
+        ///     Null until an end is selected. Nullable because <see cref="LiveEndReason.Completed" /> is the zero
+        ///     value: a non-nullable field would make a session that has not ended read as a graceful completion,
+        ///     which is exactly what the escalation guard in <c>BeginEnd</c> tests for.
+        /// </summary>
+        public LiveEndReason? EndReason { get; set; }
 
         /// <summary>
         ///     Set once the terminal status is about to be written. A commit that arrives after it is dropped: the

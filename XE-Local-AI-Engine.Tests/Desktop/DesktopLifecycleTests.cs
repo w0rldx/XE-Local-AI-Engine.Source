@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Desktop;
 
 using System.IO.Pipes;
+using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Desktop;
@@ -45,6 +46,22 @@ public sealed class DesktopLifecycleTests
         AssertEx.True(DesktopCommandLine.EngineArguments(["--headless", "--port=41234"]).SequenceEqual(["--headless", "--port=41234"]));
         AssertEx.True(DesktopCommandLine.EngineArguments(["--mcp-only"]).SequenceEqual(["--mcp-only"]));
         _ = AssertEx.Throws<ArgumentException>(() => DesktopCommandLine.EngineArguments(["--browser", "--headless"]));
+    }
+
+    [Test]
+    public void CommandLine_EnvironmentSelectedMcpOnlyBypassesTheWindowUnlessAnArgumentAsksForIt()
+    {
+        // The packaged default binary must keep the engine's unattended contract: XE_LAUNCH_MODE=mcp-only with no
+        // mode argument runs the engine headless, and the engine (not the shell) resolves the mode from the variable.
+        AssertEx.True(DesktopCommandLine.RunsEngine([], "mcp-only"));
+        AssertEx.True(DesktopCommandLine.RunsEngine(["--port=41234"], "MCP-ONLY"));
+        AssertEx.True(DesktopCommandLine.EngineArguments(["--port=41234"], "mcp-only").SequenceEqual(["--port=41234"]));
+
+        AssertEx.False(DesktopCommandLine.RunsEngine(["--desktop"], "mcp-only"));
+        AssertEx.True(DesktopCommandLine.EngineArguments(["--desktop"], "mcp-only").SequenceEqual(["--desktop"]));
+        AssertEx.False(DesktopCommandLine.RunsEngine([], "desktop"));
+        AssertEx.False(DesktopCommandLine.RunsEngine([], launchMode: null));
+        AssertEx.True(DesktopCommandLine.EngineArguments([], "desktop").SequenceEqual(["--desktop"]));
     }
 
     [Test]
@@ -198,9 +215,33 @@ public sealed class DesktopLifecycleTests
         var options = new DesktopStartupOptions { DataDirectory = directory.Path, ProfileDirectory = directory.Path, Origin = new Uri("http://127.0.0.1:35207") };
         await using var session = await DesktopEngineSession.StartAsync(options, CancellationToken.None);
         AssertEx.False(session.OwnsEngine);
-        AssertEx.Null(session.EngineExited);
+        AssertEx.Null(session.WaitForEngineExitAsync());
         AssertEx.Null(session.EngineExitCode);
         await session.StopAsync();
         AssertEx.Equal(options.Origin, session.Origin);
+    }
+
+    [Test]
+    public void ErrorTail_KeepsOnlyTheEnginesLastWordsAndSurvivesAnEmptyStream()
+    {
+        var tail = new StringBuilder();
+        DesktopEngineSession.AppendTail(tail, string.Empty);
+        AssertEx.Equal(0, tail.Length);
+
+        const string LastWords = "You must install or update .NET";
+        DesktopEngineSession.AppendTail(tail, new string('x', DesktopEngineSession.ErrorTailLimit));
+        DesktopEngineSession.AppendTail(tail, LastWords);
+        var kept = tail.ToString();
+        AssertEx.Equal(DesktopEngineSession.ErrorTailLimit, kept.Length);
+        AssertEx.Equal(new string('x', DesktopEngineSession.ErrorTailLimit - LastWords.Length) + LastWords, kept);
+    }
+
+    [Test]
+    public void StartupFailure_ReportsTheEnginesErrorTailAndStaysReadableWithoutOne()
+    {
+        AssertEx.Equal("The engine exited before readiness.", DesktopEngineSession.DescribeStartupFailure(null));
+        AssertEx.Equal("The engine exited before readiness.", DesktopEngineSession.DescribeStartupFailure("  \n "));
+        AssertEx.Equal("The engine exited before readiness. It reported: You must install or update .NET",
+            DesktopEngineSession.DescribeStartupFailure("  You must install or update .NET\n"));
     }
 }

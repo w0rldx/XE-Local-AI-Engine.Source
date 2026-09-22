@@ -199,6 +199,9 @@ Both are wired in `ConfigureServices.AddServices` and both have a rule that is e
 
 ## 5. Packaged local modes: native desktop, browser and headless
 
+Why the shell is a separate process, who owns the engine, and why the Linux and Windows document
+policies differ: [ADR 0013](../adr/0013-native-desktop-shell.md).
+
 Packaged Windows and Ubuntu launches default to `XE-Local-AI-Engine.Desktop`.
 `DesktopEngineSession` discovers a healthy engine for the selected data root or starts the
 adjacent engine with `--desktop --no-browser`. The existing React bundle still uses REST,
@@ -240,7 +243,9 @@ are tracked in [Native desktop checkpoint](../roadmaps/native-desktop-1.0.md).
 `XE_LAUNCH_MODE=desktop`, `--desktop`, or a managed package's default launch; MCP-only requires
 `XE_LAUNCH_MODE=mcp-only` or `--mcp-only`. An explicit local-mode argument wins over the managed
 desktop default, which prevents one-shot installer commands from opening a browser. With no local
-signal, Aspire/CI headless behavior is unchanged.
+signal, Aspire/CI headless behavior is unchanged. The shell binary honours the same variable:
+`XE_LAUNCH_MODE=mcp-only` with no `--desktop` argument runs the engine unattended without a window
+(`DesktopCommandLine.RunsEngine`), so the variable keeps working on a display-less machine.
 
 ```
  launcher/package selects a local mode

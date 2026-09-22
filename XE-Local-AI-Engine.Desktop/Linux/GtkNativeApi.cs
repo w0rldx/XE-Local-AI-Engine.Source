@@ -62,6 +62,7 @@ internal sealed class GtkNativeApi : IDisposable
     internal nint Ref(nint value) => Object<Pointer>("g_object_ref")(value);
     internal void Unref(nint value) => Object<Command>("g_object_unref")(value);
     internal void Disconnect(nint value, ulong signal) => Object<DisconnectSignal>("g_signal_handler_disconnect")(value, signal);
+    // No GDestroyNotify is passed, so the caller owns the delegate's lifetime: hold it in a field and Disconnect before releasing it.
     internal ulong Connect(nint value, string signal, Delegate callback)
     {
         var id = Object<ConnectSignal>("g_signal_connect_data")(value, signal, Marshal.GetFunctionPointerForDelegate(callback), nint.Zero, nint.Zero, 0);
@@ -78,6 +79,7 @@ internal sealed class GtkNativeApi : IDisposable
         var csp = new List<string>();
         var permissions = new List<string>();
         var validHeaders = true;
+        // The one callback not stored in a field: soup_message_headers_foreach invokes it synchronously and returns, so GC.KeepAlive below bounds its lifetime.
         HeaderCallback callback = (name, value, _) =>
         {
             try

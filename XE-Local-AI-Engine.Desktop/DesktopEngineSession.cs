@@ -3,13 +3,30 @@ namespace XE_Local_AI_Engine.Desktop;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Pipes;
+using System.Text;
 using System.Text.Json;
 
 internal sealed class DesktopEngineSession : IAsyncDisposable
 {
+    /// <summary>Name of the environment variable carrying the supervisor's one-way lifetime pipe to the engine.</summary>
+    internal const string LifetimePipeVariable = "XE_DESKTOP_LIFETIME_PIPE";
+
+    /// <summary>Name of the environment variable carrying this shell's process id to an owned engine.</summary>
+    internal const string SupervisorProcessIdVariable = "XE_DESKTOP_SUPERVISOR_PID";
+
+    /// <summary>The argument that puts an owned engine into desktop mode.</summary>
+    internal const string DesktopArgument = "--desktop";
+
+    /// <summary>The argument that stops an owned engine from opening a browser of its own.</summary>
+    internal const string NoBrowserArgument = "--no-browser";
+
+    /// <summary>How much of the engine's standard error is kept for a startup failure report.</summary>
+    internal const int ErrorTailLimit = 4096;
+
     private readonly Process? _process;
     private readonly NamedPipeServerStream? _lifetime;
     private readonly CancellationTokenSource _reading = new();
+    private readonly StringBuilder _errorTail = new();
     private Task _output = Task.CompletedTask;
     private Task _errors = Task.CompletedTask;
     private bool _stopped;
@@ -25,8 +42,18 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
 
     internal Uri Origin => _origin ?? throw new InvalidOperationException("The engine is not ready.");
     internal bool OwnsEngine => _process is not null;
-    internal Task? EngineExited => _process?.WaitForExitAsync(CancellationToken.None);
     internal int? EngineExitCode => _process is { HasExited: true } ? _process.ExitCode : null;
+
+    /// <summary>The last <see cref="ErrorTailLimit" /> characters the owned engine wrote to standard error.</summary>
+    private string ErrorTail
+    {
+        get
+        {
+            lock (_errorTail) { return _errorTail.ToString(); }
+        }
+    }
+
+    internal Task? WaitForEngineExitAsync() => _process?.WaitForExitAsync(CancellationToken.None);
 
     internal static async Task<DesktopEngineSession> StartAsync(DesktopStartupOptions options, CancellationToken cancellationToken)
     {
@@ -42,33 +69,39 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
             return new DesktopEngineSession(existing);
         }
 
-        var owned = await StartOwnedAsync(options, cancellationToken);
+        var (owned, errorTail) = await StartOwnedAsync(options, cancellationToken);
         if (owned is not null)
         {
             return owned;
         }
 
         existing = await DiscoverAsync(options.DataDirectory, cancellationToken);
-        if (existing is null) { throw new InvalidOperationException("The engine exited before readiness."); }
+        if (existing is null) { throw new InvalidOperationException(DescribeStartupFailure(errorTail)); }
         ValidateRequestedPort(existing, options.Port);
         return new DesktopEngineSession(existing);
     }
 
-    private static async Task<DesktopEngineSession?> StartOwnedAsync(DesktopStartupOptions options, CancellationToken cancellationToken)
+    /// <summary>Carries the engine's own last words (a missing shared runtime, a port conflict) into the failure the
+    ///     operator sees and the startup breadcrumb, instead of discarding them with the child process.</summary>
+    internal static string DescribeStartupFailure(string? errorTail) => string.IsNullOrWhiteSpace(errorTail)
+        ? "The engine exited before readiness."
+        : "The engine exited before readiness. It reported: " + errorTail.Trim();
+
+    private static async Task<(DesktopEngineSession? Session, string? ErrorTail)> StartOwnedAsync(DesktopStartupOptions options, CancellationToken cancellationToken)
     {
         var start = CreateStartInfo(options.DataDirectory);
         var pipeName = "xe-desktop-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
         var pipe = new NamedPipeServerStream(pipeName, PipeDirection.Out, 1,
             PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-        start.ArgumentList.Add("--desktop");
-        start.ArgumentList.Add("--no-browser");
+        start.ArgumentList.Add(DesktopArgument);
+        start.ArgumentList.Add(NoBrowserArgument);
         if (options.Port is { } port)
         {
             start.ArgumentList.Add("--port");
             start.ArgumentList.Add(port.ToString(CultureInfo.InvariantCulture));
         }
 
-        start.Environment["XE_DESKTOP_LIFETIME_PIPE"] = pipeName;
+        start.Environment[LifetimePipeVariable] = pipeName;
         var process = new Process { StartInfo = start };
         DesktopEngineSession? session = null;
         try
@@ -83,7 +116,7 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
 
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             session._output = DrainOutputAsync(process.StandardOutput, ready, session._reading.Token);
-            session._errors = process.StandardError.BaseStream.CopyToAsync(Stream.Null, session._reading.Token);
+            session._errors = DrainErrorsAsync(process.StandardError, session._errorTail, session._reading.Token);
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             deadline.CancelAfter(TimeSpan.FromMinutes(2));
             var startup = Task.WhenAll(pipe.WaitForConnectionAsync(deadline.Token), ready.Task.WaitAsync(deadline.Token));
@@ -102,14 +135,15 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
                     // The candidate lost a startup race or exited before readiness.
                 }
 
-                return null;
+                // Read before the finally disposes the session: this is the only surviving trace of why it died.
+                return (null, session.ErrorTail);
             }
 
             await startup;
             session._origin = await ReadOwnedReadyAsync(options.DataDirectory, process.Id, deadline.Token);
             var ownedSession = session;
             session = null;
-            return ownedSession;
+            return (ownedSession, null);
         }
         finally
         {
@@ -151,10 +185,10 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         start.Environment["XE_DATA_DIR"] = dataDirectory;
         if (OperatingSystem.IsLinux())
         {
-            start.Environment["XE_DESKTOP_SUPERVISOR_PID"] = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
+            start.Environment[SupervisorProcessIdVariable] = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
         }
 
-        start.Environment.Remove("XE_DESKTOP_LIFETIME_PIPE");
+        start.Environment.Remove(LifetimePipeVariable);
         return start;
     }
 
@@ -324,6 +358,38 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         finally
         {
             ready.TrySetException(new InvalidOperationException("The engine exited before readiness."));
+        }
+    }
+
+    private static async Task DrainErrorsAsync(StreamReader reader, StringBuilder tail, CancellationToken cancellationToken)
+    {
+        var buffer = new char[1024];
+        try
+        {
+            int read;
+            while ((read = await reader.ReadAsync(buffer, cancellationToken)) > 0)
+            {
+                lock (tail)
+                {
+                    AppendTail(tail, new ReadOnlySpan<char>(buffer, 0, read));
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Teardown cancels the read; whatever was captured before that is what the failure report gets.
+        }
+    }
+
+    /// <summary>Keeps only the last <see cref="ErrorTailLimit" /> characters: a looping engine can write megabytes,
+    ///     and only its final lines say why it stopped.</summary>
+    internal static void AppendTail(StringBuilder tail, ReadOnlySpan<char> text)
+    {
+        ArgumentNullException.ThrowIfNull(tail);
+        _ = tail.Append(text);
+        if (tail.Length > ErrorTailLimit)
+        {
+            _ = tail.Remove(0, tail.Length - ErrorTailLimit);
         }
     }
 

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Desktop;
 
+using System.Globalization;
 using System.Text.Json;
 using XE_Local_AI_Engine.Desktop.Linux;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -137,5 +138,47 @@ public sealed class LinuxDesktopPolicyTests
         AssertEx.False(File.Exists(first));
         _ = AssertEx.Throws<ArgumentException>(() => GtkDownload.TemporaryPath("relative.json"));
         _ = AssertEx.Throws<ArgumentException>(() => GtkDownload.TemporaryPath(destination + "\n"));
+    }
+
+    [Test]
+    public void ExportBridgeScript_PinsTheSameLimitsTheNativeSideEnforces()
+    {
+        var script = ExportBridgeScript();
+        AssertEx.Equal(GtkSaveIntent.MaximumBytes, ScriptConstant(script, "MAX_BLOB_BYTES"));
+        AssertEx.Equal((long)GtkDesktopBridge.SaveTimeout.TotalMilliseconds, ScriptConstant(script, "SAVE_TIMEOUT_MS"));
+        AssertEx.Equal(256L, ScriptConstant(script, "MAX_CACHED_BLOBS"));
+    }
+
+    [Test]
+    public void ExportBridgeScript_KeepsTheNonceTokenEveryMessageKindAndTheNativeSurface()
+    {
+        var script = ExportBridgeScript();
+        AssertEx.Contains(script, "__XE_NONCE__"); // GtkDesktopBridge.ArmAsync substitutes the armed nonce here.
+        foreach (var kind in new[] { "xe-save", "xe-save-cancel", "xe-save-unavailable", "xe-frame-blocked" })
+        {
+            AssertEx.Contains(script, $"kind: '{kind}'");
+        }
+
+        AssertEx.Contains(script, "globalThis.__xeSaveBridge = {");
+        AssertEx.Contains(script, "return 'installed';");
+    }
+
+    private static string ExportBridgeScript()
+    {
+        using var stream = typeof(GtkSaveIntent).Assembly.GetManifestResourceStream("DesktopDownloadBridge.js");
+        using var reader = new StreamReader(AssertEx.NotNull(stream, "The Desktop assembly no longer embeds DesktopDownloadBridge.js."));
+        return reader.ReadToEnd();
+    }
+
+    private static long ScriptConstant(string script, string name)
+    {
+        var declaration = $"const {name} = ";
+        var start = script.IndexOf(declaration, StringComparison.Ordinal);
+        AssertEx.True(start >= 0, $"DesktopDownloadBridge.js no longer declares {name}.");
+        var end = script.IndexOf(';', start);
+        AssertEx.True(end > start, $"The {name} declaration in DesktopDownloadBridge.js is unterminated.");
+        return script[(start + declaration.Length)..end]
+            .Split('*')
+            .Aggregate(1L, (product, factor) => product * long.Parse(factor.Trim(), CultureInfo.InvariantCulture));
     }
 }

@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- Required by the LibraryImport source generator for DesktopEngineCommand's kill(2) P/Invoke (SYSLIB1062); no
+         hand-written unsafe code exists in this project. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>XE_Local_AI_Engine.Desktop</RootNamespace>
     <AssemblyName>XE-Local-AI-Engine.Desktop</AssemblyName>

@@ -1,70 +1,153 @@
+/*
+ * XE native export bridge — evaluated in the WebKitGTK page by GtkDesktopBridge.ArmAsync (Linux native shell).
+ *
+ * Purpose: keep an in-page export inside the native shell. The SPA builds a Blob, hands it to
+ * URL.createObjectURL and clicks an <a download>. This script owns that click: it looks the Blob up, hashes
+ * it, and asks the native side to run the save through a GTK file picker instead of letting WebKit download
+ * it on its own. It also reports any frame in the document, because the native document policy forbids them.
+ *
+ * Outbound messages — JSON, sent through window.webkit.messageHandlers.postAvWebViewMessage and parsed by
+ * GtkDesktopBridge.ReceiveMessage, which drops anything whose nonce does not match the armed one:
+ *   { kind: 'xe-save',             nonce, id, url, filename, size, sha256 }  export ready; validated by GtkSaveIntent.Parse
+ *   { kind: 'xe-save-cancel',      nonce, id }                               the page-side save timed out
+ *   { kind: 'xe-save-unavailable', nonce }                                   the click cannot become an export
+ *   { kind: 'xe-frame-blocked',    nonce }                                   a frame exists or was just inserted
+ *
+ * Inbound calls, made from C# through NativeWebView.InvokeScript:
+ *   globalThis.__xeSaveBridge.finish(nonce, id)  terminal native acknowledgment: release the Blob held for `id`
+ *   globalThis.__xeSaveBridge.reset(nonce)       re-arm on the same document: drop the pending save, adopt the new nonce
+ *
+ * Return value — ArmAsync accepts exactly 'installed' and treats everything else as a failure:
+ *   'installed'   the bridge is live in this document (also when an already installed bridge was re-armed)
+ *   'unavailable' this document cannot host the bridge (sub-frame, no message handler, or a frame is present)
+ *
+ * __XE_NONCE__ is substituted with a JSON string literal by GtkDesktopBridge.ArmAsync before evaluation.
+ * MAX_BLOB_BYTES and SAVE_TIMEOUT_MS must stay equal to their C# counterparts, GtkSaveIntent.MaximumBytes and
+ * GtkDesktopBridge.SaveTimeout: the native side re-checks both and a larger or slower export is rejected there,
+ * not here. LinuxDesktopPolicyTests pins all three constants. Plain ES2020: no build step, no dependencies.
+ */
 (() => {
+  // ---- Guard: only the top document, with a live Avalonia message handler, can host the bridge.
+  if (window !== window.top || !window.webkit?.messageHandlers?.postAvWebViewMessage) { return 'unavailable'; }
+
+  // ---- Config
+  const MAX_BLOB_BYTES = 50 * 1024 * 1024; // Equals GtkSaveIntent.MaximumBytes, which rejects a larger export.
+  const MAX_CACHED_BLOBS = 256; // Page-side memory bound for the Blob registry; no C# counterpart.
+  const SAVE_TIMEOUT_MS = 90000; // Equals GtkDesktopBridge.SaveTimeout, which cancels the native save.
+  const FRAME_SELECTOR = 'iframe,frame,object,embed';
   let nonce = __XE_NONCE__;
-  if (window !== window.top || !window.webkit?.messageHandlers?.postAvWebViewMessage) return 'unavailable';
-  if (globalThis.__xeSaveBridge) { globalThis.__xeSaveBridge.reset(nonce); return 'installed'; }
-  const post = value => window.webkit.messageHandlers.postAvWebViewMessage.postMessage(JSON.stringify(value));
-  const frames = () => document.querySelector('iframe,frame,object,embed') !== null;
-  if (frames()) return 'unavailable';
-  new MutationObserver(records => {
-    const inserted = records.some(record => Array.from(record.addedNodes).some(node =>
-      node instanceof Element && (node.matches('iframe,frame,object,embed') || node.querySelector('iframe,frame,object,embed'))));
-    if (frames() || inserted) post({ kind: 'xe-frame-blocked', nonce });
+
+  // ---- Re-entry: arming the same document again re-uses the installed bridge and adopts the fresh nonce.
+  if (globalThis.__xeSaveBridge) {
+    globalThis.__xeSaveBridge.reset(nonce);
+    return 'installed';
+  }
+
+  // ---- Transport: outbound messages are fire-and-forget, and a torn-down handler must never abort a caller.
+  const postSafely = message => {
+    try {
+      window.webkit.messageHandlers.postAvWebViewMessage.postMessage(JSON.stringify(message));
+    } catch { /* The page-side flow still has to run to completion without the native side. */ }
+  };
+
+  // ---- Frame guard: the native document policy forbids frames, so report one instead of exporting from it.
+  const hasFrame = () => document.querySelector(FRAME_SELECTOR) !== null;
+  if (hasFrame()) { return 'unavailable'; }
+  const insertsFrame = mutations => mutations.some(mutation => Array.from(mutation.addedNodes).some(
+    node => node instanceof Element && (node.matches(FRAME_SELECTOR) || node.querySelector(FRAME_SELECTOR) !== null)));
+  new MutationObserver(mutations => {
+    if (hasFrame() || insertsFrame(mutations)) { postSafely({ kind: 'xe-frame-blocked', nonce }); }
   }).observe(document, { childList: true, subtree: true });
-  const originalCreate = URL.createObjectURL.bind(URL);
-  const originalRevoke = URL.revokeObjectURL.bind(URL);
-  const originalClick = HTMLAnchorElement.prototype.click;
-  const blobs = new Map();
-  let pending = null;
+
+  // ---- Blob registry: remember the Blob behind every object URL this document creates, oldest evicted first.
+  const createObjectUrl = URL.createObjectURL.bind(URL);
+  const revokeObjectUrl = URL.revokeObjectURL.bind(URL);
+  const cachedBlobs = new Map();
   URL.createObjectURL = blob => {
-    const url = originalCreate(blob);
-    if (blobs.size >= 256) blobs.delete(blobs.keys().next().value);
-    if (blob.size <= 50 * 1024 * 1024) blobs.set(url, blob);
+    const url = createObjectUrl(blob);
+    if (cachedBlobs.size >= MAX_CACHED_BLOBS) { cachedBlobs.delete(cachedBlobs.keys().next().value); }
+    if (blob.size <= MAX_BLOB_BYTES) { cachedBlobs.set(url, blob); }
     return url;
   };
   URL.revokeObjectURL = url => {
-    if (pending?.url === url) return;
-    blobs.delete(url);
-    originalRevoke(url);
+    if (pendingSave?.url === url) { return; } // The page revokes right after the click; the save still needs the Blob.
+    cachedBlobs.delete(url);
+    revokeObjectUrl(url);
   };
-  const release = id => {
-    if (!pending || pending.id !== id) return false;
-    clearTimeout(pending.timer);
-    blobs.delete(pending.url);
-    originalRevoke(pending.url);
-    pending = null;
+
+  // ---- Pending-save state: one export at a time, its Blob URL kept alive until the native side acknowledges.
+  let pendingSave = null; // { id, url, timer } while a save is in flight, otherwise null.
+  const releasePendingSave = id => {
+    if (pendingSave === null || pendingSave.id !== id) { return false; }
+    clearTimeout(pendingSave.timer);
+    cachedBlobs.delete(pendingSave.url);
+    revokeObjectUrl(pendingSave.url);
+    pendingSave = null;
     return true;
   };
-  const intercept = anchor => {
-    if (!anchor.hasAttribute('download') || anchor.protocol !== 'blob:') return false;
-    const url = anchor.href;
-    const blob = blobs.get(url);
-    if (pending) return true;
-    if (!blob || new URL(url).origin !== location.origin || blob.size > 50 * 1024 * 1024) {
-      post({ kind: 'xe-save-unavailable', nonce });
-      return true;
-    }
+
+  // ---- Download interception: an <a download> aimed at one of our Blob URLs becomes a native save intent.
+  const isBlobDownload = anchor => anchor.hasAttribute('download') && anchor.protocol === 'blob:';
+  const rejectSave = () => {
+    postSafely({ kind: 'xe-save-unavailable', nonce });
+    return true;
+  };
+
+  const beginSave = (blob, url, filename) => {
     const id = crypto.randomUUID();
-    const filename = anchor.download;
-    pending = { id, url, timer: setTimeout(() => {
-      try { post({ kind: 'xe-save-cancel', nonce, id }); } catch {} finally { release(id); }
-    }, 90000) };
+    const timer = setTimeout(() => {
+      postSafely({ kind: 'xe-save-cancel', nonce, id });
+      releasePendingSave(id);
+    }, SAVE_TIMEOUT_MS);
+    pendingSave = { id, url, timer };
     // Keep the Blob URL alive while hashing and until native terminal acknowledgment.
-    blob.arrayBuffer().then(bytes => crypto.subtle.digest('SHA-256', bytes)).then(hash => {
-      if (pending?.id !== id) return;
-      post({ kind: 'xe-save', nonce, id, url, filename,
-        size: blob.size, sha256: Array.from(new Uint8Array(hash), value => value.toString(16).padStart(2, '0')).join('') });
-    }).catch(() => release(id));
+    blob.arrayBuffer()
+      .then(bytes => crypto.subtle.digest('SHA-256', bytes))
+      .then(digest => {
+        if (pendingSave?.id !== id) { return; }
+        const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+        postSafely({ kind: 'xe-save', nonce, id, url, filename, size: blob.size, sha256 });
+      })
+      .catch(() => releasePendingSave(id));
+  };
+
+  // True when this click was consumed, and the caller must suppress the browser's own download.
+  const intercept = anchor => {
+    if (!isBlobDownload(anchor)) { return false; }
+    if (pendingSave !== null) { return rejectSave(); } // A second export click while a save is still in flight.
+    const url = anchor.href;
+    const blob = cachedBlobs.get(url);
+    if (blob === undefined) { return rejectSave(); } // Not created by this document, or already evicted.
+    if (new URL(url).origin !== location.origin) { return rejectSave(); }
+    if (blob.size > MAX_BLOB_BYTES) { return rejectSave(); }
+    beginSave(blob, url, anchor.download);
     return true;
   };
-  HTMLAnchorElement.prototype.click = function() {
-    if (!intercept(this)) return Reflect.apply(originalClick, this, []);
+
+  const originalAnchorClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () {
+    if (!intercept(this)) { Reflect.apply(originalAnchorClick, this, []); }
   };
   document.addEventListener('click', event => {
     const anchor = event.target instanceof Element ? event.target.closest('a') : null;
-    if (anchor && intercept(anchor)) { event.preventDefault(); event.stopImmediatePropagation(); }
+    if (anchor !== null && intercept(anchor)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
   }, true);
-  globalThis.__xeSaveBridge = { finish: (replyNonce, id) => replyNonce === nonce && release(id),
-    reset: value => { if (pending) release(pending.id); nonce = value; } };
-  window.addEventListener('pagehide', () => { if (pending) release(pending.id); }, { once: true });
+
+  // ---- Public native bridge: the only surface C# calls into.
+  globalThis.__xeSaveBridge = {
+    finish: (replyNonce, id) => replyNonce === nonce && releasePendingSave(id),
+    reset: freshNonce => {
+      if (pendingSave !== null) { releasePendingSave(pendingSave.id); }
+      nonce = freshNonce;
+    },
+  };
+
+  // ---- Lifecycle: leaving the document drops the pending save so its Blob URL is not leaked.
+  window.addEventListener('pagehide', () => {
+    if (pendingSave !== null) { releasePendingSave(pendingSave.id); }
+  }, { once: true });
   return 'installed';
 })()

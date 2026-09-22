@@ -2,6 +2,8 @@
 
 Status: implementation delivered as a merge candidate; final validation and review are recorded below. Merge requires operator approval; real Ubuntu GUI acceptance remains waived.
 
+Decision record: [ADR 0013](../adr/0013-native-desktop-shell.md)
+
 ## Approved direction
 
 - Native desktop is required for 1.0. Keep React, the standalone ASP.NET Core engine,

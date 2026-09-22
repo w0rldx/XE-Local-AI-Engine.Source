@@ -10,6 +10,9 @@ internal static class FrameworkDependentVelopackBootstrap
 {
     internal const string WindowsLauncherFileName = "XE-Local-AI-Engine.WindowsLauncher.exe";
 
+    /// <summary>The desktop shell publishes its own process id here; the shell duplicates the literal.</summary>
+    internal const string SupervisorProcessIdVariable = "XE_DESKTOP_SUPERVISOR_PID";
+
     internal static void Run(string[] args)
     {
         var app = VelopackApp.Build().SetArgs(args);
@@ -31,8 +34,8 @@ internal static class FrameworkDependentVelopackBootstrap
 
         if (OperatingSystem.IsLinux())
         {
-            var supervisor = Environment.GetEnvironmentVariable("XE_DESKTOP_SUPERVISOR_PID");
-            Environment.SetEnvironmentVariable("XE_DESKTOP_SUPERVISOR_PID", null);
+            var supervisor = Environment.GetEnvironmentVariable(SupervisorProcessIdVariable);
+            Environment.SetEnvironmentVariable(SupervisorProcessIdVariable, null);
             var process = new DefaultProcessImpl(NullVelopackLogger.Instance);
             app.SetLocator(new LinuxVelopackLocator(CreateSupervisedProcess(process, supervisor), customLog: null));
         }
