@@ -7,6 +7,7 @@ TEMP_ROOT="$(mktemp -d)"
 # Name the command that ended the run: under -e a failing check exits 1 with no output, which left one CI log with
 # nothing but the runner's verdict. Only the exit trap reports, so the negative controls that expect a failure stay quiet.
 failed_at=''
+rc=0
 trap 'failed_at="line ${LINENO}: ${BASH_COMMAND}"' ERR
 trap 'rc=$?; rm -rf -- "${TEMP_ROOT}"; if [[ "${rc}" -ne 0 ]]; then echo "openapi-live-check.test.sh: FAILED (exit ${rc}) at ${failed_at}" >&2; fi' EXIT
 mkdir -p "${TEMP_ROOT}/bin"
