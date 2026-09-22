@@ -153,6 +153,10 @@ published.
 
 ### Changed
 
+- **Launching the packaged app with no arguments opens the native desktop window instead of a browser.** That is
+  double-clicking `XE-Local-AI-Engine.WindowsLauncher.exe` on Windows, and running the AppImage — whose main
+  executable is `XE-Local-AI-Engine.Desktop` — on Ubuntu. `--browser` and `--headless` restore the previous
+  behaviour, and `XE_LAUNCH_MODE=mcp-only` or `--mcp-only` still runs unattended with no window.
 - Chat corrects its context window from the token usage a provider actually reports, and conversation compaction
   bounds its summarizer folds with an output cap and a gated thinking switch, with synopsis fidelity and language
   pinned in the prompt.
