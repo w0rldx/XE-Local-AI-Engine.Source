@@ -130,6 +130,81 @@ public sealed class LlamaCppRuntimeEndpointTests
         await catalog.ReceivedWithAnyArgs().ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    // The tester's phantom banner: the startup check runs BEFORE first-run provisioning writes installed-runtime.json,
+    // caching updateAvailable=true against installedTag=null, and the SPA's mount query passes no ?refresh.
+    [Test]
+    public async Task RuntimeStatus_WhenCachedSnapshotPredatesTheInstalledTag_RecomputesWithoutRefresh()
+    {
+        var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        var updateState = new LlamaCppUpdateState();
+        updateState.Store(new LlamaCppUpdateSnapshot
+        {
+            InstalledTag = null,
+            RecommendedTag = "b10201",
+            UpstreamLatestTag = "b10201",
+            UpdateAvailable = true,
+            IsOffline = false,
+            CheckedAtUtc = DateTimeOffset.UtcNow
+        });
+
+        await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(),
+            updateState,
+            catalog,
+            installedRuntime: InstalledAt("b10201"),
+            nodeSettings: OfflineSettings("b10201"));
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.False(doc.RootElement.GetProperty("updateAvailable").GetBoolean(),
+            "The installed tag already equals the recommended one, so no update may be advertised.");
+        AssertEx.Equal("b10201", doc.RootElement.GetProperty("installed").GetProperty("tag").GetString());
+        AssertEx.Equal("b10201", updateState.Current.InstalledTag);
+
+        // The reconcile is local arithmetic over tags already in hand — it must not spend the GitHub budget.
+        await catalog.DidNotReceiveWithAnyArgs().ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await catalog.DidNotReceiveWithAnyArgs().ResolveUpstreamLatestAsync(Arg.Any<CancellationToken>());
+    }
+
+    // The other half of the guard: when the snapshot was computed against the tag that is installed, it is served
+    // verbatim. Seeded deliberately wrong (equal tags, updateAvailable=true) so a silent recompute would flip it.
+    [Test]
+    public async Task RuntimeStatus_WhenCachedSnapshotMatchesTheInstalledTag_ServesCachedWithoutCallingCatalog()
+    {
+        var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        var updateState = new LlamaCppUpdateState();
+        updateState.Store(new LlamaCppUpdateSnapshot
+        {
+            InstalledTag = "b10201",
+            RecommendedTag = "b10201",
+            UpstreamLatestTag = "b10201",
+            UpdateAvailable = true,
+            IsOffline = false,
+            CheckedAtUtc = DateTimeOffset.UtcNow
+        });
+
+        await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(),
+            updateState,
+            catalog,
+            installedRuntime: InstalledAt("b10201"),
+            nodeSettings: OfflineSettings("b10201"));
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.True(doc.RootElement.GetProperty("updateAvailable").GetBoolean(), "The cached snapshot must be served unchanged.");
+        await catalog.DidNotReceiveWithAnyArgs().ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await catalog.DidNotReceiveWithAnyArgs().ResolveUpstreamLatestAsync(Arg.Any<CancellationToken>());
+    }
+
     [Test]
     public async Task UpdateRuntime_WhenTagMalformed_ReturnsBadRequestWithoutInstalling()
     {
@@ -381,16 +456,22 @@ public sealed class LlamaCppRuntimeEndpointTests
         AssertEx.Equal(JsonValueKind.Number, doc.RootElement.GetProperty("checkedAtUtc").ValueKind);
     }
 
+    private static InstalledRuntimeState InstalledAt(string tag) =>
+        new(tag, $"llama-{tag}-bin-win-cuda-x64.zip", new string('a', count: 64), GpuVariant.Cuda, DateTimeOffset.UtcNow);
+
     /// <summary>A node whose operator chose Offline: every automatic check is off, and every manual action still works.</summary>
-    private static FakeNodeSettingsStore OfflineSettings()
+    private static FakeNodeSettingsStore OfflineSettings(string? recommendedLlamaCppTag = null)
     {
-        return new FakeNodeSettingsStore(new StoredNodeSettings
+        var settings = new StoredNodeSettings
         {
             ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline,
             AutoCheckApplicationUpdates = false,
             AutoCheckRuntimeUpdates = false,
             AutoProvisionFirstRunModel = false
-        });
+        };
+        return new FakeNodeSettingsStore(recommendedLlamaCppTag is null
+            ? settings
+            : settings with { RecommendedLlamaCppTag = recommendedLlamaCppTag });
     }
 
     private static TestServerWebAppFactory CreateFactory(ILlamaCppBinaryManager binaryManager,

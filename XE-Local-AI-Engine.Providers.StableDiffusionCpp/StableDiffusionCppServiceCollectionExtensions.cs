@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
@@ -48,11 +49,17 @@ public static class StableDiffusionCppServiceCollectionExtensions
         // Vulkan backend on a box (e.g. WSL2) where sd-server would hard-fail with "backend 'vulkan0' was not found".
         services.TryAddSingleton<IVulkanDeviceProbe, DefaultVulkanDeviceProbe>();
 
+        // The companion CUDA probe: nvidia-smi reporting an NVIDIA GPU proves the display driver, not that a CUDA build
+        // finds a device. Without this the Windows NVIDIA branch picks CUDA blind and sd-server exits on every spawn.
+        services.TryAddSingleton<ICudaDeviceProbe, DefaultCudaDeviceProbe>();
+
         services.TryAddSingleton<ISdGpuBackendSelector>(static sp =>
             new SdGpuBackendSelector(sp.GetRequiredService<IHardwareProfiler>(),
                 sp.GetRequiredService<StableDiffusionServerRuntimeOverrideOptions>(),
                 sp.GetRequiredService<IVulkanDeviceProbe>(),
-                sp.GetRequiredService<IStableDiffusionManagedSourceBuildSignal>()));
+                sp.GetRequiredService<ICudaDeviceProbe>(),
+                sp.GetRequiredService<IStableDiffusionManagedSourceBuildSignal>(),
+                sp.GetService<ILogger<SdGpuBackendSelector>>()));
 
         services.TryAddSingleton<IStableDiffusionBinaryManager>(static sp =>
             new StableDiffusionCppBinaryManager(sp.GetRequiredService<IHttpClientFactory>().CreateClient(BinaryHttpClientName),

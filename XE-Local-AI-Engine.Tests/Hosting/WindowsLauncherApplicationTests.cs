@@ -29,6 +29,32 @@ public sealed class WindowsLauncherApplicationTests
     }
 
     [Test]
+    [Arguments("--browser")]
+    [Arguments("--headless")]
+    [Arguments("--no-browser")]
+    [Arguments("--mcp-only")]
+    [Arguments("--help")]
+    [Arguments("--status")]
+    [Arguments("--setup")]
+    [Arguments("--mcp-key=agentic")]
+    [Arguments("--reset-admin-password=secret")]
+    [Arguments("--knowledge-downgrade-preflight")]
+    [Arguments("--knowledge-downgrade-export")]
+    public void ShouldDetachConsole_KeepsTheConsoleForEveryModeThatPrintsToIt(string argument) =>
+        AssertEx.False(WindowsLauncherApplication.ShouldDetachConsole([argument]),
+            $"{argument} writes to the inherited console, so the launcher must keep it.");
+
+    [Test]
+    public void ShouldDetachConsole_ReleasesTheConsoleOnlyForTheDesktopShell()
+    {
+        AssertEx.True(WindowsLauncherApplication.ShouldDetachConsole([]), "A plain double-click starts the GUI shell.");
+        AssertEx.True(WindowsLauncherApplication.ShouldDetachConsole(["--desktop", "--port", "41234"]),
+            "An update restart also starts the GUI shell.");
+        AssertEx.False(WindowsLauncherApplication.ShouldDetachConsole(["--desktop", "--status"]),
+            "A mode argument that prints wins over the desktop argument.");
+    }
+
+    [Test]
     [Arguments("10.0.11", true)]
     [Arguments("10.0.12", true)]
     [Arguments("10.1.0", false)]

@@ -33,6 +33,17 @@ internal interface IImageServerProcessHandle : IDisposable
     /// <summary><see langword="true" /> once the process has exited (crash or clean stop).</summary>
     bool HasExited { get; }
 
+    /// <summary>The exit code once the process has exited, or <see langword="null" /> while it runs or when the code is unavailable.</summary>
+    /// <remarks>
+    ///     Diagnostics only. An <c>sd-server</c> that dies during model load exits within a second and its code is the
+    ///     one thing that distinguishes a missing GPU device from an out-of-memory kill.
+    /// </remarks>
+    int? ExitCode { get; }
+
+    /// <summary>The last few sanitized lines the child wrote to <c>stderr</c>, or <see langword="null" /> when it wrote none.</summary>
+    /// <remarks>Bounded by the launcher; absolute paths are already reduced to file names. See <c>ImageServerStderrTail</c>.</remarks>
+    string? StderrTail { get; }
+
     /// <summary>
     ///     Tree-kills the process and every descendant (Windows: close the Job Object; Linux: <c>kill(-pgid)</c>).
     ///     Idempotent and safe to call after the process has already exited.

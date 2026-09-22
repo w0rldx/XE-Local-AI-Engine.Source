@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Desktop;
 
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Layout;
 using Avalonia.Platform;
 using XE_Local_AI_Engine.Desktop.Linux;
 
@@ -39,23 +37,6 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         _webView.NewWindowRequested += OnNewWindowRequested;
         Content = _webView;
         _webView.Source = options.Origin;
-    }
-
-    internal void AddDesktopSettings(Action openSettings)
-    {
-        var settings = new Button
-        {
-            Content = DesktopText.Settings,
-            Margin = new Thickness(8, 4),
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        settings.Click += (_, _) => openSettings();
-        var layout = new DockPanel();
-        DockPanel.SetDock(settings, Dock.Top);
-        layout.Children.Add(settings);
-        Content = null;
-        layout.Children.Add(_webView);
-        Content = layout;
     }
 
     private void OnEnvironmentRequested(object? sender, WebViewEnvironmentRequestedEventArgs args)

@@ -6,7 +6,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
-internal static class WindowsLauncherApplication
+internal static partial class WindowsLauncherApplication
 {
     internal const string LauncherProcessIdVariable = "XE_WINDOWS_LAUNCHER_PID";
     private const string AspNetCoreRuntimeName = "Microsoft.AspNetCore.App";
@@ -81,13 +81,15 @@ internal static class WindowsLauncherApplication
             return MissingRuntime(requiredRuntime);
         }
 
+        var detachConsole = ShouldDetachConsole(arguments);
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
                 FileName = dotnet,
                 WorkingDirectory = baseDirectory,
-                UseShellExecute = false
+                UseShellExecute = false,
+                CreateNoWindow = detachConsole
             }
         };
         foreach (var argument in CreateManagedArguments(Path.Combine(baseDirectory, SelectManagedEntryPoint(arguments)), arguments))
@@ -100,6 +102,13 @@ internal static class WindowsLauncherApplication
         process.StartInfo.Environment[LauncherProcessIdVariable] = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
         try
         {
+            // Every prerequisite check that prints has passed, so the GUI shell leaves nothing more for this console
+            // to show; releasing it closes the window the tester saw hanging around for the whole session.
+            if (detachConsole && OperatingSystem.IsWindows())
+            {
+                _ = FreeConsole();
+            }
+
             if (!process.Start())
             {
                 return Fail("Windows did not start the managed application.", LaunchFailureExitCode);
@@ -128,6 +137,15 @@ internal static class WindowsLauncherApplication
             or "--SETUP" or "--MCP-KEY" or "--RESET-ADMIN-PASSWORD"
             or "--KNOWLEDGE-DOWNGRADE-PREFLIGHT" or "--KNOWLEDGE-DOWNGRADE-EXPORT")
             ? ManagedEntryPoint : DesktopEntryPoint;
+
+    /// <summary>True only for the GUI shell launch; every CLI mode keeps the console it prints to.</summary>
+    internal static bool ShouldDetachConsole(IEnumerable<string> arguments) =>
+        string.Equals(SelectManagedEntryPoint(arguments), DesktopEntryPoint, StringComparison.Ordinal);
+
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool FreeConsole();
 
     internal static IReadOnlyList<string> MissingPayloadFiles(Func<string, bool> fileExists) =>
         RequiredPayloadFiles.Where(relative => !fileExists(relative)).ToArray();

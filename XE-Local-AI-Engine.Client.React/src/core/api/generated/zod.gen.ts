@@ -6905,6 +6905,8 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitRespons
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse),
+	embeddingModel: z.string(),
+	embeddingModelAvailable: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse = z.object({

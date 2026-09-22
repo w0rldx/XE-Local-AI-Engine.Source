@@ -159,6 +159,60 @@ public sealed class BinaryManagerInstallTagTests
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    public async Task InstallTag_WhenInstallSucceeds_BumpsTheBinaryChangedSignal()
+    {
+        // A prebuilt install replaces the binary the device audit memoized against; without the bump a mid-download
+        // zero-device audit keeps the CPU-fallback banner up until restart. POSIX-only: the smoke test spawns the stub.
+        using var cache = new TempDir();
+        var archive = BuildExecutableTarGz();
+        using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(archive)
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        using var store = new InstalledRuntimeStore(cache.Path);
+        var signal = new CudaManagedBuildSignal();
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store,
+            managedCudaSignal: signal);
+        var before = signal.Version;
+
+        await manager.InstallTagAsync(Tag, AssetName, $"sha256:{Sha256Hex(archive)}", archive.Length, GpuVariant.Cpu, CancellationToken.None);
+
+        AssertEx.True(signal.Version > before, "a completed prebuilt install must invalidate the device-audit memo");
+        // The prebuilt install must not masquerade as an adopted managed CUDA source build.
+        AssertEx.Null(signal.ActiveVariant);
+    }
+
+    [Test]
+    public async Task EnsureBinary_CachedServe_DoesNotBumpTheBinaryChangedSignal()
+    {
+        // The negative control for the bump above: this branch runs on EVERY model spawn, so bumping here would
+        // invalidate the device-audit memo continuously and re-run the expensive --list-devices probe per spawn.
+        using var cache = new TempDir();
+        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
+        await File.WriteAllTextAsync(serverPath, "pinned-binary");
+
+        using var handler = new ScriptedHandler(() => throw new InvalidOperationException("Cached serve must not download."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        using var store = new InstalledRuntimeStore(cache.Path);
+        var signal = new CudaManagedBuildSignal();
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, new OfflineCatalog(), store,
+            managedCudaSignal: signal);
+        var before = signal.Version;
+
+        await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+        await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+
+        AssertEx.Equal(before, signal.Version);
+        AssertEx.Equal(expected: 0, handler.CallCount);
+    }
+
+    [Test]
     public async Task InstallTag_WhenDigestMismatch_RetriesThenKeepsOldBinary_NoStateWritten()
     {
         using var cache = new TempDir();

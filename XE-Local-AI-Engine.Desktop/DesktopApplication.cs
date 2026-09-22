@@ -40,7 +40,10 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             _desktop = desktop;
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _window = new Window { Title = "XE AI-Engine", Width = 560, Height = 220 };
-            _window.Content = new TextBlock { Text = DesktopText.Starting, Margin = new Thickness(24), TextWrapping = TextWrapping.Wrap };
+            var starting = new StackPanel { Margin = new Thickness(24), Spacing = 16, VerticalAlignment = VerticalAlignment.Center };
+            starting.Children.Add(new TextBlock { Text = DesktopText.Starting, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center });
+            starting.Children.Add(new ProgressBar { IsIndeterminate = true, Width = 320, HorizontalAlignment = HorizontalAlignment.Center });
+            _window.Content = starting;
             _window.Closing += OnClosing;
             _window.Opened += (_, _) => _initialization = InitializeDesktopAsync();
             desktop.MainWindow = _window;
@@ -90,7 +93,6 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             var startupWindow = _window!;
             var mainWindow = new DesktopWindow(new DesktopLaunchOptions(_engine.Origin, _options.ProfileDirectory));
             mainWindow.Closing += OnClosing;
-            mainWindow.AddDesktopSettings(OpenSettings);
             _window = mainWindow;
             _desktop!.MainWindow = mainWindow;
             await CreateTrayAsync();

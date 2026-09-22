@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp;
 
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
@@ -16,6 +17,27 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class ImageServerSupervisorTests
 {
+    [Test]
+    public async Task EnsureRunning_ChildExitsBeforeReady_ReportsExitCodeAndStderrTail()
+    {
+        // The Windows tester failure: sd-server died within a second of every spawn and the fixed sentence said nothing
+        // about why. The child's exit code and last stderr line now reach both the exception and one Warning line.
+        var launcher = new FakeImageProcessLauncher(bornDeadExitCode: 2, bornDeadStderrTail: "ggml_cuda_init: no CUDA devices found");
+        var probe = new FakeImageReadinessProbe(hangsUntilCancelled: true);
+        var logger = new RecordingLogger<ImageServerProcessSupervisor>();
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, probe, logger: logger);
+
+        var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(
+            () => supervisor.EnsureRunningAsync("sd15", CancellationToken.None));
+
+        AssertEx.True(exception.Message.StartsWith("The image runtime exited while loading the model.", StringComparison.Ordinal));
+        AssertEx.True(exception.Message.Contains("exit code 2", StringComparison.Ordinal));
+        AssertEx.True(exception.Message.Contains("ggml_cuda_init: no CUDA devices found", StringComparison.Ordinal));
+        AssertEx.Equal(expected: 1,
+            logger.Entries.Count(entry => entry.Level == LogLevel.Warning
+                                          && entry.Message.Contains("ggml_cuda_init: no CUDA devices found", StringComparison.Ordinal)));
+    }
+
     [Test]
     public async Task EnsureRunning_ReusesRunningDaemon_NoSecondSpawn()
     {
@@ -462,6 +484,11 @@ public sealed class ImageServerSupervisorTests
         public int ProcessId { get; }
 
         public bool HasExited => Volatile.Read(ref _exited) != 0;
+
+        // This double exists for the tree-kill latch only; it never stands in for a crashed child.
+        public int? ExitCode => null;
+
+        public string? StderrTail => null;
 
         public void TreeKill()
         {

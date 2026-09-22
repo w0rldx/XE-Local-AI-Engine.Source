@@ -38,7 +38,8 @@ public sealed class RuntimeDeviceAuditServiceTests
     public void BuildState_GpuExpected_GpuVariantZeroDevices_IsFallback_AndNamesLikelyCause()
     {
         // The audited WSL2 case: the Vulkan build ran --list-devices and saw nothing (no ICD) — a silent CPU fallback.
-        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Vulkan, LlamaDeviceInventory.Empty(GpuVariant.Vulkan));
+        // isWindows is pinned so the wording assertions below are host-independent.
+        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Vulkan, LlamaDeviceInventory.Empty(GpuVariant.Vulkan), isWindows: false);
 
         AssertEx.True(state.CpuFallback);
         AssertEx.Equal("cpu", state.InferenceBackend);
@@ -46,6 +47,25 @@ public sealed class RuntimeDeviceAuditServiceTests
         AssertEx.True(state.Reason.Contains("WSL2", StringComparison.Ordinal));
         AssertEx.True(state.Remediation!.Contains("build", StringComparison.OrdinalIgnoreCase));
         AssertEx.True(state.Remediation.Contains("XE_LLAMACPP_SERVER_PATH", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void BuildState_OnWindows_ZeroDevices_DropsTheWslVulkanWording_AndPointsAtTheDriver()
+    {
+        // Windows ships a prebuilt CUDA runtime: the Linux text told a Windows tester to install a Vulkan ICD and
+        // source-build CUDA, neither of which applies. The reason code ("zero_devices") is unchanged.
+        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, LlamaDeviceInventory.Empty(GpuVariant.Cuda), isWindows: true);
+
+        AssertEx.True(state.CpuFallback);
+        var reason = AssertEx.NotNull(state.Reason);
+        AssertEx.True(reason.Contains("CUDA", StringComparison.Ordinal));
+        AssertEx.False(reason.Contains("WSL2", StringComparison.Ordinal), "the WSL2 cause does not apply on Windows");
+        AssertEx.False(reason.Contains("Vulkan ICD", StringComparison.Ordinal), "a Windows CUDA runtime needs no Vulkan ICD");
+
+        var remediation = AssertEx.NotNull(state.Remediation);
+        AssertEx.True(remediation.Contains("driver", StringComparison.OrdinalIgnoreCase));
+        AssertEx.False(remediation.Contains("build the CUDA runtime from source", StringComparison.Ordinal),
+            "Windows has a prebuilt CUDA runtime — do not send the operator to a source build");
     }
 
     [Test]
@@ -391,6 +411,57 @@ public sealed class RuntimeDeviceAuditServiceTests
         // The re-computed determinate audit is memoized again against the new stamp — a follow-up call does not re-probe.
         await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
         await probe.Received(2).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetAudit_PrebuiltInstallBumpsSignal_InvalidatesTheCpuFallbackMemo()
+    {
+        // The Windows tester bug: an audit taken mid-download saw zero devices and memoized "CPU fallback", then the
+        // prebuilt install that followed bumped no stamp, so the banner never cleared. NotifyBinaryChanged is that bump.
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(LlamaDeviceInventory.Empty(GpuVariant.Cuda)),
+                 Task.FromResult(WithDevices(GpuVariant.Cuda)));
+        var signal = new CudaManagedBuildSignal();
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, probe, signal);
+
+        var duringDownload = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.True(duringDownload.CpuFallback);
+        AssertEx.Equal("cpu", duringDownload.InferenceBackend);
+
+        // The negative control: without a bump the determinate zero-device audit stays latched.
+        var stillCached = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.True(stillCached.CpuFallback);
+        await probe.Received(1).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+
+        signal.NotifyBinaryChanged();
+
+        var afterInstall = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.False(afterInstall.CpuFallback);
+        AssertEx.Equal("cuda", afterInstall.InferenceBackend);
+        AssertEx.Null(afterInstall.Reason);
+    }
+
+    [Test]
+    public void NotifyBinaryChanged_BumpsTheVersionOnly_LeavingTheActiveVariantUntouched()
+    {
+        // GpuVariantSelector decides CUDA-vs-Vulkan from ActiveVariant/IsAvailable: a prebuilt install must invalidate
+        // the audit memo WITHOUT claiming a managed CUDA source build exists.
+        var signal = new CudaManagedBuildSignal();
+        AssertEx.Null(signal.ActiveVariant);
+
+        var before = signal.Version;
+        signal.NotifyBinaryChanged();
+
+        AssertEx.True(signal.Version > before);
+        AssertEx.Null(signal.ActiveVariant);
+        AssertEx.False(signal.IsAvailable);
+
+        // Nor does it clear a variant an adopted source build already set.
+        signal.MarkAvailable();
+        signal.NotifyBinaryChanged();
+        AssertEx.Equal(GpuVariant.Cuda, signal.ActiveVariant);
+        AssertEx.True(signal.IsAvailable);
     }
 
     [Test]

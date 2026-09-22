@@ -207,6 +207,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             await EnsureCudartRuntimeAsync(resolvedTag, pin, cudartAsset: null, variant, variantDir, serverPath, reporter, ct).ConfigureAwait(false);
 
             await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, ct).ConfigureAwait(false);
+
+            // A NEW binary is on disk (the cached-serve branch above deliberately does not do this — it runs on every
+            // model spawn): bump the stamp so the device audit re-probes instead of serving a memo taken mid-download.
+            _managedCudaSignal?.NotifyBinaryChanged();
             reporter.Complete();
             return new LlamaBinary { ServerExecutablePath = serverPath, Version = resolvedTag, Variant = variant, IsPinnedFallback = isPinnedFallback };
         }
@@ -478,6 +482,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
             }
 
+            // Same reason as EnsureBinaryAsync: the operator-initiated install replaced the binary the audit was memoized against.
+            _managedCudaSignal?.NotifyBinaryChanged();
             reporter.Complete();
             return new LlamaBinary { ServerExecutablePath = serverPath, Version = tag, Variant = variant, IsPinnedFallback = false };
         }

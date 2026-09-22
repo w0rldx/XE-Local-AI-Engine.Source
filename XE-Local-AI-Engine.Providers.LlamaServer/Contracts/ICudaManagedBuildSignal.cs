@@ -18,4 +18,14 @@ public interface ICudaManagedBuildSignal : IActiveSourceBuildSignal
 
     /// <summary>Marks a managed CUDA source build as available; called on adopt and at startup seeding.</summary>
     void MarkAvailable();
+
+    /// <summary>
+    ///     Bumps <see cref="IActiveSourceBuildSignal.Version" /> only: the llama.cpp binary on disk changed, so every
+    ///     memo keyed to the stamp (the runtime device audit) must recompute. Never touches the active variant.
+    /// </summary>
+    /// <remarks>
+    ///     A prebuilt install changes which devices the runtime enumerates without changing the selected variant, so
+    ///     without this the device audit computed mid-download (zero devices ⇒ CPU fallback) stays cached until restart.
+    /// </remarks>
+    void NotifyBinaryChanged();
 }

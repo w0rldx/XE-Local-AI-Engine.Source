@@ -36572,7 +36572,9 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "items"
+          "items",
+          "embeddingModel",
+          "embeddingModelAvailable"
         ],
         "properties": {
           "items": {
@@ -36580,6 +36582,12 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse"
             }
+          },
+          "embeddingModel": {
+            "type": "string"
+          },
+          "embeddingModelAvailable": {
+            "type": "boolean"
           }
         }
       },

@@ -26,17 +26,23 @@ internal sealed partial class WindowsImageJobObjectProcessHandle : IImageServerP
     private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
     private readonly SafeJobHandle _job;
     private readonly Process _process;
+    private readonly ImageServerStderrTail? _stderrTail;
     private int _disposed;
 
-    private WindowsImageJobObjectProcessHandle(Process process, SafeJobHandle job)
+    private WindowsImageJobObjectProcessHandle(Process process, SafeJobHandle job, ImageServerStderrTail? stderrTail)
     {
         _process = process;
         _job = job;
+        _stderrTail = stderrTail;
     }
 
     public int ProcessId => _process.Id;
 
     public bool HasExited => SafeHasExited(_process);
+
+    public int? ExitCode => SafeExitCode(_process);
+
+    public string? StderrTail => _stderrTail?.Snapshot();
 
     public void TreeKill()
     {
@@ -68,7 +74,7 @@ internal sealed partial class WindowsImageJobObjectProcessHandle : IImageServerP
     ///     Creates a job, marks it kill-on-close, assigns the already-started <paramref name="process" /> to it, and
     ///     returns the handle. On any failure the job and process are torn down and a sanitized error is surfaced.
     /// </summary>
-    public static WindowsImageJobObjectProcessHandle Wrap(Process process)
+    public static WindowsImageJobObjectProcessHandle Wrap(Process process, ImageServerStderrTail? stderrTail = null)
     {
         ArgumentNullException.ThrowIfNull(process);
 
@@ -83,7 +89,7 @@ internal sealed partial class WindowsImageJobObjectProcessHandle : IImageServerP
 
             ConfigureKillOnClose(job);
             AssignProcess(job, process);
-            return new WindowsImageJobObjectProcessHandle(process, job);
+            return new WindowsImageJobObjectProcessHandle(process, job, stderrTail);
         }
         catch (Exception ex)
         {
@@ -152,6 +158,18 @@ internal sealed partial class WindowsImageJobObjectProcessHandle : IImageServerP
         catch (InvalidOperationException)
         {
             return true;
+        }
+    }
+
+    private static int? SafeExitCode(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null; // No associated process — the code is unavailable.
         }
     }
 

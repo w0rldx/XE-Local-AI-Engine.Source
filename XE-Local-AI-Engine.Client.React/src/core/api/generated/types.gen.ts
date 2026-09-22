@@ -3484,6 +3484,8 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsReque
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse>;
+	embeddingModel: string;
+	embeddingModelAvailable: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse = {

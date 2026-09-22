@@ -336,10 +336,15 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 
         try
         {
-            await using var stream = new FileStream(_manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            var manifest = await JsonSerializer
+            // The read handle closes here, before any write below: on Windows a File.Move(overwrite) onto a manifest this
+            // process still holds open fails with ERROR_ACCESS_DENIED, which bricks every later read.
+            RawManifestDocument? manifest;
+            await using (var stream = new FileStream(_manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                manifest = await JsonSerializer
                                  .DeserializeAsync<RawManifestDocument>(stream, SerializerOptions, ct)
                                  .ConfigureAwait(false);
+            }
 
             if (manifest?.Models is null)
             {
@@ -391,7 +396,16 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             var (reconciled, changed) = await ReconcileWithSidecarsAsync(entries, ct).ConfigureAwait(false);
             if (changed)
             {
-                await WriteManifestAsync(reconciled, ct).ConfigureAwait(false);
+                // Best-effort: the reconciled view is already correct in memory, so a manifest that cannot be rewritten
+                // (a locked or read-only file) must degrade to a stale manifest, never fail the read.
+                try
+                {
+                    await WriteManifestAsync(reconciled, ct).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    _logger.LogWarning(exception, "Could not persist the self-healed GGUF registry manifest at {ManifestPath}.", _manifestPath);
+                }
             }
 
             return reconciled;
@@ -749,13 +763,31 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         };
 
         var tempPath = _manifestPath + ".tmp";
-        await using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+        try
         {
-            await JsonSerializer.SerializeAsync(stream, document, SerializerOptions, ct).ConfigureAwait(false);
-        }
+            await using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                await JsonSerializer.SerializeAsync(stream, document, SerializerOptions, ct).ConfigureAwait(false);
+            }
 
-        // Atomic replace so a crash mid-write never leaves a half-written manifest.
-        File.Move(tempPath, _manifestPath, overwrite: true);
+            // Atomic replace so a crash mid-write never leaves a half-written manifest.
+            File.Move(tempPath, _manifestPath, overwrite: true);
+        }
+        catch
+        {
+            // A half-written temp must not survive a failed write: the next attempt truncates it anyway, but a reader
+            // glancing at the directory should never see it.
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(cleanup, "Could not remove the temporary GGUF registry manifest at {TempPath}.", tempPath);
+            }
+
+            throw;
+        }
     }
 
     // Collapses entries that resolve to the same backing file into one, keeping the most canonical (verified hash/

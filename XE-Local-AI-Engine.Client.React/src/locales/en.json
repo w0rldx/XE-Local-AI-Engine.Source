@@ -564,6 +564,11 @@
 				"unsupported": "{{name}} is not a supported document type.",
 				"batchFailed": "Failed to upload files."
 			},
+			"embeddingMissing": {
+				"title": "No embedding model installed",
+				"body": "Documents can be uploaded only once an embedding model is installed on this node: without one they cannot be indexed or searched.",
+				"openNodeSettings": "Open node settings"
+			},
 			"documents": {
 				"heading": "Documents",
 				"loading": "Loading documents…",

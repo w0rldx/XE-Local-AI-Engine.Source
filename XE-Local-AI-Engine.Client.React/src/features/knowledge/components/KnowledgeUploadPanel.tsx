@@ -12,20 +12,25 @@ import type { KnowledgePendingUpload } from "@/features/knowledge/queries/useKno
 
 interface KnowledgeUploadPanelProps {
 	readonly pendingUploads: readonly KnowledgePendingUpload[];
+	/** Blocks ingestion entirely: the zone greys out, the picker never opens and a drop is swallowed. */
+	readonly disabled?: boolean;
 	onUpload(files: readonly File[]): void;
 }
 
 // Drag-and-drop / click-to-browse ingestion surface. Dependency-free (no @mantine/dropzone in this build): a
 // bordered, keyboard-focusable drop zone drives a hidden file input, with a live per-file progress list beneath.
 // Purely presentational — the parent owns the upload hook and passes in the pending set + upload handler.
-export function KnowledgeUploadPanel({ pendingUploads, onUpload }: KnowledgeUploadPanelProps) {
+export function KnowledgeUploadPanel({ pendingUploads, disabled = false, onUpload }: KnowledgeUploadPanelProps) {
 	const { t } = useTranslation();
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [isDragging, setIsDragging] = useState(false);
 
 	const openPicker = useCallback((): void => {
+		if (disabled) {
+			return;
+		}
 		inputRef.current?.click();
-	}, []);
+	}, [disabled]);
 
 	const handleInputChange = useCallback(
 		(event: ChangeEvent<HTMLInputElement>): void => {
@@ -44,17 +49,21 @@ export function KnowledgeUploadPanel({ pendingUploads, onUpload }: KnowledgeUplo
 			event.preventDefault();
 			setIsDragging(false);
 			const files = event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : [];
-			if (files.length > 0) {
-				onUpload(files);
+			if (disabled || files.length === 0) {
+				return;
 			}
+			onUpload(files);
 		},
-		[onUpload],
+		[disabled, onUpload],
 	);
 
-	const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>): void => {
-		event.preventDefault();
-		setIsDragging(true);
-	}, []);
+	const handleDragOver = useCallback(
+		(event: DragEvent<HTMLDivElement>): void => {
+			event.preventDefault();
+			setIsDragging(!disabled);
+		},
+		[disabled],
+	);
 
 	const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>): void => {
 		event.preventDefault();
@@ -75,7 +84,8 @@ export function KnowledgeUploadPanel({ pendingUploads, onUpload }: KnowledgeUplo
 		<Stack gap="sm">
 			<Box
 				role="button"
-				tabIndex={0}
+				tabIndex={disabled ? -1 : 0}
+				aria-disabled={disabled}
 				aria-label={t("pages.knowledgeBase.upload.dropzoneAria", "Upload documents to the knowledge base")}
 				onClick={openPicker}
 				onKeyDown={handleKeyDown}
@@ -84,7 +94,8 @@ export function KnowledgeUploadPanel({ pendingUploads, onUpload }: KnowledgeUplo
 				onDragLeave={handleDragLeave}
 				data-testid="knowledge-upload-dropzone"
 				style={{
-					cursor: "pointer",
+					cursor: disabled ? "not-allowed" : "pointer",
+					opacity: disabled ? 0.5 : 1,
 					borderRadius: "var(--mantine-radius-md)",
 					border: `2px dashed ${isDragging ? "var(--mantine-color-primary-filled)" : "var(--mantine-color-default-border)"}`,
 					backgroundColor: isDragging ? "var(--mantine-color-primary-light)" : "transparent",
@@ -111,6 +122,7 @@ export function KnowledgeUploadPanel({ pendingUploads, onUpload }: KnowledgeUplo
 					multiple={true}
 					accept={KNOWLEDGE_ACCEPT_ATTRIBUTE}
 					onChange={handleInputChange}
+					disabled={disabled}
 					style={{ display: "none" }}
 					// The drop zone above IS the labelled control; this input only opens the OS picker. Marked hidden so
 					// it is not reported as an unnamed form control.

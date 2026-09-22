@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
@@ -10,45 +12,52 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 ///     detection.
 /// </summary>
 /// <remarks>
-///     Pure decision logic beyond the single probe call, so the rule is fully unit-testable via <see cref="SelectForVendor" />; the rule
+///     Pure decision logic beyond the probe calls, so the rule is fully unit-testable via <see cref="SelectForVendor" />; the rule
 ///     itself is stated on <see cref="ISdGpuBackendSelector" />. An active operator override or validated managed source build
 ///     short-circuits hardware selection with its configured backend, which is how Linux CUDA source builds remain selected despite the
-///     missing prebuilt; their paths and bytes are validated by the binary manager, never here. Without either signal, Linux NVIDIA
-///     selects Vulkan when a Vulkan device exists, otherwise CPU.
+///     missing prebuilt; their paths and bytes are validated by the binary manager, never here. Without either signal, a GPU vendor is
+///     served a GPU backend only where a probe confirms that backend's device.
 /// </remarks>
 public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
 {
+    private readonly ICudaDeviceProbe _cudaDeviceProbe;
     private readonly IHardwareProfiler _hardwareProfiler;
     private readonly bool _isWindows;
+    private readonly ILogger<SdGpuBackendSelector> _logger;
     private readonly IStableDiffusionManagedSourceBuildSignal _managedSourceSignal;
     private readonly StableDiffusionServerRuntimeOverrideOptions _overrideOptions;
     private readonly IVulkanDeviceProbe _vulkanDeviceProbe;
 
-    /// <summary>Creates a selector over the shared hardware profiler + override options + Vulkan device probe, defaulting OS detection to the live host.</summary>
+    /// <summary>Creates a selector over the shared hardware profiler + override options + device probes, defaulting OS detection to the live host.</summary>
     public SdGpuBackendSelector(IHardwareProfiler hardwareProfiler,
         StableDiffusionServerRuntimeOverrideOptions overrideOptions,
         IVulkanDeviceProbe vulkanDeviceProbe,
-        IStableDiffusionManagedSourceBuildSignal managedSourceSignal)
-        : this(hardwareProfiler, OperatingSystem.IsWindows(), vulkanDeviceProbe, overrideOptions, managedSourceSignal)
+        ICudaDeviceProbe cudaDeviceProbe,
+        IStableDiffusionManagedSourceBuildSignal managedSourceSignal,
+        ILogger<SdGpuBackendSelector>? logger = null)
+        : this(hardwareProfiler, OperatingSystem.IsWindows(), vulkanDeviceProbe, cudaDeviceProbe, overrideOptions, managedSourceSignal, logger)
     {
     }
 
     /// <summary>
-    ///     Test seam: lets a unit test pin the OS so the NVIDIA→CUDA/Vulkan split can be exercised on any host, and inject
-    ///     a faked Vulkan device probe. The override options default to an inactive instance so the vendor-rule path stays
-    ///     unchanged.
+    ///     Test seam: pins the OS so the NVIDIA→CUDA/Vulkan split runs on any host, and injects faked device probes. The
+    ///     override options default to an inactive instance and the CUDA probe to one that always confirms a device.
     /// </summary>
     internal SdGpuBackendSelector(IHardwareProfiler hardwareProfiler,
         bool isWindows,
         IVulkanDeviceProbe vulkanDeviceProbe,
+        ICudaDeviceProbe? cudaDeviceProbe = null,
         StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null,
-        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null)
+        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null,
+        ILogger<SdGpuBackendSelector>? logger = null)
     {
         _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
         _isWindows = isWindows;
         _vulkanDeviceProbe = vulkanDeviceProbe ?? throw new ArgumentNullException(nameof(vulkanDeviceProbe));
+        _cudaDeviceProbe = cudaDeviceProbe ?? new DefaultCudaDeviceProbe(isWindows: false, static () => true);
         _overrideOptions = overrideOptions ?? new StableDiffusionServerRuntimeOverrideOptions();
         _managedSourceSignal = managedSourceSignal ?? new StableDiffusionManagedSourceBuildSignal();
+        _logger = logger ?? NullLogger<SdGpuBackendSelector>.Instance;
     }
 
     /// <inheritdoc />
@@ -69,25 +78,34 @@ public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
         var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);
         var vendor = profile.GpuVendor;
 
-        // The Vulkan device probe is consulted only where it can change the decision: Linux GPU vendors, whose sole GPU backend is Vulkan; Windows/macOS keep their mapping (Windows NVIDIA→CUDA,
-        // AMD/Intel→Vulkan). A confirmed Vulkan device is required on Linux because a Vulkan pick with no enumerable device hard-fails sd-server (e.g. WSL2), whereas CPU always works.
+        // Each device probe is consulted only where it can change the decision. Linux GPU vendors: Vulkan is their sole GPU backend, and a Vulkan pick with no enumerable device hard-fails sd-server
+        // (e.g. WSL2), whereas CPU always works. Windows NVIDIA: CUDA is the prebuilt, and a CUDA pick on a box whose driver enumerates no device exits the child within a second of every spawn.
         var vulkanDeviceAvailable = !_isWindows
                                     && vendor is GpuVendor.Nvidia or GpuVendor.Amd or GpuVendor.Intel
                                     && _vulkanDeviceProbe.HasEnumerableVulkanDevice();
 
-        return SelectForVendor(vendor, _isWindows, vulkanDeviceAvailable);
+        var cudaDeviceAvailable = !_isWindows
+                                  || vendor is not GpuVendor.Nvidia
+                                  || _cudaDeviceProbe.HasEnumerableCudaDevice();
+
+        if (!cudaDeviceAvailable)
+        {
+            _logger.LogWarning("An NVIDIA GPU is present but no CUDA device could be enumerated (the CUDA driver library is absent); the image runtime falls back to the Vulkan backend.");
+        }
+
+        return SelectForVendor(vendor, _isWindows, vulkanDeviceAvailable, cudaDeviceAvailable);
     }
 
     /// <summary>Pure selection rule, exposed for direct assertion in tests.</summary>
-    internal static SdGpuBackend SelectForVendor(GpuVendor vendor, bool isWindows, bool vulkanDeviceAvailable)
+    internal static SdGpuBackend SelectForVendor(GpuVendor vendor, bool isWindows, bool vulkanDeviceAvailable, bool cudaDeviceAvailable)
     {
         return vendor switch
         {
-            // NVIDIA prebuilt CUDA exists for Windows only.
-            GpuVendor.Nvidia when isWindows => SdGpuBackend.Cuda,
+            // NVIDIA prebuilt CUDA exists for Windows only, and only when a CUDA device actually enumerates.
+            GpuVendor.Nvidia when isWindows && cudaDeviceAvailable => SdGpuBackend.Cuda,
 
-            // Linux NVIDIA/AMD/Intel → Vulkan only when a Vulkan device actually enumerates; else CPU (fail-safe).
-            // Windows AMD/Intel keep their existing unconditional Vulkan mapping.
+            // Linux → Vulkan only when a Vulkan device actually enumerates, else CPU. Windows keeps the unconditional
+            // Vulkan mapping, NVIDIA-without-CUDA included: every Windows GPU display driver ships a Vulkan ICD.
             GpuVendor.Nvidia or GpuVendor.Amd or GpuVendor.Intel =>
                 isWindows || vulkanDeviceAvailable ? SdGpuBackend.Vulkan : SdGpuBackend.Cpu,
 

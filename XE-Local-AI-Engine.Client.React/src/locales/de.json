@@ -564,6 +564,11 @@
 				"unsupported": "{{name}} ist kein unterstützter Dokumenttyp.",
 				"batchFailed": "Dateien konnten nicht hochgeladen werden."
 			},
+			"embeddingMissing": {
+				"title": "Kein Embedding-Modell installiert",
+				"body": "Dokumente können erst hochgeladen werden, wenn auf diesem Node ein Embedding-Modell installiert ist: ohne eines lassen sie sich weder indexieren noch durchsuchen.",
+				"openNodeSettings": "Node-Einstellungen öffnen"
+			},
 			"documents": {
 				"heading": "Dokumente",
 				"loading": "Dokumente werden geladen…",

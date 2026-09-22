@@ -40,19 +40,22 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
 
         var label = spec.ModelName;
 
+        // Retains the child's last stderr lines so a crash during model load is reported with the runtime's own words.
+        var stderrTail = new ImageServerStderrTail();
+
         if (OperatingSystem.IsWindows())
         {
-            return LaunchWindows(BuildStartInfo(spec), label);
+            return LaunchWindows(BuildStartInfo(spec), label, stderrTail);
         }
 
         if (OperatingSystem.IsLinux())
         {
-            return LaunchLinux(BuildStartInfo(spec), label);
+            return LaunchLinux(BuildStartInfo(spec), label, stderrTail);
         }
 
         // macOS / other Unix: no Job Object and no setsid wrapper — a plain process whose own tree-kill tears down the
         // server keeps the launcher functional on the CPU floor elsewhere.
-        return LaunchPlain(BuildStartInfo(spec), label);
+        return LaunchPlain(BuildStartInfo(spec), label, stderrTail);
     }
 
     private static ProcessStartInfo BuildStartInfo(ImageServerLaunchSpec spec)
@@ -76,14 +79,14 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     }
 
     [SupportedOSPlatform("windows")]
-    private IImageServerProcessHandle LaunchWindows(ProcessStartInfo startInfo, string label)
+    private IImageServerProcessHandle LaunchWindows(ProcessStartInfo startInfo, string label, ImageServerStderrTail stderrTail)
     {
-        var process = StartProcess(startInfo, label);
-        return WindowsImageJobObjectProcessHandle.Wrap(process);
+        var process = StartProcess(startInfo, label, stderrTail);
+        return WindowsImageJobObjectProcessHandle.Wrap(process, stderrTail);
     }
 
     [SupportedOSPlatform("linux")]
-    private IImageServerProcessHandle LaunchLinux(ProcessStartInfo startInfo, string label)
+    private IImageServerProcessHandle LaunchLinux(ProcessStartInfo startInfo, string label, ImageServerStderrTail stderrTail)
     {
         // Run sd-server under `setsid` so it leads a new process group; tree-kill = kill(-pgid). The server inherits
         // setsid's redirected stdout/stderr, so the draining wired in StartProcess still captures the server's output.
@@ -92,18 +95,18 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return LinuxImageProcessGroupHandle.Wrap(StartProcess(startInfo, label));
+        return LinuxImageProcessGroupHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
 #pragma warning restore CA2000
     }
 
-    private IImageServerProcessHandle LaunchPlain(ProcessStartInfo startInfo, string label)
+    private IImageServerProcessHandle LaunchPlain(ProcessStartInfo startInfo, string label, ImageServerStderrTail stderrTail)
     {
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return PlainImageProcessHandle.Wrap(StartProcess(startInfo, label));
+        return PlainImageProcessHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
 #pragma warning restore CA2000
     }
 
-    private Process StartProcess(ProcessStartInfo startInfo, string label)
+    private Process StartProcess(ProcessStartInfo startInfo, string label, ImageServerStderrTail stderrTail)
     {
         var process = new Process
         {
@@ -117,9 +120,9 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
                 throw new StableDiffusionRuntimeException("The image runtime process did not start.");
             }
 
-            // Drain both streams so the pipes never fill and stall the child.
-            StartDrain(process.StandardOutput, label);
-            StartDrain(process.StandardError, label);
+            // Drain both streams so the pipes never fill and stall the child; only stderr feeds the retained tail.
+            StartDrain(process.StandardOutput, label, stderrTail: null);
+            StartDrain(process.StandardError, label, stderrTail);
         }
         catch (StableDiffusionRuntimeException)
         {
@@ -139,9 +142,9 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     ///     Starts the detached drain loop for one of the child's streams. Detached on purpose: the handle owns the
     ///     process lifetime, and the loop ends by itself at EOF when the process exits or is tree-killed.
     /// </summary>
-    private void StartDrain(StreamReader reader, string label)
+    private void StartDrain(StreamReader reader, string label, ImageServerStderrTail? stderrTail)
     {
-        _ = Task.Run(() => DrainAsync(reader, label), CancellationToken.None);
+        _ = Task.Run(() => DrainAsync(reader, label, stderrTail), CancellationToken.None);
     }
 
     /// <summary>
@@ -151,10 +154,10 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     ///     Reads into a char buffer rather than calling <c>ReadLineAsync</c>, whose carriage-return handling waits to
     ///     see whether a line feed follows — the exact one-frame stall the splitter exists to avoid.
     /// </remarks>
-    private async Task DrainAsync(StreamReader reader, string label)
+    private async Task DrainAsync(StreamReader reader, string label, ImageServerStderrTail? stderrTail)
     {
         var buffer = new char[DrainBufferLength];
-        var splitter = new SdOutputFrameSplitter(frame => ForwardLine(label, frame));
+        var splitter = new SdOutputFrameSplitter(frame => ForwardLine(label, frame, stderrTail));
 
         try
         {
@@ -180,12 +183,14 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
         splitter.Flush();
     }
 
-    private void ForwardLine(string label, string? line)
+    private void ForwardLine(string label, string? line, ImageServerStderrTail? stderrTail)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
             return;
         }
+
+        stderrTail?.Append(line);
 
         // Debug, not Information: sd-server may echo the prompt; keep it out of the default app log.
         _logger.LogDebug("sd-server[{Label}] {Line}", label, line);

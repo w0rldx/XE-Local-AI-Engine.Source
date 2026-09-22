@@ -20,6 +20,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
     private readonly ILogger<ExternalAppStateObserver> _logger;
     private readonly ExternalAppsOptions _options;
     private readonly IExternalAppEventPublisher _publisher;
+    private readonly ExternalAppStartupReconciler _reconciler;
     private readonly ExternalAppOperationRunner _runner;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ExternalAppService _service;
@@ -31,6 +32,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         ExternalAppService service,
         ExternalAppInstanceGate gate,
         ExternalAppOperationRunner runner,
+        ExternalAppStartupReconciler reconciler,
         IExternalAppEventPublisher publisher,
         IOptions<ExternalAppsOptions> options,
         TimeProvider timeProvider,
@@ -42,6 +44,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+        _reconciler = reconciler ?? throw new ArgumentNullException(nameof(reconciler));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _options = options.Value;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -95,6 +98,13 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
     internal async Task PollOnceAsync(CancellationToken cancellationToken)
     {
         if (!_options.Enabled)
+        {
+            return;
+        }
+
+        // The boot pass has the first word: "stopped unexpectedly" must not land on a row it is still judging. A
+        // skipped tick costs one interval, and the pass is the better authority for it anyway.
+        if (!_reconciler.BootPass.IsCompleted)
         {
             return;
         }

@@ -45,6 +45,20 @@ export function useKnowledgeDocuments(enabled = true, collectionId?: string) {
 	});
 }
 
+/**
+ * Whether this node can actually embed a new upload: the list endpoint reports the embedding-model resolution the
+ * ingestion lane itself runs, so the upload gate and the background embedder agree. Shares the document-list query
+ * key, so it costs no extra request. While no model is resolved it polls, because a finished GGUF download
+ * invalidates only the installed-model list — a different key — and the gate must clear without a page reload.
+ */
+export function useKnowledgeEmbeddingAvailability(collectionId?: string) {
+	return useQuery({
+		...withResponseValidation(listKnowledgeDocumentsOptions({ query: collectionId ? { collectionId } : undefined })),
+		select: (data): boolean => data.embeddingModelAvailable,
+		refetchInterval: (query) => (query.state.data?.embeddingModelAvailable === false ? 10_000 : false),
+	});
+}
+
 /** One document's detail + chunks. Disabled until a document id is supplied and the drawer is open. */
 export function useKnowledgeDocumentDetail(documentId: string, enabled: boolean) {
 	return useQuery({

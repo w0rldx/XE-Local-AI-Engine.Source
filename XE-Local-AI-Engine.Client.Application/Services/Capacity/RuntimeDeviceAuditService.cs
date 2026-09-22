@@ -164,7 +164,8 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     }
 
     /// <summary>Pure audit decision over (host profile, selected variant, enumerated devices) — unit-testable without I/O.</summary>
-    internal static RuntimeDeviceAuditState BuildState(HardwareProfile raw, GpuVariant variant, LlamaDeviceInventory inventory)
+    /// <param name="isWindows">Host OS for the operator-facing fallback text; defaults to the running OS, passed explicitly by tests.</param>
+    internal static RuntimeDeviceAuditState BuildState(HardwareProfile raw, GpuVariant variant, LlamaDeviceInventory inventory, bool? isWindows = null)
     {
         // A usable GPU is advertised: a vendor GPU with a known, positive total VRAM.
         var gpuExpected = raw.GpuVendor is GpuVendor.Nvidia or GpuVendor.Amd or GpuVendor.Intel && (raw.VramBytes ?? 0) > 0;
@@ -175,7 +176,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         var zeroDevices = !cpuVariant && inventory.ProbeSucceeded && inventory.Devices.Count == 0;
         var cpuFallback = gpuExpected && (cpuVariant || zeroDevices);
 
-        var fallbackText = cpuFallback ? BuildFallbackText(raw.GpuVendor, variant, cpuVariant) : null;
+        var fallbackText = cpuFallback ? BuildFallbackText(raw.GpuVendor, variant, cpuVariant, isWindows ?? OperatingSystem.IsWindows()) : null;
 
         var backend = ResolveInferenceBackend(variant, inventory);
         return new RuntimeDeviceAuditState
@@ -238,19 +239,34 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         return variant == GpuVariant.Cuda ? "cuda" : "vulkan";
     }
 
-    private static FallbackText BuildFallbackText(GpuVendor vendor, GpuVariant variant, bool cpuVariant)
+    // Windows ships a prebuilt CUDA runtime and has no Vulkan-ICD/WSL2 story, so the Linux wording sends a Windows
+    // operator to fix something that does not apply; both branches keep the same reason codes.
+    private static FallbackText BuildFallbackText(GpuVendor vendor, GpuVariant variant, bool cpuVariant, bool isWindows)
     {
-        var reason = cpuVariant
-            ? $"A {VendorName(vendor)} GPU was detected, but the CPU llama.cpp runtime is selected — inference is running on the CPU."
-            : $"The {VariantName(variant)} llama.cpp runtime is selected but enumerated no GPU devices (commonly a missing Vulkan ICD under WSL2), so inference is silently running on the CPU.";
-
-        const string Remediation =
+        const string LinuxRemediation =
             "To run on the GPU: build the CUDA runtime from source with the in-app build feature, or set XE_LLAMACPP_SERVER_PATH + "
             + "XE_LLAMACPP_VARIANT to a GPU-capable llama-server binary. On Linux there is no prebuilt CUDA llama.cpp — the default "
             + "NVIDIA build is Vulkan, which needs a Vulkan ICD; if a bring-your-own override is set, verify XE_LLAMACPP_SERVER_PATH "
             + "points to a valid GPU-capable binary.";
 
-        return new FallbackText { Reason = reason, Remediation = Remediation };
+        const string WindowsRemediation =
+            "Update the GPU driver, check the GPU is visible to the system, then reinstall the runtime from Node Settings. If a "
+            + "bring-your-own override is set, verify XE_LLAMACPP_SERVER_PATH points to a valid GPU-capable binary.";
+
+        if (cpuVariant)
+        {
+            return new FallbackText
+            {
+                Reason = $"A {VendorName(vendor)} GPU was detected, but the CPU llama.cpp runtime is selected — inference is running on the CPU.",
+                Remediation = isWindows ? WindowsRemediation : LinuxRemediation
+            };
+        }
+
+        var reason = isWindows
+            ? $"The {VariantName(variant)} llama.cpp runtime is selected but enumerated no GPU devices, so inference is silently running on the CPU."
+            : $"The {VariantName(variant)} llama.cpp runtime is selected but enumerated no GPU devices (commonly a missing Vulkan ICD under WSL2), so inference is silently running on the CPU.";
+
+        return new FallbackText { Reason = reason, Remediation = isWindows ? WindowsRemediation : LinuxRemediation };
     }
 
     private static string VendorName(GpuVendor vendor)

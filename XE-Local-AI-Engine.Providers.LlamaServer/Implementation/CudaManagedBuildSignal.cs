@@ -44,6 +44,12 @@ public sealed class CudaManagedBuildSignal : ICudaManagedBuildSignal
     }
 
     /// <inheritdoc />
+    public void NotifyBinaryChanged()
+    {
+        Interlocked.Increment(ref _version);
+    }
+
+    /// <inheritdoc />
     public void Clear()
     {
         Volatile.Write(ref _activeVariant, -1);

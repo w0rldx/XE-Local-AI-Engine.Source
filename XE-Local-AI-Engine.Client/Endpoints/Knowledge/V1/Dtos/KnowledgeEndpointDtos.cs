@@ -137,6 +137,12 @@ public sealed class KnowledgeDocumentResponse
 public sealed class ListKnowledgeDocumentsResponse
 {
     public required IReadOnlyList<KnowledgeDocumentResponse> Items { get; init; }
+
+    /// <summary>The embedding model a new upload would be indexed with right now.</summary>
+    public required string EmbeddingModel { get; init; }
+
+    /// <summary>Whether that model is installed; <see langword="false" /> means an upload cannot be indexed yet.</summary>
+    public required bool EmbeddingModelAvailable { get; init; }
 }
 
 /// <summary>One chunk of a document, for the detail drawer.</summary>

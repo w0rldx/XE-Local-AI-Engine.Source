@@ -10,7 +10,8 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 /// </summary>
 /// <remarks>
 ///     Each summary carries the decrypted display name (owner-only, over this authenticated surface), pipeline status,
-///     chunk count, embedding model and a computed stale-model flag — but never chunk content.
+///     chunk count, embedding model and a computed stale-model flag — but never chunk content. The envelope also
+///     carries the node-wide embedding-model resolution, which is the upload precondition the ingestion lane uses.
 /// </remarks>
 public sealed class ListKnowledgeDocumentsEndpoint : Endpoint<ListKnowledgeDocumentsRequest, ListKnowledgeDocumentsResponse>
 {
@@ -30,12 +31,12 @@ public sealed class ListKnowledgeDocumentsEndpoint : Endpoint<ListKnowledgeDocum
 
     public override async Task HandleAsync(ListKnowledgeDocumentsRequest req, CancellationToken ct)
     {
-        var documents = string.IsNullOrWhiteSpace(req.CollectionId)
-            ? await _catalogService.ListAsync(ct)
-            : await _catalogService.ListAsync(req.CollectionId, ct);
+        var listing = await _catalogService.ListWithEmbeddingStatusAsync(req.CollectionId, ct);
         await Send.OkAsync(new ListKnowledgeDocumentsResponse
             {
-                Items = [.. documents.Select(ToResponse)]
+                Items = [.. listing.Items.Select(ToResponse)],
+                EmbeddingModel = listing.Embedding.Name,
+                EmbeddingModelAvailable = listing.Embedding.IsConfident
             },
             ct);
     }

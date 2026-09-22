@@ -22,6 +22,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
 
     private readonly ExternalAppInstanceGate _gate;
     private readonly ExternalAppStorageLayout _layout;
+    private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<ExternalAppStartupReconciler> _logger;
     private readonly ExternalAppsOptions _options;
     private readonly IExternalAppEventPublisher _publisher;
@@ -29,6 +30,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ExternalAppService _service;
     private readonly TimeProvider _timeProvider;
+    private Task _bootPass = Task.CompletedTask;
 
     public ExternalAppStartupReconciler(IServiceScopeFactory scopeFactory,
         ExternalAppService service,
@@ -36,6 +38,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         ExternalAppInstanceGate gate,
         ExternalAppOperationRunner runner,
         IExternalAppEventPublisher publisher,
+        IHostApplicationLifetime lifetime,
         IOptions<ExternalAppsOptions> options,
         TimeProvider timeProvider,
         ILogger<ExternalAppStartupReconciler> logger)
@@ -48,22 +51,60 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+        _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
         _options = options.Value;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
-    ///     One pass, and the whole body is guarded: a node whose Docker daemon is broken must still start, and an
-    ///     application the user can see and act on is worth more than a reconciliation that ran.
+    ///     The boot pass as a task, so the state observer can hold its first tick until this pass has decided what
+    ///     the rows are. It completes without faulting: <see cref="RunBootPassAsync" /> guards its whole body.
     /// </summary>
-    public async Task StartAsync(CancellationToken cancellationToken)
+    internal Task BootPass => _bootPass;
+
+    /// <summary>
+    ///     The boot pass, started and never awaited: the host must reach <c>ApplicationStarted</c> without it.
+    ///     <see cref="BootPass" /> is how anything that must not run before it waits.
+    /// </summary>
+    /// <remarks>
+    ///     Awaiting it here cost every launch the daemon probe's timeout — ten seconds on a Windows box with no
+    ///     Docker Desktop, in front of the desktop shell's "Starting XE…" window, for a pass that then judged
+    ///     nothing because no runtime was ready.
+    /// </remarks>
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         if (!_options.Enabled)
         {
-            return;
+            return Task.CompletedTask;
         }
 
+        // ApplicationStopping, not this start call's token, which is cancelled the moment startup finishes. The
+        // Task.Run takes None: the pass's lifetime is the host's.
+        _bootPass = Task.Run(() => RunBootPassAsync(_lifetime.ApplicationStopping), CancellationToken.None);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     Nothing to do to the containers: they keep serving while the engine is down, which is the whole point of
+    ///     the restart policy the daemon owns. The pass is already cancelled, so this only waits for it to unwind.
+    /// </summary>
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _bootPass.WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // The pass's own cancellation or a shutdown deadline that ran out; neither is worth failing shutdown
+            // over, and the pass writes nothing on its way out.
+        }
+    }
+
+    /// <summary>One pass, and the whole body is guarded: a node whose Docker daemon is broken must still start.</summary>
+    private async Task RunBootPassAsync(CancellationToken cancellationToken)
+    {
         try
         {
             var summary = await ReconcileAsync(cancellationToken);
@@ -76,19 +117,17 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
                     summary.RowsSkippedBusy);
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The node is shutting down inside the pass. Nothing was written and nothing failed, so this is not the
+            // warning below.
+        }
 #pragma warning disable CA1031 // Startup must not fail because a container daemon did; the next refresh re-runs this.
         catch (Exception exception)
 #pragma warning restore CA1031
         {
             _logger.LogWarning(exception, "Reconciling external applications at startup failed; the node is starting anyway.");
         }
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken)
-    {
-        // Nothing to stop, and nothing to do to the containers: installed applications keep serving while the engine
-        // is down, which is the whole point of creating them with a restart policy the daemon owns.
-        return Task.CompletedTask;
     }
 
     public async Task<ExternalAppReconcileSummary> ReconcileAsync(CancellationToken cancellationToken = default)

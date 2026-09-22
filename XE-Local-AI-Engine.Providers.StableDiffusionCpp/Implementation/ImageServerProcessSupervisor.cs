@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
@@ -23,6 +24,10 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 /// </remarks>
 internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAsyncDisposable
 {
+    /// <summary>User-facing prefix for an exit-before-ready; kept verbatim so any surface matching on it still matches.</summary>
+    private const string ExitedWhileLoadingMessage =
+        "The image runtime exited while loading the model. The model may be incompatible with this runtime or too large for the available memory.";
+
     /// <summary>Poll cadence for observing that a freshly spawned process exited during its readiness wait.</summary>
     private static readonly TimeSpan ProcessExitPollInterval = TimeSpan.FromMilliseconds(250);
 
@@ -442,7 +447,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         {
             await linkedCts.CancelAsync().ConfigureAwait(false);
             await SwallowCancellationAsync(readyTask).ConfigureAwait(false);
-            throw new StableDiffusionRuntimeException("The image runtime exited while loading the model. The model may be incompatible with this runtime or too large for the available memory.");
+
+            // Without the child's own exit code and last words, every load failure reads as the same fixed sentence and
+            // a missing GPU device is indistinguishable from an out-of-memory kill.
+            var detail = DescribeExit(handle);
+            _logger.LogWarning("sd-server exited while loading the model (pid {ProcessId}).{Detail}", handle.ProcessId, detail);
+            throw new StableDiffusionRuntimeException(ExitedWhileLoadingMessage + detail);
         }
 
         await linkedCts.CancelAsync().ConfigureAwait(false);
@@ -452,6 +462,19 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         {
             throw new StableDiffusionRuntimeException("The image runtime did not become ready in time.");
         }
+    }
+
+    /// <summary>
+    ///     The exit code and sanitized stderr tail of a child that died during load, appended to the user-facing
+    ///     sentence. Empty when the OS reported neither.
+    /// </summary>
+    private static string DescribeExit(IImageServerProcessHandle handle)
+    {
+        var code = handle.ExitCode is { } exitCode
+            ? string.Create(CultureInfo.InvariantCulture, $" The runtime reported exit code {exitCode}.")
+            : string.Empty;
+        var tail = handle.StderrTail is { } stderrTail ? " Last output: " + stderrTail : string.Empty;
+        return code + tail;
     }
 
     private async Task WatchForExitAsync(IImageServerProcessHandle handle, CancellationToken ct)

@@ -20,17 +20,23 @@ internal sealed partial class LinuxImageProcessGroupHandle : IImageServerProcess
     private const int Sigkill = 9;
 
     private readonly Process _process;
+    private readonly ImageServerStderrTail? _stderrTail;
     private int _disposed;
 
-    public LinuxImageProcessGroupHandle(Process process)
+    public LinuxImageProcessGroupHandle(Process process, ImageServerStderrTail? stderrTail = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         _process = process;
+        _stderrTail = stderrTail;
     }
 
     public int ProcessId => _process.Id;
 
     public bool HasExited => SafeHasExited(_process);
+
+    public int? ExitCode => SafeExitCode(_process);
+
+    public string? StderrTail => _stderrTail?.Snapshot();
 
     public void TreeKill()
     {
@@ -67,12 +73,12 @@ internal sealed partial class LinuxImageProcessGroupHandle : IImageServerProcess
     }
 
     /// <summary>Takes ownership of an already-started process, disposing it if the wrap itself throws.</summary>
-    public static LinuxImageProcessGroupHandle Wrap(Process process)
+    public static LinuxImageProcessGroupHandle Wrap(Process process, ImageServerStderrTail? stderrTail = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         try
         {
-            return new LinuxImageProcessGroupHandle(process);
+            return new LinuxImageProcessGroupHandle(process, stderrTail);
         }
         catch
         {
@@ -90,6 +96,18 @@ internal sealed partial class LinuxImageProcessGroupHandle : IImageServerProcess
         catch (InvalidOperationException)
         {
             return true; // No associated process — treat as exited.
+        }
+    }
+
+    private static int? SafeExitCode(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null; // No associated process — the code is unavailable.
         }
     }
 

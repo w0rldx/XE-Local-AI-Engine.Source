@@ -11,17 +11,23 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 internal sealed class PlainImageProcessHandle : IImageServerProcessHandle
 {
     private readonly Process _process;
+    private readonly ImageServerStderrTail? _stderrTail;
     private int _disposed;
 
-    public PlainImageProcessHandle(Process process)
+    public PlainImageProcessHandle(Process process, ImageServerStderrTail? stderrTail = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         _process = process;
+        _stderrTail = stderrTail;
     }
 
     public int ProcessId => _process.Id;
 
     public bool HasExited => SafeHasExited(_process);
+
+    public int? ExitCode => SafeExitCode(_process);
+
+    public string? StderrTail => _stderrTail?.Snapshot();
 
     public void TreeKill()
     {
@@ -58,12 +64,12 @@ internal sealed class PlainImageProcessHandle : IImageServerProcessHandle
     }
 
     /// <summary>Takes ownership of an already-started process, disposing it if the wrap itself throws.</summary>
-    public static PlainImageProcessHandle Wrap(Process process)
+    public static PlainImageProcessHandle Wrap(Process process, ImageServerStderrTail? stderrTail = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         try
         {
-            return new PlainImageProcessHandle(process);
+            return new PlainImageProcessHandle(process, stderrTail);
         }
         catch
         {
@@ -81,6 +87,18 @@ internal sealed class PlainImageProcessHandle : IImageServerProcessHandle
         catch (InvalidOperationException)
         {
             return true;
+        }
+    }
+
+    private static int? SafeExitCode(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null; // No associated process — the code is unavailable.
         }
     }
 }

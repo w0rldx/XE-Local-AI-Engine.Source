@@ -628,8 +628,8 @@ public sealed class ExternalAppStartupReconcilerTests
     }
 
     /// <summary>
-    ///     A node whose Docker daemon is broken must still start. An application the user can see and act on is worth
-    ///     more than a reconciliation that ran.
+    ///     A node whose Docker daemon is broken must still start. The pass runs off the readiness path now, so the
+    ///     guard that must hold is its own: a faulted boot pass is an unobserved exception, not a start failure.
     /// </summary>
     [Test]
     public async Task StartAsync_WhenThePassThrows_DoesNotFailStartup()
@@ -640,10 +640,14 @@ public sealed class ExternalAppStartupReconcilerTests
 
         harness.Resolver.CreateFailure = new InvalidOperationException("The daemon socket vanished mid-pass.");
 
-        // Returning at all is the assertion's other half: StartAsync throwing is precisely the failure this guards
-        // against, and the platform would report it as this test's own exception.
-        await harness.CreateReconciler().StartAsync(CancellationToken.None);
+        var reconciler = harness.CreateReconciler();
 
+        // Returning at all is one half: StartAsync throwing is precisely the failure this guards against, and the
+        // platform would report it as this test's own exception.
+        await reconciler.StartAsync(CancellationToken.None);
+        await reconciler.BootPass;
+
+        AssertEx.True(reconciler.BootPass.IsCompletedSuccessfully, "The pass swallowed nothing and left a faulted task behind.");
         AssertEx.Equal(ExternalAppInstanceStatus.Installing, AssertEx.NotNull(await harness.ReadAsync(seeded.Id)).Status);
     }
 
@@ -748,6 +752,112 @@ public sealed class ExternalAppStartupReconcilerTests
                 dependsOn: [new ApplicationDependency("web", "started")],
                 image: ExternalAppTestManifests.SecondImage)
         ]);
+    }
+
+    /// <summary>
+    ///     The launch cost the tester round found: the pass ran inside <c>IHost.StartAsync</c>, so a probe taking
+    ///     its full timeout sat in front of readiness. Readiness must be reached with the probe still unanswered,
+    ///     and the pass must still do its work.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_WithADaemonProbeThatNeverAnswers_ReachesReadinessAndStillRunsThePass()
+    {
+        var manifest = SingleServiceManifest();
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing);
+
+        var probe = new TaskCompletionSource();
+        harness.Resolver.ProbeGate = probe;
+
+        var reconciler = harness.CreateReconciler();
+
+        // This call IS host readiness: it is the one the host awaits before ApplicationStarted fires.
+        await reconciler.StartAsync(CancellationToken.None);
+        await harness.Resolver.ProbeEntered;
+
+        AssertEx.False(reconciler.BootPass.IsCompleted,
+            "The probe has not answered, so readiness was reached with the pass still in flight — or the pass never started.");
+        AssertEx.Equal(ExternalAppInstanceStatus.Installing,
+            AssertEx.NotNull(await harness.ReadAsync(seeded.Id)).Status,
+            "Nothing may be judged while the probe is unanswered.");
+
+        probe.SetResult();
+        await reconciler.BootPass;
+
+        AssertEx.Equal(ExternalAppInstanceStatus.Failed,
+            AssertEx.NotNull(await harness.ReadAsync(seeded.Id)).Status,
+            "Off the readiness path the pass must still settle the row an engine death left transient.");
+
+        await reconciler.StopAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    ///     A probe that never answers must not keep the node from shutting down either: the pass rides
+    ///     <c>ApplicationStopping</c>, the same signal that cancels every lifecycle pipeline.
+    /// </summary>
+    [Test]
+    public async Task Shutdown_WithThePassStillInsideTheProbe_CancelsItAndWritesNothing()
+    {
+        var manifest = SingleServiceManifest();
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
+        var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing);
+
+        harness.Resolver.ProbeGate = new TaskCompletionSource();
+
+        var reconciler = harness.CreateReconciler();
+        await reconciler.StartAsync(CancellationToken.None);
+        await harness.Resolver.ProbeEntered;
+
+        harness.StopHost();
+        await reconciler.StopAsync(CancellationToken.None);
+
+        AssertEx.True(reconciler.BootPass.IsCompleted, "Stop returned with the pass still running.");
+        AssertEx.Equal(ExternalAppInstanceStatus.Installing,
+            AssertEx.NotNull(await harness.ReadAsync(seeded.Id)).Status,
+            "A cancelled pass writes nothing.");
+    }
+
+    /// <summary>
+    ///     The ordering the registration used to get for free: the pass ran inside its own <c>StartAsync</c>, so
+    ///     the observer could not judge a row it was still judging. The pass no longer blocks readiness, so a tick
+    ///     that finds it unfinished skips instead.
+    /// </summary>
+    [Test]
+    public async Task Observer_WhileTheBootPassIsStillRunning_SkipsItsTick()
+    {
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
+
+        // Gone behind the engine's back: the row a tick would report StoppedUnexpectedly.
+        await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[0]);
+
+        var listing = new TaskCompletionSource();
+        harness.Gated.NextListDetailedGate = listing;
+
+        var reconciler = harness.CreateReconciler();
+        await reconciler.StartAsync(CancellationToken.None);
+
+        // The pass is inside that listing; every later one, the observer's included, is served straight through.
+        await harness.Gated.NextListDetailedEntered;
+
+        var lists = harness.Gated.ListDetailedCalls;
+        using var observer = harness.CreateObserver(reconciler);
+        await observer.PollOnceAsync(CancellationToken.None);
+
+        AssertEx.Equal(lists, harness.Gated.ListDetailedCalls, "The tick reached the daemon while the boot pass was still running.");
+        AssertEx.Equal(ExternalAppInstanceStatus.Running,
+            AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId)).Status,
+            "No observer verdict may land on a row the boot pass has not judged yet.");
+
+        listing.SetResult();
+        await reconciler.BootPass;
+
+        // The pass settled this row itself, so put it back: what follows is about the TICK, and this is a hold
+        // rather than an observer that stopped working.
+        _ = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running);
+        await observer.PollOnceAsync(CancellationToken.None);
+
+        AssertEx.Equal(ExternalAppInstanceStatus.StoppedUnexpectedly,
+            AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId)).Status);
     }
 
     private static async Task<ExternalAppServiceHarness> RunningHarnessAsync(ApplicationManifest manifest, bool withBridge = true)

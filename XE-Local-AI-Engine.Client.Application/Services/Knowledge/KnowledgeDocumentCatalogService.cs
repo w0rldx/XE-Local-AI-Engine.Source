@@ -43,7 +43,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(CancellationToken cancellationToken)
     {
-        return await ListCoreAsync(collectionId: null, sourceKind: null, sourceId: null, cancellationToken);
+        return (await ListCoreAsync(collectionId: null, sourceKind: null, sourceId: null, cancellationToken)).Items;
     }
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId, CancellationToken cancellationToken)
@@ -53,7 +53,20 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             return [];
         }
 
-        return await ListCoreAsync(normalizedCollectionId, sourceKind: null, sourceId: null, cancellationToken);
+        return (await ListCoreAsync(normalizedCollectionId, sourceKind: null, sourceId: null, cancellationToken)).Items;
+    }
+
+    public async Task<KnowledgeDocumentListing> ListWithEmbeddingStatusAsync(string? collectionId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(collectionId))
+        {
+            return await ListCoreAsync(collectionId: null, sourceKind: null, sourceId: null, cancellationToken);
+        }
+
+        // An unusable namespace holds no documents, but the embedding verdict is node-wide and still gates the upload.
+        return KnowledgeCollectionScope.TryNormalize(collectionId, out var normalizedCollectionId)
+            ? await ListCoreAsync(normalizedCollectionId, sourceKind: null, sourceId: null, cancellationToken)
+            : new KnowledgeDocumentListing { Items = [], Embedding = await ResolveEmbeddingModelAsync(cancellationToken) };
     }
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId,
@@ -68,10 +81,10 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             return [];
         }
 
-        return await ListCoreAsync(normalizedCollectionId, sourceKind, sourceId, cancellationToken);
+        return (await ListCoreAsync(normalizedCollectionId, sourceKind, sourceId, cancellationToken)).Items;
     }
 
-    private async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListCoreAsync(string? collectionId,
+    private async Task<KnowledgeDocumentListing> ListCoreAsync(string? collectionId,
         string? sourceKind,
         string? sourceId,
         CancellationToken cancellationToken)
@@ -127,7 +140,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             });
         }
 
-        return documents;
+        return new KnowledgeDocumentListing { Items = documents, Embedding = resolution };
     }
 
     public async Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, CancellationToken cancellationToken)

@@ -60,8 +60,8 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         IOptions<ExternalAppsOptions> appOptions,
         RecordingLogger<ExternalAppService> serviceLog)
     {
-        // Held as an action and a handle rather than as the lifetime itself: a CancellationToken source in scope
-        // makes every store call in this fixture look like one that forgot to thread it.
+        // An action and an opaque handle rather than the lifetime itself: a CancellationToken source in scope makes
+        // every store call here look like one that forgot to thread it. CreateReconciler casts the handle back.
         _stopHost = lifetime.StopApplication;
         _hostHandle = lifetime;
         _provider = provider;
@@ -141,18 +141,23 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
             Gate,
             Runner,
             Publisher,
+            (IHostApplicationLifetime)_hostHandle,
             _appOptions,
             Time,
             NullLogger<ExternalAppStartupReconciler>.Instance);
     }
 
-    /// <summary>The state observer over the same wiring. Its own <see cref="IDisposable" />: the caller owns it.</summary>
-    public ExternalAppStateObserver CreateObserver()
+    /// <summary>
+    ///     The state observer over the same wiring. Its own <see cref="IDisposable" />: the caller owns it. The
+    ///     reconciler is its boot-pass gate, so a test that never starts one gets an observer that polls at once.
+    /// </summary>
+    public ExternalAppStateObserver CreateObserver(ExternalAppStartupReconciler? reconciler = null)
     {
         return new ExternalAppStateObserver(_provider.GetRequiredService<IServiceScopeFactory>(),
             Service,
             Gate,
             Runner,
+            reconciler ?? CreateReconciler(),
             Publisher,
             _appOptions,
             Time,
@@ -685,6 +690,7 @@ internal sealed class TestHostLifetime : IHostApplicationLifetime, IDisposable
 /// </summary>
 internal sealed class FakeContainerRuntimeResolver : IContainerRuntimeResolver
 {
+    private readonly TaskCompletionSource _probeEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly IContainerRuntime _runtime;
 
     public FakeContainerRuntimeResolver(IContainerRuntime runtime)
@@ -698,6 +704,15 @@ internal sealed class FakeContainerRuntimeResolver : IContainerRuntimeResolver
     /// <summary>Thrown instead of handing out a runtime, so a caller's guard around a failing pass can be proven.</summary>
     public Exception? CreateFailure { get; set; }
 
+    /// <summary>
+    ///     Holds every probe open until the source is completed — the npipe probe that never answers on a Windows
+    ///     box with no Docker Desktop. Null is the immediate answer.
+    /// </summary>
+    public TaskCompletionSource? ProbeGate { get; set; }
+
+    /// <summary>Completes when a probe has actually been entered, so a test never asserts on a pass that has not started.</summary>
+    public Task ProbeEntered => _probeEntered.Task;
+
     public static ContainerRuntimeResolution ReadyResolution(ContainerRuntimeCapabilities capabilities, bool isRootless)
     {
         return Build(ContainerRuntimeStatus.Ready, capabilities, "The container runtime is ready.", isRootless);
@@ -708,11 +723,19 @@ internal sealed class FakeContainerRuntimeResolver : IContainerRuntimeResolver
         return Build(ContainerRuntimeStatus.DaemonUnreachable, ContainerRuntimeCapabilities.None, message, isRootless: false);
     }
 
-    public Task<ContainerRuntimeResolution> ResolveAsync(ContainerRuntimeSelection? instanceOverride = null,
+    public async Task<ContainerRuntimeResolution> ResolveAsync(ContainerRuntimeSelection? instanceOverride = null,
         bool forceRefresh = false,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(Resolution);
+        if (ProbeGate is { } gate)
+        {
+            // Signalled only for a GATED probe, so a test never reads a probe the fixture made during setup as the
+            // pass it is waiting for.
+            _ = _probeEntered.TrySetResult();
+            await gate.Task.WaitAsync(cancellationToken);
+        }
+
+        return Resolution;
     }
 
     public Task<ContainerRuntimeResolution> ConfirmDaemonIdentityAsync(string expectedDaemonId, CancellationToken cancellationToken = default)
@@ -764,6 +787,7 @@ internal sealed class FakeContainerRuntimeResolver : IContainerRuntimeResolver
 internal sealed class GatedContainerRuntime : IContainerRuntime
 {
     private readonly FakeDockerRuntimeClient _inner;
+    private readonly TaskCompletionSource _nextListEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _listDetailedCalls;
     private int _mutationCalls;
 
@@ -795,6 +819,15 @@ internal sealed class GatedContainerRuntime : IContainerRuntime
     ///     second, so this is where a test can let an operation finish underneath a pass that has already read them.
     /// </summary>
     public Action? OnListDetailed { get; set; }
+
+    /// <summary>
+    ///     Holds the NEXT detailed listing open until the source is completed, and is taken as it fires. The seam
+    ///     that keeps ONE reader — the boot pass — mid-flight while a second reaches the daemon freely.
+    /// </summary>
+    public TaskCompletionSource? NextListDetailedGate { get; set; }
+
+    /// <summary>Completes when that listing has been entered.</summary>
+    public Task NextListDetailedEntered => _nextListEntered.Task;
 
     /// <summary>
     ///     Fails a removal the way a daemon does when a container will not go. The repo's fake removes whatever it is
@@ -871,12 +904,21 @@ internal sealed class GatedContainerRuntime : IContainerRuntime
     public Task<IReadOnlyList<string>> ListNetworksAsync(IReadOnlyDictionary<string, string> labels, CancellationToken cancellationToken = default) =>
         _inner.ListNetworksAsync(labels, cancellationToken);
 
-    public Task<IReadOnlyList<ContainerSummary>> ListContainersDetailedAsync(IReadOnlyDictionary<string, string> labels,
+    public async Task<IReadOnlyList<ContainerSummary>> ListContainersDetailedAsync(IReadOnlyDictionary<string, string> labels,
         CancellationToken cancellationToken = default)
     {
         _ = Interlocked.Increment(ref _listDetailedCalls);
         OnListDetailed?.Invoke();
-        return _inner.ListContainersDetailedAsync(labels, cancellationToken);
+
+        if (NextListDetailedGate is { } gate)
+        {
+            // Cleared as it fires, so it holds ONE listing and the next reader goes straight through.
+            NextListDetailedGate = null;
+            _ = _nextListEntered.TrySetResult();
+            await gate.Task.WaitAsync(cancellationToken);
+        }
+
+        return await _inner.ListContainersDetailedAsync(labels, cancellationToken);
     }
 
     public Task<ContainerLogSnapshot> ReadLogsAsync(string containerId, ContainerLogRequest request, CancellationToken cancellationToken = default) =>

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp;
 
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
@@ -17,7 +18,19 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 /// </summary>
 internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
 {
+    private readonly int? _bornDeadExitCode;
+    private readonly string? _bornDeadStderrTail;
     private int _nextPid = 2000;
+
+    /// <summary>
+    ///     With an exit code, every handed-out handle is already exited — the deterministic stand-in for an sd-server
+    ///     that dies during model load, with no timer and no race.
+    /// </summary>
+    public FakeImageProcessLauncher(int? bornDeadExitCode = null, string? bornDeadStderrTail = null)
+    {
+        _bornDeadExitCode = bornDeadExitCode;
+        _bornDeadStderrTail = bornDeadStderrTail;
+    }
 
     public ConcurrentQueue<ImageServerLaunchSpec> Launches { get; } = new();
 
@@ -31,6 +44,11 @@ internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
         var handle = new FakeImageProcessHandle(Interlocked.Increment(ref _nextPid));
 #pragma warning restore CA2000
+        if (_bornDeadExitCode is { } exitCode)
+        {
+            handle.SimulateExit(exitCode, _bornDeadStderrTail);
+        }
+
         Handles.Add(handle);
         return handle;
     }
@@ -53,6 +71,10 @@ internal sealed class FakeImageProcessHandle : IImageServerProcessHandle
 
     public bool HasExited => Volatile.Read(ref _exited) != 0;
 
+    public int? ExitCode { get; private set; }
+
+    public string? StderrTail { get; private set; }
+
     public void TreeKill()
     {
         Interlocked.Exchange(ref _killed, value: 1);
@@ -64,9 +86,11 @@ internal sealed class FakeImageProcessHandle : IImageServerProcessHandle
         // No unmanaged resources in the fake.
     }
 
-    /// <summary>Simulates a daemon crash/exit so the next ensure-running sees a dead process.</summary>
-    public void SimulateExit()
+    /// <summary>Simulates a daemon crash/exit so the next ensure-running sees a dead process, optionally with the diagnostics the real handle would carry.</summary>
+    public void SimulateExit(int? exitCode = null, string? stderrTail = null)
     {
+        ExitCode = exitCode;
+        StderrTail = stderrTail;
         Interlocked.Exchange(ref _exited, value: 1);
     }
 }
@@ -76,10 +100,13 @@ internal sealed class FakeImageReadinessProbe : IImageServerReadinessProbe
 {
     private int _responsiveChecks;
 
-    public FakeImageReadinessProbe(bool ready = true, bool responsive = true)
+    private readonly bool _hangsUntilCancelled;
+
+    public FakeImageReadinessProbe(bool ready = true, bool responsive = true, bool hangsUntilCancelled = false)
     {
         Ready = ready;
         Responsive = responsive;
+        _hangsUntilCancelled = hangsUntilCancelled;
     }
 
     public bool Ready { get; set; }
@@ -89,9 +116,16 @@ internal sealed class FakeImageReadinessProbe : IImageServerReadinessProbe
     /// <summary>Count of reuse-path liveness probes issued — asserts the hot path did / did not probe.</summary>
     public int ResponsiveChecks => Volatile.Read(ref _responsiveChecks);
 
-    public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
+    public async Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
     {
-        return Task.FromResult(Ready);
+        if (_hangsUntilCancelled)
+        {
+            // Lets the exit side of the readiness race win deterministically: this probe only ends when the
+            // supervisor cancels it, which is exactly what a dead daemon's never-bound socket does.
+            await Task.Delay(Timeout.Infinite, ct);
+        }
+
+        return Ready;
     }
 
     public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
@@ -224,7 +258,8 @@ internal static class ImageSupervisorFactory
         AdvanceableClock? timeProvider = null,
         FakeSdBackendSelector? backendSelector = null,
         FakeSdBinaryManager? binaryManager = null,
-        IGpuModelLoadAdmission? loadAdmission = null)
+        IGpuModelLoadAdmission? loadAdmission = null,
+        ILogger<ImageServerProcessSupervisor>? logger = null)
     {
         return new ImageServerProcessSupervisor(modelStore ?? new FakeImageModelStore(),
             backendSelector ?? new FakeSdBackendSelector(),
@@ -238,6 +273,7 @@ internal static class ImageSupervisorFactory
                 MaxLoadedProcesses = 2
             },
             timeProvider ?? new AdvanceableClock(),
-            loadAdmission: loadAdmission);
+            logger,
+            loadAdmission);
     }
 }

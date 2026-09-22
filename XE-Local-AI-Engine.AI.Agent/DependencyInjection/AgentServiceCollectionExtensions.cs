@@ -117,15 +117,10 @@ public static class AgentServiceCollectionExtensions
     ///     OpenTelemetry.
     /// </summary>
     /// <remarks>
-    ///     Built in two stages: a provider client (tool relevance, provider-call budget, OpenTelemetry over the base
-    ///     client), then a function-invoking client over it. <see cref="EmptyToolOfferChatClient" /> sends a request
-    ///     whose <see cref="ChatOptions.Tools" /> is null or empty straight to the provider client, so a tool-free turn
-    ///     never gets a synthetic "not found" tool result and an extra provider round; every other request takes the
-    ///     function-invoking path with the unchanged per-round hop order. The function-invoking client stays reachable
-    ///     through <see cref="IChatClient.GetService" /> traversal.
-    ///     Exposed as a public method so test harnesses that replace the base <see cref="IChatClient" /> with a fake
-    ///     can reapply the full decoration after their <c>RemoveAll</c> + <c>AddSingleton</c>. The order is
-    ///     load-bearing; see docs/wiki/04-agent-mode.md ("Why each hop sits where it does, and what it may mutate").
+    ///     Two stages: a provider client (tool relevance, budget, OpenTelemetry), then a function-invoking client over
+    ///     it. <see cref="EmptyToolOfferChatClient" /> routes a request with no <see cref="ChatOptions.Tools" /> straight
+    ///     to the provider client, so a tool-free turn costs no synthetic tool round. Public so test harnesses can reapply
+    ///     the decoration after replacing the base client. The order is load-bearing; see docs/wiki/04-agent-mode.md.
     /// </remarks>
     public static IServiceCollection DecorateChatClientPipeline(this IServiceCollection services)
     {
@@ -153,8 +148,7 @@ public static class AgentServiceCollectionExtensions
             }
 
             // Provider client: first .Use is outermost, OpenTelemetry INNERMOST so each provider round emits its own gen_ai
-            // span. The function-invoking client wraps it, and the empty-offer branch below may bypass that wrapper. Source
-            // name and EnableSensitiveData are pinned; see docs/wiki/04-agent-mode.md, "The chat-client decorator pipeline".
+            // span; source name and EnableSensitiveData are pinned (docs/wiki/04-agent-mode.md, decorator pipeline).
             var providerClient = inner.AsBuilder()
                         .Use(chatClient => new ToolRelevanceChatClient(chatClient,
                             toolRelevanceSelector,

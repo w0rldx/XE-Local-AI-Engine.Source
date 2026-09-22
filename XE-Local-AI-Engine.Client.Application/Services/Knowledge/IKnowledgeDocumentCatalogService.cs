@@ -21,6 +21,12 @@ public interface IKnowledgeDocumentCatalogService
         return ListAsync(cancellationToken);
     }
 
+    /// <summary>
+    ///     Lists documents (optionally in one collection) together with the embedding-model resolution the ingestion
+    ///     lane would use right now, so a caller can gate uploads on the same truth ingestion runs on.
+    /// </summary>
+    Task<KnowledgeDocumentListing> ListWithEmbeddingStatusAsync(string? collectionId, CancellationToken cancellationToken);
+
     /// <summary>Lists documents belonging to one durable source inside a collection.</summary>
     Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(string collectionId,
         string sourceKind,
@@ -77,6 +83,18 @@ public interface IKnowledgeDocumentCatalogService
     ///     semantics — and in-progress clobbering — of <see cref="ResetNonTerminalToPendingAsync" />.
     /// </remarks>
     Task<IReadOnlyList<Guid>> ListPendingDocumentIdsAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>Documents plus the embedding model ingestion would embed them with right now.</summary>
+/// <remarks>
+///     <see cref="EmbeddingModelResolution.IsConfident" /> is the upload precondition: a NOT-confident resolution means
+///     no installed model was matched, so an accepted upload would fail later in the background embedder.
+/// </remarks>
+public sealed class KnowledgeDocumentListing
+{
+    public required IReadOnlyList<KnowledgeDocumentSummary> Items { get; init; }
+
+    public required EmbeddingModelResolution Embedding { get; init; }
 }
 
 /// <summary>Management summary of one knowledge-base document.</summary>

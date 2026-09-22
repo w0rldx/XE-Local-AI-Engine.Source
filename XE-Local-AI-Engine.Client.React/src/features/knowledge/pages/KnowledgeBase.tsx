@@ -14,6 +14,7 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { useDevelopmentRepositories } from "@/features/development/queries/useDevelopment";
 import { KnowledgeDocumentDrawer } from "@/features/knowledge/components/KnowledgeDocumentDrawer";
 import { KnowledgeDocumentsTable } from "@/features/knowledge/components/KnowledgeDocumentsTable";
+import { KnowledgeEmbeddingModelAlert } from "@/features/knowledge/components/KnowledgeEmbeddingModelAlert";
 import { KnowledgeRepositoryImportPanel } from "@/features/knowledge/components/KnowledgeRepositoryImportPanel";
 import { KnowledgeSearchPanel } from "@/features/knowledge/components/KnowledgeSearchPanel";
 import { KnowledgeUploadPanel } from "@/features/knowledge/components/KnowledgeUploadPanel";
@@ -28,6 +29,7 @@ import {
 	useDeleteKnowledgeDocument,
 	useKnowledgeDocumentDetail,
 	useKnowledgeDocuments,
+	useKnowledgeEmbeddingAvailability,
 	useReindexKnowledgeCorpus,
 	useReindexKnowledgeDocument,
 } from "@/features/knowledge/queries/useKnowledgeDocuments";
@@ -56,6 +58,13 @@ export function KnowledgeBase() {
 	const { data: documents, isLoading, error, refetch, isFetching } = useKnowledgeDocuments(true, collectionId);
 	const documentList = useMemo<readonly KnowledgeDocument[]>(() => documents ?? [], [documents]);
 	const hasStaleDocuments = useMemo(() => documentList.some((document) => document.staleModel), [documentList]);
+
+	// Ingestion precondition: the background embedder needs a resolvable embedding model, and without one the server
+	// accepts the upload and fails the document minutes later. The verdict comes from the list endpoint because that is
+	// the resolver ingestion runs; the installed-model list classifies by NAME and disagrees on a custom-named model.
+	// Gated on `isSuccess` so neither the first paint nor a failed call flashes an alert the node may not deserve.
+	const embeddingAvailabilityQuery = useKnowledgeEmbeddingAvailability(collectionId);
+	const embeddingModelMissing = embeddingAvailabilityQuery.isSuccess && embeddingAvailabilityQuery.data === false;
 
 	const upload = useKnowledgeUpload(collectionId);
 	const search = useKnowledgeSearch(collectionId);
@@ -247,7 +256,12 @@ export function KnowledgeBase() {
 			</SectionCard>
 
 			<SectionCard title={t("pages.knowledgeBase.upload.heading", "Add documents")} data-tour="knowledge-upload">
-				<KnowledgeUploadPanel pendingUploads={upload.pendingUploads} onUpload={upload.uploadFiles} />
+				{embeddingModelMissing ? <KnowledgeEmbeddingModelAlert /> : null}
+				<KnowledgeUploadPanel
+					pendingUploads={upload.pendingUploads}
+					disabled={embeddingModelMissing}
+					onUpload={upload.uploadFiles}
+				/>
 				<Divider label={t("pages.knowledgeBase.repository.divider", "Or import a repository")} labelPosition="center" />
 				<KnowledgeRepositoryImportPanel
 					repositories={repositoriesQuery.data ?? []}
