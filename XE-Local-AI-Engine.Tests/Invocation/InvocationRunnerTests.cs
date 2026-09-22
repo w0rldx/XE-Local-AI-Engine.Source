@@ -597,6 +597,48 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenSystemPromptIsExplicitlyOmitted_ProjectsOnlyConversationMessagesToTheFactory()
+    {
+        InvocationAgentDefinition? capturedDefinition = null;
+        var factory = CreateFactory(CreateUpdates("ok"), definition => capturedDefinition = definition);
+        var package = RuntimePackageBuilder.Valid().WithoutSystemPrompt().WithUserMessage("Run the node.").Build();
+
+        await RunAsync(CreateRunner(factory), package);
+
+        var definition = AssertEx.NotNull(capturedDefinition);
+        AssertEx.True(definition.OmitSystemPrompt);
+        AssertEx.Equal(string.Empty, definition.Instructions);
+        AssertEx.Equal(expected: 1, definition.ConversationContext.Count);
+        AssertEx.Equal(ChatRole.User, definition.ConversationContext[0].Role);
+        AssertEx.Equal("Run the node.", definition.ConversationContext[0].Text);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenNodeManagedLlamaIsRequired_ScopesTheExactModelForTheWholeAgentRun()
+    {
+        string? modelDuringFactory = null;
+        string? modelDuringStream = null;
+        var factory = CreateFactory(_ => ObserveScope(), definition => modelDuringFactory = NodeManagedLlamaRoutingScope.CurrentModel);
+        var package = RuntimePackageBuilder.Valid().WithModel("gguf-model").RequiringNodeManagedLlama().Build();
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync("gguf-model", Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
+
+        await RunAsync(CreateRunner(factory, providerResolver: providerResolver), package);
+
+        AssertEx.Equal("gguf-model", modelDuringFactory);
+        AssertEx.Equal("gguf-model", modelDuringStream);
+        AssertEx.Null(NodeManagedLlamaRoutingScope.CurrentModel);
+
+        async IAsyncEnumerable<AgentResponseUpdate> ObserveScope()
+        {
+            modelDuringStream = NodeManagedLlamaRoutingScope.CurrentModel;
+            yield return new AgentResponseUpdate { Contents = [new TextContent("ok")] };
+            await Task.CompletedTask;
+        }
+    }
+
+    [Test]
     public async Task RunAsync_WhenConversationMessageCarriesImages_EmitsDataContentIntoTheAgentContext()
     {
         // A vision turn: a ConversationMessageDto carrying image parts must map to an MEAI DataContent alongside its
@@ -4488,9 +4530,9 @@ public sealed class InvocationRunnerTests
                    {
                        Agent = new FakeAIAgent(updates, onSessionObserved: null),
                        Session = null,
-                       SeedMessages = definition.ConversationContext
-                                                .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
-                                                .ToList()
+                       SeedMessages = definition.OmitSystemPrompt
+                           ? definition.ConversationContext
+                           : definition.ConversationContext.Prepend(new ChatMessage(ChatRole.System, definition.Instructions)).ToList()
                    });
                });
 

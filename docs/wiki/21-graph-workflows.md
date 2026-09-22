@@ -2,7 +2,7 @@
 
 > Reviewed: 2026-09-22 · Code-grounded.
 
-**Graph Workflows** let an operator draw a directed acyclic graph of agent turns, tool calls, conditions and human
+**Graph Workflows** let an operator draw a directed acyclic graph of LLM calls, agent turns, tool calls, conditions and human
 pauses, save it, and start runs of it. The engine executes the run from the database: every node run is a row, every
 change is an append-only event, and the process that advances it holds no authoritative state of its own. Restarting
 the node loses at most the work that was in flight.
@@ -70,10 +70,10 @@ opinion. Save time and run start call the same parser, so a graph accepted at sa
 | Member | Required | Meaning |
 |---|---|---|
 | `key` | yes | 1–64 characters of letters, digits, `_` and `-`. Node and edge keys share **one** namespace. |
-| `kind` | yes | One of `Start`, `Agent`, `Tool`, `Condition`, `Parallel`, `Join`, `Pause`, `End`, by NAME. |
+| `kind` | yes | One of `Start`, `LlmCall`, `Agent`, `Tool`, `Condition`, `Parallel`, `Join`, `Pause`, `End`, by NAME. |
 | `label` | no | Display text. Defaults to the key. |
 | `joinPolicy` | no | `All` (default) or `Any`. A property of **every** node — see §2.3. |
-| `maxAttempts` | no | Positive. Defaults to **3** for `Agent` and `Tool`, **1** for every other kind. |
+| `maxAttempts` | no | Positive. Defaults to **3** for `LlmCall`, `Agent` and `Tool`, **1** for every other kind. |
 | `timeoutSeconds` | no | Positive. Overrides `DefaultNodeTimeoutSeconds` for this node only. |
 | `position` | no | `{ x, y }`, both numeric. Authoring metadata the runtime never reads. |
 | `config` | no | The per-kind settings, discriminated by `kind` — see §4. |
@@ -415,7 +415,7 @@ The verdicts:
 
 - A `Queued` row, or a `Running` **inline** row, collapses to `Pending` without touching `Attempt`. Neither is a
   failure, so neither costs an attempt.
-- A `Running` **`Agent` or `Tool`** row is **failed** `Interrupted`. The work was an in-process task with no durable
+- A `Running` **`LlmCall`, `Agent` or `Tool`** row is **failed** `Interrupted`. The work was an in-process task with no durable
   handle, so its partial output died with the host. Recovery never re-attempts it; the dispatcher's retry stage does
   on its first tick, if and only if the node and run budgets allow. The class written is the plain `Interrupted`
   rather than anything `GraphWorkflowFailures.Classify` would decide, because recovery deliberately never parses the
@@ -474,8 +474,8 @@ Output: `{ "input": <the run's start payload> }`, handed to everything downstrea
 
 ### 4.2 `Agent`
 
-One headless saved-agent turn, on its own in-flight lane sized at `MaxConcurrentRuns`
-(`GraphWorkflowAgentExecutor`). It drives `IInvocationRunner` from the tick and never inside it; the turn is an
+One headless saved-agent turn, on the model-invocation lane shared with LLM Call and sized at `MaxConcurrentRuns`
+(`GraphWorkflowInvocationExecutor`). It drives `IInvocationRunner` from the tick and never inside it; the turn is an
 in-process task with no durable handle, which is exactly why an interrupted `Running` row is failed rather than
 resumed (§3.5). `InvocationId` is written on the row as the correlation id in the node logs for a turn nothing else
 survives.
@@ -538,6 +538,52 @@ with `IsUnattended` set — the same posture a scheduled saved-agent run holds.
 The runner's own watchdog reports a timeout as a failed terminal, which is why the executor classes it `Timeout`
 rather than `NodeFailed` — a node that ran out of time deserves a different answer from one whose provider said no.
 Provider errors never reach the row: the reason says "see the node logs" and the detail stays there.
+
+### 4.2a `LlmCall` — LLM Call
+
+One logical chat-model invocation per node attempt, through `GraphWorkflowInvocationExecutor.RunLlmTurnAsync` and the shared
+`ILocalChatRuntimePackageBuilder` / `IInvocationRunner` stack. The node does not resolve an agent definition or add
+a persona, tools, skills, memory, or orchestration. Existing bounded transport retries before the first output
+remain enabled; graph retries are separate attempts governed by `maxAttempts`. Tool-free requests bypass the
+function-invocation loop, so unsolicited tool-call content cannot trigger a recovery round.
+
+The package's explicit `OmitSystemPrompt` flag carries absence through validation, configuration hashing and
+`InvocationAgentFactory.BuildSeedMessages`. It defaults to false, so existing chat, Agent and benchmark callers
+retain their non-empty system-prompt requirement and their existing configuration hashes.
+
+The LLM Call package also requires node-managed llama routing for the selected model throughout dispatch.
+The shared runtime bypasses cloud selection for that request and rejects a provider remap before choosing a
+local client, including a cached client. This keeps a settings change between validation and inference from
+sending the call externally, without locking provider settings for the duration of generation.
+
+| Config member | Meaning |
+|---|---|
+| `model` | Optional installed node-managed GGUF chat model. When omitted, the local-default resolver chooses one. Cloud, external, Ollama, uninstalled and non-chat models are refused before inference. The chosen model is not automatically swapped. |
+| `systemPrompt` | Optional authored system instructions. Empty means no system-role message; no default assistant prompt is substituted. |
+| `prompt` | Required user instructions for this call. |
+| `inputBindings` | Optional object mapping names to dot paths in the node's input document. Values form a named JSON data block alongside the prompt; there is no placeholder expansion or implicit upstream context. |
+| `reasoningEffort` | Optional, using the same vocabulary as the Agent node. Actual support depends on the selected model. |
+| `responseJsonSchema` | Optional object schema, with the same response handling and provider limitations as Agent output. |
+| `samplingOptions` | Optional inference overrides. Unset values use runtime defaults. The editor keeps these in a collapsed Advanced section. |
+
+Bindings use `GraphWorkflowDocuments.Resolve`. A missing path fails the node before inference; an explicit JSON
+`null` is a valid bound value. `run.input.question` reads the run input, and
+`upstream.retrieve.output.result` reads an incoming Tool result. `input.output.result` is a shortcut only when
+exactly one incoming predecessor is satisfied. The `upstream` map contains **satisfied immediate predecessors**,
+not every ancestor: add a direct dependency edge to consume an earlier result, taking the consumer's join policy
+into account. Bound data is size-limited and is not silently truncated into a different JSON value.
+
+Sampling overrides include `temperature`, `topP`, `topK`, `minP`, `maxOutputTokens`, `seed`, `repeatPenalty`,
+`repeatLastN`, `presencePenalty`, `frequencyPenalty`, `stop`, and `numCtx`. The last is a request/prompt budget
+ceiling; it cannot resize the llama-server context window fixed when the model was loaded.
+
+Output uses the Agent-compatible `{ text, json, usage }` payload inside the normal node envelope. A requested
+structured response must parse as a JSON object; otherwise the attempt fails. This is not a separate full JSON
+Schema validation pass. A following Condition can route on `output.json.needsReview` without parsing prose.
+
+For example, `Start → Tool → LLM Call → End` can bind `document` to `input.output.result` and use the prompt
+"Summarize the bound document and retain the technical findings." Only the named document is supplied to the
+model. A second LLM Call can consume the first one's `input.output.text` the same way.
 
 ### 4.3 `Tool`
 
@@ -872,8 +918,8 @@ environment variable such as `GraphWorkflows__MaxConcurrentRuns`.
 | `DefaultNodeTimeoutSeconds` | 600 | One node run's attempt, when its node names no `timeoutSeconds`. Unlike Dev Workflows, a node that declares nothing still has a deadline. |
 | `MaxOutputJsonBytes` | 262 144 | One node run's composed output document, in UTF-8 bytes, checked before it is encrypted and stored. |
 | `DispatchIntervalMilliseconds` | 500 | The sweep cadence, independent of the change signals the dispatcher also listens for. Floored at 100 ms. |
-| `MaxConcurrentRuns` | 4 | Live runs at once, and the size of both the Agent and Tool in-flight lanes. Runs above the cap **wait**; they are not refused. |
-| `MaxRunInputBytes` | 65 536 | A run-start input document, checked in `GraphWorkflowRunService.StartAsync` (§3.1) rather than at the endpoint, so every caller of the service is held to it. Also the budget for the inlined `upstream` map in an Agent prompt. |
+| `MaxConcurrentRuns` | 4 | Live runs at once, and the size of both the shared Agent/LLM Call invocation lane and the Tool lane. Runs above the cap **wait**; they are not refused. |
+| `MaxRunInputBytes` | 65 536 | A run-start input document, checked in `GraphWorkflowRunService.StartAsync` (§3.1) rather than at the endpoint, so every caller of the service is held to it. Also the budget for the inlined `upstream` map in an Agent prompt and the complete user prompt with bound JSON data in an LLM Call. |
 | `EventReplayLimit` | 200 | Events one replay may return, hub snapshot and events route alike. Ceiling 1000 — one replay is one response body. |
 
 `GraphWorkflowOptionsValidator` checks at startup what the data annotations cannot: a semantic floor under each

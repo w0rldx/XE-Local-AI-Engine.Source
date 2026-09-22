@@ -12,9 +12,12 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
     public RuntimePackage Build(LocalChatRuntimePackageRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (string.IsNullOrWhiteSpace(request.ResolvedSystemPrompt))
+        if (request.ResolvedSystemPrompt is null ||
+            (request.OmitSystemPrompt
+                ? !string.IsNullOrWhiteSpace(request.ResolvedSystemPrompt)
+                : string.IsNullOrWhiteSpace(request.ResolvedSystemPrompt)))
         {
-            throw new ArgumentException("Resolved system prompt must be provided.", nameof(request));
+            throw new ArgumentException("Resolved system prompt must be blank exactly when it is explicitly omitted.", nameof(request));
         }
 
         if (request.ConversationContext is null)
@@ -35,6 +38,7 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             ClientNodeId = request.ClientNodeId ?? LocalChatLoopbackDefaults.ClientNodeId,
             AgentDefinitionVersion = request.AgentDefinitionVersion,
             ResolvedSystemPrompt = request.ResolvedSystemPrompt,
+            OmitSystemPrompt = request.OmitSystemPrompt,
             ConversationContext = [.. request.ConversationContext.OrderBy(static message => message.SortOrder)],
             AllowedTools = allowedTools,
             ToolPolicies = request.ToolPolicies is null ? null : new Dictionary<string, object>(request.ToolPolicies, StringComparer.Ordinal),
@@ -58,6 +62,7 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // Deliberately NOT fed into the config hash below (same reason as IsUnattended): it describes how the model
             // was CHOSEN, not the agent's configuration, so a menu pick and the node default hash identically.
             AllowAutoModelSwap = request.AllowAutoModelSwap,
+            RequireNodeManagedLlama = request.RequireNodeManagedLlama,
             Timeouts = timeouts,
             OrchestrationSpec = request.OrchestrationSpec,
             // Normalize an empty assigned-skill set to null so the no-skills loopback package carries no skill payload
@@ -78,7 +83,9 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
                 timeouts,
                 request.ReasoningEffort,
                 request.OrchestrationSpec,
-                skills)
+                skills,
+                request.OmitSystemPrompt,
+                request.RequireNodeManagedLlama)
         };
     }
 

@@ -5808,6 +5808,7 @@
 			"nodeKind": {
 				"Start": "Start",
 				"Agent": "Agent",
+				"LlmCall": "LLM-Aufruf",
 				"Tool": "Werkzeug",
 				"Condition": "Bedingung",
 				"Parallel": "Verzweigung",
@@ -5925,6 +5926,8 @@
 					"unknownConditionOperator": "Die Kante „{{subject}}“ verwendet einen Vergleich, den diese Version nicht kennt.",
 					"toolNameMissing": "„{{subject}}“ ist ein Werkzeugknoten ohne ausgewähltes Werkzeug.",
 					"agentInstructionsMissing": "„{{subject}}“ ist ein Agentenknoten ohne Anweisungen.",
+					"llmPromptMissing": "„{{subject}}“ ist ein LLM-Aufruf ohne Prompt.",
+					"invalidInputBindings": "„{{subject}}“ hat eine Eingabebindung mit leerem oder doppeltem Namen oder ungültigem Pfad.",
 					"pausePromptMissing": "„{{subject}}“ ist ein Pausenknoten ohne Frage.",
 					"pauseNoDecisions": "„{{subject}}“ ist ein Pausenknoten, der keine Entscheidung anbietet.",
 					"endOutcomeMissing": "„{{subject}}“ ist ein End-Knoten ohne Ergebnisnamen.",
@@ -5952,6 +5955,9 @@
 				"instructions": {
 					"required": "Geben Sie die Anweisungen ein, mit denen dieser Agent läuft."
 				},
+				"llmPrompt": {
+					"required": "Geben Sie den Prompt ein, den das Modell erhält."
+				},
 				"responseJsonSchema": {
 					"notObject": "Geben Sie ein JSON-Objektschema ein oder lassen Sie das Feld leer."
 				},
@@ -5963,6 +5969,9 @@
 				},
 				"argumentBindings": {
 					"pathRequired": "Geben Sie den Pfad an, aus dem dieses Argument gelesen wird."
+				},
+				"inputBindings": {
+					"invalid": "Verwende für jede Bindung einen eindeutigen Namen und einen nicht leeren Punktpfad."
 				},
 				"path": {
 					"invalid": "Verwenden Sie einen Punktpfad wie output.json.status."
@@ -6007,6 +6016,16 @@
 				"instructions": "Anweisungen",
 				"model": "Modell",
 				"modelPlaceholder": "Das eigene Modell des Agenten",
+				"llmModelPlaceholder": "Lokales Standardmodell des Knotens",
+				"systemPrompt": "System-Prompt",
+				"systemPromptHelp": "Optional. Ein leerer Prompt bleibt leer.",
+				"llmPrompt": "Prompt",
+				"inputBindings": "Eingabebindungen",
+				"inputBindingsHelp": "Benannte Werte werden als JSON-Datenblock neben dem Prompt gesendet. Sie ersetzen keinen Text im Prompt.",
+				"bindingName": "Name",
+				"advanced": "Erweitert",
+				"numCtx": "Prompt-Budget (Token)",
+				"numCtxHelp": "Begrenzt das Prompt-Budget dieser Anfrage; das Kontextfenster des Servers wird nicht verändert.",
 				"reasoningEffort": "Denkaufwand",
 				"reasoningEffortPlaceholder": "Standard des Anbieters",
 				"effort": {

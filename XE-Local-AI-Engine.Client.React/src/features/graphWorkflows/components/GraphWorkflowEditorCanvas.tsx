@@ -17,6 +17,7 @@ import {
 	IconLayoutDistributeVertical,
 	IconPlayerPause,
 	IconRobot,
+	IconSparkles,
 	IconTool,
 } from "@tabler/icons-react";
 import {
@@ -55,6 +56,7 @@ const PALETTE_MIME = "application/xe-graph-workflow";
 const paletteIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
 	Start: IconFlag,
 	Agent: IconRobot,
+	LlmCall: IconSparkles,
 	Tool: IconTool,
 	Condition: IconGitBranch,
 	Parallel: IconArrowsSplit2,

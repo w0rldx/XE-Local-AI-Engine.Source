@@ -147,7 +147,7 @@ XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowDocum
 XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowStateMachine.cs|4
 XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowValidationException.cs|3
 XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/IGraphWorkflowEventPublisher.cs|3
-XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/Implementation/GraphWorkflowAgentExecutor.cs|3
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/Implementation/GraphWorkflowInvocationExecutor.cs|3
 XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/Implementation/GraphWorkflowInFlightLane.cs|2
 XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/Import/CanvasWorkflowImport.cs|4
 XE-Local-AI-Engine.Client.Application/Services/Images/Fit/ImageModelFitEstimator.cs|4

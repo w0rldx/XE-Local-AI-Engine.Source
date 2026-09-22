@@ -69,6 +69,8 @@ export const graphWorkflowGraphRules = [
 	"unknownConditionOperator",
 	"toolNameMissing",
 	"agentInstructionsMissing",
+	"llmPromptMissing",
+	"invalidInputBindings",
 	"pausePromptMissing",
 	"pauseNoDecisions",
 	"endOutcomeMissing",
@@ -176,6 +178,8 @@ function jsonObjectMembers(kind: GraphWorkflowNodeKind): readonly string[] {
 			return ["inputSchema"];
 		case "Agent":
 			return ["responseJsonSchema"];
+		case "LlmCall":
+			return ["responseJsonSchema"];
 		case "Tool":
 			return ["arguments"];
 		default:
@@ -222,6 +226,9 @@ function nodeIssues(nodes: readonly GraphWorkflowGraphNode[]): readonly GraphWor
 		}
 		if (kind === "Agent" && text(config["instructions"]).trim().length === 0) {
 			issues.push({ rule: "agentInstructionsMissing", subject: key });
+		}
+		if (kind === "LlmCall" && text(config["prompt"]).trim().length === 0) {
+			issues.push({ rule: "llmPromptMissing", subject: key });
 		}
 		if (kind === "Pause") {
 			if (text(config["prompt"]).trim().length === 0) {
@@ -568,6 +575,37 @@ export const agentConfigSchema = z.object({
 	reasoningEffort: z.string().nullable(),
 	responseJsonSchema: jsonObjectText("responseJsonSchema"),
 	includeUpstreamOutputs: z.boolean(),
+});
+
+export const llmCallConfigSchema = z.object({
+	prompt: z
+		.string()
+		.trim()
+		.min(1, { message: messageKey("llmPrompt", "required") }),
+	responseJsonSchema: jsonObjectText("responseJsonSchema"),
+	inputBindings: z
+		.array(
+			z.object({
+				parameter: z
+					.string()
+					.trim()
+					.min(1, { message: messageKey("inputBindings", "invalid") }),
+				path: z
+					.string()
+					.trim()
+					.min(1, { message: messageKey("inputBindings", "invalid") })
+					.refine(isGraphWorkflowDotPath, { message: messageKey("inputBindings", "invalid") }),
+			}),
+		)
+		.superRefine((bindings, context) => {
+			const names = new Set<string>();
+			for (const binding of bindings) {
+				if (names.has(binding.parameter)) {
+					context.addIssue({ code: "custom", message: messageKey("inputBindings", "invalid") });
+				}
+				names.add(binding.parameter);
+			}
+		}),
 });
 
 export const toolConfigSchema = z.object({

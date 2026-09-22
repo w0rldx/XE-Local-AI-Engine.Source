@@ -14,6 +14,13 @@ public sealed record RuntimePackage
 
     public required string ResolvedSystemPrompt { get; init; }
 
+    /// <summary>Whether this invocation intentionally has no system message.</summary>
+    /// <remarks>
+    ///     Defaults to <c>false</c>, preserving every existing caller. When <c>true</c>,
+    ///     <see cref="ResolvedSystemPrompt" /> must be blank and the invocation factory seeds no system message.
+    /// </remarks>
+    public bool OmitSystemPrompt { get; init; }
+
     public required List<ConversationMessageDto> ConversationContext { get; init; }
 
     public required List<AllowedToolDto> AllowedTools { get; init; }
@@ -93,6 +100,9 @@ public sealed record RuntimePackage
     ///     chosen, so the same agent asking the same question hashes identically and the cross-repo encrypted/server digest stays stable.
     /// </remarks>
     public bool AllowAutoModelSwap { get; init; }
+
+    /// <summary>Requires every provider send in this invocation to use the package model through llama-server.</summary>
+    public bool RequireNodeManagedLlama { get; init; }
 
 
     public required TimeoutSettings Timeouts { get; init; }

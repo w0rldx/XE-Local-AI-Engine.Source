@@ -15,6 +15,7 @@
 
 import type { Edge, Node } from "@xyflow/react";
 
+import type { ChatSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
 import { layoutGraphWorkflow } from "@/features/graphWorkflows/models/GraphWorkflowLayout";
 import {
 	GRAPH_WORKFLOW_KEY_PATTERN,
@@ -61,11 +62,24 @@ export interface GraphWorkflowArgumentBinding {
 	readonly path: string;
 }
 
+export type GraphWorkflowInputBinding = GraphWorkflowArgumentBinding;
+export type GraphWorkflowSamplingOptions = Omit<ChatSamplingOptions, "seed"> & { seed?: string };
+
 export type GraphWorkflowCanvasNodeData =
 	| (GraphWorkflowNodeBase & {
 			readonly kind: "Start";
 			readonly inputSchema: string | null;
 			readonly defaultInput: string | null;
+	  })
+	| (GraphWorkflowNodeBase & {
+			readonly kind: "LlmCall";
+			readonly model: string | null;
+			readonly systemPrompt: string | null;
+			readonly prompt: string;
+			readonly inputBindings: readonly GraphWorkflowInputBinding[];
+			readonly reasoningEffort: string | null;
+			readonly responseJsonSchema: string | null;
+			readonly samplingOptions: GraphWorkflowSamplingOptions;
 	  })
 	| (GraphWorkflowNodeBase & {
 			readonly kind: "Agent";
@@ -116,6 +130,7 @@ export interface GraphWorkflowCanvas {
 export const graphWorkflowNodeTypeByKind: Record<GraphWorkflowNodeKind, string> = {
 	Start: "start",
 	Agent: "agent",
+	LlmCall: "llm-call",
 	Tool: "tool",
 	Condition: "condition",
 	Parallel: "parallel",
@@ -168,6 +183,48 @@ function bindingsFromWire(value: unknown): readonly GraphWorkflowArgumentBinding
 	);
 }
 
+function samplingFromWire(value: unknown): GraphWorkflowSamplingOptions {
+	const source = configRecord(value);
+	const result: GraphWorkflowSamplingOptions = {};
+	for (const key of [
+		"temperature",
+		"topP",
+		"topK",
+		"minP",
+		"maxOutputTokens",
+		"repeatPenalty",
+		"repeatLastN",
+		"presencePenalty",
+		"frequencyPenalty",
+		"numCtx",
+	] as const) {
+		const number = numberOrUndefined(source[key]);
+		if (number !== undefined) {
+			result[key] = number;
+		}
+	}
+	if (Array.isArray(source["stop"])) {
+		result.stop = source["stop"].filter((entry): entry is string => typeof entry === "string");
+	}
+	if (typeof source["seed"] === "string") {
+		result.seed = source["seed"];
+	}
+	return result;
+}
+
+function samplingToWire(value: GraphWorkflowSamplingOptions): GraphWorkflowSamplingOptions | undefined {
+	const result = Object.fromEntries(
+		Object.entries(value).flatMap(([key, entry]) => {
+			if (key === "stop" && Array.isArray(entry)) {
+				const stop = entry.filter((item) => item.length > 0);
+				return stop.length > 0 ? [[key, stop]] : [];
+			}
+			return entry !== undefined && entry !== "" ? [[key, entry]] : [];
+		}),
+	) as GraphWorkflowSamplingOptions;
+	return Object.keys(result).length > 0 ? result : undefined;
+}
+
 function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNodeData {
 	const config = configRecord(node.config);
 	const base = {
@@ -197,6 +254,18 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				reasoningEffort: stringOrNull(config["reasoningEffort"]),
 				responseJsonSchema: jsonText(config["responseJsonSchema"]),
 				includeUpstreamOutputs: booleanOr(config["includeUpstreamOutputs"], true),
+			};
+		case "LlmCall":
+			return {
+				...base,
+				kind: "LlmCall",
+				model: stringOrNull(config["model"]),
+				systemPrompt: stringOrNull(config["systemPrompt"]),
+				prompt: stringOrEmpty(config["prompt"]),
+				inputBindings: bindingsFromWire(config["inputBindings"]),
+				reasoningEffort: stringOrNull(config["reasoningEffort"]),
+				responseJsonSchema: jsonText(config["responseJsonSchema"]),
+				samplingOptions: samplingFromWire(config["samplingOptions"]),
 			};
 		case "Tool":
 			return {
@@ -398,6 +467,23 @@ function bindingsToWire(bindings: readonly GraphWorkflowArgumentBinding[]): Reco
 	return Object.keys(map).length > 0 ? map : undefined;
 }
 
+function llmBindingsToWire(
+	bindings: readonly GraphWorkflowInputBinding[],
+	key: string,
+	issues: GraphWorkflowGraphIssue[],
+): Record<string, string> | undefined {
+	const names = new Set<string>();
+	for (const binding of bindings) {
+		const invalidPath = binding.path.split(".").some((segment) => segment.length === 0 || /\s|[[\]*()]/u.test(segment));
+		if (binding.parameter.trim().length === 0 || invalidPath || names.has(binding.parameter)) {
+			issues.push({ rule: "invalidInputBindings", subject: key });
+			return undefined;
+		}
+		names.add(binding.parameter);
+	}
+	return bindingsToWire(bindings);
+}
+
 function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGraphIssue[]): unknown {
 	switch (data.kind) {
 		case "Start":
@@ -414,6 +500,21 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 				responseJsonSchema: parseJsonField(data.responseJsonSchema, data.key, issues, true),
 				includeUpstreamOutputs: data.includeUpstreamOutputs,
 			};
+		case "LlmCall": {
+			const bindings = llmBindingsToWire(data.inputBindings, data.key, issues);
+			const samplingOptions = samplingToWire(data.samplingOptions);
+			return {
+				...(data.model === null ? {} : { model: data.model }),
+				...(data.systemPrompt === null ? {} : { systemPrompt: data.systemPrompt }),
+				prompt: data.prompt,
+				...(bindings ? { inputBindings: bindings } : {}),
+				...(data.reasoningEffort === null ? {} : { reasoningEffort: data.reasoningEffort }),
+				...(data.responseJsonSchema === null
+					? {}
+					: { responseJsonSchema: parseJsonField(data.responseJsonSchema, data.key, issues, true) }),
+				...(samplingOptions ? { samplingOptions } : {}),
+			};
+		}
 		case "Tool": {
 			const bindings = bindingsToWire(data.argumentBindings);
 			return {
@@ -532,6 +633,18 @@ export function defaultNodeData(kind: GraphWorkflowNodeKind, key: string): Graph
 				reasoningEffort: null,
 				responseJsonSchema: null,
 				includeUpstreamOutputs: true,
+			};
+		case "LlmCall":
+			return {
+				...base,
+				kind,
+				model: null,
+				systemPrompt: null,
+				prompt: "",
+				inputBindings: [],
+				reasoningEffort: null,
+				responseJsonSchema: null,
+				samplingOptions: {},
 			};
 		case "Tool":
 			return { ...base, kind, toolName: null, argumentsJson: "", argumentBindings: [] };

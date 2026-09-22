@@ -67,8 +67,18 @@ export type {
 	ValidateGraphWorkflowDefinitionResponse,
 };
 
-/** The eight v1 node kinds. A closed vocabulary: an unknown `kind` is a save-time validation error server-side. */
-export const graphWorkflowNodeKinds = ["Start", "Agent", "Tool", "Condition", "Parallel", "Join", "Pause", "End"] as const;
+/** The nine v1 node kinds. A closed vocabulary: an unknown `kind` is a save-time validation error server-side. */
+export const graphWorkflowNodeKinds = [
+	"Start",
+	"Agent",
+	"LlmCall",
+	"Tool",
+	"Condition",
+	"Parallel",
+	"Join",
+	"Pause",
+	"End",
+] as const;
 export type GraphWorkflowNodeKind = (typeof graphWorkflowNodeKinds)[number];
 
 /** Every node carries a join policy; `All` is the parser's default. `Any` is what a reconverging End needs. */
@@ -269,5 +279,5 @@ export const GRAPH_WORKFLOW_KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
  * structural kinds, where a retry would re-evaluate the same inputs to the same answer.
  */
 export function graphWorkflowDefaultMaxAttempts(kind: GraphWorkflowNodeKind): number {
-	return kind === "Agent" || kind === "Tool" ? 3 : 1;
+	return kind === "Agent" || kind === "LlmCall" || kind === "Tool" ? 3 : 1;
 }

@@ -75,8 +75,13 @@ public sealed class RuntimeChatClient : IChatClient
             return this;
         }
 
-        // Delegate metadata/service lookups to the active client so callers see the real provider's services. There
-        // is no per-request model id available at this boundary, so this resolves the node-default provider.
+        // A metadata lookup carries no model id. Keep a node-managed invocation on the local branch without applying
+        // the exact-model send check; streaming and non-streaming dispatch still validate their ChatOptions.ModelId.
+        if (NodeManagedLlamaRoutingScope.CurrentModel is not null)
+        {
+            return _localClient.Value.GetService(serviceType, serviceKey);
+        }
+
         return ResolveActiveClient(options: null).GetService(serviceType, serviceKey);
     }
 
@@ -94,6 +99,17 @@ public sealed class RuntimeChatClient : IChatClient
     private IChatClient ResolveActiveClient(ChatOptions? options)
     {
         var requestedModelId = options?.ModelId;
+        if (NodeManagedLlamaRoutingScope.CurrentModel is { } requiredModel)
+        {
+            if (!string.Equals(requestedModelId, requiredModel, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("The invocation model changed after node-managed llama routing was required.");
+            }
+
+            AuthorizeDevelopmentLocalRequest(options, requestedModelId);
+            return _localClient.Value;
+        }
+
         if (!_activeCloudFactory.TryCreateActiveCloudChatClient(requestedModelId, out var cloudClient) || cloudClient is null)
         {
             AuthorizeDevelopmentLocalRequest(options, requestedModelId);

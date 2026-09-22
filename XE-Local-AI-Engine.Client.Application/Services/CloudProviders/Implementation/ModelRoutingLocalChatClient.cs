@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
@@ -110,6 +111,12 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
     {
         var modelName = string.IsNullOrWhiteSpace(options?.ModelId) ? _defaultModelName : options.ModelId;
         var providerName = await _resolver.ResolveProviderNameForModelAsync(modelName, cancellationToken);
+        if (NodeManagedLlamaRoutingScope.CurrentModel is { } requiredModel
+            && (!string.Equals(modelName, requiredModel, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException("The invocation model is no longer routed through the node-managed llama provider.");
+        }
 
         var cacheKey = new ProviderModelKey(providerName, modelName);
         if (_clientsByProviderAndModel.TryGetValue(cacheKey, out var cached))

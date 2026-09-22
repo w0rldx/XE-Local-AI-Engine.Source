@@ -97,6 +97,46 @@ public sealed class ModelRoutingLocalChatClientTests
     }
 
     [Test]
+    public async Task GetResponse_WhenRequiredModelWasRemappedAwayFromLlama_RefusesBeforeClientSelection()
+    {
+        var llamacpp = new RecordingLocalModelProvider(LlamaProvider);
+        var external = new RecordingLocalModelProvider("external");
+        var resolver = BuildResolver([llamacpp, external],
+            LlamaProvider,
+            new Dictionary<string, string> { ["gguf-model"] = "external" });
+        using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
+        using var scope = NodeManagedLlamaRoutingScope.Begin("gguf-model");
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => router.GetResponseAsync(Message, new ChatOptions { ModelId = "gguf-model" }));
+
+        AssertEx.Empty(llamacpp.CreatedClients);
+        AssertEx.Empty(external.CreatedClients);
+    }
+
+    [Test]
+    public async Task GetStreamingResponse_WhenRequiredModelWasRemappedAwayFromLlama_RefusesBeforeClientSelection()
+    {
+        var llamacpp = new RecordingLocalModelProvider(LlamaProvider);
+        var external = new RecordingLocalModelProvider("external");
+        var resolver = BuildResolver([llamacpp, external],
+            LlamaProvider,
+            new Dictionary<string, string> { ["gguf-model"] = "external" });
+        using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
+        using var scope = NodeManagedLlamaRoutingScope.Begin("gguf-model");
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in router.GetStreamingResponseAsync(Message, new ChatOptions { ModelId = "gguf-model" }))
+            {
+                AssertEx.True(false, "A remapped node-managed model must be rejected before streaming starts.");
+            }
+        });
+
+        AssertEx.Empty(llamacpp.CreatedClients);
+        AssertEx.Empty(external.CreatedClients);
+    }
+
+    [Test]
     public async Task Dispose_DisposesCachedClients_ButNeverDuringASend()
     {
         var ollama = new RecordingLocalModelProvider(OllamaProvider);

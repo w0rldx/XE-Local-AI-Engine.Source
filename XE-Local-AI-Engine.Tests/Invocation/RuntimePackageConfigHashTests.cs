@@ -84,6 +84,54 @@ public sealed class RuntimePackageConfigHashTests
         AssertEx.Equal("a532bda9b1fbae5b0cb6982317a98450be90a5694bb91e492a552cfed4fdd4ae", emptySkillsDigest);
     }
 
+    [Test]
+    public void ConfigHash_ExplicitSystemPromptOmission_IsRepresentedAndDistinct()
+    {
+        var timeouts = new TimeoutSettings
+        {
+            InvocationTimeoutSeconds = 300,
+            ToolCallTimeoutSeconds = 60,
+            StreamIdleTimeoutSeconds = 30
+        };
+        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(7,
+            string.Empty,
+            [],
+            modelProfile: null,
+            timeouts,
+            omitSystemPrompt: true);
+        var omitted = RuntimePackageConfigHash.Compute(7,
+            string.Empty,
+            [],
+            modelProfile: null,
+            timeouts,
+            omitSystemPrompt: true);
+        var ordinary = RuntimePackageConfigHash.Compute(7,
+            "You are helpful.",
+            [],
+            modelProfile: null,
+            timeouts);
+
+        AssertEx.True(canonicalJson.EndsWith(",\"omitSystemPrompt\":true}", StringComparison.Ordinal));
+        AssertEx.NotEqual(ordinary, omitted);
+    }
+
+    [Test]
+    public void ConfigHash_NodeManagedLlamaRequirement_IsRepresentedWithoutChangingLegacyBytes()
+    {
+        var timeouts = new TimeoutSettings();
+        var ordinary = RuntimePackageConfigHash.SerializeCanonicalJson(1, "prompt", [], null, timeouts);
+        var required = RuntimePackageConfigHash.SerializeCanonicalJson(1,
+            "prompt",
+            [],
+            null,
+            timeouts,
+            requireNodeManagedLlama: true);
+
+        AssertEx.False(ordinary.Contains("requireNodeManagedLlama", StringComparison.Ordinal));
+        AssertEx.True(required.EndsWith(",\"requireNodeManagedLlama\":true}", StringComparison.Ordinal));
+        AssertEx.NotEqual(ordinary, required);
+    }
+
     // Resume invalidation: a non-empty skill set must change the digest off the no-skills baseline, and EACH of a body
     // edit, a rename, and a picklist change (an added/removed skill) must move it again. The body is HASHED into the
     // payload — never embedded — so a body edit changes the digest without placing plaintext in the canonical JSON.

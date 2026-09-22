@@ -50,6 +50,25 @@ public sealed class RuntimePackageValidatorTests
     }
 
     [Test]
+    public void Validate_WhenSystemPromptIsExplicitlyOmittedAndBlank_ReturnsValid()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithoutSystemPrompt().Build());
+
+        AssertEx.True(result.IsValid);
+        AssertEx.Empty(result.Errors);
+    }
+
+    [Test]
+    public void Validate_WhenSystemPromptIsMarkedOmittedButPresent_ReturnsError()
+    {
+        var package = RuntimePackageBuilder.Valid().Build() with { OmitSystemPrompt = true };
+
+        var result = _validator.Validate(package);
+
+        AssertErrorContains(result, "system prompt");
+    }
+
+    [Test]
     public void Validate_WhenSystemPromptExceedsLimit_ReturnsError()
     {
         var package = RuntimePackageBuilder.Valid()

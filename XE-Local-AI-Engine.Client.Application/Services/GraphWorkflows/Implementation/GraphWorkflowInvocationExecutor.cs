@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -15,7 +16,11 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -63,7 +68,7 @@ internal sealed class GraphWorkflowAgentTurn
 }
 
 /// <summary>
-///     The <c>Agent</c> lane: a headless saved-agent invocation, driven off the tick through
+///     The shared model-invocation lane for <c>Agent</c> and <c>LlmCall</c> nodes, driven off the tick through
 ///     <see cref="GraphWorkflowInFlightLane{TResult}" /> and never inside it.
 /// </summary>
 /// <remarks>
@@ -73,9 +78,11 @@ internal sealed class GraphWorkflowAgentTurn
 ///     <see cref="GraphWorkflowNodeRun.InvocationId" /> is written at all — the correlation id for a turn nothing
 ///     else survives. <b>Singleton</b>: scoped collaborators resolve in the task body. What it copies from <c>RunSavedAgentHandler</c>: docs/wiki/21-graph-workflows.md ("Agent").
 /// </remarks>
-internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, IAsyncDisposable
+internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecutor, IAsyncDisposable
 {
-    /// <summary>What a <c>Queued</c> Agent row is waiting for. It is waiting, not failing, so it carries no event.</summary>
+    /// <summary>What a queued model row is waiting for. It is waiting, not failing, so it carries no event.</summary>
+    private const string AwaitingInvocationSlot = "awaiting-invocation-slot";
+
     private const string AwaitingAgentSlot = "awaiting-agent-slot";
 
     /// <summary>
@@ -85,7 +92,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
     private const int DefaultAgentDefinitionVersion = 1;
 
     /// <summary>What a row says when its turn was cancelled before it produced a reason of its own.</summary>
-    private const string CancelledInFlight = "The run was cancelled while this node run's agent turn was in flight.";
+    private const string CancelledInFlight = "The run was cancelled while this node run's model turn was in flight.";
 
     /// <summary>
     ///     The finish reasons a row's terminal reason may repeat. Everything else reads <c>unknown</c>: the token is
@@ -98,14 +105,14 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 
     private readonly IInvocationRunner _invocationRunner;
     private readonly GraphWorkflowInFlightLane<GraphWorkflowAgentTurn> _lane;
-    private readonly ILogger<GraphWorkflowAgentExecutor> _logger;
+    private readonly ILogger<GraphWorkflowInvocationExecutor> _logger;
     private readonly GraphWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public GraphWorkflowAgentExecutor(IServiceScopeFactory scopeFactory,
+    public GraphWorkflowInvocationExecutor(IServiceScopeFactory scopeFactory,
         IInvocationRunner invocationRunner,
         IOptions<GraphWorkflowOptions> options,
-        ILogger<GraphWorkflowAgentExecutor> logger)
+        ILogger<GraphWorkflowInvocationExecutor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -125,15 +132,15 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
     }
 
     public bool Owns(GraphWorkflowNodeKind kind) =>
-        kind == GraphWorkflowNodeKind.Agent;
+        kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.LlmCall;
 
     public bool IsInFlight(Guid nodeRunId) =>
         _lane.IsInFlight(nodeRunId);
 
-    /// <summary>Admits an eligible Agent node run, and answers how many transitions it wrote.</summary>
+    /// <summary>Admits an eligible model node run, and answers how many transitions it wrote.</summary>
     /// <remarks>
     ///     The row goes to <c>Queued</c> first ALWAYS, even when a slot is free a line later, and stays there until
-    ///     the turn holds the node-wide invocation lease. Three parallel Agent nodes on a node with one invocation
+    ///     the turn holds the node-wide invocation lease. Three parallel model nodes on a node with one invocation
     ///     slot therefore read <c>Running, Queued, Queued</c> rather than leaving a reader to infer it from timing.
     /// </remarks>
     public async Task<int> DispatchAsync(IGraphWorkflowStore store,
@@ -158,7 +165,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                 : 0;
         }
 
-        if (node.Config is not GraphWorkflowAgentConfig config)
+        if (node.Config is not GraphWorkflowAgentConfig and not GraphWorkflowLlmCallConfig)
         {
             // Unreachable through the parser, which types a node's config by its kind. Refused rather than assumed,
             // because the alternative is a NullReferenceException inside a detached task nobody is watching.
@@ -168,7 +175,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                     node,
                     nodeRun,
                     GraphWorkflowFailureClass.ValidationFailed,
-                    $"Node '{node.NodeKey}' is an Agent node without agent settings.",
+                    $"Node '{node.NodeKey}' has no settings for its {node.Kind} kind.",
                     eventType: null,
                     cancellationToken);
         }
@@ -187,7 +194,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                 NodeRunId = nodeRun.Id,
                 ExpectedVersion = GraphWorkflowVersions.Any,
                 TargetStatus = GraphWorkflowNodeRunStatus.Queued,
-                QueueReason = AwaitingAgentSlot,
+                QueueReason = node.Kind == GraphWorkflowNodeKind.Agent ? AwaitingAgentSlot : AwaitingInvocationSlot,
                 InputJson = inputJson
             },
                                cancellationToken);
@@ -206,7 +213,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
         var flight = await _lane.TryStartAsync(nodeRun.Id,
                                     nodeRun.Attempt,
                                     invocationId,
-                                    (leaseAcquired, token) => RunTurnAsync(run.Id, nodeRun.Id, node, config, invocationId, inputJson, leaseAcquired, token),
+                                    (leaseAcquired, token) => RunTurnAsync(run.Id, nodeRun.Id, node, node.Config, invocationId, inputJson, leaseAcquired, token),
                                     cancellationToken);
         if (flight is null)
         {
@@ -246,7 +253,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                     node,
                     nodeRun,
                     GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.Interrupted, nodeRun.Attempt, node.MaxAttempts),
-                    "The host stopped while this node run's agent turn was in flight.",
+                    "The host stopped while this node run's model turn was in flight.",
                     GraphWorkflowEventTypes.NodeInterrupted,
                     cancellationToken);
         }
@@ -328,12 +335,18 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
     private async Task<GraphWorkflowAgentTurn> RunTurnAsync(Guid runId,
         Guid nodeRunId,
         GraphWorkflowGraphNode node,
-        GraphWorkflowAgentConfig config,
+        GraphWorkflowNodeConfig config,
         Guid invocationId,
         string inputJson,
         StrongBox<bool> leaseAcquired,
         CancellationToken cancellationToken)
     {
+        if (config is GraphWorkflowLlmCallConfig llmConfig)
+        {
+            return await RunLlmTurnAsync(runId, nodeRunId, node, llmConfig, invocationId, inputJson, leaseAcquired, cancellationToken);
+        }
+
+        var agentConfig = (GraphWorkflowAgentConfig)config;
         IDisposable? reservation = null;
         try
         {
@@ -343,7 +356,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             // 1. The node's agent. A node naming one that has since been deleted is a configuration error, not a run
             //    that should be re-attempted; a node naming none takes the DEFAULT persona (step 5).
             string? pinnedModel = null;
-            if (config.AgentDefinitionId is { } agentDefinitionId)
+            if (agentConfig.AgentDefinitionId is { } agentDefinitionId)
             {
                 var definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId, cancellationToken);
                 if (definition is null)
@@ -359,7 +372,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(cancellationToken);
             var localDefault = await services.GetRequiredService<ILocalDefaultChatModelResolver>()
                                              .ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
-            var effectiveModel = config.Model ?? pinnedModel ?? localDefault;
+            var effectiveModel = agentConfig.Model ?? pinnedModel ?? localDefault;
             if (string.IsNullOrWhiteSpace(effectiveModel))
             {
                 return Invalid("No local chat model is available to run this agent node. Install a local model or pin one to the agent.");
@@ -388,21 +401,21 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
 
             // The seed prompt is also the retrieval query below, so it is built before the resolve rather than beside the package: a playbook gated on a blank
             // query injects its full static prepend instead of the relevant slice, and that difference is a different resolved prompt.
-            var seedPrompt = SeedPrompt(config, inputJson);
+            var seedPrompt = SeedPrompt(agentConfig, inputJson);
 
             // 5. The agent's COMPLETE runtime. honorModelProfile is FALSE exactly when this node names its own model: with a bare true, a node overriding a
             //    cloud-pinned agent to a local one would pass step 3 on its own choice while the resolver gated the offer against — and returned — the cloud pin.
             var resolved = await services.GetRequiredService<IAgentDefinitionResolver>()
-                                         .ResolveAsync(config.AgentDefinitionId,
+                                         .ResolveAsync(agentConfig.AgentDefinitionId,
                                              effectiveModel,
                                              seedPrompt,
                                              capabilities.SupportsTools,
-                                             config.Model is null,
+                                             agentConfig.Model is null,
                                              activeModelIsCloud: false,
                                              cancellationToken);
             if (resolved is null)
             {
-                if (config.AgentDefinitionId is not null)
+                if (agentConfig.AgentDefinitionId is not null)
                 {
                     // The definition existed at step 1 and was deleted before the resolve finished (rare race). ONLY this case is a deletion: a null id
                     // resolves to null BY DESIGN, and reading that as a deletion is what makes every agent node that names no agent unrunnable.
@@ -416,7 +429,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             var package = BuildPackage(services.GetRequiredService<ILocalChatRuntimePackageBuilder>(),
                 resolved,
                 node,
-                config,
+                agentConfig,
                 effectiveModel,
                 capabilities,
                 invocationId,
@@ -430,7 +443,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
                     cancellationToken);
 
             // 11. What the turn came to.
-            return Map(terminal, config);
+            return Map(terminal, agentConfig.ResponseJsonSchema);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -449,6 +462,169 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             // The outermost finally, on success, failure, refusal and cancellation alike.
             reservation?.Dispose();
         }
+    }
+
+    private async Task<GraphWorkflowAgentTurn> RunLlmTurnAsync(Guid runId,
+        Guid nodeRunId,
+        GraphWorkflowGraphNode node,
+        GraphWorkflowLlmCallConfig config,
+        Guid invocationId,
+        string inputJson,
+        StrongBox<bool> leaseAcquired,
+        CancellationToken cancellationToken)
+    {
+        IDisposable? reservation = null;
+        try
+        {
+            if (!TryBuildBoundPrompt(config, inputJson, _options.MaxRunInputBytes, out var prompt, out var bindingError))
+            {
+                return Invalid($"Node '{node.NodeKey}' {bindingError}");
+            }
+
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var services = scope.ServiceProvider;
+            var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(cancellationToken);
+            var effectiveModel = config.Model ?? await services.GetRequiredService<ILocalDefaultChatModelResolver>()
+                                                       .ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
+            if (string.IsNullOrWhiteSpace(effectiveModel))
+            {
+                return Invalid("No local chat model is available to run this LLM call node. Install a local chat model or pin one on the node.");
+            }
+
+            if (!await NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(effectiveModel,
+                    services.GetRequiredService<IGgufModelStore>(),
+                    services.GetRequiredService<IModelTrustResolver>(),
+                    services.GetRequiredService<ILocalModelProviderResolver>(),
+                    cancellationToken))
+            {
+                return Invalid("Graph workflow LLM call nodes require an installed node-managed GGUF chat model.");
+            }
+
+            var classification = await services.GetRequiredService<IModelClassificationStore>().GetByNameAsync(effectiveModel, cancellationToken);
+            if (!IsChatModel(effectiveModel, classification))
+            {
+                return Invalid("Graph workflow LLM call nodes require a model classified for chat.");
+            }
+
+            var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
+            var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
+            if (decision.Verdict == CapacityVerdict.RejectInsufficient)
+            {
+                return Failure(GraphWorkflowFailureClass.NodeFailed, decision.Reason);
+            }
+
+            reservation = decision.Reservation;
+            var seedTurn = new ConversationMessageDto { Id = Guid.NewGuid(), Role = MessageRole.User, Content = prompt, SortOrder = 0 };
+            var package = services.GetRequiredService<ILocalChatRuntimePackageBuilder>().Build(new LocalChatRuntimePackageRequest
+            {
+                InvocationId = invocationId,
+                ConversationId = Guid.NewGuid(),
+                ResolvedSystemPrompt = config.SystemPrompt ?? string.Empty,
+                OmitSystemPrompt = string.IsNullOrWhiteSpace(config.SystemPrompt),
+                ConversationContext = [seedTurn],
+                ModelProfile = effectiveModel,
+                AgentDefinitionVersion = DefaultAgentDefinitionVersion,
+                ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+                AllowedTools = [],
+                Timeouts = new TimeoutSettings { InvocationTimeoutSeconds = node.TimeoutSeconds ?? _options.DefaultNodeTimeoutSeconds },
+                ReasoningEffort = config.ReasoningEffort,
+                SupportsThinking = capabilities.SupportsThinking,
+                SamplingOptions = config.SamplingOptions,
+                IsUnattended = true,
+                ResponseJsonSchema = config.ResponseJsonSchema,
+                ReasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable,
+                AllowAutoModelSwap = false,
+                RequireNodeManagedLlama = true
+            });
+            var terminal = await RunInvocationAsync(services.GetRequiredService<IWorkerEventDispatcher>(), _invocationRunner, package, leaseAcquired, cancellationToken);
+            return Map(terminal, config.ResponseJsonSchema);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception,
+                "Graph workflow run {RunId} node run {NodeRunId} ('{NodeKey}', invocation {InvocationId}) could not complete its LLM call.",
+                runId,
+                nodeRunId,
+                node.NodeKey,
+                invocationId);
+            return Failure(GraphWorkflowFailureClass.NodeFailed, "This node run's LLM call did not complete. See the node logs for details.");
+        }
+        finally
+        {
+            reservation?.Dispose();
+        }
+    }
+
+    internal static bool TryBuildBoundPrompt(GraphWorkflowLlmCallConfig config,
+        string inputJson,
+        int maxBytes,
+        out string prompt,
+        out string? error)
+    {
+        prompt = config.Prompt;
+        error = null;
+        if (Encoding.UTF8.GetByteCount(config.Prompt) > maxBytes)
+        {
+            error = $"has a prompt larger than the {maxBytes}-byte limit.";
+            return false;
+        }
+
+        if (config.InputBindings.Count == 0)
+        {
+            return true;
+        }
+
+        using var input = JsonDocument.Parse(inputJson);
+        var bound = new SortedDictionary<string, JsonElement>(StringComparer.Ordinal);
+        var boundBytes = 2; // braces
+        foreach (var (name, path) in config.InputBindings.OrderBy(static binding => binding.Key, StringComparer.Ordinal))
+        {
+            if (GraphWorkflowDocuments.Resolve(input.RootElement, path) is not { } value)
+            {
+                error = $"could not resolve input binding '{name}' from path '{path}'.";
+                return false;
+            }
+
+            bound[name] = value;
+            boundBytes += (bound.Count == 1 ? 0 : 1)
+                          + Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(name, JsonOptions))
+                          + 1
+                          + Encoding.UTF8.GetByteCount(value.GetRawText());
+            if (boundBytes > maxBytes)
+            {
+                error = $"has bound input data larger than the {maxBytes}-byte limit.";
+                return false;
+            }
+        }
+
+        prompt = $"{config.Prompt}\n\nNamed input data:\n```json\n{JsonSerializer.Serialize(bound, JsonOptions)}\n```";
+        if (Encoding.UTF8.GetByteCount(prompt) > maxBytes)
+        {
+            error = $"has a rendered prompt larger than the {maxBytes}-byte limit.";
+            return false;
+        }
+
+        return true;
+    }
+
+    internal static bool IsChatModel(string modelName, ModelClassificationRecord? classification)
+    {
+        if (LocalGgufModelKindClassifier.Classify(modelName) == ModelKind.Draft)
+        {
+            return false;
+        }
+
+        if (classification?.OverrideKind is { } overrideKind)
+        {
+            return overrideKind == ModelKind.Chat;
+        }
+
+        return classification?.DetectedKind switch
+        {
+            ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft => false,
+            ModelKind.Chat => true,
+            _ => LocalGgufModelKindClassifier.Classify(modelName) == ModelKind.Chat
+        };
     }
 
     /// <summary>
@@ -610,24 +786,24 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
     ///     cause. There is deliberately no salvage path: grammar-constrained output carries no fences, and stripping
     ///     some would quietly mask a broken grammar.
     /// </remarks>
-    private static GraphWorkflowAgentTurn Map(InvocationState? terminal, GraphWorkflowAgentConfig config)
+    private static GraphWorkflowAgentTurn Map(InvocationState? terminal, JsonElement? responseJsonSchema)
     {
         switch (terminal?.Status)
         {
             case null:
-                return Failure(GraphWorkflowFailureClass.NodeFailed, "The agent turn reported no result.");
+                return Failure(GraphWorkflowFailureClass.NodeFailed, "The model turn reported no result.");
 
             case InvocationStatus.Failed when terminal.FailureCategory == FailureCategory.Timeout:
                 // The runner's own watchdog reports a timeout as a FAILED terminal, so the category is the only place it survives. Still retryable, and classed
                 // Timeout rather than NodeFailed because the answer to a node that ran out of time differs from the answer to a node whose provider said no.
-                return Failure(GraphWorkflowFailureClass.Timeout, "The agent turn ran out of time before it answered. See the node logs for details.");
+                return Failure(GraphWorkflowFailureClass.Timeout, "The model turn ran out of time before it answered. See the node logs for details.");
 
             case InvocationStatus.Failed:
                 // Never the raw provider error: the detail is in the node logs.
-                return Failure(GraphWorkflowFailureClass.NodeFailed, "The agent turn failed. See the node logs for details.");
+                return Failure(GraphWorkflowFailureClass.NodeFailed, "The model turn failed. See the node logs for details.");
 
             case InvocationStatus.Cancelled:
-                return Failure(GraphWorkflowFailureClass.Cancelled, "The agent turn was interrupted before it completed.");
+                return Failure(GraphWorkflowFailureClass.Cancelled, "The model turn was interrupted before it completed.");
         }
 
         var text = terminal.StreamedContent;
@@ -642,7 +818,7 @@ internal sealed class GraphWorkflowAgentExecutor : IGraphWorkflowNodeExecutor, I
             Model = terminal.ModelUsed
         };
 
-        if (config.ResponseJsonSchema is null)
+        if (responseJsonSchema is null)
         {
             return new GraphWorkflowAgentTurn { Succeeded = true, FailureClass = GraphWorkflowFailureClass.None, SanitizedReason = null, Text = text, Json = null, Usage = usage };
         }

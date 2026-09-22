@@ -25,6 +25,7 @@ import {
 	useGraphWorkflowAgentOptions,
 	useGraphWorkflowDefinition,
 	useGraphWorkflowDefinitions,
+	useGraphWorkflowLlmModelOptions,
 	useGraphWorkflowModelOptions,
 	useGraphWorkflowTools,
 	useUpdateGraphWorkflowDefinition,
@@ -70,6 +71,7 @@ export function useGraphWorkflowEditorPage(
 	const toolsQuery = useGraphWorkflowTools({ enabled: hasNodeSelection });
 	const agentOptionsQuery = useGraphWorkflowAgentOptions({ enabled: hasNodeSelection });
 	const modelOptionsQuery = useGraphWorkflowModelOptions({ enabled: hasNodeSelection });
+	const llmModelOptionsQuery = useGraphWorkflowLlmModelOptions({ enabled: hasNodeSelection });
 
 	const createMutation = useCreateGraphWorkflowDefinition();
 	const updateMutation = useUpdateGraphWorkflowDefinition();
@@ -328,6 +330,7 @@ export function useGraphWorkflowEditorPage(
 		toolsQuery,
 		agentOptionsQuery,
 		modelOptionsQuery,
+		llmModelOptionsQuery,
 		createMutation,
 		updateMutation,
 		validateMutation,

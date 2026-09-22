@@ -5,17 +5,22 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -62,14 +67,45 @@ public sealed class GraphWorkflowAgentHostFixture : IAsyncInitializer, IAsyncDis
                 services.RemoveAll<IAgentDefinitionResolver>();
                 services.AddSingleton<IAgentDefinitionResolver, FakeGraphWorkflowAgentRuntime>();
 
+                var ggufModels = Substitute.For<IGgufModelStore>();
+                ggufModels.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+                services.RemoveAll<IGgufModelStore>();
+                services.AddSingleton(ggufModels);
+
+                var trust = Substitute.For<IModelTrustResolver>();
+                trust.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(ModelTrustLocality.Local);
+                services.RemoveAll<IModelTrustResolver>();
+                services.AddSingleton(trust);
+
+                var providers = Substitute.For<ILocalModelProviderResolver>();
+                providers.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                         .Returns(LlamaServerProviderConstants.ProviderName);
+                services.RemoveAll<ILocalModelProviderResolver>();
+                services.AddSingleton(providers);
+
+                var classifications = Substitute.For<IModelClassificationStore>();
+                classifications.GetByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                               .Returns(call => new ModelClassificationRecord
+                               {
+                                   ModelName = call.ArgAt<string>(0),
+                                   Digest = null,
+                                   DetectedKind = ModelKind.Chat,
+                                   DetectedCapabilitiesJson = null,
+                                   OverrideKind = null,
+                                   DetectedAtUtc = null,
+                                   UpdatedAtUtc = 0
+                               });
+                services.RemoveAll<IModelClassificationStore>();
+                services.AddSingleton(classifications);
+
                 // The hub publisher, recorded. A ping is content-free, so what a test can ask of it is that one landed
                 // for every committed change — which is what the E2E run asserts alongside its event log.
                 services.RemoveAll<IGraphWorkflowEventPublisher>();
                 services.AddSingleton<IGraphWorkflowEventPublisher, RecordingGraphWorkflowEventPublisher>();
 
                 // The executor's own logger, so the stripped-offer warning is assertable rather than assumed.
-                services.AddSingleton<RecordingLogger<GraphWorkflowAgentExecutor>>();
-                services.AddSingleton<ILogger<GraphWorkflowAgentExecutor>>(provider => provider.GetRequiredService<RecordingLogger<GraphWorkflowAgentExecutor>>());
+                services.AddSingleton<RecordingLogger<GraphWorkflowInvocationExecutor>>();
+                services.AddSingleton<ILogger<GraphWorkflowInvocationExecutor>>(provider => provider.GetRequiredService<RecordingLogger<GraphWorkflowInvocationExecutor>>());
             },
 
             // The concurrency cap counts LIVE runs across the whole database, and a shared host is a shared database.

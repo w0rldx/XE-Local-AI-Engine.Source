@@ -19,6 +19,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { GraphWorkflowAgentConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowAgentConfigForm";
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
+import { GraphWorkflowLlmCallConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowLlmCallConfigForm";
 import { GraphWorkflowToolConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowToolConfigForm";
 import type { GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import {
@@ -37,6 +38,7 @@ import {
 	conditionConfigSchema,
 	endConfigSchema,
 	type GraphWorkflowGraphIssue,
+	llmCallConfigSchema,
 	nodeCommonSchema,
 	pauseConfigSchema,
 	startConfigSchema,
@@ -54,6 +56,7 @@ export interface GraphWorkflowNodeConfigPanelProps {
 	readonly tools: readonly GraphWorkflowToolResponse[];
 	readonly agentOptions: readonly { readonly value: string; readonly label: string }[];
 	readonly modelOptions: readonly { readonly value: string; readonly label: string }[];
+	readonly llmModelOptions?: readonly { readonly value: string; readonly label: string }[];
 	readonly readOnly?: boolean;
 }
 
@@ -64,6 +67,8 @@ function configSchemaFor(kind: GraphWorkflowNodeKind): ZodType | undefined {
 			return startConfigSchema;
 		case "Agent":
 			return agentConfigSchema;
+		case "LlmCall":
+			return llmCallConfigSchema;
 		case "Tool":
 			return toolConfigSchema;
 		case "Condition":
@@ -103,6 +108,7 @@ export function GraphWorkflowNodeConfigPanel({
 	tools,
 	agentOptions,
 	modelOptions,
+	llmModelOptions = modelOptions,
 	readOnly = false,
 }: GraphWorkflowNodeConfigPanelProps) {
 	const { t } = useTranslation();
@@ -206,6 +212,17 @@ export function GraphWorkflowNodeConfigPanel({
 						onTouch={touch}
 						agentOptions={agentOptions}
 						modelOptions={modelOptions}
+						readOnly={readOnly}
+					/>
+				);
+			case "LlmCall":
+				return (
+					<GraphWorkflowLlmCallConfigForm
+						node={node}
+						onChange={onChange}
+						errorFor={errorFor}
+						onTouch={touch}
+						modelOptions={llmModelOptions}
 						readOnly={readOnly}
 					/>
 				);

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -13,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -31,6 +33,130 @@ public sealed class GraphWorkflowAgentExecutorTests
 {
     [ClassDataSource<GraphWorkflowAgentHostFixture>(Shared = SharedType.PerClass)]
     public required GraphWorkflowAgentHostFixture Host { get; init; }
+
+    [Test]
+    public void TheHostWiresOneSharedOwnerForBothInvocationKinds()
+    {
+        var executors = Host.Factory.Services.GetServices<IGraphWorkflowNodeExecutor>().ToList();
+
+        AssertEx.ContainsSingle(executors, executor => executor is GraphWorkflowInvocationExecutor);
+        var executor = executors.Single(executor => executor is GraphWorkflowInvocationExecutor);
+        AssertEx.True(executor.Owns(GraphWorkflowNodeKind.Agent));
+        AssertEx.True(executor.Owns(GraphWorkflowNodeKind.LlmCall));
+    }
+
+    [Test]
+    public async Task ALlmCall_UsesTheDefaultModelWithoutAgentRuntimeAndOmitsABlankSystemPrompt()
+    {
+        const string prompt = "llm-default-no-system";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var resolverCalls = Runtimes(harness).Calls.Count;
+        var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "systemPrompt": "" }"""));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status);
+        var package = harness.Invocations.PackageFor(prompt);
+        AssertEx.Equal(GraphWorkflowModels.LocalDefault, package.ModelProfile);
+        AssertEx.True(package.OmitSystemPrompt);
+        AssertEx.False(package.AllowAutoModelSwap);
+        AssertEx.True(package.RequireNodeManagedLlama);
+        AssertEx.Empty(package.AllowedTools);
+        AssertEx.True(package.Skills is null or { Count: 0 });
+        AssertEx.Equal(resolverCalls, Runtimes(harness).Calls.Count, "an LLM call never enters the saved-agent resolver.");
+        AssertEx.Equal("the fake agent answered", Output(analyze).GetProperty("text").GetString());
+        AssertEx.Equal(expected: 11, Output(analyze).GetProperty("usage").GetProperty("inputTokens").GetInt32());
+    }
+
+    [Test]
+    public async Task ALlmCall_PreservesExplicitSystemSamplingSchemaAndPinnedModel()
+    {
+        const string prompt = "llm-explicit-package";
+        const string model = "pinned-chat.gguf";
+        await using var harness = new GraphWorkflowHarness(Host);
+        harness.Invocations.Script(prompt, new GraphWorkflowScriptedTurn { Text = """{"answer":"yes"}""" });
+        var runId = await StartToTheAgentAsync(harness,
+                LlmGraph($$"""
+                           { "prompt": "{{prompt}}", "systemPrompt": "Answer tersely.", "model": "{{model}}",
+                             "reasoningEffort": "high", "samplingOptions": { "temperature": 0.2, "seed": "7", "numCtx": 2048 },
+                             "responseJsonSchema": { "type": "object", "properties": { "answer": { "type": "string" } }, "required": ["answer"] } }
+                           """));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        var package = harness.Invocations.PackageFor(prompt);
+        AssertEx.Equal(model, package.ModelProfile);
+        AssertEx.False(package.OmitSystemPrompt);
+        AssertEx.Equal("Answer tersely.", package.ResolvedSystemPrompt);
+        AssertEx.Equal("high", package.ReasoningEffort);
+        AssertEx.Equal(expected: 2048, AssertEx.NotNull(package.SamplingOptions).NumCtx);
+        AssertEx.Equal("yes", Output(analyze).GetProperty("json").GetProperty("answer").GetString());
+    }
+
+    [Test]
+    public async Task ALlmCall_WithAMissingBinding_FailsBeforeCapacityAndInvocation()
+    {
+        const string prompt = "llm-missing-binding";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var capacityCalls = Capacity(harness).ReservationsFor(GraphWorkflowModels.LocalDefault).Count;
+        var runId = await StartToTheAgentAsync(harness,
+                LlmGraph($$"""{ "prompt": "{{prompt}}", "inputBindings": { "customer": "run.input.customer" } }"""),
+                """{}""");
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
+        AssertEx.Contains(analyze.Error, "binding 'customer'");
+        AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(prompt, StringComparison.Ordinal)));
+        AssertEx.Equal(capacityCalls, Capacity(harness).ReservationsFor(GraphWorkflowModels.LocalDefault).Count);
+    }
+
+    [Test]
+    public async Task ALlmCall_WithANonChatInstalledModel_FailsBeforeCapacityAndInvocation()
+    {
+        const string prompt = "llm-non-chat-model";
+        const string model = "embedding-model.gguf";
+        await using var harness = GraphWorkflowHarness.PrivateAgentHost();
+        harness.Services.GetRequiredService<IModelClassificationStore>()
+               .GetByNameAsync(model, Arg.Any<CancellationToken>())
+               .Returns(new ModelClassificationRecord
+               {
+                   ModelName = model,
+                   Digest = null,
+                   DetectedKind = ModelKind.Embedding,
+                   DetectedCapabilitiesJson = null,
+                   OverrideKind = null,
+                   DetectedAtUtc = null,
+                   UpdatedAtUtc = 0
+               });
+        var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}" }"""));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
+        AssertEx.Contains(analyze.Error, "classified for chat");
+        AssertEx.Empty(harness.Invocations.Packages);
+        AssertEx.Empty(Capacity(harness).ReservationsFor(model));
+    }
+
+    [Test]
+    public async Task ALlmCall_WithAnUninstalledModel_FailsBeforeCapacityAndInvocation()
+    {
+        const string prompt = "llm-uninstalled-model";
+        const string model = "missing-model.gguf";
+        await using var harness = GraphWorkflowHarness.PrivateAgentHost();
+        harness.Services.GetRequiredService<IGgufModelStore>()
+               .ExistsAsync(model, Arg.Any<CancellationToken>())
+               .Returns(false);
+        var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}" }"""));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
+        AssertEx.Contains(analyze.Error, "installed node-managed GGUF");
+        AssertEx.Empty(harness.Invocations.Packages);
+        AssertEx.Empty(Capacity(harness).ReservationsFor(model));
+    }
 
     /// <summary>
     ///     The linear <c>Start → Agent → End</c> walk, one layer per tick, which is the shape the dispatcher suite could
@@ -95,7 +221,7 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.True(package.IsUnattended, "a graph workflow run is unattended by construction.");
         AssertEx.ContainsSingle(package.AllowedTools, tool => tool.Name == FakeGraphWorkflowAgentRuntime.OfferedTool);
         AssertEx.Empty(package.AllowedTools.Where(static tool => tool.RequiresApproval), "nothing in an unattended offer may need an approval.");
-        AssertEx.True(harness.Services.GetRequiredService<RecordingLogger<GraphWorkflowAgentExecutor>>()
+        AssertEx.True(harness.Services.GetRequiredService<RecordingLogger<GraphWorkflowInvocationExecutor>>()
                              .HasEntry(LogLevel.Warning, FakeGraphWorkflowAgentRuntime.ApprovalRequiredTool),
             "the stripped tool is named, so a narrower offer is visible rather than silent.");
     }
@@ -723,6 +849,22 @@ public sealed class GraphWorkflowAgentExecutorTests
             "nodes": [
               { "key": "start", "kind": "Start" },
               { "key": "analyze", "kind": "Agent"{{nodeExtras}}, "config": { "instructions": "{{instructions}}"{{agentConfig}} } },
+              { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+            ],
+            "edges": [
+              { "key": "e1", "from": "start", "to": "analyze" },
+              { "key": "e2", "from": "analyze", "to": "done" }
+            ]
+          }
+          """;
+
+    private static string LlmGraph(string config, string? nodeExtras = null) =>
+        $$"""
+          {
+            "schemaVersion": 1,
+            "nodes": [
+              { "key": "start", "kind": "Start" },
+              { "key": "analyze", "kind": "LlmCall"{{nodeExtras}}, "config": {{config}} },
               { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
             ],
             "edges": [

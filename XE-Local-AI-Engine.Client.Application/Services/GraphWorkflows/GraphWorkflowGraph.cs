@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
@@ -48,6 +49,7 @@ internal sealed class GraphWorkflowGraph
     {
         [GraphWorkflowNodeKind.Start] = ["inputSchema", "defaultInput"],
         [GraphWorkflowNodeKind.Agent] = ["agentDefinitionId", "instructions", "model", "reasoningEffort", "responseJsonSchema", "includeUpstreamOutputs"],
+        [GraphWorkflowNodeKind.LlmCall] = ["model", "systemPrompt", "prompt", "inputBindings", "reasoningEffort", "responseJsonSchema", "samplingOptions"],
         [GraphWorkflowNodeKind.Tool] = ["toolName", "arguments", "argumentBindings"],
         [GraphWorkflowNodeKind.Condition] = ["path"],
         [GraphWorkflowNodeKind.Parallel] = [],
@@ -367,7 +369,7 @@ internal sealed class GraphWorkflowGraph
         GraphWorkflowNodeKind kind,
         List<GraphWorkflowValidationError> errors)
     {
-        var isWorkNode = kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.Tool;
+        var isWorkNode = kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.Tool or GraphWorkflowNodeKind.LlmCall;
         return new GraphWorkflowGraphNode
         {
             NodeKey = nodeKey,
@@ -434,6 +436,16 @@ internal sealed class GraphWorkflowGraph
                 ParseReasoningEffort(config, nodeKey),
                 ParseResponseJsonSchema(config, nodeKey),
                 OptionalBool(config, "includeUpstreamOutputs", nodeKey, fallback: true)),
+            GraphWorkflowNodeKind.LlmCall => new GraphWorkflowLlmCallConfig
+            {
+                Model = StrictOptionalString(config, "model", nodeKey)?.Trim() is { Length: > 0 } model ? model : null,
+                SystemPrompt = StrictOptionalString(config, "systemPrompt", nodeKey),
+                Prompt = RequiredString(config, "prompt", owner),
+                InputBindings = ParseBindings(config, "inputBindings", nodeKey),
+                ReasoningEffort = ParseReasoningEffort(config, nodeKey),
+                ResponseJsonSchema = ParseResponseJsonSchema(config, nodeKey),
+                SamplingOptions = ParseSamplingOptions(config, nodeKey)
+            },
             GraphWorkflowNodeKind.Tool => new GraphWorkflowToolConfig(RequiredString(config, "toolName", owner),
                 OptionalObject(config, "arguments", nodeKey),
                 ParseArgumentBindings(config, nodeKey)),
@@ -481,23 +493,31 @@ internal sealed class GraphWorkflowGraph
     }
 
     private static IReadOnlyDictionary<string, string> ParseArgumentBindings(JsonElement config, string nodeKey)
+        => ParseBindings(config, "argumentBindings", nodeKey);
+
+    private static IReadOnlyDictionary<string, string> ParseBindings(JsonElement config, string memberName, string nodeKey)
     {
-        if (!config.TryGetProperty("argumentBindings", out var value) || value.ValueKind == JsonValueKind.Null)
+        if (!config.TryGetProperty(memberName, out var value) || value.ValueKind == JsonValueKind.Null)
         {
             return NoArgumentBindings;
         }
 
         if (value.ValueKind != JsonValueKind.Object)
         {
-            throw new GraphWorkflowValidationException($"The 'argumentBindings' on node '{nodeKey}' must be an object mapping each argument to a dot path.");
+            throw new GraphWorkflowValidationException($"The '{memberName}' on node '{nodeKey}' must be an object mapping each name to a dot path.");
         }
 
         var bindings = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var member in value.EnumerateObject())
         {
+            if (string.IsNullOrWhiteSpace(member.Name))
+            {
+                throw new GraphWorkflowValidationException($"The '{memberName}' on node '{nodeKey}' contains an empty binding name.");
+            }
+
             if (member.Value.ValueKind != JsonValueKind.String || !GraphWorkflowTokens.IsDotPath(member.Value.GetString()?.Trim()))
             {
-                throw new GraphWorkflowValidationException($"The 'argumentBindings' on node '{nodeKey}' binds '{member.Name}' to something that is not a dot path. {DotPathRule}");
+                throw new GraphWorkflowValidationException($"The '{memberName}' on node '{nodeKey}' binds '{member.Name}' to something that is not a dot path. {DotPathRule}");
             }
 
             bindings[member.Name] = member.Value.GetString()!.Trim();
@@ -505,6 +525,78 @@ internal sealed class GraphWorkflowGraph
 
         return bindings;
     }
+
+    private static SamplingOptions? ParseSamplingOptions(JsonElement config, string nodeKey)
+    {
+        if (!config.TryGetProperty("samplingOptions", out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            throw new GraphWorkflowValidationException($"The 'samplingOptions' on node '{nodeKey}' must be an object.");
+        }
+
+        var allowed = new HashSet<string>(["temperature", "topP", "topK", "minP", "maxOutputTokens", "seed", "repeatPenalty", "repeatLastN", "presencePenalty", "frequencyPenalty", "stop", "numCtx"], StringComparer.Ordinal);
+        var stray = value.EnumerateObject().Select(static member => member.Name).FirstOrDefault(member => !allowed.Contains(member));
+        if (stray is not null)
+        {
+            throw new GraphWorkflowValidationException($"The 'samplingOptions' on node '{nodeKey}' declares unknown member '{stray}'.");
+        }
+
+        try
+        {
+            var sampling = value.Deserialize<SamplingOptions>(JsonSerializerOptions.Web);
+            if (sampling is null)
+            {
+                throw new GraphWorkflowValidationException($"The 'samplingOptions' on node '{nodeKey}' could not be read.");
+            }
+
+            if (!SeedValue.TryParse(sampling.Seed, out var seed, out var seedError))
+            {
+                throw new GraphWorkflowValidationException($"The 'samplingOptions' on node '{nodeKey}' is invalid: {seedError}.");
+            }
+
+            ValidateSamplingOptions(sampling, seed, nodeKey);
+
+            return sampling;
+        }
+        catch (JsonException exception)
+        {
+            throw new GraphWorkflowValidationException($"The 'samplingOptions' on node '{nodeKey}' is invalid: {exception.Message}");
+        }
+    }
+
+    private static void ValidateSamplingOptions(SamplingOptions sampling, long? seed, string nodeKey)
+    {
+        var valid = IsFiniteInRange(sampling.Temperature, 0, 2)
+                    && IsProbability(sampling.TopP)
+                    && IsProbability(sampling.MinP)
+                    && sampling.TopK is null or > 0
+                    && sampling.MaxOutputTokens is null or > 0
+                    && IsFiniteAtLeast(sampling.RepeatPenalty, 0)
+                    && sampling.RepeatLastN is null or >= -1
+                    && IsFiniteInRange(sampling.PresencePenalty, -2, 2)
+                    && IsFiniteInRange(sampling.FrequencyPenalty, -2, 2)
+                    && seed is null or >= -1
+                    && sampling.NumCtx is null or > 0
+                    && (sampling.NumCtx is not { } context || sampling.MaxOutputTokens is not { } output || output <= context)
+                    && (sampling.Stop is null || sampling.Stop.Count > 0 && sampling.Stop.All(static stop => !string.IsNullOrWhiteSpace(stop)));
+        if (!valid)
+        {
+            throw new GraphWorkflowValidationException($"The 'samplingOptions' on node '{nodeKey}' contains a value outside the supported range.");
+        }
+    }
+
+    private static bool IsProbability(float? value) =>
+        value is null || float.IsFinite(value.Value) && value is >= 0 and <= 1;
+
+    private static bool IsFiniteAtLeast(float? value, float minimum) =>
+        value is null || float.IsFinite(value.Value) && value >= minimum;
+
+    private static bool IsFiniteInRange(float? value, float minimum, float maximum) =>
+        value is null || float.IsFinite(value.Value) && value >= minimum && value <= maximum;
 
     /// <summary>
     ///     The answers this pause accepts, as a non-empty distinct subset of the decision vocabulary. Empty would be a
@@ -794,12 +886,18 @@ internal sealed class GraphWorkflowGraph
         var warnings = new List<GraphWorkflowValidationError>();
         foreach (var (nodeKey, node) in Nodes.OrderBy(static entry => entry.Key, StringComparer.Ordinal))
         {
-            if (node.Config is not GraphWorkflowAgentConfig { ResponseJsonSchema: { } schema })
+            var schema = node.Config switch
+            {
+                GraphWorkflowAgentConfig { ResponseJsonSchema: { } agentSchema } => agentSchema,
+                GraphWorkflowLlmCallConfig { ResponseJsonSchema: { } llmSchema } => llmSchema,
+                _ => (JsonElement?)null
+            };
+            if (schema is null)
             {
                 continue;
             }
 
-            if (DescribeSchema(schema) is { } complaint)
+            if (DescribeSchema(schema.Value) is { } complaint)
             {
                 warnings.Add(new GraphWorkflowValidationError(nodeKey,
                     GraphWorkflowStateMachine.Bounded($"Node '{nodeKey}' declares a response schema the runtime rewrites before it becomes a grammar: it {complaint}.",
@@ -1063,6 +1161,18 @@ internal sealed class GraphWorkflowGraph
 
     private static string? OptionalString(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static string? StrictOptionalString(JsonElement element, string name, string nodeKey)
+    {
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : throw new GraphWorkflowValidationException($"The '{name}' on node '{nodeKey}' must be a string.");
+    }
 
     /// <summary>An optional string, trimmed, with a blank one read as ABSENT rather than refused.</summary>
     /// <remarks>

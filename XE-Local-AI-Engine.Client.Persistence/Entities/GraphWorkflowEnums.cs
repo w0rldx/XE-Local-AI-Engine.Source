@@ -16,7 +16,8 @@ public enum GraphWorkflowNodeKind
     Parallel,
     Join,
     Pause,
-    End
+    End,
+    LlmCall
 }
 
 /// <summary>

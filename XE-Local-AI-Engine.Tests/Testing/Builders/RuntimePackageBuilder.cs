@@ -15,6 +15,8 @@ public sealed class RuntimePackageBuilder
 
     private Guid _invocationId = Guid.NewGuid();
     private bool _isUnattended;
+    private bool _omitSystemPrompt;
+    private bool _requireNodeManagedLlama;
     private string? _modelProfile = "qwen3.5:0.8b";
     private string? _reasoningEffort;
     private bool _allowAutoModelSwap;
@@ -69,6 +71,13 @@ public sealed class RuntimePackageBuilder
     {
         ArgumentNullException.ThrowIfNull(systemPrompt);
         _resolvedSystemPrompt = systemPrompt;
+        return this;
+    }
+
+    public RuntimePackageBuilder WithoutSystemPrompt()
+    {
+        _resolvedSystemPrompt = string.Empty;
+        _omitSystemPrompt = true;
         return this;
     }
 
@@ -248,6 +257,12 @@ public sealed class RuntimePackageBuilder
         return this;
     }
 
+    public RuntimePackageBuilder RequiringNodeManagedLlama()
+    {
+        _requireNodeManagedLlama = true;
+        return this;
+    }
+
     /// <summary>Marks the package as a scheduled/headless run, which has no operator to answer an approval.</summary>
     public RuntimePackageBuilder AsUnattended()
     {
@@ -269,6 +284,8 @@ public sealed class RuntimePackageBuilder
             ClientNodeId = _clientNodeId,
             AgentDefinitionVersion = _agentDefinitionVersion,
             ResolvedSystemPrompt = _resolvedSystemPrompt,
+            OmitSystemPrompt = _omitSystemPrompt,
+            RequireNodeManagedLlama = _requireNodeManagedLlama,
             ConversationContext = _conversationContext.OrderBy(message => message.SortOrder).ToList(),
             AllowedTools = [.. _allowedTools],
             ToolPolicies = _toolPolicies.Count == 0 ? null : new Dictionary<string, object>(_toolPolicies),

@@ -7,6 +7,7 @@
 // form driven by the server's own tool list and parameter schema.
 
 import { fireEvent, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 // Monaco is ~3 MB behind a lazy import and needs a layout engine jsdom does not have. The JSON fields' contract here is
@@ -55,11 +56,30 @@ function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {})
 	);
 }
 
+function StatefulLlmPanel() {
+	const [node, setNode] = useState(() => defaultNodeData("LlmCall", "llm-call-1"));
+	return (
+		<ConfirmProvider>
+			<GraphWorkflowNodeConfigPanel
+				node={node}
+				issues={[]}
+				onChange={(patch) => setNode((current) => ({ ...current, ...patch }) as GraphWorkflowCanvasNodeData)}
+				onRename={() => "ok"}
+				onRemove={vi.fn()}
+				tools={tools}
+				agentOptions={[]}
+				modelOptions={[]}
+			/>
+		</ConfirmProvider>
+	);
+}
+
 // One body per kind. The union is closed, so a kind that falls through to the pass-through text is a kind whose
 // configuration an operator can never reach.
 const bodyTestIdByKind: Record<GraphWorkflowNodeKind, string> = {
 	Start: "gw-node-config-input-schema",
 	Agent: "gw-node-config-instructions",
+	LlmCall: "gw-node-config-llm-prompt",
 	Tool: "gw-node-config-tool",
 	Condition: "gw-node-config-path",
 	Parallel: "gw-node-config-passthrough",
@@ -89,6 +109,32 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		expect(screen.getByTestId("gw-node-config-response-schema-error").textContent).toBe(
 			"Enter a JSON object schema, or leave it empty.",
 		);
+	});
+
+	it("keeps LLM sampling overrides collapsed until requested", () => {
+		renderPanel(defaultNodeData("LlmCall", "llm-call-1"));
+
+		const advanced = screen.getByText("Advanced").closest("button");
+		expect(advanced?.getAttribute("aria-expanded")).toBe("false");
+		fireEvent.click(advanced as HTMLButtonElement);
+
+		expect(advanced?.getAttribute("aria-expanded")).toBe("true");
+		expect(screen.getByTestId("gw-node-config-sampling-temperature")).toBeTruthy();
+		expect(screen.getByText("Limits this request's prompt budget; it does not resize the server context window.")).toBeTruthy();
+	});
+
+	it("keeps a trailing newline while entering stop sequences and publishes multiple lines", () => {
+		renderWithProviders(<StatefulLlmPanel />);
+		fireEvent.click(screen.getByText("Advanced"));
+		const stop = screen.getByTestId("gw-node-config-sampling-stop") as HTMLTextAreaElement;
+
+		fireEvent.change(stop, { target: { value: "first\n" } });
+		expect(stop.value).toBe("first\n");
+		fireEvent.change(stop, { target: { value: "first\nsecond" } });
+		expect(stop.value).toBe("first\nsecond");
+
+		fireEvent.change(stop, { target: { value: "" } });
+		expect(stop.value).toBe("");
 	});
 
 	it("flags a key that breaks the charset at the keystroke and does not rename on it", () => {

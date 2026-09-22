@@ -195,11 +195,9 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     ///     Builds the turn's <see cref="ChatClientAgent" /> and wraps it with the approval-replay validator.
     /// </summary>
     /// <remarks>
-    ///     The inner agent carries NO instructions on either path: they are delivered exactly once per request as the
-    ///     leading <see cref="ChatRole.System" /> seed message (<see cref="BuildSeedMessages" />), and MAF would forward
-    ///     ctor or options instructions alongside it. Constructor argument order is
-    ///     (chatClient, instructions, name, description, tools, loggerFactory, services), verified at
-    ///     Microsoft.Agents.AI 1.20.0 and pinned with named arguments. See docs/wiki/04-agent-mode.md ("Building the agent: instructions once, skills through a context provider").
+    ///     Instructions live only in <see cref="BuildSeedMessages" />, unless explicitly omitted. Supplying them to
+    ///     the inner agent would duplicate the system prompt. Named arguments pin the Microsoft.Agents.AI 1.20.0
+    ///     constructor contract. See docs/wiki/04-agent-mode.md ("Building the agent: instructions once, skills through a context provider").
     /// </remarks>
     private AIAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
     {
@@ -432,10 +430,9 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
     private static IReadOnlyList<ChatMessage> BuildSeedMessages(InvocationAgentDefinition definition)
     {
-        List<ChatMessage> messages =
-        [
-            new(ChatRole.System, definition.Instructions)
-        ];
+        List<ChatMessage> messages = definition.OmitSystemPrompt
+            ? []
+            : [new ChatMessage(ChatRole.System, definition.Instructions)];
 
         messages.AddRange(definition.ConversationContext);
 
