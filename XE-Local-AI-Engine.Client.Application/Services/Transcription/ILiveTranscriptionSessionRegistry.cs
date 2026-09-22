@@ -35,7 +35,7 @@ public interface ILiveTranscriptionSessionRegistry
     Task PushAudioAsync(Guid sessionId, TranscriptChannel channel, ReadOnlyMemory<byte> pcm16, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     The only way a live session ends. Idempotent: a second call returns the first call's task, and it never
+    ///     The only way a live session ends. Idempotent: repeated calls join one task; a non-graceful end can interrupt a pending graceful stop. It never
     ///     throws to its caller.
     /// </summary>
     Task EndAsync(Guid sessionId, LiveEndReason reason, CancellationToken cancellationToken);
@@ -58,6 +58,9 @@ public interface ILiveTranscriptionSessionRegistry
 
     /// <summary>Whether this session has lanes that accept audio right now.</summary>
     bool IsLive(Guid sessionId);
+
+    /// <summary>Whether the registry still owns the session, including finalization after audio admission closes.</summary>
+    bool IsRegistered(Guid sessionId);
 }
 
 /// <summary>Why a live session ended. Maps to the persisted status and to the session-status push.</summary>

@@ -42,6 +42,9 @@ RID_REQUIRED = {
         "xe-local-ai-engine.windowslauncher.dll",
         "xe-local-ai-engine.windowslauncher.deps.json",
         "xe-local-ai-engine.windowslauncher.runtimeconfig.json",
+        "xe-local-ai-engine.desktop.dll",
+        "xe-local-ai-engine.desktop.deps.json",
+        "xe-local-ai-engine.desktop.runtimeconfig.json",
         "xe-local-ai-engine.client.dll",
         "xe-local-ai-engine.client.deps.json",
         "xe-local-ai-engine.client.runtimeconfig.json",
@@ -51,6 +54,8 @@ RID_REQUIRED = {
         "wwwroot/licenses/dotnet/dotnet-apphost-third-party-notices.txt",
     ),
     "linux-x64": (
+        "xe-local-ai-engine.desktop",
+        "xe-local-ai-engine.client",
         *(f"licenses/dotnet/{name.lower()}" for name in DOTNET_RUNTIME_DOCUMENT_NAMES),
         *(f"wwwroot/licenses/dotnet/{name.lower()}" for name in DOTNET_RUNTIME_DOCUMENT_NAMES),
     ),

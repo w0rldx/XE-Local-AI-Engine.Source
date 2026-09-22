@@ -71,7 +71,7 @@ export OPENAPI_LIVE_CLIENT_RELEASE_ROOT="${TEMP_ROOT}/release"
 # A caller that sets MISE_DATA_DIR: the value has to survive the HOME isolation and reach the host, or every
 # mise shim on PATH aborts and the host dies before readiness.
 output="$(MISE_DATA_DIR="${TEMP_ROOT}/mise-data" "${SCRIPT_DIR}/openapi-live-check.sh" 2>&1)"
-[[ "${output}" == *"PASS: live backend contract matches committed frontend artifacts."* ]]
+[[ "${output}" == *"PASS: pnpm openapi:check:live succeeded against the live backend."* ]]
 [[ "${output}" == *"verify: build output unchanged during the run"* ]]
 [[ -s "${FAKE_PNPM_RECORD}" ]]
 [[ "$(cat "${FAKE_MISE_RECORD}")" == "${TEMP_ROOT}/mise-data" ]]
@@ -90,7 +90,7 @@ HOME="${TEMP_ROOT}/no-such-home" MISE_DATA_DIR='' "${SCRIPT_DIR}/openapi-live-ch
 # the path was wrong, which is how the primary path stayed dead and unnoticed.
 rm -f "${FAKE_PNPM_RECORD}"
 port_file_output="$(FAKE_SUPPRESS_BROWSER_LOG=1 "${SCRIPT_DIR}/openapi-live-check.sh" 2>&1)"
-[[ "${port_file_output}" == *"PASS: live backend contract matches committed frontend artifacts."* ]]
+[[ "${port_file_output}" == *"PASS: pnpm openapi:check:live succeeded against the live backend."* ]]
 [[ -s "${FAKE_PNPM_RECORD}" ]]
 
 printf 'stable\n' >"${TEMP_ROOT}/release/fake.dll"

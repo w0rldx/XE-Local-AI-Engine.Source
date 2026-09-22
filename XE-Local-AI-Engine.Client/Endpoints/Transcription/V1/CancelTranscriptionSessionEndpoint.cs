@@ -6,9 +6,8 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>
-///     Signals the transcription running for this session; 204 when one was signalled, 404 when nothing is in flight
-///     for that id. Cancellation is a signal, not a join: the run unwinds on its own and writes the session
-///     <c>Cancelled</c>. Operator-gated.
+///     Operator-gated cancellation: 204 when active, otherwise 404. Interrupts and joins live finalization;
+///     signals batch jobs without joining. Retains committed transcript rows.
 /// </summary>
 public sealed class CancelTranscriptionSessionEndpoint : Endpoint<TranscriptionSessionRouteRequest>
 {

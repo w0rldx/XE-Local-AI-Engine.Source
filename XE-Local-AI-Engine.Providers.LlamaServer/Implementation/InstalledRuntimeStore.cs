@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -31,7 +32,7 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
     /// <summary>Creates the store under <paramref name="cacheRoot" /> (defaulting to the shared app cache root).</summary>
     public InstalledRuntimeStore(string? cacheRoot = null)
     {
-        var root = string.IsNullOrWhiteSpace(cacheRoot) ? DefaultCacheRoot() : cacheRoot;
+        var root = string.IsNullOrWhiteSpace(cacheRoot) ? RuntimeCacheDirectory.Resolve() : cacheRoot;
         _statePath = Path.Combine(root, StateFileName);
     }
 
@@ -183,11 +184,5 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
         {
             // Best-effort cleanup of a temp write; ignore.
         }
-    }
-
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine");
     }
 }

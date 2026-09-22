@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
@@ -79,7 +80,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         ICudaManagedBuildSignal? managedCudaSignal = null,
         IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null)
         : this(httpClient,
-            cacheRoot ?? DefaultCacheRoot(),
+            cacheRoot ?? RuntimeCacheDirectory.Resolve(),
             activeTag ?? LlamaCppReleasePins.PinnedTag,
             CurrentOsPlatform(),
             RuntimeInformation.ProcessArchitecture,
@@ -1056,12 +1057,6 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         };
     }
 
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine");
-    }
-
     /// <summary>
     ///     The directory every acquired llama.cpp runtime is cached under for the default app-data root
     ///     (<c>{cacheRoot}/llama.cpp</c>, the layout <see cref="EnsureBinaryAsync" /> writes its variant dirs into).
@@ -1072,7 +1067,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// </remarks>
     internal static string DefaultLlamaCppBinariesRoot()
     {
-        return Path.Combine(DefaultCacheRoot(), "llama.cpp");
+        return Path.Combine(RuntimeCacheDirectory.Resolve(), "llama.cpp");
     }
 
     private static OSPlatform CurrentOsPlatform()

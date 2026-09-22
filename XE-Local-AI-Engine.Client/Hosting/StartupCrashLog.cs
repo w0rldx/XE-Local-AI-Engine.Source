@@ -17,12 +17,23 @@ internal static class StartupCrashLog
 {
     private const string LogFileName = "startup-crash.log";
 
-    internal static Task RecordAsync(string message, CancellationToken cancellationToken = default) =>
-        RecordToAsync(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                DesktopBootstrap.ApplicationDataFolderName,
-                "logs"),
-            message,
-            cancellationToken);
+    internal static Task RecordAsync(string message, CancellationToken cancellationToken = default)
+    {
+        var directory = ResolveLogDirectory();
+        return directory is null ? Task.CompletedTask : RecordToAsync(directory, message, cancellationToken);
+    }
+
+    internal static string? ResolveLogDirectory()
+    {
+        var configured = Environment.GetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable);
+        if ((configured is not null && string.IsNullOrWhiteSpace(configured))
+            || !DesktopBootstrap.TryResolveDataDirectoryPath(out var root, out _))
+        {
+            return null;
+        }
+
+        return Path.Combine(root, "logs");
+    }
 
     /// <summary>Directory-injected core (mirrors DesktopBootstrap's resolver seam) so the write path is testable without
     ///     touching the real per-user profile.</summary>

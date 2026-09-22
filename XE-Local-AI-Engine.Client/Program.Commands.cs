@@ -132,7 +132,7 @@ public sealed partial class Program
     {
         ArgumentNullException.ThrowIfNull(standardOutput);
         await standardOutput.WriteLineAsync("XE Local AI Engine");
-        await standardOutput.WriteLineAsync("Serve: --desktop | --mcp-only [--no-browser] [--port <1-65535>]");
+        await standardOutput.WriteLineAsync("Serve: --desktop | --browser | --headless | --mcp-only [--no-browser] [--port <1-65535>]");
         await standardOutput
               .WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help");
         await standardOutput.WriteLineAsync("Maintenance: --reset-admin-password <password> | --knowledge-downgrade-preflight | --knowledge-downgrade-export");

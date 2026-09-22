@@ -159,8 +159,8 @@
           BeforeTargets="ComputeFilesToPublish"
           Condition="'$(SelfContained)' == 'true' and '$(RuntimeIdentifier)' != ''">
     <PropertyGroup>
-      <_DotNetRuntimePackDirectory>$(NuGetPackageRoot)microsoft.netcore.app.runtime.$(RuntimeIdentifier)/$(DotNetRuntimeVersion)</_DotNetRuntimePackDirectory>
-      <_AspNetCoreRuntimePackDirectory>$(NuGetPackageRoot)microsoft.aspnetcore.app.runtime.$(RuntimeIdentifier)/$(DotNetRuntimeVersion)</_AspNetCoreRuntimePackDirectory>
+      <_DotNetRuntimePackDirectory>$([System.IO.Path]::Combine('$(NuGetPackageRoot)', 'microsoft.netcore.app.runtime.$(RuntimeIdentifier)', '$(DotNetRuntimeVersion)'))</_DotNetRuntimePackDirectory>
+      <_AspNetCoreRuntimePackDirectory>$([System.IO.Path]::Combine('$(NuGetPackageRoot)', 'microsoft.aspnetcore.app.runtime.$(RuntimeIdentifier)', '$(DotNetRuntimeVersion)'))</_AspNetCoreRuntimePackDirectory>
     </PropertyGroup>
     <Error Condition="!Exists('$(_DotNetRuntimePackDirectory)/THIRD-PARTY-NOTICES.TXT')"
            Text="The .NET $(DotNetRuntimeVersion) $(RuntimeIdentifier) third-party notices are missing from the restored runtime pack."/>

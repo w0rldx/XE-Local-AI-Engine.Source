@@ -63,6 +63,9 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
             "current/XE-Local-AI-Engine.WindowsLauncher.dll": b"repository-owned C# launcher",
             "current/XE-Local-AI-Engine.WindowsLauncher.deps.json": b"{}",
             "current/XE-Local-AI-Engine.WindowsLauncher.runtimeconfig.json": b"{}",
+            "current/XE-Local-AI-Engine.Desktop.dll": b"native desktop shell",
+            "current/XE-Local-AI-Engine.Desktop.deps.json": b"{}",
+            "current/XE-Local-AI-Engine.Desktop.runtimeconfig.json": b"{}",
             "current/XE-Local-AI-Engine.Client.dll": b"managed application",
             "current/XE-Local-AI-Engine.Client.deps.json": b"{}",
             "current/XE-Local-AI-Engine.Client.runtimeconfig.json": b"{}",
@@ -142,6 +145,8 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
 
     def test_linux_requires_the_split_runtime_license_corpus(self) -> None:
         paths = [
+            "XE-Local-AI-Engine.Desktop",
+            "XE-Local-AI-Engine.Client",
             "LICENSE",
             "NOTICE",
             "licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt",
@@ -161,6 +166,11 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
         ]
 
         MODULE.assert_required_paths(paths, "linux-x64", "linux payload")
+        for executable in ("XE-Local-AI-Engine.Desktop", "XE-Local-AI-Engine.Client"):
+            with self.subTest(executable=executable), self.assertRaisesRegex(ValueError, "missing required"):
+                MODULE.assert_required_paths(
+                    [path for path in paths if path != executable], "linux-x64", "linux payload"
+                )
 
     def test_windows_portable_with_required_compliance_material_passes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -252,6 +262,9 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
             "current/XE-Local-AI-Engine.WindowsLauncher.dll",
             "current/XE-Local-AI-Engine.WindowsLauncher.deps.json",
             "current/XE-Local-AI-Engine.WindowsLauncher.runtimeconfig.json",
+            "current/XE-Local-AI-Engine.Desktop.dll",
+            "current/XE-Local-AI-Engine.Desktop.deps.json",
+            "current/XE-Local-AI-Engine.Desktop.runtimeconfig.json",
             "current/XE-Local-AI-Engine.Client.dll",
             "current/XE-Local-AI-Engine.Client.deps.json",
             "current/XE-Local-AI-Engine.Client.runtimeconfig.json",

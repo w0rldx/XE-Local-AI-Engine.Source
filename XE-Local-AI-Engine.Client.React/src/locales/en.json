@@ -6949,6 +6949,8 @@
 			"capture": {
 				"start": "Start capture",
 				"stop": "Stop capture",
+				"finalizing": "Finalizing transcript…",
+				"cancel": "Cancel now",
 				"replayStalled": "The node stopped sending missed segments. The transcript on screen may be incomplete — reload the page to fetch it again.",
 				"error": {
 					"unsupported": "This browser cannot capture audio here. A local HTTPS page in a recent Chrome, Edge or Firefox is required.",

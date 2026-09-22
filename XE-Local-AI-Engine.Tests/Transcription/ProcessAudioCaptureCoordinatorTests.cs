@@ -420,6 +420,8 @@ public sealed class ProcessAudioCaptureCoordinatorTests
         public bool IsLive(Guid sessionId) =>
             Live;
 
+        public bool IsRegistered(Guid sessionId) => _sessions.ContainsKey(sessionId);
+
         public Task StartLiveSessionAsync(Guid sessionId, LiveSessionOptions options, CancellationToken cancellationToken) =>
             throw new NotSupportedException("The capture coordinator never starts a live session.");
 

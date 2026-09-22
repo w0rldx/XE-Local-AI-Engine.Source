@@ -4,8 +4,45 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.WindowsLauncher;
 
 [Category(TestCategories.Unit)]
+[NotInParallel]
 public sealed class StartupDiagnosticsTests
 {
+    [Test]
+    public void ResolveLogDirectory_UnsetKeepsDefault()
+    {
+        AssertEx.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "XE-Local-AI-Engine", "logs"), StartupDiagnostics.ResolveLogDirectory(null));
+    }
+
+    [Test]
+    [Arguments("")]
+    [Arguments(" ")]
+    [Arguments("relative")]
+    [Arguments("/tmp/path\n")]
+    public void ResolveLogDirectory_InvalidOverrideDoesNotFallBack(string value)
+    {
+        AssertEx.Null(StartupDiagnostics.ResolveLogDirectory(value));
+    }
+
+    [Test]
+    public async Task Record_UsesExplicitNodeDataRoot()
+    {
+        var root = Directory.CreateTempSubdirectory("xe-launcher-root-").FullName;
+        var original = Environment.GetEnvironmentVariable("XE_DATA_DIR");
+        try
+        {
+            Environment.SetEnvironmentVariable("XE_DATA_DIR", root);
+            StartupDiagnostics.Record("isolated");
+            var text = await File.ReadAllTextAsync(Path.Combine(root, "logs", "launcher.log"));
+            AssertEx.Contains(text, "isolated");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("XE_DATA_DIR", original);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Test]
     public void RecordTo_CreatesTheDirectoryAndAppendsTimestampedLines()
     {

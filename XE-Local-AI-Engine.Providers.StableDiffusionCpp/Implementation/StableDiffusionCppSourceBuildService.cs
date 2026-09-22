@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>Linux-only detached single-flight source build for stable-diffusion.cpp.</summary>
@@ -59,7 +60,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         IStableDiffusionCppSourceBuildEventPublisher publisher,
         ILogger<StableDiffusionCppSourceBuildService> logger,
         TimeProvider timeProvider)
-        : this(prerequisiteProbe, runtimeStore, managedSignal, activityGate, publisher, logger, DefaultCacheRoot(), new StableDiffusionSourceCommandRunner(), timeProvider)
+        : this(prerequisiteProbe, runtimeStore, managedSignal, activityGate, publisher, logger, RuntimeCacheDirectory.Resolve(), new StableDiffusionSourceCommandRunner(), timeProvider)
     {
     }
 
@@ -784,11 +785,6 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         {
             // Best-effort cleanup; the caller reports the primary operation.
         }
-    }
-
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XE-Local-AI-Engine");
     }
 
     private sealed record BuildCompletion

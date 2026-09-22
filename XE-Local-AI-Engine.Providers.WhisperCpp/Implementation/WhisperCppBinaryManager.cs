@@ -4,6 +4,7 @@ using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 
@@ -51,7 +52,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         IWhisperInstalledRuntimeStore? installedRuntimeStore = null,
         IWhisperManagedSourceBuildSignal? managedSourceSignal = null)
         : this(httpClient,
-            cacheRoot ?? DefaultCacheRoot(),
+            cacheRoot ?? RuntimeCacheDirectory.Resolve(),
             activeTag ?? WhisperCppReleasePins.PinnedTag,
             CurrentOsPlatform(),
             RuntimeInformation.ProcessArchitecture,
@@ -169,7 +170,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     /// </summary>
     internal static string DefaultWhisperBinariesRoot()
     {
-        return Path.Combine(DefaultCacheRoot(), "whisper.cpp");
+        return Path.Combine(RuntimeCacheDirectory.Resolve(), "whisper.cpp");
     }
 
     private async Task<WhisperBinary?> TryResolveManagedRuntimeAsync(WhisperInstalledRuntimeState state, CancellationToken ct)
@@ -515,11 +516,6 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     private static string BackendSlug(WhisperBackend backend)
     {
         return backend == WhisperBackend.Cuda ? "cuda" : "cpu";
-    }
-
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XE-Local-AI-Engine");
     }
 
     private static OSPlatform CurrentOsPlatform()

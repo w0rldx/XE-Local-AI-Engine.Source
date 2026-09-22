@@ -699,7 +699,7 @@ finally {
     Remove-Item $testOutputPath -Force -ErrorAction SilentlyContinue
 }
 
-# 2. Publish (single-file self-contained win-x64, tester update flavor)
+# 2. Publish framework-dependent Windows engine, native shell and Velopack launcher.
 # The publish directory is wiped FIRST because `dotnet publish` never removes stale files from it, and the app
 # writes runtime state next to its own executable. Running the published exe straight out of this directory —
 # a manual smoke test — leaves artifacts behind that the next pack silently ships:
@@ -727,7 +727,22 @@ dotnet publish XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj `
     --configuration Release `
     -p:PublishProfile=win-x64 `
     -p:UpdateChannel=tester
-Assert-LastExitCode "dotnet publish"
+Assert-LastExitCode "dotnet publish engine"
+
+dotnet publish XE-Local-AI-Engine.Desktop\XE-Local-AI-Engine.Desktop.csproj `
+    --configuration Release `
+    -p:PublishProfile=win-x64 `
+    --output $publishDir
+Assert-LastExitCode "dotnet publish desktop"
+
+dotnet publish XE-Local-AI-Engine.WindowsLauncher\XE-Local-AI-Engine.WindowsLauncher.csproj `
+    --configuration Release `
+    -p:PublishProfile=win-x64 `
+    --output $publishDir
+Assert-LastExitCode "dotnet publish launcher"
+
+& "$PSScriptRoot/../scripts/tests/windows-framework-launcher-smoke.ps1" -PublishDirectory $publishDir
+
 
 foreach ($required in @("$publishDir\wwwroot\index.html", "$publishDir\wwwroot\assets")) {
     if (-not (Test-Path $required)) {
@@ -916,7 +931,7 @@ dnx vpk@1.2.0 pack `
     --packId XE-Local-AI-Engine `
     --packVersion $Version `
     --packDir $publishDir `
-    --mainExe XE-Local-AI-Engine.Client.exe `
+    --mainExe XE-Local-AI-Engine.WindowsLauncher.exe `
     --channel win `
     --releaseNotes RELEASE_NOTES.md `
     --noInst

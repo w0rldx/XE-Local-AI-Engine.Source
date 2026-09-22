@@ -11,7 +11,7 @@ require a maintainer PAT.
 
 | Platform | User-facing artifact | Install model | Self-update |
 |---|---|---|---|
-| Windows x64 | Velopack `Portable.zip` | Install ASP.NET Core Runtime 10.0.11+ (x64), extract to a writable directory, and run the top-level launcher | Yes |
+| Windows x64 | Velopack `Portable.zip` | Install ASP.NET Core Runtime 10.0.11+ (x64) and WebView2 Evergreen Runtime, extract to a writable directory, and run the top-level launcher | Yes |
 | Linux x64 | Velopack `.AppImage` | Mark executable and run the AppImage | Yes; Velopack replaces the AppImage in place |
 
 Windows packing passes `--noInst` to Velopack 1.2.0, so the release must contain exactly one Windows
@@ -19,7 +19,12 @@ Windows packing passes `--noInst` to Velopack 1.2.0, so the release must contain
 
 The Windows payload is framework-dependent. `XE-Local-AI-Engine.Client` publishes as DLL/deps/runtimeconfig files with
 no apphost or runtime; `XE-Local-AI-Engine.WindowsLauncher` publishes a small C# apphost into the same directory. The
-launcher validates the payload and installed ASP.NET Core runtime before starting the managed app through `dotnet.exe`.
+launcher validates the payload and installed ASP.NET Core runtime before starting the native Desktop shell through `dotnet.exe`.
+The shell owns its engine process and offers Exit or minimize-to-tray on first close. `--browser` starts the standalone
+local engine and opens a browser; `--headless` starts the same local engine without UI. Operator commands and
+`--mcp-only` bypass the shell. Updates preserve the selected mode. WebView2 is a separately installed prerequisite;
+XE does not silently download its installer. Linux packages launch the native shell and retain a standalone engine payload. Native Ubuntu LTS
+X11/Wayland acceptance remains unvalidated: real Ubuntu testing was waived, not established by Windows or WSL checks.
 If the base .NET runtime is absent, Microsoft's apphost reports the missing framework; if ASP.NET Core is absent or too
 old, the launcher prints the exact requirement and opens the official .NET 10 download page.
 The archive must not contain `coreclr.dll`, `hostfxr.dll`, `hostpolicy.dll`, `System.Private.CoreLib.dll`, or the .NET

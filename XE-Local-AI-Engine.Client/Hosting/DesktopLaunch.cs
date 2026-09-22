@@ -13,6 +13,8 @@ internal static class DesktopLaunch
     internal const string McpOnlyModeValue = "mcp-only";
     internal const string DesktopArgument = "--desktop";
     internal const string McpOnlyArgument = "--mcp-only";
+    internal const string BrowserArgument = "--browser";
+    internal const string HeadlessArgument = "--headless";
     internal const string NoBrowserArgument = "--no-browser";
     internal const string PortArgument = "--port";
     internal const string SetupArgument = "--setup";
@@ -39,7 +41,7 @@ internal static class DesktopLaunch
             return LaunchMode.McpOnly;
         }
 
-        if (HasArgument(args, DesktopArgument))
+        if (HasArgument(args, DesktopArgument) || HasArgument(args, BrowserArgument) || HasArgument(args, HeadlessArgument))
         {
             return LaunchMode.Desktop;
         }
@@ -62,10 +64,11 @@ internal static class DesktopLaunch
         ResolveLaunchMode(args, Environment.GetEnvironmentVariable, isManagedInstall);
 
     internal static bool HasExplicitLocalModeArgument(string[] args) =>
-        HasArgument(args, McpOnlyArgument) || HasArgument(args, DesktopArgument);
+        HasArgument(args, McpOnlyArgument) || HasArgument(args, DesktopArgument)
+        || HasArgument(args, BrowserArgument) || HasArgument(args, HeadlessArgument);
 
     internal static bool HasNoBrowserFlag(string[] args) =>
-        HasArgument(args, NoBrowserArgument);
+        HasArgument(args, NoBrowserArgument) || HasArgument(args, HeadlessArgument);
 
     internal static bool ShouldSuppressBrowser(LaunchMode launchMode, bool noBrowserRequested) =>
         launchMode == LaunchMode.McpOnly || noBrowserRequested;
@@ -82,14 +85,28 @@ internal static class DesktopLaunch
     internal static bool HasOneShotCommand(string[] args) =>
         HasHelpFlag(args) || HasStatusFlag(args) || HasArgument(args, SetupArgument) || HasArgument(args, McpKeyArgument);
 
-    internal static IReadOnlyList<string> BuildRestartArguments(string[] args, LaunchMode launchMode, int? port)
+    internal static IReadOnlyList<string> BuildRestartArguments(string[] args, LaunchMode launchMode, int? port, bool shellOwned = false)
     {
         ArgumentNullException.ThrowIfNull(args);
-        var sanitized = new List<string>(capacity: 4)
+        var modeArgument = DesktopArgument;
+        if (launchMode == LaunchMode.McpOnly)
         {
-            launchMode == LaunchMode.McpOnly ? McpOnlyArgument : DesktopArgument
-        };
-        if (HasNoBrowserFlag(args))
+            modeArgument = McpOnlyArgument;
+        }
+        else if (!shellOwned)
+        {
+            if (HasArgument(args, HeadlessArgument))
+            {
+                modeArgument = HeadlessArgument;
+            }
+            else if (HasArgument(args, BrowserArgument))
+            {
+                modeArgument = BrowserArgument;
+            }
+        }
+
+        var sanitized = new List<string>(capacity: 4) { modeArgument };
+        if (!shellOwned && HasArgument(args, NoBrowserArgument))
         {
             sanitized.Add(NoBrowserArgument);
         }

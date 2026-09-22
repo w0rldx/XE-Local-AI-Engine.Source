@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>Atomic owner-only state store with a redundant desired-selection record for fail-closed recovery.</summary>
@@ -20,7 +21,7 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
 
     public StableDiffusionInstalledRuntimeStore(string? cacheRoot = null)
     {
-        var root = string.IsNullOrWhiteSpace(cacheRoot) ? DefaultCacheRoot() : cacheRoot;
+        var root = string.IsNullOrWhiteSpace(cacheRoot) ? RuntimeCacheDirectory.Resolve() : cacheRoot;
         var stateRoot = Path.Combine(root, "stable-diffusion.cpp");
         _statePath = Path.Combine(stateRoot, StateFileName);
         _desiredPath = Path.Combine(stateRoot, DesiredFileName);
@@ -301,11 +302,6 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
         {
             // Best-effort temp cleanup.
         }
-    }
-
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XE-Local-AI-Engine");
     }
 
     private sealed record DesiredRuntimeState(

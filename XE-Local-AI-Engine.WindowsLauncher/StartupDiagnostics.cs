@@ -20,11 +20,37 @@ internal static class StartupDiagnostics
     private const string ApplicationDataFolderName = "XE-Local-AI-Engine";
     private const string LogFileName = "launcher.log";
 
-    internal static void Record(string message) =>
-        RecordTo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                ApplicationDataFolderName,
-                "logs"),
-            message);
+    internal static void Record(string message)
+    {
+        var directory = ResolveLogDirectory(Environment.GetEnvironmentVariable("XE_DATA_DIR"));
+        if (directory is not null)
+        {
+            RecordTo(directory, message);
+        }
+    }
+
+    internal static string? ResolveLogDirectory(string? configured)
+    {
+        if (configured is null)
+        {
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                ApplicationDataFolderName, "logs");
+        }
+
+        if (string.IsNullOrWhiteSpace(configured) || configured.Any(char.IsControl) || !Path.IsPathFullyQualified(configured))
+        {
+            return null;
+        }
+
+        try
+        {
+            return Path.Combine(Path.GetFullPath(configured), "logs");
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>Directory-injected core (mirrors DesktopBootstrap's resolver seam) so the write path is testable without
     ///     touching the real per-user profile.</summary>

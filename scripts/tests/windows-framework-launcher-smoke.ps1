@@ -10,7 +10,10 @@ $publishPath = [System.IO.Path]::GetFullPath($PublishDirectory)
 $launcher = Join-Path $publishPath 'XE-Local-AI-Engine.WindowsLauncher.exe'
 $launcherRuntimeConfig = Join-Path $publishPath 'XE-Local-AI-Engine.WindowsLauncher.runtimeconfig.json'
 $managedEntryPoint = Join-Path $publishPath 'XE-Local-AI-Engine.Client.dll'
-foreach ($required in @($launcher, $launcherRuntimeConfig, $managedEntryPoint)) {
+$desktopEntryPoint = Join-Path $publishPath 'XE-Local-AI-Engine.Desktop.dll'
+$desktopRuntimeConfig = Join-Path $publishPath 'XE-Local-AI-Engine.Desktop.runtimeconfig.json'
+$desktopDeps = Join-Path $publishPath 'XE-Local-AI-Engine.Desktop.deps.json'
+foreach ($required in @($launcher, $launcherRuntimeConfig, $managedEntryPoint, $desktopEntryPoint, $desktopRuntimeConfig, $desktopDeps)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
         throw "Windows framework-dependent payload is missing: $required"
     }

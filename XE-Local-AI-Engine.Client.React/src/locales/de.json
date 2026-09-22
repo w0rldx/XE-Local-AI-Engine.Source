@@ -6949,6 +6949,8 @@
 			"capture": {
 				"start": "Aufnahme starten",
 				"stop": "Aufnahme beenden",
+				"finalizing": "Transkript wird abgeschlossen…",
+				"cancel": "Jetzt abbrechen",
 				"replayStalled": "Der Node sendet keine verpassten Segmente mehr. Das Transkript auf dem Bildschirm ist möglicherweise unvollständig — lade die Seite neu, um es erneut abzurufen.",
 				"error": {
 					"unsupported": "Dieser Browser kann hier kein Audio aufnehmen. Nötig ist eine lokale HTTPS-Seite in einem aktuellen Chrome, Edge oder Firefox.",

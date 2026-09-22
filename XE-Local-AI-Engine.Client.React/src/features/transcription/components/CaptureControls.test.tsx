@@ -9,6 +9,7 @@ import { renderWithProviders } from "@/test/RenderWithProviders";
 function renderControls(overrides: Partial<Parameters<typeof CaptureControls>[0]> = {}) {
 	const onStart = vi.fn();
 	const onStop = vi.fn();
+	const onCancel = vi.fn();
 	renderWithProviders(
 		<CaptureControls
 			sourceKind="Microphone"
@@ -20,10 +21,11 @@ function renderControls(overrides: Partial<Parameters<typeof CaptureControls>[0]
 			elapsedMs={0}
 			onStart={onStart}
 			onStop={onStop}
+			onCancel={onCancel}
 			{...overrides}
 		/>,
 	);
-	return { onStart, onStop };
+	return { onStart, onStop, onCancel };
 }
 
 describe("CaptureControls", () => {
@@ -47,6 +49,15 @@ describe("CaptureControls", () => {
 
 		expect(onStop).toHaveBeenCalledTimes(1);
 		expect(screen.queryByTestId("transcription-capture-start")).toBeNull();
+	});
+
+	it("names finalization and offers cancellation while graceful stop is pending", () => {
+		const { onCancel } = renderControls({ state: "stopping" });
+
+		expect(screen.getByTestId("transcription-capture-finalizing").textContent).toBe("Finalizing transcript…");
+		fireEvent.click(screen.getByTestId("transcription-capture-cancel"));
+		expect(onCancel).toHaveBeenCalledTimes(1);
+		expect(screen.queryByTestId("transcription-capture-stop")).toBeNull();
 	});
 
 	// Offering stop while the sources are still being acquired would race the acquisition it is meant to undo, so the

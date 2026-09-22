@@ -82,6 +82,27 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertIn("--windows-apphost-license", body)
         self.assertIn("--windows-apphost-notices", body)
 
+    def test_native_shell_is_published_with_separate_compliance_evidence(self) -> None:
+        shell = self.source.index("name: Publish native shell (${{ matrix.rid }})")
+        launcher = self.source.index("name: Build and test Windows framework launcher")
+        self.assertLess(shell, launcher)
+        self.assertIn("main-exe: XE-Local-AI-Engine.Desktop", self.source)
+        self.assertIn("XE-Local-AI-Engine.Desktop/XE-Local-AI-Engine.Desktop.csproj", self.source)
+        self.assertEqual(
+            2,
+            self.source.count(
+                '--additional-deps-json "XE-Local-AI-Engine.Desktop/bin/Release/net10.0/'
+                '${{ matrix.rid }}/XE-Local-AI-Engine.Desktop.deps.json"'
+            ),
+        )
+        self.assertEqual(
+            2,
+            self.source.count(
+                '--additional-bundle-input-manifest "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"'
+            ),
+        )
+        self.assertIn('--output "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"', self.source)
+
     def test_windows_payload_does_not_claim_the_dotnet_library_license(self) -> None:
         self.assertNotIn("--dotnet-library-license", self.source)
         self.assertNotIn("DOTNET-LIBRARY-LICENSE.html", self.source)

@@ -25,10 +25,13 @@ public sealed class AppUpdateServiceTests
             LaunchMode.McpOnly,
             port: 41234);
 
-        builder.AddAppUpdate(builder.Configuration, LaunchMode.McpOnly, sanitized);
+        builder.Configuration[DesktopBootstrap.NodeDataDirectoryKey] = Path.GetTempPath();
+        builder.AddAppUpdate(builder.Configuration, LaunchMode.McpOnly, sanitized, shellOwned: true);
 
         var descriptor = builder.Services.Single(static service => service.ServiceType == typeof(AppUpdateHostContext));
         var context = (AppUpdateHostContext)AssertEx.NotNull(descriptor.ImplementationInstance);
+        AssertEx.True(context.IsShellOwned);
+        AssertEx.Equal(Path.GetTempPath(), context.DataDirectory);
         AssertEx.True(context.RestartArgs.SequenceEqual(["--mcp-only", "--port", "41234"], StringComparer.Ordinal));
         AssertEx.False(context.RestartArgs.Any(static value => value.Contains("secret", StringComparison.Ordinal)));
     }
@@ -353,6 +356,167 @@ public sealed class AppUpdateServiceTests
         factory.DidNotReceive().Create();
     }
 
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Apply_WithNativeWindow_RejectsAttachedEngineButAllowsOwnedEngine(bool shellOwned)
+    {
+        using var directory = new TempDirectory("xe-update-lease");
+        using var shell = OpenShellLease(directory.Path);
+        var manager = Substitute.For<IVelopackUpdateManager>();
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(),
+            shellOwned: shellOwned, dataDirectory: directory.Path);
+
+        if (shellOwned)
+        {
+            AssertEx.True(await service.ApplyAsync(CancellationToken.None));
+            await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        }
+        else
+        {
+            var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(CancellationToken.None));
+            AssertEx.Equal("Close the native XE window, then apply this update from your browser.", exception.Message);
+            await manager.DidNotReceive().PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        }
+    }
+
+    [Test]
+    public async Task Apply_StandaloneRetainsLeaseUntilHostDisposesService()
+    {
+        using var directory = new TempDirectory("xe-update-lease");
+        var manager = Substitute.For<IVelopackUpdateManager>();
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
+        using (var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(),
+                   shellOwned: false, dataDirectory: directory.Path))
+        {
+            AssertEx.True(await service.ApplyAsync(CancellationToken.None));
+            AssertShellLeaseHeld(directory.Path);
+            AssertEx.False(await service.ApplyAsync(CancellationToken.None));
+        }
+
+        using var released = OpenShellLease(directory.Path);
+        AssertEx.True(released.CanWrite);
+        await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Apply_ProductionRetentionTransfersLiveLeaseBeyondServiceDisposal()
+    {
+        using var directory = new TempDirectory("xe-update-lease");
+        FileStream? retained = null;
+        var transferCount = 0;
+        var manager = Substitute.For<IVelopackUpdateManager>();
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
+        try
+        {
+            using (var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(),
+                       shellOwned: false, dataDirectory: directory.Path, retainAcceptedLease: lease =>
+                       {
+                           retained = lease;
+                           transferCount++;
+                       }))
+            {
+                AssertEx.True(await service.ApplyAsync(CancellationToken.None));
+                AssertEx.Equal(directory.FilePath(AppUpdateService.DesktopShellLeaseFileName), AssertEx.NotNull(retained).Name);
+            }
+
+            AssertEx.Equal(1, transferCount);
+            AssertEx.True(AssertEx.NotNull(retained).CanWrite);
+            AssertShellLeaseHeld(directory.Path);
+        }
+        finally
+        {
+            if (retained is not null)
+            {
+                await retained.DisposeAsync();
+            }
+        }
+
+        using var released = OpenShellLease(directory.Path);
+        AssertEx.True(released.CanWrite);
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    [Arguments(2)]
+    public async Task Apply_StandaloneReleasesLeaseOnNoUpdateFailureOrCancellation(int outcome)
+    {
+        using var directory = new TempDirectory("xe-update-lease");
+        using var cancellation = new CancellationTokenSource();
+        var manager = Substitute.For<IVelopackUpdateManager>();
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+               .Returns(async _ =>
+               {
+                   AssertShellLeaseHeld(directory.Path);
+                   if (outcome == 1)
+                   {
+                       throw new AppUpdateException("private manager detail");
+                   }
+
+                   if (outcome == 2)
+                   {
+                       await cancellation.CancelAsync();
+                       cancellation.Token.ThrowIfCancellationRequested();
+                   }
+
+                   return false;
+               });
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(),
+            shellOwned: false, dataDirectory: directory.Path);
+
+        if (outcome == 1)
+        {
+            var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(cancellation.Token));
+            AssertEx.Equal("The update could not be applied. Please try again later.", exception.Message);
+        }
+        else if (outcome == 2)
+        {
+            await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.ApplyAsync(cancellation.Token));
+        }
+        else
+        {
+            AssertEx.False(await service.ApplyAsync(cancellation.Token));
+        }
+
+        using var released = OpenShellLease(directory.Path);
+        AssertEx.True(released.CanWrite);
+        await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Apply_StandaloneWithoutDataDirectoryFailsBeforeDownload()
+    {
+        var manager = Substitute.For<IVelopackUpdateManager>();
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(), shellOwned: false);
+        var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(CancellationToken.None));
+        AssertEx.Equal("The update could not verify the desktop lifetime. Restart XE and try again.", exception.Message);
+        await manager.DidNotReceive().PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Apply_WithoutAvailableUpdateDoesNotAcquireShellLease()
+    {
+        using var directory = new TempDirectory("xe-update-lease");
+        var manager = Substitute.For<IVelopackUpdateManager>();
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true,
+            shellOwned: false, dataDirectory: directory.Path);
+        AssertEx.False(await service.ApplyAsync(CancellationToken.None));
+        AssertEx.False(File.Exists(directory.FilePath(AppUpdateService.DesktopShellLeaseFileName)));
+    }
+
+    private static FileStream OpenShellLease(string directory) =>
+        new(Path.Combine(directory, AppUpdateService.DesktopShellLeaseFileName), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+
+    private static void AssertShellLeaseHeld(string directory)
+    {
+        AssertEx.Throws<IOException>(() =>
+        {
+            using var unexpected = OpenShellLease(directory);
+        });
+    }
+
     private static IVelopackUpdateManager ManagerReturning(VelopackCheckResult result)
     {
         var manager = Substitute.For<IVelopackUpdateManager>();
@@ -389,7 +553,10 @@ public sealed class AppUpdateServiceTests
         string repoUrl = "https://github.com/example/public-repo",
         ILogger<AppUpdateService>? logger = null,
         AppUpdateState? state = null,
-        IReadOnlyList<string>? restartArgs = null)
+        IReadOnlyList<string>? restartArgs = null,
+        bool shellOwned = true,
+        string? dataDirectory = null,
+        Action<FileStream>? retainAcceptedLease = null)
     {
         var options = Options.Create(new AppUpdateChannelOptions
         {
@@ -400,8 +567,15 @@ public sealed class AppUpdateServiceTests
         return new AppUpdateService(factory,
             state ?? new AppUpdateState(),
             options,
-            new AppUpdateHostContext { IsLocalMode = isDesktop, RestartArgs = restartArgs ?? ["--desktop"] },
+            new AppUpdateHostContext
+            {
+                IsLocalMode = isDesktop,
+                IsShellOwned = shellOwned,
+                DataDirectory = dataDirectory,
+                RestartArgs = restartArgs ?? ["--desktop"]
+            },
             logger ?? NullLogger<AppUpdateService>.Instance,
-            TimeProvider.System);
+            TimeProvider.System,
+            retainAcceptedLease);
     }
 }

@@ -12,7 +12,11 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
     private readonly AppUpdateHostContext _hostContext;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AppUpdateService> _logger;
+    internal const string DesktopShellLeaseFileName = "desktop-shell.lock";
     private IVelopackUpdateManager? _primedUpdateManager;
+    private FileStream? _standaloneUpdateLease;
+    private readonly Action<FileStream>? _retainAcceptedLease;
+    private bool _applyScheduled;
 
     public AppUpdateService(IVelopackUpdateManagerFactory updateManagerFactory,
         IAppUpdateState state,
@@ -20,7 +24,19 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         AppUpdateHostContext hostContext,
         ILogger<AppUpdateService> logger,
         TimeProvider timeProvider)
+        : this(updateManagerFactory, state, channelOptions, hostContext, logger, timeProvider, retainAcceptedLease: null)
     {
+    }
+
+    internal AppUpdateService(IVelopackUpdateManagerFactory updateManagerFactory,
+        IAppUpdateState state,
+        IOptions<AppUpdateChannelOptions> channelOptions,
+        AppUpdateHostContext hostContext,
+        ILogger<AppUpdateService> logger,
+        TimeProvider timeProvider,
+        Action<FileStream>? retainAcceptedLease)
+    {
+        _retainAcceptedLease = retainAcceptedLease;
         _updateManagerFactory = updateManagerFactory ?? throw new ArgumentNullException(nameof(updateManagerFactory));
         _state = state ?? throw new ArgumentNullException(nameof(state));
         ArgumentNullException.ThrowIfNull(channelOptions);
@@ -43,6 +59,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
 
     public void Dispose()
     {
+        _standaloneUpdateLease?.Dispose();
         _operationGate.Dispose();
     }
 
@@ -127,36 +144,89 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         }
 
         await _operationGate.WaitAsync(ct);
+        FileStream? shellLease = null;
         try
         {
-            if (!_state.Current.UpdateAvailable)
+            if (!_state.Current.UpdateAvailable || _applyScheduled)
             {
                 return false;
             }
 
-            var manager = TakeUpdateManager();
-            var applying = await manager.PrepareUpdateAndRestartAsync(_hostContext.RestartArgs, ct);
-            // Clear the advertised update for both outcomes. On false, the live feed no longer has an applicable update;
-            // on true, this prevents a concurrent/retried request from scheduling a second updater before shutdown.
-            StoreSnapshot(Snapshot(manager.CurrentVersion,
-                isConfigured: true,
-                checkStatus: AppUpdateCheckStatus.Ready));
+#pragma warning disable CA2000 // The async finally disposes this lease unless accepted update ownership transfers to the service or process-exit holder.
+            shellLease = AcquireStandaloneShellLease();
+#pragma warning restore CA2000
+            try
+            {
+                var manager = TakeUpdateManager();
+                var applying = await manager.PrepareUpdateAndRestartAsync(_hostContext.RestartArgs, ct);
+                if (applying)
+                {
+                    _applyScheduled = true;
+                    _standaloneUpdateLease = shellLease;
+                    shellLease = null;
+                    if (_standaloneUpdateLease is { } acceptedLease && _retainAcceptedLease is not null)
+                    {
+                        _retainAcceptedLease(acceptedLease);
+                        _standaloneUpdateLease = null;
+                    }
+                }
 
-            return applying;
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            // Do not attach the exception to the log: downloader errors may include the feed URL or local paths.
-            _logger.LogWarning("Applying the app self-update failed.");
-            throw new AppUpdateException("The update could not be applied. Please try again later.", exception);
+                StoreSnapshot(Snapshot(manager.CurrentVersion,
+                    isConfigured: true,
+                    checkStatus: AppUpdateCheckStatus.Ready));
+                return applying;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning("Applying the app self-update failed.");
+                throw new AppUpdateException("The update could not be applied. Please try again later.", exception);
+            }
         }
         finally
         {
+            if (shellLease is not null)
+            {
+                await shellLease.DisposeAsync();
+            }
+
             _operationGate.Release();
+        }
+    }
+
+    internal static void RetainLeaseUntilProcessExit(FileStream lease)
+    {
+        // Even ProcessExit runs before the process exits; only the OS may release this accepted-update lock.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => GC.KeepAlive(lease);
+    }
+
+    private FileStream? AcquireStandaloneShellLease()
+    {
+        if (_hostContext.IsShellOwned)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(_hostContext.DataDirectory) || !Path.IsPathFullyQualified(_hostContext.DataDirectory))
+        {
+            throw new AppUpdateException("The update could not verify the desktop lifetime. Restart XE and try again.");
+        }
+
+        try
+        {
+            return new FileStream(Path.Combine(_hostContext.DataDirectory, DesktopShellLeaseFileName),
+                FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        }
+        catch (IOException exception) when (exception.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021) or 11)
+        {
+            throw new AppUpdateException("Close the native XE window, then apply this update from your browser.");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            throw new AppUpdateException("The update could not verify the desktop lifetime. Restart XE and try again.", exception);
         }
     }
 

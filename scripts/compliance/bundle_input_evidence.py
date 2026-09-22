@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 SCHEMA_VERSION = 2
@@ -83,3 +85,72 @@ def load_bundle_packages(path: Path, runtime_identifier: str) -> dict[tuple[str,
     for package in packages.values():
         package["inputs"].sort(key=lambda entry: (entry["relativePath"].casefold(), entry["relativePath"]))
     return packages
+
+
+def shipment_evidence_hash(paths: list[Path]) -> str:
+    """Keep the single-input binding; bind multi-executable inventories to every input."""
+    hashes = [hashlib.sha256(path.read_bytes()).hexdigest() for path in paths]
+    return hashes[0] if len(hashes) == 1 else hashlib.sha256(json.dumps(hashes).encode()).hexdigest()
+
+
+def load_publish_evidence(
+    documents: Sequence[object], paths: list[Path], runtime_identifier: str
+) -> tuple[dict[tuple[str, str], dict], dict[tuple[str, str], dict]]:
+    """Validate each executable's evidence before combining its shipped package inputs."""
+    if not documents or len(documents) != len(paths):
+        raise ValueError("each deps.json requires its own bundle-input evidence manifest")
+    libraries: dict[tuple[str, str], dict] = {}
+    packages: dict[tuple[str, str], dict] = {}
+    versions: dict[str, str] = {}
+    outputs: dict[str, tuple[tuple[str, str], str]] = {}
+    for document, path in zip(documents, paths, strict=True):
+        if not isinstance(document, dict):
+            raise ValueError("deps.json must contain a JSON object")
+        targets = document.get("targets")
+        entries = document.get("libraries")
+        if not isinstance(targets, dict) or not isinstance(entries, dict):
+            raise ValueError("deps.json has no valid targets/libraries objects")
+        matching = [key for key in targets if key.endswith(f"/{runtime_identifier}")]
+        if len(matching) != 1 or not isinstance(targets[matching[0]], dict):
+            raise ValueError(f"expected one valid {runtime_identifier} target in deps.json")
+        current: dict[tuple[str, str], dict] = {}
+        for identity, library in entries.items():
+            if not isinstance(identity, str) or not isinstance(library, dict) or library.get("type") == "project":
+                continue
+            name, separator, version = identity.rpartition("/")
+            if not separator or not name or not version:
+                raise ValueError(f"invalid deps.json package identity: {identity}")
+            key = (name.casefold(), version)
+            if key in current:
+                raise ValueError(f"duplicate deps.json package identity {identity}")
+            current[key] = {"name": name, **library}
+        for key, evidence in load_bundle_packages(path, runtime_identifier).items():
+            runtime_pack = key[0].startswith(
+                ("runtimepack.microsoft.", "microsoft.netcore.app.runtime.", "microsoft.aspnetcore.app.runtime.")
+            )
+            if key not in current and not runtime_pack:
+                raise ValueError(
+                    f"bundle input package {evidence['name']}/{key[1]} is absent from RID deps.json libraries"
+                )
+            if key in current:
+                if key in libraries and libraries[key] != current[key]:
+                    raise ValueError(f"conflicting deps.json package evidence for {evidence['name']}/{key[1]}")
+                libraries[key] = current[key]
+            if key[0] in versions and versions[key[0]] != key[1]:
+                raise ValueError(f"conflicting shipped package versions for {evidence['name']}")
+            versions[key[0]] = key[1]
+            combined = packages.setdefault(key, {"name": evidence["name"], "inputs": []})
+            if combined["name"] != evidence["name"]:
+                raise ValueError(f"conflicting shipped package casing for {evidence['name']}")
+            for entry in evidence["inputs"]:
+                relative = entry["relativePath"].replace("\\", "/")
+                output = relative.casefold() if runtime_identifier == "win-x64" else relative
+                identity = (key, entry["sha256"])
+                if output in outputs and outputs[output] != identity:
+                    raise ValueError(f"conflicting publish input evidence for {relative}")
+                outputs[output] = identity
+                if entry not in combined["inputs"]:
+                    combined["inputs"].append(entry)
+    for package in packages.values():
+        package["inputs"].sort(key=lambda entry: (entry["relativePath"].casefold(), entry["relativePath"]))
+    return libraries, packages

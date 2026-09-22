@@ -31,7 +31,7 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
     private readonly long _requiredFreeDiskBytes;
 
     public WhisperCppSourceBuildPrerequisiteProbe()
-        : this(DefaultCacheRoot(), RequiredFreeDiskBytes)
+        : this(RuntimeCacheDirectory.Resolve(), RequiredFreeDiskBytes)
     {
     }
 
@@ -271,10 +271,5 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
         {
             // Best-effort bounded probe cleanup.
         }
-    }
-
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XE-Local-AI-Engine");
     }
 }

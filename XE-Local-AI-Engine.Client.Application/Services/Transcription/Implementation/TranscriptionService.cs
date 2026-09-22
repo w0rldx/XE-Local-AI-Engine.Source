@@ -155,7 +155,7 @@ public sealed class TranscriptionService : ITranscriptionService
     /// </remarks>
     public async Task<bool> CancelAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var wasLive = _live.IsLive(sessionId);
+        var wasLive = _live.IsRegistered(sessionId);
         await _live.EndAsync(sessionId, LiveEndReason.Cancelled, cancellationToken);
 
         if (!_inFlight.TryGetValue(sessionId, out var source))

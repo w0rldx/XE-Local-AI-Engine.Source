@@ -215,8 +215,7 @@ public sealed class BenchmarkKldBaseCache
     ///     serves every node profile on the box and the existing uninstaller sweep already reaches it.
     /// </summary>
     private static string DefaultRoot() =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine",
+        Path.Combine(RuntimeCacheDirectory.Resolve(),
             "benchmarks",
             "kld-base");
 }

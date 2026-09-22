@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -31,7 +32,7 @@ public sealed class WhisperInstalledRuntimeStore : IWhisperInstalledRuntimeStore
     /// <summary>Creates the store under <paramref name="cacheRoot" />, defaulting to the app's local-data directory.</summary>
     public WhisperInstalledRuntimeStore(string? cacheRoot = null)
     {
-        var root = string.IsNullOrWhiteSpace(cacheRoot) ? DefaultCacheRoot() : cacheRoot;
+        var root = string.IsNullOrWhiteSpace(cacheRoot) ? RuntimeCacheDirectory.Resolve() : cacheRoot;
         var stateRoot = Path.Combine(root, "whisper.cpp");
         _statePath = Path.Combine(stateRoot, StateFileName);
         _desiredPath = Path.Combine(stateRoot, DesiredFileName);
@@ -321,11 +322,6 @@ public sealed class WhisperInstalledRuntimeStore : IWhisperInstalledRuntimeStore
         {
             // Best-effort temp cleanup; never mask the real failure.
         }
-    }
-
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XE-Local-AI-Engine");
     }
 
     /// <summary>The redundant selection record, written beside the primary so a corrupt primary still fails closed.</summary>

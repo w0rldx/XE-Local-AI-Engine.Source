@@ -108,9 +108,39 @@ namespace XE_Local_AI_Engine.Client
         public static async Task<ProgramStartResult> CreateAppAsync(string[] args, ProgramAppCustomization? customization = null)
         {
             ArgumentNullException.ThrowIfNull(args);
+            var parentPipeValue = DesktopParentLifetime.TakeEnvironmentValue();
             if (!DesktopLaunch.HasOneShotCommand(args))
             {
-                return await CreateAppCoreAsync(args, customization, commandContext: null);
+                var launchMode = customization is null
+                    ? DesktopLaunch.ResolveLaunchMode(args, VelopackInstall.IsManaged())
+                    : LaunchMode.Headless;
+                var pipeName = DesktopParentLifetime.ResolvePipeName(launchMode, parentPipeValue);
+                DesktopParentLifetime? parentLifetime = null;
+                try
+                {
+                    if (pipeName is not null)
+                    {
+#pragma warning disable CA2000 // Failure/null-result disposal is in finally; successful bootstrap transfers ownership to the resolved DI singleton.
+                        parentLifetime = new DesktopParentLifetime(pipeName, TimeProvider.System, Environment.Exit);
+#pragma warning restore CA2000
+                        await parentLifetime.StartAsync(CancellationToken.None);
+                    }
+
+                    var result = await CreateAppCoreAsync(args, customization, commandContext: null, parentLifetime);
+                    if (result.App is not null)
+                    {
+                        parentLifetime = null;
+                    }
+
+                    return result;
+                }
+                finally
+                {
+                    if (parentLifetime is not null)
+                    {
+                        await parentLifetime.DisposeAsync();
+                    }
+                }
             }
 
             var standardError = customization?.StandardError ?? Console.Error;
@@ -134,7 +164,8 @@ namespace XE_Local_AI_Engine.Client
 
         private static async Task<ProgramStartResult> CreateAppCoreAsync(string[] args,
             ProgramAppCustomization? customization,
-            OneShotCommandContext? commandContext)
+            OneShotCommandContext? commandContext,
+            DesktopParentLifetime? parentLifetime = null)
         {
             var standardOutput = customization?.StandardOutput ?? Console.Out;
             var standardError = customization?.StandardError ?? Console.Error;
@@ -199,7 +230,7 @@ namespace XE_Local_AI_Engine.Client
                 : LaunchMode.Headless;
             var isLocalMode = launchMode.IsLocalMode();
             var needsLocalData = isLocalMode || setupRequested || mcpKeyRequested;
-            var stableRestartArgs = DesktopLaunch.BuildRestartArguments(args, launchMode, requestedPort);
+            var stableRestartArgs = DesktopLaunch.BuildRestartArguments(args, launchMode, requestedPort, shellOwned: parentLifetime is not null);
             var hostArgs = args;
             if (setupRequested || mcpKeyRequested)
             {
@@ -319,13 +350,19 @@ namespace XE_Local_AI_Engine.Client
             // Published BEFORE AddServices, because the bind address resolves during host construction and the services that tell a container about the bridge are built after
             // this line. Registered even when the bridge did not open: a missing registration would be a startup failure rather than the honest "this node has no bridge".
             builder.Services.AddSingleton(new ContainerBridgeEndpointSource(bridgeEndpoint));
+            if (parentLifetime is not null)
+            {
+                builder.Services.AddSingleton<DesktopParentLifetime>(_ => parentLifetime);
+            }
+
             builder.AddServices(builder.Configuration);
 
             // App self-update (Velopack + anonymous public GitHub releases), desktop-mode only: off the flag this registers nothing and the desktop-only endpoints are
             // filtered out of FastEndpoints above. The process args are re-passed on relaunch, so the new version comes back up in desktop mode on the persisted port.
             builder.AddAppUpdate(builder.Configuration,
                 launchMode,
-                stableRestartArgs);
+                stableRestartArgs,
+                shellOwned: parentLifetime is not null);
 
             // W3C trace correlation that works with Aspire/OpenTelemetry OFF, the desktop/RC default: without it Activity.Current is null in the request pipeline and the
             // emitted trace id regresses to the Kestrel connection id. Process-global, set once before Build(). See docs/wiki/11-hosting-and-deployment.md ("The node host pipeline (`Program.cs`)").
@@ -344,6 +381,10 @@ namespace XE_Local_AI_Engine.Client
             customization?.ConfigureBuilder?.Invoke(builder);
 
             var app = builder.Build();
+            if (parentLifetime is not null)
+            {
+                app.Services.GetRequiredService<DesktopParentLifetime>().Bind(app.Lifetime);
+            }
 
             // Transfer the single-instance lease to the host lifetime: it lives until shutdown and releases the exclusive lock on ApplicationStopped. The OS releases it on a
             // crash too, so this is graceful cleanup rather than a correctness requirement. Null off the desktop flag, where no lease is acquired.
@@ -481,6 +522,7 @@ namespace XE_Local_AI_Engine.Client
 
             app.UseAntiforgery();
 
+            app.UseMiddleware<NativeDesktopDocumentPolicy>();
             app.UseStaticFiles();
             // AllowAnonymous is load-bearing, not decorative: under the FallbackPolicy an endpoint with no auth
             // metadata is challenged, and Aspire's WithHttpHealthCheck poll carries no token.

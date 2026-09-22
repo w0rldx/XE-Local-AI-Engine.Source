@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>
 ///     Where the training runtime lives on disk, and where the pinned Python scripts are found.
 /// </summary>
@@ -23,9 +25,7 @@ internal static class TrainingRuntimeLayout
 
     public static string DefaultCacheRoot()
     {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine",
-            "training-runtime");
+        return Path.Combine(RuntimeCacheDirectory.Resolve(), "training-runtime");
     }
 
     public static string VenvRoot(string cacheRoot)

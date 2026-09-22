@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Desktop;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
@@ -84,6 +85,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly HostAssembly = typeof(LocalApiRoutes).Assembly;
     private static readonly Assembly ServiceDefaultsAssembly = typeof(Extensions).Assembly;
     private static readonly Assembly WindowsLauncherAssembly = typeof(WindowsLauncherApplication).Assembly;
+    private static readonly Assembly DesktopAssembly = DesktopAssemblyMarker.Assembly;
 
     private static readonly IReadOnlyDictionary<string, string[]> ApprovedProjectReferences =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
@@ -134,6 +136,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Client.Application"
             ],
             ["XE-Local-AI-Engine.WindowsLauncher"] = [],
+            ["XE-Local-AI-Engine.Desktop"] = [],
             ["XE-Local-AI-Engine.AppHost"] = ["XE-Local-AI-Engine.Client"],
             ["XE-Local-AI-Engine.ServiceDefaults"] = ["XE-Local-AI-Engine.AI.Contracts"],
             ["XE-Local-AI-Engine.Providers.Abstractions"] = [],
@@ -187,6 +190,7 @@ public sealed class LayerDependencyTests
                 "Scrutor"
             ],
             ["XE-Local-AI-Engine.AI.Contracts"] = [],
+            ["XE-Local-AI-Engine.Desktop"] = ["Avalonia.Desktop", "Avalonia.Controls.WebView", "Avalonia.Themes.Fluent", "Velopack"],
             ["XE-Local-AI-Engine.AppHost"] =
             [
                 "Aspire.Hosting.AppHost",
@@ -386,6 +390,7 @@ public sealed class LayerDependencyTests
             ["XE-Local-AI-Engine.Testing.FakeDocker/XE-Local-AI-Engine.Testing.FakeDocker.csproj"] = [],
             ["XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj"] =
             [
+                "XE-Local-AI-Engine.Desktop",
                 "XE-Local-AI-Engine.Client",
                 "XE-Local-AI-Engine.Client.Application",
                 "XE-Local-AI-Engine.Client.Testing",
@@ -418,6 +423,7 @@ public sealed class LayerDependencyTests
             [PersistenceAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [ServiceDefaultsAssembly] = ["XE-Local-AI-Engine.AI.Contracts"],
             [WindowsLauncherAssembly] = [],
+            [DesktopAssembly] = [],
             [AbstractionsAssembly] = [],
             [CapabilitiesAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [CodexOAuthAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],

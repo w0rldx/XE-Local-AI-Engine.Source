@@ -296,6 +296,11 @@ calls into it per lane.
   frame, so a silent native capture is not reaped (`NeverAttached`); the pending-audio budget —
   two windows' worth, capped at 640 KB — exceeded (`Overloaded`); and a stalled lane (`Failed`). Only `Completed`
   flushes the retained tail; every other reason aborts in-flight inference instead, so stopping stays prompt.
+- Graceful stopping gives all lanes **one shared 30-second drain-and-flush budget**. Lanes finalize independently,
+  but each lane drains before flushing. Producer shutdown and terminal persistence are outside this budget.
+  Cancellation can interrupt a pending graceful stop until the commit barrier freezes its terminal outcome;
+  repeated end requests join the same task. A finalizing session remains registered for REST cancellation even
+  though it no longer admits frames.
 - Persisted status mapping: `Completed` → `Completed`; `Cancelled`, `Abandoned`, `NeverAttached` → `Cancelled`;
   `Overloaded`, `Failed` → `Failed` with error codes `live-overloaded` / `live-failed`. A graceful end whose final
   flush throws, or whose lane did not drain inside its bound, finalizes as `Failed` with `live-flush-failed` rather
@@ -379,7 +384,7 @@ confirmation dialog or an async guard breaks system audio silently, and the call
 `useLiveCapture.test.ts` are the only thing that catches it.
 
 Any failure on that path disposes everything: the display promise is settled first so its stream is registered, then
-every acquired source is stopped and `EndSession` is invoked if the session had already been opened. A cancelled
+every acquired source is stopped and REST cancellation is requested if the session had already been opened. A cancelled
 picker never leaves a hot microphone, and a refused start never leaves a screen share running.
 
 Leaving the page during a start disposes everything too, and by a different route. The unmount teardown stops what the
@@ -701,11 +706,14 @@ invoke `EndSession` on. A throwing invoke is treated the same way, but for a dif
 tell whether the node processed the call before the transport dropped, so it assumes the worst. In both cases
 `useLiveCapture` falls back to the REST cancel route, `POST transcription/sessions/{sessionId}/cancel`, which reaches
 the registry's single `EndAsync` path with `LiveEndReason.Cancelled` and stops the producer at once. Sending it after
-an `EndSession` that did land is **redundant and harmless**: `BeginEnd` is idempotent under the session gate — a
-session that already has an end task returns it untouched — so the first end wins and keeps **its own** reason. A
-session genuinely completed over the hub therefore stays `Completed`; the late cancel changes nothing. The fallback
-covers **every** stop path, including `abandon(true)` — the unmount that lands while `live/start` is still in
-flight — and it applies to every request kind, not only process capture.
+an `EndSession` that did land can **interrupt its pending graceful finalization**: the first non-graceful reason
+replaces `Completed` until the commit barrier freezes the outcome. A session whose terminal outcome is already
+frozen stays unchanged. Normal Stop uses the hub first; capture failures, explicit Cancel and unmount cleanup use
+REST cancellation directly. This applies to every request kind, not only process capture.
+
+Normal Stop releases capture sources immediately and displays **Finalizing…** while the node drains and flushes.
+Cancel remains available during that wait. Capture errors are shown before cancellation finishes and remain visible
+after the persisted session becomes terminal.
 
 **A stop that neither transport acknowledged is not dropped.** It is held pending, surfaced to the operator as
 `stop-failed` rather than a silent return to idle, and redelivered the moment the hub reconnects. That redelivery

@@ -2,9 +2,11 @@
 
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { usePendingComposerTextStore } from "@/core/ui/stores/PendingComposerTextStore";
+import type { LiveCaptureErrorCode } from "@/features/transcription/capture/useLiveCapture";
 import type { LiveTranscriptView } from "@/features/transcription/hooks/useTranscriptionHub";
 import { TranscriptionSessionPage } from "@/features/transcription/pages/TranscriptionSessionPage";
 import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
@@ -45,19 +47,29 @@ vi.mock("@/features/transcription/hooks/useTranscriptionHub", async () => {
 const liveCapture = vi.hoisted(() => ({
 	start: vi.fn(() => Promise.resolve()),
 	stop: vi.fn(() => Promise.resolve()),
+	cancel: vi.fn(() => Promise.resolve()),
+	setError: vi.fn() as (error: LiveCaptureErrorCode | null) => void,
 }));
 
-vi.mock("@/features/transcription/capture/useLiveCapture", () => ({
-	useLiveCapture: () => ({
-		state: "idle",
-		error: null,
-		replayStalled: false,
-		connected: true,
-		subscribeFailed: null,
-		start: liveCapture.start,
-		stop: liveCapture.stop,
-	}),
-}));
+vi.mock("@/features/transcription/capture/useLiveCapture", async () => {
+	const { useState } = await import("react");
+	return {
+		useLiveCapture: () => {
+			const [error, setError] = useState<LiveCaptureErrorCode | null>(null);
+			liveCapture.setError = setError;
+			return {
+				state: "idle",
+				error,
+				replayStalled: false,
+				connected: true,
+				subscribeFailed: null,
+				start: liveCapture.start,
+				stop: liveCapture.stop,
+				cancel: liveCapture.cancel,
+			};
+		},
+	};
+});
 
 // The app router is built from routeTree.gen.ts; a unit test only needs the navigate CALL, not a real route match.
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
@@ -349,6 +361,52 @@ describe("TranscriptionSessionPage", () => {
 		expect(await screen.findByTestId("transcript-segment-list")).toBeDefined();
 		expect(reads).toBeGreaterThan(1);
 		expect(screen.queryByTestId("transcription-live-panel")).toBeNull();
+	});
+
+	it.each(["before", "after"])("keeps a permission error arriving %s completion visible", async (timing) => {
+		let completed = false;
+		server.use(
+			http.get(localApiPath(`transcription/sessions/${sessionId}`), () =>
+				HttpResponse.json(detail({ status: completed ? "Completed" : "Transcribing", sourceKind: "Microphone" }, [])),
+			),
+		);
+		const nextSessionId = "99999999-0000-4000-8000-000000000009";
+		function SessionNavigation() {
+			const [currentId, setCurrentId] = useState(sessionId);
+			return (
+				<>
+					<button type="button" onClick={() => setCurrentId(nextSessionId)}>
+						Next session
+					</button>
+					<TranscriptionSessionPage sessionId={currentId} />
+				</>
+			);
+		}
+		const { queryClient } = renderWithProviders(<SessionNavigation />);
+		await screen.findByTestId("transcription-live-panel");
+		if (timing === "before") {
+			act(() => liveCapture.setError("permission-denied"));
+		}
+		completed = true;
+		pushLiveTranscript(queryClient, liveView("Completed"));
+		await screen.findByTestId("transcription-session-empty");
+		if (timing === "after") {
+			act(() => liveCapture.setError("permission-denied"));
+		}
+		expect((await screen.findByTestId("transcription-capture-error")).textContent).toBe(
+			"Access was refused. Allow the microphone or screen share and start again.",
+		);
+
+		server.use(
+			jsonRoute(
+				"get",
+				`transcription/sessions/${nextSessionId}`,
+				detail({ id: nextSessionId, title: "Next session", status: "Completed", sourceKind: "Microphone" }, []),
+			),
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Next session" }));
+		await screen.findByRole("heading", { name: "Next session" });
+		expect(screen.queryByTestId("transcription-capture-error")).toBeNull();
 	});
 
 	it("offers no send-to-chat control while there is nothing to send", async () => {

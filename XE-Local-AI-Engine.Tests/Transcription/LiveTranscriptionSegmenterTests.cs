@@ -312,6 +312,57 @@ public sealed class LiveTranscriptionSegmenterTests
     }
 
     [Test]
+    public async Task PushWithAnAlreadyCancelledToken_DoesNotAcceptAudio()
+    {
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(
+            async () => await segmenter.PushAsync(LivePcm.Range(0, 500), cancellation.Token),
+            "Even a frame shorter than the inference tick must observe cancellation before accepting audio.");
+
+        AssertEx.Equal(0L, segmenter.AudioEndMs);
+        AssertEx.Equal(0L, segmenter.CommittedEndMs);
+        AssertEx.Equal(0, transcriber.CallCount);
+    }
+
+    [Test]
+    public async Task CancelledSubmission_FollowedByQueuedFrames_DoesNotBecomeAStall()
+    {
+        var transcriber = new GatedWhisperTranscriber(ContinuousSpeech);
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
+        using var cancellation = new CancellationTokenSource();
+
+        var submission = segmenter.PushAsync(LivePcm.Range(0, 1_000), cancellation.Token).AsTask();
+        try
+        {
+            await transcriber.Entered.WaitAsync(TestBudgets.Contended);
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+        }
+
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(async () => await submission,
+            "Cancellation interrupts the in-flight submission at its current boundary.");
+
+        // The registry drains previously admitted frames serially with the same cancelled lane token.
+        for (var frame = 0; frame < 4; frame++)
+        {
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(
+                async () => await segmenter.PushAsync(LivePcm.Range(1_000, 1_500), cancellation.Token),
+                "Cancelled queued frames must not increment the unchanged-boundary stall counter.");
+            AssertEx.Equal(1_000L, segmenter.AudioEndMs, "No queued audio is accepted after cancellation.");
+            AssertEx.Equal(0L, segmenter.CommittedEndMs, "The cancelled submission committed no audio.");
+        }
+
+        AssertEx.Equal(1, transcriber.CallCount);
+        AssertEx.False(transcriber.Released, "The inference gate was cancelled, not released to produce a successful result.");
+    }
+
+    [Test]
     public async Task WhenASubmissionMakesNoProgressTwice_ThrowsLiveSegmenterStalled()
     {
         // A transcriber that answers every window with a zero-length segment at the very start of it: each response
