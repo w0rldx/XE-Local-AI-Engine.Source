@@ -52,9 +52,9 @@ internal static class AddNodeGraphWorkflowsExtensions
         // The five kinds that run inside the tick. A singleton because it holds nothing per run — only the output cap.
         builder.Services.AddSingleton<GraphWorkflowInlineExecutor>();
 
-        // The Agent lane. Registered as one of the executor SET the dispatcher asks which kind it owns, so adding a
-        // lane is a registration and nothing else: the tick's dispatch switch has no per-kind arm to grow.
-        builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowAgentExecutor>();
+        // The shared model-invocation lane. Agent and LLM call paths share the node-wide invocation queue and lifecycle,
+        // while their runtime-package construction stays separate inside it.
+        builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowInvocationExecutor>();
 
         // The Pause lane. A lane that drives nothing: it parks the row on a person and the answer arrives through
         // DecideAsync, which is precisely what an inline kind never does.

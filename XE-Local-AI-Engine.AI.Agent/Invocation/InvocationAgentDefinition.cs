@@ -14,6 +14,9 @@ public sealed class InvocationAgentDefinition
     /// <summary>System instructions prepended to <see cref="ConversationContext" />.</summary>
     public required string Instructions { get; init; }
 
+    /// <summary>Whether the turn intentionally omits the system seed message.</summary>
+    public bool OmitSystemPrompt { get; init; }
+
     /// <summary>Offer-list tools projected from the runtime package before executable registry resolution.</summary>
     public required IReadOnlyList<AITool> Tools { get; init; }
 

@@ -55,6 +55,70 @@ public sealed class RuntimeChatClientTests
         AssertEx.Equal(expected: 0, localClient.CallCount);
     }
 
+    [Test]
+    public async Task GetResponse_WhenNodeManagedLlamaRequired_BypassesActiveCloudSelection()
+    {
+        using var localClient = new StubChatClient("local");
+        using var cloudClient = new StubChatClient("cloud");
+        var selector = new ToggleableCloudFactory(cloudClient) { CloudActive = true };
+        using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer(), new FakeModelTrustResolver());
+        using var scope = NodeManagedLlamaRoutingScope.Begin("gguf-model");
+
+        await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], new ChatOptions { ModelId = "gguf-model" });
+
+        AssertEx.Equal(expected: 1, localClient.CallCount);
+        AssertEx.Equal(expected: 0, cloudClient.CallCount);
+    }
+
+    [Test]
+    public void GetService_WhenNodeManagedLlamaRequired_UsesLocalMetadataWithoutARequestModel()
+    {
+        using var localClient = new StubChatClient("local");
+        using var cloudClient = new StubChatClient("cloud");
+        var selector = new ToggleableCloudFactory(cloudClient) { CloudActive = true };
+        using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer(), new FakeModelTrustResolver());
+        using var scope = NodeManagedLlamaRoutingScope.Begin("gguf-model");
+
+        var metadata = runtime.GetService(typeof(StubChatClient));
+
+        AssertEx.True(ReferenceEquals(localClient, metadata));
+        AssertEx.Equal(expected: 0, localClient.CallCount);
+        AssertEx.Equal(expected: 0, cloudClient.CallCount);
+    }
+
+    [Test]
+    [Arguments(false, null)]
+    [Arguments(false, "different-model")]
+    [Arguments(true, null)]
+    [Arguments(true, "different-model")]
+    public async Task Send_WhenNodeManagedLlamaRequired_RefusesAbsentOrDifferentModel(bool streaming, string? modelId)
+    {
+        using var localClient = new StubChatClient("local");
+        using var cloudClient = new StubChatClient("cloud");
+        var selector = new ToggleableCloudFactory(cloudClient) { CloudActive = true };
+        using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer(), new FakeModelTrustResolver());
+        using var scope = NodeManagedLlamaRoutingScope.Begin("gguf-model");
+        var options = new ChatOptions { ModelId = modelId };
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            if (streaming)
+            {
+                await foreach (var _ in runtime.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")], options))
+                {
+                    AssertEx.True(false, "A mismatched model must be refused before streaming starts.");
+                }
+            }
+            else
+            {
+                await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options);
+            }
+        });
+
+        AssertEx.Equal(expected: 0, localClient.CallCount);
+        AssertEx.Equal(expected: 0, cloudClient.CallCount);
+    }
+
     /// <summary>A selector whose cloud-vs-local decision the test flips between sends.</summary>
     private sealed class ToggleableCloudFactory : IActiveCloudChatClientFactory
     {

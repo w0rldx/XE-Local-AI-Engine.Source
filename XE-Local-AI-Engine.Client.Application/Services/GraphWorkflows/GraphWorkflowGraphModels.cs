@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>Where the editor drew a node. Authoring metadata the runtime never reads.</summary>
@@ -33,6 +34,23 @@ internal sealed record GraphWorkflowAgentConfig(
     string? ReasoningEffort,
     JsonElement? ResponseJsonSchema,
     bool IncludeUpstreamOutputs) : GraphWorkflowNodeConfig;
+
+internal sealed record GraphWorkflowLlmCallConfig : GraphWorkflowNodeConfig
+{
+    public required string? Model { get; init; }
+
+    public required string? SystemPrompt { get; init; }
+
+    public required string Prompt { get; init; }
+
+    public required IReadOnlyDictionary<string, string> InputBindings { get; init; }
+
+    public required string? ReasoningEffort { get; init; }
+
+    public required JsonElement? ResponseJsonSchema { get; init; }
+
+    public required SamplingOptions? SamplingOptions { get; init; }
+}
 
 internal sealed record GraphWorkflowToolConfig(string ToolName, JsonElement? Arguments, IReadOnlyDictionary<string, string> ArgumentBindings) : GraphWorkflowNodeConfig;
 

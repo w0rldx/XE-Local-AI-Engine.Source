@@ -27,7 +27,7 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
 
         var errors = new List<string>();
 
-        ValidateSystemPrompt(package.ResolvedSystemPrompt, errors);
+        ValidateSystemPrompt(package.ResolvedSystemPrompt, package.OmitSystemPrompt, errors);
         ValidateModelProfile(package.ModelProfile, errors);
         ValidateReasoningEffort(package.ReasoningEffort, errors);
         ValidateConversationContext(package.ConversationContext, enforceMessageSizeCap, errors);
@@ -38,8 +38,18 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
         return RuntimePackageValidationResult.FromErrors(errors);
     }
 
-    private void ValidateSystemPrompt(string systemPrompt, List<string> errors)
+    private void ValidateSystemPrompt(string systemPrompt, bool omitSystemPrompt, List<string> errors)
     {
+        if (omitSystemPrompt)
+        {
+            if (systemPrompt is null || !string.IsNullOrWhiteSpace(systemPrompt))
+            {
+                errors.Add("Invalid system prompt format");
+            }
+
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(systemPrompt))
         {
             errors.Add("Invalid system prompt format");

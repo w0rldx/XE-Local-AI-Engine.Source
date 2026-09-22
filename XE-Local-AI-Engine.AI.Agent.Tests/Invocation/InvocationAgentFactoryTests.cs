@@ -1166,6 +1166,33 @@ public sealed class InvocationAgentFactoryTests
         AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", chatClientAgent);
     }
 
+    [Test]
+    public async Task RunStreamingAsync_WithExplicitlyOmittedSystemPrompt_SendsOnlyTheUserPromptInOneProviderCall()
+    {
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = string.Empty,
+            OmitSystemPrompt = true,
+            Tools = [],
+            ConversationContext = [new ChatMessage(ChatRole.User, "Return the graph node output.")]
+        };
+
+        using var chatClient = new CapturingChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+        await DriveAsync(context.Agent, context);
+
+        var messages = AssertEx.NotNull(chatClient.CapturedMessages);
+        AssertEx.Equal(expected: 1, chatClient.CallCount, "An empty tool offer must not trigger a relevance-selection round.");
+        AssertEx.Equal(expected: 1, messages.Count);
+        AssertEx.Equal(ChatRole.User, messages[0].Role);
+        AssertEx.Equal("Return the graph node output.", messages[0].Text);
+        AssertEx.Empty(chatClient.CapturedOptions?.Tools ?? []);
+        AssertEx.True(string.IsNullOrEmpty(chatClient.CapturedOptions?.Instructions));
+    }
+
     // MAAI001: the skills definition drives the AgentSkillsProvider options ctor inside the factory; the wire assertion
     // below is provider-boundary only, so this test does not reference the experimental types directly.
     [Test]

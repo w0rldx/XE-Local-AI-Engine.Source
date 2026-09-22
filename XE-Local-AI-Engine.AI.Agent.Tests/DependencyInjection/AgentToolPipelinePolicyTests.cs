@@ -294,6 +294,34 @@ public sealed class AgentToolPipelinePolicyTests
     [Test]
     [Arguments(false)]
     [Arguments(true)]
+    public async Task EmptyToolOffer_UnsolicitedFunctionCallReturnsWithoutFollowup(bool streaming)
+    {
+        using var inner = new ScriptedChatClient((call, _, _) => FunctionCall("invented_tool", call));
+        using var provider = BuildProvider(inner);
+        var client = provider.GetRequiredService<IChatClient>();
+        ProviderCallEfficiencySnapshot snapshot;
+        ChatResponse response;
+
+        using (ProviderCallBudget.BeginScope(BudgetOptions()))
+        {
+            response = await SendAsync(client, Options(), streaming);
+            snapshot = ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
+        }
+
+        AssertEx.Equal(expected: 1, inner.CallCount, "An empty tool offer must not start a repair or result round.");
+        AssertEx.Equal(expected: 1, snapshot.ProviderCalls);
+        AssertEx.True(response.Messages
+                              .SelectMany(static message => message.Contents)
+                              .OfType<FunctionCallContent>()
+                              .Any(static call => call.Name == "invented_tool"));
+        AssertEx.Equal(expected: 1, inner.ReceivedMessages.Single().Count);
+        AssertEx.Equal(ChatRole.User, inner.ReceivedMessages.Single()[0].Role);
+        AssertEx.Empty(inner.ReceivedToolNames.Single());
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
     public async Task ListTools_RevealsThenInvokesHiddenAuthorizedTool(bool streaming)
     {
         const string HiddenToolName = "hidden_authorized_tool";

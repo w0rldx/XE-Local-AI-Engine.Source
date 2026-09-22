@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 ///     <b>Singleton.</b> The lane and its slot count are properties of the node and outlive both a tick and a DI
 ///     scope; the store it writes through is the scoped one the tick hands it, and the invocation service is a
 ///     singleton in its own right, so this lane needs no scope of its own. Its shape is
-///     <see cref="GraphWorkflowAgentExecutor" />'s to the letter, because a second shape is how two lanes come to
+///     <see cref="GraphWorkflowInvocationExecutor" />'s to the letter, because a second shape is how two lanes come to
 ///     disagree about whether a row is still being driven. What it queues for, what bounds the fan-out and how an outcome becomes a terminal: docs/wiki/21-graph-workflows.md ("Tool").
 /// </remarks>
 internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IAsyncDisposable

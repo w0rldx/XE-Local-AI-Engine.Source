@@ -216,7 +216,7 @@ internal static class GraphWorkflowDocuments
     }
 
     /// <summary>Walks a dot path one property name at a time. Anything that is not a dot path resolves to nothing.</summary>
-    private static JsonElement? Resolve(JsonElement? document, string path)
+    internal static JsonElement? Resolve(JsonElement? document, string path)
     {
         if (document is not { } current || !GraphWorkflowTokens.IsDotPath(path))
         {

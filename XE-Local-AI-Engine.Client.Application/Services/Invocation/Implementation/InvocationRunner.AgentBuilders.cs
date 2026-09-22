@@ -288,6 +288,7 @@ public sealed partial class InvocationRunner
         {
             ModelId = resolvedModel,
             Instructions = package.ResolvedSystemPrompt,
+            OmitSystemPrompt = package.OmitSystemPrompt,
             Tools = BuildInvocationTools(package),
             ConversationContext = messages,
             ReasoningEffort = package.ReasoningEffort,
@@ -320,8 +321,8 @@ public sealed partial class InvocationRunner
         StreamTransport transport,
         ContextBudgetNoticeGate gate)
     {
-        // The system prompt is prepended AFTER this history and tool schemas are never in the message list, so both
-        // go to the budgeter as fixed overhead — mirroring the inner budgeter, so the hard stop measures a real round.
+        // The system prompt (blank when omitted) and tool schemas sit outside this history. Count both as fixed
+        // overhead, matching the inner budgeter so the hard stop measures the actual request.
         var result = _contextBudgeter.Budget(messages,
             turnPolicy.ContextCapacityTokens,
             turnPolicy.ReservedOutputTokens,

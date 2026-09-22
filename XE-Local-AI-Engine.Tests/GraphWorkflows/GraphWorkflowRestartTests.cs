@@ -107,6 +107,20 @@ public sealed class GraphWorkflowRestartTests
             message: "the collapse and the verdict that repairs it are both on the log, in that order.");
     }
 
+    [Test]
+    [NotInParallel(RecoveryKey)]
+    public async Task AnInterruptedRunningLlmCall_IsFailedInterruptedRatherThanResumed()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await RunningAgentNodeAsync(harness, LlmCallGraph);
+
+        await RestartAsync(harness);
+
+        var failed = await harness.ReadNodeRunAsync(runId, "analyze");
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, failed.Status);
+        AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, failed.FailureClass);
+    }
+
     /// <summary>
     ///     And the other half of that ruling: the interrupted verdict is re-attempted by the dispatcher's retry stage
     ///     rather than by a second mechanism inside recovery. A work node gets three attempts by default, so the first
@@ -337,6 +351,15 @@ public sealed class GraphWorkflowRestartTests
                 Enabled = enabled
             }),
             NullLogger<GraphWorkflowStartupReconciler>.Instance);
+
+    private const string LlmCallGraph = """
+                                              { "schemaVersion": 1,
+                                                "nodes": [{ "key": "start", "kind": "Start" },
+                                                          { "key": "analyze", "kind": "LlmCall", "config": { "prompt": "Go." } },
+                                                          { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+                                                "edges": [{ "key": "e1", "from": "start", "to": "analyze" },
+                                                          { "key": "e2", "from": "analyze", "to": "done" }] }
+                                          """;
 
     /// <summary>A run ticked far enough that its inline work node is in flight, the way a host death would leave it.</summary>
     private static async Task<Guid> InFlightWorkNodeAsync(GraphWorkflowHarness harness, GraphWorkflowNodeRunStatus status)

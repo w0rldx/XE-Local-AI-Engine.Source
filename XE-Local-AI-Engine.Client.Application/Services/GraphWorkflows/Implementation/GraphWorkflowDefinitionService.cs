@@ -122,10 +122,18 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         var suppressed = new HashSet<GraphWorkflowValidationError>();
         foreach (var warning in graph.ResponseSchemaWarnings)
         {
-            if (warning.Key is not { } nodeKey
-                || !graph.Nodes.TryGetValue(nodeKey, out var node)
-                || node.Config is not GraphWorkflowAgentConfig { Model: { } model }
-                || string.IsNullOrWhiteSpace(model))
+            if (warning.Key is not { } nodeKey || !graph.Nodes.TryGetValue(nodeKey, out var node))
+            {
+                continue;
+            }
+
+            var model = node.Config switch
+            {
+                GraphWorkflowAgentConfig { Model: { } agentModel } => agentModel,
+                GraphWorkflowLlmCallConfig { Model: { } llmModel } => llmModel,
+                _ => null
+            };
+            if (string.IsNullOrWhiteSpace(model))
             {
                 continue;
             }

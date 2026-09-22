@@ -18,6 +18,7 @@ import {
 	IconGitBranch,
 	IconPlayerPause,
 	IconRobot,
+	IconSparkles,
 	IconTool,
 } from "@tabler/icons-react";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
@@ -33,6 +34,7 @@ import type { GraphWorkflowNodeKind, GraphWorkflowNodeRunStatus } from "@/featur
 const nodeKindIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
 	Start: IconFlag,
 	Agent: IconRobot,
+	LlmCall: IconSparkles,
 	Tool: IconTool,
 	Condition: IconGitBranch,
 	Parallel: IconArrowsSplit2,

@@ -333,6 +333,10 @@ describe("validateGraphWorkflowGraph reports one failing case per rule", () => {
 		expect(rulesOf(minimal([{ key: "a", kind: "Agent", config: { instructions: "  " } }]))).toContain("agentInstructionsMissing");
 	});
 
+	it("llmPromptMissing", () => {
+		expect(rulesOf(minimal([{ key: "llm", kind: "LlmCall", config: { prompt: "  " } }]))).toContain("llmPromptMissing");
+	});
+
 	it("pausePromptMissing and pauseNoDecisions", () => {
 		const bare = rulesOf(minimal([{ key: "review", kind: "Pause", config: { prompt: "", allowedDecisions: [] } }]));
 

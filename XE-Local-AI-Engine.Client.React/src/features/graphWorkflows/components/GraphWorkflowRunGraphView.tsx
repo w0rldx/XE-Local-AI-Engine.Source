@@ -6,6 +6,7 @@ import {
 	IconGitBranch,
 	IconPlayerPlay,
 	IconRobot,
+	IconSparkles,
 	IconTool,
 	IconUserCheck,
 } from "@tabler/icons-react";
@@ -40,6 +41,7 @@ import type { GraphWorkflowRunCanvas } from "@/features/graphWorkflows/models/Gr
 const kindIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
 	Start: IconPlayerPlay,
 	Agent: IconRobot,
+	LlmCall: IconSparkles,
 	Tool: IconTool,
 	Condition: IconGitBranch,
 	Parallel: IconArrowsSplit2,

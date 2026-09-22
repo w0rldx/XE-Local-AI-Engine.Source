@@ -33,12 +33,48 @@ public sealed class LocalChatRuntimePackageBuilderTests
         AssertEx.Equal(Guid.Parse("00000000-0000-0000-0000-000000000001"), package.ClientNodeId);
         AssertEx.Equal("qwen3.5:0.8b", package.ModelProfile);
         AssertEx.Equal(expected: 1, package.AgentDefinitionVersion);
+        AssertEx.False(package.OmitSystemPrompt);
         AssertEx.Empty(package.AllowedTools);
         AssertEx.Null(package.ToolPolicies);
         AssertEx.Equal(expected: 600, package.Timeouts.InvocationTimeoutSeconds);
         AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(expected: 60, package.Timeouts.StreamIdleTimeoutSeconds);
         AssertEx.False(string.IsNullOrWhiteSpace(package.ConfigHash));
+    }
+
+    [Test]
+    public void Build_WhenSystemPromptIsExplicitlyOmitted_CarriesTheOmissionAndBlankPrompt()
+    {
+        var package = new LocalChatRuntimePackageBuilder().Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = string.Empty,
+            OmitSystemPrompt = true,
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1
+        });
+
+        AssertEx.True(package.OmitSystemPrompt);
+        AssertEx.Equal(string.Empty, package.ResolvedSystemPrompt);
+    }
+
+    [Test]
+    public void Build_WhenSystemPromptAndOmissionDisagree_Throws()
+    {
+        var request = new LocalChatRuntimePackageRequest
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ResolvedSystemPrompt = "You are helpful.",
+            OmitSystemPrompt = true,
+            ConversationContext = [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
+            ModelProfile = "qwen3.5:0.8b",
+            AgentDefinitionVersion = 1
+        };
+
+        AssertEx.Throws<ArgumentException>(() => new LocalChatRuntimePackageBuilder().Build(request));
     }
 
     [Test]

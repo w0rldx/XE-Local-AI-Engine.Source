@@ -161,6 +161,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         var package = context.Package;
 
+        using var nodeManagedRouting = NodeManagedLlamaRoutingScope.Begin(package.RequireNodeManagedLlama ? package.ModelProfile : null);
+
         // Mark the turn's processing start (baseline for the pre-spawn latency + TTFT metrics) and open a coarse whole-turn span, so a silent
         // pre-spawn gap — a first send stalling seconds before the model spawn with no log lines — reads as timed child spans rather than a hang.
         var turnStartedTimestamp = Stopwatch.GetTimestamp();

@@ -29,7 +29,9 @@ public static class RuntimePackageConfigHash
         TimeoutSettings timeouts,
         string? reasoningEffort = null,
         OrchestrationSpec? orchestrationSpec = null,
-        IReadOnlyList<ResolvedSkill>? skills = null)
+        IReadOnlyList<ResolvedSkill>? skills = null,
+        bool omitSystemPrompt = false,
+        bool requireNodeManagedLlama = false)
     {
         var canonicalJson = SerializeCanonicalJson(agentDefinitionVersion,
             resolvedSystemPrompt,
@@ -38,7 +40,9 @@ public static class RuntimePackageConfigHash
             timeouts,
             reasoningEffort,
             orchestrationSpec,
-            skills);
+            skills,
+            omitSystemPrompt,
+            requireNodeManagedLlama);
 
         return FormatLowercaseHex(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson)));
     }
@@ -50,9 +54,17 @@ public static class RuntimePackageConfigHash
         TimeoutSettings timeouts,
         string? reasoningEffort = null,
         OrchestrationSpec? orchestrationSpec = null,
-        IReadOnlyList<ResolvedSkill>? skills = null)
+        IReadOnlyList<ResolvedSkill>? skills = null,
+        bool omitSystemPrompt = false,
+        bool requireNodeManagedLlama = false)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(resolvedSystemPrompt);
+        if (resolvedSystemPrompt is null ||
+            (omitSystemPrompt
+                ? !string.IsNullOrWhiteSpace(resolvedSystemPrompt)
+                : string.IsNullOrWhiteSpace(resolvedSystemPrompt)))
+        {
+            throw new ArgumentException("Resolved system prompt must be blank exactly when it is explicitly omitted.", nameof(resolvedSystemPrompt));
+        }
         ArgumentNullException.ThrowIfNull(allowedTools);
         ArgumentNullException.ThrowIfNull(timeouts);
 
@@ -84,7 +96,9 @@ public static class RuntimePackageConfigHash
             Orchestration = BuildOrchestrationHashPayload(orchestrationSpec),
             // Sorted by Id, body HASHED not embedded, folded ONLY when non-empty and WhenWritingNull like Orchestration.
             // Progressive disclosure keeps bodies out of the prompt, so only this fold invalidates resume on an edit.
-            Skills = BuildSkillsHashPayload(skills)
+            Skills = BuildSkillsHashPayload(skills),
+            OmitSystemPrompt = omitSystemPrompt,
+            RequireNodeManagedLlama = requireNodeManagedLlama
         };
 
         return JsonSerializer.Serialize(payload, SerializerOptions);
@@ -219,6 +233,15 @@ public static class RuntimePackageConfigHash
         [JsonPropertyOrder(8)]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<SkillHashPayload>? Skills { get; init; }
+
+        // Appended and omitted at its false default, preserving the exact canonical bytes of every existing package.
+        [JsonPropertyOrder(9)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool OmitSystemPrompt { get; init; }
+
+        [JsonPropertyOrder(10)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool RequireNodeManagedLlama { get; init; }
     }
 
     private sealed record SkillHashPayload

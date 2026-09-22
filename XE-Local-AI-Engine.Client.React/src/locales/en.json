@@ -5808,6 +5808,7 @@
 			"nodeKind": {
 				"Start": "Start",
 				"Agent": "Agent",
+				"LlmCall": "LLM Call",
 				"Tool": "Tool",
 				"Condition": "Condition",
 				"Parallel": "Parallel",
@@ -5925,6 +5926,8 @@
 					"unknownConditionOperator": "Edge “{{subject}}” uses a comparison this version does not know.",
 					"toolNameMissing": "“{{subject}}” is a Tool node with no tool selected.",
 					"agentInstructionsMissing": "“{{subject}}” is an Agent node with no instructions.",
+					"llmPromptMissing": "“{{subject}}” is an LLM Call node with no prompt.",
+					"invalidInputBindings": "“{{subject}}” has an input binding with a blank or duplicate name, or an invalid path.",
 					"pausePromptMissing": "“{{subject}}” is a Pause node with no question to ask.",
 					"pauseNoDecisions": "“{{subject}}” is a Pause node that offers no decision.",
 					"endOutcomeMissing": "“{{subject}}” is an End node with no outcome name.",
@@ -5952,6 +5955,9 @@
 				"instructions": {
 					"required": "Enter the instructions this agent runs on."
 				},
+				"llmPrompt": {
+					"required": "Enter the prompt this model receives."
+				},
 				"responseJsonSchema": {
 					"notObject": "Enter a JSON object schema, or leave it empty."
 				},
@@ -5963,6 +5969,9 @@
 				},
 				"argumentBindings": {
 					"pathRequired": "Enter the path this argument reads from."
+				},
+				"inputBindings": {
+					"invalid": "Use a unique name and a non-empty dot path for every binding."
 				},
 				"path": {
 					"invalid": "Use a dot path such as output.json.status."
@@ -6007,6 +6016,16 @@
 				"instructions": "Instructions",
 				"model": "Model",
 				"modelPlaceholder": "The agent's own model",
+				"llmModelPlaceholder": "Node default local model",
+				"systemPrompt": "System prompt",
+				"systemPromptHelp": "Optional. A blank prompt is kept blank.",
+				"llmPrompt": "Prompt",
+				"inputBindings": "Input bindings",
+				"inputBindingsHelp": "Named values are sent as a JSON data block beside the prompt. They do not replace text in the prompt.",
+				"bindingName": "Name",
+				"advanced": "Advanced",
+				"numCtx": "Prompt budget (tokens)",
+				"numCtxHelp": "Limits this request's prompt budget; it does not resize the server context window.",
 				"reasoningEffort": "Reasoning effort",
 				"reasoningEffortPlaceholder": "Provider default",
 				"effort": {

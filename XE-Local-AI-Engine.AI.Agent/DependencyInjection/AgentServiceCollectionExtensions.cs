@@ -113,9 +113,16 @@ public static class AgentServiceCollectionExtensions
 
     /// <summary>
     ///     Decorates the registered <see cref="IChatClient" /> with the agent pipeline, outermost first: tool
-    ///     observability, function invocation, tool relevance, provider-call budgeting, OpenTelemetry.
+    ///     observability, the empty-tool-offer branch, function invocation, tool relevance, provider-call budgeting,
+    ///     OpenTelemetry.
     /// </summary>
     /// <remarks>
+    ///     Built in two stages: a provider client (tool relevance, provider-call budget, OpenTelemetry over the base
+    ///     client), then a function-invoking client over it. <see cref="EmptyToolOfferChatClient" /> sends a request
+    ///     whose <see cref="ChatOptions.Tools" /> is null or empty straight to the provider client, so a tool-free turn
+    ///     never gets a synthetic "not found" tool result and an extra provider round; every other request takes the
+    ///     function-invoking path with the unchanged per-round hop order. The function-invoking client stays reachable
+    ///     through <see cref="IChatClient.GetService" /> traversal.
     ///     Exposed as a public method so test harnesses that replace the base <see cref="IChatClient" /> with a fake
     ///     can reapply the full decoration after their <c>RemoveAll</c> + <c>AddSingleton</c>. The order is
     ///     load-bearing; see docs/wiki/04-agent-mode.md ("Why each hop sits where it does, and what it may mutate").
@@ -145,10 +152,22 @@ public static class AgentServiceCollectionExtensions
                                    nameof(AgentTelemetryOptions.CaptureSensitiveContent));
             }
 
-            // First .Use is outermost, OpenTelemetry INNERMOST so each provider round emits its own gen_ai span. Source
+            // Provider client: first .Use is outermost, OpenTelemetry INNERMOST so each provider round emits its own gen_ai
+            // span. The function-invoking client wraps it, and the empty-offer branch below may bypass that wrapper. Source
             // name and EnableSensitiveData are pinned; see docs/wiki/04-agent-mode.md, "The chat-client decorator pipeline".
-            return inner.AsBuilder()
-                        .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
+            var providerClient = inner.AsBuilder()
+                        .Use(chatClient => new ToolRelevanceChatClient(chatClient,
+                            toolRelevanceSelector,
+                            toolRelevanceOptions,
+                            serviceProvider.GetRequiredService<ILogger<ToolRelevanceChatClient>>()))
+                        .Use(chatClient => new ProviderCallBudgetChatClient(chatClient,
+                            serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>(),
+                            serviceProvider.GetRequiredService<ITokenEstimatorCalibrationStore>()))
+                        .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(),
+                            sourceName: "Microsoft.Extensions.AI",
+                            configure: openTelemetryChatClient => openTelemetryChatClient.EnableSensitiveData = telemetryOptions.CaptureSensitiveContent)
+                        .Build();
+            var functionInvokingClient = providerClient.AsBuilder()
                         .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>(),
                             functionInvokingChatClient =>
                             {
@@ -159,21 +178,11 @@ public static class AgentServiceCollectionExtensions
                                 functionInvokingChatClient.AllowConcurrentInvocation = false;
                                 functionInvokingChatClient.TerminateOnUnknownCalls = false;
                             })
-                        // Below UseFunctionInvocation so the layer above keeps the WHOLE executable list, and ABOVE the
-                        // budgeter so its EstimateTools measures the array actually sent. Gated on ToolRelevanceScope.
-                        .Use(chatClient => new ToolRelevanceChatClient(chatClient,
-                            toolRelevanceSelector,
-                            toolRelevanceOptions,
-                            serviceProvider.GetRequiredService<ILogger<ToolRelevanceChatClient>>()))
-                        // Below UseFunctionInvocation so it re-budgets EVERY inner tool-loop and MAF participant round,
-                        // above UseOpenTelemetry so the span reflects what was sent. Gated on a ProviderCallBudget scope.
-                        .Use(chatClient => new ProviderCallBudgetChatClient(chatClient,
-                            serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>(),
-                            serviceProvider.GetRequiredService<ITokenEstimatorCalibrationStore>()))
-                        .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(),
-                            sourceName: "Microsoft.Extensions.AI",
-                            configure: openTelemetryChatClient => openTelemetryChatClient.EnableSensitiveData = telemetryOptions.CaptureSensitiveContent)
                         .Build();
+
+            return new ToolInvocationObservabilityChatClient(
+                new EmptyToolOfferChatClient(functionInvokingClient, providerClient),
+                serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>());
         });
 
         return services;

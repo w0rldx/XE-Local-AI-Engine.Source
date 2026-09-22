@@ -11,6 +11,8 @@ public sealed class LocalChatRuntimePackageRequest
 
     public required string ResolvedSystemPrompt { get; init; }
 
+    public bool OmitSystemPrompt { get; init; }
+
     public required IReadOnlyList<ConversationMessageDto> ConversationContext { get; init; }
 
     public required string? ModelProfile { get; init; }
@@ -47,4 +49,6 @@ public sealed class LocalChatRuntimePackageRequest
     public bool DisableToolRelevanceFilter { get; init; }
 
     public bool AllowAutoModelSwap { get; init; }
+
+    public bool RequireNodeManagedLlama { get; init; }
 }

@@ -28,6 +28,7 @@ import {
 	useGraphWorkflowAgentOptions,
 	useGraphWorkflowDefinition,
 	useGraphWorkflowDefinitions,
+	useGraphWorkflowLlmModelOptions,
 	useGraphWorkflowModelOptions,
 	useGraphWorkflowNodeRun,
 	useGraphWorkflowRun,
@@ -213,23 +214,28 @@ describe("graph workflow read hooks", () => {
 		expect(limit).toBe(`${GRAPH_WORKFLOW_RUN_PAGE_SIZE}`);
 	});
 
-	it("keeps only Chat models, because a node naming another kind is a run that fails at dispatch", async () => {
+	it("keeps Agent chat options broad and LLM Call options node-managed", async () => {
 		server.use(
 			http.get(localApiPath("models"), () =>
 				HttpResponse.json({
 					isAvailable: true,
 					items: [
-						localModel({ modelName: "qwen3", displayLabel: "Qwen 3", kind: "Chat" }),
-						localModel({ modelName: "nomic-embed", displayLabel: "Nomic", kind: "Embedding", detectedKind: "Embedding" }),
+						localModel({ modelName: "qwen3", displayLabel: "Qwen 3", kind: "Chat", provider: "llamacpp" }),
+						localModel({ modelName: "ollama-chat", kind: "Chat", provider: "ollama" }),
+						localModel({ modelName: "external-chat", kind: "Chat", provider: "external" }),
+						localModel({ modelName: "nomic-embed", kind: "Embedding", detectedKind: "Embedding", provider: "llamacpp" }),
 					],
 				}),
 			),
 		);
 		const { wrapper } = harness();
 
-		const { result } = renderHook(() => useGraphWorkflowModelOptions(), { wrapper });
+		const agent = renderHook(() => useGraphWorkflowModelOptions(), { wrapper });
+		const llm = renderHook(() => useGraphWorkflowLlmModelOptions(), { wrapper });
 
-		await waitFor(() => expect(result.current.data).toEqual([{ value: "qwen3", label: "Qwen 3" }]));
+		await waitFor(() => expect(agent.result.current.data).toHaveLength(3));
+		expect(agent.result.current.data?.map((option) => option.value)).toEqual(["qwen3", "ollama-chat", "external-chat"]);
+		expect(llm.result.current.data).toEqual([{ value: "qwen3", label: "Qwen 3" }]);
 	});
 
 	it("projects the agent definitions to picker options", async () => {

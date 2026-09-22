@@ -221,6 +221,18 @@ export function useGraphWorkflowModelOptions(options: FeedOptions = {}) {
 	});
 }
 
+/** Installed, node-managed GGUF chat models are the only runtimes an LLM Call may dispatch through. */
+export function useGraphWorkflowLlmModelOptions(options: FeedOptions = {}) {
+	return useQuery({
+		...withResponseValidation(listLocalModelsOptions()),
+		enabled: options.enabled ?? true,
+		select: (data) =>
+			(data.items ?? [])
+				.filter((model) => model.kind === "Chat" && model.provider === "llamacpp")
+				.map((model) => ({ value: model.modelName ?? "", label: model.displayLabel ?? model.modelName ?? "" })),
+	});
+}
+
 function useDefinitionRefresh(): (definitionId?: string) => Promise<void> {
 	const queryClient = useQueryClient();
 	return async (definitionId?: string): Promise<void> => {

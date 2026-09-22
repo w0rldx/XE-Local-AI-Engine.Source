@@ -33,7 +33,17 @@ describe("graph-workflow vocabularies", () => {
 	// The member LISTS are the contract with the server: they cross the wire as C# enum names, so a member silently
 	// dropped here becomes an unlabelled fallback in front of an operator rather than a compile error.
 	it("carries exactly the members the v1 wire uses", () => {
-		expect(graphWorkflowNodeKinds).toEqual(["Start", "Agent", "Tool", "Condition", "Parallel", "Join", "Pause", "End"]);
+		expect(graphWorkflowNodeKinds).toEqual([
+			"Start",
+			"Agent",
+			"LlmCall",
+			"Tool",
+			"Condition",
+			"Parallel",
+			"Join",
+			"Pause",
+			"End",
+		]);
 		expect(graphWorkflowJoinPolicies).toEqual(["All", "Any"]);
 		expect(graphWorkflowRunStatuses).toHaveLength(7);
 		expect(graphWorkflowNodeRunStatuses).toHaveLength(8);
@@ -184,10 +194,13 @@ describe("server-mirroring constants", () => {
 		expect(GRAPH_WORKFLOW_KEY_PATTERN.test("dot.path")).toBe(false);
 	});
 
-	it("defaults maxAttempts to 3 only for the two kinds that call something fallible", () => {
+	it("defaults maxAttempts to 3 for the three kinds that call something fallible", () => {
 		expect(graphWorkflowDefaultMaxAttempts("Agent")).toBe(3);
+		expect(graphWorkflowDefaultMaxAttempts("LlmCall")).toBe(3);
 		expect(graphWorkflowDefaultMaxAttempts("Tool")).toBe(3);
-		for (const kind of graphWorkflowNodeKinds.filter((member) => member !== "Agent" && member !== "Tool")) {
+		for (const kind of graphWorkflowNodeKinds.filter(
+			(member) => member !== "Agent" && member !== "LlmCall" && member !== "Tool",
+		)) {
 			expect(graphWorkflowDefaultMaxAttempts(kind)).toBe(1);
 		}
 	});

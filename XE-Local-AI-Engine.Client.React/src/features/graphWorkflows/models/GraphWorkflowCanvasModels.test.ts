@@ -163,6 +163,62 @@ describe("graphToCanvas / canvasToGraph round trip", () => {
 });
 
 describe("node config conversion", () => {
+	it("round-trips an LLM Call and omits every unset override", () => {
+		const freshConfig = canvasToGraph([canvasNode(defaultNodeData("LlmCall", "llm-call-1"))], []).graph.nodes?.[0]
+			?.config as Record<string, unknown>;
+		expect(freshConfig).toEqual({ prompt: "" });
+
+		const source = graph(
+			[
+				{
+					key: "llm-call-1",
+					kind: "LlmCall",
+					config: {
+						model: "qwen",
+						systemPrompt: "",
+						prompt: "Summarize",
+						inputBindings: { source: "output.json" },
+						reasoningEffort: "medium",
+						responseJsonSchema: { type: "object" },
+						samplingOptions: { temperature: 0.2, seed: "42", stop: ["END"] },
+					},
+				},
+			],
+			[],
+		);
+		const canvas = graphToCanvas(source);
+		const result = canvasToGraph(canvas.nodes, canvas.edges);
+		expect(result.issues).toEqual([]);
+		expect(result.graph.nodes?.[0]?.config).toEqual(source.nodes?.[0]?.config);
+	});
+
+	it("keeps a precision-safe LLM seed string and rejects lossy binding maps", () => {
+		const defaults = defaultNodeData("LlmCall", "llm-call-1") as Extract<GraphWorkflowCanvasNodeData, { kind: "LlmCall" }>;
+		const data: Extract<GraphWorkflowCanvasNodeData, { kind: "LlmCall" }> = {
+			...defaults,
+			kind: "LlmCall",
+			prompt: "Run",
+			samplingOptions: { seed: "9223372036854775807" },
+			inputBindings: [
+				{ parameter: "source", path: "output.first" },
+				{ parameter: "source", path: "output.second" },
+			],
+		};
+		const result = canvasToGraph([canvasNode(data)], []);
+		const config = result.graph.nodes?.[0]?.config as Record<string, unknown>;
+
+		expect(config["samplingOptions"]).toEqual({ seed: "9223372036854775807" });
+		expect(config).not.toHaveProperty("inputBindings");
+		expect(result.issues).toContainEqual({ rule: "invalidInputBindings", subject: "llm-call-1" });
+	});
+
+	it("omits an empty LLM stop override when it is cleared", () => {
+		const defaults = defaultNodeData("LlmCall", "llm-call-1") as Extract<GraphWorkflowCanvasNodeData, { kind: "LlmCall" }>;
+		const result = canvasToGraph([canvasNode({ ...defaults, prompt: "Run", samplingOptions: { stop: [""] } })], []);
+		const config = result.graph.nodes?.[0]?.config as Record<string, unknown>;
+
+		expect(config).not.toHaveProperty("samplingOptions");
+	});
 	it("holds the three JSON-shaped fields as pretty-printed text and parses them back to objects", () => {
 		const canvas = graphToCanvas(eightNodeGraph);
 		const agent = dataOfKind(canvas, "analyze", "Agent");
