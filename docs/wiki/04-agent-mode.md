@@ -40,16 +40,28 @@ five things, in order:
 
 `DecorateChatClientPipeline` (`AgentServiceCollectionExtensions.cs`) decorates the registered
 `IChatClient` so that **every** code path — local chat, platform invocations, ClientLocal tools, MCP
-tools — shares one execution pipeline. The first `.Use` is the **outermost** hop:
+tools — shares one execution pipeline. It is built in two stages: a **provider client** (relevance,
+budget, OpenTelemetry over the base client), then FICC over that provider client. The returned client
+branches on the offered tools, and within each chain the first `.Use` is the **outermost** hop:
 
 ```
 ToolInvocationObservabilityChatClient       // tool-call request/completion spans + logs
-   └─ UseFunctionInvocation (FICC)          // MEAI FunctionInvokingChatClient: auto-executes tools
-        └─ ToolRelevanceChatClient          // narrows the offered tools array, provider call only
-             └─ ProviderCallBudgetChatClient  // per-round input budget + cumulative ceilings
-                  └─ UseOpenTelemetry       // one gen_ai span per provider round
-                       └─ base IChatClient
+   └─ EmptyToolOfferChatClient              // branches on ChatOptions.Tools
+        ├─ tools offered ──► UseFunctionInvocation (FICC)  // MEAI FunctionInvokingChatClient: auto-executes tools
+        │                        └─ provider client (below)
+        └─ Tools null/empty ──► provider client (below)     // no FICC round at all
+provider client:
+   ToolRelevanceChatClient                  // narrows the offered tools array, provider call only
+      └─ ProviderCallBudgetChatClient       // per-round input budget + cumulative ceilings
+           └─ UseOpenTelemetry              // one gen_ai span per provider round
+                └─ base IChatClient
 ```
+
+On the tool path the per-round hop order is unchanged. On the empty-offer path a turn skips FICC
+entirely: with nothing offered, FICC would otherwise answer a model's unsolicited function call with a
+synthetic "not found" result and run one more provider round. The bypass removes that extra round and
+the synthetic transcript entry for tool-free turns; graph-workflow LLM call nodes are the first such
+caller. It is not a security boundary — FICC never executed a tool that was not offered.
 
 The decoration is exposed as a **public** method specifically so test harnesses that swap the base
 client for a fake (e.g. FakeOllama) can re-apply the full pipeline after their
@@ -59,7 +71,8 @@ lazily at `IChatClient` resolution, so a missing registration has to fall back r
 during a partial re-decoration.
 
 > **Seam to respect:** because the base client is already FICC-wrapped, `ChatClientAgent`'s constructor
-> detects the existing `FunctionInvokingChatClient` and registers the agent's own tools as
+> detects the existing `FunctionInvokingChatClient` (still reachable through `GetService` traversal:
+> `EmptyToolOfferChatClient` delegates it to its FICC inner client) and registers the agent's own tools as
 > `AdditionalTools` rather than re-wrapping. This is what lets the handoff builder inject bodyless
 > `handoff_to_*` declarations that the outer FICC leaves unserviced (the workflow executor routes them).
 
@@ -68,6 +81,7 @@ during a partial re-decoration.
 | Hop | Placement rule | What it may mutate |
 |---|---|---|
 | `ToolInvocationObservabilityChatClient` | Above FICC, so it observes the model's *request* to call a tool before the delegate runs | Nothing — it reads the response and emits spans/logs |
+| `EmptyToolOfferChatClient` | Below observability so both branches are observed alike; **above** FICC so a request whose `ChatOptions.Tools` is null or empty goes straight to the provider client and never enters the tool loop. It borrows the provider client; the FICC chain it owns disposes it | Nothing — it only picks the branch |
 | `UseFunctionInvocation` (FICC) | Owns the autonomous tool loop, and keeps the **whole** executable list | Appends tool-result messages |
 | `ToolRelevanceChatClient` | Below FICC so a revealed tool stays immediately callable with its wrapper intact; **above** the budgeter so `EstimateTools` measures the array actually sent | `ChatOptions.Tools`, on a clone only |
 | `ProviderCallBudgetChatClient` | Below FICC so it re-budgets **every** inner tool-loop and MAF participant round; above OpenTelemetry so the recorded span reflects the budgeted set actually sent | The message list, and `AdditionalProperties` on a clone when the reasoning budget is narrowed |

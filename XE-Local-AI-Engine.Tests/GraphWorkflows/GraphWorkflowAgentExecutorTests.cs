@@ -49,8 +49,7 @@ public sealed class GraphWorkflowAgentExecutorTests
     public async Task ALlmCall_UsesTheDefaultModelWithoutAgentRuntimeAndOmitsABlankSystemPrompt()
     {
         const string prompt = "llm-default-no-system";
-        await using var harness = new GraphWorkflowHarness(Host);
-        var resolverCalls = Runtimes(harness).Calls.Count;
+        await using var harness = GraphWorkflowHarness.PrivateAgentHost();
         var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "systemPrompt": "" }"""));
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
@@ -63,7 +62,7 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.True(package.RequireNodeManagedLlama);
         AssertEx.Empty(package.AllowedTools);
         AssertEx.True(package.Skills is null or { Count: 0 });
-        AssertEx.Equal(resolverCalls, Runtimes(harness).Calls.Count, "an LLM call never enters the saved-agent resolver.");
+        AssertEx.Empty(Runtimes(harness).Calls, "an LLM call never enters the saved-agent resolver.");
         AssertEx.Equal("the fake agent answered", Output(analyze).GetProperty("text").GetString());
         AssertEx.Equal(expected: 11, Output(analyze).GetProperty("usage").GetProperty("inputTokens").GetInt32());
     }
@@ -97,10 +96,10 @@ public sealed class GraphWorkflowAgentExecutorTests
     public async Task ALlmCall_WithAMissingBinding_FailsBeforeCapacityAndInvocation()
     {
         const string prompt = "llm-missing-binding";
+        const string model = "missing-binding-chat.gguf";
         await using var harness = new GraphWorkflowHarness(Host);
-        var capacityCalls = Capacity(harness).ReservationsFor(GraphWorkflowModels.LocalDefault).Count;
         var runId = await StartToTheAgentAsync(harness,
-                LlmGraph($$"""{ "prompt": "{{prompt}}", "inputBindings": { "customer": "run.input.customer" } }"""),
+                LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}", "inputBindings": { "customer": "run.input.customer" } }"""),
                 """{}""");
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);
@@ -108,7 +107,7 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
         AssertEx.Contains(analyze.Error, "binding 'customer'");
         AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(prompt, StringComparison.Ordinal)));
-        AssertEx.Equal(capacityCalls, Capacity(harness).ReservationsFor(GraphWorkflowModels.LocalDefault).Count);
+        AssertEx.Empty(Capacity(harness).ReservationsFor(model), "a binding failure is refused before capacity is asked.");
     }
 
     [Test]
