@@ -22,10 +22,7 @@ public sealed partial class Program
     ///     removes the table they live in and no migration can decrypt the graph blob.
     /// </summary>
     /// <remarks>
-    ///     The write half runs after migrations, once the Graph Workflow tables exist. A read that throws is reported
-    ///     and answered with an empty snapshot, because the import is best-effort and must never block startup; it
-    ///     logs at Error rather than staying quiet, because "the read threw" and "there were no rows" must not look
-    ///     alike in the log.
+    ///     The encrypted source is staged durably before migrations. A failed read stops startup before any drop.
     /// </remarks>
     private static async Task<CanvasWorkflowImportSnapshot> ReadPendingCanvasWorkflowsAsync(IServiceProvider services)
     {
@@ -43,8 +40,8 @@ public sealed partial class Program
         }
         catch (Exception exception)
         {
-            Log.Error(exception, "Saved Open Canvas workflows could not be read before migrations; none will be imported.");
-            return new CanvasWorkflowImportSnapshot { Candidates = [], FailedCount = 0 };
+            Log.Error(exception, "Saved Open Canvas workflows could not be read; startup stopped before migrations.");
+            throw;
         }
     }
 
@@ -57,11 +54,6 @@ public sealed partial class Program
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(pending);
 
-        if (pending.Candidates.Count == 0 && pending.FailedCount == 0)
-        {
-            return;
-        }
-
         try
         {
             await using var scope = services.CreateAsyncScope();
@@ -70,11 +62,12 @@ public sealed partial class Program
             var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(CanvasWorkflowImport));
 
             // CancellationToken.None: no token exists on the startup path (see ReadPendingCanvasWorkflowsAsync).
-            await CanvasWorkflowImport.ImportAsync(definitions, store, pending, logger, CancellationToken.None);
+            await CanvasWorkflowImport.ImportAsync(scope.ServiceProvider.GetRequiredService<NodeChatDbContext>(), definitions, store, pending, logger, CancellationToken.None);
         }
         catch (Exception exception)
         {
-            Log.Error(exception, "Saved Open Canvas workflows could not be imported; canvas_workflows has already been dropped.");
+            Log.Error(exception, "Saved Open Canvas workflows could not be imported; encrypted recovery data is retained and startup stopped.");
+            throw;
         }
     }
 

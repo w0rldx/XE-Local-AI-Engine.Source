@@ -4,6 +4,8 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
@@ -16,7 +18,9 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The supervisor's step loop against a scripted stream service — its real dependency, since a fake chat client
@@ -226,6 +230,78 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.Empty(await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId),
             "An answered park records no open question — that finding exists only because a timeout loses the prompt.");
         AssertEx.False(events.Any(entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut), "The park clock was disarmed, not fired.");
+    }
+
+    [Test]
+    [Arguments(ChatStreamEventTypes.ApprovalRequested, 0)]
+    [Arguments(ChatStreamEventTypes.QuestionRequested, 0)]
+    [Arguments(ChatStreamEventTypes.QuestionRequested, 45)]
+    [Arguments(ChatStreamEventTypes.AssistantReconcile, 45)]
+    public async Task Loop_WhenEffectiveToolAgeIsShorterThanConfiguredPark_PausesBeforeToolExpiry(string eventType, int elapsedSeconds)
+    {
+        var sessionId = Guid.NewGuid();
+        var time = new ManualTimeProvider(TimeProvider.System.GetUtcNow());
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        var runtimeSettings = new StubNodeRuntimeSettings().WithMaxPendingToolCallAgeMinutes(1).Build();
+        await using var factory = new TestServerWebAppFactory
+        {
+            // The configured park passes its seed validation; only the effective override shortens the tool age.
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<INodeRuntimeSettings>();
+                services.AddSingleton(runtimeSettings);
+                WorkSessionTestSupport.WithFakes(provider =>
+                    {
+                        var fake = new FakeNodeChatStreamService(provider.GetRequiredService<INodeChatStreamCancellationRegistry>(), provider, sessionId);
+                        stream = fake;
+                        return eventType == ChatStreamEventTypes.AssistantReconcile
+                            ? new ApprovalDroppingStreamService(fake, provider.GetRequiredService<PendingToolCallRegistry>(), time, TimeSpan.FromSeconds(elapsedSeconds))
+                            : fake;
+                    },
+                    publisher)(services);
+            }
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript
+        {
+            EventTypes = [],
+            Park = true,
+            ParkEventType = eventType == ChatStreamEventTypes.AssistantReconcile ? ChatStreamEventTypes.ApprovalRequested : eventType,
+            ParkOccurredAtUtc = (time.GetUtcNow() - TimeSpan.FromSeconds(elapsedSeconds)).ToUnixTimeMilliseconds(),
+            ParkToolName = RunCommandToolName
+        });
+        var approvalCoordinator = factory.Services.GetRequiredService<ToolApprovalCoordinator>();
+        // Editing between construction of the two owners must not give the park a different wait lifetime.
+#pragma warning disable CA1849, S6966 // Configures the synchronous substitute accessor used by the constructor; no I/O runs.
+        runtimeSettings.GetMaxPendingToolCallAgeMinutes().Returns(10);
+#pragma warning restore CA1849, S6966
+        await using var supervisor = new WorkSessionExecutionSupervisor(factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            factory.Services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
+            publisher,
+            factory.Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
+            time,
+            factory.Services.GetRequiredService<PendingToolCallRegistry>(),
+            approvalCoordinator,
+            NullLogger<WorkSessionExecutionSupervisor>.Instance);
+
+        AssertEx.True(supervisor.TryStart(sessionId));
+        var waiting = eventType == ChatStreamEventTypes.QuestionRequested
+            ? AgentWorkSessionStatus.WaitingForInput
+            : AgentWorkSessionStatus.WaitingForApproval;
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, waiting);
+        time.Advance(TimeSpan.FromSeconds(58 - elapsedSeconds));
+        AssertEx.Equal(waiting, (await WorkSessionTestSupport.ReadSessionAsync(factory.Services, sessionId)).Status);
+        time.Advance(TimeSpan.FromSeconds(1));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId);
+        AssertEx.Contains(events, entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut);
+        AssertEx.ContainsSingle(await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId),
+            static finding => finding.Kind == AgentWorkSessionFindingKind.OpenQuestion);
     }
 
     /// <summary>
@@ -964,11 +1040,16 @@ public sealed class WorkSessionStepLoopTests
     {
         private readonly INodeChatStreamService _inner;
         private readonly PendingToolCallRegistry _pendingToolCalls;
+        private readonly TimeProvider _timeProvider;
+        private readonly TimeSpan _elapsed;
 
-        public ApprovalDroppingStreamService(INodeChatStreamService inner, PendingToolCallRegistry pendingToolCalls)
+        public ApprovalDroppingStreamService(INodeChatStreamService inner, PendingToolCallRegistry pendingToolCalls,
+            TimeProvider? timeProvider = null, TimeSpan elapsed = default)
         {
             _inner = inner;
             _pendingToolCalls = pendingToolCalls;
+            _timeProvider = timeProvider ?? TimeProvider.System;
+            _elapsed = elapsed;
         }
 
         public async IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
@@ -985,7 +1066,7 @@ public sealed class WorkSessionStepLoopTests
                         new PendingToolCall
                         {
                             InvocationId = request.RequestId.GetValueOrDefault(),
-                            CreatedAt = DateTimeOffset.UtcNow,
+                            CreatedAt = _timeProvider.GetUtcNow() - _elapsed,
                             ApprovalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
                         });
                     yield return streamEvent with

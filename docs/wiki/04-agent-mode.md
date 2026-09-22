@@ -1711,6 +1711,12 @@ the timeout nor a restart; the finding is what makes the question durable. The c
 **before** the `Paused` status: a crash in that window reconciles to `Interrupted` off a valid
 checkpoint, where status-first would resume from a stale state block.
 
+Each park is additionally capped one second below `ToolApprovalCoordinator.PendingToolCallAge`, the same effective
+startup snapshot (including stored Node Settings) that actually bounds the human wait. A registered approval's
+elapsed age is subtracted too; questions use their stream producer timestamp because they have no registry row.
+A delayed/reconciled event cannot restart the wait lifetime. Changing settings after
+startup does not make the supervisor and approval coordinator disagree; both use the coordinator's snapshot.
+
 #### A dropped park event
 
 The stream sink is a bounded channel with `FullMode = DropWrite` whose `ChatStreamEventSink.TryWrite`
@@ -1905,7 +1911,7 @@ is refused until an operator adds that id under **Node Settings → Tools**, and
 | `WorkSessions:MaxStepsPerRun` | `25` | Per start/resume, not per lifetime |
 | `WorkSessions:CheckpointEveryNSteps` | `5` | |
 | `WorkSessions:MaxConcurrentSessions` | `1` | Admission cap — see §5.2 |
-| `WorkSessions:MaxParkedSeconds` | `300` | Must stay under the node's `WorkerNode:MaxPendingToolCallAgeMinutes` — `WorkSessionOptionsValidator` checks it at startup against the configured seed; a stored Node-Settings override is not covered |
+| `WorkSessions:MaxParkedSeconds` | `300` | Startup validation checks the configured tool-age seed; every park is also capped below the approval coordinator's effective age, including stored overrides and elapsed time for registered approvals |
 | `WorkSessions:MaxArtifactBytes` | `1048576` | 1 MiB |
 | `WorkSessions:StepTimeoutSeconds` | `0` | 0 inherits the node's maximum message request timeout |
 | `WorkSessions:StepContextBudgetTokens` | `12000` | Replayed-transcript budget per step; over it the boundary force-compacts (§5.3). 0 disables |

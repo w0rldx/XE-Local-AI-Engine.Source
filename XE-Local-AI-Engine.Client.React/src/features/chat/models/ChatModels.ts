@@ -373,7 +373,7 @@ export interface ChatConversationListModel {
 }
 
 // Result of a manual, non-destructive compaction. `outcome` mirrors the backend ConversationCompactionOutcome names
-// ("Compacted", "NothingToCompact", "NoLocalModel", "SummarizerReturnedNothing", "ConversationNotFound"); the remaining
+// ("Compacted", "NothingToCompact", "NoLocalModel", "SummarizerReturnedNothing", "TimedOut", "ConversationNotFound"); the remaining
 // fields are populated only when a synopsis was produced.
 export interface ChatCompactionResult {
 	outcome: string;

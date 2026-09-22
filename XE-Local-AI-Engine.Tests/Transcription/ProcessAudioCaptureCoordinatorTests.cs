@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The lifecycle of a server-side capture: attach first, run on the registry's own token, stop without waiting
-///     for inference, and never end the session itself.
+///     for inference, and leave requested session termination to the registry.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -426,7 +426,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
             throw new NotSupportedException("The capture coordinator never starts a live session.");
 
         public Task EndAsync(Guid sessionId, LiveEndReason reason, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("S5 never ends a live session; that is the registry's single termination path.");
+            throw new NotSupportedException("These requested-stop cases must not replace the registry caller's termination reason.");
 
         public void NoteBrowserAttached(Guid sessionId, string connectionId) =>
             throw new NotSupportedException("A native capture is not a browser connection.");

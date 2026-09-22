@@ -2,11 +2,13 @@ namespace XE_Local_AI_Engine.Tests.Transcription;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Live;
+using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -32,6 +34,76 @@ public sealed class LiveTranscriptionSessionRegistryTests
     private static readonly TimeSpan AttachmentDeadline = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan ProducerStopBound = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan GracefulFinalizationBound = TimeSpan.FromSeconds(30);
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    [Arguments(2)]
+    public async Task ProcessCapture_UnexpectedEnd_FailsAndPublishesToTheWatchingBrowser(int outcome)
+    {
+        await using var fixture = new RegistryFixture(new ScriptedWhisperTranscriber(OneSegment));
+        var sessionId = Guid.NewGuid();
+        var statuses = fixture.RecordStatuses();
+        var source = Substitute.For<IProcessAudioCaptureSource>();
+        _ = source.IsSupported.Returns(true);
+        _ = source.CaptureAsync(sessionId, 4321, Arg.Any<CancellationToken>()).Returns(_ => outcome switch
+        {
+            0 => Task.CompletedTask,
+            1 => Task.FromException(new IOException("Recorder unavailable")),
+            _ => Task.FromException(new OperationCanceledException("Recorder cancelled without a stop request"))
+        });
+        await using var coordinator = new ProcessAudioCaptureCoordinator(source, fixture.Registry, fixture.Time,
+            NullLogger<ProcessAudioCaptureCoordinator>.Instance);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        fixture.Registry.NoteBrowserAttached(sessionId, "watching-browser");
+
+        AssertEx.Equal(StartProcessCaptureOutcome.Started, coordinator.Start(sessionId, 4321),
+            "Admission succeeds before the detached recorder completes or fails.");
+        await AssertEx.EventuallyAsync(() => Snapshot(statuses).Count == 1, TimeSpan.FromSeconds(5),
+            "A watching browser receives the failure without disconnecting or waiting for abandonment.");
+
+        AssertEx.Equal(LiveEndReason.Failed, Snapshot(statuses)[0], "An unexpected recorder end is a visible failure.");
+        AssertEx.False(coordinator.IsCapturing(sessionId), "The failed producer was detached before session teardown.");
+        AssertEx.False(fixture.Registry.IsLive(sessionId), "No live session is left without its producer.");
+        await fixture.Service.Received(1).CompleteLiveAsync(sessionId, TranscriptionSessionStatus.Failed,
+            Arg.Any<long>(), Arg.Any<string?>(), "live-failed", Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ProcessCapture_RequestedCompletion_PreservesTheGracefulFlush()
+    {
+        await using var fixture = new RegistryFixture(new ScriptedWhisperTranscriber(OneSegment));
+        var sessionId = Guid.NewGuid();
+        var statuses = fixture.RecordStatuses();
+        var segments = fixture.RecordSegments();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = Substitute.For<IProcessAudioCaptureSource>();
+        _ = source.IsSupported.Returns(true);
+        _ = source.CaptureAsync(sessionId, 4321, Arg.Any<CancellationToken>()).Returns(async call =>
+        {
+            var cancellationToken = call.ArgAt<CancellationToken>(2);
+            var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            await using var registration = cancellationToken.Register(() => cancelled.TrySetResult());
+            _ = entered.TrySetResult();
+            await cancelled.Task;
+            _ = stopped.TrySetResult();
+            cancellationToken.ThrowIfCancellationRequested();
+        });
+        await using var coordinator = new ProcessAudioCaptureCoordinator(source, fixture.Registry, fixture.Time,
+            NullLogger<ProcessAudioCaptureCoordinator>.Instance);
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        _ = coordinator.Start(sessionId, 4321);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 500);
+
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
+        await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.Equal("Completed", string.Join(',', Snapshot(statuses)), "A requested completion is not changed to failure.");
+        AssertEx.Equal(1, Snapshot(segments).Count, "Graceful completion still flushes the final partial audio window.");
+        AssertEx.False(coordinator.IsCapturing(sessionId), "The recorder is stopped.");
+    }
 
     [Test]
     public async Task Commit_WhenPersisting_PersistsBeforeItPublishes()

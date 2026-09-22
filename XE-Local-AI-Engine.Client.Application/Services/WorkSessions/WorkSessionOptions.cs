@@ -37,11 +37,10 @@ public sealed class WorkSessionOptions
     ///     unattended parked session would otherwise hold the node's only invocation slot indefinitely.
     /// </summary>
     /// <remarks>
-    ///     It must stay strictly under <c>WorkerNode:MaxPendingToolCallAgeMinutes</c>, or the node expires the pending tool call the
-    ///     session is parked on before the park clock fires and the park times out against a prompt nobody can answer. The range's
-    ///     upper bound is 3599 because that node setting itself caps at 60 minutes. <c>WorkSessionOptionsValidator</c> checks the
-    ///     relation at startup against the CONFIGURED seed only: <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c> can
-    ///     override the tool-call age from the database afterwards, and lowering it below this park budget re-opens the gap.
+    ///     Must stay below <c>WorkerNode:MaxPendingToolCallAgeMinutes</c> so the park ends before its prompt expires.
+    ///     The 3599-second ceiling follows that setting's 60-minute maximum. Startup validation checks the configured
+    ///     seed; the supervisor also caps each park against the coordinator's effective age, including stored overrides,
+    ///     leaving one second before expiry and subtracting time already spent waiting.
     /// </remarks>
     [Range(1, 3599)]
     public int MaxParkedSeconds { get; init; } = 300;

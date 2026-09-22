@@ -1220,6 +1220,7 @@
 				"nothing": "Noch nichts zu verdichten — die aktuellen Nachrichten passen weiterhin ins Kontextfenster.",
 				"noModel": "Es ist kein lokales Chat-Modell zum Zusammenfassen installiert, daher kann die Verdichtung nicht on-node laufen.",
 				"noSummary": "Die Verdichtung hat keine Zusammenfassung erzeugt. Bitte versuche es erneut.",
+				"timedOut": "Die Komprimierung hat das Zeitlimit erreicht. Deine Nachrichten und die bisherige Zusammenfassung bleiben unverändert. Versuche ein schnelleres lokales Modell oder erhöhe das Zeitlimit für Nachrichtenanfragen in den Knoteneinstellungen.",
 				"error": "Die Unterhaltung konnte nicht verdichtet werden. Bitte versuche es erneut.",
 				"compactedLocalFallback": "{{count}} ältere Nachricht(en) lokal mit {{model}} verdichtet, damit dein Chat auf dem Gerät bleibt. Deine Originale bleiben erhalten.",
 				"aLocalModel": "einem lokalen Modell"
@@ -7655,7 +7656,9 @@
 				"empty": "Noch keine Trainingsläufe. Starte oben einen.",
 				"cancel": "Abbrechen",
 				"loss": "Loss {{loss}}",
-				"steps": "Schritt {{step}} von {{total}}"
+				"steps": "Schritt {{step}} von {{total}}",
+				"waiting": "Wartende Läufe starten, sobald andere Aufgaben und geladene Modelle die Laufzeit freigeben. Prüfe die geladenen Modelle, wenn ein Lauf in der Warteschlange bleibt.",
+				"loadedModels": "Geladene Modelle"
 			},
 			"status": {
 				"Queued": "In Warteschlange",

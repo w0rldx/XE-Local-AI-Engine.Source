@@ -1,5 +1,6 @@
-import { Badge, Button, Group, Progress, Stack, Text } from "@mantine/core";
+import { Anchor, Badge, Button, Group, Progress, Stack, Text } from "@mantine/core";
 import { IconSchool } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -14,8 +15,8 @@ import { useRefreshTrainingArtifacts } from "@/features/training/queries/useTrai
 import { useCancelTrainingRun, useRefreshTrainingRuns, useTrainingRuns } from "@/features/training/queries/useTrainingRuns";
 
 /**
- * The run list. Exactly one run can be active at a time (a run holds the whole GPU), so only that one subscribes to
- * the progress hub — the rest are static rows and need no live stream at all.
+ * The run list. Only an executing run holds the GPU; queued rows must not steal its progress subscription.
+ * Queued work keeps the HTTP poll alive until one of those rows starts.
  *
  * An EXPORT is the exception: it runs against an already-finished run, whose status never moves, so the exporting
  * run takes the subscription slot instead. Only one export can run at a time for the same reason a run can.
@@ -33,13 +34,15 @@ export function TrainingRunList() {
 
 	const runsQuery = useTrainingRuns();
 	const runs = useMemo(() => runsQuery.data ?? [], [runsQuery.data]);
-	const active = runs.find((run) => isRunActive(run.status)) ?? null;
+	const executing = runs.find((run) => isRunActive(run.status) && run.status !== "Queued") ?? null;
+	const hasPendingRuns = runs.some((run) => isRunActive(run.status));
+	const hasQueuedRuns = runs.some((run) => run.status === "Queued");
 	const [exportingRunId, setExportingRunId] = useState<string | null>(null);
 
 	// Poll as a floor under the hub while something is in flight; a run can last hours, and a missed push must not
 	// leave the list permanently stale.
-	const pollingQuery = useTrainingRuns(active != null);
-	const focusedRunId = active?.id ?? exportingRunId;
+	const pollingQuery = useTrainingRuns(hasPendingRuns);
+	const focusedRunId = executing?.id ?? exportingRunId;
 	const live = useTrainingRunHub(focusedRunId, refresh);
 	const cancelMutation = useCancelTrainingRun();
 	const rows = pollingQuery.data ?? runs;
@@ -59,16 +62,28 @@ export function TrainingRunList() {
 	return (
 		<SectionCard title={t("training.runs.list.title", "Training runs")}>
 			<Stack gap="sm">
+				{hasQueuedRuns ? (
+					<Text c="dimmed" size="sm">
+						{t(
+							"training.runs.list.waiting",
+							"Queued runs wait for other work and loaded models to release the runtime. Check loaded models if a run stays queued.",
+						)}{" "}
+						<Anchor component={Link} to="/loaded-models">
+							{t("training.runs.list.loadedModels", "Loaded models")}
+						</Anchor>
+					</Text>
+				) : null}
 				{rows.map((run) => {
 					const isActive = isRunActive(run.status);
-					const step = isActive && live.step > 0 ? live.step : (run.progress?.step ?? 0);
-					const totalSteps = isActive && live.totalSteps > 0 ? live.totalSteps : (run.progress?.totalSteps ?? 0);
-					const loss = isActive && live.loss != null ? live.loss : (run.progress?.loss ?? null);
-					const phase = (isActive ? live.phase : null) ?? run.progress?.phase ?? null;
+					const hasLiveProgress = run.id === executing?.id;
+					const step = hasLiveProgress && live.step > 0 ? live.step : (run.progress?.step ?? 0);
+					const totalSteps = hasLiveProgress && live.totalSteps > 0 ? live.totalSteps : (run.progress?.totalSteps ?? 0);
+					const loss = hasLiveProgress && live.loss != null ? live.loss : (run.progress?.loss ?? null);
+					const phase = (hasLiveProgress ? live.phase : null) ?? run.progress?.phase ?? null;
 					const percent = runPercent(step, totalSteps);
 
 					return (
-						<Stack gap={4} key={run.id}>
+						<Stack gap={4} key={run.id} data-testid={`training-run-${run.id}`}>
 							<Group gap="sm" justify="space-between">
 								<Group gap="sm">
 									<Badge color={statusColors[run.status] ?? "gray"} variant="light">
@@ -114,7 +129,9 @@ export function TrainingRunList() {
 
 							{run.status === "Succeeded" ? (
 								<TrainingArtifactPanel
-									exportPhase={run.id === exportingRunId && isExportRunning(live.phase) ? live.phase : null}
+									exportPhase={
+										run.id === exportingRunId && run.id === focusedRunId && isExportRunning(live.phase) ? live.phase : null
+									}
 									onExportStarted={() => setExportingRunId(run.id)}
 									runId={run.id}
 								/>

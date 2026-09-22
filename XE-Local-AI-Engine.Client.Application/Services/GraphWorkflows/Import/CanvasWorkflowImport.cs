@@ -21,9 +21,7 @@ public sealed class CanvasWorkflowImportCandidate
 }
 
 /// <summary>
-///     Everything the pre-migration read found. <see cref="FailedCount" /> is the rows that could not be decrypted or
-///     did not parse as JSON at all: they are unrecoverable once the drop migration commits, so they are counted and
-///     named in the log rather than passed on.
+///     Every recoverable canvas. An incomplete snapshot must never be committed as a successful import.
 /// </summary>
 public sealed class CanvasWorkflowImportSnapshot
 {
@@ -39,9 +37,8 @@ public sealed class CanvasWorkflowImportSnapshot
 /// <remarks>
 ///     Split in two because an EF migration cannot decrypt <c>graph_json</c> — it has no node key — while the
 ///     <c>DropCanvasWorkflows</c> migration removes the source table before any hosted service starts, so
-///     <see cref="ReadAsync" /> runs BEFORE migrations and <see cref="ImportAsync" /> after them. That absent table is
-///     the idempotency mechanism: no marker table, no flag column to keep honest. Why it ignores the feature flag,
-///     what it may not depend on and which launch paths reach it: docs/wiki/21-graph-workflows.md ("Why it is split around the migration").
+///     <see cref="ReadAsync" /> durably stages ciphertext BEFORE migrations and <see cref="ImportAsync" /> imports
+///     it after them. Definitions and recovery-table removal commit together; interrupted imports retry on startup.
 /// </remarks>
 public static class CanvasWorkflowImport
 {
@@ -60,31 +57,37 @@ public static class CanvasWorkflowImport
     private static readonly JsonSerializerOptions CanvasSerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    ///     Every saved canvas, decrypted, read BEFORE migrations while <c>canvas_workflows</c> still exists.
+    ///     Stages every saved canvas before migrations, or reads retained recovery data after an interrupted import.
     /// </summary>
     /// <remarks>
-    ///     Raw SQL with EVERY column aliased: an unmapped-type query binds result columns to property names, so
-    ///     <c>graph_json</c> would never reach <c>GraphJson</c> and the read would throw with the drop migration still
-    ///     committing behind it. No <c>LIMIT</c> and no option — a cap plus an unconditional drop destroys everything
-    ///     past the cap as its normal outcome.
+    ///     Raw SQL aliases every column for the unmapped-type query. The staged graph bytes retain their original
+    ///     encryption and AAD. No row cap is safe when a later migration drops the entire source table.
     /// </remarks>
     public static async Task<CanvasWorkflowImportSnapshot> ReadAsync(NodeChatDbContext dbContext, ILogger logger, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dbContext);
         ArgumentNullException.ThrowIfNull(logger);
 
-        // The table is gone on every start after the first, which is what makes this import one-shot.
         var tables = await dbContext.Database
-                                    .SqlQueryRaw<string>("SELECT name AS Value FROM sqlite_master WHERE type='table' AND name='canvas_workflows'")
+                                    .SqlQueryRaw<string>("SELECT name AS Value FROM sqlite_master WHERE type='table' AND name IN ('canvas_workflows', 'canvas_workflow_import_recovery')")
                                     .ToListAsync(cancellationToken);
-        if (tables.Count == 0)
+        if (tables.Contains("canvas_workflows", StringComparer.Ordinal))
+        {
+            // Durable ciphertext staging survives a crash after migrations drop the original; this is NOT a TEMP table.
+            // While the original exists it stays authoritative, including when refreshing staging on retry.
+            await using var staging = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            _ = await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS canvas_workflow_import_recovery", cancellationToken);
+            _ = await dbContext.Database.ExecuteSqlRawAsync("CREATE TABLE canvas_workflow_import_recovery AS SELECT id, name, graph_json, created_at_utc FROM canvas_workflows", cancellationToken);
+            await staging.CommitAsync(cancellationToken);
+        }
+        else if (!tables.Contains("canvas_workflow_import_recovery", StringComparer.Ordinal))
         {
             return new CanvasWorkflowImportSnapshot { Candidates = [], FailedCount = 0 };
         }
 
         var rows = await dbContext.Database
                                   .SqlQueryRaw<CanvasWorkflowRow>("SELECT id AS Id, name AS Name, graph_json AS GraphJson, created_at_utc AS CreatedAtUtc "
-                                                                  + "FROM canvas_workflows ORDER BY created_at_utc ASC, id ASC")
+                                                                  + "FROM canvas_workflow_import_recovery ORDER BY created_at_utc ASC, id ASC")
                                   .ToListAsync(cancellationToken);
 
         logger.LogInformation("Open Canvas one-shot import: {CanvasWorkflowCount} saved workflow(s) read before migrations.", rows.Count);
@@ -98,24 +101,27 @@ public static class CanvasWorkflowImport
             {
                 var plaintext = dbContext.DecryptCanvasWorkflowGraphJson(row.GraphJson, row.Id);
 
-                // The only skip cause there is. A blob written by the Open Canvas endpoint decrypts under its own AAD
-                // and parses, so a failure here means the row was already damaged before this slice touched it.
+                // Refuse malformed legacy content before allowing the migration to drop its source table.
                 JsonDocument.Parse(plaintext).Dispose();
 
                 candidates.Add(new CanvasWorkflowImportCandidate { Id = row.Id, Name = row.Name ?? string.Empty, GraphJson = plaintext, CreatedAtUtc = row.CreatedAtUtc });
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // Broad on purpose: one damaged row must never cost the operator the rest of their canvases, and the
-                // drop migration commits whether this read succeeded or not. The type, never the content.
+                // Report every unreadable row without logging its content, then refuse the destructive migration.
                 failed++;
-                logger.LogError("Open Canvas workflow {CanvasWorkflowId} could not be read and will be lost when canvas_workflows is dropped. [{ErrorType}]",
+                logger.LogError("Open Canvas workflow {CanvasWorkflowId} could not be read; its encrypted source is retained and startup will stop. [{ErrorType}]",
                     row.Id,
                     exception.GetType().Name);
             }
         }
 
-        return new CanvasWorkflowImportSnapshot { Candidates = candidates, FailedCount = failed };
+        if (failed != 0)
+        {
+            throw new InvalidOperationException("Saved Open Canvas workflows could not all be read. Their encrypted source is retained; repair the data or restore a backup before restarting.");
+        }
+
+        return new CanvasWorkflowImportSnapshot { Candidates = candidates, FailedCount = 0 };
     }
 
     /// <summary>
@@ -126,15 +132,16 @@ public static class CanvasWorkflowImport
     ///     The happy path goes through <see cref="IGraphWorkflowDefinitionService" />, which owns the parse, the node
     ///     cap and the hash the save endpoint uses. A graph it refuses is saved ANYWAY through
     ///     <see cref="IGraphWorkflowStore" /> with an <c>IMPORT NEEDS ATTENTION:</c> description: preserving the row
-    ///     beats enforcing validity on data about to be deleted either way, and such a definition cannot run until an
-    ///     operator edits it.
+    ///     preserves the source graph without permitting execution until an operator repairs it.
     /// </remarks>
-    public static async Task ImportAsync(IGraphWorkflowDefinitionService definitions,
+    public static async Task ImportAsync(NodeChatDbContext dbContext,
+        IGraphWorkflowDefinitionService definitions,
         IGraphWorkflowStore store,
         CanvasWorkflowImportSnapshot snapshot,
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(dbContext);
         ArgumentNullException.ThrowIfNull(definitions);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -142,9 +149,13 @@ public static class CanvasWorkflowImport
 
         if (snapshot.Candidates.Count == 0 && snapshot.FailedCount == 0)
         {
+            _ = await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS canvas_workflow_import_recovery", cancellationToken);
             return;
         }
 
+        // The service and store must share this scoped context. A failed write, cleanup, or process interruption
+        // rolls back every definition, keeping the staged ciphertext available for a duplicate-free retry.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var imported = 0;
         var attention = 0;
         var failed = snapshot.FailedCount;
@@ -167,8 +178,15 @@ public static class CanvasWorkflowImport
             }
         }
 
-        // Warning, not Information: this is an irreversible one-shot the operator had no chance to decline, and
-        // Information is where it would be invisible.
+        if (failed != 0)
+        {
+            throw new InvalidOperationException("Saved Open Canvas workflows could not all be imported. No imported definitions were committed; encrypted recovery data is retained for the next startup.");
+        }
+
+        _ = await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS canvas_workflow_import_recovery", cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        // Announce completion only after both the imports and recovery cleanup commit.
         logger.LogWarning("Open Canvas one-shot import complete: {Imported} imported, {NeedsAttention} need attention, {Failed} failed. "
                           + "Open Canvas has been removed; canvas_workflows is dropped.",
             imported,
@@ -278,8 +296,7 @@ public static class CanvasWorkflowImport
         string provenance;
         try
         {
-            // Inside the guard, not before it: this method is the only thing standing between a row that throws while
-            // being mapped and every LATER canvas plus the summary line, and the source table is already dropped.
+            // Account for mapping failures as well as failed writes; neither may permit recovery cleanup.
             map = MapGraph(candidate.GraphJson);
             graphJson = map.Document.ToJsonString();
             name = DefinitionName(candidate.Name);
@@ -287,7 +304,7 @@ public static class CanvasWorkflowImport
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogError("Open Canvas workflow {CanvasWorkflowId} could not be translated and is lost. [{ErrorType}]",
+            logger.LogError("Open Canvas workflow {CanvasWorkflowId} could not be translated; encrypted recovery data is retained. [{ErrorType}]",
                 candidate.Id,
                 exception.GetType().Name);
             return ImportOutcome.Failed;
@@ -357,7 +374,7 @@ public static class CanvasWorkflowImport
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogError("Open Canvas workflow {CanvasWorkflowId} ('{CanvasWorkflowName}') could not be stored and is lost. [{ErrorType}]",
+            logger.LogError("Open Canvas workflow {CanvasWorkflowId} ('{CanvasWorkflowName}') could not be stored; encrypted recovery data is retained. [{ErrorType}]",
                 candidate.Id,
                 name,
                 exception.GetType().Name);

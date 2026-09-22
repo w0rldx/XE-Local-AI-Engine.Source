@@ -678,25 +678,22 @@ segmenter tolerates this, and the timestamps stay internally consistent, but the
 start of the recording. Writing silence instead would require the zero-copy `DataAvailable` event, whose buffer is a
 `ReadOnlySpan<byte>` valid only inside the callback and therefore cannot cross an `await`.
 
-### A capture that dies leaves the session live and silent
+### An unexpected capture end fails the session
 
-The companion consequence, and the sharper one. A detached capture can end on its own in several ways: `BuildAsync`
-refuses because the pid is already gone or CoreAudio refuses the activation, the target process exits mid-capture, or
-the converter's buffer overflows because conversion stopped keeping up. All of them are caught and logged by the
-capture loop, which then removes its own handle. **Nothing ends the session.** By that point `Start` has already
-answered 200 with `capturing: true`; the producer attached, which disarmed the registry's producer-attachment
-deadline, so the `NeverAttached` sweep will not fire either; and S5 never calls `EndAsync`,
-because stopping a capture and ending a live session are different acts. The session therefore stays live, receives
-nothing more, and the only client-visible signals are indirect: `IsCapturing` reports `false`, and a later `DELETE`
-on the capture route answers **404** instead of 204. The browser abandonment grace is the one thing that still ends
-such a session, and only if the operator closes the tab.
+`ProcessAudioCaptureCoordinator.SessionCapture.RunAsync` detaches a recorder that returns or throws without a stop
+request, then calls the registry's existing `EndAsync(Failed)` path. This includes a process disappearing before
+`BuildAsync`, a CoreAudio failure, and an `OperationCanceledException` whose capture token was not cancelled. The
+registry finalizes the row and publishes its normal terminal event; `TranscriptionSessionPage` re-reads that row and
+replaces the live controls with the failed-session view. A browser that remains connected therefore sees the failure
+instead of waiting for an abandonment timer that cannot fire while it is watching.
 
-This is intended rather than overlooked — the coordinator's own remarks state that it never ends a session and names
-no session status, so that the registry keeps exactly one termination path. It is also the least pleasant thing about
-the design from the operator's seat, which is why the Windows round has to record what actually happens: killing the
-target process mid-session is a step in the live-validation plan, and what the transcript, the status and the capture
-route report afterwards is the observation that decides whether a future slice needs a "capture ended" signal on the
-hub.
+A requested stop retains its existing semantics: the capture's cancelled token or stop flag prevents a second failure
+request, and the registry's graceful completion still flushes the final window. Detaching precedes `EndAsync` so
+teardown cannot wait on its own producer. The registry remains the only owner of session terminalization.
+`LiveTranscriptionSessionRegistryTests.ProcessCapture_UnexpectedEnd_FailsAndPublishesToTheWatchingBrowser` covers a
+clean unexpected end, a recorder exception and an uncancelled cancellation exception with the real registry;
+`ProcessCapture_RequestedCompletion_PreservesTheGracefulFlush` covers normal completion. The native WASAPI outcome
+still needs the Windows live round.
 
 ### Stopping when the hub cannot deliver: the REST fallback
 
@@ -743,10 +740,11 @@ path the fallback is supposed to make instant.
 
 ### Known limitations
 
-- **The target process exiting mid-capture is caught and logged**, not raised: the capture loop treats any failure as
-  "capture ended", the session lives on until something ends it through the registry, and nothing escapes as an
-  unobserved task fault. Which of the two shapes NAudio produces there — a clean end of the sequence or a COM
-  exception — is not verified.
+- **An unexpected capture end fails the live session through the registry.** `ProcessAudioCaptureCoordinator.SessionCapture.RunAsync`
+  detaches before calling `EndAsync(Failed)`, so a recorder initialization failure, an unexpected clean return, or an
+  uncancelled `OperationCanceledException` reaches persistence and the browser's terminal status event instead of leaving
+  a session recording without a producer. Requested cancellation keeps the registry caller's status and graceful-flush
+  semantics. Which shape NAudio produces when a target exits — a clean end or a COM exception — still needs a Windows round.
 - **More than two channels is refused** with a `NotSupportedException`. `StereoToMonoSampleProvider` downmixes two
   channels only, and failing loudly beats interleaving channels into the transcript. Unreachable with NAudio's stereo
   default.

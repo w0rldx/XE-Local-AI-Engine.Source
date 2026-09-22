@@ -2,49 +2,13 @@
 
 What happens the first time you start the app, and what to do in it.
 
-**Expect the first launch to take 5–15 minutes.** Most of that is downloading, and it only happens
-once.
+On a new installation, create your local profile and choose how the engine may access the internet.
+If you enable automatic setup, allow time for the runtime and starter model to download; the time
+needed depends on your connection.
 
 ---
 
-## Step 1 — Wait for the first-time setup
-
-When the app starts for the first time it downloads two things in the background:
-
-1. **The AI engine** (called *llama.cpp*) — the component that actually runs models.
-2. **A small starter model** — about 400 MB, downloaded from Hugging Face.
-
-While this happens the app can look frozen or unhelpfully quiet. **It isn't stuck.** The black console
-window shows the real progress — watch that if you want reassurance.
-
-**You need an internet connection for this.** After the initial download, chatting works offline.
-
-### How to tell it's working, not dead
-
-The console is your progress bar. You're looking for **lines that keep changing** — download
-percentages, model or runtime names, or messages about extracting and starting.
-
-**The finish line is a line containing `Now listening on:` followed by a `http://127.0.0.1:...`
-address.** Once you see that, setup is done and the browser page will move on to the **"Set up local
-admin"** form.
-
-| What you see | What it means |
-|---|---|
-| Lines still appearing, numbers changing | Working. Leave it alone. |
-| `Now listening on: http://127.0.0.1:…` | **Done** — go to your browser. |
-| The *same* last line for 10+ minutes | Probably stuck — see below. |
-
-> **If it really is stuck** (nothing has changed for 10+ minutes): close the console, delete
-> `%LOCALAPPDATA%\XE-Local-AI-Engine`, and start again. If it stalls at the same place twice,
-> **that's a bug worth reporting** — please send me the last few console lines.
-> → [How to report it](feedback.md)
-
-> **Needs about 2 GB free disk space** for this stage. Real models you add later are much bigger — plan
-> for 5–30 GB if you get into it.
-
----
-
-## Step 2 — Create your local profile
+## Step 1 — Create your local profile
 
 You'll see **"Set up local admin"**, asking for an email address and a password.
 
@@ -91,7 +55,47 @@ it is just stored with the account.
 
 ---
 
-## Step 3 — Have your first chat
+## Step 2 — Choose external access
+
+After creating your profile, choose **Recommended** or **Offline / Manual**:
+
+- **Recommended** enables automatic application and llama.cpp update checks, and first-run runtime
+  and starter-model downloads.
+- **Offline / Manual** disables those automatic actions. Install or import a model yourself before
+  chatting. This choice is not a firewall: configured integrations and model-catalog lookups can
+  still use the network.
+
+You can change this choice later in **Node Settings**. Automatic provisioning waits for this decision;
+waiting at the account-setup screen will not download a model for you.
+
+### Choose Simple or Advanced
+
+Next, choose how much of the application you want to see and click **Continue**. **Simple** shows the
+everyday tools, including chat, agents, models, knowledge, images and transcription. **Advanced** also
+shows tools such as scheduling, workflows, integrations, benchmarks and training. This choice does not
+delete anything, and you can change it later in **Node Settings**.
+
+---
+
+## Step 3 — Install a model
+
+With **Recommended**, a fresh desktop installation downloads the llama.cpp runtime and a small
+starter model in the background. Follow the runtime and model download progress in the app. The
+engine's listening address means the app is reachable; it does not mean a model has finished downloading.
+
+With **Offline / Manual**, use **Models → Installed** to download or import a model. Runtime acquisition
+also needs internet access unless you have already supplied the required runtime locally.
+
+If setup fails or progress stops, check the visible error and the application logs, confirm internet
+access and free disk space, then retry the failed download from model management. If the problem
+persists, retain the error and [report it](feedback.md).
+
+**Do not delete the data directory as a troubleshooting step.** It contains your account, chats,
+settings, keys and downloaded models. A deliberate reset is destructive and is a separate operation.
+
+---
+
+## Step 4 — Have your first chat
 
 Once you're in, there's a guided tour you can follow, or you can go straight to **Chat** and type
 something.
@@ -100,7 +104,7 @@ something.
   <img src="../media/screenshots/onboarding-tour@2x.png" alt="The optional guided tour on first sign-in" width="800">
 </p>
 
-The first model is already selected, so it should just work.
+Once a chat model is installed, select it in Chat if it is not already selected, then send a message.
 
 <p align="center">
   <img src="../media/screenshots/chat@2x.png" alt="The chat interface" width="800">
@@ -111,7 +115,7 @@ the rest can wait.
 
 ---
 
-## Step 4 — Get a model that is actually good
+## Step 5 — Get a model that is actually good
 
 > ### ⚠️ Please read this part — it prevents the most common bad first impression
 >
@@ -164,7 +168,7 @@ hardware.
 
 ---
 
-## Step 5 — Explore, at your own pace
+## Step 6 — Explore, at your own pace
 
 No need to do these in order, or at all.
 

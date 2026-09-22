@@ -336,7 +336,16 @@ synopsis does not already cover, summarizes them, and persists the result on the
 (`CompactionSummary`, `CompactionSummaryCoversToSequence`, `CompactionSummaryUpdatedAtUtc` on
 `NodeConversation` — the summary column is encrypted like every other chat payload). **The original messages are
 never deleted; only what is *sent* on later turns changes.** The outcome is typed
-(`Compacted`, `NothingToCompact`, `NoLocalModel`, `SummarizerReturnedNothing`, `ConversationNotFound`).
+(`Compacted`, `NothingToCompact`, `NoLocalModel`, `SummarizerReturnedNothing`, `TimedOut`, `ConversationNotFound`).
+
+After loading node settings, `ConversationCompactionService` applies the existing
+`MaxMessageRequestTimeoutSeconds` as one cancellation deadline across history/model resolution and every
+summarization fold, including automatic work-session compaction. Expiry returns `TimedOut`; coverage and the
+previous synopsis remain unchanged, and the manual control explains how to retry with a faster local model or a
+larger message-request budget. Caller cancellation still propagates as cancellation. The provider's network
+operation timeout is a separate ceiling, not a fresh budget for each compaction fold. Once generation succeeds
+within budget, persistence uses the caller token; a deadline that expires during the committed write cannot
+misreport an unchanged synopsis.
 
 Two rules are load-bearing:
 

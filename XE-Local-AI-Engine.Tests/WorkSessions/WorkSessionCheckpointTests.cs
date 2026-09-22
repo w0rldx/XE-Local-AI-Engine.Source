@@ -78,6 +78,7 @@ public sealed class WorkSessionCheckpointTests
     [Arguments(ConversationCompactionOutcome.NothingToCompact)]
     [Arguments(ConversationCompactionOutcome.NoLocalModel)]
     [Arguments(ConversationCompactionOutcome.SummarizerReturnedNothing)]
+    [Arguments(ConversationCompactionOutcome.TimedOut)]
     public async Task Compose_WhenCompactionIsANoOp_StillCheckpointsAndKeepsThePriorSummary(ConversationCompactionOutcome outcome)
     {
         var compaction = new StubCompactionService(new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = "First pass." });

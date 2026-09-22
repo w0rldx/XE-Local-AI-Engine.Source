@@ -64,6 +64,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     private readonly ILogger<WorkSessionExecutionSupervisor> _logger;
     private readonly IWorkSessionEventPublisher _publisher;
     private readonly WorkSessionOptions _options;
+    private readonly TimeSpan _pendingToolCallAge;
 
     /// <summary>
     ///     The node's one set of tool calls parked on an out-of-stream answer. Read only to tell a dropped approval
@@ -83,6 +84,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         IOptions<WorkSessionOptions> options,
         TimeProvider timeProvider,
         PendingToolCallRegistry pendingToolCalls,
+        ToolApprovalCoordinator approvalCoordinator,
         ILogger<WorkSessionExecutionSupervisor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -93,6 +95,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
+        ArgumentNullException.ThrowIfNull(approvalCoordinator);
+        // Use the wait owner's snapshot: separately reading settings could observe a later edit.
+        _pendingToolCallAge = approvalCoordinator.PendingToolCallAge;
         _admission = new SemaphoreSlim(_options.MaxConcurrentSessions, _options.MaxConcurrentSessions);
     }
 
@@ -423,6 +428,24 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         return await SettleStepAsync(run, guard, sessionId, step, stepsThisRun, started.Sequence, terminal, callBudget);
     }
 
+    private void ArmPark(StepCancellationGuard guard, Guid invocationId, string? toolName, long occurredAtUtc = 0)
+    {
+        var now = _timeProvider.GetUtcNow();
+        // Questions have no registry row; their producer timestamp still accounts for time queued in the stream.
+        var requestedAt = occurredAtUtc > 0 && occurredAtUtc <= now.ToUnixTimeMilliseconds()
+            ? DateTimeOffset.FromUnixTimeMilliseconds(occurredAtUtc)
+            : now;
+        var createdAt = _pendingToolCalls.Calls.Values
+                                         .Where(call => call.InvocationId == invocationId)
+                                         .Select(static call => call.CreatedAt)
+                                         .DefaultIfEmpty(requestedAt)
+                                         .Min();
+        var remaining = createdAt + _pendingToolCallAge - TimeSpan.FromSeconds(1) - now;
+        var budget = TimeSpan.FromSeconds(_options.MaxParkedSeconds);
+        var capped = remaining < budget ? remaining : budget;
+        guard.ArmPark(capped > TimeSpan.Zero ? capped : TimeSpan.Zero, toolName);
+    }
+
     /// <summary>Drains one step's stream to its terminal, mapping parks onto the session status as they happen.</summary>
     private async Task<ChatStreamEvent> DrainStepAsync(INodeChatStreamService stream,
         StepCancellationGuard guard,
@@ -438,7 +461,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 case ChatStreamEventTypes.ApprovalRequested:
                 case ChatStreamEventTypes.QuestionRequested:
                     parked = true;
-                    guard.ArmPark(TimeSpan.FromSeconds(_options.MaxParkedSeconds), streamEvent.ToolName);
+                    ArmPark(guard, request.RequestId.GetValueOrDefault(), streamEvent.ToolName, streamEvent.OccurredAtUtc);
                     await MoveAsync(sessionId,
                             streamEvent.Type == ChatStreamEventTypes.ApprovalRequested
                                 ? AgentWorkSessionStatus.WaitingForApproval
@@ -479,7 +502,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     // The turn IS waiting on a human, so arm the clock off the signal that survived. The registry entry
                     // carries no tool name, hence null; the delta/completed case disarms it if the turn turns out live.
                     parked = true;
-                    guard.ArmPark(TimeSpan.FromSeconds(_options.MaxParkedSeconds), toolName: null);
+                    ArmPark(guard, request.RequestId.GetValueOrDefault(), toolName: null);
                     await MoveAsync(sessionId, AgentWorkSessionStatus.WaitingForApproval);
                     _logger.LogWarning("Work session {SessionId} step {Step} lost the event for a parked tool call to a stream drop; the park clock was armed off the reconcile.",
                         sessionId,
@@ -705,12 +728,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         return StepOutcome.Settled;
     }
 
-    private string ParkedQuestionText(string? toolName) =>
+    private static string ParkedQuestionText(string? toolName) =>
         toolName is { Length: > 0 }
             ? string.Create(CultureInfo.InvariantCulture,
-                $"The tool '{toolName}' asked for a decision and nobody answered within {_options.MaxParkedSeconds} seconds, so the step was stopped. Ask again, or find another way forward.")
-            : string.Create(CultureInfo.InvariantCulture,
-                $"A prompt went unanswered for {_options.MaxParkedSeconds} seconds, so the step was stopped. Ask again, or find another way forward.");
+                $"The tool '{toolName}' asked for a decision and nobody answered before the response deadline, so the step was stopped. Ask again, or find another way forward.")
+            : "A prompt went unanswered before the response deadline, so the step was stopped. Ask again, or find another way forward.";
 
     /// <summary>
     ///     Reads back whether <c>complete_work_session</c> fired during the step, and the summary it carried.

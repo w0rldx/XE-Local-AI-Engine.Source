@@ -108,7 +108,7 @@ public sealed class CompactNodeChatConversationRequest
 /// </summary>
 /// <remarks>
 ///     <see cref="Outcome" /> is one of the <c>ConversationCompactionOutcome</c> names ("Compacted",
-///     "NothingToCompact", "NoLocalModel", "SummarizerReturnedNothing", "ConversationNotFound"); the remaining fields
+///     "NothingToCompact", "NoLocalModel", "SummarizerReturnedNothing", "TimedOut", "ConversationNotFound"); the remaining fields
 ///     are populated only when a synopsis was produced.
 /// </remarks>
 public sealed class CompactNodeChatConversationResponse
