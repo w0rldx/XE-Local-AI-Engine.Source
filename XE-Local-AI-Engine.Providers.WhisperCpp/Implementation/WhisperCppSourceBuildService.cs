@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -81,7 +82,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             activityGate,
             publisher,
             logger,
-            DefaultCacheRoot(),
+            RuntimeCacheDirectory.Resolve(),
             new WhisperSourceCommandRunner(),
             timeProvider)
     {
@@ -944,11 +945,6 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         {
             // Best-effort cleanup; the caller reports the primary operation.
         }
-    }
-
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XE-Local-AI-Engine");
     }
 
     [GeneratedRegex(@"\((?:RUNPATH|RPATH)\)[^\[]*\[(?<value>[^\]]*)\]", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, 1000)]

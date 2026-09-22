@@ -80,7 +80,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         ILlamaCppSourceBuildEventPublisher publisher,
         ILogger<LlamaCppSourceBuildService> logger,
         TimeProvider timeProvider)
-        : this(prerequisiteProbe, binaryManager, installedRuntimeStore, activeSignal, supervisor, buildActivity, publisher, logger, timeProvider, DefaultCacheRoot())
+        : this(prerequisiteProbe, binaryManager, installedRuntimeStore, activeSignal, supervisor, buildActivity, publisher, logger, timeProvider, RuntimeCacheDirectory.Resolve())
     {
     }
 
@@ -1315,12 +1315,6 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         {
             throw new LlamaRuntimeException("A prior source-build directory could not be reconciled safely.", exception);
         }
-    }
-
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine");
     }
 
     [GeneratedRegex(@"^(?<major>[0-9]{1,2})\.(?<minor>[0-9])$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]

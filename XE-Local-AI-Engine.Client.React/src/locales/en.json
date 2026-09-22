@@ -1220,6 +1220,7 @@
 				"nothing": "Nothing to compact yet — the recent messages still fit the context window.",
 				"noModel": "No local chat model is installed to summarize with, so compaction can't run on-node.",
 				"noSummary": "Compaction didn't produce a summary. Please try again.",
+				"timedOut": "Compaction reached the time limit. Your messages and previous summary are unchanged. Try a faster local model or increase the message request timeout in Node Settings.",
 				"error": "Couldn't compact the conversation. Please try again.",
 				"compactedLocalFallback": "Compacted {{count}} older message(s) locally with {{model}} to keep your chat on-device. Your originals are kept.",
 				"aLocalModel": "a local model"
@@ -6949,6 +6950,8 @@
 			"capture": {
 				"start": "Start capture",
 				"stop": "Stop capture",
+				"finalizing": "Finalizing transcript…",
+				"cancel": "Cancel now",
 				"replayStalled": "The node stopped sending missed segments. The transcript on screen may be incomplete — reload the page to fetch it again.",
 				"error": {
 					"unsupported": "This browser cannot capture audio here. A local HTTPS page in a recent Chrome, Edge or Firefox is required.",
@@ -7653,7 +7656,9 @@
 				"empty": "No training runs yet. Start one above.",
 				"cancel": "Cancel",
 				"loss": "loss {{loss}}",
-				"steps": "step {{step}} of {{total}}"
+				"steps": "step {{step}} of {{total}}",
+				"waiting": "Queued runs wait for other work and loaded models to release the runtime. Check loaded models if a run stays queued.",
+				"loadedModels": "Loaded models"
 			},
 			"status": {
 				"Queued": "Queued",

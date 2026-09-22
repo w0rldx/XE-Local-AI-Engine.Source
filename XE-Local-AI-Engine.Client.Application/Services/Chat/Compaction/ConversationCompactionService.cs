@@ -57,6 +57,46 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         int? recentMessagesToKeepVerbatim,
         CancellationToken cancellationToken = default)
     {
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
+        // One budget for resolution and ALL folds, shared by manual compaction and work-session checkpoints.
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(nodeSettings.MaxMessageRequestTimeoutSeconds), _timeProvider);
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        ConversationCompactionResult result;
+        try
+        {
+            result = await CompactCoreAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim, nodeSettings, operation.Token);
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("Compaction timed out for conversation {ConversationId}; the previous synopsis is retained.", conversationId);
+            return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.TimedOut };
+        }
+
+        if (result.Outcome == ConversationCompactionOutcome.Compacted)
+        {
+            // Commit outside the generation deadline: expiry during the store's post-write read must not report
+            // TimedOut after the summary has already changed. Caller cancellation remains the store's authority.
+            await _persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
+                {
+                    ConversationId = conversationId,
+                    Summary = result.Summary,
+                    CoversToSequence = result.CoversToSequence,
+                    UpdatedAtUtc = result.UpdatedAtUtc.GetValueOrDefault()
+                },
+                cancellationToken);
+            _logger.LogInformation("Compacted conversation {ConversationId}: folded {Folded} message(s) up to sequence {Cutoff} into the synopsis.",
+                conversationId, result.MessagesFolded, result.CoversToSequence);
+        }
+
+        return result;
+    }
+
+    private async Task<ConversationCompactionResult> CompactCoreAsync(Guid conversationId,
+        string? requestedModel,
+        int? recentMessagesToKeepVerbatim,
+        StoredNodeSettings nodeSettings,
+        CancellationToken cancellationToken)
+    {
         var conversation = await _persistence.GetConversationAsync(conversationId, cancellationToken);
         if (conversation is null)
         {
@@ -110,7 +150,6 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
 
         // Summarize with the user's model only when it is an installed LOCAL chat model: anything else degrades to a
         // node-local default, so conversation content never leaves the machine.
-        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
         var preferred = string.IsNullOrWhiteSpace(requestedModel) ? nodeSettings.DefaultModelName : requestedModel;
         var model = await _localDefaultChatModelResolver.ResolveAsync(preferred, cancellationToken);
         if (string.IsNullOrWhiteSpace(model))
@@ -130,6 +169,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         var summary = await _summarizer
                             .SummarizeAsync(new ConversationSummarizerInput { PriorSummary = conversation.CompactionSummary, Messages = toFold, ModelName = model, SupportsThinking = capabilities.SupportsThinking },
                                 cancellationToken);
+        // A provider may finish concurrently with cancellation; never advance coverage after the deadline.
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(summary))
         {
             return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.SummarizerReturnedNothing };
@@ -140,14 +181,6 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         summary = ConversationSummarizer.TruncateAtRuneBoundary(summary, Math.Max(1, _options.MaxSummaryChars));
 
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        await _persistence
-              .SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest { ConversationId = conversationId, Summary = summary, CoversToSequence = cutoffSequence, UpdatedAtUtc = now }, cancellationToken);
-
-        _logger.LogInformation("Compacted conversation {ConversationId}: folded {Folded} message(s) up to sequence {Cutoff} into the synopsis.",
-            conversationId,
-            toFold.Count,
-            cutoffSequence);
-
         return new ConversationCompactionResult { Outcome = ConversationCompactionOutcome.Compacted, Summary = summary, CoversToSequence = cutoffSequence, MessagesFolded = toFold.Count, UpdatedAtUtc = now, ModelUsed = model, UsedFallbackModel = usedFallbackModel };
     }
 }

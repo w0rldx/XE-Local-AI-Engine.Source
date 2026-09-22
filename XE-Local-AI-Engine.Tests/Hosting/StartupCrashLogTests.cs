@@ -4,8 +4,46 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
+[NotInParallel]
 public sealed class StartupCrashLogTests
 {
+    [Test]
+    public async Task RecordAsync_UsesExplicitNodeDataRoot()
+    {
+        var root = Directory.CreateTempSubdirectory("xe-crash-root-").FullName;
+        var original = Environment.GetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, root);
+            await StartupCrashLog.RecordAsync("isolated");
+            var text = await File.ReadAllTextAsync(Path.Combine(root, "logs", "startup-crash.log"));
+            AssertEx.Contains(text, "isolated");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, original);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    [Arguments(" ")]
+    [Arguments("relative")]
+    public async Task RecordAsync_InvalidNodeDataRoot_DoesNotFallBack(string value)
+    {
+        var original = Environment.GetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, value);
+            AssertEx.Null(StartupCrashLog.ResolveLogDirectory());
+            await StartupCrashLog.RecordAsync("must not write");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, original);
+        }
+    }
+
     [Test]
     public async Task RecordToAsync_CreatesTheDirectoryAndAppendsTimestampedLines()
     {

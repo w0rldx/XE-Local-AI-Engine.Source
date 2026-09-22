@@ -839,6 +839,24 @@ Cold dynamic component imports inside a test count against timeout and become co
 
 Official packaging validates the selected update-policy file, not only publish exit code. `CopyToPublishDirectory="Always"` may leave a previously disturbed destination missing until the **source** timestamp changes. Both official and reference packagers must refuse a package with missing/wrong update channel. Historical manual tag lookup supports bare and `v` forms, but the public updater itself is anonymous and targets the consolidated source repository.
 
+### Only the packaged main executable calls `VelopackApp.Build().Run()` — a second process of the same install must not
+
+**Rule:** with no `--veloapp-*` hook arguments, `Run()` is a near no-op only in an unpackaged dev run, where
+`CurrentlyInstalledVersion` is null. Inside an installed app it deletes every superseded `.nupkg` from the packages
+directory on each run and, when a newer staged full package exists and auto-apply is on (the default), spawns
+`Update.exe apply --waitPid <this pid>` and calls `Environment.Exit(0)`. From a secondary process that `waitPid` names
+the wrong process, so the updater rewrites the install underneath the still-running main executable and relaunches it
+carrying the secondary's arguments; the once-only guard is a per-process static that only logs, so two processes race
+rather than one winning, and the Windows locator keys on the process path, so any executable inside the install tree
+looks like the main one. On Windows only `XE-Local-AI-Engine.WindowsLauncher` — the packed `--mainExe` — calls it; on
+Linux the desktop shell **is** the main executable and calls it first, outside every `try`, guarded by
+`OperatingSystem.IsLinux()`. A supervised engine that needs Velopack points it at its supervisor instead of calling
+`Run()` a second time. **Failure prevented:** a `Run()` added to the Desktop shell racing the launcher over one
+Windows install, applying an update under a live process. **Authority:** `XE-Local-AI-Engine.Desktop/Program.cs`
+(`Main` remarks), `XE-Local-AI-Engine.WindowsLauncher/Program.cs`,
+`XE-Local-AI-Engine.Client/Hosting/FrameworkDependentVelopackBootstrap.cs` (`CreateSupervisedProcess`),
+`.github/workflows/release.yml` (the `main-exe` matrix), Velopack 1.2.0 `VelopackApp.Run` decompile; review 2026-09-22.
+
 ### The backend serves the SPA
 
 One Kestrel process serves API and UI via `UseStaticFiles` and `MapFallbackToFile("index.html")`. Do not add a second bundled Node/static server.
@@ -2265,7 +2283,7 @@ OpenAPI int64 normalization belongs at spec materialization. Ordinary timestamps
 
 ### An EF unmapped-type raw SQL query must ALIAS every column, or it binds nothing
 
-**Rule:** `SqlQueryRaw<T>` on a type EF does not map matches result columns to PROPERTY names, so a snake_case column never binds to a PascalCase property. Write `SELECT graph_json AS GraphJson, created_at_utc AS CreatedAtUtc …`, one alias per projected column, every time. **Prevents:** a read that throws at run time rather than at compile time — and, where the caller swallows the exception so a failed read cannot block startup, a silent zero-row answer that looks exactly like "there was nothing to read". The one-shot Open Canvas import is the case that made this expensive: the read runs immediately before `DropCanvasWorkflows`, so an unaliased column would have destroyed every canvas behind one log line. **Authority:** `CanvasWorkflowImport.ReadAsync` and the older `NodeChatTitleEncryptionBackfillService`, which aliases every column for the same reason.
+**Rule:** `SqlQueryRaw<T>` on a type EF does not map matches result columns to PROPERTY names, so a snake_case column never binds to a PascalCase property. Write `SELECT graph_json AS GraphJson, created_at_utc AS CreatedAtUtc …`, one alias per projected column, every time. **Prevents:** a read that throws at run time rather than at compile time — and, wherever a caller swallows the exception, a silent zero-row answer that looks exactly like "there was nothing to read". The one-shot Open Canvas import is the case that made this expensive: the read runs immediately before `DropCanvasWorkflows`, and until 2026-09-22 startup swallowed a failed read, so an unaliased column would have destroyed every canvas behind one log line (a failed read now stops startup and the ciphertext is staged first, but the alias rule is what keeps the read binding at all). **Authority:** `CanvasWorkflowImport.ReadAsync` and the older `NodeChatTitleEncryptionBackfillService`, which aliases every column for the same reason.
 
 Corollary for any swallowing caller: log a read failure at **Error** with the exception type. "The read threw" and "there were no rows" must never look alike in the log.
 

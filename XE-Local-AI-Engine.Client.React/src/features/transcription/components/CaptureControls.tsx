@@ -20,6 +20,7 @@ interface CaptureControlsProps {
 	readonly elapsedMs: number;
 	readonly onStart: () => void;
 	readonly onStop: () => void;
+	readonly onCancel: () => void;
 }
 
 /**
@@ -63,20 +64,29 @@ export function CaptureControls({
 	elapsedMs,
 	onStart,
 	onStop,
+	onCancel,
 }: CaptureControlsProps) {
 	const { t } = useTranslation();
-	// Stop replaces Start only once there is something to stop. While a start is still acquiring devices the Start
-	// button stays in place and busy: offering Stop there would race the acquisition it is meant to undo.
-	const canStop = state === "capturing" || state === "stopping";
+	// While a start is still acquiring devices the Start button stays in place and busy: offering Stop there would
+	// race the acquisition it is meant to undo.
+	const canStop = state === "capturing";
 
 	return (
 		<Group gap="sm" align="center" wrap="wrap">
-			{canStop ? (
+			{state === "stopping" ? (
+				<>
+					<Button variant="light" disabled={true} data-testid="transcription-capture-finalizing">
+						{t("pages.transcription.capture.finalizing")}
+					</Button>
+					<Button variant="light" color="red" onClick={onCancel} data-testid="transcription-capture-cancel">
+						{t("pages.transcription.capture.cancel")}
+					</Button>
+				</>
+			) : canStop ? (
 				<Button
 					variant="light"
 					color="red"
 					leftSection={<IconPlayerStopFilled size={16} />}
-					loading={state === "stopping"}
 					onClick={onStop}
 					data-testid="transcription-capture-stop"
 				>
@@ -96,7 +106,7 @@ export function CaptureControls({
 				</Button>
 			)}
 
-			{canStop || connected ? null : (
+			{state === "capturing" || state === "stopping" || connected ? null : (
 				<Text size="sm" c="dimmed" data-testid="transcription-capture-not-ready">
 					{t("pages.transcription.capture.notConnected")}
 				</Text>

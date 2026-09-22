@@ -13,6 +13,7 @@ internal static class WindowsLauncherApplication
     private const int MissingPrerequisiteExitCode = 150;
     private const int LaunchFailureExitCode = 151;
     private const string ManagedEntryPoint = "XE-Local-AI-Engine.Client.dll";
+    private const string DesktopEntryPoint = "XE-Local-AI-Engine.Desktop.dll";
     private const string RuntimeConfig = "XE-Local-AI-Engine.Client.runtimeconfig.json";
 
     private static readonly Uri DownloadUri = new UriBuilder(Uri.UriSchemeHttps, "dotnet.microsoft.com")
@@ -23,6 +24,9 @@ internal static class WindowsLauncherApplication
     private static readonly string[] RequiredPayloadFiles =
     [
         ManagedEntryPoint,
+        DesktopEntryPoint,
+        "XE-Local-AI-Engine.Desktop.deps.json",
+        "XE-Local-AI-Engine.Desktop.runtimeconfig.json",
         "XE-Local-AI-Engine.Client.deps.json",
         RuntimeConfig,
         "appsettings.AppUpdate.json",
@@ -86,7 +90,7 @@ internal static class WindowsLauncherApplication
                 UseShellExecute = false
             }
         };
-        foreach (var argument in CreateManagedArguments(Path.Combine(baseDirectory, ManagedEntryPoint), arguments))
+        foreach (var argument in CreateManagedArguments(Path.Combine(baseDirectory, SelectManagedEntryPoint(arguments)), arguments))
         {
             process.StartInfo.ArgumentList.Add(argument);
         }
@@ -117,6 +121,13 @@ internal static class WindowsLauncherApplication
             return Fail($"The managed application could not be started: {exception.Message}", LaunchFailureExitCode);
         }
     }
+
+    internal static string SelectManagedEntryPoint(IEnumerable<string> arguments) =>
+        arguments.Any(static argument => argument.Split('=', 2)[0].ToUpperInvariant() is
+            "--BROWSER" or "--HEADLESS" or "--NO-BROWSER" or "--MCP-ONLY" or "--HELP" or "--STATUS"
+            or "--SETUP" or "--MCP-KEY" or "--RESET-ADMIN-PASSWORD"
+            or "--KNOWLEDGE-DOWNGRADE-PREFLIGHT" or "--KNOWLEDGE-DOWNGRADE-EXPORT")
+            ? ManagedEntryPoint : DesktopEntryPoint;
 
     internal static IReadOnlyList<string> MissingPayloadFiles(Func<string, bool> fileExists) =>
         RequiredPayloadFiles.Where(relative => !fileExists(relative)).ToArray();

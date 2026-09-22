@@ -122,7 +122,7 @@ jobs:
           - rid: linux-x64
             os: ubuntu-latest
             vpk-channel: linux
-            main-exe: XE-Local-AI-Engine.Client
+            main-exe: XE-Local-AI-Engine.Desktop
             publish-dir: XE-Local-AI-Engine.Client/bin/Release/net10.0/linux-x64/publish
             pack-args: ""
             icon-args: "--icon XE-Local-AI-Engine.Client.React/public/logo.png"
@@ -200,6 +200,25 @@ jobs:
             --raw "$RAW_BUNDLE_INPUTS" \
             --output "${{ matrix.publish-dir }}/bundle-inputs.json"
 
+      # The shell publishes into the SAME publish-dir as the Client payload on purpose: vpk packs one tree, so the
+      # window and the engine it supervises must ship as one install. package-rc.sh and package-tester-win.ps1
+      # layer the two publishes the same way.
+      - name: Publish native shell (${{ matrix.rid }})
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_DESKTOP_INPUTS="$RUNNER_TEMP/desktop-bundle-inputs-${{ matrix.rid }}.raw"
+          dotnet publish XE-Local-AI-Engine.Desktop/XE-Local-AI-Engine.Desktop.csproj \
+            --configuration Release \
+            -p:PublishProfile=${{ matrix.rid }} \
+            -p:CustomAfterMicrosoftCommonTargets="$GITHUB_WORKSPACE/scripts/compliance/capture_bundle_inputs.targets" \
+            -p:XeBundleInputEvidenceRaw="$RAW_DESKTOP_INPUTS" \
+            --output '${{ matrix.publish-dir }}'
+          python scripts/compliance/create_bundle_input_manifest.py \
+            --rid "${{ matrix.rid }}" \
+            --raw "$RAW_DESKTOP_INPUTS" \
+            --output "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"
+
       - name: Build and test Windows framework launcher
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -258,17 +277,26 @@ jobs:
               raise SystemExit("nuget-license produced an empty or invalid package array")
           Path(sys.argv[2]).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
           PY
+          DESKTOP_INPUT_ARGS=(
+            --additional-deps-json "XE-Local-AI-Engine.Desktop/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Desktop.deps.json"
+            --additional-bundle-input-manifest "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"
+          )
           python scripts/compliance/generate_backend_license_corpus.py \
             --rid "${{ matrix.rid }}" \
             --deps-json "XE-Local-AI-Engine.Client/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Client.deps.json" \
             --bundle-input-manifest "${{ matrix.publish-dir }}/bundle-inputs.json" \
             --metadata-json "$JSON_METADATA" \
+            "${DESKTOP_INPUT_ARGS[@]}" \
             --output-directory "${{ matrix.publish-dir }}"
 
       - name: Generate and validate payload SPDX
         shell: bash
         run: |
           set -euo pipefail
+          DESKTOP_INPUT_ARGS=(
+            --additional-deps-json "XE-Local-AI-Engine.Desktop/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Desktop.deps.json"
+            --additional-bundle-input-manifest "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"
+          )
           WINDOWS_APPHOST_ARGS=()
           if [[ "${{ matrix.rid }}" == "win-x64" ]]; then
             WINDOWS_APPHOST_ARGS+=(
@@ -292,6 +320,7 @@ jobs:
             --bundle-input-manifest "${{ matrix.publish-dir }}/bundle-inputs.json" \
             --backend-manifest "${{ matrix.publish-dir }}/backend-components.json" \
             --frontend-manifest "${{ matrix.publish-dir }}/wwwroot/component-manifest.json" \
+            "${DESKTOP_INPUT_ARGS[@]}" \
             "${WINDOWS_APPHOST_ARGS[@]}"
           scripts/compliance/sbom-tool.sh Validate \
             -b "${{ matrix.publish-dir }}" \

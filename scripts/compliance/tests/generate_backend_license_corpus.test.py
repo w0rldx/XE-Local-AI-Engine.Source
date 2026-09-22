@@ -54,6 +54,11 @@ def package(
 
 
 class BackendLicenseCorpusTests(unittest.TestCase):
+    def test_pinned_tool_matches_repository_manifest(self) -> None:
+        self.assertEqual(
+            MODULE.NUGET_LICENSE_VERSION, MODULE.pinned_tool_version(REPOSITORY_ROOT / "dotnet-tools.json")
+        )
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
@@ -84,7 +89,7 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         upstream.mkdir()
         for filename, contents in (
             ("FastEndpoints-8.3.0-LICENSE.md", "Copyright (c) 2021 FastEndpoints upstream\nMIT terms\n"),
-            ("Scalar.AspNetCore-2.16.10-LICENSE", "Copyright (c) 2023-present Scalar\nMIT terms\n"),
+            ("Scalar.AspNetCore-2.17.4-LICENSE", "Copyright (c) 2023-present Scalar\nMIT terms\n"),
             ("Scrutor-7.0.0-LICENSE", "Copyright (c) 2015 Kristian Hellang\nMIT terms\n"),
             ("TimeZoneConverter-7.2.0-LICENSE.txt", "Copyright (c) 2017 Matt Johnson-Pint\nMIT terms\n"),
         ):
@@ -99,7 +104,7 @@ class BackendLicenseCorpusTests(unittest.TestCase):
             self.write_provenance(self.license_root / f"{source_path.as_posix()}.source.txt", text_path)
         self.manifest = self.write_json(
             "dotnet-tools.json",
-            {"tools": {"nuget-license": {"version": "4.0.14", "commands": ["nuget-license"]}}},
+            {"tools": {"nuget-license": {"version": "4.0.16", "commands": ["nuget-license"]}}},
         )
 
     def tearDown(self) -> None:
@@ -190,6 +195,44 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         )
         return output
 
+    def test_multi_executable_corpus_includes_desktop_and_requires_exact_metadata(self) -> None:
+        rid = "win-x64"
+        self.generate([package("Alpha", "1")], deps(rid, {"Alpha/1": {"runtime": {"Alpha.dll": {}}}}), rid=rid)
+        desktop = deps(rid, {"Desktop/2": {"runtime": {"Desktop.dll": {}}}})
+        self.ensure_package_roots(desktop)
+        desktop_deps = self.write_json("desktop.deps.json", desktop)
+        primary_evidence = self.root / f"{rid}.bundle-inputs.json"
+        evidence = json.loads(primary_evidence.read_text())
+        evidence["inputs"][0].update(packageId="Desktop", packageVersion="2", relativePath="Desktop.dll")
+        desktop_evidence = self.write_json("desktop.inputs.json", evidence)
+        output = self.root / "combined"
+
+        def generate(metadata: list[dict]) -> int:
+            return MODULE.generate_corpus(
+                rid,
+                self.root / f"{rid}.deps.json",
+                primary_evidence,
+                self.write_json("combined-metadata.json", metadata),
+                self.manifest,
+                self.license_root,
+                self.packages_root,
+                output,
+                additional_deps=(desktop_deps,),
+                additional_manifests=(desktop_evidence,),
+            )
+
+        with self.assertRaisesRegex(ValueError, "missing from nuget-license metadata"):
+            generate([package("Alpha", "1")])
+        with self.assertRaisesRegex(ValueError, "stale nuget-license metadata"):
+            generate([package("Alpha", "1"), package("Desktop", "1")])
+        self.assertEqual(2, generate([package("Alpha", "1"), package("Desktop", "2")]))
+        components = json.loads((output / "backend-components.json").read_text())
+        self.assertEqual(["Alpha", "Desktop"], [entry["name"] for entry in components["packages"]])
+        self.assertEqual(
+            MODULE.shipment_evidence_hash([primary_evidence, desktop_evidence]),
+            components["shipmentEvidence"]["sha256"],
+        )
+
     def test_generates_one_exact_rid_with_attributed_fallback_and_no_authorship_inference(self) -> None:
         output = self.generate([package("Zeta", "2.0.0", "Apache-2.0"), package("Alpha", "1.0.0")])
         components = json.loads((output / "backend-components.json").read_text(encoding="utf-8"))
@@ -206,9 +249,9 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "author-only MIT metadata.*no exact upstream"):
             self.generate(authors_only, output_name="authors-only-generic")
 
-        scalar_document = deps("linux-x64", {"Scalar.AspNetCore/2.16.10": {"runtime": {"Scalar.dll": {}}}})
+        scalar_document = deps("linux-x64", {"Scalar.AspNetCore/2.17.4": {"runtime": {"Scalar.dll": {}}}})
         authors_output = self.generate(
-            [package("Scalar.AspNetCore", "2.16.10", copyright_text="")],
+            [package("Scalar.AspNetCore", "2.17.4", copyright_text="")],
             scalar_document,
             output_name="authors-only-exact",
         )
@@ -221,10 +264,10 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         )
         self.assertIn("Authors are not inferred", (authors_output / "THIRD-PARTY-NOTICES.md").read_text())
 
-        wrong_version = deps("linux-x64", {"Scalar.AspNetCore/2.16.11": {"runtime": {"Scalar.dll": {}}}})
+        wrong_version = deps("linux-x64", {"Scalar.AspNetCore/2.17.5": {"runtime": {"Scalar.dll": {}}}})
         with self.assertRaisesRegex(ValueError, "author-only MIT metadata.*no exact upstream"):
             self.generate(
-                [package("Scalar.AspNetCore", "2.16.11", copyright_text="")],
+                [package("Scalar.AspNetCore", "2.17.5", copyright_text="")],
                 wrong_version,
                 output_name="authors-only-wrong-version",
             )
@@ -356,10 +399,10 @@ class BackendLicenseCorpusTests(unittest.TestCase):
                 self.generate(value, output_name=f"invalid-{len(message)}")
 
         self.manifest.write_text(json.dumps({"tools": {"nuget-license": {"version": "4.0.15"}}}))
-        with self.assertRaisesRegex(ValueError, "expected pinned nuget-license 4.0.14"):
+        with self.assertRaisesRegex(ValueError, "expected pinned nuget-license 4.0.16"):
             self.generate(baseline, output_name="wrong-tool")
 
-        self.manifest.write_text(json.dumps({"tools": {"nuget-license": {"version": "4.0.14"}}}))
+        self.manifest.write_text(json.dumps({"tools": {"nuget-license": {"version": "4.0.16"}}}))
         (self.license_root / "nuget/standard/MIT.txt").write_text("tampered\n")
         with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
             self.generate(baseline, output_name="tampered")

@@ -239,7 +239,7 @@ read these before you start, so nothing comes as a surprise:
 - **The starter model is deliberately tiny.** The app downloads a very small model (~400 MB) on first
   launch just to prove chat works. **It is not representative of the quality this app can deliver** —
   it will feel weak, and that is expected. Use the built-in advisor at **Models → Recommendations** to pick a real model
-  for your hardware. [How to do that →](docs/first-run.md#step-4--get-a-model-that-is-actually-good)
+  for your hardware. [How to do that →](docs/first-run.md#step-5--get-a-model-that-is-actually-good)
 - **Windows will warn you on first launch**, because the build is unsigned. [What to click →](docs/install-windows.md#the-windows-smartscreen-warning)
 - **Expect rough edges.** This is early, actively-developed software.
 - **Your database is not fully encrypted.** Sensitive fields are individually encrypted, but extracted

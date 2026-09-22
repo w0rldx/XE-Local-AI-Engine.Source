@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -46,7 +47,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     /// <summary>Creates the store under <paramref name="cacheRoot" /> (defaulting to the shared app cache root).</summary>
     public LlamaServerLaunchFallbackStore(string? cacheRoot = null, ILogger<LlamaServerLaunchFallbackStore>? logger = null)
     {
-        var root = string.IsNullOrWhiteSpace(cacheRoot) ? DefaultCacheRoot() : cacheRoot;
+        var root = string.IsNullOrWhiteSpace(cacheRoot) ? RuntimeCacheDirectory.Resolve() : cacheRoot;
         _statePath = Path.Combine(root, StateFileName);
         _lockPath = Path.Combine(root, LockFileName);
         _logger = logger ?? NullLogger<LlamaServerLaunchFallbackStore>.Instance;
@@ -297,11 +298,6 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         }
     }
 
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine");
-    }
 }
 
 /// <summary>Persisted shape for <see cref="LlamaServerLaunchFallbackStore" />: the launch configs proven unable to reach readiness.</summary>

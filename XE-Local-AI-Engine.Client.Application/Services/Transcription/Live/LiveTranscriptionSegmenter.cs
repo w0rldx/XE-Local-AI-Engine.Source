@@ -149,6 +149,8 @@ public sealed class LiveTranscriptionSegmenter
     /// <exception cref="LiveSegmenterStalledException">Submissions stopped making progress.</exception>
     public async ValueTask<LiveTick> PushAsync(ReadOnlyMemory<byte> pcm16, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var commits = new List<LiveCommit>();
         string? learnedLanguage = null;
         var remaining = pcm16;

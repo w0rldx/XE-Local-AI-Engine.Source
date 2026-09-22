@@ -30,6 +30,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Client.Services.Training.Export;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
@@ -223,6 +224,15 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         // this runs. Idempotent: the PerTestSession factory initializes once per run.
         await SeedAdminUserAsync();
         await SeedPooledUsersAsync();
+
+        // Returning users have completed mode selection; hosted backfills are disabled in this fixture.
+        // Tutorial tests still reset their per-user tour state independently.
+        await using var scope = Services.CreateAsyncScope();
+        var settingsStore = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
+        _ = await settingsStore.UpdateAsync(settings => settings with
+        {
+            UiMode = StoredNodeSettings.UiModeAdvanced
+        });
     }
 
     /// <summary>

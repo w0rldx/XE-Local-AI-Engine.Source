@@ -216,7 +216,7 @@ If the console shows no GPU devices when you have one, that's worth reporting.
 ### The starter model gives terrible answers
 That's expected — it's a 0.5B model chosen for download size, not quality. **Replace it.** The Model
 Advisor recommends something appropriate for your hardware, and the difference is dramatic.
-→ [How to swap it](first-run.md#step-4--get-a-model-that-is-actually-good)
+→ [How to swap it](first-run.md#step-5--get-a-model-that-is-actually-good)
 
 ### A model won't load / out of memory
 It's too big for your VRAM or RAM.
@@ -351,7 +351,7 @@ The password rules are strict and the button stays disabled until **all** are sa
 - at least **12 characters** · an **uppercase** letter · a **lowercase** letter · a **digit** ·
   a **symbol** (e.g. `!@#$%`)
 
-One unmet rule is almost always the reason. → [Setup walkthrough](first-run.md#step-2--create-your-local-profile)
+One unmet rule is almost always the reason. → [Setup walkthrough](first-run.md#step-1--create-your-local-profile)
 
 ### Do I need a real email address to sign up?
 **No.** It's stored only on your machine and is never contacted, verified or transmitted — a made-up

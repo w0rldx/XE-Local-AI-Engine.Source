@@ -91,19 +91,18 @@ XE Local AI Engine — tester quickstart (Windows)
 
 1. Unzip this folder anywhere (e.g. your Desktop).
 2. Double-click  Start-XE-Local-AI-Engine.cmd
-   (Do NOT double-click XE-Local-AI-Engine.Client.exe directly — it will not
-    open the app correctly. Always use the Start launcher.)
+   Or run XE-Local-AI-Engine.WindowsLauncher.exe directly.
 3. Windows SmartScreen may warn "Windows protected your PC" because this build
    is unsigned (unknown publisher). This is expected for a tester build: click
    "More info", then "Run anyway".
-4. A console window opens with live logs and your default browser opens the app.
+4. The native window opens. ASP.NET Core Runtime 10 (x64) and WebView2 are required.
 
 First run downloads a llama.cpp runtime and a ~400 MB starter model from the
 internet — this can take a few minutes and looks quiet; watch the console.
 Needs ~2 GB free disk. A GPU is optional (CPU works).
 
 To create your login: the first time the app opens, set an admin password.
-To stop the app: close the console window (this also stops the model engine).
+To stop the app: choose Exit when closing the native window, or Exit from its tray menu.
 Your data lives under: %LOCALAPPDATA%\XE-Local-AI-Engine
 
 Run only ONE instance at a time.
@@ -127,16 +126,15 @@ XE Local AI Engine — tester quickstart (Linux)
 
 1. Unzip this folder anywhere.
 2. From a terminal in this folder, run:  ./start-xe-local-ai-engine.sh
-   (Do NOT run ./XE-Local-AI-Engine.Client directly — it will not enter desktop
-    mode. Always use the start launcher.)
-3. The terminal shows live logs and your default browser opens the app.
+   Or run ./XE-Local-AI-Engine.Desktop directly.
+3. The native window opens; --browser and --headless remain available.
 
 First run downloads a llama.cpp runtime and a ~400 MB starter model from the
 internet — this can take a few minutes and looks quiet; watch the terminal.
 Needs ~2 GB free disk. A GPU is optional (CPU works).
 
 To create your login: the first time the app opens, set an admin password.
-To stop the app: close the terminal (this also stops the model engine).
+To stop the app: choose Exit when closing the native window.
 Your data lives under: $HOME/.local/share/XE-Local-AI-Engine
 
 Run only ONE instance at a time.
@@ -320,8 +318,8 @@ make_zip() {
 package_rid() {
   local rid="$1" version="$2" exe os base artifact stage pub zip_path
   case "${rid}" in
-    win-x64)   os="windows"; exe="XE-Local-AI-Engine.Client.exe" ;;
-    linux-x64) os="linux";   exe="XE-Local-AI-Engine.Client" ;;
+    win-x64)   os="windows"; exe="XE-Local-AI-Engine.WindowsLauncher.exe" ;;
+    linux-x64) os="linux";   exe="XE-Local-AI-Engine.Desktop" ;;
     *) echo "Error: unsupported RID '${rid}' (expected win-x64 | linux-x64)." >&2; exit 2 ;;
   esac
 
@@ -333,9 +331,16 @@ package_rid() {
   pub="${CLIENT_PROJECT}/bin/Release/net10.0/${rid}/publish"
   rm -rf "${pub}"
 
-  echo ">> Publishing ${rid} (single-file self-contained)…"
+  echo ">> Publishing ${rid}…"
   dotnet publish "${CLIENT_PROJECT}" -c Release -r "${rid}" -p:PublishProfile="${rid}" \
     -p:UpdateChannel="${UPDATE_CHANNEL}" --nologo
+
+  dotnet publish "${REPO_ROOT}/XE-Local-AI-Engine.Desktop/XE-Local-AI-Engine.Desktop.csproj" \
+    -c Release -p:PublishProfile="${rid}" --output "${pub}" --nologo
+  if [[ "${rid}" == "win-x64" ]]; then
+    dotnet publish "${REPO_ROOT}/XE-Local-AI-Engine.WindowsLauncher/XE-Local-AI-Engine.WindowsLauncher.csproj" \
+      -c Release -p:PublishProfile=win-x64 --output "${pub}" --nologo
+  fi
 
   [[ -f "${pub}/${exe}" ]] || { echo "Error: expected published binary not found at ${pub}/${exe}." >&2; exit 1; }
   # Tripwire for anything the app wrote here during THIS run (the wipe above only removes what earlier runs left).

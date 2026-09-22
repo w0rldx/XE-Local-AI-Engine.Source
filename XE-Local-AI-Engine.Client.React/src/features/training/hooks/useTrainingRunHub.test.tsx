@@ -60,6 +60,26 @@ describe("useTrainingRunHub", () => {
 		expect(result.current.phase).toBe("training");
 	});
 
+	it("never exposes the previous run's progress during a subscription change", async () => {
+		const resync = vi.fn();
+		const observed: { id: string; step: number }[] = [];
+		const { rerender } = renderHook(
+			({ id }) => {
+				const progress = useTrainingRunHub(id, resync);
+				observed.push({ id, step: progress.step });
+				return progress;
+			},
+			{ initialProps: { id: runId } },
+		);
+		await waitFor(() => expect(hubMock.connection.invoke).toHaveBeenCalledWith("Subscribe", runId, 0));
+		emit(progressFrame);
+
+		const nextId = "22222222-2222-4222-8222-222222222222";
+		rerender({ id: nextId });
+
+		expect(observed.filter((render) => render.id === nextId).every((render) => render.step === 0)).toBe(true);
+	});
+
 	it("drops a frame whose kind is a raw enum number", async () => {
 		const resync = vi.fn();
 		const { result } = renderHook(() => useTrainingRunHub(runId, resync));

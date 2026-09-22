@@ -174,7 +174,7 @@ XE-Local-AI-Engine.Client.Persistence.Tests/FeedbackInsightsStoreTests.cs|run|3
 XE-Local-AI-Engine.Client.Persistence.Tests/GoldenConversationStoreTests.cs|run|1
 XE-Local-AI-Engine.Client.Persistence.Tests/GoldenHarvestSourceStoreTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/AddGraphWorkflowsMigrationTests.cs|summary|2
-XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/CanvasWorkflowImportReadTests.cs|summary|4
+XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/CanvasWorkflowImportReadTests.cs|summary|3
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowEncryptionTests.cs|summary|2
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowPurgeCoverageTests.cs|summary|2
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowRunStoreTests.cs|summary|5
@@ -307,8 +307,6 @@ XE-Local-AI-Engine.Tests.E2ETests/Tests/AgentsPageE2ETests.cs|summary|2
 XE-Local-AI-Engine.Tests.E2ETests/Tests/BenchmarkQualityScoreE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/BenchmarkQualityScoreE2ETests.cs|run|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/BenchmarkQualityScoreE2ETests.cs|summary|2
-XE-Local-AI-Engine.Tests.E2ETests/Tests/CapabilityGatedSurfacesE2ETests.cs|block|1
-XE-Local-AI-Engine.Tests.E2ETests/Tests/CapabilityGatedSurfacesE2ETests.cs|summary|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatActionsE2ETests.cs|run|2
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatActionsE2ETests.cs|summary|4
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatAgentModeE2ETests.cs|block|1

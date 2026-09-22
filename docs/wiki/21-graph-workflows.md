@@ -1,6 +1,6 @@
 # Graph Workflows — Operator-Authored DAGs
 
-> Reviewed: 2026-09-20 · Code-grounded.
+> Reviewed: 2026-09-22 · Code-grounded.
 
 **Graph Workflows** let an operator draw a directed acyclic graph of agent turns, tool calls, conditions and human
 pauses, save it, and start runs of it. The engine executes the run from the database: every node run is a row, every
@@ -14,7 +14,7 @@ dispatcher and the node lanes), `Client.Persistence` (four tables, per-column AE
 
 **It replaced Open Canvas.** The Preview / Open Canvas visual builder was removed in the same slice that turned this
 feature on by default; saved canvases are converted into Graph Workflow definitions once, automatically, on the first
-start of the new build. That conversion is §9 and it is irreversible — read it before you upgrade a node with
+start of the new build. That conversion is §9; read its recovery and backup guidance before upgrading a node with
 canvases you care about.
 
 ---
@@ -898,8 +898,8 @@ the grammar rather than dropped — see §4.2. See
 ## 9. The Open Canvas import
 
 Open Canvas (the Preview workflow builder) was removed. Its saved canvases are **converted into Graph Workflow
-definitions once, automatically, on the first start of the build that removed it.** There is no button, no prompt and
-no opt-out, and the conversion **cannot be undone**.
+definitions automatically during startup.** There is no button, prompt or opt-out. The encrypted source survives
+interrupted conversion; startup stops on conversion failures and retries after the underlying fault is resolved.
 
 **Back up the node's data directory before upgrading a node that has canvases you care about.** That is not a
 formality: see the failure posture below.
@@ -920,9 +920,16 @@ await ImportCanvasWorkflowsAsync(app.Services, pending);             // write, I
 await ApplyNodeIdentityMigrationsAsync(app.Services);                // a different database; runs after the write
 ```
 
-The reader guards on `sqlite_master`, so it is a no-op when the table is absent — which is a fresh install, and every
-start after the first. **That absence is the idempotency mechanism.** There is no marker table, no flag column and no
-provenance field to go stale.
+Before migrations, the reader uses one SQLite transaction to copy the legacy rows into
+`canvas_workflow_import_recovery` **without decrypting or rewriting their graph bytes**. This is a durable staging
+table in the node database, not a SQLite temporary table or a restored Open Canvas feature. While the original table
+exists it remains authoritative, and a retry atomically refreshes staging from it. Once migrations drop the original,
+startup reads staging instead. A process interruption between migration and import therefore loses no source rows.
+
+After migrations, the importer uses the same scoped `NodeChatDbContext` as the definition service and store. It writes
+all definitions and drops the recovery table in **one transaction**. A write, cleanup or commit failure rolls back
+both operations; a later startup imports the retained ciphertext without duplicate definitions. Fresh installs have
+neither table and import nothing. An empty legacy table is staged and cleaned up without creating definitions.
 
 The import runs regardless of `GraphWorkflows:Enabled`, deliberately: an operator who never turns the feature on must
 not silently lose their canvases. Every row is read — there is **no cap** — because a cap plus an unconditional drop
@@ -1019,20 +1026,19 @@ names.** Nothing is discarded for being invalid. A Debug node with no successor,
 an unknown kind — all of them arrive as a definition you can see and edit, rather than as an absence you have to
 notice.
 
-Two causes skip a row in the **read** half, both logged at **Error** and counted as failed: the blob does not
-decrypt, or it does not parse as JSON at all. A blob that does not parse could never have been saved through the old
-endpoint. That log line carries the canvas id and the exception type only — not the name, which the read never
-decrypted a reason for, and not a reason.
+A blob that does not decrypt or parse as JSON is reported at Error with its canvas id and exception type,
+then the read fails and startup stops **before destructive migrations**. The source and recovery ciphertext remain
+available for repair or restoration with the original node key. A whole-read or staging failure also stops startup;
+it is never treated as an empty successful read.
 
-`{Failed}` in the summary is not the read half alone. The **write** half counts a row there too, also at **Error**,
-whenever the canvas could not be stored at all: any non-validation exception out of `CreateAsync`, the unvalidated
-store write itself throwing ("could not be stored and is lost"), or the mapping throwing before either is reached.
-A validation refusal is *not* one of these — that is the needs-attention path below, and the row survives.
+The write half records mapping or persistence failures at Error and refuses to commit any definitions when one row
+failed. Validation refusals still use the needs-attention path and preserve the graph. Only after every candidate has
+been preserved does the transaction remove recovery staging and commit. Startup propagates failures instead of
+serving a node whose conversion silently lost data.
 
 **Graph content is never logged.** Instructions and start text are exactly the payload the column is encrypted to
 protect. The reader logs entry and per-row failures; the writer logs one line per clean import. The summary an
-operator must not miss is logged at **Warning**, because this is an irreversible one-shot they had no chance to
-decline:
+operator must not miss is logged at **Warning**, only after the import and recovery cleanup commit:
 
 ```
 Open Canvas one-shot import complete: {Imported} imported, {NeedsAttention} need attention, {Failed} failed.
@@ -1044,21 +1050,17 @@ canvas gets an **Error** line instead, and it names no reason: the read-half lin
 type, the write-half lines the id, the name and the exception type. A cleanly imported canvas whose mapping still
 changed something gets one Warning per change.
 
-### 9.4 The one real risk, stated plainly
+### 9.4 Recovery and backups
 
-`DropCanvasWorkflows` runs during the migration pass **regardless of whether the write half later succeeds**. If the
-process dies between the migration and the write, or the write throws, the canvases are gone from the live database.
+The same-database encrypted staging is the recovery mechanism for this conversion. The existing
+`INodeDbBackupService.BackupBeforeMigrationAsync()` backup is supplementary: its best-effort failure no longer removes
+the only recovery copy. If the durable staging write fails, startup stops before migrations. If import fails after the
+source table has been dropped, staging remains and the next startup retries it.
 
-The only recovery is the **best-effort** backup `INodeDbBackupService.BackupBeforeMigrationAsync()` takes immediately
-before migrations run. Best-effort means what it says: a failure to take it is logged and swallowed. It is a
-mitigation, not a guarantee.
-
-No plaintext export is written to hedge this, and that is a deliberate trade rather than an oversight: the graph blob
-carries the operator's agent instructions, which is exactly what the column is encrypted to protect, and dropping a
-decrypted copy on disk would swap a small durability risk for a standing privacy regression.
-
-**So: copy the SQLite data directory before you upgrade.** That is the belt-and-braces answer, and it is the
-operator's to take.
+Back up the complete data directory, including its key material, before upgrading. This fix cannot recover canvases
+that an earlier version already dropped without importing; those require a pre-upgrade backup. Do not delete or edit
+the recovery table to bypass a startup failure. Resolve the reported underlying fault or restore a complete backup.
+No plaintext export is created.
 
 ---
 

@@ -28,7 +28,7 @@ public enum StartProcessCaptureOutcome
 ///     session gets its own <c>SessionCapture</c> handle, owning that session's linked cancellation source, capture task and
 ///     detach handle, and that is what <see cref="ILiveTranscriptionSessionRegistry.AttachProducer" /> receives. Cancelling the
 ///     registry's <c>ProducerToken</c> is the ONE stop signal, so a private token the registry cannot reach is how a recorder
-///     outlives its session. This class never ends a session: that is the registry's single <c>EndAsync</c> path.
+///     outlives its session. An unexpected capture end fails the session through the registry's single <c>EndAsync</c> path.
 /// </remarks>
 public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
 {
@@ -288,7 +288,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
                 cancellationToken.ThrowIfCancellationRequested();
                 await _owner._source.CaptureAsync(_sessionId, _processId, cancellationToken);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // The stop signal, not a failure.
             }
@@ -296,13 +296,25 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
             catch (Exception exception)
 #pragma warning restore CA1031
             {
-                // The target process exited, or CoreAudio failed. Either way capture is over; the session lives on
-                // until something ends it through the registry.
+                // The target process exited, or CoreAudio failed. The registry must tell the browser capture ended.
                 _owner._logger.LogError(exception, "Per-application capture for transcription session {SessionId} ended unexpectedly.", _sessionId);
             }
             finally
             {
-                StopCore();
+                bool unexpected;
+                lock (_gate)
+                {
+                    unexpected = !_stopRequested && !cancellationToken.IsCancellationRequested;
+                    _stopRequested = true;
+                    CleanUpLocked();
+                }
+
+                // Detach first: the registry must not stop or await this same producer while it is ending the session.
+                // A requested stop retains the registry caller's reason (and its graceful flush).
+                if (unexpected)
+                {
+                    await _owner._registry.EndAsync(_sessionId, LiveEndReason.Failed, CancellationToken.None);
+                }
             }
         }
     }

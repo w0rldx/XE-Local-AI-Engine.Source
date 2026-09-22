@@ -19,6 +19,28 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class DesktopLaunchTests
 {
     [Test]
+    [Arguments("--browser", false)]
+    [Arguments("--headless", true)]
+    public void ExplicitStandaloneModes_KeepLocalHostAndStableRestart(string argument, bool suppressBrowser)
+    {
+        AssertEx.Equal(LaunchMode.Desktop, DesktopLaunch.ResolveLaunchMode([argument], static _ => null, isManagedInstall: false));
+        AssertEx.True(DesktopLaunch.HasExplicitLocalModeArgument([argument]));
+        AssertEx.Equal(suppressBrowser, DesktopLaunch.HasNoBrowserFlag([argument]));
+        AssertEx.True(DesktopLaunch.BuildRestartArguments([argument], LaunchMode.Desktop, port: 41234)
+            .SequenceEqual([argument, "--port", "41234"], StringComparer.Ordinal));
+    }
+
+    [Test]
+    public void ShellOwnedRestart_DropsOnlyInternalBrowserSuppression()
+    {
+        var arguments = new[] { "--desktop", "--no-browser" };
+        AssertEx.True(DesktopLaunch.BuildRestartArguments(arguments, LaunchMode.Desktop, port: 41234, shellOwned: true)
+            .SequenceEqual(["--desktop", "--port", "41234"], StringComparer.Ordinal));
+        AssertEx.True(DesktopLaunch.BuildRestartArguments(arguments, LaunchMode.Desktop, port: null)
+            .SequenceEqual(arguments, StringComparer.Ordinal));
+    }
+
+    [Test]
     public void DesktopModeGate_WhenFlagUnset_LeavesPipelineUnchanged()
     {
         // No CLI arg, no env signal → desktop mode is off, so Program.cs keeps the standard HTTPS/HSTS pipeline.

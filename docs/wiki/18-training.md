@@ -254,3 +254,12 @@ The three hooks (`useDatasetGenerationHub`, `useTrainingRunHub`, `useTrainingRun
 - [Hosting & Deployment](11-hosting-and-deployment.md) — hosted-service inventory and process reaping.
 - [Security & Privacy](12-security-and-privacy.md) — Operator gating, loopback-only surface, encryption at rest.
 - [Testing & Validation](13-testing-and-validation.md) · [ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md)
+
+### Queued runs and live progress
+
+`TrainingRunList` polls while any run is queued or executing, but subscribes to the executing run rather than a newer
+queued row. Only that run receives its streamed counters; an export on a finished run can keep its subscription while
+other runs wait. `useTrainingRunHub` binds its returned progress to the subscription id, including the render before
+a changed subscription's effect runs. Queued rows show guidance linking to Loaded models: training waits for other
+work and resident models to release the runtime. This is guidance, not a claim that a particular model is the current
+blocker; ejection remains an explicit operator action.

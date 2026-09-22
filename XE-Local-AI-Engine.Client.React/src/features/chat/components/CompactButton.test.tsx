@@ -91,6 +91,21 @@ describe("CompactButton", () => {
 		expect(toastSpies.success).not.toHaveBeenCalled();
 	});
 
+	it("explains a timeout and keeps the previous summary instead of claiming success", async () => {
+		confirmSpy.mockResolvedValue(true);
+		compactSpy.mockResolvedValue({ outcome: "TimedOut", messagesFolded: 0 });
+
+		renderWithProviders(<CompactButton />);
+		fireEvent.click(screen.getByTestId("compact-conversation-button"));
+
+		await waitFor(() =>
+			expect(toastSpies.warn).toHaveBeenCalledWith(
+				"Compaction reached the time limit. Your messages and previous summary are unchanged. Try a faster local model or increase the message request timeout in Node Settings.",
+			),
+		);
+		expect(toastSpies.success).not.toHaveBeenCalled();
+	});
+
 	it("does nothing when the user cancels the confirmation", async () => {
 		confirmSpy.mockResolvedValue(false);
 

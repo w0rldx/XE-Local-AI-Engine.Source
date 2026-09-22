@@ -79,6 +79,11 @@ function toCaptureRequest(sourceKind: TranscriptionSourceKind, deviceId: string 
  * rendered here rather than inferred from an HTTP status anywhere.
  */
 export function TranscriptionSessionPage({ sessionId }: TranscriptionSessionPageProps) {
+	// Capture errors belong to this session; route changes must not retain the previous hook state.
+	return <TranscriptionSessionContent key={sessionId} sessionId={sessionId} />;
+}
+
+function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProps) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
@@ -197,6 +202,14 @@ export function TranscriptionSessionPage({ sessionId }: TranscriptionSessionPage
 						/>
 					)}
 
+					{!isLive && isLiveSourceKind(sourceKind) && capture.error !== null ? (
+						<InlineErrorAlert
+							message={t(`pages.transcription.capture.error.${capture.error}`)}
+							variant="light"
+							data-testid="transcription-capture-error"
+						/>
+					) : null}
+
 					{isLive && processMissing ? (
 						<InlineErrorAlert
 							message={t("pages.transcription.session.processMissing")}
@@ -228,6 +241,9 @@ export function TranscriptionSessionPage({ sessionId }: TranscriptionSessionPage
 							}}
 							onStop={() => {
 								capture.stop().catch(() => undefined);
+							}}
+							onCancel={() => {
+								capture.cancel().catch(() => undefined);
 							}}
 						/>
 					) : null}

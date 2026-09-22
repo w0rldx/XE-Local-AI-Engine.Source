@@ -39,7 +39,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
 
     /// <summary>Creates the probe over the supplied vendor probe, defaulting the disk check to the shared app cache root.</summary>
     public LlamaCppSourceBuildPrerequisiteProbe(IGpuVendorProbe vendorProbe)
-        : this(vendorProbe, DefaultCacheRoot(), RequiredFreeDiskBytes)
+        : this(vendorProbe, RuntimeCacheDirectory.Resolve(), RequiredFreeDiskBytes)
     {
     }
 
@@ -249,11 +249,5 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         var newline = text.IndexOfAny(['\r', '\n']);
         var line = newline < 0 ? text : text[..newline];
         return line.Trim();
-    }
-
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine");
     }
 }

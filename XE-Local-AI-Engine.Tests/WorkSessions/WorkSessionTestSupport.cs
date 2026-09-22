@@ -115,6 +115,8 @@ internal sealed class StepScript
 
     public string ParkEventType { get; init; } = ChatStreamEventTypes.ApprovalRequested;
 
+    public long ParkOccurredAtUtc { get; init; }
+
     // Rides on the scripted terminal event. The supervisor reads it to tell a step that spent a BOUND (the
     // provider-call cap, whose message is a fixed constant) from one that actually broke.
     public string? TerminalError { get; init; }
@@ -214,12 +216,12 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
 
         if (script.ParkThenContinue)
         {
-            yield return Event(correlation, script.ParkEventType, script.ParkToolName);
+            yield return Event(correlation, script.ParkEventType, script.ParkToolName, occurredAtUtc: script.ParkOccurredAtUtc);
         }
 
         if (script.Park)
         {
-            yield return Event(correlation, script.ParkEventType, script.ParkToolName);
+            yield return Event(correlation, script.ParkEventType, script.ParkToolName, occurredAtUtc: script.ParkOccurredAtUtc);
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, turn.Token);
@@ -239,7 +241,7 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
         }
     }
 
-    private static ChatStreamEvent Event(NodeChatMessageCorrelation correlation, string type, string? toolName = null, string? error = null) =>
+    private static ChatStreamEvent Event(NodeChatMessageCorrelation correlation, string type, string? toolName = null, string? error = null, long occurredAtUtc = 0) =>
         new()
         {
             Type = type,
@@ -248,7 +250,7 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
             RequestId = correlation.RequestId,
             Status = "streaming",
             Sequence = 0,
-            OccurredAtUtc = 0,
+            OccurredAtUtc = occurredAtUtc,
             Error = error,
             ToolName = toolName,
             ApprovalRequestId = toolName is null ? null : Guid.NewGuid().ToString("N")

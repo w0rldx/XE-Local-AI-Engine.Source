@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client;
 
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
@@ -19,7 +20,8 @@ internal static class AddAppUpdateExtensions
     internal static IHostApplicationBuilder AddAppUpdate(this IHostApplicationBuilder builder,
         IConfiguration configuration,
         LaunchMode launchMode,
-        IReadOnlyList<string> restartArgs)
+        IReadOnlyList<string> restartArgs,
+        bool shellOwned = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
@@ -32,12 +34,25 @@ internal static class AddAppUpdateExtensions
 
         // Host facts the services can't derive: desktop mode + the args to re-pass on relaunch. The real desktop flag is
         // recorded here so the services no-op off the flag even though they are registered in every mode.
-        builder.Services.AddSingleton(new AppUpdateHostContext { IsLocalMode = isLocalMode, RestartArgs = [.. restartArgs] });
+        builder.Services.AddSingleton(new AppUpdateHostContext
+        {
+            IsLocalMode = isLocalMode,
+            IsShellOwned = shellOwned,
+            DataDirectory = configuration[DesktopBootstrap.NodeDataDirectoryKey],
+            RestartArgs = [.. restartArgs]
+        });
 
         // Velopack update manager seam + the shared snapshot state + the orchestration service.
         builder.Services.AddSingleton<IVelopackUpdateManagerFactory, VelopackUpdateManagerFactory>();
         builder.Services.AddSingleton<IAppUpdateState, AppUpdateState>();
-        builder.Services.AddSingleton<IAppUpdateService, AppUpdateService>();
+        builder.Services.AddSingleton<IAppUpdateService>(services => new AppUpdateService(
+            services.GetRequiredService<IVelopackUpdateManagerFactory>(),
+            services.GetRequiredService<IAppUpdateState>(),
+            services.GetRequiredService<IOptions<AppUpdateChannelOptions>>(),
+            services.GetRequiredService<AppUpdateHostContext>(),
+            services.GetRequiredService<ILogger<AppUpdateService>>(),
+            services.GetRequiredService<TimeProvider>(),
+            AppUpdateService.RetainLeaseUntilProcessExit));
         builder.Services.AddSingleton<AppUpdateShutdownCoordinator>();
 
         // The one-shot startup update check is the only desktop-gated registration: off the flag no check is ever

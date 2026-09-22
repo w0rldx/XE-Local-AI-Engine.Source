@@ -70,6 +70,14 @@ export function CompactButton({ percentUsed, disabled = false }: CompactButtonPr
 			case "NothingToCompact":
 				toast.info(t("pages.chat.compact.nothing", "Nothing to compact yet — the recent messages still fit the context window."));
 				break;
+			case "TimedOut":
+				toast.warn(
+					t(
+						"pages.chat.compact.timedOut",
+						"Compaction reached the time limit. Your messages and previous summary are unchanged. Try a faster local model or increase the message request timeout in Node Settings.",
+					),
+				);
+				break;
 			case "NoLocalModel":
 				toast.warn(
 					t("pages.chat.compact.noModel", "No local chat model is installed to summarize with, so compaction can't run on-node."),

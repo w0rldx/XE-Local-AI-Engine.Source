@@ -1,18 +1,18 @@
 # Hosting, AppHost & Deployment
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-09-22 · Code-grounded.
 
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, packaged **desktop mode** (`XE_LAUNCH_MODE=desktop`), the asymmetric Windows/Linux publish profiles, the Windows C# launcher, and the legacy/manual cleanup scripts.
 
-There are **three distinct ways the node runs**:
+The engine supports these hosting paths; packaged launches additionally select a native window, browser or headless operation:
 
 | Mode | Entry point | Used for | HTTP/HTTPS | DB + secrets source |
 |------|-------------|----------|------------|---------------------|
 | **Aspire dev / integration** | `XE-Local-AI-Engine.AppHost/AppHost.cs` orchestrates the `app` project | Local development and integration checks via the worktree-scoped `scripts/dev-*.sh` helpers | HTTPS (Kestrel default URLs) | Aspire parameters + env (`XE_NODE_SQLITE_KEY`, SQLite resource) |
-| **Packaged desktop** | Linux self-contained AppImage or Windows framework-dependent C# launcher + client DLL | Shipped portable app a user double-clicks | Plain HTTP on loopback `127.0.0.1:<auto-port>` | Per-user data dir; connection string + operator key synthesized at startup |
+| **Packaged desktop** | Linux self-contained native shell or Windows framework-dependent launcher + native shell + engine DLL | Shipped portable app a user double-clicks | Plain HTTP on loopback `127.0.0.1:<auto-port>` | Per-user data dir; connection string + operator key synthesized at startup |
 | **MCP-only local mode** | The same packaged binary with `--mcp-only` or `XE_LAUNCH_MODE=mcp-only` | Unattended external-agent operation without browser launch | Plain HTTP on loopback `127.0.0.1:<remembered-or-requested-port>` | The same per-user data, provisioning, and single-instance lease as desktop |
 
-The two paths are deliberately kept **byte-behaviour-identical when the desktop flag is off** — every desktop branch in `Program.cs` is gated and skipped in Aspire/CI/headless runs.
+Aspire hosting remains independent of the shell. Packaged browser and headless modes reuse the local engine bootstrap without starting Avalonia.
 
 ---
 
@@ -93,7 +93,7 @@ See [API & Hubs](09-api-and-hubs.md) for endpoint/hub detail and [Security & Pri
 Three startup details are easy to undo by accident:
 
 - **W3C trace correlation is forced, so it works with OpenTelemetry OFF** (the desktop/RC default). Setting `Activity.DefaultIdFormat`/`ForceDefaultIdFormat` to W3C and registering an `ActivityListener` for the `Microsoft.AspNetCore` source makes ASP.NET create a request `Activity` from an inbound `traceparent` even when no OTel listener is present; otherwise `Activity.Current` would be null in the pipeline and the emitted trace id would regress to the Kestrel connection id (`TraceIdentifier`). The listener is scoped to that one source — the only one producing the request activities this needs — rather than every source in the process. `AllData` makes it request all data for the activities that source creates, so their W3C trace and span ids are populated; it does not by itself record them, which would need `AllDataAndRecorded`. The emitted `traceresponse` trace-flags byte follows the activity's actual recorded state: with only this listener attached, activities are never recorded, so the byte is `00` regardless of the inbound sampled flag, while in the normal host the OpenTelemetry `TracerProvider` is also running and its default `ParentBased(AlwaysOn)` sampler does record, so a sampled inbound parent yields `01`. It is process-global, so it is set once before `Build()`.
-- **The Open Canvas import is split around the migration pass.** `DropCanvasWorkflows` removes the table the saved workflows live in and no migration can decrypt their graph blob, so the read runs first and the write IMMEDIATELY after the node-chat pass: the identity pass runs against a different database, and a throw there would otherwise crash startup with the canvases already dropped and not yet written, which the next start could never recover, because the table's absence is the one-shot marker.
+- **The Open Canvas import is split around the migration pass.** `DropCanvasWorkflows` removes the table the saved workflows live in and no migration can decrypt their graph blob, so the read runs first and the write IMMEDIATELY after the node-chat pass. The read stages the encrypted rows into `canvas_workflow_import_recovery` before the drop, and the write imports from that table and removes it in one transaction, so a crash or a throw between the two passes is retried on the next start rather than lost. A failed read or import stops startup instead of continuing without the canvases. Details: `docs/wiki/21-graph-workflows.md` §9.
 - **The rate-limiting middleware is skipped in the `Testing` environment**, where the permit limits are relaxed to non-limits anyway. `RateLimitingMiddleware` never disposes its `PartitionedRateLimiter` (verified against `Microsoft.AspNetCore.RateLimiting` 10.0), so its 100 ms replenishment timer outlives host disposal and GC-roots the middleware pipeline — logger, DI root scope, the entire host — for the process lifetime. `RequireRateLimiting` endpoint metadata stays registered and is inert without the middleware, and no test asserts 429s. See "Registration-time closures".
 
 ### Background (hosted) services
@@ -197,13 +197,55 @@ Both are wired in `ConfigureServices.AddServices` and both have a rule that is e
 
 ---
 
-## 5. Packaged local modes: desktop and MCP-only
+## 5. Packaged local modes: native desktop, browser and headless
+
+Why the shell is a separate process, who owns the engine, and why the Linux and Windows document
+policies differ: [ADR 0013](../adr/0013-native-desktop-shell.md).
+
+Packaged Windows and Ubuntu launches default to `XE-Local-AI-Engine.Desktop`.
+`DesktopEngineSession` discovers a healthy engine for the selected data root or starts the
+adjacent engine with `--desktop --no-browser`. The existing React bundle still uses REST,
+SignalR and normal authentication; no second native application API is introduced.
+`--browser`, `--headless`, MCP-only and operator commands bypass the native window
+(`DesktopCommandLine.RunsEngine`, `WindowsLauncherApplication`).
+
+The shell has a per-data-root single-instance lease and same-user activation pipe
+(`DesktopInstance`). Starting it again restores the existing window. First close offers
+Keep in tray, Quit or Cancel, with an optional remembered choice and desktop settings to
+change it. Windows supports tray operation; Linux currently keeps tray unavailable rather
+than hiding a window without a usable restore path. Quit stops only an engine the shell
+started, never a separately running engine it attached to.
+
+For an owned engine, `DesktopParentLifetime` connects before host construction. Parent loss
+requests graceful shutdown with a bounded exit watchdog; `DesktopEngineSession` bounds its
+own shutdown wait and owned-process cleanup. An attached standalone engine refuses in-app
+update while a native shell holds its lease: close that shell and update through the browser.
+Owned-engine updates coordinate through the shell/launcher process lifetime
+(`AppUpdateService`, `FrameworkDependentVelopackBootstrap`).
+
+Windows requires the .NET desktop payload's framework prerequisites and WebView2; missing
+WebView2 produces an actionable startup error. Ubuntu requires WebKitGTK 4.1. Its restricted
+GTK adapter verifies the actual top-level document policy, blocks embedded frames, and offers
+microphone-only consent; camera/screen capture require browser mode. Blob export uses a
+bounded Save dialog and validates the transfer (maximum 50 MiB). These restrictions do not
+change the ordinary browser or Windows document policy (`NativeDesktopDocumentPolicy`,
+`GtkDesktopBridge`).
+
+For compositor-specific flicker, `WEBKIT_DISABLE_COMPOSITING_MODE=1` is an opt-in workaround,
+not a production default. Real Ubuntu LTS X11/Wayland acceptance was waived for this delivery;
+WSLg prototype checks are not equivalent. Current evidence and remaining acceptance checks
+are tracked in [Native desktop checkpoint](../roadmaps/native-desktop-1.0.md).
+
+### Underlying engine bootstrap
+
 
 `DesktopLaunch.ResolveLaunchMode` selects `Headless`, `Desktop`, or `McpOnly`. Desktop is chosen by
 `XE_LAUNCH_MODE=desktop`, `--desktop`, or a managed package's default launch; MCP-only requires
 `XE_LAUNCH_MODE=mcp-only` or `--mcp-only`. An explicit local-mode argument wins over the managed
 desktop default, which prevents one-shot installer commands from opening a browser. With no local
-signal, Aspire/CI headless behavior is unchanged.
+signal, Aspire/CI headless behavior is unchanged. The shell binary honours the same variable:
+`XE_LAUNCH_MODE=mcp-only` with no `--desktop` argument runs the engine unattended without a window
+(`DesktopCommandLine.RunsEngine`), so the variable keeps working on a display-less machine.
 
 ```
  launcher/package selects a local mode
@@ -231,7 +273,7 @@ signal, Aspire/CI headless behavior is unchanged.
 **Text fallback:** both local modes select a per-user data directory, fill only absent local configuration,
 binds Kestrel to a remembered/free loopback port, skips HTTPS redirect/HSTS for that loopback HTTP
 listener, write readiness evidence, and request graceful application stop when their console closes.
-Desktop opens the browser unless suppressed; MCP-only never does. Real packaged behavior still
+The standalone desktop bootstrap opens the browser unless suppressed; the native shell always suppresses it. MCP-only never opens a browser. Real packaged behavior still
 requires observation on the target OS; this flow description is not a retained smoke-test transcript.
 
 `--port <1-65535>` pins the requested loopback port and exits 6 if unavailable. On
@@ -249,7 +291,7 @@ Windows. Installation never enables autostart by default.
 
 - The bind URL comes from `DesktopPortStore.ResolveBindUrl(dataDirectory)` (`Client/Hosting/DesktopPortStore.cs`, called by the desktop Kestrel branch in `Program.cs`), **not** a hard-coded `:0`. `DesktopPortStore` **remembers the last loopback port** in a `desktop-port.txt` file under the per-user data dir and re-binds it when it is still free; only when there is no remembered port (or it is taken/invalid) does it fall back to the dynamic `http://127.0.0.1:0`. This matters because a fresh OS-assigned port every launch changes the browser **origin** (scheme+host+port) and silently resets every `localStorage`-backed user preference between runs — pinning the port keeps preferences alive. The store writes via temp-file+move (no torn file), probes availability with a throwaway `TcpListener`, and is best-effort: any IO/parse failure resolves to a dynamic bind rather than throwing.
 - Kestrel still binds loopback only. The concrete URL is known **post-bind**, so `LoopbackUrlResolver.Resolve` (`Client/Hosting/LoopbackUrlResolver.cs`) reads `IServerAddressesFeature.Addresses`, prefers an explicit `127.0.0.1`/`localhost` address, and **rewrites any wildcard host (`0.0.0.0`/`::`) back to `127.0.0.1`** so the browser never targets a routable interface.
-- `DesktopLifecycle.OnApplicationStarted` resolves that URL and calls `BrowserLauncher.OpenBrowser` (`Client/Hosting/BrowserLauncher.cs`): `explorer <url>` on Windows, `xdg-open <url>` on Linux, **never via a shell** (`UseShellExecute = false`). Browser launch is strictly non-fatal — failure logs the URL and the server keeps serving.
+- `DesktopLifecycle.OnApplicationStarted` resolves that URL and, unless browser launch is suppressed, calls `BrowserLauncher.OpenBrowser` (`Client/Hosting/BrowserLauncher.cs`): `explorer <url>` on Windows, `xdg-open <url>` on Linux, **never via a shell** (`UseShellExecute = false`). Browser launch is strictly non-fatal — failure logs the URL and the server keeps serving.
 
 ### Persistent per-user data + operator key
 
@@ -406,10 +448,43 @@ and target-OS smoke evidence; this page does not assert those artifacts are avai
 
 ---
 
+## Isolated managed-runtime storage
+
+`XE_RUNTIME_DATA_DIR` overrides the shared managed-runtime cache root for llama.cpp,
+stable-diffusion.cpp, whisper.cpp, Python training/compute runtimes and benchmark KLD caches. It covers downloads, installed/desired runtime
+metadata, launch fallbacks, conversion scripts, source-build staging/recovery and
+startup orphan-reaper roots. `RuntimeCacheDirectory.Resolve` is the common resolver.
+Unset, the default remains `<LocalApplicationData>/XE-Local-AI-Engine`. An explicitly
+empty, whitespace-only, relative or control-character-containing value fails closed.
+Use an absolute, dedicated directory; this does not migrate an existing cache.
+
+This is separate from `XE_DATA_DIR`: the latter selects the node database, keys and
+desktop profile. For a Windows scratch launch, set both in the launching process
+before starting the packaged launcher (the children inherit them):
+
+```powershell
+$scratch = Join-Path ([System.IO.Path]::GetTempPath()) ('XE-scratch-' + [guid]::NewGuid())
+$env:XE_DATA_DIR = Join-Path $scratch 'node'
+$env:XE_RUNTIME_DATA_DIR = Join-Path $scratch 'runtimes'
+$env:FirstRunModel__Enabled = 'false'
+$env:HuggingFaceImageModels__ModelsDirectory = Join-Path $scratch 'image-models'
+# Start the packaged XE-Local-AI-Engine.WindowsLauncher.exe from its payload directory.
+```
+
+Use a dedicated PowerShell process so these overrides cannot leak into ordinary
+launches. Desktop GGUF models default under the node data root, as do transcription
+models. Image weights otherwise default under the application payload, not the
+user runtime root; the explicit image-model override above isolates them too.
+Existing explicitly configured model directories still take precedence. On Linux,
+the same two environment variables isolate the node and managed-runtime roots.
+Do not point two active engines at the same runtime cache during isolation testing.
+
+---
+
 ## Related pages
 
 - [Architecture Overview](01-architecture-overview.md) — where hosting sits in the whole node
-- [Project Layout](02-project-layout.md) — the 21 solution projects, including AppHost, ServiceDefaults, and WindowsLauncher
+- [Project Layout](02-project-layout.md) — solution projects, including Desktop, AppHost, ServiceDefaults, and WindowsLauncher
 - [Local Runtime & Providers](03-local-runtime-and-providers.md) — llama.cpp supervisor, process reaping, the Job Object's counterpart
 - [Data & Persistence](08-data-and-persistence.md) — node data directory, SQLite, selected per-column encryption, EF migrations
 - [API & Hubs](09-api-and-hubs.md) — endpoints, SignalR hubs, OpenAPI/Scalar

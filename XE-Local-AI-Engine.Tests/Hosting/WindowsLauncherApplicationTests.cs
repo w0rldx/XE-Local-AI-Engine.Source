@@ -7,6 +7,28 @@ using XE_Local_AI_Engine.WindowsLauncher;
 public sealed class WindowsLauncherApplicationTests
 {
     [Test]
+    [Arguments("--browser")]
+    [Arguments("--headless")]
+    [Arguments("--no-browser")]
+    [Arguments("--mcp-only")]
+    [Arguments("--help")]
+    [Arguments("--status")]
+    [Arguments("--setup")]
+    [Arguments("--mcp-key=agentic")]
+    [Arguments("--reset-admin-password=secret")]
+    [Arguments("--knowledge-downgrade-preflight")]
+    [Arguments("--knowledge-downgrade-export")]
+    public void SelectManagedEntryPoint_OperatorAndBrowserModesBypassShell(string argument) =>
+        AssertEx.Equal("XE-Local-AI-Engine.Client.dll", WindowsLauncherApplication.SelectManagedEntryPoint([argument]));
+
+    [Test]
+    public void SelectManagedEntryPoint_DefaultAndUpdateRestartOpenShell()
+    {
+        AssertEx.Equal("XE-Local-AI-Engine.Desktop.dll", WindowsLauncherApplication.SelectManagedEntryPoint([]));
+        AssertEx.Equal("XE-Local-AI-Engine.Desktop.dll", WindowsLauncherApplication.SelectManagedEntryPoint(["--desktop", "--port", "41234"]));
+    }
+
+    [Test]
     [Arguments("10.0.11", true)]
     [Arguments("10.0.12", true)]
     [Arguments("10.1.0", false)]
@@ -52,6 +74,9 @@ public sealed class WindowsLauncherApplicationTests
         var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "XE-Local-AI-Engine.Client.dll",
+            "XE-Local-AI-Engine.Desktop.dll",
+            "XE-Local-AI-Engine.Desktop.deps.json",
+            "XE-Local-AI-Engine.Desktop.runtimeconfig.json",
             "XE-Local-AI-Engine.Client.deps.json",
             "XE-Local-AI-Engine.Client.runtimeconfig.json",
             "appsettings.AppUpdate.json",

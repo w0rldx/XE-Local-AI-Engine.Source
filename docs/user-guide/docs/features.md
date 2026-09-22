@@ -427,6 +427,6 @@ or manage Ollama for you, and if it isn't running, nothing breaks.
 
 Don't try to use everything at once. → [**First run**](first-run.md) walks through the first session,
 and the most valuable thing you can do early is
-[swap the starter model for a real one](first-run.md#step-4--get-a-model-that-is-actually-good).
+[swap the starter model for a real one](first-run.md#step-5--get-a-model-that-is-actually-good).
 
 **[← Back to the main page](../README.md)**

@@ -85,6 +85,9 @@ public sealed class ToolApprovalCoordinator
 
     private readonly UserQuestionAnswerStash _userQuestionAnswerStash;
 
+    /// <summary>The effective startup snapshot used by approval and question waits, also bounding work-session parks.</summary>
+    internal TimeSpan PendingToolCallAge => _maxPendingToolCallAge;
+
     public ToolApprovalCoordinator(Lazy<IWorkerEventDispatcher> eventDispatcher,
         PendingToolCallRegistry pendingToolCallRegistry,
         IToolApprovalAuditRecorder approvalAuditRecorder,

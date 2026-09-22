@@ -466,19 +466,124 @@ public sealed class ConversationCompactionServiceTests
                          .SetCompactionSummaryAsync(Arg.Is<NodeChatSetCompactionSummaryRequest>(request => request.Summary == persisted), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task CompactAsync_WhenTheOverallBudgetExpires_CancelsResolutionAndKeepsThePreviousSummary()
+    {
+        var time = new ManualTimeProvider();
+        var conversation = Conversation(CompletedMessages(12), compactionSummary: "previous summary", coversToSequence: 1);
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            time.Advance(TimeSpan.FromSeconds(4));
+            return "local-model";
+        });
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns(async call =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, call.Arg<CancellationToken>());
+            return (string?)"unreachable summary";
+        });
+        var settings = CreateNodeSettingsStore();
+        settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings { MaxMessageRequestTimeoutSeconds = 5 });
+        var service = CreateService(persistence, summarizer, resolver, timeProvider: time, nodeSettingsStore: settings);
+
+        var pending = service.CompactAsync(ConversationId);
+        await started.Task.WaitAsync(TestBudgets.Contended);
+        time.Advance(TimeSpan.FromSeconds(1));
+        var result = await pending.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(ConversationCompactionOutcome.TimedOut, result.Outcome);
+        AssertEx.Equal("previous summary", conversation.CompactionSummary);
+        AssertEx.Equal(1, conversation.CompactionSummaryCoversToSequence);
+        await persistence.DidNotReceive().SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CompactAsync_WhenCallerCancels_PropagatesCancellationWithoutPersisting()
+    {
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(Conversation(CompletedMessages(12)));
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        using var caller = new CancellationTokenSource();
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns(async call =>
+        {
+            await caller.CancelAsync();
+            call.Arg<CancellationToken>().ThrowIfCancellationRequested();
+            return (string?)"unreachable summary";
+        });
+        var service = CreateService(persistence, summarizer, resolver);
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.CompactAsync(ConversationId, cancellationToken: caller.Token));
+        await persistence.DidNotReceive().SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CompactAsync_WhenSummaryArrivesAfterTheDeadline_DoesNotAdvanceCoverage()
+    {
+        var time = new ManualTimeProvider();
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(Conversation(CompletedMessages(12)));
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            time.Advance(TimeSpan.FromSeconds(StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds));
+            return "late summary";
+        });
+        var service = CreateService(persistence, summarizer, resolver, timeProvider: time);
+
+        var result = await service.CompactAsync(ConversationId);
+
+        AssertEx.Equal(ConversationCompactionOutcome.TimedOut, result.Outcome);
+        await persistence.DidNotReceive().SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CompactAsync_WhenDeadlineExpiresDuringTheCommittedWrite_StillReportsCompacted()
+    {
+        var time = new ManualTimeProvider();
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(Conversation(CompletedMessages(12)));
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            time.Advance(TimeSpan.FromSeconds(StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds));
+            call.Arg<CancellationToken>().ThrowIfCancellationRequested();
+            return (NodeChatConversationDto?)null;
+        });
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("new summary");
+        var service = CreateService(persistence, summarizer, resolver, timeProvider: time);
+
+        var result = await service.CompactAsync(ConversationId);
+
+        AssertEx.Equal(ConversationCompactionOutcome.Compacted, result.Outcome);
+        await persistence.Received(1).SetCompactionSummaryAsync(Arg.Is<NodeChatSetCompactionSummaryRequest>(request => request.Summary == "new summary"), Arg.Any<CancellationToken>());
+    }
+
     private static ConversationCompactionService CreateService(INodeChatPersistenceService persistence,
         IConversationSummarizer summarizer,
         ILocalDefaultChatModelResolver? resolver = null,
-        IModelCapabilityResolver? capabilityResolver = null)
+        IModelCapabilityResolver? capabilityResolver = null,
+        TimeProvider? timeProvider = null,
+        INodeSettingsStore? nodeSettingsStore = null)
     {
         resolver ??= Substitute.For<ILocalDefaultChatModelResolver>();
         return new ConversationCompactionService(persistence,
             summarizer,
             resolver,
             capabilityResolver ?? CreateCapabilityResolver(supportsThinking: false),
-            CreateNodeSettingsStore(),
+            nodeSettingsStore ?? CreateNodeSettingsStore(),
             Options.Create(new ConversationCompactionOptions()),
-            TimeProvider.System,
+            timeProvider ?? TimeProvider.System,
             NullLogger<ConversationCompactionService>.Instance);
     }
 

@@ -22,7 +22,7 @@ const trainingRunHubEvents = {
  * server-pushed replay reset falls back to the authoritative HTTP snapshot (`onResync`) instead of guessing.
  */
 export function useTrainingRunHub(runId: string | null, onResync: () => void): TrainingRunLiveProgress {
-	const [progress, setProgress] = useState<TrainingRunLiveProgress>(emptyTrainingRunProgress);
+	const [snapshot, setSnapshot] = useState({ runId, progress: emptyTrainingRunProgress });
 	const cursorRef = useRef(0);
 	const resyncRef = useRef(onResync);
 	useLayoutEffect(() => {
@@ -31,12 +31,12 @@ export function useTrainingRunHub(runId: string | null, onResync: () => void): T
 
 	useEffect(() => {
 		if (!runId) {
-			setProgress(emptyTrainingRunProgress);
+			setSnapshot({ runId, progress: emptyTrainingRunProgress });
 			cursorRef.current = 0;
 			return;
 		}
 
-		setProgress(emptyTrainingRunProgress);
+		setSnapshot({ runId, progress: emptyTrainingRunProgress });
 		cursorRef.current = 0;
 		const hub = acquireHubConnection("training/runs/hub");
 		const { connection } = hub;
@@ -44,7 +44,7 @@ export function useTrainingRunHub(runId: string | null, onResync: () => void): T
 
 		const eventHandler = (value: unknown): void => {
 			const parsed = trainingRunEventSchema.safeParse(value);
-			if (!parsed.success || parsed.data.runId !== runId || parsed.data.sequence <= cursorRef.current) {
+			if (disposed || !parsed.success || parsed.data.runId !== runId || parsed.data.sequence <= cursorRef.current) {
 				return;
 			}
 			if (parsed.data.sequence !== cursorRef.current + 1) {
@@ -53,7 +53,7 @@ export function useTrainingRunHub(runId: string | null, onResync: () => void): T
 				return;
 			}
 			cursorRef.current = parsed.data.sequence;
-			setProgress((current) => applyRunEvent(current, parsed.data));
+			setSnapshot((current) => ({ runId, progress: applyRunEvent(current.progress, parsed.data) }));
 			// A status change moves a row only the HTTP snapshot is authoritative for — the run's own for "State", and an
 			// evaluation's for "EvaluationState", which rides this stream because evaluations share their run's group.
 			if (parsed.data.kind === "State" || parsed.data.kind === "EvaluationState") {
@@ -92,5 +92,6 @@ export function useTrainingRunHub(runId: string | null, onResync: () => void): T
 		};
 	}, [runId]);
 
-	return progress;
+	// A new subscription must never render the previous run's counters before its effect resets them.
+	return snapshot.runId === runId ? snapshot.progress : emptyTrainingRunProgress;
 }

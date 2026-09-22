@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -39,7 +40,7 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
 
     /// <summary>Creates a provisioner rooted at the shared managed-runtime cache.</summary>
     public ConvertScriptProvisioner(IConvertScriptSourceFetcher fetcher, ILogger<ConvertScriptProvisioner> logger)
-        : this(fetcher, logger, DefaultCacheRoot())
+        : this(fetcher, logger, RuntimeCacheDirectory.Resolve())
     {
     }
 
@@ -218,11 +219,5 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
         {
             // Best effort: a leftover work/staging directory is reclaimed by the next provisioning attempt.
         }
-    }
-
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine");
     }
 }

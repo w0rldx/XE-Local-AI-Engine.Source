@@ -1,12 +1,21 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.GraphWorkflows;
 
+using System.Data.Common;
 using System.Globalization;
 using System.Text;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import;
+using XE_Local_AI_Engine.Client.Services.Tools;
 
 /// <summary>
 ///     The pre-migration half of the one-shot Open Canvas import, exercised over the real upgrade path: a database
@@ -93,8 +102,7 @@ public sealed class CanvasWorkflowImportReadTests
     }
 
     /// <summary>
-    ///     The idempotency mechanism, stated as a test: on every start after the first the table is gone, so the read
-    ///     is a permanent no-op. No marker table, no flag column, nothing to keep honest.
+    ///     A node with neither legacy canvases nor pending recovery has nothing to import.
     /// </summary>
     [Test]
     public async Task ReadAsync_AtHeadWhereTheTableIsAlreadyDropped_AnswersAnEmptySnapshotWithoutThrowing()
@@ -110,12 +118,10 @@ public sealed class CanvasWorkflowImportReadTests
     }
 
     /// <summary>
-    ///     A blob that will not decrypt is the one thing this import genuinely loses, and it should be impossible: a
-    ///     row written by the canvas endpoint decrypts under its own AAD. So it is counted and its id is named at
-    ///     Error — the operator's only route back to it is the pre-migration backup — and the read carries on.
+    ///     An unreadable row stops the upgrade; neither its source nor the intact sibling may be discarded.
     /// </summary>
     [Test]
-    public async Task ReadAsync_WithARowThatWillNotDecrypt_CountsItAndStillReturnsTheOthers()
+    public async Task ReadAsync_WithARowThatWillNotDecrypt_StopsBeforeMigrationAndRetainsCiphertext()
     {
         await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-damaged.sqlite", PreDropMigrationId);
         var damaged = await SeedAsync(probe, "Damaged", LinearGraph, createdAtUtc: 1);
@@ -131,13 +137,12 @@ public sealed class CanvasWorkflowImportReadTests
             command.Parameters.AddWithValue("$id", damaged.ToString());
         });
 
-        var (snapshot, logger) = await ReadAsync(probe);
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(async () => { _ = await ReadAsync(probe); });
 
-        AssertEx.Equal(expected: 1, snapshot.FailedCount);
-        AssertEx.Equal("Intact", string.Join(", ", snapshot.Candidates.Select(static candidate => candidate.Name)),
-            "one damaged row never costs the operator the rest.");
-        AssertEx.True(logger.HasEntry(LogLevel.Error, damaged.ToString()),
-            "the id is named, because it is what an operator pulls from the backup.");
+        AssertEx.True(await probe.TableExistsAsync("canvas_workflows"));
+        AssertEx.True(await probe.TableExistsAsync("canvas_workflow_import_recovery"));
+        AssertEx.Equal(2L, await probe.ScalarAsync("SELECT COUNT(*) FROM canvas_workflow_import_recovery"));
+        AssertEx.Equal(2L, await probe.ScalarAsync("SELECT COUNT(*) FROM canvas_workflows AS source JOIN canvas_workflow_import_recovery AS recovery ON source.id = recovery.id WHERE source.graph_json = recovery.graph_json"));
     }
 
     /// <summary>
@@ -156,6 +161,124 @@ public sealed class CanvasWorkflowImportReadTests
         var (snapshot, _) = await ReadAsync(probe);
 
         AssertEx.Equal(expected: 60, snapshot.Candidates.Count);
+    }
+
+    [Test]
+    public async Task Restart_AfterSourceDrop_ImportsDurableCiphertextOnceAndRemovesRecovery()
+    {
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-restart.sqlite", PreDropMigrationId);
+        _ = await SeedAsync(probe, "Release notes", LinearGraph, createdAtUtc: 1);
+        var ciphertext = (byte[])(await probe.ScalarAsync("SELECT graph_json FROM canvas_workflows"))!;
+        _ = await ReadAsync(probe);
+        await probe.MigrateToAsync(targetMigration: null);
+
+        AssertEx.False(await probe.TableExistsAsync("canvas_workflows"));
+        var stagedCiphertext = (byte[])(await probe.ScalarAsync("SELECT graph_json FROM canvas_workflow_import_recovery"))!;
+        AssertEx.True(ciphertext.SequenceEqual(stagedCiphertext),
+            "staging preserves the original authenticated ciphertext, never a plaintext export.");
+
+        // Discard the pre-migration snapshot: a new context must recover solely from the database after restart.
+        await ImportFromRecoveryAsync(probe);
+        AssertEx.False(await probe.TableExistsAsync("canvas_workflow_import_recovery"));
+        AssertEx.Equal(1L, await probe.ScalarAsync("SELECT COUNT(*) FROM graph_workflow_definitions"));
+        await ImportFromRecoveryAsync(probe);
+        AssertEx.Equal(1L, await probe.ScalarAsync("SELECT COUNT(*) FROM graph_workflow_definitions"));
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Import_WhenSecondWriteFails_RollsBackFirstAndRetriesWithoutDuplicates(bool needsAttention)
+    {
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-retry.sqlite", PreDropMigrationId);
+        _ = await SeedAsync(probe, "First", LinearGraph, createdAtUtc: 1);
+        _ = await SeedAsync(probe, "Second", needsAttention ? PauseGraph.Replace("\"Agent\"", "\"Unknown\"", StringComparison.Ordinal) : PauseGraph, createdAtUtc: 2);
+        _ = await ReadAsync(probe);
+        await probe.MigrateToAsync(targetMigration: null);
+        await probe.ExecuteAsync("CREATE TRIGGER reject_second_canvas BEFORE INSERT ON graph_workflow_definitions WHEN NEW.name = 'Second' BEGIN SELECT RAISE(ABORT, 'injected write failure'); END;");
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => ImportFromRecoveryAsync(probe));
+        AssertEx.Equal(0L, await probe.ScalarAsync("SELECT COUNT(*) FROM graph_workflow_definitions"));
+        AssertEx.Equal(2L, await probe.ScalarAsync("SELECT COUNT(*) FROM canvas_workflow_import_recovery"));
+
+        await probe.ExecuteAsync("DROP TRIGGER reject_second_canvas");
+        await ImportFromRecoveryAsync(probe);
+        AssertEx.Equal(2L, await probe.ScalarAsync("SELECT COUNT(*) FROM graph_workflow_definitions"));
+        AssertEx.False(await probe.TableExistsAsync("canvas_workflow_import_recovery"));
+        await ImportFromRecoveryAsync(probe);
+        AssertEx.Equal(2L, await probe.ScalarAsync("SELECT COUNT(*) FROM graph_workflow_definitions"));
+    }
+
+    [Test]
+    public async Task Read_WhenStagingCannotBeWritten_LeavesLegacySourceIntact()
+    {
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-stage-failure.sqlite", PreDropMigrationId);
+        _ = await SeedAsync(probe, "Release notes", LinearGraph, createdAtUtc: 1);
+        // A schema collision makes SQLite refuse the durable copy before destructive migrations can run.
+        await probe.ExecuteAsync("CREATE VIEW canvas_workflow_import_recovery AS SELECT * FROM canvas_workflows");
+        _ = await AssertEx.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(async () => { _ = await ReadAsync(probe); });
+        AssertEx.True(await probe.TableExistsAsync("canvas_workflows"));
+        AssertEx.Equal(1L, await probe.ScalarAsync("SELECT COUNT(*) FROM canvas_workflows"));
+    }
+
+    [Test]
+    public async Task Import_WithEmptyLegacyTable_CleansUpStagingAndStaysEmpty()
+    {
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-empty.sqlite", PreDropMigrationId);
+        _ = await ReadAsync(probe);
+        AssertEx.True(await probe.TableExistsAsync("canvas_workflow_import_recovery"));
+        await probe.MigrateToAsync(targetMigration: null);
+        await ImportFromRecoveryAsync(probe);
+        AssertEx.False(await probe.TableExistsAsync("canvas_workflow_import_recovery"));
+        AssertEx.Equal(0L, await probe.ScalarAsync("SELECT COUNT(*) FROM graph_workflow_definitions"));
+    }
+
+    [Test]
+    public async Task Import_WhenRecoveryCleanupFails_RollsBackDefinitionsAndKeepsRetrySource()
+    {
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-cleanup-failure.sqlite", PreDropMigrationId);
+        _ = await SeedAsync(probe, "Release notes", LinearGraph, createdAtUtc: 1);
+        _ = await ReadAsync(probe);
+        await probe.MigrateToAsync(targetMigration: null);
+
+        _ = await AssertEx.ThrowsAsync<IOException>(() => ImportFromRecoveryAsync(probe, new RejectRecoveryCleanup()));
+        AssertEx.Equal(0L, await probe.ScalarAsync("SELECT COUNT(*) FROM graph_workflow_definitions"));
+        AssertEx.Equal(1L, await probe.ScalarAsync("SELECT COUNT(*) FROM canvas_workflow_import_recovery"));
+        await ImportFromRecoveryAsync(probe);
+        AssertEx.Equal(1L, await probe.ScalarAsync("SELECT COUNT(*) FROM graph_workflow_definitions"));
+        AssertEx.False(await probe.TableExistsAsync("canvas_workflow_import_recovery"));
+    }
+
+    private sealed class RejectRecoveryCleanup : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText == "DROP TABLE IF EXISTS canvas_workflow_import_recovery")
+            {
+                throw new IOException("Injected recovery cleanup failure.");
+            }
+
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    private static async Task ImportFromRecoveryAsync(MigrationSchemaProbe probe, IInterceptor? interceptor = null)
+    {
+        using var keyHolder = new NullNodeSqliteKeyHolder();
+        await using var context = interceptor is null
+            ? AgentDefinitionTestContextFactory.Create(probe.DatabasePath, keyHolder)
+            : AgentDefinitionTestContextFactory.Create(probe.DatabasePath, keyHolder, interceptor);
+        var logger = new RecordingLogger();
+        var snapshot = await CanvasWorkflowImport.ReadAsync(context, logger);
+        var store = new GraphWorkflowStore(context, TimeProvider.System);
+        var definitions = new GraphWorkflowDefinitionService(store,
+            Substitute.For<IToolInvocationService>(),
+            Substitute.For<ILocalModelProviderResolver>(),
+            Options.Create(new GraphWorkflowOptions()));
+        await CanvasWorkflowImport.ImportAsync(context, definitions, store, snapshot, logger);
     }
 
     /// <summary>

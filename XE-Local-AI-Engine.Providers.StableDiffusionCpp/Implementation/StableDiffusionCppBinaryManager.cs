@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
@@ -48,7 +49,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         IStableDiffusionInstalledRuntimeStore? installedRuntimeStore = null,
         IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null)
         : this(httpClient,
-            cacheRoot ?? DefaultCacheRoot(),
+            cacheRoot ?? RuntimeCacheDirectory.Resolve(),
             activeTag ?? StableDiffusionReleasePins.PinnedTag,
             CurrentOsPlatform(),
             RuntimeInformation.ProcessArchitecture,
@@ -574,12 +575,6 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         };
     }
 
-    private static string DefaultCacheRoot()
-    {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine");
-    }
-
     /// <summary>
     ///     The directory every acquired stable-diffusion.cpp runtime is cached under for the default app-data root:
     ///     <c>{cacheRoot}/stable-diffusion.cpp</c>, the layout <see cref="EnsureBinaryAsync" /> writes backend dirs into.
@@ -590,7 +585,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     /// </remarks>
     internal static string DefaultStableDiffusionBinariesRoot()
     {
-        return Path.Combine(DefaultCacheRoot(), "stable-diffusion.cpp");
+        return Path.Combine(RuntimeCacheDirectory.Resolve(), "stable-diffusion.cpp");
     }
 
     private static OSPlatform CurrentOsPlatform()

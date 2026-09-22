@@ -5,13 +5,13 @@ using Velopack;
 using Velopack.Locators;
 using Velopack.Logging;
 
-/// <summary>
-///     Starts Velopack with the repository-owned Windows launcher as its process-path authority when the managed host is
-///     running through <c>dotnet.exe</c>. Linux and unpackaged/development runs retain Velopack's default locator.
-/// </summary>
+/// <summary>Keeps update process identity aligned with the executable supervising the engine.</summary>
 internal static class FrameworkDependentVelopackBootstrap
 {
     internal const string WindowsLauncherFileName = "XE-Local-AI-Engine.WindowsLauncher.exe";
+
+    /// <summary>The desktop shell publishes its own process id here; the shell duplicates the literal.</summary>
+    internal const string SupervisorProcessIdVariable = "XE_DESKTOP_SUPERVISOR_PID";
 
     internal static void Run(string[] args)
     {
@@ -30,6 +30,14 @@ internal static class FrameworkDependentVelopackBootstrap
                 app.SetLocator(new WindowsVelopackLocator(new LauncherProcess(defaultProcess, launcherPath, launcherProcessId),
                     customLog: null));
             }
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            var supervisor = Environment.GetEnvironmentVariable(SupervisorProcessIdVariable);
+            Environment.SetEnvironmentVariable(SupervisorProcessIdVariable, null);
+            var process = new DefaultProcessImpl(NullVelopackLogger.Instance);
+            app.SetLocator(new LinuxVelopackLocator(CreateSupervisedProcess(process, supervisor), customLog: null));
         }
 
         app.Run();
@@ -55,6 +63,14 @@ internal static class FrameworkDependentVelopackBootstrap
         && parsed > 0
             ? parsed
             : managedProcessId;
+
+    internal static IProcessImpl CreateSupervisedProcess(IProcessImpl process, string? supervisorId)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        var processId = process.GetCurrentProcessId();
+        var resolved = ResolveLauncherProcessId(supervisorId, processId);
+        return resolved == processId ? process : new LauncherProcess(process, process.GetCurrentProcessPath(), resolved);
+    }
 
     private sealed class LauncherProcess : IProcessImpl
     {

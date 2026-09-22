@@ -8,10 +8,8 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 ///     the pending tool call it is waiting on.
 /// </summary>
 /// <remarks>
-///     Otherwise the park times out against a call the node has already given up on, and the session is checkpointed off a prompt nobody can
-///     answer any more. Startup-only, and against the CONFIGURED seed: <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c> lets a
-///     stored Node-Settings override lower the tool-call age at runtime, which this check cannot see, and such an override re-opens the gap
-///     until the next restart.
+///     This check sees the configured seed only. The supervisor additionally bounds parks by the approval
+///     coordinator's effective startup snapshot, including stored overrides and elapsed approval age.
 /// </remarks>
 public sealed class WorkSessionOptionsValidator : IValidateOptions<WorkSessionOptions>
 {

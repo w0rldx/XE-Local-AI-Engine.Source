@@ -36,9 +36,10 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     private const string FlushFailedErrorMessage =
         "The final window could not be transcribed; the transcript may be missing its last seconds.";
 
-    // Safety bounds, never a wait: in every ordinary end both are satisfied immediately. They exist so one wedged
-    // lane or one wedged shutdown cannot hold the session, or the process, open forever.
+    // Abort cleanup stays short. Graceful draining and final inference share a larger, single session budget.
+    // Shutdown has its own outer bound; persistence already inside the commit gate is never abandoned.
     private static readonly TimeSpan LaneDrainTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan GracefulFinalizationTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ShutdownDrainTimeout = TimeSpan.FromSeconds(3);
 
     private readonly ConcurrentDictionary<Guid, LiveSession> _sessions = new();
@@ -266,6 +267,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         }
     }
 
+    public bool IsRegistered(Guid sessionId) => _sessions.ContainsKey(sessionId);
+
     public bool IsLive(Guid sessionId)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
@@ -330,17 +333,47 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
     private Task BeginEnd(LiveSession session, LiveEndReason reason)
     {
+        Task ending;
+        var escalate = false;
         lock (session.Gate)
         {
-            if (session.EndTask is not null)
+            if (session.EndTask is null)
             {
-                return session.EndTask;
+                // Admission closes synchronously; no frame can enter the final lane chains after this point.
+                session.AdmissionClosed = true;
+                session.EndReason = reason;
+                session.EndTask = RunEndAsync(session, reason);
+            }
+            else if (!session.Finalized && session.EndReason == LiveEndReason.Completed && reason != LiveEndReason.Completed)
+            {
+                // The first abort replaces a pending graceful stop, never an already selected failure or cancellation.
+                session.EndReason = reason;
+                escalate = true;
             }
 
-            // Admission closes HERE, synchronously, so a frame racing the rest of the teardown cannot reach a lane.
-            session.AdmissionClosed = true;
-            session.EndTask = RunEndAsync(session, reason);
-            return session.EndTask;
+            ending = session.EndTask;
+        }
+
+        if (escalate)
+        {
+            _ = RequestCancellationAsync(session.Abort);
+        }
+
+        return ending;
+    }
+
+    private async Task RequestCancellationAsync(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            // Outside Gate: cancellation callbacks may re-enter the registry.
+            await cancellation.CancelAsync();
+        }
+#pragma warning disable CA1031 // A producer callback cannot prevent the already selected abort from terminalizing.
+        catch (Exception exception)
+#pragma warning restore CA1031
+        {
+            _logger.LogWarning(exception, "Cancelling live transcription resources failed.");
         }
     }
 
@@ -358,22 +391,20 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             {
                 // An abort must not wait behind an inference. Cancelling frees every lane at its next cancellation
                 // point, which is what makes stopping prompt even while the transcriber is mid-call.
-                await session.Abort.CancelAsync();
+                _ = RequestCancellationAsync(session.Abort);
             }
 
             await StopProducerAsync(session);
 
             // A graceful end that could not finalize its last window is NOT a completed transcript: telling the operator otherwise hands them a success for a
             // recording that is missing its final seconds, and the retained audio is gone by then.
-            var outcome = await DrainAndFlushAsync(session, reason)
-                ? reason
-                : LiveEndReason.Failed;
-            var errorCode = outcome == reason ? null : FlushFailedErrorCode;
-            var errorMessage = outcome == reason ? null : FlushFailedErrorMessage;
+            var finalizedCleanly = await DrainAndFlushAsync(session, reason);
 
-            // The point of no return, taken THROUGH the commit gate: a commit already inside the pipeline finishes and no commit may start after it. An abandoned
-            // lane that answers later is dropped rather than persisted and published for a session the client has been told is over.
-            await FinalizeAsync(session);
+            // Freeze the winning reason together with the commit barrier. Cancellation before this point may
+            // escalate a graceful stop; cancellation afterwards cannot rewrite a terminal result.
+            var (outcome, gracefulFailure) = await FinalizeAsync(session, finalizedCleanly);
+            var errorCode = gracefulFailure ? FlushFailedErrorCode : null;
+            var errorMessage = gracefulFailure ? FlushFailedErrorMessage : null;
 
             await CompleteAsync(session, outcome, errorCode, errorMessage);
             await _publisher.PublishStatusAsync(session.Id, outcome, CancellationToken.None);
@@ -411,7 +442,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         }
 
         // Cancelled BEFORE StopAsync is called: a producer that already stops on its token has nothing left to do.
-        await session.ProducerCts.CancelAsync();
+        _ = RequestCancellationAsync(session.ProducerCts);
 
         if (producer is null)
         {
@@ -437,80 +468,67 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     /// </summary>
     private async Task<bool> DrainAndFlushAsync(LiveSession session, LiveEndReason reason)
     {
-        var finalizedCleanly = true;
-
-        foreach (var lane in session.Lanes.Values)
+        if (reason != LiveEndReason.Completed)
         {
-            // Snapshotted under the same gate admission closes under, so the chain read here is final: nothing can
-            // append to it after this point.
-            Task chain;
-            lock (session.Gate)
-            {
-                chain = lane.Chain;
-            }
-
-            // The bound runs off the injected clock, so a test drives it and production still gets five real seconds. Timing out means the lane is STILL RUNNING,
-            // which the flush below must not race: a segmenter is single-threaded by contract, so flushing a lane whose PushAsync has not returned would corrupt the buffer it finalizes.
-            var drained = true;
-            try
-            {
-                // Explicitly not propagating: this drain is what the abort tokens already triggered, so passing
-                // session.Abort.Token or lane.Abort.Token would abandon the lane the flush below must not race.
-                await chain.WaitAsync(LaneDrainTimeout, _timeProvider, CancellationToken.None);
-            }
-            catch (TimeoutException)
-            {
-                drained = false;
-                _logger.LogWarning("The {Channel} lane of transcription session {SessionId} did not drain within {Timeout}; it is abandoned unflushed.",
-                    lane.Channel,
-                    session.Id,
-                    LaneDrainTimeout);
-            }
-#pragma warning disable CA1031 // A faulted chain has still FINISHED; its own handler already reported why.
-            catch (Exception exception)
-#pragma warning restore CA1031
-            {
-                _logger.LogWarning(exception, "Draining the {Channel} lane of transcription session {SessionId} failed.", lane.Channel, session.Id);
-            }
-
-            if (!drained)
-            {
-                // THIS lane only. Cancelling the session's source here would hand a cancelled token to a sibling
-                // that drained cleanly, so one wedged lane would discard another lane's flushable speech.
-                await lane.Abort.CancelAsync();
-                finalizedCleanly &= reason != LiveEndReason.Completed;
-                continue;
-            }
-
-            if (reason != LiveEndReason.Completed)
-            {
-                // Aborted: the token above already cancelled the in-flight submission, and re-submitting the retained
-                // audio would be exactly the wait this branch exists to avoid.
-                continue;
-            }
-
-            try
-            {
-                var tick = await lane.Segmenter.FlushAsync(lane.Abort.Token);
-                await CommitAsync(session, lane, tick);
-                NoteProgress(session, lane, tick);
-            }
-#pragma warning disable CA1031 // A lane that cannot finalize must not stop the session ending or the status push.
-            catch (Exception exception)
-#pragma warning restore CA1031
-            {
-                finalizedCleanly = false;
-                _logger.LogWarning(exception, "Flushing the {Channel} lane of transcription session {SessionId} failed.", lane.Channel, session.Id);
-            }
+            var aborted = session.Lanes.Values.Select(lane => FinalizeLaneAsync(session, lane, graceful: false, CancellationToken.None));
+            _ = await Task.WhenAll(aborted);
+            return true;
         }
 
-        return finalizedCleanly;
+        // One deadline for ALL lanes, including their final inference; producer stopping and persistence are not
+        // included in this budget. Independent lanes finalize concurrently, but each lane drains before it flushes.
+        using var deadline = new CancellationTokenSource(GracefulFinalizationTimeout, _timeProvider);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token, session.Abort.Token);
+        var results = await Task.WhenAll(session.Lanes.Values.Select(lane => FinalizeLaneAsync(session, lane, graceful: true, stop.Token)));
+        return results.All(static clean => clean);
     }
 
-    /// <summary>
-    ///     Closes the commit pipeline. Taken through the commit gate so a commit already inside it finishes first.
-    /// </summary>
-    private static async Task FinalizeAsync(LiveSession session)
+    private async Task<bool> FinalizeLaneAsync(LiveSession session, Lane lane, bool graceful, CancellationToken stopToken)
+    {
+        Task chain;
+        lock (session.Gate)
+        {
+            chain = lane.Chain;
+        }
+
+        try
+        {
+            if (graceful)
+            {
+                await chain.WaitAsync(stopToken);
+                stopToken.ThrowIfCancellationRequested();
+                // WaitAsync bounds even a runtime ignoring cancellation. Its late result still goes through the
+                // commit barrier in FlushLaneAsync; never flush an undrained lane or race its segmenter state.
+                await FlushLaneAsync(session, lane, stopToken).WaitAsync(stopToken);
+            }
+            else
+            {
+                // Abort already cancelled inference. Retain the short cleanup bound without re-submitting audio.
+                await chain.WaitAsync(LaneDrainTimeout, _timeProvider, CancellationToken.None);
+            }
+
+            return true;
+        }
+#pragma warning disable CA1031 // A timed-out or faulted lane must not stop siblings finalizing or the terminal status.
+        catch (Exception exception)
+#pragma warning restore CA1031
+        {
+            _ = RequestCancellationAsync(lane.Abort);
+            _logger.LogWarning(exception, "Finalizing the {Channel} lane of transcription session {SessionId} did not finish cleanly.", lane.Channel, session.Id);
+            return !graceful;
+        }
+    }
+
+    private async Task FlushLaneAsync(LiveSession session, Lane lane, CancellationToken stopToken)
+    {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lane.Abort.Token, stopToken);
+        var tick = await lane.Segmenter.FlushAsync(cancellation.Token);
+        await CommitAsync(session, lane, tick);
+        NoteProgress(session, lane, tick);
+    }
+
+    /// <summary>Closes the commit pipeline and freezes the terminal outcome under the same barrier.</summary>
+    private static async Task<(LiveEndReason Reason, bool GracefulFailure)> FinalizeAsync(LiveSession session, bool finalizedCleanly)
     {
         await session.CommitGate.WaitAsync(CancellationToken.None);
         try
@@ -518,6 +536,13 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             lock (session.Gate)
             {
                 session.Finalized = true;
+
+                // EndReason is written under this same gate, together with EndTask, before the task that runs this
+                // method exists; reaching here unset would mean the end pipeline started without an end.
+                var selected = session.EndReason
+                               ?? throw new InvalidOperationException("The live transcription session ended without a reason.");
+                var gracefulFailure = selected == LiveEndReason.Completed && !finalizedCleanly;
+                return (gracefulFailure ? LiveEndReason.Failed : selected, gracefulFailure);
             }
         }
         finally
@@ -795,6 +820,13 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         public bool AdmissionClosed { get; set; }
 
         public Task? EndTask { get; set; }
+
+        /// <summary>
+        ///     Null until an end is selected. Nullable because <see cref="LiveEndReason.Completed" /> is the zero
+        ///     value: a non-nullable field would make a session that has not ended read as a graceful completion,
+        ///     which is exactly what the escalation guard in <c>BeginEnd</c> tests for.
+        /// </summary>
+        public LiveEndReason? EndReason { get; set; }
 
         /// <summary>
         ///     Set once the terminal status is about to be written. A commit that arrives after it is dropped: the

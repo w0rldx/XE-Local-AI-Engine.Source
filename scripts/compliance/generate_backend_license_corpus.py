@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from bundle_input_evidence import load_bundle_packages
+from bundle_input_evidence import load_publish_evidence, shipment_evidence_hash
 
-NUGET_LICENSE_VERSION = "4.0.14"
+NUGET_LICENSE_VERSION = "4.0.16"
 INVALID_LICENSES = {"", "UNKNOWN", "NOASSERTION"}
 TERM_FILE_PATTERN = re.compile(
     r"^(?:(?:licen[cs]e|notice|copyright)s?|copying)(?:$|[-_. ])"
@@ -95,9 +95,9 @@ UPSTREAM_PACKAGE_LICENSE_TEXTS = {
             "FastEndpoints.Swagger",
         )
     },
-    ("scalar.aspnetcore", "2.16.10", "MIT"): (
-        Path("nuget/upstream/Scalar.AspNetCore-2.16.10-LICENSE"),
-        Path("nuget/upstream/Scalar.AspNetCore-2.16.10-LICENSE.source.txt"),
+    ("scalar.aspnetcore", "2.17.4", "MIT"): (
+        Path("nuget/upstream/Scalar.AspNetCore-2.17.4-LICENSE"),
+        Path("nuget/upstream/Scalar.AspNetCore-2.17.4-LICENSE.source.txt"),
     ),
     ("scrutor", "7.0.0", "MIT"): (
         Path("nuget/upstream/Scrutor-7.0.0-LICENSE"),
@@ -140,48 +140,27 @@ def is_runtime_pack(name: str) -> bool:
     )
 
 
-def shipped_packages(rid: str, deps_path: Path, bundle_input_manifest: Path) -> dict[tuple[str, str], dict]:
-    document = load_json(deps_path)
-    if not isinstance(document, dict):
-        raise ValueError(f"{deps_path} must contain a JSON object")
-    targets = document.get("targets")
-    libraries = document.get("libraries")
-    if not isinstance(targets, dict) or not isinstance(libraries, dict):
-        raise ValueError(f"{deps_path} has no valid targets/libraries objects")
-    matching = [key for key in targets if key.endswith(f"/{rid}")]
-    if len(matching) != 1:
-        raise ValueError(f"expected one {rid} target in {deps_path}, found {len(matching)}")
-    if not isinstance(targets[matching[0]], dict):
-        raise ValueError(f"{deps_path} has an invalid {rid} target")
-    deps_packages: dict[tuple[str, str], dict] = {}
-    for identity, library in libraries.items():
-        if not isinstance(identity, str) or not isinstance(library, dict) or library.get("type") == "project":
-            continue
-        name, separator, version = identity.rpartition("/")
-        if not separator or not name or not version:
-            raise ValueError(f"invalid deps.json package identity: {identity}")
-        if is_runtime_pack(name):
-            continue
-        package_path = required_text(library.get("path"), f"deps.json library {identity} path")
-        key = (name.casefold(), version)
-        if key in deps_packages:
-            raise ValueError(f"duplicate deps.json package identity {identity}")
-        deps_packages[key] = {"name": name, "packagePath": package_path}
-
+def shipped_packages(
+    rid: str,
+    deps_path: Path,
+    bundle_input_manifest: Path,
+    additional_deps: tuple[Path, ...] = (),
+    additional_manifests: tuple[Path, ...] = (),
+) -> dict[tuple[str, str], dict]:
+    libraries, evidence = load_publish_evidence(
+        [load_json(path) for path in (deps_path, *additional_deps)],
+        [bundle_input_manifest, *additional_manifests],
+        rid,
+    )
     selected: dict[tuple[str, str], dict] = {}
-    for key, evidence in load_bundle_packages(bundle_input_manifest, rid).items():
-        if is_runtime_pack(evidence["name"]):
+    for key, package in evidence.items():
+        if is_runtime_pack(package["name"]):
             continue
-        try:
-            package = deps_packages[key]
-        except KeyError as error:
-            raise ValueError(
-                f"bundle input package {evidence['name']}/{key[1]} is absent from the RID deps.json libraries"
-            ) from error
+        library = libraries[key]
         selected[key] = {
-            "bundleInputs": evidence["inputs"],
-            "name": package["name"],
-            "packagePath": package["packagePath"],
+            "bundleInputs": package["inputs"],
+            "name": library["name"],
+            "packagePath": required_text(library.get("path"), f"deps.json library {library['name']} path"),
         }
     return selected
 
@@ -561,9 +540,11 @@ def generate_corpus(
     packages_root: Path,
     output_directory: Path,
     repository_root: Path | None = None,
+    additional_deps: tuple[Path, ...] = (),
+    additional_manifests: tuple[Path, ...] = (),
 ) -> int:
     tool_version = pinned_tool_version(tool_manifest_path)
-    selected = shipped_packages(rid, deps_path, bundle_input_manifest)
+    selected = shipped_packages(rid, deps_path, bundle_input_manifest, additional_deps, additional_manifests)
     metadata, versions_by_name = metadata_index(metadata_path)
     license_output = output_directory / "licenses" / "nuget"
     if license_output.exists():
@@ -595,7 +576,7 @@ def generate_corpus(
         "runtimeIdentifier": rid,
         "shipmentEvidence": {
             "method": "MSBuild FilesToBundle and loose ResolvedFileToPublish captured immediately before bundling",
-            "sha256": hashlib.sha256(bundle_input_manifest.read_bytes()).hexdigest(),
+            "sha256": shipment_evidence_hash([bundle_input_manifest, *additional_manifests]),
         },
     }
     (output_directory / "backend-components.json").write_text(
@@ -610,6 +591,8 @@ def main() -> int:
     parser.add_argument("--rid", choices=("linux-x64", "win-x64"), required=True)
     parser.add_argument("--deps-json", type=Path, required=True)
     parser.add_argument("--bundle-input-manifest", type=Path, required=True)
+    parser.add_argument("--additional-deps-json", type=Path, action="append", default=[])
+    parser.add_argument("--additional-bundle-input-manifest", type=Path, action="append", default=[])
     parser.add_argument("--metadata-json", type=Path, required=True)
     parser.add_argument("--tool-manifest", type=Path, default=Path("dotnet-tools.json"))
     parser.add_argument("--license-root", type=Path, default=Path("third-party"))
@@ -630,6 +613,8 @@ def main() -> int:
         args.nuget_packages_root,
         args.output_directory,
         repository_root,
+        tuple(args.additional_deps_json),
+        tuple(args.additional_bundle_input_manifest),
     )
     print(
         f"generated {args.rid} backend license corpus for {count} shipped NuGet packages "

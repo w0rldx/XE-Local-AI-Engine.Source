@@ -296,6 +296,11 @@ calls into it per lane.
   frame, so a silent native capture is not reaped (`NeverAttached`); the pending-audio budget —
   two windows' worth, capped at 640 KB — exceeded (`Overloaded`); and a stalled lane (`Failed`). Only `Completed`
   flushes the retained tail; every other reason aborts in-flight inference instead, so stopping stays prompt.
+- Graceful stopping gives all lanes **one shared 30-second drain-and-flush budget**. Lanes finalize independently,
+  but each lane drains before flushing. Producer shutdown and terminal persistence are outside this budget.
+  Cancellation can interrupt a pending graceful stop until the commit barrier freezes its terminal outcome;
+  repeated end requests join the same task. A finalizing session remains registered for REST cancellation even
+  though it no longer admits frames.
 - Persisted status mapping: `Completed` → `Completed`; `Cancelled`, `Abandoned`, `NeverAttached` → `Cancelled`;
   `Overloaded`, `Failed` → `Failed` with error codes `live-overloaded` / `live-failed`. A graceful end whose final
   flush throws, or whose lane did not drain inside its bound, finalizes as `Failed` with `live-flush-failed` rather
@@ -379,7 +384,7 @@ confirmation dialog or an async guard breaks system audio silently, and the call
 `useLiveCapture.test.ts` are the only thing that catches it.
 
 Any failure on that path disposes everything: the display promise is settled first so its stream is registered, then
-every acquired source is stopped and `EndSession` is invoked if the session had already been opened. A cancelled
+every acquired source is stopped and REST cancellation is requested if the session had already been opened. A cancelled
 picker never leaves a hot microphone, and a refused start never leaves a screen share running.
 
 Leaving the page during a start disposes everything too, and by a different route. The unmount teardown stops what the
@@ -623,8 +628,10 @@ operator is still making.
 - **`StopAsync` cancels and returns — it never awaits the capture task.** A `PushAudioAsync` blocked behind inference
   would otherwise hold the registry's bounded producer-stop wait. `StopAsync_ReturnsWhileAPushIsBlockedBehindInference`
   is the proof: adding an `await` on the capture task turns it red.
-- **The coordinator never ends a session and names no session status.** Stopping capture and ending a live session are
-  different acts; the second belongs to the registry's single `EndAsync` path.
+- **The coordinator ends a session only when its capture died unexpectedly, and only through the registry.** A
+  requested stop (`StopAsync`, a cancelled producer token, `DisposeAsync`) cancels and detaches without naming a status;
+  a recorder that returns or throws without a stop request is detached and then handed to the registry's single
+  `EndAsync(Failed)` path. See "An unexpected capture end fails the session" below.
 - **`DisposeAsync`** stops and detaches every capture, then bounds the drain at three seconds on the injected
   `TimeProvider` — a bound on shutdown, not a wait for an event, so one wedged capture cannot hold the process open.
 
@@ -673,25 +680,22 @@ segmenter tolerates this, and the timestamps stay internally consistent, but the
 start of the recording. Writing silence instead would require the zero-copy `DataAvailable` event, whose buffer is a
 `ReadOnlySpan<byte>` valid only inside the callback and therefore cannot cross an `await`.
 
-### A capture that dies leaves the session live and silent
+### An unexpected capture end fails the session
 
-The companion consequence, and the sharper one. A detached capture can end on its own in several ways: `BuildAsync`
-refuses because the pid is already gone or CoreAudio refuses the activation, the target process exits mid-capture, or
-the converter's buffer overflows because conversion stopped keeping up. All of them are caught and logged by the
-capture loop, which then removes its own handle. **Nothing ends the session.** By that point `Start` has already
-answered 200 with `capturing: true`; the producer attached, which disarmed the registry's producer-attachment
-deadline, so the `NeverAttached` sweep will not fire either; and S5 never calls `EndAsync`,
-because stopping a capture and ending a live session are different acts. The session therefore stays live, receives
-nothing more, and the only client-visible signals are indirect: `IsCapturing` reports `false`, and a later `DELETE`
-on the capture route answers **404** instead of 204. The browser abandonment grace is the one thing that still ends
-such a session, and only if the operator closes the tab.
+`ProcessAudioCaptureCoordinator.SessionCapture.RunAsync` detaches a recorder that returns or throws without a stop
+request, then calls the registry's existing `EndAsync(Failed)` path. This includes a process disappearing before
+`BuildAsync`, a CoreAudio failure, and an `OperationCanceledException` whose capture token was not cancelled. The
+registry finalizes the row and publishes its normal terminal event; `TranscriptionSessionPage` re-reads that row and
+replaces the live controls with the failed-session view. A browser that remains connected therefore sees the failure
+instead of waiting for an abandonment timer that cannot fire while it is watching.
 
-This is intended rather than overlooked — the coordinator's own remarks state that it never ends a session and names
-no session status, so that the registry keeps exactly one termination path. It is also the least pleasant thing about
-the design from the operator's seat, which is why the Windows round has to record what actually happens: killing the
-target process mid-session is a step in the live-validation plan, and what the transcript, the status and the capture
-route report afterwards is the observation that decides whether a future slice needs a "capture ended" signal on the
-hub.
+A requested stop retains its existing semantics: the capture's cancelled token or stop flag prevents a second failure
+request, and the registry's graceful completion still flushes the final window. Detaching precedes `EndAsync` so
+teardown cannot wait on its own producer. The registry remains the only owner of session terminalization.
+`LiveTranscriptionSessionRegistryTests.ProcessCapture_UnexpectedEnd_FailsAndPublishesToTheWatchingBrowser` covers a
+clean unexpected end, a recorder exception and an uncancelled cancellation exception with the real registry;
+`ProcessCapture_RequestedCompletion_PreservesTheGracefulFlush` covers normal completion. The native WASAPI outcome
+still needs the Windows live round.
 
 ### Stopping when the hub cannot deliver: the REST fallback
 
@@ -701,11 +705,14 @@ invoke `EndSession` on. A throwing invoke is treated the same way, but for a dif
 tell whether the node processed the call before the transport dropped, so it assumes the worst. In both cases
 `useLiveCapture` falls back to the REST cancel route, `POST transcription/sessions/{sessionId}/cancel`, which reaches
 the registry's single `EndAsync` path with `LiveEndReason.Cancelled` and stops the producer at once. Sending it after
-an `EndSession` that did land is **redundant and harmless**: `BeginEnd` is idempotent under the session gate — a
-session that already has an end task returns it untouched — so the first end wins and keeps **its own** reason. A
-session genuinely completed over the hub therefore stays `Completed`; the late cancel changes nothing. The fallback
-covers **every** stop path, including `abandon(true)` — the unmount that lands while `live/start` is still in
-flight — and it applies to every request kind, not only process capture.
+an `EndSession` that did land can **interrupt its pending graceful finalization**: the first non-graceful reason
+replaces `Completed` until the commit barrier freezes the outcome. A session whose terminal outcome is already
+frozen stays unchanged. Normal Stop uses the hub first; capture failures, explicit Cancel and unmount cleanup use
+REST cancellation directly. This applies to every request kind, not only process capture.
+
+Normal Stop releases capture sources immediately and displays **Finalizing…** while the node drains and flushes.
+Cancel remains available during that wait. Capture errors are shown before cancellation finishes and remain visible
+after the persisted session becomes terminal.
 
 **A stop that neither transport acknowledged is not dropped.** It is held pending, surfaced to the operator as
 `stop-failed` rather than a silent return to idle, and redelivered the moment the hub reconnects. That redelivery
@@ -735,10 +742,11 @@ path the fallback is supposed to make instant.
 
 ### Known limitations
 
-- **The target process exiting mid-capture is caught and logged**, not raised: the capture loop treats any failure as
-  "capture ended", the session lives on until something ends it through the registry, and nothing escapes as an
-  unobserved task fault. Which of the two shapes NAudio produces there — a clean end of the sequence or a COM
-  exception — is not verified.
+- **An unexpected capture end fails the live session through the registry.** `ProcessAudioCaptureCoordinator.SessionCapture.RunAsync`
+  detaches before calling `EndAsync(Failed)`, so a recorder initialization failure, an unexpected clean return, or an
+  uncancelled `OperationCanceledException` reaches persistence and the browser's terminal status event instead of leaving
+  a session recording without a producer. Requested cancellation keeps the registry caller's status and graceful-flush
+  semantics. Which shape NAudio produces when a target exits — a clean end or a COM exception — still needs a Windows round.
 - **More than two channels is refused** with a `NotSupportedException`. `StereoToMonoSampleProvider` downmixes two
   channels only, and failing loudly beats interleaving channels into the transcript. Unreachable with NAudio's stereo
   default.

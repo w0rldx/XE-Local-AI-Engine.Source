@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Required by the LibraryImport source generator for DesktopEngineCommand's kill(2) P/Invoke (SYSLIB1062); no
+         hand-written unsafe code exists in this project. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>XE_Local_AI_Engine.Desktop</RootNamespace>
+    <AssemblyName>XE-Local-AI-Engine.Desktop</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Velopack" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Controls.WebView" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Linux/DownloadBridge.js" LogicalName="DesktopDownloadBridge.js" />
+    <EmbeddedResource Include="../XE-Local-AI-Engine.Client.React/public/favicon.png" LogicalName="DesktopIcon.png" />
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
+  </ItemGroup>
+
+</Project>

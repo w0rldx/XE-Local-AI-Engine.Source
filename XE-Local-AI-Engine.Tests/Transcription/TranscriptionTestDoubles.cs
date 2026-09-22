@@ -347,6 +347,8 @@ internal sealed class NoLiveSessionsRegistry : ILiveTranscriptionSessionRegistry
 
     public bool IsLive(Guid sessionId) =>
         false;
+
+    public bool IsRegistered(Guid sessionId) => false;
 }
 
 /// <summary>

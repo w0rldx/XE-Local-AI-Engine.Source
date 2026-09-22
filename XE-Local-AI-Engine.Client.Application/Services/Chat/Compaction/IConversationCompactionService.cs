@@ -16,7 +16,10 @@ public enum ConversationCompactionOutcome
     NoLocalModel,
 
     /// <summary>The summarizer produced no usable text; the existing synopsis (if any) was left untouched.</summary>
-    SummarizerReturnedNothing
+    SummarizerReturnedNothing,
+
+    /// <summary>The operation exceeded the node's message-request budget; the previous synopsis was left untouched.</summary>
+    TimedOut
 }
 
 /// <summary>Outcome of a compaction attempt. Carries the new synopsis + how much it covers, so the endpoint can echo it back.</summary>

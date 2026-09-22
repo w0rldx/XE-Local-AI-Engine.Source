@@ -13,6 +13,10 @@ public sealed class AppUpdateHostContext
     /// <summary><see langword="true" /> when launched as the desktop self-update build.</summary>
     public required bool IsLocalMode { get; init; }
 
+    public bool IsShellOwned { get; init; }
+
+    public string? DataDirectory { get; init; }
+
     /// <summary>The args to re-supply to the relaunched process after applying an update.</summary>
     public required IReadOnlyList<string> RestartArgs { get; init; }
 }

@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import;
@@ -108,15 +109,15 @@ public sealed class CanvasWorkflowImportTests
         ];
         var logger = new RecordingLogger<CanvasWorkflowImportTests>();
 
-        await ImportAsync(factory, new CanvasWorkflowImportSnapshot { Candidates = candidates, FailedCount = 1 }, logger);
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot { Candidates = candidates, FailedCount = 0 }, logger);
 
         var summaries = await ListDefinitionsAsync(factory);
         AssertEx.Equal("First, Odd one, Third", string.Join(", ", summaries.Select(static summary => summary.Name).Order(StringComparer.Ordinal)),
             "nothing is dropped for being invalid — the row travels and the operator decides.");
         AssertEx.Equal(expected: 1, summaries.Count(static summary => summary.Description?.StartsWith("IMPORT NEEDS ATTENTION", StringComparison.Ordinal) is true));
 
-        AssertEx.True(logger.HasEntry(LogLevel.Warning, "Open Canvas one-shot import complete: 2 imported, 1 need attention, 1 failed."),
-            "the failed count carries the reader's unreadable rows through into the one line an operator must not miss.");
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "Open Canvas one-shot import complete: 2 imported, 1 need attention, 0 failed."),
+            "the summary describes only definitions that committed together.");
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "Open Canvas has been removed; canvas_workflows is dropped."));
     }
 
@@ -143,7 +144,8 @@ public sealed class CanvasWorkflowImportTests
     private static async Task ImportAsync(TestServerWebAppFactory factory, CanvasWorkflowImportSnapshot snapshot, ILogger logger)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        await CanvasWorkflowImport.ImportAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>(),
+        await CanvasWorkflowImport.ImportAsync(scope.ServiceProvider.GetRequiredService<NodeChatDbContext>(),
+                                      scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>(),
                                       scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(),
                                       snapshot,
                                       logger);

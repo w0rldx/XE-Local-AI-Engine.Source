@@ -2,6 +2,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
+import { createElement, type ReactNode, StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CaptureError, type CaptureChannel } from "@/features/transcription/capture/CaptureSource";
@@ -122,6 +123,7 @@ function processCaptureOk(calls: string[]): void {
 }
 
 const cancelPath = localApiPath(`transcription/sessions/${sessionId}/cancel`);
+const abortCancels: string[] = [];
 
 /** Records every POST to this session's cancel route, which is the REST path an undeliverable `EndSession` falls to. */
 function cancelRoute(calls: string[]): void {
@@ -148,6 +150,13 @@ function renderCapture() {
 	return renderHook(() => useLiveCapture(sessionId), { wrapper });
 }
 
+function renderCaptureStrict() {
+	const { wrapper: Providers } = createProvidersWrapper();
+	const wrapper = ({ children }: { children: ReactNode }) =>
+		createElement(StrictMode, null, createElement(Providers, null, children));
+	return renderHook(() => useLiveCapture(sessionId), { wrapper });
+}
+
 async function startCapture(
 	capture: { current: ReturnType<typeof useLiveCapture> },
 	request: LiveCaptureRequest,
@@ -160,6 +169,13 @@ async function startCapture(
 
 describe("useLiveCapture", () => {
 	beforeEach(() => {
+		abortCancels.length = 0;
+		server.use(
+			http.post(cancelPath, () => {
+				abortCancels.push("cancel");
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
 		hub.pushFrame.mockReset();
 		hub.pushFrame.mockResolvedValue(undefined);
 		hub.endSession.mockReset();
@@ -176,7 +192,7 @@ describe("useLiveCapture", () => {
 	// Plan §4.2: WhenSystemAudioHasNoAudioTrack_TheSessionIsNeverStarted
 	// R19: a shared surface that came back silent is a failure, not a session that quietly records nothing. The picker
 	// is opened from the click (so `live/start` has already been sent by the time the stream is inspected), which is
-	// why "never started" is proved as: no frame ever reached the node, and the session was ended again.
+	// why "never started" is proved as: no frame ever reached the node, and the opened session was cancelled again.
 	it("never runs a system-audio session whose shared surface has no audio track", async () => {
 		liveStartOk();
 		const { factory, sources } = harness({ systemAudio: new CaptureError("no-audio-track", "no audio track") });
@@ -188,7 +204,8 @@ describe("useLiveCapture", () => {
 		expect(result.current.state).toBe("idle");
 		expect(sources.get("systemAudio")?.started).toBe(false);
 		expect(hub.pushFrame).not.toHaveBeenCalled();
-		expect(hub.endSession).toHaveBeenCalledTimes(1);
+		expect(hub.endSession).not.toHaveBeenCalled();
+		expect(abortCancels).toEqual(["cancel"]);
 	});
 
 	// Plan §4.2: WhenTheDisplayPickerIsCancelledOnBoth_TheMicrophoneIsStopped
@@ -264,6 +281,106 @@ describe("useLiveCapture", () => {
 		parked.resolve(undefined);
 	});
 
+	it("cancels a finalization without waiting for a stuck graceful EndSession", async () => {
+		liveStartOk();
+		const endGate = deferred<boolean>();
+		hub.endSession.mockReturnValue(endGate.promise);
+		const calls: string[] = [];
+		cancelRoute(calls);
+		const { factory, sources } = harness();
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+		let stopped = Promise.resolve();
+		await act(async () => {
+			stopped = result.current.stop();
+			await vi.waitFor(() => expect(hub.endSession).toHaveBeenCalledTimes(1));
+		});
+		expect(sources.get("microphone")?.stopped).toBe(true);
+		expect(result.current.state).toBe("stopping");
+
+		await act(async () => {
+			await result.current.cancel();
+		});
+		expect(calls).toEqual(["cancel"]);
+		expect(result.current.state).toBe("idle");
+
+		await act(async () => {
+			endGate.reject(new Error("late hub failure"));
+			await stopped;
+		});
+		expect(result.current.state).toBe("idle");
+		expect(result.current.error).toBeNull();
+		expect(calls).toEqual(["cancel"]);
+	});
+
+	it("keeps cancellation failures visible while graceful finalization can still complete", async () => {
+		liveStartOk();
+		const endGate = deferred<boolean>();
+		hub.endSession.mockReturnValue(endGate.promise);
+		const calls: string[] = [];
+		cancelRouteFails(calls);
+		const { factory } = harness();
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+		let stopped = Promise.resolve();
+		await act(async () => {
+			stopped = result.current.stop();
+			await vi.waitFor(() => expect(hub.endSession).toHaveBeenCalledTimes(1));
+		});
+		await act(async () => {
+			await expect(result.current.cancel()).rejects.toBeDefined();
+		});
+		expect(result.current.error).toBe("stop-failed");
+		expect(result.current.state).toBe("stopping");
+
+		await act(async () => {
+			endGate.resolve(true);
+			await stopped;
+		});
+		expect(result.current.error).toBeNull();
+		expect(result.current.state).toBe("idle");
+		expect(calls).toEqual(["cancel"]);
+	});
+
+	it("surfaces a capture error before its cancellation request finishes", async () => {
+		liveStartOk();
+		const cancelGate = deferred<void>();
+		server.use(
+			http.post(cancelPath, async () => {
+				await cancelGate.promise;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		const { factory, sources } = harness();
+		const { result } = renderCapture();
+		await startCapture(result, { kind: "microphone" }, factory);
+		hub.pushFrame.mockRejectedValue(new CaptureError("overloaded", "maximum frames in flight"));
+
+		act(() => sources.get("microphone")?.emit(new Int16Array([1])));
+		await vi.waitFor(() => expect(result.current.error).toBe("overloaded"));
+		expect(result.current.state).toBe("stopping");
+
+		await act(async () => {
+			cancelGate.resolve(undefined);
+		});
+		await vi.waitFor(() => expect(result.current.state).toBe("idle"));
+	});
+
+	it("continues updating after StrictMode replays effect cleanup", async () => {
+		liveStartOk();
+		const { factory } = harness();
+		const { result } = renderCaptureStrict();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+		expect(result.current.state).toBe("capturing");
+		await act(async () => {
+			await result.current.stop();
+		});
+		expect(result.current.state).toBe("idle");
+	});
+
 	// Plan §4.2: OverloadedStatusPush_StopsCaptureAndSurfacesTheNamedError
 	it("stops capture and names the error when the node reports overloaded", async () => {
 		liveStartOk();
@@ -281,7 +398,8 @@ describe("useLiveCapture", () => {
 		expect(result.current.error).toBe("overloaded");
 		expect(result.current.state).toBe("idle");
 		expect(sources.get("microphone")?.stopped).toBe(true);
-		expect(hub.endSession).toHaveBeenCalledTimes(1);
+		expect(hub.endSession).not.toHaveBeenCalled();
+		expect(abortCancels).toEqual(["cancel"]);
 	});
 
 	// Plan §4.2: MicrophoneOnly_AwaitsLiveStartBeforeGetUserMedia
@@ -388,7 +506,8 @@ describe("useLiveCapture", () => {
 
 		expect(sources.get("systemAudio")?.stopped).toBe(true);
 		expect(result.current.error).toBe("permission-denied");
-		expect(hub.endSession).toHaveBeenCalledTimes(1);
+		expect(hub.endSession).not.toHaveBeenCalled();
+		expect(abortCancels).toEqual(["cancel"]);
 	});
 
 	// Plan §4.2: the mirror case — the display fails and the microphone must not be left hot.
@@ -401,6 +520,7 @@ describe("useLiveCapture", () => {
 
 		expect(sources.get("microphone")?.stopped).toBe(true);
 		expect(result.current.error).toBe("no-audio-track");
+		expect(abortCancels).toEqual(["cancel"]);
 	});
 
 	// S4 review B1 — WhenUnmountedDuringStart_StopsEverySourceAcquiredAfterwards.
@@ -430,6 +550,7 @@ describe("useLiveCapture", () => {
 		expect(sources.has("microphone")).toBe(false);
 		sources.get("systemAudio")?.emit(new Int16Array([1]));
 		expect(hub.pushFrame).not.toHaveBeenCalled();
+		expect(abortCancels).toEqual(["cancel"]);
 	});
 
 	// S5: the node records the application itself. A browser capture source here would open an AudioContext for audio
@@ -497,7 +618,8 @@ describe("useLiveCapture", () => {
 		expect(result.current.error).toBe(reason);
 		expect(result.current.state).toBe("idle");
 		// Whatever the reason, the live session the node opened a moment ago must not be left with nothing feeding it.
-		expect(hub.endSession).toHaveBeenCalledTimes(1);
+		expect(hub.endSession).not.toHaveBeenCalled();
+		expect(abortCancels).toEqual(["cancel"]);
 	});
 
 	// A refusal the SPA does not know a sentence for must still read as a refusal, not as a missing translation key.
@@ -614,24 +736,50 @@ describe("useLiveCapture", () => {
 		expect(result.current.error).toBe("stop-failed");
 		expect(result.current.state).toBe("idle");
 
-		hub.endSession.mockResolvedValue(true);
 		hub.endSession.mockClear();
+		cancelRoute(calls);
 		await act(async () => {
 			hub.connected = true;
 			rerender();
 		});
 
-		await vi.waitFor(() => expect(hub.endSession).toHaveBeenCalledTimes(1));
+		await vi.waitFor(() => expect(calls).toEqual(["cancel", "cancel"]));
+		expect(hub.endSession).not.toHaveBeenCalled();
 		await vi.waitFor(() => expect(result.current.error).toBeNull());
 	});
 
-	// Leaving the page takes the transport with it, so the unmount teardown is exactly the case where the hub cannot
-	// deliver. Without the fallback the node only stopped on its 60 s abandonment grace.
-	it("ends the session over REST when the page is left with no hub", async () => {
+	it("retries cancellation rather than graceful completion after an abort loses both transports", async () => {
+		liveStartOk();
+		const calls: string[] = [];
+		cancelRouteFails(calls);
+		const { factory, sources } = harness();
+		const { result, rerender } = renderCapture();
+		await startCapture(result, { kind: "microphone" }, factory);
+		hub.pushFrame.mockRejectedValue(new CaptureError("disconnected", "transport gone"));
+
+		hub.connected = false;
+		rerender();
+		act(() => sources.get("microphone")?.emit(new Int16Array([1])));
+		await vi.waitFor(() => expect(calls).toEqual(["cancel"]));
+		expect(hub.endSession).not.toHaveBeenCalled();
+		expect(result.current.error).toBe("disconnected");
+
+		cancelRoute(calls);
+		await act(async () => {
+			hub.connected = true;
+			rerender();
+		});
+		await vi.waitFor(() => expect(calls).toEqual(["cancel", "cancel"]));
+		expect(hub.endSession).not.toHaveBeenCalled();
+		expect(result.current.error).toBe("disconnected");
+	});
+
+	// Leaving the page is cancellation, not graceful completion: there is no UI left to wait for finalization or to
+	// offer escalation if it stalls.
+	it("cancels the session when the page is left", async () => {
 		liveStartOk();
 		const calls: string[] = [];
 		cancelRoute(calls);
-		hub.endSession.mockResolvedValue(false);
 		// The way in is not what this case is about; it records into its own list so `calls` stays the teardown's.
 		processCaptureOk([]);
 		const { factory } = harness();
@@ -642,12 +790,13 @@ describe("useLiveCapture", () => {
 
 		// The unmount teardown is fire-and-forget, so the assertion waits for the request rather than the promise.
 		await vi.waitFor(() => expect(calls).toEqual(["cancel"]));
+		expect(hub.endSession).not.toHaveBeenCalled();
 	});
 
 	// Plan §4.2: WhenAPushReportsOverloaded_StopsEverySourceEndsTheSessionAndShowsTheError
 	// R34a: hitting the hub's in-flight limit is a visible failure. A dropped frame is a hole in the transcript that
 	// nothing refetches, so capture stops instead.
-	it("stops every source and ends the session when a push reports overloaded", async () => {
+	it("stops every source and cancels the session when a push reports overloaded", async () => {
 		liveStartOk();
 		const { factory, sources } = harness();
 		const { result } = renderCapture();
@@ -664,7 +813,8 @@ describe("useLiveCapture", () => {
 		expect(result.current.state).toBe("idle");
 		expect(sources.get("microphone")?.stopped).toBe(true);
 		expect(sources.get("systemAudio")?.stopped).toBe(true);
-		expect(hub.endSession).toHaveBeenCalledTimes(1);
+		expect(hub.endSession).not.toHaveBeenCalled();
+		expect(abortCancels).toEqual(["cancel"]);
 		// Outstanding work stayed bounded: the rejected frame stopped capture rather than being retried.
 		expect(hub.pushFrame).toHaveBeenCalledTimes(1);
 	});

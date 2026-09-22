@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from urllib.parse import quote
 
-from bundle_input_evidence import load_bundle_packages
+from bundle_input_evidence import load_publish_evidence, shipment_evidence_hash
 
 INVALID_LICENSES = {"", "UNKNOWN", "NOASSERTION"}
 THREE_PART_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -56,12 +56,15 @@ def package(name: str, version: str, license_expression: str, purl: str) -> dict
 
 
 def backend_license_map(
-    backend_manifest: dict, runtime_identifier: str, bundle_input_manifest: Path
+    backend_manifest: dict,
+    runtime_identifier: str,
+    bundle_input_manifest: Path,
+    additional_manifests: tuple[Path, ...] = (),
 ) -> dict[tuple[str, str], str]:
     if backend_manifest.get("runtimeIdentifier") != runtime_identifier:
         raise ValueError("backend license inventory runtime identifier does not match the payload")
     shipment_evidence = backend_manifest.get("shipmentEvidence")
-    expected_hash = hashlib.sha256(bundle_input_manifest.read_bytes()).hexdigest()
+    expected_hash = shipment_evidence_hash([bundle_input_manifest, *additional_manifests])
     if not isinstance(shipment_evidence, dict) or shipment_evidence.get("sha256") != expected_hash:
         raise ValueError("backend license inventory is not bound to the supplied bundle-input evidence")
     result: dict[tuple[str, str], str] = {}
@@ -137,23 +140,18 @@ def detected_backend_packages(
     bundle_input_manifest: Path,
     runtime_identifier: str,
     licenses: dict[tuple[str, str], str],
+    additional_deps: tuple[dict, ...] = (),
+    additional_manifests: tuple[Path, ...] = (),
 ) -> tuple[list[dict], list[dict]]:
-    matching_targets = [key for key in deps.get("targets", {}) if key.endswith(f"/{runtime_identifier}")]
-    if len(matching_targets) != 1:
-        raise ValueError(f"expected one {runtime_identifier} target in deps.json, found {len(matching_targets)}")
-    libraries = deps.get("libraries", {})
-    deps_package_keys: set[tuple[str, str]] = set()
-    for identity, library in libraries.items():
-        if not isinstance(identity, str) or not isinstance(library, dict) or library.get("type") == "project":
-            continue
-        name, separator, version = identity.rpartition("/")
-        if not separator or not name or not version:
-            raise ValueError(f"invalid deps.json package identity: {identity}")
-        deps_package_keys.add((name.casefold(), version))
+    deps_libraries, bundle_packages = load_publish_evidence(
+        [deps, *additional_deps],
+        [bundle_input_manifest, *additional_manifests],
+        runtime_identifier,
+    )
+    deps_package_keys = set(deps_libraries)
     packages: list[dict] = []
     extracted_licenses: list[dict] = []
     detected_inventory_keys: set[tuple[str, str]] = set()
-    bundle_packages = load_bundle_packages(bundle_input_manifest, runtime_identifier)
     for (folded_name, version), evidence in sorted(bundle_packages.items()):
         name = evidence["name"]
         if folded_name.startswith(
@@ -217,6 +215,8 @@ def reconcile(
     windows_apphost_version: str | None = None,
     windows_apphost_license_path: Path | None = None,
     windows_apphost_notices_path: Path | None = None,
+    additional_deps: tuple[Path, ...] = (),
+    additional_manifests: tuple[Path, ...] = (),
 ) -> tuple[int, int]:
     if legacy_library_license_path is not None:
         raise ValueError("the Windows framework-dependent payload must not use the .NET Library License")
@@ -232,7 +232,11 @@ def reconcile(
         load_json(deps_path),
         bundle_input_manifest,
         runtime_identifier,
-        backend_license_map(load_json(backend_manifest_path), runtime_identifier, bundle_input_manifest),
+        backend_license_map(
+            load_json(backend_manifest_path), runtime_identifier, bundle_input_manifest, additional_manifests
+        ),
+        tuple(load_json(path) for path in additional_deps),
+        additional_manifests,
     )
     frontend = detected_frontend_packages(load_json(frontend_manifest_path))
     apphost = windows_apphost_component(
@@ -290,6 +294,8 @@ def main() -> int:
     parser.add_argument("--spdx", type=Path, required=True)
     parser.add_argument("--deps-json", type=Path, required=True)
     parser.add_argument("--bundle-input-manifest", type=Path, required=True)
+    parser.add_argument("--additional-deps-json", type=Path, action="append", default=[])
+    parser.add_argument("--additional-bundle-input-manifest", type=Path, action="append", default=[])
     parser.add_argument("--backend-manifest", type=Path, required=True)
     parser.add_argument("--frontend-manifest", type=Path, required=True)
     parser.add_argument("--windows-apphost-version")
@@ -307,6 +313,8 @@ def main() -> int:
         windows_apphost_version=args.windows_apphost_version,
         windows_apphost_license_path=args.windows_apphost_license,
         windows_apphost_notices_path=args.windows_apphost_notices,
+        additional_deps=tuple(args.additional_deps_json),
+        additional_manifests=tuple(args.additional_bundle_input_manifest),
     )
     print(f"reconciled payload SPDX: {backend_count} backend + {frontend_count} frontend shipped components")
     return 0

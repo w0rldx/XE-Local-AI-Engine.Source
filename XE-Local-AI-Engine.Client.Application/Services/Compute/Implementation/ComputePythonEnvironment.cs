@@ -1,6 +1,7 @@
 ﻿namespace XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 
 using System.Security.Cryptography;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
 
@@ -349,8 +350,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     /// </summary>
     private static string DefaultCacheRoot()
     {
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine",
+        return Path.Combine(RuntimeCacheDirectory.Resolve(),
             "compute-runtime");
     }
 
