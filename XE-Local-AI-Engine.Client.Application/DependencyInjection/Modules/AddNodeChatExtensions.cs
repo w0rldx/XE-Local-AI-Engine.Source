@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -42,6 +43,16 @@ internal static class AddNodeChatExtensions
                .ValidateOnStart();
         builder.Services.AddSingleton<IConversationSummarizer, ConversationSummarizer>();
         builder.Services.AddScoped<IConversationCompactionService, ConversationCompactionService>();
+
+        // Automatic post-turn compaction: the chat hooks enqueue onto one bounded queue that a single background worker drains,
+        // each job in its own scope, so a fold never runs on (or outlives) the request scope that produced the terminal.
+        builder.Services.AddSingleton<ConversationMaintenanceDispatcher>();
+        builder.Services.AddSingleton<IConversationMaintenanceDispatcher>(sp => sp.GetRequiredService<ConversationMaintenanceDispatcher>());
+        builder.Services.AddHostedService(sp => new ConversationMaintenanceWorker(sp.GetRequiredService<IServiceScopeFactory>(),
+            sp.GetRequiredService<ConversationMaintenanceDispatcher>(),
+            sp.GetRequiredService<IOptions<ConversationCompactionOptions>>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<ConversationMaintenanceWorker>>()));
 
         // Chat retention defaults to disabled because it permanently deletes user chat history: it must be opted into through the
         // ChatRetention section, and start-up validation rejects a window of zero or fewer days, whose cutoff would purge everything.

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
@@ -17,6 +18,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
     private readonly IConversationSummarizer _summarizer;
     private readonly ILocalDefaultChatModelResolver _localDefaultChatModelResolver;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
+    private readonly LocalRuntimeWarmer _localRuntimeWarmer;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly ConversationCompactionOptions _options;
     private readonly TimeProvider _timeProvider;
@@ -27,6 +29,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         IConversationSummarizer summarizer,
         ILocalDefaultChatModelResolver localDefaultChatModelResolver,
         IModelCapabilityResolver modelCapabilityResolver,
+        LocalRuntimeWarmer localRuntimeWarmer,
         INodeSettingsStore nodeSettingsStore,
         IOptions<ConversationCompactionOptions> options,
         TimeProvider timeProvider,
@@ -40,6 +43,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         _localDefaultChatModelResolver = localDefaultChatModelResolver;
         ArgumentNullException.ThrowIfNull(modelCapabilityResolver);
         _modelCapabilityResolver = modelCapabilityResolver;
+        ArgumentNullException.ThrowIfNull(localRuntimeWarmer);
+        _localRuntimeWarmer = localRuntimeWarmer;
         ArgumentNullException.ThrowIfNull(nodeSettingsStore);
         _nodeSettingsStore = nodeSettingsStore;
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
@@ -166,8 +171,22 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         // miss safely resolves NOT-capable. It is resolved here because the scoped resolver cannot live in a singleton.
         var capabilities = await _modelCapabilityResolver.ResolveAsync(model, cancellationToken);
 
+        // The window the fold model is running with, read back exactly as a chat turn's participant on another model
+        // reads it: only from an already-resident llama.cpp server, never triggering a load. Null keeps the ceiling.
+        var warmProvider = await _localRuntimeWarmer.ResolveWarmableProviderAsync(model, conversationId, cancellationToken);
+        var effectiveContextTokens = warmProvider is null
+            ? null
+            : await _localRuntimeWarmer.ResolveEffectiveContextTokensAsync(warmProvider, model, conversationId, cancellationToken);
+
         var summary = await _summarizer
-                            .SummarizeAsync(new ConversationSummarizerInput { PriorSummary = conversation.CompactionSummary, Messages = toFold, ModelName = model, SupportsThinking = capabilities.SupportsThinking },
+                            .SummarizeAsync(new ConversationSummarizerInput
+                                {
+                                    PriorSummary = conversation.CompactionSummary,
+                                    Messages = toFold,
+                                    ModelName = model,
+                                    SupportsThinking = capabilities.SupportsThinking,
+                                    EffectiveContextTokens = effectiveContextTokens
+                                },
                                 cancellationToken);
         // A provider may finish concurrently with cancellation; never advance coverage after the deadline.
         cancellationToken.ThrowIfCancellationRequested();

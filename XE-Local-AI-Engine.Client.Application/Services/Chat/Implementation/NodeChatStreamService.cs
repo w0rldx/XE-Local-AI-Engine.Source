@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -52,6 +53,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly ILocalDefaultChatModelResolver _localDefaultChatModelResolver;
     private readonly IMemoryExtractionDispatcher _memoryExtractionDispatcher;
+    private readonly IConversationMaintenanceDispatcher _conversationMaintenanceDispatcher;
     private readonly IChatTurnContextBuilder _turnContextBuilder;
     private readonly IConversationSandboxStager _conversationSandboxStager;
     private readonly IOptions<KnowledgeBaseOptions> _knowledgeOptions;
@@ -76,6 +78,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         INodeSettingsStore nodeSettingsStore,
         ILocalDefaultChatModelResolver localDefaultChatModelResolver,
         IMemoryExtractionDispatcher memoryExtractionDispatcher,
+        IConversationMaintenanceDispatcher conversationMaintenanceDispatcher,
         IChatTurnContextBuilder turnContextBuilder,
         IConversationSandboxStager conversationSandboxStager,
         IOptions<KnowledgeBaseOptions> knowledgeOptions,
@@ -99,6 +102,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         _nodeSettingsStore = nodeSettingsStore;
         _localDefaultChatModelResolver = localDefaultChatModelResolver;
         _memoryExtractionDispatcher = memoryExtractionDispatcher;
+        _conversationMaintenanceDispatcher = conversationMaintenanceDispatcher;
         _turnContextBuilder = turnContextBuilder;
         _conversationSandboxStager = conversationSandboxStager;
         _knowledgeOptions = knowledgeOptions;
@@ -264,7 +268,10 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                 requestId);
         var preRunDurationMs = Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds;
 
-        var onTerminal = BuildMemoryExtractionHook(resolution, conversation, userMessage, selectedPath, package);
+        // A work-session step is bounded by ConversationStepContextBound before it sends, so only a chat turn auto-compacts.
+        var onTerminal = ChatCompactionTriggerHook.Compose(_logger,
+            BuildMemoryExtractionHook(resolution, conversation, userMessage, selectedPath, package),
+            request.IsWorkSessionTurn ? null : ChatCompactionTriggerHook.Build(_conversationMaintenanceDispatcher, conversation.ConversationId));
 
         Task pumpTask;
         Task runTask;

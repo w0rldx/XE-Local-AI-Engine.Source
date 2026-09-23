@@ -10,20 +10,25 @@ using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
 ///     Default <see cref="IConversationSummarizer" />, running a NODE-LOCAL model at temperature 0 to fold an older
 ///     conversation span into a compact synopsis.
 /// </summary>
 /// <remarks>
-///     The model is resolved per-model through <see cref="ILocalModelProviderResolver" />, never the shared
-///     cloud-capable singleton, so conversation content never crosses the node boundary. A span larger than
-///     <see cref="ConversationCompactionOptions.MaxInputCharsPerSummarizationCall" /> folds in multiple passes, a
-///     running summary plus the next batch, so no request exceeds the model's window. Tests substitute a fake
-///     summarizer, mirroring the memory-extraction seam, so CI needs no runtime.
+///     Resolved per-model through <see cref="ILocalModelProviderResolver" />, so content never leaves the node. A span
+///     over the per-call budget folds in passes (running summary plus next batch); the budget is the fold model's
+///     window in calibrated characters, capped by <see cref="ConversationCompactionOptions.MaxInputCharsPerSummarizationCall" />.
+///     Tests substitute a fake summarizer, mirroring the memory-extraction seam, so CI needs no runtime.
 /// </remarks>
 internal sealed class ConversationSummarizer : IConversationSummarizer
 {
+    // Window share one request's text (everything RequestFitsBudget charges) may take. The other 40% covers the chat
+    // template, the synopsis written back, and the prose-calibrated divisor's error on code or non-Latin text.
+    private const double InputShare = 0.6;
+
+    private readonly ITokenEstimatorCalibrationStore _calibrationStore;
     private readonly ConversationCompactionOptions _options;
 
     // The string SENT as the system message and the string budget validation CHARGES must come from one rendering;
@@ -72,9 +77,12 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
 
     public ConversationSummarizer(
         ILocalModelProviderResolver providerResolver,
+        ITokenEstimatorCalibrationStore calibrationStore,
         IOptions<ConversationCompactionOptions> options,
         ILogger<ConversationSummarizer> logger)
     {
+        ArgumentNullException.ThrowIfNull(calibrationStore);
+        _calibrationStore = calibrationStore;
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _systemPrompt = RenderSystemPrompt(options.Value.MaxSummaryChars);
@@ -106,7 +114,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
 
         // The span folds in batches bounded by the TOTAL model-facing budget, splitting an oversized message into
         // fragments. A pass yielding nothing aborts everything, or the covered sequence advances past lost messages.
-        var budget = Math.Max(1, _options.MaxInputCharsPerSummarizationCall);
+        var budget = ResolveRequestBudget(input);
         var running = string.IsNullOrWhiteSpace(input.PriorSummary) ? null : input.PriorSummary;
         var batch = new List<ConversationSummarizerMessage>();
 
@@ -212,6 +220,33 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         // emits it - how many folds a compaction ran. Debug, so it costs nothing outside a diagnostic round.
         _logger.LogDebug("Conversation summarizer fold produced a {Length}-character synopsis.", clamped.Length);
         return clamped;
+    }
+
+    // min(ceiling, window × chars-per-token × InputShare), floored at the smallest request that still fits; an
+    // unknown window (Ollama, a cold runtime) keeps the ceiling, so the budget only ever shrinks below the option.
+    internal int ResolveRequestBudget(ConversationSummarizerInput input)
+    {
+        var ceiling = Math.Max(1, _options.MaxInputCharsPerSummarizationCall);
+        if (input.EffectiveContextTokens is not > 0)
+        {
+            return ceiling;
+        }
+
+        var derived = (long)(input.EffectiveContextTokens.Value * (double)_calibrationStore.ResolveDivisor(input.ModelName) * InputShare);
+        if (derived >= ceiling)
+        {
+            return ceiling;
+        }
+
+        var minimum = GetMinimumRequestBudget(_options.MaxSummaryChars);
+        if (derived < minimum)
+        {
+            _logger.LogWarning("The {Window}-token effective window of {Model} leaves a {Derived}-character fold budget, below the {Minimum}-character minimum request; folding at the minimum.",
+                input.EffectiveContextTokens.Value, input.ModelName, derived, minimum);
+            return (int)Math.Min(minimum, ceiling);
+        }
+
+        return (int)derived;
     }
 
     internal static string RenderSystemPrompt(int maxSummaryChars) =>

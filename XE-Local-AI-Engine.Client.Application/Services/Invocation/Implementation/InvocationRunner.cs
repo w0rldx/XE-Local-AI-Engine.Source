@@ -360,6 +360,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // real window and the INNER num_ctx budgeter resolves the same one. Captured BEFORE the fold: the swapped model's policy would size against a window the authorised model never had.
             var preWarmPolicy = turnPolicy;
             turnPolicy = turnPolicy.WithEffectiveContext(effectiveContextTokens);
+            await dispatcher.ReportTurnContextWindowAsync(package.InvocationId, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens);
 
             if (context.GenerationAdmissionPolicy is { } admissionPolicy)
             {
@@ -430,6 +431,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     var retryRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken);
                     var retryContextTokens = retryRuntime.EffectiveContextTokens;
                     var retryPolicy = preWarmPolicy.WithEffectiveContext(retryContextTokens);
+                    await dispatcher.ReportTurnContextWindowAsync(package.InvocationId, retryPolicy.ContextCapacityTokens, retryPolicy.ReservedOutputTokens);
 
                     await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
                                        BuildEffortDispatchedNoticeMessage(ReasoningTier.Fast, FallbackDispatchEffort, resolvedModel, swapped: false),

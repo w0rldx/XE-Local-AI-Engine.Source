@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
@@ -79,6 +80,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -245,6 +247,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -410,6 +413,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             // Resolver reports no installed GGUF chat model (null).
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -481,6 +485,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -567,6 +572,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -645,6 +651,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -736,6 +743,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -807,6 +815,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -871,6 +880,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -936,6 +946,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -1013,6 +1024,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(maxMessageRequestTimeoutSeconds: 900),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -1085,6 +1097,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -1154,6 +1167,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -1213,6 +1227,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -1629,6 +1644,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -1686,6 +1702,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -1731,6 +1748,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -1806,6 +1824,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -1872,6 +1891,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -2064,6 +2084,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(),
             Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
@@ -2168,6 +2189,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
             CreateTurnContextBuilder(scopeFactory),
             Options.Create(new KnowledgeBaseOptions
             {
@@ -2773,6 +2795,17 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 CurrentInvocation.TurnOutputTokens = usage?.OutputTokens;
                 CurrentInvocation.TurnTotalTokens = usage?.TotalTokens;
                 CurrentInvocation.TurnReasoningTokens = usage?.ReasoningTokens;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ReportTurnContextWindowAsync(Guid invocationId, int contextCapacityTokens, int reservedOutputTokens)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ContextCapacityTokens = contextCapacityTokens;
+                CurrentInvocation.ReservedOutputTokens = reservedOutputTokens;
             }
 
             return Task.CompletedTask;

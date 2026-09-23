@@ -290,6 +290,9 @@ public sealed class ToolApprovalCoordinatorTests
         public Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage) =>
             _inner.ReportTurnTelemetryAsync(invocationId, modelReadinessMs, usage);
 
+        public Task ReportTurnContextWindowAsync(Guid invocationId, int contextCapacityTokens, int reservedOutputTokens) =>
+            _inner.ReportTurnContextWindowAsync(invocationId, contextCapacityTokens, reservedOutputTokens);
+
         public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort) =>
             _inner.ReportEffortDispatchAsync(invocationId, dispatchedTier, authoredEffort);
 

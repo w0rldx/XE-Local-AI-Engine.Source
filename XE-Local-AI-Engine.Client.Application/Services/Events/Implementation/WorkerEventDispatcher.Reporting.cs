@@ -116,6 +116,20 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public Task ReportTurnContextWindowAsync(Guid invocationId, int contextCapacityTokens, int reservedOutputTokens)
+    {
+        // A no-op when the id is not the current invocation, exactly like the reports above.
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.ContextCapacityTokens = contextCapacityTokens;
+                state.ReservedOutputTokens = reservedOutputTokens;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
     public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchedTier);

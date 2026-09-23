@@ -23,6 +23,12 @@ public sealed class ConversationSummarizerInput
     ///     the fold sends no thinking fields at all.
     /// </summary>
     public bool SupportsThinking { get; init; }
+
+    /// <summary>
+    ///     The context window, in tokens, <see cref="ModelName" /> is running with, read back from the warm runtime the
+    ///     way a chat turn reads it. Null means unknown, and the fold budget stays at the configured ceiling.
+    /// </summary>
+    public int? EffectiveContextTokens { get; init; }
 }
 
 /// <summary>

@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -29,6 +30,7 @@ public sealed class ConversationSummarizerBoundaryTests
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderForModelAsync("model", Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
         var summarizer = new ConversationSummarizer(resolver,
+            new TokenEstimatorCalibrationStore(),
             Options.Create(new ConversationCompactionOptions
             {
                 MaxInputCharsPerSummarizationCall = requestBudget
@@ -329,7 +331,10 @@ public sealed class ConversationSummarizerBoundaryTests
             "Sending and budget validation must charge one rendering; a drift between them invalidates every budget decision.");
     }
 
-    private static ConversationSummarizer CreateSummarizer(CapturingChatClient client, int requestBudget, int maxSummaryChars)
+    private static ConversationSummarizer CreateSummarizer(CapturingChatClient client,
+        int requestBudget,
+        int maxSummaryChars,
+        ITokenEstimatorCalibrationStore? calibrationStore = null)
     {
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns("local");
@@ -337,6 +342,7 @@ public sealed class ConversationSummarizerBoundaryTests
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderForModelAsync("model", Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
         return new ConversationSummarizer(resolver,
+            calibrationStore ?? new TokenEstimatorCalibrationStore(),
             Options.Create(new ConversationCompactionOptions
             {
                 MaxInputCharsPerSummarizationCall = requestBudget,
@@ -344,6 +350,81 @@ public sealed class ConversationSummarizerBoundaryTests
             }),
             NullLogger<ConversationSummarizer>.Instance);
     }
+
+    [Test]
+    public void ResolveRequestBudget_WhenTheWindowIsUnknown_KeepsTheConfiguredCeiling()
+    {
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 12_000, maxSummaryChars: 1000);
+
+        AssertEx.Equal(12_000, summarizer.ResolveRequestBudget(BudgetInput(effectiveContextTokens: null)));
+        AssertEx.Equal(12_000, summarizer.ResolveRequestBudget(BudgetInput(effectiveContextTokens: 0)),
+            "A non-positive window is unknown, not zero: it must not collapse the budget.");
+    }
+
+    [Test]
+    public void ResolveRequestBudget_WhenTheWindowIsLarge_NeverExceedsTheConfiguredCeiling()
+    {
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 12_000, maxSummaryChars: 1000);
+
+        AssertEx.Equal(12_000, summarizer.ResolveRequestBudget(BudgetInput(effectiveContextTokens: 131_072)));
+    }
+
+    [Test]
+    public void ResolveRequestBudget_WhenTheWindowIsSmall_ShrinksWithTheModelsCalibratedDivisor()
+    {
+        using var client = new CapturingChatClient();
+        var calibration = new TokenEstimatorCalibrationStore();
+        calibration.SetDivisor("model", 3);
+        var summarizer = CreateSummarizer(client, requestBudget: 12_000, maxSummaryChars: 1000, calibration);
+        const int expected = 4096 * 3 * 6 / 10;
+        AssertEx.True(expected > ConversationSummarizer.GetMinimumRequestBudget(1000), "Precondition: the derived budget sits above the floor.");
+
+        AssertEx.Equal(expected, summarizer.ResolveRequestBudget(BudgetInput(effectiveContextTokens: 4096)),
+            "The budget is window x calibrated chars-per-token x 0.6.");
+        AssertEx.Equal(4096 * 4 * 6 / 10, CreateSummarizer(client, 12_000, 1000).ResolveRequestBudget(BudgetInput(effectiveContextTokens: 4096)),
+            "An uncalibrated model uses the default four characters per token.");
+    }
+
+    [Test]
+    public void ResolveRequestBudget_WhenTheWindowIsTiny_NeverDropsBelowTheMinimumRequest()
+    {
+        using var client = new CapturingChatClient();
+        var summarizer = CreateSummarizer(client, requestBudget: 12_000, maxSummaryChars: 1000);
+
+        AssertEx.Equal((int)ConversationSummarizer.GetMinimumRequestBudget(1000), summarizer.ResolveRequestBudget(BudgetInput(effectiveContextTokens: 256)));
+    }
+
+    [Test]
+    public async Task SummarizeAsync_WhenTheWindowShrinks_FoldsInMoreRequestsEachWithinTheDerivedBudget()
+    {
+        var messages = Enumerable.Range(0, 40)
+                                 .Select(index => new ConversationSummarizerMessage { Role = index % 2 == 0 ? "user" : "assistant", Content = new string('x', 480) })
+                                 .ToList();
+
+        async Task<IReadOnlyList<IReadOnlyList<ChatMessage>>> FoldAsync(int? windowTokens)
+        {
+            using var client = new CapturingChatClient();
+            var summarizer = CreateSummarizer(client, requestBudget: 12_000, maxSummaryChars: 1000);
+            var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput { PriorSummary = null, Messages = messages, ModelName = "model", EffectiveContextTokens = windowTokens });
+            AssertEx.NotNull(result);
+            return client.Requests;
+        }
+
+        var ceilingRequests = await FoldAsync(windowTokens: null);
+        var smallWindowRequests = await FoldAsync(windowTokens: 2048);
+
+        AssertEx.True(smallWindowRequests.Count > ceilingRequests.Count,
+            $"A smaller window must fold in more batches: {smallWindowRequests.Count} vs {ceilingRequests.Count} at the ceiling.");
+        AssertEx.True(smallWindowRequests.All(request => request.Sum(message => message.Text?.Length ?? 0) <= 2048 * 4 * 6 / 10),
+            "Every request must stay within the window-derived budget, not the configured ceiling.");
+        AssertEx.True(ceilingRequests.Any(request => request.Sum(message => message.Text?.Length ?? 0) > 2048 * 4 * 6 / 10),
+            "Precondition: at the ceiling, batches are larger than the small-window budget.");
+    }
+
+    private static ConversationSummarizerInput BudgetInput(int? effectiveContextTokens) =>
+        new() { PriorSummary = null, Messages = [], ModelName = "model", EffectiveContextTokens = effectiveContextTokens };
 
     private static IEnumerable<string> PromptContents(IReadOnlyList<ChatMessage> request)
     {

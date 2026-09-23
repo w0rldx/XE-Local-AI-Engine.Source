@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -47,6 +48,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly ILocalDefaultChatModelResolver _localDefaultChatModelResolver;
     private readonly IMemoryExtractionDispatcher _memoryExtractionDispatcher;
+    private readonly IConversationMaintenanceDispatcher _conversationMaintenanceDispatcher;
     private readonly IChatTurnContextBuilder _turnContextBuilder;
     private readonly IOptions<KnowledgeBaseOptions> _knowledgeOptions;
     private readonly IOptions<ChatStreamBudgetOptions> _streamBudgetOptions;
@@ -70,6 +72,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         INodeSettingsStore nodeSettingsStore,
         ILocalDefaultChatModelResolver localDefaultChatModelResolver,
         IMemoryExtractionDispatcher memoryExtractionDispatcher,
+        IConversationMaintenanceDispatcher conversationMaintenanceDispatcher,
         IChatTurnContextBuilder turnContextBuilder,
         IOptions<KnowledgeBaseOptions> knowledgeOptions,
         IOptions<ChatStreamBudgetOptions> streamBudgetOptions,
@@ -92,6 +95,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         _nodeSettingsStore = nodeSettingsStore;
         _localDefaultChatModelResolver = localDefaultChatModelResolver;
         _memoryExtractionDispatcher = memoryExtractionDispatcher;
+        _conversationMaintenanceDispatcher = conversationMaintenanceDispatcher;
         _turnContextBuilder = turnContextBuilder;
         _knowledgeOptions = knowledgeOptions;
         _streamBudgetOptions = streamBudgetOptions;
@@ -269,7 +273,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
 
             // The post-run adaptive-memory hook fires once on a Completed or Failed terminal, and ONLY when the resolved
             // agent has the playbook enabled AND opts into extraction, so a retrieval-only agent mines nothing new.
-            var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
+            var memoryHook = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
                 ? ChatMemoryExtractionHook.Build(_memoryExtractionDispatcher,
                     memoryAgent,
                     conversation.ConversationId,
@@ -278,6 +282,9 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                     resolution.EffectiveModel,
                     () => CollectUserTurns(conversation, original, selectedPath))
                 : null;
+            var onTerminal = ChatCompactionTriggerHook.Compose(_logger,
+                memoryHook,
+                ChatCompactionTriggerHook.Build(_conversationMaintenanceDispatcher, conversation.ConversationId));
 
             pumpTask = _invocationStatePump.PumpAsync(stateChannel.Reader,
                 eventSink,

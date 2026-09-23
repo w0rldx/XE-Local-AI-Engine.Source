@@ -156,6 +156,15 @@ public sealed class InvocationState
     public int? MaxToolSchemaTokens { get; set; }
 
     /// <summary>
+    ///     The turn's context window after the launched window was folded in (<c>TurnPolicy.ContextCapacityTokens</c>);
+    ///     null until the runner reports it.
+    /// </summary>
+    public int? ContextCapacityTokens { get; set; }
+
+    /// <summary>The output tokens that window held back (<c>TurnPolicy.ReservedOutputTokens</c>); null with <see cref="ContextCapacityTokens" />.</summary>
+    public int? ReservedOutputTokens { get; set; }
+
+    /// <summary>
     ///     How many of <see cref="GenerationDurationMs" /> the turn spent making a LOCAL runtime ready — launching
     ///     <c>llama-server</c> and loading the model — rather than generating.
     /// </summary>
@@ -267,6 +276,8 @@ public sealed class InvocationState
             TurnReasoningTokens = TurnReasoningTokens,
             ToolSchemaTokens = ToolSchemaTokens,
             MaxToolSchemaTokens = MaxToolSchemaTokens,
+            ContextCapacityTokens = ContextCapacityTokens,
+            ReservedOutputTokens = ReservedOutputTokens,
             ModelReadinessMs = ModelReadinessMs,
             DispatchedTier = DispatchedTier,
             AuthoredEffort = AuthoredEffort,

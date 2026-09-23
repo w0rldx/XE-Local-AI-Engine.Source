@@ -5,7 +5,12 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -187,6 +192,7 @@ public sealed class ConversationCompactionServiceTests
             summarizer,
             resolver,
             CreateCapabilityResolver(supportsThinking: false),
+            CreateWarmer(residentWindowTokens: null),
             CreateNodeSettingsStore(),
             options,
             TimeProvider.System,
@@ -424,6 +430,30 @@ public sealed class ConversationCompactionServiceTests
     }
 
     [Test]
+    [Arguments(8192)]
+    [Arguments(null)]
+    public async Task CompactAsync_PassesTheFoldModelsResidentWindowToTheSummarizer(int? residentWindowTokens)
+    {
+        // The summarizer sizes its fold batches from this window; null (no resident llama.cpp server) keeps the ceiling.
+        var conversation = Conversation(CompletedMessages(count: 12));
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("SYNOPSIS");
+        var service = CreateService(persistence, summarizer, resolver, warmer: CreateWarmer(residentWindowTokens));
+
+        var result = await service.CompactAsync(ConversationId);
+
+        AssertEx.Equal(ConversationCompactionOutcome.Compacted, result.Outcome);
+        await summarizer.Received(1)
+                        .SummarizeAsync(Arg.Is<ConversationSummarizerInput>(input => input.ModelName == "local-model" && input.EffectiveContextTokens == residentWindowTokens),
+                            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task CompactAsync_WhenTheSummaryEndsOnASurrogatePair_TruncatesWithoutSplittingIt()
     {
         // The clamp is reachable through any IConversationSummarizer implementation, so it must be rune-safe on its own
@@ -449,6 +479,7 @@ public sealed class ConversationCompactionServiceTests
             summarizer,
             resolver,
             CreateCapabilityResolver(supportsThinking: false),
+            CreateWarmer(residentWindowTokens: null),
             CreateNodeSettingsStore(),
             options,
             TimeProvider.System,
@@ -574,17 +605,33 @@ public sealed class ConversationCompactionServiceTests
         ILocalDefaultChatModelResolver? resolver = null,
         IModelCapabilityResolver? capabilityResolver = null,
         TimeProvider? timeProvider = null,
-        INodeSettingsStore? nodeSettingsStore = null)
+        INodeSettingsStore? nodeSettingsStore = null,
+        LocalRuntimeWarmer? warmer = null)
     {
         resolver ??= Substitute.For<ILocalDefaultChatModelResolver>();
         return new ConversationCompactionService(persistence,
             summarizer,
             resolver,
             capabilityResolver ?? CreateCapabilityResolver(supportsThinking: false),
+            warmer ?? CreateWarmer(residentWindowTokens: null),
             nodeSettingsStore ?? CreateNodeSettingsStore(),
             Options.Create(new ConversationCompactionOptions()),
             timeProvider ?? TimeProvider.System,
             NullLogger<ConversationCompactionService>.Instance);
+    }
+
+    // The real warmer over a substituted provider: a resident llama.cpp server reporting the given window, or (null) an
+    // Ollama-served model, which the warmer never reads a window from.
+    private static LocalRuntimeWarmer CreateWarmer(int? residentWindowTokens)
+    {
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(residentWindowTokens is null ? "ollama" : LlamaServerProviderConstants.ProviderName);
+        provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(new LocalModelRuntimeInfo { EffectiveContextTokens = residentWindowTokens ?? 0 });
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
+        var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
+        return new LocalRuntimeWarmer(providerResolver, cloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System);
     }
 
     private static IModelCapabilityResolver CreateCapabilityResolver(bool supportsThinking)

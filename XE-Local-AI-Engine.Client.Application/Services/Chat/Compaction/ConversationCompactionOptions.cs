@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using System.ComponentModel.DataAnnotations;
 
 /// <summary>
-///     Operator-tunable knobs for manual, non-destructive conversation compaction, bound from the
+///     Operator-tunable knobs for manual and automatic non-destructive conversation compaction, bound from the
 ///     <c>Agent:ConversationCompaction</c> section.
 /// </summary>
 /// <remarks>
@@ -55,11 +55,32 @@ public sealed class ConversationCompactionOptions : IValidatableObject
     ///     Older history larger than this, including one individually oversized message, folds in multiple passes so
     ///     no provider request exceeds the bound. The default leaves at least 6,500 characters of source room per
     ///     fold even with the running summary at its cap, which is what keeps a long conversation from folding in
-    ///     dozens of lossy passes. The summarizer never probes the model's window, so lower this on a 4k-token model.
-    ///     simplified: a fixed budget, not a probed window — upgrade to per-model probing to fold in fewer passes.
+    ///     dozens of lossy passes. This is a ceiling: the summarizer lowers each call's budget to 60% of the fold
+    ///     model's effective window in calibrated characters when that window is known.
     /// </remarks>
     [Range(MinimumInputCharsPerSummarizationCall, int.MaxValue)]
     public int MaxInputCharsPerSummarizationCall { get; set; } = 12_000;
+
+    /// <summary>
+    ///     Whether a completed chat turn queues a compaction when the next turn's replayed history crosses
+    ///     <see cref="AutoCompactFraction" /> of the turn's usable window. The manual control works either way.
+    /// </summary>
+    public bool AutoCompactEnabled { get; set; } = true;
+
+    /// <summary>
+    ///     The share of the turn's usable window (context capacity minus reserved output) the projected next-turn
+    ///     history may fill before a post-turn compaction is queued.
+    /// </summary>
+    [Range(0.3, 0.95)]
+    public double AutoCompactFraction { get; set; } = 0.75;
+
+    /// <summary>Bound on queued background maintenance jobs; a full queue drops the newest with a warning.</summary>
+    [Range(1, int.MaxValue)]
+    public int MaintenanceQueueCapacity { get; set; } = 64;
+
+    /// <summary>How long shutdown waits for queued and running maintenance jobs before cancelling them.</summary>
+    [Range(1, int.MaxValue)]
+    public int MaintenanceShutdownDrainTimeoutSeconds { get; set; } = 10;
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

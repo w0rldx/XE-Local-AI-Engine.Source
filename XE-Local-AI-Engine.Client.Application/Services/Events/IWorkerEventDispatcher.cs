@@ -135,6 +135,12 @@ public interface IWorkerEventDispatcher
     Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage);
 
     /// <summary>
+    ///     Records the turn's effective context window and output reserve, as <c>TurnPolicy.WithEffectiveContext</c>
+    ///     folded them, so a post-turn hook can size against the window the turn actually ran with.
+    /// </summary>
+    Task ReportTurnContextWindowAsync(Guid invocationId, int contextCapacityTokens, int reservedOutputTokens);
+
+    /// <summary>
     ///     Records what reasoning effort <c>auto</c> resolved to on the invocation state, so the terminalize write can
     ///     persist it onto the run-envelope row.
     /// </summary>
