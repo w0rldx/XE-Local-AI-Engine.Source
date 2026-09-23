@@ -94,6 +94,20 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
     internal Task WaitUntilReadyAsync(CancellationToken cancellationToken) =>
         _ready.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
 
+    /// <summary>Reads the SPA's chosen UI language raw (WebView returns JSON: <c>"de"</c> quoted, a missing key as
+    ///     <c>null</c>); null when the page cannot answer or the shell is stopping. UI thread only.</summary>
+    // Never throws: every caller is a fire-and-forget UI handler that keeps the last-known language.
+    internal async Task<string?> ReadLanguageAsync(CancellationToken cancellationToken)
+    {
+        if (_disposed) { return null; }
+        try
+        {
+            return await _webView.InvokeScript("localStorage.getItem('i18nextLng')")
+                .WaitAsync(TimeSpan.FromSeconds(3), cancellationToken);
+        }
+        catch (Exception) { return null; }
+    }
+
     private async void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs args)
     {
         var disposition = DesktopLaunchOptions.ClassifyNavigation(_options.Origin, args.Request);

@@ -43,4 +43,24 @@ internal static class DesktopPreferences
         await File.WriteAllTextAsync(temporaryPath, value, cancellationToken);
         File.Move(temporaryPath, path, overwrite: true);
     }
+
+    internal static async Task<string?> ReadLanguageAsync(string directory, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await File.ReadAllTextAsync(Path.Combine(directory, "desktop-language.txt"), cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    internal static async Task WriteLanguageAsync(string directory, string language, CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(directory, "desktop-language.txt");
+        var temporaryPath = path + ".tmp";
+        await File.WriteAllTextAsync(temporaryPath, language, cancellationToken);
+        File.Move(temporaryPath, path, overwrite: true);
+    }
 }

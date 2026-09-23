@@ -16,6 +16,9 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     private DesktopEngineSession? _engine;
     private DesktopInstance? _instance;
     private TrayIcon? _tray;
+    private NativeMenuItem? _trayOpen;
+    private NativeMenuItem? _traySettings;
+    private NativeMenuItem? _trayQuit;
     private Window? _window;
     private DesktopCloseDialog? _dialog;
     private Task _initialization = Task.CompletedTask;
@@ -88,6 +91,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             DesktopInstance.RetainUntilProcessExit(_instance);
             _instance.Listen(() => Dispatcher.UIThread.Post(ShowWindow));
             _preference = await DesktopPreferences.ReadAsync(_options.DataDirectory, _stopping.Token);
+            DesktopText.Apply(await DesktopPreferences.ReadLanguageAsync(_options.DataDirectory, _stopping.Token));
             _engine = await DesktopEngineSession.StartAsync(_options, _stopping.Token);
             _stopping.Token.ThrowIfCancellationRequested();
             var startupWindow = _window!;
@@ -100,6 +104,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             startupWindow.Closing -= OnClosing;
             startupWindow.Close();
             await mainWindow.WaitUntilReadyAsync(_stopping.Token);
+            await RefreshLanguageAsync();
             if (_engine.WaitForEngineExitAsync() is { } exit)
             {
                 _ = ExitWithEngineAsync(exit);
@@ -133,15 +138,15 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         _window!.Icon = icon;
         _tray = new TrayIcon { Icon = icon, ToolTipText = "XE AI-Engine", IsVisible = true };
         var menu = new NativeMenu();
-        var open = new NativeMenuItem(DesktopText.Open);
-        open.Click += (_, _) => ShowWindow();
-        var settings = new NativeMenuItem(DesktopText.Settings);
-        settings.Click += (_, _) => OpenSettings();
-        var quit = new NativeMenuItem(DesktopText.Quit);
-        quit.Click += (_, _) => _ = RequestQuitAsync();
-        menu.Items.Add(open);
-        menu.Items.Add(settings);
-        menu.Items.Add(quit);
+        _trayOpen = new NativeMenuItem(DesktopText.Open);
+        _trayOpen.Click += (_, _) => ShowWindow();
+        _traySettings = new NativeMenuItem(DesktopText.Settings);
+        _traySettings.Click += (_, _) => OpenSettings();
+        _trayQuit = new NativeMenuItem(DesktopText.Quit);
+        _trayQuit.Click += (_, _) => _ = RequestQuitAsync();
+        menu.Items.Add(_trayOpen);
+        menu.Items.Add(_traySettings);
+        menu.Items.Add(_trayQuit);
         _tray.Menu = menu;
         _tray.Clicked += (_, _) => ShowWindow();
     }
@@ -195,6 +200,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         _asking = true;
         try
         {
+            await RefreshLanguageAsync();
             var action = DesktopPreferences.Resolve(_preference, TrayAvailable);
             if (settings || action == DesktopCloseAction.Ask)
             {
@@ -258,6 +264,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             try
             {
                 ShowWindow();
+                await RefreshLanguageAsync();
                 _dialog = new DesktopCloseDialog(false, true, false, quitting: true);
                 var choice = await _dialog.ShowDialog<DesktopCloseChoice?>(_window!);
                 _dialog = null;
@@ -291,10 +298,34 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         if (_engine?.EngineExitCode is not (null or 0))
         {
             ShowWindow();
+            await RefreshLanguageAsync();
             await ShowNoticeAsync(DesktopText.EngineStopped);
         }
 
         await QuitAsync();
+    }
+
+    /// <summary>Adopts the SPA's current language choice, relabels the tray and remembers it for the next start.</summary>
+    private async Task RefreshLanguageAsync()
+    {
+        if (_window is not DesktopWindow window || _exiting || _failed
+            || !DesktopText.Apply(await window.ReadLanguageAsync(_stopping.Token)))
+        {
+            return;
+        }
+
+        // The Win32 tray rebuilds its flyout from these items on every open, so a header change is enough.
+        if (_trayOpen is not null) { _trayOpen.Header = DesktopText.Open; }
+        if (_traySettings is not null) { _traySettings.Header = DesktopText.Settings; }
+        if (_trayQuit is not null) { _trayQuit.Header = DesktopText.Quit; }
+        try
+        {
+            await DesktopPreferences.WriteLanguageAsync(_options.DataDirectory, DesktopText.Language, _stopping.Token);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OperationCanceledException)
+        {
+            // A lost language preference only costs the next start its first-run fallback.
+        }
     }
 
     private async Task QuitAsync()

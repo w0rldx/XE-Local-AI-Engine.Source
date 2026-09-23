@@ -214,7 +214,9 @@ The shell has a per-data-root single-instance lease and same-user activation pip
 Keep in tray, Quit or Cancel, with an optional remembered choice and desktop settings to
 change it. Windows supports tray operation; Linux currently keeps tray unavailable rather
 than hiding a window without a usable restore path. Quit stops only an engine the shell
-started, never a separately running engine it attached to.
+started, never a separately running engine it attached to. The shell's own dialogs and tray menu
+follow the SPA's `i18nextLng` language choice, persisted as `desktop-language.txt` in the data root,
+with the OS UI culture only as the first-run fallback (`DesktopText`).
 
 For an owned engine, `DesktopParentLifetime` connects before host construction. Parent loss
 requests graceful shutdown with a bounded exit watchdog; `DesktopEngineSession` bounds its

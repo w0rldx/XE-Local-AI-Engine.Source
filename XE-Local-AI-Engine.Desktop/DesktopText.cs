@@ -4,7 +4,36 @@ using System.Globalization;
 
 internal static class DesktopText
 {
-    private static bool German => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "de";
+    // The SPA's i18nextLng choice wins once known; the OS culture is only the first-run fallback.
+    internal static string Language { get; private set; } = Normalize(CultureInfo.CurrentUICulture.Name) ?? "en";
+    private static bool German => Language == "de";
+
+    /// <summary>Maps a raw language value (possibly JSON-quoted, possibly a region tag) to "de" or "en"; null when
+    ///     nothing is known, so the caller keeps its current language.</summary>
+    internal static string? Normalize(string? value)
+    {
+        var text = value?.Trim().Trim('"').Trim();
+        if (string.IsNullOrEmpty(text) || text == "null")
+        {
+            return null;
+        }
+
+        var separator = text.IndexOfAny(['-', '_']);
+        var primary = separator < 0 ? text : text[..separator];
+        return primary.Equals("de", StringComparison.OrdinalIgnoreCase) ? "de" : "en";
+    }
+
+    internal static bool Apply(string? language)
+    {
+        if (Normalize(language) is not { } normalized || normalized == Language)
+        {
+            return false;
+        }
+
+        Language = normalized;
+        return true;
+    }
+
     internal static string Starting => German ? "XE wird gestartet…" : "Starting XE…";
     internal static string Closing => German ? "XE wird beendet…" : "Stopping XE…";
     internal static string Open => German ? "XE öffnen" : "Open XE";
