@@ -715,7 +715,7 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
-        // Four distinct AAD column names on one row, and not cosmetically: an edge condition routes on output_json, so if these shared a name a database writer
+        // Five distinct AAD column names on one row, and not cosmetically: an edge condition routes on output_json, so if these shared a name a database writer
         // could swap an input, an error or a decider into the output column and reroute a run without forging a ciphertext or a tag.
         foreach (var entry in nodeContext.ChangeTracker.Entries<GraphWorkflowNodeRun>())
         {
@@ -725,6 +725,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Error), entry.Entity.RunId, entry.Entity.Id, "graph_workflow_node_run_error", trackedProperties);
             EncryptOptionalProperty(entry, entry.Property(entity => entity.DecidedBySubject), entry.Entity.RunId, entry.Entity.Id, "graph_workflow_node_run_decided_by",
+                trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.SteeringJson), entry.Entity.RunId, entry.Entity.Id, "graph_workflow_node_run_steering_json",
                 trackedProperties);
         }
 

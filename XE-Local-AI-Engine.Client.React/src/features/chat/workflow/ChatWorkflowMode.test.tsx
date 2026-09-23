@@ -229,12 +229,12 @@ function conflict(conflictType: string) {
 }
 
 function renderChat(confirm = vi.fn().mockResolvedValue(true)) {
-	renderWithProviders(
+	const { queryClient } = renderWithProviders(
 		<ConfirmContext.Provider value={{ confirm }}>
 			<Chat />
 		</ConfirmContext.Provider>,
 	);
-	return { confirm };
+	return { confirm, queryClient };
 }
 
 async function pickWorkflow(): Promise<void> {
@@ -584,12 +584,124 @@ describe("Chat workflow mode", () => {
 		);
 		renderChat();
 
-		expect((await screen.findByTestId("chat-workflow-locked-hint")).textContent).toBe("Workflow running — Stop it or wait.");
+		// The running node is an LLM Call, so Intervene is on offer alongside Stop.
+		await waitFor(() =>
+			expect(screen.getByTestId("chat-workflow-locked-hint").textContent).toBe(i18next.t("pages.chat.workflow.lockedHintSteer")),
+		);
 		await waitFor(() => expect(screen.getByTestId("chat-input")).toHaveProperty("disabled", true));
 
 		fireEvent.click(await screen.findByTestId("chat-workflow-status-stop"));
 
 		await waitFor(() => expect(cancelled).toEqual([runId]));
+	});
+
+	it("steers the run the dialog captured even after it finished, and keeps the draft on the server's refusal", async () => {
+		const steered: string[] = [];
+		const running = [makeNodeRun({ nodeKey: "code", kind: "LlmCall", status: "Running", completedAtUtc: null })];
+		server.use(
+			runsRoute([graphWorkflowConversationRun({ run: graphWorkflowRunSummary({ status: "Running" }) })]),
+			...runRoutes("Running", running),
+			http.post(localApiPath("graph-workflows/runs/:runId/nodes/:nodeKey/steer"), ({ params }) => {
+				steered.push(`${String(params["runId"])}/${String(params["nodeKey"])}`);
+				return conflict("GraphWorkflowRunConflict")();
+			}),
+		);
+		const { queryClient } = renderChat();
+
+		fireEvent.click(await screen.findByTestId("chat-workflow-status-intervene"));
+		const dialog = await screen.findByTestId("chat-workflow-steer-dialog");
+		const textarea = within(dialog).getByLabelText(i18next.t("pages.chat.workflow.steer.label"));
+		fireEvent.change(textarea, { target: { value: "Use Rust instead" } });
+
+		// The run completes while the operator is still typing: no run is live any more.
+		server.use(
+			runsRoute([graphWorkflowConversationRun({ run: graphWorkflowRunSummary({ status: "Completed" }) })]),
+			...runRoutes("Completed", [makeNodeRun({ nodeKey: "code", kind: "LlmCall", status: "Succeeded" })]),
+		);
+		await act(() => queryClient.invalidateQueries());
+		await waitFor(() => expect(screen.getByTestId("chat-workflow-status-dismiss")).toBeTruthy());
+
+		fireEvent.click(within(dialog).getByTestId("chat-workflow-steer-send"));
+
+		expect((await within(dialog).findByTestId("chat-workflow-steer-error")).textContent).toBe(
+			i18next.t("pages.chat.workflow.steer.finished"),
+		);
+		expect(steered).toEqual([`${runId}/code`]);
+		expect(textarea).toHaveProperty("value", "Use Rust instead");
+		expect(screen.getByTestId("chat-workflow-steer-dialog")).toBeTruthy();
+	});
+
+	it("says only Stop is on offer while the running node cannot be steered", async () => {
+		server.use(
+			runsRoute([graphWorkflowConversationRun({ run: graphWorkflowRunSummary({ status: "Running" }) })]),
+			...runRoutes("Running", [
+				makeNodeRun({ nodeKey: "classify", kind: "DecisionModel", status: "Running", completedAtUtc: null }),
+			]),
+		);
+		renderChat();
+
+		// The card's active line proves the run detail (and so the path) has loaded before the hint is judged.
+		await screen.findByTestId("chat-workflow-status-active");
+		expect(screen.getByTestId("chat-workflow-locked-hint").textContent).toBe(i18next.t("pages.chat.workflow.lockedHint"));
+		expect(screen.queryByTestId("chat-workflow-status-intervene")).toBeNull();
+	});
+
+	it("steers the running node with a fresh operation id per submit, keeps the draft on each 409 with its own reason, and re-reads on 202", async () => {
+		const steers: unknown[] = [];
+		const runReads: string[] = [];
+		const running = [makeNodeRun({ nodeKey: "code", kind: "LlmCall", status: "Running", completedAtUtc: null })];
+		server.use(
+			runsRoute([graphWorkflowConversationRun({ run: graphWorkflowRunSummary({ status: "Running" }) })]),
+			// Ahead of `runRoutes`, whose run-detail handler would otherwise answer first and hide the re-reads.
+			http.get(localApiPath(`graph-workflows/runs/${runId}`), () => {
+				runReads.push(runId);
+				return HttpResponse.json(
+					graphWorkflowRun({ run: graphWorkflowRunSummary({ status: "Running" }), graph: chatGraph, nodeRuns: running }),
+				);
+			}),
+			...runRoutes("Running", running),
+			http.post(localApiPath(`graph-workflows/runs/${runId}/nodes/code/steer`), async ({ request }) => {
+				steers.push(await request.json());
+				if (steers.length <= 2) {
+					return conflict(steers.length === 1 ? "GraphWorkflowRunConflict" : "GraphWorkflowSteerLimitReached")();
+				}
+				return HttpResponse.json(
+					graphWorkflowRun({ run: graphWorkflowRunSummary({ status: "Running" }), graph: chatGraph, nodeRuns: running }),
+					{ status: 202 },
+				);
+			}),
+		);
+		renderChat();
+
+		fireEvent.click(await screen.findByTestId("chat-workflow-status-intervene"));
+		const dialog = await screen.findByTestId("chat-workflow-steer-dialog");
+		const textarea = within(dialog).getByLabelText(i18next.t("pages.chat.workflow.steer.label"));
+		fireEvent.change(textarea, { target: { value: "Use Rust instead" } });
+		fireEvent.click(within(dialog).getByTestId("chat-workflow-steer-send"));
+
+		expect((await within(dialog).findByTestId("chat-workflow-steer-error")).textContent).toBe(
+			i18next.t("pages.chat.workflow.steer.finished"),
+		);
+		expect(textarea).toHaveProperty("value", "Use Rust instead");
+
+		fireEvent.click(within(dialog).getByTestId("chat-workflow-steer-send"));
+		await waitFor(() =>
+			expect(within(dialog).getByTestId("chat-workflow-steer-error").textContent).toBe(
+				i18next.t("pages.chat.workflow.steer.capReached"),
+			),
+		);
+		expect(textarea).toHaveProperty("value", "Use Rust instead");
+		const readsBefore = runReads.length;
+
+		fireEvent.click(within(dialog).getByTestId("chat-workflow-steer-send"));
+
+		await waitFor(() => expect(screen.queryByTestId("chat-workflow-steer-dialog")).toBeNull());
+		await waitFor(() => expect(runReads.length).toBeGreaterThan(readsBefore));
+		const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+		expect(steers).toEqual(
+			Array.from({ length: 3 }, () => ({ operationId: expect.stringMatching(uuid), message: "Use Rust instead" })),
+		);
+		expect(new Set((steers as { operationId: string }[]).map((steer) => steer.operationId)).size).toBe(3);
 	});
 
 	it("streams the running node's live reasoning into the status card and its activity row", async () => {

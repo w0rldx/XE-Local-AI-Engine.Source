@@ -27,6 +27,7 @@ import {
 	listLocalModelsOptions,
 	sendGraphWorkflowChatMessageMutation,
 	startGraphWorkflowRunMutation,
+	steerGraphWorkflowNodeRunMutation,
 	updateGraphWorkflowDefinitionMutation,
 	validateGraphWorkflowDefinitionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -430,5 +431,27 @@ export function useDecideGraphWorkflowNodeRun() {
 		// on a settled gate, and every further click earns another 409.
 		onError: (error, variables) =>
 			readGraphWorkflowConflict(error) ? refresh(variables.path?.runId, variables.path?.nodeKey) : undefined,
+	});
+}
+
+/**
+ * Steering a running Agent / LLM Call (§3.6). 202 means the intent is committed; the dispatcher applies it on its next
+ * tick, so this re-reads the run, its trail, the node and the bound-run list rather than predicting the reset.
+ */
+export function useSteerGraphWorkflowNodeRun() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...withResponseValidation(steerGraphWorkflowNodeRunMutation()),
+		onSuccess: async (_data, variables) => {
+			const { runId, nodeKey } = variables.path;
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.run, { runId }) }),
+				queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.events, { runId }) }),
+				queryClient.invalidateQueries({
+					queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.node, { runId, nodeKey }),
+				}),
+				queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.conversationRuns) }),
+			]);
+		},
 	});
 }

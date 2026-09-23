@@ -70,4 +70,12 @@ public sealed class GraphWorkflowOptions
     /// </summary>
     [Range(1, 10_000)]
     public int EventReplayLimit { get; init; } = 200;
+
+    /// <summary>How many times an operator may steer one node run.</summary>
+    /// <remarks>
+    ///     Each applied steer re-runs the node on the same attempt and restarts its deadline, so the attempt budget
+    ///     does not bound steering; this does.
+    /// </remarks>
+    [Range(1, 1_000)]
+    public int MaxSteersPerNode { get; init; } = 5;
 }

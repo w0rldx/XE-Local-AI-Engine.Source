@@ -109,6 +109,18 @@ public sealed class GraphWorkflowOptionsTests
         AssertEx.Equal(expected: 4, options.MaxConcurrentRuns);
         AssertEx.Equal(expected: 65_536, options.MaxRunInputBytes);
         AssertEx.Equal(expected: 200, options.EventReplayLimit);
+        AssertEx.Equal(expected: 5, options.MaxSteersPerNode);
+    }
+
+    /// <summary>The steer bound has a floor of one: at zero no node could ever be steered, and the refusal belongs at startup.</summary>
+    [Test]
+    [Arguments(0, false)]
+    [Arguments(1, true)]
+    public void Validator_HoldsTheSteerBoundAtItsFloor(int maxSteersPerNode, bool expected)
+    {
+        var result = new GraphWorkflowOptionsValidator().Validate(name: null, new GraphWorkflowOptions { MaxSteersPerNode = maxSteersPerNode });
+
+        AssertEx.Equal(expected, result.Succeeded, result.FailureMessage ?? "accepted");
     }
 
     /// <summary>

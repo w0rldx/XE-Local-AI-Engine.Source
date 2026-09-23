@@ -96,6 +96,15 @@ internal static class GraphWorkflowChatTestSupport
         return await client.SendAsync(request);
     }
 
+    public static async Task<HttpResponseMessage> PostSteerAsync(TestServerWebAppFactory factory, Guid runId, string nodeKey, Guid operationId, string message)
+    {
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{Root}/runs/{runId}/nodes/{nodeKey}/steer");
+        request.Content = new StringContent(JsonSerializer.Serialize(new { operationId, message }), Encoding.UTF8, "application/json");
+        factory.AddNodeBearerToken(request);
+        return await client.SendAsync(request);
+    }
+
     public static async Task<HttpResponseMessage> GetRunsAsync(TestServerWebAppFactory factory, Guid conversationId)
     {
         using var client = factory.CreateClient();

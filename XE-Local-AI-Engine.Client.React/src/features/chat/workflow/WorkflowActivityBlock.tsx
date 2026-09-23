@@ -109,6 +109,15 @@ function ActivityRow({ entry, liveDetail }: { entry: WorkflowActivityEntry; live
 						: entry.tool.name}
 				</Text>
 			) : null}
+			{entry.steering?.map((steer) => (
+				<Text key={steer.seq} size="xs" c="dimmed" fs="italic" data-testid={`chat-workflow-activity-steer-${entry.key}`}>
+					{steer.applied
+						? steer.message
+							? t("pages.chat.workflow.activity.steered", "Steered: {{message}}", { message: steer.message })
+							: t("pages.chat.workflow.activity.steeredNoText", "Steered")
+						: t("pages.chat.workflow.activity.steerIgnored", "Steering arrived after the node finished")}
+				</Text>
+			))}
 			{entry.error ? (
 				<Text size="xs" c="red">
 					{entry.error}

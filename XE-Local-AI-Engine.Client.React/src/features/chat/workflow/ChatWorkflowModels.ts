@@ -157,6 +157,17 @@ export function liveWorkflowNode(path: WorkflowPath): (WorkflowPathNode & { read
 		: undefined;
 }
 
+/**
+ * The active node when an operator may steer it (§3.6): an Agent or LLM Call that is Running or Queued. Read off the
+ * path, which re-reads on every `node` ping, rather than the bound run's `steerable`, which moves on lifecycle pings only.
+ */
+export function steerableWorkflowNode(path: WorkflowPath): WorkflowPathNode | undefined {
+	const node = activeWorkflowNode(path);
+	return (node?.kind === "Agent" || node?.kind === "LlmCall") && (node.status === "Running" || node.status === "Queued")
+		? node
+		: undefined;
+}
+
 /** The run is parked on a ChatInput (a question for the user), not on a Pause. */
 export function isWaitingForWorkflowInput(path: WorkflowPath): boolean {
 	return path.flat().some((node) => node.kind === "ChatInput" && node.status === "WaitingForApproval");
@@ -254,6 +265,11 @@ export interface WorkflowActivityEntry {
 	readonly input?: { readonly prompt: string; readonly answer?: string };
 	readonly published: boolean;
 	readonly error?: string;
+	/**
+	 * Operator steers on this node, oldest first: `applied` ones re-ran the node (same attempt — not a retry), the rest
+	 * arrived after it settled. `message` is absent when neither the event nor the node document carried the text.
+	 */
+	readonly steering?: readonly { readonly seq: number; readonly applied: boolean; readonly message?: string }[];
 }
 
 /** The node kinds whose detail document the activity block reads (the rest are fully described by their summary row). */
@@ -277,6 +293,23 @@ export function toWorkflowActivity(
 	events: readonly GraphWorkflowRunEventResponse[],
 ): readonly WorkflowActivityEntry[] {
 	const published = new Set(events.filter((event) => event.eventType === "node.published").map((event) => event.nodeKey ?? ""));
+	const steeringByKey = new Map<string, { seq: number; applied: boolean; message?: string }[]>();
+	for (const event of events.toSorted((left, right) => left.seq - right.seq)) {
+		const applied = event.eventType === "node.steered";
+		if (!applied && event.eventType !== "node.steer-ignored") {
+			continue;
+		}
+		const nodeKey = event.nodeKey ?? "";
+		const operationId = textAt(event.detail, "operationId");
+		// The event carries the text; the node document's entry is the fallback for a trail written without it.
+		const message =
+			textAt(event.detail, "message") ??
+			detailsByKey.get(nodeKey)?.steering?.find((entry) => entry.operationId === operationId)?.message;
+		steeringByKey.set(nodeKey, [
+			...(steeringByKey.get(nodeKey) ?? []),
+			{ seq: event.seq, applied, ...(message?.trim() ? { message } : {}) },
+		]);
+	}
 	const configByKey = new Map(graphNodes(graph).map((node) => [node.key ?? "", node.config]));
 	return path
 		.flat()
@@ -294,6 +327,7 @@ export function toWorkflowActivity(
 			const toolName = node.kind === "Tool" ? textAt(config, "toolName") : undefined;
 			const prompt = node.kind === "ChatInput" ? textAt(config, "prompt") : undefined;
 			const error = workflowNodeFailureReason(node.status, detail?.error);
+			const steering = steeringByKey.get(node.key);
 			return {
 				key: node.key,
 				label: node.label,
@@ -306,6 +340,7 @@ export function toWorkflowActivity(
 				...(toolName ? { tool: { name: toolName, summary: summarize(at(envelope, "output", "result")) } } : {}),
 				...(prompt ? { input: { prompt, answer: textAt(envelope, "output", "text") } } : {}),
 				...(error ? { error } : {}),
+				...(steering ? { steering } : {}),
 			};
 		});
 }

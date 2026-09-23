@@ -981,6 +981,12 @@ public static class LocalApiRoutes
         public const string RunNodeDecide = "graph-workflows/runs/{runId}/nodes/{nodeKey}/decide";
 
         /// <summary>
+        ///     Steers the queued or running Agent/LLM call node at <c>nodeKey</c> of a chat-bound run: 202, and the
+        ///     dispatcher re-runs the node on the same attempt. <c>operationId</c> is the idempotency key.
+        /// </summary>
+        public const string RunNodeSteer = "graph-workflows/runs/{runId}/nodes/{nodeKey}/steer";
+
+        /// <summary>
         ///     The run's event log, paged from an EXCLUSIVE watermark and capped at the configured replay limit, which
         ///     the response reports rather than leaving a client to infer from a full page.
         /// </summary>

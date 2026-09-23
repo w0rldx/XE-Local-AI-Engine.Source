@@ -3161,27 +3161,6 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinit
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunRequest = z.record(z.string(), z.never());
 
-export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunResponse = z.object({
-	id: z.guid(),
-	runId: z.guid(),
-	nodeKey: z.string(),
-	kind: z.string(),
-	status: z.string(),
-	attempt: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	failureClass: z.string(),
-	pendingDecisionKind: z.string().nullable(),
-	error: z.string().nullable(),
-	input: z.unknown(),
-	output: z.unknown(),
-	invocationId: z.guid().nullable(),
-	startedAtUtc: z.int().nullable(),
-	completedAtUtc: z.int().nullable(),
-	updatedAtUtc: z.int(),
-});
-
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse = z.object({
 	id: z.guid(),
 	nodeKey: z.string(),
@@ -3254,6 +3233,39 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowConvers
 	steerable: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteerableNodeResponse.nullable(),
 });
 
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteeringEntryResponse = z.object({
+	operationId: z.guid(),
+	message: z.string(),
+	atUtc: z.int(),
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	applied: z.boolean().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunResponse = z.object({
+	id: z.guid(),
+	runId: z.guid(),
+	nodeKey: z.string(),
+	kind: z.string(),
+	status: z.string(),
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	failureClass: z.string(),
+	pendingDecisionKind: z.string().nullable(),
+	error: z.string().nullable(),
+	input: z.unknown(),
+	output: z.unknown(),
+	invocationId: z.guid().nullable(),
+	startedAtUtc: z.int().nullable(),
+	completedAtUtc: z.int().nullable(),
+	updatedAtUtc: z.int(),
+	steering: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteeringEntryResponse),
+});
+
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse = z.object({
 	name: z.string(),
 	description: z.string(),
@@ -3316,6 +3328,11 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRu
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse = z.object({
 	runId: z.guid(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1SteerGraphWorkflowNodeRunRequest = z.object({
+	operationId: z.guid().min(1),
+	message: z.string().min(1),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest = z.object({
@@ -9846,6 +9863,18 @@ export const zDecideGraphWorkflowNodeRunPath = z.object({
  */
 export const zDecideGraphWorkflowNodeRunResponse =
 	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDecisionResultResponse;
+
+export const zSteerGraphWorkflowNodeRunBody = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1SteerGraphWorkflowNodeRunRequest;
+
+export const zSteerGraphWorkflowNodeRunPath = z.object({
+	runId: z.guid(),
+	nodeKey: z.string(),
+});
+
+/**
+ * Accepted
+ */
+export const zSteerGraphWorkflowNodeRunResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse;
 
 /**
  * Success

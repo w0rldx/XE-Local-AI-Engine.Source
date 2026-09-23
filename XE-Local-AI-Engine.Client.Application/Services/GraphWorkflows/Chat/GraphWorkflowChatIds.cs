@@ -14,6 +14,13 @@ internal static class GraphWorkflowChatIds
     public static Guid UserMessage(Guid requestId) =>
         NameBased(requestId, "user");
 
+    /// <summary>
+    ///     The user message a steer persists, scoped to its target: the steer's idempotency is per node run, so an
+    ///     operation id reused on another node or run is another steer and gets its own message.
+    /// </summary>
+    public static Guid SteerMessage(Guid operationId, Guid runId, string nodeKey) =>
+        NameBased(operationId, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"steer/{runId}/{nodeKey}"));
+
     /// <summary>The chat message one succeeded attempt of a node publishes.</summary>
     public static Guid PublishedMessage(Guid runId, string nodeKey, int attempt) =>
         NameBased(runId, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{nodeKey}/{attempt}"));

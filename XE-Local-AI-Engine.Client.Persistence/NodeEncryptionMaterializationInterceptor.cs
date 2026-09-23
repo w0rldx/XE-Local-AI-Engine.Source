@@ -485,6 +485,11 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     graphNodeRun.RunId,
                     graphNodeRun.Id,
                     "graph_workflow_node_run_decided_by");
+                graphNodeRun.SteeringJson = DecryptIfPresent(graphNodeRun.SteeringJson,
+                    context.NodeEncryptionKey.Span,
+                    graphNodeRun.RunId,
+                    graphNodeRun.Id,
+                    "graph_workflow_node_run_steering_json");
                 break;
             case GraphWorkflowRunEvent graphEvent:
                 graphEvent.DetailJson =

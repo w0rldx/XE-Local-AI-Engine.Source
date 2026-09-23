@@ -2818,6 +2818,7 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunRe
 	startedAtUtc: number | null;
 	completedAtUtc: number | null;
 	updatedAtUtc: number;
+	steering: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteeringEntryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse = {
@@ -2879,6 +2880,14 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummar
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteerableNodeResponse = {
 	nodeKey: string;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteeringEntryResponse = {
+	operationId: string;
+	message: string;
+	atUtc: number;
+	attempt: number;
+	applied: boolean | null;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse = {
@@ -2944,6 +2953,11 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunR
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse = {
 	runId: string;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1SteerGraphWorkflowNodeRunRequest = {
+	operationId: string;
+	message: string;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest = {
@@ -13522,6 +13536,48 @@ export type DecideGraphWorkflowNodeRunResponses = {
 };
 
 export type DecideGraphWorkflowNodeRunResponse = DecideGraphWorkflowNodeRunResponses[keyof DecideGraphWorkflowNodeRunResponses];
+
+export type SteerGraphWorkflowNodeRunData = {
+	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1SteerGraphWorkflowNodeRunRequest;
+	path: {
+		runId: string;
+		nodeKey: string;
+	};
+	query?: never;
+	url: "/api/local/v1/graph-workflows/runs/{runId}/nodes/{nodeKey}/steer";
+};
+
+export type SteerGraphWorkflowNodeRunErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type SteerGraphWorkflowNodeRunError = SteerGraphWorkflowNodeRunErrors[keyof SteerGraphWorkflowNodeRunErrors];
+
+export type SteerGraphWorkflowNodeRunResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse;
+};
+
+export type SteerGraphWorkflowNodeRunResponse = SteerGraphWorkflowNodeRunResponses[keyof SteerGraphWorkflowNodeRunResponses];
 
 export type ListGraphWorkflowToolsData = {
 	body?: never;

@@ -265,6 +265,87 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         return await ComposeDecisionAsync(runId, nodeKey, decision, cancellationToken);
     }
 
+    public async Task<GraphWorkflowRunDetail> SteerAsync(Guid runId,
+        string nodeKey,
+        Guid operationId,
+        string message,
+        string? steeredBySubject,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(nodeKey))
+        {
+            throw new GraphWorkflowValidationException("A steer names the node it steers by node key.");
+        }
+
+        if (operationId == Guid.Empty)
+        {
+            throw new GraphWorkflowValidationException("A steer needs a caller-minted operation id.");
+        }
+
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            throw new GraphWorkflowValidationException("A steer needs a message.");
+        }
+
+        // The cap a chat input answer carries: a steer is operator text that lands in the node's prompt and in the chat.
+        var maxBytes = MaxAnswerBytes();
+        if (Encoding.UTF8.GetByteCount(message) > maxBytes)
+        {
+            throw new GraphWorkflowValidationException($"The steer is larger than the {maxBytes} bytes it may carry.");
+        }
+
+        var run = await _store.GetRunAsync(runId, cancellationToken);
+        if (run.ConversationId is null)
+        {
+            throw new GraphWorkflowValidationException("Only a run bound to a chat conversation can be steered.");
+        }
+
+        var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
+        if (nodeRun.Kind is not (GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.LlmCall))
+        {
+            throw new GraphWorkflowValidationException($"Node '{nodeKey}' is a {nodeRun.Kind} node; only an Agent or LLM call node can be steered.");
+        }
+
+        // Replay first, like a decide: the same id answers again even once the row has moved on.
+        if (SteerRefusal(run, nodeRun, operationId, message, steeredBySubject, out var replay) is { } refusal)
+        {
+            throw refusal;
+        }
+
+        if (replay)
+        {
+            return await SignalAndComposeAsync(runId, cancellationToken);
+        }
+
+        var written = await _store.AppendNodeRunSteeringAsync(new AppendGraphWorkflowSteeringCommand
+        {
+            RunId = runId,
+            NodeRunId = nodeRun.Id,
+            OperationId = operationId,
+            Message = message,
+            SteeredBySubject = steeredBySubject,
+            MaxEntries = _options.MaxSteersPerNode
+        },
+                              cancellationToken);
+        if (written is null)
+        {
+            // The append re-checks inside its transaction and declined: answer from what the rows NOW say.
+            var current = await _store.GetRunAsync(runId, cancellationToken);
+            var currentNodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
+            if (SteerRefusal(current, currentNodeRun, operationId, message, steeredBySubject, out var replayed) is { } lost)
+            {
+                throw lost;
+            }
+
+            if (!replayed)
+            {
+                throw new GraphWorkflowRunConflictException($"Node '{nodeKey}' could not be steered; re-read the run.");
+            }
+        }
+
+        return await SignalAndComposeAsync(runId, cancellationToken);
+    }
+
     public async Task<GraphWorkflowRunDetail> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
         await ComposeAsync(await _store.GetRunAsync(runId, cancellationToken), cancellationToken);
 
@@ -287,6 +368,41 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         var events = await _store.ListEventsAsync(runId, afterSeq, _options.EventReplayLimit + 1, cancellationToken);
         var page = events.Take(_options.EventReplayLimit).ToList();
         return new GraphWorkflowRunEventPage { Events = page, LastSeq = page.Count == 0 ? afterSeq : page[^1].Seq, ReplayTruncated = events.Count > _options.EventReplayLimit };
+    }
+
+    /// <summary>
+    ///     The refusal the rows earn, or null; <paramref name="replay" /> is true when this id already steered the row.
+    ///     One judgement for the first read and for a declined append, so both answer alike.
+    /// </summary>
+    private Exception? SteerRefusal(GraphWorkflowRunSnapshot run,
+        GraphWorkflowNodeRunSnapshot nodeRun,
+        Guid operationId,
+        string message,
+        string? steeredBySubject,
+        out bool replay)
+    {
+        replay = false;
+        if (nodeRun.Steering.FirstOrDefault(entry => entry.OperationId == operationId) is { } recorded)
+        {
+            replay = string.Equals(recorded.Message, message, StringComparison.Ordinal) && string.Equals(recorded.SteeredBySubject, steeredBySubject, StringComparison.Ordinal);
+            return replay
+                ? null
+                : new GraphWorkflowRunConflictException($"Operation '{operationId}' already steered node '{nodeRun.NodeKey}' with a different message.");
+        }
+
+        if (run.Status is GraphWorkflowRunStatus.Pending or GraphWorkflowRunStatus.Cancelling || GraphWorkflowStateMachine.IsTerminal(run.Status))
+        {
+            return new GraphWorkflowRunConflictException($"This run is {run.Status}, so node '{nodeRun.NodeKey}' can no longer be steered.");
+        }
+
+        if (nodeRun.Status is not (GraphWorkflowNodeRunStatus.Queued or GraphWorkflowNodeRunStatus.Running))
+        {
+            return new GraphWorkflowRunConflictException($"Node run '{nodeRun.NodeKey}' is {nodeRun.Status}; only a queued or running node can be steered.");
+        }
+
+        return nodeRun.Steering.Count >= _options.MaxSteersPerNode
+            ? new GraphWorkflowSteerLimitReachedException($"Node '{nodeRun.NodeKey}' has been steered {nodeRun.Steering.Count} times, the most one node run allows.")
+            : null;
     }
 
     /// <summary>The same act arriving twice.</summary>
@@ -453,11 +569,15 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
             throw new GraphWorkflowValidationException($"The chat input '{nodeKey}' needs a non-empty 'payload.text' answer.");
         }
 
-        var maxBytes = Math.Min(_security.MaxMessageSizeKb * 1024, _options.MaxOutputJsonBytes / 2);
+        var maxBytes = MaxAnswerBytes();
         return Encoding.UTF8.GetByteCount(text) <= maxBytes
             ? text
             : throw new GraphWorkflowValidationException($"The answer is larger than the {maxBytes} bytes a chat input answer may carry.");
     }
+
+    /// <summary>The byte cap of operator text a run takes in: a chat input answer, and a steer.</summary>
+    private int MaxAnswerBytes() =>
+        Math.Min(_security.MaxMessageSizeKb * 1024, _options.MaxOutputJsonBytes / 2);
 
     /// <summary>The run status that follows its rows, written against the version it was read at.</summary>
     /// <remarks>

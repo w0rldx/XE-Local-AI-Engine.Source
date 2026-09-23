@@ -33,6 +33,35 @@ public sealed class SendGraphWorkflowChatMessageResponse
     public required string Action { get; init; }
 }
 
+/// <summary>
+///     An operator steer of a running node. <see cref="OperationId" /> is the caller-minted idempotency key: the same
+///     one answers again, and the same one with a different message is a 409.
+/// </summary>
+public sealed class SteerGraphWorkflowNodeRunRequest
+{
+    public Guid RunId { get; init; }
+
+    public string NodeKey { get; init; } = string.Empty;
+
+    public Guid OperationId { get; init; }
+
+    public string Message { get; init; } = string.Empty;
+}
+
+/// <summary>One steer of a node run as the run view lists it. <see cref="Applied" /> is null until the dispatcher judged it.</summary>
+public sealed class GraphWorkflowSteeringEntryResponse
+{
+    public required Guid OperationId { get; init; }
+
+    public required string Message { get; init; }
+
+    public required long AtUtc { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required bool? Applied { get; init; }
+}
+
 public sealed class ListGraphWorkflowConversationRunsRequest
 {
     public Guid ConversationId { get; init; }
@@ -48,7 +77,7 @@ public sealed class GraphWorkflowPendingInputResponse
     public required string Prompt { get; init; }
 }
 
-/// <summary>The Agent or LLM call node whose row is queued or running. Steering it is a later route; this tells the UI which.</summary>
+/// <summary>The Agent or LLM call node whose row is queued or running: the node the steer route targets.</summary>
 public sealed class GraphWorkflowSteerableNodeResponse
 {
     public required string NodeKey { get; init; }

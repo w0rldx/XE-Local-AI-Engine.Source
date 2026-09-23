@@ -1270,7 +1270,8 @@
 					"view": "View workflow",
 					"dismiss": "Dismiss",
 					"stop": "Stop",
-					"defaultModel": "default model"
+					"defaultModel": "default model",
+					"intervene": "Intervene"
 				},
 				"activity": {
 					"title": "Workflow: {{name}}",
@@ -1280,7 +1281,10 @@
 					"published": "Published to chat",
 					"inputAsked": "Asked: {{prompt}}",
 					"inputAnswered": "Asked: {{prompt}} — Answer: {{answer}}",
-					"toolResult": "{{tool}}: {{summary}}"
+					"toolResult": "{{tool}}: {{summary}}",
+					"steered": "Steered: {{message}}",
+					"steeredNoText": "Steered",
+					"steerIgnored": "Steering arrived after the node finished"
 				},
 				"rerun": {
 					"title": "Run the workflow again?",
@@ -1307,7 +1311,15 @@
 					"generating": "Generating",
 					"tokens_one": "{{count}} token",
 					"tokens_other": "{{count}} tokens"
-				}
+				},
+				"steer": {
+					"title": "Steer {{node}}",
+					"label": "What should the agent do differently?",
+					"send": "Send steering",
+					"finished": "The node finished before your steering arrived.",
+					"capReached": "This node has been steered the maximum number of times."
+				},
+				"lockedHintSteer": "Workflow running — Intervene or Stop."
 			}
 		},
 		"clientNodes": {

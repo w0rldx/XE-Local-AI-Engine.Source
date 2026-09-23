@@ -1230,6 +1230,9 @@ import type {
 	StartWorkSessionData,
 	StartWorkSessionErrors,
 	StartWorkSessionResponses,
+	SteerGraphWorkflowNodeRunData,
+	SteerGraphWorkflowNodeRunErrors,
+	SteerGraphWorkflowNodeRunResponses,
 	StopExternalAppData,
 	StopExternalAppErrors,
 	StopExternalAppResponses,
@@ -2147,6 +2150,9 @@ import {
 	zStartWhisperCppSourceBuildResponse,
 	zStartWorkSessionPath,
 	zStartWorkSessionResponse,
+	zSteerGraphWorkflowNodeRunBody,
+	zSteerGraphWorkflowNodeRunPath,
+	zSteerGraphWorkflowNodeRunResponse,
 	zStopExternalAppBody,
 	zStopExternalAppPath,
 	zStopExternalAppResponse,
@@ -8863,6 +8869,40 @@ export const decideGraphWorkflowNodeRun = <ThrowOnError extends boolean = false>
 			},
 		],
 		url: "/api/local/v1/graph-workflows/runs/{runId}/nodes/{nodeKey}/decide",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const steerGraphWorkflowNodeRun = <ThrowOnError extends boolean = false>(
+	options: Options<SteerGraphWorkflowNodeRunData, ThrowOnError>,
+): RequestResult<SteerGraphWorkflowNodeRunResponses, SteerGraphWorkflowNodeRunErrors, ThrowOnError> =>
+	(options.client ?? client).post<SteerGraphWorkflowNodeRunResponses, SteerGraphWorkflowNodeRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zSteerGraphWorkflowNodeRunBody,
+					path: zSteerGraphWorkflowNodeRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zSteerGraphWorkflowNodeRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/runs/{runId}/nodes/{nodeKey}/steer",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

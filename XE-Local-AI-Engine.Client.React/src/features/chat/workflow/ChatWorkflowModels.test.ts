@@ -7,6 +7,7 @@ import {
 	isBusyWorkflowRun,
 	isLiveWorkflowRun,
 	liveWorkflowNode,
+	steerableWorkflowNode,
 	toWorkflowActivity,
 	toWorkflowPath,
 	workflowNodeFailureReason,
@@ -82,6 +83,22 @@ describe("status helpers", () => {
 		expect(liveWorkflowNode(running("code", "LlmCall", "inv-2"))?.key).toBe("code");
 		expect(liveWorkflowNode(running("code", "LlmCall", null))).toBeUndefined();
 		expect(liveWorkflowNode(running("ask", "ChatInput", "inv-3"))).toBeUndefined();
+	});
+
+	it("offers a steer on a running or queued Agent / LLM Call only", () => {
+		const active = (nodeKey: string, kind: string, status: string) =>
+			steerableWorkflowNode(toWorkflowPath(chatGraph, [makeNodeRun({ nodeKey, kind, status })]));
+
+		expect(active("code", "LlmCall", "Running")?.key).toBe("code");
+		expect(active("code", "LlmCall", "Queued")?.key).toBe("code");
+		expect(active("code", "LlmCall", "Succeeded")).toBeUndefined();
+		expect(active("classify", "DecisionModel", "Running")).toBeUndefined();
+		expect(active("ask", "ChatInput", "WaitingForApproval")).toBeUndefined();
+		expect(
+			steerableWorkflowNode(
+				toWorkflowPath(eightNodeGraph, [makeNodeRun({ nodeKey: "analyze", kind: "Agent", status: "Running" })]),
+			)?.key,
+		).toBe("analyze");
 	});
 
 	it("treats a run parked on a ChatInput as live but not busy, and a Pause park as busy", () => {
@@ -194,5 +211,31 @@ describe("toWorkflowActivity", () => {
 
 		expect(entries.find((entry) => entry.key === "check")?.route).toBe("no");
 		expect(entries.find((entry) => entry.key === "lookup")?.tool).toEqual({ name: "read_file", summary: '{"lines":12}' });
+	});
+
+	it("marks each steer under its node — applied with its text, or arrived after the node finished", () => {
+		const path = toWorkflowPath(chatGraph, [makeNodeRun({ nodeKey: "code", kind: "LlmCall", status: "Succeeded" })]);
+		const details = new Map([
+			[
+				"code",
+				{
+					...detail("code", "LlmCall", { status: "succeeded", attempt: 1, branch: null, output: { text: "done" } }),
+					steering: [{ operationId: "op-2", message: "Use Rust instead", atUtc: 2, attempt: 1, applied: true }],
+				},
+			],
+		]);
+		const events = [
+			graphWorkflowRunEvent({ seq: 5, eventType: "node.steer-ignored", nodeKey: "code", detail: { operationId: "op-3" } }),
+			graphWorkflowRunEvent({ seq: 2, eventType: "node.steered", nodeKey: "code", detail: { message: "Be brief" } }),
+			graphWorkflowRunEvent({ seq: 4, eventType: "node.steered", nodeKey: "code", detail: { operationId: "op-2" } }),
+		];
+
+		const [entry] = toWorkflowActivity(chatGraph, path, details, events);
+
+		expect(entry?.steering).toEqual([
+			{ seq: 2, applied: true, message: "Be brief" },
+			{ seq: 4, applied: true, message: "Use Rust instead" },
+			{ seq: 5, applied: false },
+		]);
 	});
 });

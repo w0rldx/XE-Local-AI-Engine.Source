@@ -128,6 +128,19 @@ public sealed class PublishingGraphWorkflowStoreTests
         AssertEx.Empty(publisher.ReceivedCalls());
     }
 
+    /// <summary>A steer the store declined committed nothing, and announces nothing.</summary>
+    [Test]
+    public async Task ASteerThatWasDeclined_AnnouncesNothing()
+    {
+        var inner = Substitute.For<IGraphWorkflowStore>();
+        inner.AppendNodeRunSteeringAsync(Arg.Any<AppendGraphWorkflowSteeringCommand>(), Arg.Any<CancellationToken>()).Returns((GraphWorkflowMutationResult?)null);
+        var publisher = Substitute.For<IGraphWorkflowEventPublisher>();
+        var store = new PublishingGraphWorkflowStore(inner, publisher, NullLogger<PublishingGraphWorkflowStore>.Instance);
+
+        AssertEx.Null(await store.AppendNodeRunSteeringAsync(Steer()));
+        AssertEx.Empty(publisher.ReceivedCalls());
+    }
+
     /// <summary>
     ///     The write is already committed when the announcement is attempted, so failing the caller over a notification
     ///     would turn a late repaint into a lost transition.
@@ -178,7 +191,11 @@ public sealed class PublishingGraphWorkflowStoreTests
         new() { Method = nameof(IGraphWorkflowStore.DecideNodeRunAsync), Kind = GraphWorkflowChangeKind.Gate, Invoke = store => store.DecideNodeRunAsync(Decision()) },
 
         // A result published into the run's chat conversation: the node's row changed, so the client repaints it.
-        new() { Method = nameof(IGraphWorkflowStore.MarkNodeRunPublishedAsync), Kind = GraphWorkflowChangeKind.Node, Invoke = store => store.MarkNodeRunPublishedAsync(RunId, NodeRunId, Guid.NewGuid()) }
+        new() { Method = nameof(IGraphWorkflowStore.MarkNodeRunPublishedAsync), Kind = GraphWorkflowChangeKind.Node, Invoke = store => store.MarkNodeRunPublishedAsync(RunId, NodeRunId, Guid.NewGuid()) },
+
+        // A steer the row now lists, and one a tick judged too late: both repaint the node.
+        new() { Method = nameof(IGraphWorkflowStore.AppendNodeRunSteeringAsync), Kind = GraphWorkflowChangeKind.Node, Invoke = store => store.AppendNodeRunSteeringAsync(Steer()) },
+        new() { Method = nameof(IGraphWorkflowStore.IgnoreNodeRunSteeringAsync), Kind = GraphWorkflowChangeKind.Node, Invoke = store => store.IgnoreNodeRunSteeringAsync(RunId, NodeRunId, Guid.NewGuid()) }
     ];
 
     private static IReadOnlyList<Func<IGraphWorkflowStore, Task>> Reads() =>
@@ -221,6 +238,9 @@ public sealed class PublishingGraphWorkflowStoreTests
     private static TransitionGraphWorkflowNodeRunCommand NodeRunTransition(GraphWorkflowNodeRunStatus target) =>
         new() { RunId = RunId, NodeRunId = NodeRunId, ExpectedVersion = GraphWorkflowVersions.Any, TargetStatus = target };
 
+    private static AppendGraphWorkflowSteeringCommand Steer() =>
+        new() { RunId = RunId, NodeRunId = NodeRunId, OperationId = Guid.NewGuid(), Message = "focus on the tests", SteeredBySubject = null, MaxEntries = 5 };
+
     private static DecideGraphWorkflowNodeRunCommand Decision() =>
         new()
         {
@@ -242,6 +262,8 @@ public sealed class PublishingGraphWorkflowStoreTests
         inner.AppendEventAsync(Arg.Any<AppendGraphWorkflowEventCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.DecideNodeRunAsync(Arg.Any<DecideGraphWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.MarkNodeRunPublishedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.AppendNodeRunSteeringAsync(Arg.Any<AppendGraphWorkflowSteeringCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.IgnoreNodeRunSteeringAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(result);
 
         var publisher = Substitute.For<IGraphWorkflowEventPublisher>();
         var store = new PublishingGraphWorkflowStore(inner, publisher, NullLogger<PublishingGraphWorkflowStore>.Instance);

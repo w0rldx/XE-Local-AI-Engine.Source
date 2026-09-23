@@ -418,6 +418,9 @@ public sealed class GraphWorkflowNodeRunResponse
     public required long? CompletedAtUtc { get; init; }
 
     public required long UpdatedAtUtc { get; init; }
+
+    /// <summary>The operator's steers of this row, oldest first; who steered stays server-side.</summary>
+    public required IReadOnlyList<GraphWorkflowSteeringEntryResponse> Steering { get; init; }
 }
 
 public sealed class GraphWorkflowRunEventResponse

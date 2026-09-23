@@ -84,6 +84,17 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
         return await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Node, cancellationToken);
     }
 
+    /// <summary>A steer the row now lists, which a watching chat page repaints for; a declined append announces nothing.</summary>
+    public async Task<GraphWorkflowMutationResult?> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default) =>
+        await _inner.AppendNodeRunSteeringAsync(command, cancellationToken) is { } result
+            ? await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Node, cancellationToken)
+            : null;
+
+    public async Task<GraphWorkflowMutationResult?> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
+        await _inner.IgnoreNodeRunSteeringAsync(runId, nodeRunId, operationId, cancellationToken) is { } result
+            ? await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Node, cancellationToken)
+            : null;
+
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.TransitionRunAsync(command, cancellationToken), GraphWorkflowChangeKind.Run, cancellationToken);
 

@@ -106,8 +106,9 @@ public sealed class ConflictExceptionHandlerTests
         AssertEx.Equal("Reject", body.StandingDecision);
     }
 
-    /// <summary>The three chat-workflow refusals each reach the client under a discriminator of their own, which the chat page branches on.</summary>
+    /// <summary>The four chat-workflow refusals each reach the client under a discriminator of their own, which the chat page branches on.</summary>
     [Test]
+    [Arguments("steer-limit")]
     [Arguments("busy")]
     [Arguments("rerun")]
     [Arguments("attachments")]
@@ -117,6 +118,7 @@ public sealed class ConflictExceptionHandlerTests
         {
             "busy" => ((Exception)new GraphWorkflowRunBusyException("busy"), "GraphWorkflowRunBusy"),
             "rerun" => (new GraphWorkflowRerunConfirmationRequiredException("confirm"), "GraphWorkflowRerunConfirmationRequired"),
+            "steer-limit" => (new GraphWorkflowSteerLimitReachedException("capped"), "GraphWorkflowSteerLimitReached"),
             _ => (new GraphWorkflowAttachmentsNotAcceptedException("no files"), "GraphWorkflowAttachmentsNotAccepted")
         };
 

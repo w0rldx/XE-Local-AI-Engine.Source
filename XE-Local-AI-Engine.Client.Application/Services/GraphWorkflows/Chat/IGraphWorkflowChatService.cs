@@ -17,6 +17,14 @@ public sealed class GraphWorkflowChatSendRequest
     public bool ConfirmRerun { get; init; }
 }
 
+/// <summary>An operator steer from the chat. <see cref="OperationId" /> is the caller-minted idempotency key.</summary>
+public sealed class GraphWorkflowChatSteerRequest
+{
+    public required Guid OperationId { get; init; }
+
+    public required string Message { get; init; }
+}
+
 /// <summary>What a send did: started a run, or answered the run's parked <c>ChatInput</c>.</summary>
 public enum GraphWorkflowChatSendAction
 {
@@ -88,6 +96,16 @@ public interface IGraphWorkflowChatService
 
     /// <summary>The conversation's bound runs, newest first.</summary>
     Task<IReadOnlyList<GraphWorkflowChatBoundRun>> ListBoundRunsAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Steers the running node of a chat-bound run: the text becomes a user message of the run's conversation (id
+    ///     deterministic in the operation id), then the run service commits the steer. A refused steer leaves no message.
+    /// </summary>
+    Task<GraphWorkflowRunDetail> SteerAsync(Guid runId,
+        string nodeKey,
+        GraphWorkflowChatSteerRequest request,
+        string? steeredBySubject,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Cancels the conversation's live bound run, if it has one — what a conversation delete does first.</summary>
     Task CancelBoundRunAsync(Guid conversationId, CancellationToken cancellationToken = default);

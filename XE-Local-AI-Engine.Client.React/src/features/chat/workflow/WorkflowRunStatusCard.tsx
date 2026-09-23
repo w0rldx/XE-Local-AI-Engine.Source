@@ -1,14 +1,16 @@
-import { Anchor, Button, CloseButton, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconPlayerStopFilled } from "@tabler/icons-react";
+import { Alert, Anchor, Button, CloseButton, Group, Paper, Stack, Text, Textarea } from "@mantine/core";
+import { IconHandStop, IconPlayerStopFilled } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import {
 	activeWorkflowNode,
 	formatWorkflowElapsed,
 	isWaitingForWorkflowInput,
+	steerableWorkflowNode,
 	type WorkflowPath,
 	workflowNodeGlyph,
 	workflowNodeWithStatus,
@@ -35,6 +37,94 @@ interface WorkflowRunStatusCardProps {
 	readonly onDismiss: () => void;
 	/** The active node's live output (reasoning, phase, tokens). Rendered under the active line while the run is live. */
 	readonly liveDetail?: ReactNode;
+	/**
+	 * Sends the operator's steering to a running Agent / LLM Call. Resolves once the server accepted it; rejects with an
+	 * Error whose message is what the dialog shows (the draft stays). Absent ⇒ no Intervene.
+	 */
+	readonly onSteer?: (runId: string, nodeKey: string, message: string) => Promise<void>;
+}
+
+interface SteerTarget {
+	readonly runId: string;
+	readonly key: string;
+	readonly label: string;
+}
+
+/**
+ * The Intervene dialog. The run and node are captured at open, so a node that moves on (or a run that ends) mid-draft is
+ * still the one addressed, and the server's refusal, not a silent close, is what the operator sees.
+ */
+function SteerDialog({
+	target,
+	onClose,
+	onSteer,
+}: {
+	readonly target: SteerTarget | undefined;
+	readonly onClose: () => void;
+	readonly onSteer: (runId: string, nodeKey: string, message: string) => Promise<void>;
+}) {
+	const { t } = useTranslation();
+	const [message, setMessage] = useState("");
+	const [error, setError] = useState<string | undefined>();
+	const [sending, setSending] = useState(false);
+	const close = (): void => {
+		setMessage("");
+		setError(undefined);
+		onClose();
+	};
+	const submit = (): void => {
+		if (!target) {
+			return;
+		}
+		setSending(true);
+		setError(undefined);
+		onSteer(target.runId, target.key, message.trim())
+			.then(close)
+			.catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
+			.finally(() => setSending(false));
+	};
+	return (
+		<DialogShell
+			opened={target !== undefined}
+			onClose={close}
+			size="md"
+			enableFullScreenToggle={false}
+			title={t("pages.chat.workflow.steer.title", "Steer {{node}}", { node: target?.label ?? "" })}
+			data-testid="chat-workflow-steer-dialog"
+			footer={
+				<Group justify="flex-end">
+					<Button variant="default" onClick={close}>
+						{t("common.cancel", "Cancel")}
+					</Button>
+					<Button
+						onClick={submit}
+						loading={sending}
+						disabled={message.trim().length === 0}
+						data-testid="chat-workflow-steer-send"
+					>
+						{t("pages.chat.workflow.steer.send", "Send steering")}
+					</Button>
+				</Group>
+			}
+		>
+			<Stack gap="xs">
+				{error ? (
+					<Alert color="orange" variant="light" data-testid="chat-workflow-steer-error">
+						{error}
+					</Alert>
+				) : null}
+				<Textarea
+					label={t("pages.chat.workflow.steer.label", "What should the agent do differently?")}
+					autosize={true}
+					minRows={3}
+					data-autofocus={true}
+					value={message}
+					onChange={(event) => setMessage(event.currentTarget.value)}
+					data-testid="chat-workflow-steer-message"
+				/>
+			</Stack>
+		</DialogShell>
+	);
 }
 
 function useNow(active: boolean): number {
@@ -64,12 +154,15 @@ export function WorkflowRunStatusCard({
 	onStop,
 	onDismiss,
 	liveDetail,
+	onSteer,
 }: WorkflowRunStatusCardProps) {
 	const { t } = useTranslation();
 	const narrowed = narrowGraphWorkflowRunStatus(status);
 	const terminal = isTerminalGraphWorkflowRunStatus(narrowed);
 	const active = terminal ? undefined : activeWorkflowNode(path);
 	const now = useNow(active?.startedAtUtc != null);
+	const steerable = active && narrowed !== "Cancelling" ? steerableWorkflowNode(path) : undefined;
+	const [steerTarget, setSteerTarget] = useState<SteerTarget | undefined>();
 
 	let terminalText: string | undefined;
 	if (narrowed === "Completed") {
@@ -116,18 +209,31 @@ export function WorkflowRunStatusCard({
 								data-testid="chat-workflow-status-dismiss"
 							/>
 						) : (
-							<Button
-								size="compact-xs"
-								color="red"
-								variant="light"
-								leftSection={<IconPlayerStopFilled size={12} />}
-								loading={stopping}
-								disabled={narrowed === "Cancelling"}
-								onClick={onStop}
-								data-testid="chat-workflow-status-stop"
-							>
-								{t("pages.chat.workflow.status.stop", "Stop")}
-							</Button>
+							<>
+								{onSteer && steerable ? (
+									<Button
+										size="compact-xs"
+										variant="light"
+										leftSection={<IconHandStop size={12} />}
+										onClick={() => setSteerTarget({ runId, key: steerable.key, label: steerable.label })}
+										data-testid="chat-workflow-status-intervene"
+									>
+										{t("pages.chat.workflow.status.intervene", "Intervene")}
+									</Button>
+								) : null}
+								<Button
+									size="compact-xs"
+									color="red"
+									variant="light"
+									leftSection={<IconPlayerStopFilled size={12} />}
+									loading={stopping}
+									disabled={narrowed === "Cancelling"}
+									onClick={onStop}
+									data-testid="chat-workflow-status-stop"
+								>
+									{t("pages.chat.workflow.status.stop", "Stop")}
+								</Button>
+							</>
 						)}
 					</Group>
 				</Group>
@@ -177,6 +283,7 @@ export function WorkflowRunStatusCard({
 					</Text>
 				) : null}
 			</Stack>
+			{onSteer ? <SteerDialog target={steerTarget} onClose={() => setSteerTarget(undefined)} onSteer={onSteer} /> : null}
 		</Paper>
 	);
 }

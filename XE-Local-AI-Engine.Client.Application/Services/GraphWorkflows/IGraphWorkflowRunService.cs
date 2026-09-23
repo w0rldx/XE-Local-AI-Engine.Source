@@ -63,6 +63,14 @@ public sealed class GraphWorkflowRunConflictException : InvalidOperationExceptio
     }
 }
 
+/// <summary>A steer of a node run that already holds <c>MaxSteersPerNode</c> entries. Maps to 409 <c>GraphWorkflowSteerLimitReached</c>.</summary>
+public sealed class GraphWorkflowSteerLimitReachedException : InvalidOperationException
+{
+    public GraphWorkflowSteerLimitReachedException(string message) : base(message)
+    {
+    }
+}
+
 /// <summary>The chat conversation a run starts bound to, and the user message that started it.</summary>
 public sealed class GraphWorkflowRunBinding
 {
@@ -137,6 +145,23 @@ public interface IGraphWorkflowRunService
         string? comment,
         string? payloadJson,
         string? decidedBySubject,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Commits an operator steer of the queued or running Agent/LLM call node at <paramref name="nodeKey" /> of a
+    ///     chat-bound run, signals, and answers the run as it now reads.
+    /// </summary>
+    /// <remarks>
+    ///     Intent only: the dispatcher tick resets the row to <c>Pending</c> on the same attempt, or records the steer
+    ///     as ignored when the row settled first. <b>Idempotent on <paramref name="operationId" /></b> within the
+    ///     row's entries; the same id with a different message or person is a
+    ///     <see cref="GraphWorkflowRunConflictException" />, and a row at the cap a <see cref="GraphWorkflowSteerLimitReachedException" />.
+    /// </remarks>
+    Task<GraphWorkflowRunDetail> SteerAsync(Guid runId,
+        string nodeKey,
+        Guid operationId,
+        string message,
+        string? steeredBySubject,
         CancellationToken cancellationToken = default);
 
     /// <summary><paramref name="afterSeq" /> is an EXCLUSIVE lower bound; the page is capped at the configured replay limit.</summary>

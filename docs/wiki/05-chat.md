@@ -402,7 +402,7 @@ chat resume registry ([Graph Workflows](21-graph-workflows.md) §5, "Live activi
 |---|---|
 | none, or terminal | 409 `GraphWorkflowRerunConfirmationRequired` when a previous run's pinned `chat.requireRerunConfirmation` is on and `confirmRerun` is not (nothing persisted); otherwise persist the user message, then start a run bound to the conversation with `trigger_message_id` = that message. Input `{ message, attachments: [{ fileId, name, kind }], conversationId, messageId }`. |
 | `WaitingForApproval`, parked on a `ChatInput`, nothing queued or running | persist the user message, then `DecideAsync(Answer, operationId: requestId, payload { text })`. Attachments here are 409 `GraphWorkflowAttachmentsNotAccepted`. |
-| `Pending`, `Running`, `Cancelling`, or parked on a `Pause` | 409 `GraphWorkflowRunBusy` — the client offers Stop (and Steer, S3). |
+| `Pending`, `Running`, `Cancelling`, or parked on a `Pause` | 409 `GraphWorkflowRunBusy` — the client offers Stop, and Steer while an Agent/LLM call node runs (below). |
 
 The user message and the start/answer are two commits. Its id is deterministic —
 `GraphWorkflowChatIds.UserMessage(requestId)`, an RFC 4122 version 5 UUID — and it is written through
@@ -412,6 +412,18 @@ missing half. A second live run on one conversation is refused by the database (
 already answered, moved), a message THIS send inserted is deleted again before the 409, so a refused send leaves no
 orphan turn. A `requestId` whose user message already lives in another conversation is 409
 `GraphWorkflowRunConflict` before anything is written, and so is an answer whose `definitionId` is not the parked run's.
+
+**Intervene from the chat (steer).** While the bound run's Agent or LLM call node is queued or running (the run list's
+`steerable`), the operator can redirect it: `POST graph-workflows/runs/{runId}/nodes/{nodeKey}/steer` with
+`{ operationId, message }`, answered 202 with the run detail. `IGraphWorkflowChatService.SteerAsync` checks that the
+run is bound (400 otherwise), that the conversation is mutable and that the node run exists (404, before anything is
+written). It then persists the text as a user message under `GraphWorkflowChatIds.SteerMessage(operationId, runId,
+nodeKey)`, a v5 UUID scoped to the target. A replay on the same node maps to the same message, and the same id reused
+on another node or run is another steer with its own message. Last, it asks the run service to commit the steer. A refusal deletes a message this
+call inserted, so a refused steer leaves no orphan turn. The dispatcher re-runs the node on the same attempt with an
+`## Operator steering` section in its prompt. A steer that reached the tick after the node finished is recorded as
+ignored (`node.steer-ignored`). Both events carry `{ operationId, message, attempt }`. A steer past the per-node cap
+is 409 `GraphWorkflowSteerLimitReached`. Rules, caps and events: [Graph Workflows](21-graph-workflows.md) §3.7.
 
 **Publishing.** A succeeded `publishToChat` node (Agent, LLM Call, or End — End defaults to on in a Chat graph) becomes
 one Completed assistant message: `output.text` for Agent/LLM Call, `output.result` for End when it is a string and

@@ -21,6 +21,7 @@ import {
 	isBusyWorkflowRun,
 	isLiveWorkflowRun,
 	liveWorkflowNode,
+	steerableWorkflowNode,
 	toWorkflowPath,
 	workflowNodeFailureReason,
 	workflowNodeLabel,
@@ -50,6 +51,7 @@ import {
 	useGraphWorkflowNodeRun,
 	useGraphWorkflowRun,
 	useSendGraphWorkflowChatMessage,
+	useSteerGraphWorkflowNodeRun,
 } from "@/features/graphWorkflows/queries/useGraphWorkflows";
 
 type SendNotice =
@@ -195,6 +197,12 @@ export function useChatWorkflow({
 	const liveActivity = useGraphWorkflowNodeActivity(cardRunId, liveNode?.key, liveNode?.invocationId);
 	const liveDetail = liveNode ? <WorkflowNodeLiveDetail nodeKey={liveNode.key} stream={liveActivity.stream} /> : undefined;
 	const cancelMutation = useCancelGraphWorkflowRun();
+	const steerMutation = useSteerGraphWorkflowNodeRun();
+	// Intervene is offered on the live run's running/queued Agent or LLM Call, never while a cancel drains.
+	const steerable =
+		liveRun && liveRun === cardRun && narrowGraphWorkflowRunStatus(cardStatus) !== "Cancelling"
+			? steerableWorkflowNode(path)
+			: undefined;
 	const sendMutation = useSendGraphWorkflowChatMessage();
 
 	const pendingInput = liveRun?.pendingInput ?? undefined;
@@ -356,6 +364,31 @@ export function useChatWorkflow({
 			.catch((error: unknown) => setNotice({ kind: "error", message: errorMessage(error) }));
 	}, [cancelMutation, conversationId, liveRun, refreshConversation]);
 
+	// One operation id per submit: a resend of the same text is a second steer, which the cap bounds. The run is the one
+	// the dialog captured, never "whatever is live now": a run that ended mid-draft earns the server's 409, so the draft
+	// stays and the operator is told why, instead of the dialog closing as if the steer had landed.
+	const steer = useCallback(
+		async (runId: string, nodeKey: string, message: string): Promise<void> => {
+			try {
+				await steerMutation.mutateAsync({
+					path: { runId, nodeKey },
+					body: { operationId: crypto.randomUUID(), message },
+				});
+			} catch (error) {
+				// A live card can only earn two 409s: the cap, or the node settling before the steer landed.
+				const conflictType = readGraphWorkflowConflict(error)?.conflictType;
+				throw new Error(
+					conflictType === graphWorkflowConflictTypes.steerLimitReached
+						? t("pages.chat.workflow.steer.capReached", "This node has been steered the maximum number of times.")
+						: conflictType
+							? t("pages.chat.workflow.steer.finished", "The node finished before your steering arrived.")
+							: errorMessage(error),
+				);
+			}
+		},
+		[steerMutation, t],
+	);
+
 	const runsByTrigger = useMemo(() => {
 		const map = new Map<string, GraphWorkflowConversationRunResponse[]>();
 		for (const run of runs.toReversed()) {
@@ -440,7 +473,9 @@ export function useChatWorkflow({
 			) : null}
 			{active && busy ? (
 				<Text size="xs" c="dimmed" data-testid="chat-workflow-locked-hint">
-					{t("pages.chat.workflow.lockedHint", "Workflow running — Stop it or wait.")}
+					{steerable
+						? t("pages.chat.workflow.lockedHintSteer", "Workflow running — Intervene or Stop.")
+						: t("pages.chat.workflow.lockedHint", "Workflow running — Stop it or wait.")}
 				</Text>
 			) : null}
 			{cardRun && runDetailQuery.data ? (
@@ -455,6 +490,7 @@ export function useChatWorkflow({
 					onStop={stop}
 					onDismiss={() => dismissRun(conversationId, cardRun.run.id)}
 					liveDetail={liveDetail}
+					onSteer={steer}
 				/>
 			) : null}
 			{runs.length >= GRAPH_WORKFLOW_CONVERSATION_RUN_PAGE_SIZE ? (

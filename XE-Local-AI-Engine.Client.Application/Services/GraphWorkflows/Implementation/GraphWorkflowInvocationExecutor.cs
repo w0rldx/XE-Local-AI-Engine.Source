@@ -220,7 +220,16 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         var flight = await _lane.TryStartAsync(nodeRun.Id,
                                     nodeRun.Attempt,
                                     invocationId,
-                                    (leaseAcquired, token) => RunTurnAsync(run.Id, nodeRun.Id, node, node.Config, invocationId, inputJson, graph.Kind == GraphWorkflowDefinitionKind.Chat, leaseAcquired, token),
+                                    (leaseAcquired, token) => RunTurnAsync(run.Id,
+                                        nodeRun.Id,
+                                        node,
+                                        node.Config,
+                                        invocationId,
+                                        inputJson,
+                                        graph.Kind == GraphWorkflowDefinitionKind.Chat,
+                                        SteeringSection(nodeRun),
+                                        leaseAcquired,
+                                        token),
                                     cancellationToken);
         if (flight is null)
         {
@@ -346,12 +355,13 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         Guid invocationId,
         string inputJson,
         bool chatGraph,
+        string? steering,
         StrongBox<bool> leaseAcquired,
         CancellationToken cancellationToken)
     {
         if (config is GraphWorkflowLlmCallConfig llmConfig)
         {
-            return await RunLlmTurnAsync(runId, nodeRunId, node, llmConfig, invocationId, inputJson, leaseAcquired, cancellationToken);
+            return await RunLlmTurnAsync(runId, nodeRunId, node, llmConfig, invocationId, inputJson, steering, leaseAcquired, cancellationToken);
         }
 
         if (config is GraphWorkflowDecisionModelConfig decisionConfig)
@@ -414,7 +424,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
             // The seed prompt is also the retrieval query below, so it is built before the resolve rather than beside the package: a playbook gated on a blank
             // query injects its full static prepend instead of the relevant slice, and that difference is a different resolved prompt.
-            var seedPrompt = SeedPrompt(agentConfig, inputJson, chatGraph);
+            var seedPrompt = WithSteering(SeedPrompt(agentConfig, inputJson, chatGraph), steering);
 
             // 5. The agent's COMPLETE runtime. honorModelProfile is FALSE exactly when this node names its own model: with a bare true, a node overriding a
             //    cloud-pinned agent to a local one would pass step 3 on its own choice while the resolver gated the offer against — and returned — the cloud pin.
@@ -483,6 +493,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         GraphWorkflowLlmCallConfig config,
         Guid invocationId,
         string inputJson,
+        string? steering,
         StrongBox<bool> leaseAcquired,
         CancellationToken cancellationToken)
     {
@@ -492,10 +503,12 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         var callName = node.Kind == GraphWorkflowNodeKind.DecisionModel ? "decision model" : "LLM call";
         try
         {
-            if (!TryBuildBoundPrompt(config, inputJson, _options.MaxRunInputBytes, out var prompt, out var bindingError))
+            if (!TryBuildBoundPrompt(config, inputJson, _options.MaxRunInputBytes, out var boundPrompt, out var bindingError))
             {
                 return Invalid($"Node '{node.NodeKey}' {bindingError}");
             }
+
+            var prompt = WithSteering(boundPrompt, steering);
 
             await using var scope = _scopeFactory.CreateAsyncScope();
             var services = scope.ServiceProvider;
@@ -595,7 +608,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             return Invalid($"Node '{node.NodeKey}' names the decision provider '{config.Provider}', which this build does not run.");
         }
 
-        var turn = await RunLlmTurnAsync(runId, nodeRunId, node, provider.Lower(config), invocationId, inputJson, leaseAcquired, cancellationToken);
+        var turn = await RunLlmTurnAsync(runId, nodeRunId, node, provider.Lower(config), invocationId, inputJson, steering: null, leaseAcquired, cancellationToken);
         if (!turn.Succeeded)
         {
             return turn;
@@ -970,6 +983,23 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         var rendered = TruncateUtf8(upstream.GetRawText(), _options.MaxRunInputBytes);
         return $"{prompt}\n\nThe nodes before this one produced:\n\n```json\n{rendered}\n```";
     }
+
+    /// <summary>
+    ///     The "## Operator steering" section: the row's APPLIED steers, oldest first, or null when there are none —
+    ///     so a row nobody steered sends a prompt byte-identical to one before steering existed.
+    /// </summary>
+    /// <remarks>Re-implemented from the development-workflow operator retry reason, never shared with it.</remarks>
+    private static string? SteeringSection(GraphWorkflowNodeRunSnapshot nodeRun)
+    {
+        var applied = nodeRun.Steering.Where(static entry => entry.Applied == true).Select(static (entry, index) => $"{index + 1}. {entry.Message}").ToList();
+        return applied.Count == 0
+            ? null
+            : "## Operator steering\n\nThe operator interrupted this step to redirect it. Follow the latest instruction where they conflict.\n\n"
+              + string.Join("\n", applied);
+    }
+
+    private static string WithSteering(string prompt, string? steering) =>
+        steering is null ? prompt : $"{prompt}\n\n{steering}";
 
     /// <summary>
     ///     The chat send that started the run — <c>run.input.message</c>, under the run-input budget — and the names of its

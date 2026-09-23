@@ -190,8 +190,10 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         var run = await store.GetRunAsync(runId, cancellationToken);
         if (GraphWorkflowStateMachine.IsTerminal(run.Status))
         {
+            // A steer can commit after this run's last apply pass and before the poll that ended it; the steer's own
+            // signal brings a tick here, which judges it ignored rather than leaving it unjudged forever.
             Forget(runId);
-            return 0;
+            return await ApplySteeringAsync(store, run, cancellationToken);
         }
 
         if (run.Status == GraphWorkflowRunStatus.Pending)
@@ -213,9 +215,13 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                 : await FailUnroutableAsync(store, run, exception, cancellationToken);
         }
 
+        // Steers BEFORE the poll: a reset row is then superseded in its lane (the discard cancels the invocation), and a
+        // steer whose row settled on an earlier tick is recorded as ignored rather than applied to finished work.
+        var written = await ApplySteeringAsync(store, run, cancellationToken);
+
         // Settle what the lanes have landed FIRST, before anything reads the node runs for a decision: work that finished between ticks has to be seen as
         // finished, or the run judges its whole graph against a row that is only still Running because nothing asked.
-        var written = await PollAsync(store, graph, run, cancellationToken);
+        written += await PollAsync(store, graph, run, cancellationToken);
 
         if (run.Status == GraphWorkflowRunStatus.Cancelling)
         {
@@ -248,6 +254,75 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         }
 
         written += await RecomputeRunStatusAsync(store, graph, run, cancellationToken);
+        return written;
+    }
+
+    /// <summary>
+    ///     Applies every unjudged steer: a row still <c>Queued</c>/<c>Running</c> on the steered attempt and invocation
+    ///     goes back to <c>Pending</c> on the SAME attempt (<c>node.steered</c>); any other is <c>node.steer-ignored</c>.
+    /// </summary>
+    /// <remarks>
+    ///     Here and not in the steer command because the store's node move has no from-status predicate: only inside
+    ///     the advance gate is "still running" still true when the write lands. No attempt is spent.
+    /// </remarks>
+    private static async Task<int> ApplySteeringAsync(IGraphWorkflowStore store, GraphWorkflowRunSnapshot run, CancellationToken cancellationToken)
+    {
+        var written = 0;
+        foreach (var nodeRun in await store.ListNodeRunsAsync(run.Id, cancellationToken))
+        {
+            var unjudged = nodeRun.Steering.Where(static entry => entry.Applied is null).ToList();
+            if (unjudged.Count == 0)
+            {
+                continue;
+            }
+
+            // A drain or a finished run re-runs nothing, so a steer that raced the cancel or the end is ignored like a late one.
+            var live = run.Status != GraphWorkflowRunStatus.Cancelling
+                       && !GraphWorkflowStateMachine.IsTerminal(run.Status)
+                       && nodeRun.Status is GraphWorkflowNodeRunStatus.Queued or GraphWorkflowNodeRunStatus.Running;
+            var applying = live
+                ? unjudged.Where(entry => entry.Attempt == nodeRun.Attempt && (entry.InvocationId is null || entry.InvocationId == nodeRun.InvocationId)).ToList()
+                : [];
+            foreach (var ignored in unjudged.Except(applying))
+            {
+                written += await store.IgnoreNodeRunSteeringAsync(run.Id, nodeRun.Id, ignored.OperationId, cancellationToken) is null ? 0 : 1;
+            }
+
+            if (applying.Count == 0)
+            {
+                continue;
+            }
+
+            GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Pending, nodeRun.NodeKey);
+            _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
+            {
+                RunId = run.Id,
+                NodeRunId = nodeRun.Id,
+                ExpectedVersion = GraphWorkflowVersions.Any,
+                TargetStatus = GraphWorkflowNodeRunStatus.Pending,
+                EventType = GraphWorkflowEventTypes.NodeSteered,
+                DetailJson = SteeredDetailJson(applying[0]),
+                AppliedSteeringOperationIds = [.. applying.Select(static entry => entry.OperationId)]
+            },
+                               cancellationToken);
+            written++;
+
+            // Two steers can land between ticks. One reset applies both; each still gets its own event so the feed shows every text.
+            foreach (var entry in applying.Skip(1))
+            {
+                _ = await store.AppendEventAsync(new AppendGraphWorkflowEventCommand
+                {
+                    RunId = run.Id,
+                    ExpectedVersion = GraphWorkflowVersions.Any,
+                    EventType = GraphWorkflowEventTypes.NodeSteered,
+                    NodeKey = nodeRun.NodeKey,
+                    DetailJson = SteeredDetailJson(entry)
+                },
+                                   cancellationToken);
+                written++;
+            }
+        }
+
         return written;
     }
 
@@ -856,6 +931,19 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         {
             _logger.LogError(exception, "Graph workflow run {RunId} could not be advanced.", runId);
         }
+    }
+
+    private static string SteeredDetailJson(GraphWorkflowSteeringEntry entry) =>
+        JsonSerializer.Serialize(new SteeredDetail { OperationId = entry.OperationId, Message = entry.Message, Attempt = entry.Attempt }, JsonOptions);
+
+    /// <summary>What a steer reset records: which steer, its text, and the attempt it re-ran.</summary>
+    private sealed record SteeredDetail
+    {
+        public required Guid OperationId { get; init; }
+
+        public required string Message { get; init; }
+
+        public required int Attempt { get; init; }
     }
 
     /// <summary>

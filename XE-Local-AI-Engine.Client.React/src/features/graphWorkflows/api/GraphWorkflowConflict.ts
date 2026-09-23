@@ -28,6 +28,8 @@ export const graphWorkflowConflictTypes = {
 	rerunConfirmationRequired: "GraphWorkflowRerunConfirmationRequired",
 	/** Attachments were sent to a workflow that does not accept them, or with an answer to a parked ChatInput. */
 	attachmentsNotAccepted: "GraphWorkflowAttachmentsNotAccepted",
+	/** A steer on a node run that already holds `MaxSteersPerNode` steers. Nothing was recorded. */
+	steerLimitReached: "GraphWorkflowSteerLimitReached",
 } as const;
 
 export interface GraphWorkflowConflict {

@@ -102,6 +102,34 @@ public sealed record GraphWorkflowNodeRunSnapshot
 
     /// <summary>The chat message this row's result was published as; null until published and on every row that never publishes.</summary>
     public Guid? PublishedMessageId { get; init; }
+
+    /// <summary>The operator's steering entries, oldest first. Empty on every row nobody steered.</summary>
+    public IReadOnlyList<GraphWorkflowSteeringEntry> Steering { get; init; } = [];
+}
+
+/// <summary>
+///     One operator steer of a running Agent or LLM call row: the intent the steer command commits and the dispatcher
+///     tick applies. <see cref="Applied" /> is null until a tick judged it.
+/// </summary>
+/// <remarks>
+///     <see cref="Attempt" /> and <see cref="InvocationId" /> are the row's as the steer found it, which is what the
+///     tick compares: a row that settled or moved to another attempt since is not the work the operator steered.
+/// </remarks>
+public sealed record GraphWorkflowSteeringEntry
+{
+    public required Guid OperationId { get; init; }
+
+    public required string Message { get; init; }
+
+    public required long AtUtc { get; init; }
+
+    public required int Attempt { get; init; }
+
+    public required Guid? InvocationId { get; init; }
+
+    public string? SteeredBySubject { get; init; }
+
+    public bool? Applied { get; init; }
 }
 
 /// <summary>
@@ -316,6 +344,29 @@ public sealed class TransitionGraphWorkflowNodeRunCommand
     public bool IncrementAttempt { get; init; }
 
     public string? EventType { get; init; }
+
+    /// <summary>Steering entries this move applies: stamped <c>applied: true</c> in the same transaction.</summary>
+    public IReadOnlyList<Guid> AppliedSteeringOperationIds { get; init; } = [];
+}
+
+/// <summary>
+///     A steer's intent, appended to the row only while the run is live, the row is <c>Queued</c> or <c>Running</c>,
+///     no entry carries <see cref="OperationId" /> yet and fewer than <see cref="MaxEntries" /> exist.
+/// </summary>
+/// <remarks>The store stamps the entry's instant, attempt and invocation from the row it appends to.</remarks>
+public sealed record AppendGraphWorkflowSteeringCommand
+{
+    public required Guid RunId { get; init; }
+
+    public required Guid NodeRunId { get; init; }
+
+    public required Guid OperationId { get; init; }
+
+    public required string Message { get; init; }
+
+    public required string? SteeredBySubject { get; init; }
+
+    public required int MaxEntries { get; init; }
 }
 
 /// <summary>
@@ -555,6 +606,18 @@ public interface IGraphWorkflowStore
     Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default);
 
     Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Appends a steering entry as one conditional write. <see langword="null" /> means the row, the run or the entry
+    ///     count no longer allowed it (or the operation id is already there): re-read and answer from the row.
+    /// </summary>
+    Task<GraphWorkflowMutationResult?> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Stamps an unapplied steering entry <c>applied: false</c> and appends <c>node.steer-ignored</c>, in one
+    ///     transaction. <see langword="null" /> means the entry was already judged.
+    /// </summary>
+    Task<GraphWorkflowMutationResult?> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default);
 

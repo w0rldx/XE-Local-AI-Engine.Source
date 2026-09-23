@@ -17,6 +17,7 @@ import {
 	chatGraph,
 	chatWorkflowEvents,
 	graphWorkflowRun,
+	graphWorkflowRunEvent,
 	graphWorkflowRunSummary,
 	graphWorkflowTestGuid,
 	graphWorkflowTestIds,
@@ -192,5 +193,39 @@ describe("WorkflowActivityBlock", () => {
 		const row = await screen.findByTestId("chat-workflow-activity-node-code");
 		expect(within(row).getByTestId("live-detail")).toBeTruthy();
 		expect(screen.getAllByTestId("live-detail")).toHaveLength(1);
+	});
+
+	it("marks a steered node and a steer that arrived after the node finished, without calling it a retry", async () => {
+		server.use(
+			jsonRoute(
+				"get",
+				`graph-workflows/runs/${runId}`,
+				graphWorkflowRun({
+					run: graphWorkflowRunSummary({ status: "Running" }),
+					graph: chatGraph,
+					nodeRuns: [makeNodeRun({ nodeKey: "code", kind: "LlmCall", status: "Running", completedAtUtc: null })],
+				}),
+			),
+			jsonRoute(
+				"get",
+				`graph-workflows/runs/${runId}/events`,
+				chatWorkflowEvents({
+					events: [
+						graphWorkflowRunEvent({ seq: 1, eventType: "node.steered", nodeKey: "code", detail: { message: "Use Rust" } }),
+						graphWorkflowRunEvent({ seq: 2, eventType: "node.steer-ignored", nodeKey: "code" }),
+					],
+					lastSeq: 2,
+				}),
+			),
+		);
+
+		renderWithProviders(<WorkflowActivityBlock runId={runId} workflowName="Support triage" />);
+
+		await screen.findByTestId("chat-workflow-activity-node-code");
+		const markers = await screen.findAllByTestId("chat-workflow-activity-steer-code");
+		expect(markers.map((marker) => marker.textContent)).toEqual([
+			i18next.t("pages.chat.workflow.activity.steered", { message: "Use Rust" }),
+			i18next.t("pages.chat.workflow.activity.steerIgnored"),
+		]);
 	});
 });

@@ -195,6 +195,43 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         return bound;
     }
 
+    public async Task<GraphWorkflowRunDetail> SteerAsync(Guid runId,
+        string nodeKey,
+        GraphWorkflowChatSteerRequest request,
+        string? steeredBySubject,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var message = request.Message?.Trim() ?? string.Empty;
+        if (request.OperationId == Guid.Empty || message.Length == 0)
+        {
+            throw new GraphWorkflowValidationException("A steer needs a caller-minted operation id and a message.");
+        }
+
+        var run = await _store.GetRunAsync(runId, cancellationToken);
+        if (run.ConversationId is not { } conversationId)
+        {
+            throw new GraphWorkflowValidationException("Only a run bound to a chat conversation can be steered.");
+        }
+
+        await _guard.EnsureMutableAsync(conversationId, cancellationToken);
+
+        // Resolved BEFORE the insert, so an unknown node key answers 404 without writing a message.
+        _ = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
+        var messageId = GraphWorkflowChatIds.SteerMessage(request.OperationId, runId, nodeKey);
+        if (await _persistence.GetMessageConversationIdAsync(messageId, cancellationToken) is { } owner && owner != conversationId)
+        {
+            throw new GraphWorkflowRunConflictException($"Operation '{request.OperationId}' already steered a run in another conversation.");
+        }
+
+        return await InsertThenAsync(conversationId,
+            messageId,
+            message,
+            () => _runs.SteerAsync(runId, nodeKey, request.OperationId, message, steeredBySubject, cancellationToken),
+            cancellationToken);
+    }
+
     public async Task CancelBoundRunAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         // Bounded: a version bump between the run service's read and write (a tick moving the run) loses the cancel, so the run
@@ -318,8 +355,8 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
     }
 
     /// <summary>
-    ///     Message first, then the run write. When the write loses a race or refuses the request (every validation throw is
-    ///     pre-commit) and THIS call wrote the message, the message is removed again: a refused send leaves no orphan turn.
+    ///     Message first, then the run write. When the write loses a race or refuses the request (every validation and
+    ///     not-found throw is pre-commit) and THIS call wrote the message, it is removed again: no orphan turn.
     /// </summary>
     private async Task<T> InsertThenAsync<T>(Guid conversationId, Guid messageId, string content, Func<Task<T>> write, CancellationToken cancellationToken)
     {
@@ -328,9 +365,11 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         {
             return await write();
         }
-        catch (Exception exception) when (inserted && exception is GraphWorkflowRunBusyException
+        catch (Exception exception) when (inserted && exception is GraphWorkflowNotFoundException
+                                                                 or GraphWorkflowRunBusyException
                                                                  or GraphWorkflowGateAlreadyDecidedException
                                                                  or GraphWorkflowRunConflictException
+                                                                 or GraphWorkflowSteerLimitReachedException
                                                                  or GraphWorkflowInvalidTransitionException
                                                                  or GraphWorkflowValidationException)
         {

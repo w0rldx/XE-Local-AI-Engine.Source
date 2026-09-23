@@ -297,6 +297,7 @@ export function pendingPauseNodeRun(overrides: Partial<GraphWorkflowNodeRunRespo
 		startedAtUtc: 1_700_000_220_000,
 		completedAtUtc: null,
 		updatedAtUtc: 1_700_000_220_000,
+		steering: [],
 		...overrides,
 	};
 }
@@ -385,6 +386,7 @@ export function agentNodeRunDetail(overrides: Partial<GraphWorkflowNodeRunRespon
 		startedAtUtc: 1_700_000_200_000,
 		completedAtUtc: 1_700_000_210_000,
 		updatedAtUtc: 1_700_000_210_000,
+		steering: [],
 		...overrides,
 	};
 }

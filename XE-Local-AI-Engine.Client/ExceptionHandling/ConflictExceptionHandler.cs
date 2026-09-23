@@ -61,6 +61,7 @@ public class ConflictExceptionHandler : IExceptionHandler
             GraphWorkflowRunBusyException => NodeConflictProblemType.GraphWorkflowRunBusy,
             GraphWorkflowRerunConfirmationRequiredException => NodeConflictProblemType.GraphWorkflowRerunConfirmationRequired,
             GraphWorkflowAttachmentsNotAcceptedException => NodeConflictProblemType.GraphWorkflowAttachmentsNotAccepted,
+            GraphWorkflowSteerLimitReachedException => NodeConflictProblemType.GraphWorkflowSteerLimitReached,
             ExternalAppOperationInFlightException => NodeConflictProblemType.ExternalAppOperationInFlight,
             ExternalAppInvalidTransitionException => NodeConflictProblemType.ExternalAppInvalidTransition,
             ExternalAppAlreadyInstalledException => NodeConflictProblemType.ExternalAppAlreadyInstalled,

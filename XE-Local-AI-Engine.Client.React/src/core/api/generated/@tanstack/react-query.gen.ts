@@ -418,6 +418,7 @@ import {
 	startTranscriptionModelDownload,
 	startWhisperCppSourceBuild,
 	startWorkSession,
+	steerGraphWorkflowNodeRun,
 	stopExternalApp,
 	stopProcessCapture,
 	suggestComparison,
@@ -1457,6 +1458,9 @@ import type {
 	StartWorkSessionData,
 	StartWorkSessionError,
 	StartWorkSessionResponse,
+	SteerGraphWorkflowNodeRunData,
+	SteerGraphWorkflowNodeRunError,
+	SteerGraphWorkflowNodeRunResponse,
 	StopExternalAppData,
 	StopExternalAppError,
 	StopExternalAppResponse,
@@ -6339,6 +6343,30 @@ export const decideGraphWorkflowNodeRunMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await decideGraphWorkflowNodeRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const steerGraphWorkflowNodeRunMutation = (
+	options?: Partial<Options<SteerGraphWorkflowNodeRunData>>,
+): UseMutationOptions<
+	SteerGraphWorkflowNodeRunResponse,
+	AxiosError<SteerGraphWorkflowNodeRunError>,
+	Options<SteerGraphWorkflowNodeRunData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SteerGraphWorkflowNodeRunResponse,
+		AxiosError<SteerGraphWorkflowNodeRunError>,
+		Options<SteerGraphWorkflowNodeRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await steerGraphWorkflowNodeRun({
 				...options,
 				...fnOptions,
 				throwOnError: true,

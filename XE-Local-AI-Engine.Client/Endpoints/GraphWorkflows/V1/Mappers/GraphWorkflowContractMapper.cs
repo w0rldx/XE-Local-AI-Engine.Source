@@ -198,7 +198,15 @@ internal static class GraphWorkflowContractMapper
             InvocationId = value.InvocationId,
             StartedAtUtc = value.StartedAtUtc,
             CompletedAtUtc = value.CompletedAtUtc,
-            UpdatedAtUtc = value.UpdatedAtUtc
+            UpdatedAtUtc = value.UpdatedAtUtc,
+            Steering = [.. value.Steering.Select(static entry => new GraphWorkflowSteeringEntryResponse
+            {
+                OperationId = entry.OperationId,
+                Message = entry.Message,
+                AtUtc = entry.AtUtc,
+                Attempt = entry.Attempt,
+                Applied = entry.Applied
+            })]
         };
     }
 

@@ -516,6 +516,78 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             cancellationToken);
     }
 
+    public Task<GraphWorkflowMutationResult?> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        EnsureNotBlank(command.Message, nameof(command.Message));
+
+        return TryExecuteMutationAsync(command.RunId,
+            GraphWorkflowVersions.Any,
+            async run =>
+            {
+                // Every precondition re-checked against the rows this transaction holds, so a steer racing a cancel, a settle or a second steer declines.
+                if (run.Status is not (GraphWorkflowRunStatus.Running or GraphWorkflowRunStatus.WaitingForApproval))
+                {
+                    return null;
+                }
+
+                var nodeRun = await _dbContext.GraphWorkflowNodeRuns
+                                              .SingleOrDefaultAsync(entity => entity.Id == command.NodeRunId
+                                                                              && entity.RunId == run.Id
+                                                                              && (entity.Status == GraphWorkflowNodeRunStatus.Queued
+                                                                                  || entity.Status == GraphWorkflowNodeRunStatus.Running),
+                                                  cancellationToken);
+                if (nodeRun is null)
+                {
+                    return null;
+                }
+
+                var entries = SteeringOf(nodeRun.SteeringJson);
+                if (entries.Count >= command.MaxEntries || entries.Any(entry => entry.OperationId == command.OperationId))
+                {
+                    return null;
+                }
+
+                nodeRun.SteeringJson = SteeringBytes([.. entries, new GraphWorkflowSteeringEntry
+                {
+                    OperationId = command.OperationId,
+                    Message = command.Message,
+                    AtUtc = Now(),
+                    Attempt = nodeRun.Attempt,
+                    InvocationId = nodeRun.InvocationId,
+                    SteeredBySubject = command.SteeredBySubject
+                }]);
+                nodeRun.UpdatedAtUtc = Now();
+
+                // Intent only: the tick that applies it writes node.steered, so the log records what happened rather than what was asked.
+                return new MutationOutcome { EventType = null, NodeKey = nodeRun.NodeKey, DetailJson = null };
+            },
+            cancellationToken,
+            bumpVersion: false);
+    }
+
+    public Task<GraphWorkflowMutationResult?> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
+        TryExecuteMutationAsync(runId,
+            GraphWorkflowVersions.Any,
+            async run =>
+            {
+                var nodeRun = await _dbContext.GraphWorkflowNodeRuns.SingleOrDefaultAsync(entity => entity.Id == nodeRunId && entity.RunId == run.Id, cancellationToken);
+                if (nodeRun is null || StampSteering(nodeRun, [operationId], applied: false) is not [var entry])
+                {
+                    return null;
+                }
+
+                nodeRun.UpdatedAtUtc = Now();
+                return new MutationOutcome
+                {
+                    EventType = GraphWorkflowEventTypes.NodeSteerIgnored,
+                    NodeKey = nodeRun.NodeKey,
+                    DetailJson = Utf8(JsonSerializer.Serialize(new SteerDetailPayload { OperationId = entry.OperationId, Message = entry.Message, Attempt = entry.Attempt }, JsonOptions))
+                };
+            },
+            cancellationToken,
+            bumpVersion: false);
+
     public async Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default)
     {
         var nodeRuns = await _dbContext.GraphWorkflowNodeRuns.AsNoTracking()
@@ -906,6 +978,11 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             nodeRun.InvocationId = invocationId;
         }
 
+        if (command.AppliedSteeringOperationIds.Count > 0)
+        {
+            _ = StampSteering(nodeRun, command.AppliedSteeringOperationIds, applied: true);
+        }
+
         nodeRun.UpdatedAtUtc = now;
         return new MutationOutcome
         {
@@ -1087,8 +1164,40 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             StartedAtUtc = nodeRun.StartedAtUtc,
             CompletedAtUtc = nodeRun.CompletedAtUtc,
             UpdatedAtUtc = nodeRun.UpdatedAtUtc,
-            PublishedMessageId = nodeRun.PublishedMessageId
+            PublishedMessageId = nodeRun.PublishedMessageId,
+            Steering = SteeringOf(nodeRun.SteeringJson)
         };
+
+    private static List<GraphWorkflowSteeringEntry> SteeringOf(byte[]? steeringJson) =>
+        steeringJson is null ? [] : JsonSerializer.Deserialize<List<GraphWorkflowSteeringEntry>>(steeringJson, JsonOptions) ?? [];
+
+    private static byte[] SteeringBytes(IReadOnlyList<GraphWorkflowSteeringEntry> entries) =>
+        JsonSerializer.SerializeToUtf8Bytes(entries, JsonOptions);
+
+    /// <summary>Judges the still-unjudged entries named, and answers the ones it stamped. An entry is judged once.</summary>
+    private static List<GraphWorkflowSteeringEntry> StampSteering(GraphWorkflowNodeRun nodeRun, IReadOnlyCollection<Guid> operationIds, bool applied)
+    {
+        var entries = SteeringOf(nodeRun.SteeringJson);
+        var stamped = new List<GraphWorkflowSteeringEntry>();
+        for (var index = 0; index < entries.Count; index++)
+        {
+            if (entries[index].Applied is null && operationIds.Contains(entries[index].OperationId))
+            {
+                entries[index] = entries[index] with
+                {
+                    Applied = applied
+                };
+                stamped.Add(entries[index]);
+            }
+        }
+
+        if (stamped.Count > 0)
+        {
+            nodeRun.SteeringJson = SteeringBytes(entries);
+        }
+
+        return stamped;
+    }
 
     private async Task RollbackAsync(IDbContextTransaction transaction)
     {
@@ -1119,6 +1228,16 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
 
     /// <summary>The gate.decided detail: which pause, and what was answered. Read by name, so camelCase like every other.</summary>
     private sealed record GateDecidedDetailPayload(string NodeKey, string Decision);
+
+    /// <summary>The node.steer-ignored detail: which steer arrived too late, its text, and the attempt it was aimed at.</summary>
+    private sealed class SteerDetailPayload
+    {
+        public required Guid OperationId { get; init; }
+
+        public required string Message { get; init; }
+
+        public required int Attempt { get; init; }
+    }
 
     /// <summary>The node.published detail: which chat message the result became.</summary>
     private sealed class PublishedDetailPayload

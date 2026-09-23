@@ -32,7 +32,8 @@ public sealed class GraphWorkflowOptionsValidator : IValidateOptions<GraphWorkfl
             (nameof(options.DispatchIntervalMilliseconds), options.DispatchIntervalMilliseconds, 100),
             (nameof(options.MaxConcurrentRuns), options.MaxConcurrentRuns, 1),
             (nameof(options.MaxRunInputBytes), options.MaxRunInputBytes, 1024),
-            (nameof(options.EventReplayLimit), options.EventReplayLimit, 1)
+            (nameof(options.EventReplayLimit), options.EventReplayLimit, 1),
+            (nameof(options.MaxSteersPerNode), options.MaxSteersPerNode, 1)
         ];
 
         var failures = new List<string>();

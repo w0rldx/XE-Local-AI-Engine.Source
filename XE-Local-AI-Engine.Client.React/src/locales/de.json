@@ -1270,7 +1270,8 @@
 					"view": "Workflow ansehen",
 					"dismiss": "Ausblenden",
 					"stop": "Stoppen",
-					"defaultModel": "Standardmodell"
+					"defaultModel": "Standardmodell",
+					"intervene": "Eingreifen"
 				},
 				"activity": {
 					"title": "Workflow: {{name}}",
@@ -1280,7 +1281,10 @@
 					"published": "Im Chat veröffentlicht",
 					"inputAsked": "Gefragt: {{prompt}}",
 					"inputAnswered": "Gefragt: {{prompt}} — Antwort: {{answer}}",
-					"toolResult": "{{tool}}: {{summary}}"
+					"toolResult": "{{tool}}: {{summary}}",
+					"steered": "Gesteuert: {{message}}",
+					"steeredNoText": "Gesteuert",
+					"steerIgnored": "Die Steuerung kam an, nachdem der Knoten fertig war"
 				},
 				"rerun": {
 					"title": "Workflow erneut ausführen?",
@@ -1307,7 +1311,15 @@
 					"generating": "Generiert",
 					"tokens_one": "{{count}} Token",
 					"tokens_other": "{{count}} Token"
-				}
+				},
+				"steer": {
+					"title": "{{node}} steuern",
+					"label": "Was soll der Agent anders machen?",
+					"send": "Steuerung senden",
+					"finished": "Der Knoten war fertig, bevor deine Steuerung ankam.",
+					"capReached": "Dieser Knoten wurde bereits so oft wie möglich gesteuert."
+				},
+				"lockedHintSteer": "Workflow läuft — greife ein oder stoppe ihn."
 			}
 		},
 		"clientNodes": {

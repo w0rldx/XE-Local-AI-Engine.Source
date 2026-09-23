@@ -51,4 +51,10 @@ internal sealed class GraphWorkflowNodeRun
     ///     dispatcher has published it, and forever on a node that does not publish.
     /// </summary>
     public Guid? PublishedMessageId { get; set; }
+
+    /// <summary>
+    ///     The operator's steering entries for this row, a JSON array appended by the steer command and stamped
+    ///     <c>applied</c> by the dispatcher tick. Encrypted: it is operator free text.
+    /// </summary>
+    public byte[]? SteeringJson { get; set; }
 }

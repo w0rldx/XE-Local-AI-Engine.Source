@@ -33,6 +33,7 @@ internal sealed class GraphWorkflowNodeRunConfiguration : IEntityTypeConfigurati
         builder.Property(entity => entity.CompletedAtUtc).HasColumnName("completed_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
         builder.Property(entity => entity.PublishedMessageId).HasColumnName("published_message_id");
+        builder.Property(entity => entity.SteeringJson).HasColumnName("steering_json");
 
         builder.HasOne<GraphWorkflowRun>().WithMany().HasForeignKey(entity => entity.RunId).OnDelete(DeleteBehavior.Cascade);
 

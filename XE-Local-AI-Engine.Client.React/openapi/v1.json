@@ -12364,6 +12364,105 @@
         ]
       }
     },
+    "/api/local/v1/graph-workflows/runs/{runId}/nodes/{nodeKey}/steer": {
+      "post": {
+        "tags": [
+          "Graph-Workflows"
+        ],
+        "operationId": "steerGraphWorkflowNodeRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "nodeKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SteerGraphWorkflowNodeRunRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1SteerGraphWorkflowNodeRunRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/graph-workflows/tools": {
       "get": {
         "tags": [
@@ -34316,7 +34415,8 @@
           "invocationId",
           "startedAtUtc",
           "completedAtUtc",
-          "updatedAtUtc"
+          "updatedAtUtc",
+          "steering"
         ],
         "properties": {
           "id": {
@@ -34372,6 +34472,12 @@
           },
           "updatedAtUtc": {
             "type": "integer"
+          },
+          "steering": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteeringEntryResponse"
+            }
           }
         }
       },
@@ -34587,6 +34693,37 @@
         "properties": {
           "nodeKey": {
             "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteeringEntryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operationId",
+          "message",
+          "atUtc",
+          "attempt",
+          "applied"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "message": {
+            "type": "string"
+          },
+          "atUtc": {
+            "type": "integer"
+          },
+          "attempt": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "applied": {
+            "type": "boolean",
+            "nullable": true
           }
         }
       },
@@ -34815,6 +34952,27 @@
           "runId": {
             "type": "string",
             "format": "guid"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1SteerGraphWorkflowNodeRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operationId",
+          "message"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
           }
         }
       },

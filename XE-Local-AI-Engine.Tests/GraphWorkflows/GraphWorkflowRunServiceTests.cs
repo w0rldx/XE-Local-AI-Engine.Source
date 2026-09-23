@@ -749,6 +749,12 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
     public Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default) =>
         _inner.MarkNodeRunPublishedAsync(runId, nodeRunId, messageId, cancellationToken);
 
+    public Task<GraphWorkflowMutationResult?> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default) =>
+        _inner.AppendNodeRunSteeringAsync(command, cancellationToken);
+
+    public Task<GraphWorkflowMutationResult?> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
+        _inner.IgnoreNodeRunSteeringAsync(runId, nodeRunId, operationId, cancellationToken);
+
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
         _inner.TransitionRunAsync(command, cancellationToken);
 

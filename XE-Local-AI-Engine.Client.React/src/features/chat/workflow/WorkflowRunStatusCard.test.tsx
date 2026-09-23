@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import i18next from "i18next";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -190,5 +190,63 @@ describe("WorkflowRunStatusCard", () => {
 		// The next content delta arrives with the phase cleared: the streamed text is the evidence of generation.
 		renderWithProviders(<WorkflowNodeLiveDetail nodeKey="lookup" stream={{ ...base, content: "The invoice" }} />);
 		expect(screen.getByTestId("chat-workflow-live-lookup").textContent).toBe(i18next.t("pages.chat.workflow.live.generating"));
+	});
+
+	it("offers Intervene only on a live Agent or LLM Call, and never while a cancel drains", () => {
+		const agentRunning = toWorkflowPath(eightNodeGraph, [makeNodeRun({ nodeKey: "analyze", kind: "Agent", status: "Running" })]);
+		const onSteer = vi.fn(async () => undefined);
+
+		const { unmount } = renderWithProviders(
+			<WorkflowRunStatusCard
+				runId="run-1"
+				definitionId="def-1"
+				workflowName="Support triage"
+				status="Running"
+				path={runningPath}
+				stopping={false}
+				onStop={vi.fn()}
+				onDismiss={vi.fn()}
+				onSteer={onSteer}
+			/>,
+		);
+		// The running node is a Tool.
+		expect(screen.queryByTestId("chat-workflow-status-intervene")).toBeNull();
+		unmount();
+
+		renderCard("Cancelling", { path: agentRunning, onSteer });
+		expect(screen.queryByTestId("chat-workflow-status-intervene")).toBeNull();
+
+		renderCard("Running", { path: agentRunning, onSteer });
+		expect(screen.getByTestId("chat-workflow-status-intervene").textContent).toBe(
+			i18next.t("pages.chat.workflow.status.intervene"),
+		);
+	});
+
+	it("sends the typed steering to the run and node captured at open, and keeps the draft when it is refused", async () => {
+		const agentRunning = toWorkflowPath(eightNodeGraph, [makeNodeRun({ nodeKey: "analyze", kind: "Agent", status: "Running" })]);
+		const refusal = i18next.t("pages.chat.workflow.steer.finished");
+		const onSteer = vi
+			.fn<(runId: string, nodeKey: string, message: string) => Promise<void>>()
+			.mockRejectedValueOnce(new Error(refusal))
+			.mockResolvedValueOnce(undefined);
+		renderCard("Running", { path: agentRunning, onSteer });
+
+		fireEvent.click(screen.getByTestId("chat-workflow-status-intervene"));
+		const dialog = await screen.findByTestId("chat-workflow-steer-dialog");
+		const send = within(dialog).getByTestId("chat-workflow-steer-send");
+		expect(send).toHaveProperty("disabled", true);
+		const textarea = within(dialog).getByLabelText(i18next.t("pages.chat.workflow.steer.label"));
+		fireEvent.change(textarea, { target: { value: "  Use Rust instead  " } });
+
+		fireEvent.click(send);
+		expect(await within(dialog).findByTestId("chat-workflow-steer-error")).toHaveProperty("textContent", refusal);
+		expect(textarea).toHaveProperty("value", "  Use Rust instead  ");
+
+		fireEvent.click(send);
+		await waitFor(() => expect(screen.queryByTestId("chat-workflow-steer-dialog")).toBeNull());
+		expect(onSteer.mock.calls).toEqual([
+			["run-1", "analyze", "Use Rust instead"],
+			["run-1", "analyze", "Use Rust instead"],
+		]);
 	});
 });

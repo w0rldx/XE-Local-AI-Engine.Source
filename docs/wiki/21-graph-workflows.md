@@ -403,6 +403,9 @@ recovery does not pay for one.
 pollable *result* and never transitions a row itself; the only other writers to a run are the human command paths.
 One tick, in order, and the order is load-bearing:
 
+0. **Steer** (§3.7). Judge every unjudged steer entry: a row still `Queued`/`Running` on the steered attempt and
+   invocation goes back to `Pending` on the same attempt; any other entry is recorded ignored. Before the poll, so the
+   poll's superseded-entry sweep cancels the old turn in the same tick.
 1. **Poll.** Ask every lane what became of the work it was driving and settle what landed — before anything reads the
    rows for a decision, or the run judges its graph against a row that is only still `Running` because nothing asked.
    A row its lane had nothing to say about is offered to its deadline instead.
@@ -483,6 +486,41 @@ fails, the tick **skips the recompute** (which could be the one that ends the ru
 and counts as work so it re-signals, at most three ticks per run (`GraphWorkflowDispatcher.MaxPublishRetries`, in
 memory) — after that the run completes without the message. A run that is cancelled drains without publishing.
 
+### 3.7 Steer
+
+Operator ruling D4 (2026-09-23): the running Agent or LLM Call node of a **chat-bound** run can be steered. `POST
+graph-workflows/runs/{runId}/nodes/{nodeKey}/steer` with `{ operationId, message }` goes through
+`IGraphWorkflowChatService.SteerAsync`, which writes the text as a user message of the run's conversation under the
+deterministic id `GraphWorkflowChatIds.SteerMessage(operationId, runId, nodeKey)` and then calls
+`IGraphWorkflowRunService.SteerAsync`. An unknown node key is a 404 before anything is written. When the run service
+refuses, not-found included, the message is removed again. The service **commits intent only**. It appends
+`{ operationId, message, atUtc, attempt, invocationId, steeredBySubject, applied: null }` to the encrypted
+`graph_workflow_node_runs.steering_json` (migration `AddGraphWorkflowSteering`, AAD purpose
+`graph_workflow_node_run_steering_json`), signals, and answers 202 with the run detail. The append is a
+compare-and-set that re-checks the run, the row and the cap inside its transaction. It does not bump the run version.
+
+Refusals: 400 for a node that is not `Agent` or `LlmCall`, for a run with no conversation, and for a blank or oversized
+message (the chat-input answer cap, `min(MaxMessageSizeKb × 1024, MaxOutputJsonBytes / 2)`). 409
+`GraphWorkflowSteerLimitReached` for a row already holding `MaxSteersPerNode` entries. 409 `GraphWorkflowRunConflict`
+for a `Pending`, `Cancelling` or terminal run, for a row that is not `Queued`/`Running`, and for a reused
+`operationId` with a different message or person.
+The same `operationId` with the same message is a replay and answers 202 again. Idempotency is per entry, not per
+attempt, because a steer never changes the attempt.
+
+The **dispatcher applies it** (§3.4 step 0), because the store's node move has no from-status predicate and only
+inside the advance gate is "still running" still true when the write lands. A row still `Queued`/`Running` on the
+entry's `attempt`, and on its `invocationId` when the steer saw one, moves to `Pending` with `node.steered`, and its entries are stamped `applied: true` in the same transaction. Every
+applied entry gets its own `node.steered` event (two steers between ticks are one reset and two events). Any other
+unjudged entry is stamped `applied: false` with `node.steer-ignored`. Both details are `{ operationId, message,
+attempt }`, so the activity feed renders a running node's steer from the event alone. A `Cancelling` run
+ignores them all, and so does a terminal one: a steer can commit after the apply pass of the tick that ends the run,
+so the terminal early return in `AdvanceCoreAsync` judges it on the tick the steer's own signal brings. The poll's `ForgetSupersededAsync` then discards the old flight, and the invocation executor's
+discard hook cancels its invocation. The next admit re-runs the node on the **same attempt**: no attempt is spent,
+`MaxTotalAttempts` is not charged, and the restart reconciler is unchanged, since a `Pending` row is not interrupted
+work. The re-run's seed prompt ends with an `## Operator steering` section listing the applied entries, oldest first
+(§4.2, §4.2a). Each reset restarts the node deadline, so `MaxSteersPerNode` is the bound. Cross-node routing stays
+absent (register 22, D6(a)).
+
 ---
 
 ## 4. The node kinds
@@ -559,6 +597,10 @@ after the instructions and before the upstream map, a `## Conversation request` 
 b.png` line (names only; content is a later slice). Agent nodes have no `inputBindings`, and after a router the upstream is
 the router's choice rather than the message, so without it an agent downstream of a DecisionModel or Condition never sees
 what the user asked (live-round finding, 2026-09-23). A `Standard` graph's prompt is unchanged byte for byte.
+
+**A steered row's prompt ends with an `## Operator steering` section** (§3.7): the row's applied steers, numbered,
+oldest first, after everything above. An LLM Call gets the same section after its bound prompt. A row nobody steered
+sends a prompt byte-identical to one before steering existed.
 
 Output: `{ "text": …, "json": … | null, "usage": { inputTokens, outputTokens, totalTokens, reasoningTokens,
 durationMs, finishReason, model } }`. Every usage member is nullable: the runner reports what its provider gave it,
@@ -856,12 +898,13 @@ Every route is Operator-gated.
 | `graph-workflows/runs/{runId}/cancel` | 202. Live node runs drain first, so the run reads `Cancelling`. A repeat cancel is an idempotent 202. |
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}` | One node run in full, input and output documents included. |
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}/decide` | Answers a pause (§4.6) or a chat input (§4.8). |
+| `graph-workflows/runs/{runId}/nodes/{nodeKey}/steer` | POST `{ operationId, message }` → 202 with the run detail. Steers the queued or running Agent/LLM Call node of a chat-bound run (§3.7). 400 for the request, 404 for an unknown run or node, 409 `GraphWorkflowSteerLimitReached` at the cap, 409 `GraphWorkflowRunConflict` for the run's state or a reused id. The node-run read carries `steering: [{ operationId, message, atUtc, attempt, applied }]`. |
 | `graph-workflows/runs/{runId}/events` | The event log, paged from an **exclusive** `afterSeq`, capped at `EventReplayLimit` — which the response reports rather than leaving a client to infer it from a full page. |
 | `graph-workflows/conversations/{conversationId}/messages` | POST a chat send into workflow mode → 202 `{ runId, messageId, action }` (§3.6, [Chat](05-chat.md)). 409s: `GraphWorkflowRunBusy`, `GraphWorkflowRerunConfirmationRequired`, `GraphWorkflowAttachmentsNotAccepted`. |
 | `graph-workflows/conversations/{conversationId}/runs` | GET the conversation's bound runs newest first (`?limit=`, default 20): run summary, `definitionId`, `definitionName` (null once deleted), `triggerMessageId`, `pendingInput`, `steerable`. |
 
-Five routes cap the request body at **1 MiB** (`GraphWorkflowRequestSizeLimit`): create, update and validate, which
-carry a graph, start-run, which carries an input document, and the chat send. Without it they would inherit Kestrel's 30 MB default
+Six routes cap the request body at **1 MiB** (`GraphWorkflowRequestSizeLimit`): create, update and validate, which
+carry a graph, start-run, which carries an input document, the chat send and the steer. Without it they would inherit Kestrel's 30 MB default
 and a body that size would be parsed, walked and hashed before the node cap could refuse it. Kestrel enforces the cap
 as it reads, inside model binding, so the 413 comes from `RequestBodyTooLargeExceptionHandler` rather than from the
 endpoint. A name is capped at 200 characters, a description at 1024.
@@ -917,10 +960,12 @@ the startup reconciler `ReconcileNonTerminalNodeRunsAsync`. [API & Hubs](09-api-
 depends only on `IGraphWorkflowEventPublisher`; the host swaps the hub-backed implementation in over a registered
 no-op, so a host without the hub stays resolvable.
 
-The event vocabulary is the closed seventeen-token `GraphWorkflowEventTypes` catalog — `run.created`, `run.started`,
+The event vocabulary is the closed nineteen-token `GraphWorkflowEventTypes` catalog — `run.created`, `run.started`,
 `run.waiting`, `run.completed`, `run.failed`, `run.cancelled`, `node.queued`, `node.started`, `node.completed`,
 `node.failed`, `node.skipped`, `node.cancelled`, `node.interrupted`, `node.retried`, `gate.requested`,
-`gate.decided`, and `node.published` (amendment 2026-09-23, Chat Workflows S1: a result became a chat message, §3.6). The feed is append-only and durable, so a token written once is a token every later reader must
+`gate.decided`, `node.published` (amendment 2026-09-23, Chat Workflows S1: a result became a chat message, §3.6),
+and `node.steered` / `node.steer-ignored` (amendment 2026-09-23, Chat Workflows S3: a steer reset its row, or arrived
+after the row settled, §3.7). The feed is append-only and durable, so a token written once is a token every later reader must
 understand: extend it by amendment, never silently. Event details are small structured payloads — a failure summary,
 a decision outcome — and never a transcript.
 
@@ -1054,6 +1099,7 @@ environment variable such as `GraphWorkflows__MaxConcurrentRuns`.
 | `MaxConcurrentRuns` | 4 | Executing runs at once — a run parked on a person holds no slot (§3.4) — and the size of both the shared Agent/LLM Call/DecisionModel invocation lane and the Tool lane. Runs above the cap **wait**; they are not refused. |
 | `MaxRunInputBytes` | 65 536 | A run-start input document, checked in `GraphWorkflowRunService.StartAsync` (§3.1) rather than at the endpoint, so every caller of the service is held to it. Also the budget for the inlined `upstream` map in an Agent prompt and the complete user prompt with bound JSON data in an LLM Call. |
 | `EventReplayLimit` | 200 | Events one replay may return, hub snapshot and events route alike. Ceiling 1000 — one replay is one response body. |
+| `MaxSteersPerNode` | 5 | Steers one node run may take (§3.7). Each applied steer re-runs the node on the same attempt and restarts its deadline, so the attempt budget does not bound steering; this does. Floored at 1. |
 
 `GraphWorkflowOptionsValidator` checks at startup what the data annotations cannot: a semantic floor under each
 budget (a `MaxNodesPerDefinition` of 1 passes `[Range(1, …)]` and still admits no graph, since every graph carries a

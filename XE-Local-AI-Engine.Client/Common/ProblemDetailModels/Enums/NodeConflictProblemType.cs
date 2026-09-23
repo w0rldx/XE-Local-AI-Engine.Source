@@ -137,6 +137,9 @@ public enum NodeConflictProblemType
     /// <summary>Attachments sent to a workflow that does not accept them, or with the answer to an input request.</summary>
     GraphWorkflowAttachmentsNotAccepted,
 
+    /// <summary>A steer of a node run that already took <c>GraphWorkflows:MaxSteersPerNode</c> steers. Stop the run instead.</summary>
+    GraphWorkflowSteerLimitReached,
+
     /// <summary>
     ///     A second lifecycle command on an external-app instance whose per-instance gate is already held — wait, or
     ///     cancel the operation that holds it.
