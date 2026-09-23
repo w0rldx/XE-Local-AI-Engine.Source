@@ -162,29 +162,56 @@ class PruneTests(unittest.TestCase):
 
 
 class CommandLineTests(unittest.TestCase):
-    def test_identity_cli_emits_every_documented_field(self) -> None:
+    DOCUMENTED_FIELDS = frozenset(
+        {
+            "skip",
+            "anchor_tag",
+            "anchor_version",
+            "previous_dev_tag",
+            "previous_dev_sha",
+            "dev_version",
+            "dev_tag",
+            "notes_base_ref",
+            "source_sha",
+        }
+    )
+
+    def test_compute_identity_emits_every_documented_field(self) -> None:
+        identity = MODULE.compute_identity(
+            anchor_tag=ANCHOR_TAG,
+            anchor_version=ANCHOR_VERSION,
+            dev_tags=[],
+            tag_shas={},
+            current_sha="a" * 40,
+            date=DATE,
+        )
+        self.assertEqual(self.DOCUMENTED_FIELDS, set(identity))
+
+    def test_identity_cli_matches_the_checkout_it_runs_in(self) -> None:
+        # CI checks out with fetch-depth 1 and no tags, so the anchor lookup legitimately fails there; the
+        # contract is asserted in whichever mode this checkout is in, never skipped and never vacuous.
+        anchor = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0", "--match", "v*", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         completed = subprocess.run(
             [sys.executable, str(MODULE_PATH), "identity", "--sha", "HEAD", "--repo-root", str(REPO_ROOT)],
             capture_output=True,
             text=True,
-            check=True,
+            check=False,
         )
+        if anchor.returncode != 0:
+            self.assertEqual(2, completed.returncode, completed.stderr)
+            self.assertIn("no reachable v* tag", completed.stderr)
+            return
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
         payload = json.loads(completed.stdout)
-        self.assertEqual(
-            {
-                "skip",
-                "anchor_tag",
-                "anchor_version",
-                "previous_dev_tag",
-                "previous_dev_sha",
-                "dev_version",
-                "dev_tag",
-                "notes_base_ref",
-                "source_sha",
-            },
-            set(payload),
-        )
-        self.assertTrue(payload["anchor_tag"].startswith("v"))
+        self.assertEqual(self.DOCUMENTED_FIELDS, set(payload))
+        self.assertEqual(anchor.stdout.strip(), payload["anchor_tag"])
         self.assertTrue(payload["dev_tag"].startswith("dev/"))
         self.assertEqual(1, payload["dev_version"].count("-"))
         self.assertEqual(40, len(payload["source_sha"]))
