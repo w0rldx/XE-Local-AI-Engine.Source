@@ -29,7 +29,8 @@
 #   That is not the shape you would guess from the corruption story above. Each worktree has its own
 #   bin/ and obj/, so one worktree's build cannot rewrite another's assemblies, and assembly safety
 #   alone would be satisfied by a per-worktree lock. The reason the lock is shared anyway is the
-#   MACHINE: several lanes each holding a test host at ~15 GB RSS will exhaust RAM, and a run that
+#   MACHINE: several gates at once, each running JOBS test hosts (about 1.5 GB per batch, more for the
+#   Persistence lane; the constants live in scripts/lib/test-sizing.sh), will exhaust RAM, and a run that
 #   dies to the OOM killer — or merely swaps through a timing-sensitive test — is contaminated in a
 #   way the assembly guard cannot see. Cross-worktree builds therefore serialize BY DESIGN.
 #
@@ -59,7 +60,7 @@
 #   scripts/with-build-lock.sh [options] [--] <command> [args...]
 #
 # Options:
-#   --timeout <seconds>   Max time to wait for the lock (default: ${BUILD_LOCK_TIMEOUT:-1800}).
+#   --timeout <seconds>   Max time to wait for the lock (default: ${BUILD_LOCK_TIMEOUT:-3600}).
 #                         A full Release build + solution test run legitimately takes many minutes,
 #                         so the default is deliberately generous. It is bounded, never infinite.
 #   --lock-file <path>    Lock file to use (default: the SHARED .tmp/build.lock in the main
@@ -72,6 +73,15 @@
 #   XE_BUILD_LOCK_HELD    Set BY this script for the command it runs. If it already names the same
 #                         lock file, the wrapper is a pass-through instead of deadlocking on itself.
 #                         Do not set it by hand — doing so disables locking for that subtree.
+#
+# Visibility (who holds it, who waits)
+#   The holder writes <lock>.owner (pid= started= cwd= worktree= cmd=) and truncates it on exit. A
+#   process that has to wait first registers <lock>.waiters/<pid> (pid= since= cwd= worktree= cmd=),
+#   removed on acquisition or exit; records of dead waiters are pruned whenever the wrapper starts.
+#   While waiting it prints one line a minute:
+#     [build-lock] waiting 03:00/60:00 — held by pid=… (<worktree>, <age>) <cmd>; N waiters ahead
+#   and on timeout the holder's age and progress. scripts/build-lock-status.sh [--json] shows the
+#   same picture on demand, read-only.
 #
 # Re-entrancy
 #   Nesting is safe: an inner wrapper sees XE_BUILD_LOCK_HELD matching its lock file and exec's the
@@ -95,17 +105,18 @@ set -uo pipefail
 # to the -C directory when it is inside it, so a relative answer is joined back onto that same
 # directory before realpath sees it. The else-arm is the pre-existing fallback for a source tree
 # with no git metadata; keep it.
+# The resolution itself lives in scripts/lib/build-lock-common.sh, shared with build-lock-status.sh.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if GIT_COMMON_DIR="$(git -C "${SCRIPT_DIR}" rev-parse --git-common-dir 2>/dev/null)" && [[ -n "${GIT_COMMON_DIR}" ]]; then
-  [[ "${GIT_COMMON_DIR}" == /* ]] || GIT_COMMON_DIR="${SCRIPT_DIR}/${GIT_COMMON_DIR}"
-  SHARED_REPO_ROOT="$(dirname "$(realpath "${GIT_COMMON_DIR}")")"
-else
-  SHARED_REPO_ROOT="$(dirname "${SCRIPT_DIR}")"
-fi
-SHARED_BUILD_LOCK="${SHARED_REPO_ROOT}/.tmp/build.lock"
+# A copy of this script needs lib/ beside it; say so rather than fail later on a missing function.
+[[ -r "${SCRIPT_DIR}/lib/build-lock-common.sh" ]] || {
+  echo "[build-lock] missing ${SCRIPT_DIR}/lib/build-lock-common.sh — copy scripts/lib/ along with this script." >&2
+  exit 2
+}
+# shellcheck source=scripts/lib/build-lock-common.sh
+source "${SCRIPT_DIR}/lib/build-lock-common.sh"
 
-LOCK_FILE="${BUILD_LOCK_FILE:-${SHARED_BUILD_LOCK}}"
-TIMEOUT="${BUILD_LOCK_TIMEOUT:-1800}"
+LOCK_FILE="${BUILD_LOCK_FILE:-$(build_lock_shared_path "${SCRIPT_DIR}")}"
+TIMEOUT="${BUILD_LOCK_TIMEOUT:-3600}"
 
 # Fixed fd rather than bash's `{var}>` form: the child redirection that closes it (`9>&-`) needs a
 # literal number, and fd 9 is the conventional choice in flock's own documentation.
@@ -140,6 +151,7 @@ mkdir -p "$(dirname "${LOCK_FILE}")" || die "could not create the lock directory
 # Canonicalise so the re-entrancy comparison is not defeated by a relative path or a symlinked root.
 LOCK_FILE="$(cd "$(dirname "${LOCK_FILE}")" && pwd)/$(basename "${LOCK_FILE}")"
 OWNER_FILE="${LOCK_FILE}.owner"
+WAITER_FILE="${LOCK_FILE}.waiters/$$"
 
 # Already inside a lock for this same file: run through. See "Re-entrancy" above.
 if [[ "${XE_BUILD_LOCK_HELD:-}" == "${LOCK_FILE}" ]]; then
@@ -156,22 +168,75 @@ describe_owner() {
   fi
 }
 
+# `held by pid=… (<worktree>, <age>) <cmd>` — diagnostic only, racy like describe_owner.
+describe_holder() {
+  local rec pid age
+  rec="$(head -n1 "${OWNER_FILE}" 2>/dev/null)"
+  pid="$(build_lock_field "${rec}" pid)"
+  [[ -n "${pid}" ]] || { echo "held by an unknown process (no owner record)"; return; }
+  age="$(build_lock_age_s "$(build_lock_field "${rec}" started)")"
+  # A holder that wrote the pre-visibility record has no worktree field; print "-" rather than "".
+  local worktree; worktree="$(build_lock_field "${rec}" worktree)"
+  printf 'held by pid=%s (%s, %s) %s\n' "${pid}" "${worktree:--}" \
+    "$(build_lock_hms "${age}")" "$(build_lock_field "${rec}" cmd)"
+}
+
+# Live waiter records registered before ours.
+waiters_ahead() {
+  local f since mine n=0
+  mine="$(date -d "$(build_lock_field "$(cat "${WAITER_FILE}" 2>/dev/null)" since)" +%s 2>/dev/null)" || mine=0
+  for f in "${LOCK_FILE}".waiters/*; do
+    [[ -f "${f}" && "${f}" != "${WAITER_FILE}" ]] || continue
+    build_lock_alive "${f##*/}" || continue
+    since="$(date -d "$(build_lock_field "$(cat "${f}" 2>/dev/null)" since)" +%s 2>/dev/null)" || continue
+    (( since < mine )) && n=$((n + 1))
+  done
+  echo "${n}"
+}
+
+mmss() { printf '%02d:%02d' $(( $1 / 60 )) $(( $1 % 60 )); }
+
 # Append, never truncate: a waiting process opens this file BEFORE it holds the lock, and `>` would
 # blow away the holder's data at open time.
 exec 9>>"${LOCK_FILE}" || die "could not open the lock file ${LOCK_FILE}"
 
+MY_CWD="$(pwd -P)"
+MY_WORKTREE="$(build_lock_worktree "${MY_CWD}")"
+build_lock_prune_waiters "${LOCK_FILE}"
+
 if ! flock -n "${LOCK_FD}"; then
+  # Register as a waiter so build-lock-status.sh and the holder's peers can see the queue. The EXIT
+  # trap covers a timeout or a signal; a SIGKILLed waiter is pruned by the next wrapper start.
+  mkdir -p "${LOCK_FILE}.waiters" \
+    && printf 'pid=%s since=%s cwd=%s worktree=%s cmd=%s\n' "$$" "$(date -Iseconds)" "${MY_CWD}" \
+         "${MY_WORKTREE}" "$*" >"${WAITER_FILE}" 2>/dev/null || true
+  trap 'rm -f "${WAITER_FILE}"' EXIT
   log "waiting up to ${TIMEOUT}s for the build lock — held by: $(describe_owner)"
-  if ! flock -w "${TIMEOUT}" "${LOCK_FD}"; then
-    echo "[build-lock] FAIL: could not acquire ${LOCK_FILE} within ${TIMEOUT}s." >&2
-    echo "[build-lock]   Current holder: $(describe_owner)" >&2
-    echo "[build-lock]   Nothing was run. Wait for that build/test to finish, or re-run with" >&2
-    echo "[build-lock]   --timeout <seconds> if it is legitimately slower than ${TIMEOUT}s." >&2
-    exit 69
-  fi
+  # Bounded attempts instead of one long flock, so the wait reports once a minute.
+  WAIT_START=${SECONDS}
+  while :; do
+    remaining=$(( TIMEOUT - (SECONDS - WAIT_START) ))
+    if (( remaining <= 0 )); then
+      holder_age="$(build_lock_age_s "$(build_lock_field "$(head -n1 "${OWNER_FILE}" 2>/dev/null)" started)")"
+      echo "[build-lock] FAIL: could not acquire ${LOCK_FILE} within ${TIMEOUT}s." >&2
+      echo "[build-lock]   Current holder: $(describe_owner)" >&2
+      echo "[build-lock]   Holder age: $(build_lock_hms "${holder_age}")" >&2
+      "${SCRIPT_DIR}/build-lock-status.sh" --lock-file "${LOCK_FILE}" 2>/dev/null \
+        | grep -E '^(progress|batch):' | sed 's/^ */[build-lock]   /' >&2
+      echo "[build-lock]   Nothing was run. Wait for that build/test to finish (scripts/build-lock-status.sh" >&2
+      echo "[build-lock]   shows its progress), or re-run with --timeout <seconds> if it is legitimately" >&2
+      echo "[build-lock]   slower than ${TIMEOUT}s." >&2
+      exit 69
+    fi
+    flock -w $(( remaining < 60 ? remaining : 60 )) "${LOCK_FD}" && break
+    (( SECONDS - WAIT_START < TIMEOUT )) \
+      && log "waiting $(mmss $((SECONDS - WAIT_START)))/$(mmss "${TIMEOUT}") — $(describe_holder); $(waiters_ahead) waiters ahead"
+  done
+  rm -f "${WAITER_FILE}"
 fi
 
-printf 'pid=%s started=%s cmd=%s\n' "$$" "$(date -Iseconds)" "$*" >"${OWNER_FILE}" 2>/dev/null || true
+printf 'pid=%s started=%s cwd=%s worktree=%s cmd=%s\n' "$$" "$(date -Iseconds)" "${MY_CWD}" "${MY_WORKTREE}" "$*" \
+  >"${OWNER_FILE}" 2>/dev/null || true
 # Truncate rather than delete: the next waiter's `describe_owner` should read "unknown", not the
 # stale record of a process that has already finished.
 trap ': >"${OWNER_FILE}"' EXIT

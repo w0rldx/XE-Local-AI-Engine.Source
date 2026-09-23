@@ -81,6 +81,11 @@ SHELL_TARGETS=(
   # Not release-path, but they gate the trustworthiness of every test result the release leans on —
   # a bug in the contamination guard reads as a phantom regression or, worse, hides a real one.
   "scripts/with-build-lock.sh"
+  "scripts/lib/build-lock-common.sh"
+  "scripts/build-lock-status.sh"
+  "scripts/tests/build-lock.test.sh"
+  "scripts/lib/test-sizing.sh"
+  "scripts/tests/test-sizing.test.sh"
   "scripts/assembly-guard.sh"
 )
 

@@ -88,7 +88,9 @@
 #   its cores to another namespace (GraphWorkflows grew 314 s -> 330 s) and the module's wall did not
 #   move (7:02 without it, 7:08 with it) while peak RSS per batch rose from 1369 MB to 2064 MB.
 #   Second, JOBS is the lever, and its best value tracks the box — hence the two measured defaults
-#   below rather than one number or a formula.
+#   below rather than one number. Free RAM caps them: with no profile and no explicit JOBS,
+#   JOBS = clamp(1, default, floor((MemAvailable − 5 − 4) / 1.5)) in GB, printed as a ">> Sizing:"
+#   line (constants and their evidence: scripts/lib/test-sizing.sh).
 #   JOBS=1 PAR=1 reproduces the old fully serialized behavior exactly.
 #
 # Usage:
@@ -102,9 +104,10 @@
 #
 # Env knobs:
 #   XE_TEST_PROFILE low-memory defaults JOBS and PAR to 1; explicit JOBS/PAR still win. Unset uses
-#                   the measured defaults below.
+#                   the measured defaults below, capped by free RAM.
 #   JOBS            how many namespace batch PROCESSES run concurrently (1 = sequential). Default 16 on a
-#                   host with >= 32 CPUs, 10 below that — the two measured points above, not a formula.
+#                   host with >= 32 CPUs, 10 below that — the two measured points above — lowered to
+#                   what MemAvailable fits (see "Batch-level parallelism"). Unknown memory keeps the default.
 #   PAR             max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake)
 #   AVAIL_FLOOR     a batch aborts if available RAM drops below this many MB (default 800; with JOBS>1
 #                   every batch that observes the breach kills itself — safety over completeness)
@@ -157,12 +160,21 @@ if [[ -z "${XE_BUILD_LOCK_HELD:-}" && -z "${NO_BUILD_LOCK:-}" ]]; then
 fi
 PROJ="$REPO/XE-Local-AI-Engine.Tests"
 EXE="$PROJ/bin/Release/net10.0/XE-Local-AI-Engine.Tests"
-NPROC="$(nproc 2>/dev/null || echo 4)"
+# shellcheck source=scripts/lib/test-sizing.sh
+source "$REPO/scripts/lib/test-sizing.sh"
+SIZING_LINE=""
 case "${XE_TEST_PROFILE:-}" in
-  "") DEFAULT_JOBS=$(( NPROC >= 32 ? 16 : 10 )) ;;
+  "") DEFAULT_JOBS="$(xe_sizing_default_jobs)" ;;
   low-memory) DEFAULT_JOBS=1 ;;
   *) echo "ERROR: XE_TEST_PROFILE must be 'low-memory' or unset, got '${XE_TEST_PROFILE}'." >&2; exit 2 ;;
 esac
+# Sized after the lock is ours, so the reading is the RAM free when the batches actually start. An
+# exported JOBS (the gate sized it already, or the caller chose) is taken as-is.
+if [[ -z "${XE_TEST_PROFILE:-}" && -z "${JOBS:-}" ]]; then
+  SIZING_MEM="$(xe_sizing_mem_available_gb)"
+  JOBS="$(xe_sizing_compute_jobs "$DEFAULT_JOBS" "$SIZING_MEM")"
+  SIZING_LINE="$(xe_sizing_describe "$DEFAULT_JOBS" "$SIZING_MEM")"
+fi
 PAR="${PAR:-1}"
 JOBS="${JOBS:-$DEFAULT_JOBS}"
 AVAIL_FLOOR="${AVAIL_FLOOR:-800}"
@@ -204,6 +216,7 @@ echo ">> Enumerating test namespaces…"
 mapfile -t NAMESPACES < <(grep -rlE '\[Test' "$PROJ" 2>/dev/null | grep -v '/bin/\|/obj/' | grep '\.cs$' \
   | xargs grep -h '^namespace ' 2>/dev/null | sed 's/namespace //; s/;.*//' | sort -u)
 echo "   ${#NAMESPACES[@]} namespaces; PAR=$PAR"
+[[ -z "$SIZING_LINE" ]] || echo "$SIZING_LINE"
 
 # Batches run as background subshells, so results go through files, not shell globals.
 RESULTS_DIR="$(mktemp -d)"

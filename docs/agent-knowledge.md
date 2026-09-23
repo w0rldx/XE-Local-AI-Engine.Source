@@ -1026,6 +1026,23 @@ proof (the stale binary would run and report the old green). **Authority:** the 
 
 ---
 
+### PROPOSED (awaiting operator approval): size a gate from free RAM and check the lock's status before waiting on it
+
+**Rule:** before queueing `scripts/run-backend-tests.sh` or `scripts/run-tests-memory-safe.sh`, run
+`scripts/build-lock-status.sh` (or `--json`). Never start a `low-memory` (fully serial) gate on a box with free
+RAM when other agents share the build lock — with `XE_TEST_PROFILE` unset the gate sizes `JOBS` from
+`MemAvailable` itself (`scripts/lib/test-sizing.sh`) and stays concurrent; `low-memory` is an explicit override
+that trades away both the concurrency and the RAM headroom for no reason on a box that has room.
+**Prevents:** the 2026-09-23 case — a `low-memory` gate held the shared cross-worktree build lock for over 65
+minutes with 23 GB free, while two other sessions' five-second builds each waited out the 1800 s default timeout
+and got exit 69 (lock not acquired, nothing ran). Neither waiter could see who held the lock or how long, so
+neither could make an informed call to wait longer, switch box, or ask the holder to yield.
+**Authority:** `scripts/lib/test-sizing.sh`, `scripts/build-lock-status.sh`, `scripts/tests/test-sizing.test.sh`,
+`scripts/tests/build-lock.test.sh`. Do not quote today's 65-minute figure, or any other timing or count, as
+current beyond what these scripts print — re-measure from their own output.
+
+---
+
 ## 2. Dev environment & local runtime
 
 ### The dev environment has a CUDA GPU — probe it, never infer it

@@ -74,7 +74,10 @@
 #   COVERAGE_DIR=/tmp/cov scripts/run-backend-tests.sh   # + Cobertura/TRX per project, unguarded
 #
 # Env knobs:
-#   XE_TEST_PROFILE   unset: measured parallel defaults below; low-memory: default JOBS=1, PAR=1
+#   XE_TEST_PROFILE   unset: JOBS sized from free RAM (scripts/lib/test-sizing.sh), i.e.
+#                     clamp(1, 16 or 10, floor((MemAvailable − 5 − 4) / 1.5)) in GB, printed as a
+#                     ">> Sizing:" line and exported to the runner; at JOBS=1 the sibling widths also
+#                     drop to 1, but the lanes stay concurrent. low-memory: default JOBS=1, PAR=1
 #                     and sibling width 1, and run every project lane sequentially. Explicit JOBS,
 #                     PAR and XE_TEST_WIDTH_* values still win.
 #   NO_BUILD          skip the Release build
@@ -219,18 +222,23 @@ width_for() {
   printf '%s' "$value"
 }
 
+# Own directory, so clearing it cannot touch a caller's coverage tree. Cleared BEFORE the build so the
+# gate's own progress lines have a home from the first one on.
+[[ -n "${COVERAGE_DIR:-}" ]] || rm -rf "$RESULTS_ROOT"
+mkdir -p "$RESULTS_ROOT"
+
+# Phase lines go to the console AND $RESULTS_ROOT/gate.log, which scripts/build-lock-status.sh reads so
+# a shell waiting on the lock can see which phase this gate is in.
+progress() { echo "$*"; echo "$*" >>"$RESULTS_ROOT/gate.log"; }
+
 if [[ -z "${NO_BUILD:-}" ]]; then
-  echo ">> Building the solution (Release)…"
+  progress ">> Building the solution (Release)…"
   dotnet build-server shutdown >/dev/null 2>&1 || true
   if ! dotnet build "$SLN" --configuration Release; then
     echo "BUILD FAILED — nothing was run." >&2
     exit 1
   fi
 fi
-
-# Own directory, so clearing it cannot touch a caller's coverage tree.
-[[ -n "${COVERAGE_DIR:-}" ]] || rm -rf "$RESULTS_ROOT"
-mkdir -p "$RESULTS_ROOT"
 
 # Lanes are background processes, so results travel through files, not shell globals.
 LANE_DIR="$(mktemp -d)"
@@ -354,6 +362,20 @@ run_batched_module() {
   echo "$p $f $rc $((EPOCHSECONDS-t0))" >"$LANE_DIR/$module.result"
 }
 
+# Sized here — inside the lock and after the build — so the reading is the RAM free when the lanes
+# start. JOBS is exported so the runner takes it as-is instead of re-reading a changed MemAvailable.
+# At JOBS=1 the box cannot spare the siblings' default widths either; the lanes stay concurrent.
+if [[ -z "$LOW_MEMORY" && -z "${JOBS:-}" ]]; then
+  # shellcheck source=scripts/lib/test-sizing.sh
+  source "$REPO/scripts/lib/test-sizing.sh"
+  SIZING_DEFAULT="$(xe_sizing_default_jobs)"
+  SIZING_MEM="$(xe_sizing_mem_available_gb)"
+  JOBS="$(xe_sizing_compute_jobs "$SIZING_DEFAULT" "$SIZING_MEM")"
+  export JOBS
+  (( JOBS > 1 )) || export XE_TEST_WIDTH_DEFAULT="${XE_TEST_WIDTH_DEFAULT:-1}"
+  progress "$(xe_sizing_describe "$SIZING_DEFAULT" "$SIZING_MEM")"
+fi
+
 # Widths are resolved BEFORE any lane starts: a bad value must fail the gate without first spending
 # a test run on the other lane.
 declare -A MODULE_WIDTHS=()
@@ -373,7 +395,7 @@ done
 # an asynchronous command: without it a lane could not be interrupted at all.
 set -m
 if [[ -z "$SIBLINGS_ONLY" ]]; then
-  echo ">> Lane: $BATCHED_MODULE through scripts/run-tests-memory-safe.sh"
+  progress ">> Lane: $BATCHED_MODULE through scripts/run-tests-memory-safe.sh"
   LANES+=("$BATCHED_MODULE")
   LAUNCHING=1
   run_batched_module </dev/null &
@@ -383,7 +405,7 @@ if [[ -z "$SIBLINGS_ONLY" ]]; then
   [[ -z "$LOW_MEMORY" ]] || wait "${LANE_PIDS[$BATCHED_MODULE]}"
 fi
 for module in "${!MODULE_PROJECTS[@]}"; do
-  echo ">> Lane: $module at --maximum-parallel-tests ${MODULE_WIDTHS[$module]}"
+  progress ">> Lane: $module at --maximum-parallel-tests ${MODULE_WIDTHS[$module]}"
   LANES+=("$module")
   LAUNCHING=1
   run_sibling "$module" "${MODULE_PROJECTS[$module]}" "${MODULE_WIDTHS[$module]}" </dev/null &

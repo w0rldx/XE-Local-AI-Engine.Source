@@ -69,8 +69,8 @@ run_wrapped reenter.sh
 expect_status 0 "re-entrant lock"
 
 # --- the caller's stdin reaches the command ---
-# bash sends an async command's stdin to /dev/null unless it is redirected explicitly, and the
-# wrapper runs the command asynchronously so that it can forward signals to it.
+# bash sends an async command's stdin to /dev/null unless it is redirected explicitly. The wrapper
+# runs the command in the FOREGROUND (its Cancellation note explains why); this case guards that shape.
 got="$(echo 'piped' | BUILD_LOCK_FILE="$LOCK" "$WRAPPER" -- "$TMP/read-stdin.sh")"
 [[ "$got" == "piped" ]] || { echo "stdin did not reach the command: '$got'" >&2; exit 1; }
 

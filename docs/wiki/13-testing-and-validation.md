@@ -133,6 +133,20 @@ For a memory-constrained development machine, use
 defaults `JOBS`, `PAR` and `XE_TEST_WIDTH_DEFAULT` to 1. Explicit overrides still win, including per-project
 widths. The standalone memory-safe runner also accepts the profile. Normal and CI defaults are unchanged;
 the profile trades elapsed time for lower concurrent memory demand without dropping tests or guards.
+`low-memory` is an explicit choice, not the default on a loaded box — it serializes lanes even when RAM is free.
+
+When `XE_TEST_PROFILE` is unset, `JOBS` is not a fixed default either: `scripts/lib/test-sizing.sh` (sourced by
+both scripts) reads `MemAvailable` from `/proc/meminfo` and computes
+`JOBS = clamp(1, default, floor((MemAvailable − SIBLING_RESERVE_GB − HEADROOM_GB) / BATCH_GB))`, with
+`BATCH_GB=1.5`, `SIBLING_RESERVE_GB=5` and `HEADROOM_GB=4` — all three measured against this repo's own runs, not
+modeled, with the measurements next to the constants in that file. Today's numbers: 0.3–1.5 GB per batch of the
+batched module, and `Client.Persistence.Tests` 3.2 GB at its pinned sibling width (11.6 GB only at TUnit's
+unpinned default, which the gate never uses) — do not quote the older "~15 GB per lane" rationale in
+`with-build-lock.sh`'s header as current; it predates the 2026-08-15 leak fix and the test-perf program. The
+computed `JOBS` is printed as a `>> Sizing: MemAvailable=… GB → JOBS=… (default …)` line in the gate log, so the
+log is the evidence for what ran. Explicit `JOBS`, `PAR`, `XE_TEST_WIDTH_*` and `XE_TEST_PROFILE=low-memory` all
+still win over the computed value; unknown memory (no `/proc/meminfo`, e.g. macOS) falls back to the measured
+default unchanged.
 
 Two operating rules for that script are stated once, in [AGENTS.md](../../AGENTS.md) §Validation, and not repeated
 here: what `COVERAGE_DIR` costs you in contamination detection, and how to cancel a non-interactive run without
@@ -147,7 +161,34 @@ the modules safe to run concurrently, and is why the gate no longer serializes t
 Never run a build concurrently with `dotnet test --no-build`: the build can rewrite assemblies while
 the test host reads them, producing a phantom red or phantom green. `with-build-lock.sh` prevents
 collisions between cooperating processes; `assembly-guard.sh` detects an unwrapped build. Exit `69`
-means the lock timed out and nothing ran. Exit `75` means **CONTAMINATED, result void, rerun required**.
+means the lock timed out and nothing ran (default timeout 3600 s, `BUILD_LOCK_TIMEOUT` to override). Exit `75`
+means **CONTAMINATED, result void, rerun required**.
+
+The lock's shared-path resolution lives in `scripts/lib/build-lock-common.sh`, sourced by both `with-build-lock.sh`
+and `scripts/build-lock-status.sh` so the two can never disagree about where the lock lives. The holder writes
+`.tmp/build.lock.owner` (`pid= started= cwd= worktree= cmd=`), truncated on exit; a process that has to wait
+registers `.tmp/build.lock.waiters/<pid>` (`pid= since= cwd= worktree= cmd=`) before blocking and removes it on
+acquisition or exit. While waiting it prints a line once a minute — holder, age, command, and how many waiters are
+ahead — instead of staying silent for the whole timeout.
+
+`scripts/build-lock-status.sh [--json]` shows the same picture on demand, read-only: holder (pid, liveness via
+`kill -0`, age, worktree, cmd), stale-owner detection (record present, pid dead → lock reported free), waiters
+oldest-first, and, when the holder is running the gate or the runner, its progress — the newest
+`.tmp/backend-test-results/**/gate.log` carrying a `>> ` phase line or a batch pass/fail line — plus current
+`MemAvailable`. Sample human-format output, captured live against another session's script:
+
+```
+lock:      /home/w0rldx/projects/XE-Local-AI-Engine.Source/.tmp/build.lock
+holder:    pid=853395 alive=yes worktree=hub-push-flake age=00:00:58
+cmd:       /tmp/.../scratchpad/stress.sh
+waiters:   0
+memAvailable: 23.3 GB
+```
+
+Check the status script before queueing a gate rather than waiting blind: an agent that can see who holds the lock
+and how far along they are makes a better call than one that waits out the full timeout. `build-lock.test.sh` and
+`test-sizing.test.sh` under `scripts/tests/` are self-checks for the lock and the sizing formula, auto-enrolled by
+`scripts/run-release-contract-tests.sh` and shellchecked by `scripts/lint-release-scripts.sh`.
 
 ```bash
 # Backend inner loop — scope by category (see 17-writing-tests.md §1b for what each one means)

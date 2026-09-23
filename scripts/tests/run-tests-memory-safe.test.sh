@@ -8,8 +8,10 @@ trap 'rm -rf "$TMP"' EXIT
 FAKE="$TMP/repo"
 PROJ="$FAKE/XE-Local-AI-Engine.Tests"
 BIN="$PROJ/bin/Release/net10.0"
-mkdir -p "$FAKE/scripts" "$PROJ/Cases" "$BIN"
+mkdir -p "$FAKE/scripts/lib" "$PROJ/Cases" "$BIN"
 cp "$ROOT/scripts/run-tests-memory-safe.sh" "$FAKE/scripts/"
+cp "$ROOT/scripts/lib/test-sizing.sh" "$FAKE/scripts/lib/"
+printf 'MemAvailable:    6291456 kB\n' >"$TMP/meminfo-6g"
 
 cat >"$FAKE/scripts/with-build-lock.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -93,6 +95,16 @@ output="$(FAKE_LOG="$TMP/profile-override.log" NO_BUILD=1 XE_TEST_PROFILE=low-me
   "$FAKE/scripts/run-tests-memory-safe.sh")"
 grep -Fq 'Running namespace batches (JOBS=2' <<<"$output"
 grep -Fqx 'max=3 html=1 filter=/*/XE_Local_AI_Engine.Tests.Ordinary/*/*' "$TMP/profile-override.log"
+
+# No profile, no JOBS: sized from free RAM and the evidence line is printed; explicit JOBS skips it.
+output="$(FAKE_LOG="$TMP/sized.log" NO_BUILD=1 XE_SIZING_MEMINFO="$TMP/meminfo-6g" \
+  "$FAKE/scripts/run-tests-memory-safe.sh")"
+grep -Fq '>> Sizing: MemAvailable=6.0 GB → JOBS=1 (default' <<<"$output"
+grep -Fq 'Running namespace batches (JOBS=1' <<<"$output"
+output="$(FAKE_LOG="$TMP/sized-explicit.log" NO_BUILD=1 JOBS=2 XE_SIZING_MEMINFO="$TMP/meminfo-6g" \
+  "$FAKE/scripts/run-tests-memory-safe.sh")"
+if grep -Fq '>> Sizing:' <<<"$output"; then echo "explicit JOBS was re-sized" >&2; exit 1; fi
+grep -Fq 'Running namespace batches (JOBS=2' <<<"$output"
 
 set +e
 invalid_output="$(FAKE_LOG="$TMP/profile-invalid.log" NO_BUILD=1 XE_TEST_PROFILE=small \

@@ -9,8 +9,13 @@ ROOT="$(git rev-parse --show-toplevel)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 FAKE="$TMP/repo"
-mkdir -p "$FAKE/scripts" "$FAKE/bin"
+mkdir -p "$FAKE/scripts/lib" "$FAKE/bin"
 cp "$ROOT/scripts/run-backend-tests.sh" "$FAKE/scripts/"
+cp "$ROOT"/scripts/lib/*.sh "$FAKE/scripts/lib/"
+# Pinned free RAM: the default widths asserted below must not depend on how loaded this box is.
+printf 'MemAvailable:   67108864 kB\n' >"$TMP/meminfo-64g"
+printf 'MemAvailable:    6291456 kB\n' >"$TMP/meminfo-6g"
+export XE_SIZING_MEMINFO="$TMP/meminfo-64g"
 
 write_solution() {
   {
@@ -198,6 +203,22 @@ grep -q '^test project=XE-Local-AI-Engine.Client.Persistence.Tests/.* max=1 ' "$
 run_gate low-memory-red env XE_TEST_PROFILE=low-memory FAKE_RUNNER_EXIT=1
 [[ "$status" -eq 1 ]]
 [[ "$(grep -c '^test project=' "$TMP/low-memory-red.log")" -eq 2 ]]
+
+# --- RAM sizing (no profile): JOBS computed once and exported; at JOBS=1 widths drop, lanes stay concurrent ---
+run_gate sizing-line env
+grep -Fq '>> Sizing: MemAvailable=64.0 GB' <<<"$output"
+
+run_gate sizing-low env XE_SIZING_MEMINFO="$TMP/meminfo-6g" FAKE_RECORD_ORDER=1
+[[ "$status" -eq 0 ]] || { echo "sizing-low exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq '>> Sizing: MemAvailable=6.0 GB → JOBS=1' <<<"$output"
+grep -Fq 'runner NO_BUILD=1 COVERAGE_DIR= JOBS=1 PAR=' "$TMP/sizing-low.log"
+[[ "$(grep -c ' max=1 ' "$TMP/sizing-low.log")" -eq 2 ]]
+
+run_gate sizing-explicit env XE_SIZING_MEMINFO="$TMP/meminfo-6g" JOBS=3
+[[ "$status" -eq 0 ]]
+refute_grep -F '>> Sizing:' <<<"$output"
+grep -Fq 'runner NO_BUILD=1 COVERAGE_DIR= JOBS=3 PAR=' "$TMP/sizing-explicit.log"
+grep -q '^test project=XE-Local-AI-Engine.AI.Agent.Tests/.* max=8 ' "$TMP/sizing-explicit.log"
 
 run_gate profile-invalid env XE_TEST_PROFILE=small
 [[ "$status" -eq 2 ]]

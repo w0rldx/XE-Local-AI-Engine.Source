@@ -72,6 +72,9 @@ export FAKE_PNPM_RECORD="${TEMP_ROOT}/pnpm-record"
 export FAKE_MISE_RECORD="${TEMP_ROOT}/mise-record"
 export OPENAPI_LIVE_TIMEOUT_SECONDS=10
 export OPENAPI_LIVE_CLIENT_RELEASE_ROOT="${TEMP_ROOT}/release"
+# The script under test re-execs itself under the shared build lock. With a fake dotnet on PATH there is
+# nothing to serialize against, and waiting behind a real gate stalled the whole contract run on 2026-09-23.
+export BUILD_LOCK_FILE="${TEMP_ROOT}/build.lock"
 
 # A caller that sets MISE_DATA_DIR: the value has to survive the HOME isolation and reach the host, or every
 # mise shim on PATH aborts and the host dies before readiness.

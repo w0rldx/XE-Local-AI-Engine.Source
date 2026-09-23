@@ -109,7 +109,10 @@ scripts/run-backend-tests.sh
 - Never overlap a build with a `--no-build` test run. The script takes the build lock once for the whole gate and
   runs each sibling under the assembly guard. The lock serializes cooperating shells (exit **69** = lock
   not acquired, nothing ran); the guard detects an uncooperative build (exit **75** = CONTAMINATED, result void,
-  re-run; it is not a red).
+  re-run; it is not a red). Check `scripts/build-lock-status.sh` (or `--json`) before queueing a gate: it shows the
+  holder, age, progress and any waiters. The gate sizes `JOBS` from free RAM and prints the result as a
+  `>> Sizing:` line; `XE_TEST_PROFILE=low-memory` is an explicit serial override and should not be used on a box
+  with free RAM.
 - Cancel it by signalling its **process group** (`kill -TERM -- -<pgid>`), not its PID: `with-build-lock.sh` runs
   its command in the foreground with no traps, so a PID-only signal kills the wrapper and orphans the lanes. Ctrl-C
   in a terminal already does the right thing.
