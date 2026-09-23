@@ -89,6 +89,15 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 $"No Docker socket exists at '{socketPath}'.");
         }
 
+        // The Windows twin: a pipe with no listener is retried by the transport until its timeout, so a stopped Docker
+        // Desktop would cost the whole probe budget and then read as a timeout rather than "start Docker".
+        var pipeName = Endpoint.NamedPipeName;
+        if (pipeName is not null && OperatingSystem.IsWindows() && !NamedPipeExists(pipeName))
+        {
+            throw new DockerRuntimeException(DockerDaemonPreflightStatus.DaemonUnreachable,
+                $"No Docker named pipe exists at '{Endpoint.Display}'. Start Docker Desktop.");
+        }
+
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -1458,11 +1467,12 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     /// <remarks>
     ///     The socket error code is the load-bearing signal: <c>AccessDenied</c> means the socket is there and this
     ///     process may not use it, a permissions fix, whereas every other connect failure means nothing is listening,
-    ///     a "start the daemon" fix. Matching on daemon prose instead would break on the next Docker release.
+    ///     a "start the daemon" fix. A <see cref="TimeoutException" /> is the named-pipe transport's word for the same:
+    ///     no listener answered its connect. Matching on daemon prose instead would break on the next Docker release.
     /// </remarks>
-    private DockerRuntimeException Classify(Exception exception)
+    internal DockerRuntimeException Classify(Exception exception)
     {
-        var socketException = FindSocketException(exception);
+        var socketException = FindInChain<SocketException>(exception);
         if (socketException is not null)
         {
             return socketException.SocketErrorCode == SocketError.AccessDenied
@@ -1470,6 +1480,12 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                     $"Access to the Docker endpoint '{Endpoint.Display}' was denied.", exception)
                 : new DockerRuntimeException(DockerDaemonPreflightStatus.DaemonUnreachable,
                     $"The Docker endpoint '{Endpoint.Display}' could not be reached ({socketException.SocketErrorCode}).", exception);
+        }
+
+        if (FindInChain<TimeoutException>(exception) is not null)
+        {
+            return new DockerRuntimeException(DockerDaemonPreflightStatus.DaemonUnreachable,
+                $"The Docker endpoint '{Endpoint.Display}' did not answer in time.", exception);
         }
 
         if (exception is DockerApiException apiException)
@@ -1488,20 +1504,39 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
             $"The Docker daemon at '{Endpoint.Display}' could not be used: {exception.Message}", exception);
     }
 
-    private static SocketException? FindSocketException(Exception exception)
+    /// <summary>Whether the local pipe namespace lists <paramref name="pipeName" />; true when it cannot be read.</summary>
+    /// <remarks>
+    ///     Enumerating <c>\\.\pipe\</c> lists names without connecting. <see cref="File.Exists(string)" /> would open an
+    ///     instance, which the daemon sees as a client and which reports a pipe whose instances are all busy as missing.
+    /// </remarks>
+    internal static bool NamedPipeExists(string pipeName)
+    {
+        const string pipeRoot = @"\\.\pipe\";
+        try
+        {
+            return Directory.EnumerateFiles(pipeRoot).Contains(pipeRoot + pipeName, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // Cannot tell, so do not claim absence: the transport's own connect decides.
+            return true;
+        }
+    }
+
+    private static T? FindInChain<T>(Exception exception) where T : Exception
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {
-            if (current is SocketException socketException)
+            if (current is T match)
             {
-                return socketException;
+                return match;
             }
 
             if (current is AggregateException aggregate)
             {
                 foreach (var inner in aggregate.Flatten().InnerExceptions)
                 {
-                    var found = FindSocketException(inner);
+                    var found = FindInChain<T>(inner);
                     if (found is not null)
                     {
                         return found;

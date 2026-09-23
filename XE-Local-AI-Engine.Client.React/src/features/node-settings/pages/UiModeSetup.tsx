@@ -4,12 +4,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { UiMode } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getNodeSettingsQueryKey, saveNodeSettingsMutation } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import type { UiMode } from "@/capabilities/NodeCapabilities";
+import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
 
 // The first-run navigation-mode choice, shown once after the external-access step. Like that screen it has no skip
 // control — the layout guard sends anyone with an unanswered mode straight back here, so a way out that did not save
@@ -49,9 +49,7 @@ export function UiModeSetup() {
 
 	return (
 		<Box pos="relative">
-			<Box pos="absolute" top={16} right={16} style={{ zIndex: 10 }}>
-				<LanguageMenu />
-			</Box>
+			<StandaloneScreenControls />
 			<Container size="sm" py="xl" className="min-h-dvh flex items-center">
 				<Stack gap="lg" className="w-full">
 					<Stack gap={4} align="center" ta="center">

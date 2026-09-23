@@ -18,15 +18,9 @@ interface RunningModelsPanelProps {
 // useRunningModels query and the eject mutation; this component is pure presentation. The in-flight download (when a
 // GGUF is being fetched on the Model Management page) surfaces here too as a non-responsive entry.
 //
-// The test ids are `loaded-models-llamacpp-*`. They were `model-fit-running-*` until 2026-08-01 — vestigial names from
-// the model-fit advisor page this panel was relocated from, and this panel is no longer on that page at all (there is a
-// test asserting it is absent there). The stale prefix actively misled: /loaded-models renders TWO runtime sections, and
-// `loaded-models-table` belongs to the OLLAMA one. Ollama is an optional secondary provider that is normally absent in
-// desktop mode, so on a default node that table is legitimately replaced by `loaded-models-unavailable` while a
-// llama.cpp model IS loaded and IS listed — here, under a prefix nobody would think to look for. A capture run filed
-// exactly that as a suspected defect ("a model is loaded but the loaded-models page says otherwise"). Nothing was
-// broken; the ids just did not say which runtime they belonged to. Keep both sections' ids page-scoped and
-// runtime-qualified.
+// The test ids are `loaded-models-llamacpp-*`: page-scoped and runtime-qualified. They were `model-fit-running-*` until
+// 2026-08-01, vestigial names from the model-fit advisor page this panel was relocated from (a test asserts it is absent
+// there now).
 export function RunningModelsPanel({ runningModels, isLoading, error, onEject, ejectingModelName }: RunningModelsPanelProps) {
 	const { t } = useTranslation();
 

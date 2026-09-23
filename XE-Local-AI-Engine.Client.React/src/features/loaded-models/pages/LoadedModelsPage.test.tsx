@@ -19,12 +19,7 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-const { hooksMock, runningMock, confirmMock, toastMock } = vi.hoisted(() => ({
-	hooksMock: {
-		useLoadedModels: vi.fn(),
-		useEjectModel: vi.fn(),
-	},
-	// The llama.cpp running-models section is a DIFFERENT runtime, backed by its own query module.
+const { runningMock, confirmMock, toastMock } = vi.hoisted(() => ({
 	runningMock: {
 		useRunningModels: vi.fn(),
 		useEjectRunningModel: vi.fn(),
@@ -33,7 +28,6 @@ const { hooksMock, runningMock, confirmMock, toastMock } = vi.hoisted(() => ({
 	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
-vi.mock("@/features/loaded-models/queries/useLoadedModels", () => hooksMock);
 vi.mock("@/features/loaded-models/queries/useRunningModels", () => runningMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
@@ -86,20 +80,9 @@ function renderPage() {
 	);
 }
 
-const availableSnapshot = {
-	isAvailable: true,
-	error: null,
-	models: [
-		{ modelName: "llama3.1:8b", sizeBytes: 8_589_934_592, sizeVramBytes: 4_294_967_296, expiresAtUtc: null },
-		{ modelName: "qwen2.5:3b", sizeBytes: 3_221_225_472, sizeVramBytes: null, expiresAtUtc: null },
-	],
-};
-
 describe("LoadedModelsPage", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
-		hooksMock.useLoadedModels.mockReturnValue(makeQuery(availableSnapshot));
-		hooksMock.useEjectModel.mockReturnValue(makeEjectMutation());
 		runningMock.useRunningModels.mockReturnValue(makeQuery([]));
 		runningMock.useEjectRunningModel.mockReturnValue(makeEjectMutation());
 		confirmMock.mockResolvedValue(true);
@@ -110,86 +93,19 @@ describe("LoadedModelsPage", () => {
 		vi.clearAllMocks();
 	});
 
-	it("renders a row per loaded model with an eject button", () => {
-		renderPage();
-
-		expect(screen.getByTestId("loaded-models-table")).toBeTruthy();
-		expect(screen.getByTestId("loaded-models-row-llama3.1:8b")).toBeTruthy();
-		expect(screen.getByTestId("loaded-models-eject-llama3.1:8b")).toBeTruthy();
-		expect(screen.getByTestId("loaded-models-row-qwen2.5:3b")).toBeTruthy();
-	});
-
-	it("shows the empty state when the runtime is available but holds no models", () => {
-		hooksMock.useLoadedModels.mockReturnValue(makeQuery({ isAvailable: true, error: null, models: [] }));
-
-		renderPage();
-
-		expect(screen.getByTestId("loaded-models-empty")).toBeTruthy();
-		expect(screen.queryByTestId("loaded-models-table")).toBeNull();
-	});
-
-	it("shows a neutral absent-provider state (not the raw error) when Ollama is unreachable", () => {
-		// Ollama is an optional secondary provider, deliberately absent on the desktop default. An unreachable
-		// provider is an expected empty state, not an error: the neutral line renders, the raw connection-refused
-		// reason is NOT surfaced as an alarming banner, and the table is hidden.
-		hooksMock.useLoadedModels.mockReturnValue(makeQuery({ isAvailable: false, error: "Provider unreachable", models: [] }));
-
-		renderPage();
-
-		const unavailable = screen.getByTestId("loaded-models-unavailable");
-		expect(unavailable.textContent).toContain("optional secondary provider");
-		expect(unavailable.textContent).not.toContain("Provider unreachable");
-		// The neutral state is not the red error alert.
-		expect(screen.queryByTestId("loaded-models-error")).toBeNull();
-		expect(screen.queryByTestId("loaded-models-table")).toBeNull();
-	});
-
-	it("surfaces a load error via the error alert", () => {
-		hooksMock.useLoadedModels.mockReturnValue(makeQuery(undefined, { error: new Error("boom") }));
-
-		renderPage();
-
-		expect(screen.getByTestId("loaded-models-error")).toBeTruthy();
-	});
-
-	it("ejects a model after the confirm dialog is accepted", async () => {
-		const ejectMutation = makeEjectMutation();
-		hooksMock.useEjectModel.mockReturnValue(ejectMutation);
-
-		renderPage();
-
-		fireEvent.click(screen.getByTestId("loaded-models-eject-llama3.1:8b"));
-
-		await waitFor(() => expect(ejectMutation.mutate).toHaveBeenCalled());
-		expect(ejectMutation.mutate.mock.calls[0]?.[0]).toBe("llama3.1:8b");
-	});
-
-	it("does not eject when the confirm dialog is cancelled", async () => {
-		const ejectMutation = makeEjectMutation();
-		hooksMock.useEjectModel.mockReturnValue(ejectMutation);
-		confirmMock.mockResolvedValue(false);
-
-		renderPage();
-
-		fireEvent.click(screen.getByTestId("loaded-models-eject-llama3.1:8b"));
-
-		await waitFor(() => expect(confirmMock).toHaveBeenCalled());
-		expect(ejectMutation.mutate).not.toHaveBeenCalled();
-	});
-
-	// llama.cpp running-models section (relocated from the model-fit advisor) — a DIFFERENT runtime rendered as its
-	// own labeled section alongside the Ollama in-memory table.
+	// The page lists the llama.cpp runtime only (relocated from the model-fit advisor).
 	const runningModel = { modelName: "running-a", role: "chat", isResponsive: true, detail: "" };
 
-	it("renders the llama.cpp running-models section as a second runtime table", () => {
+	it("renders the llama.cpp running-models table and no Ollama section", () => {
 		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
 
 		renderPage();
 
-		// Both runtimes show: the Ollama in-memory table and the llama.cpp running-models table.
-		expect(screen.getByTestId("loaded-models-table")).toBeTruthy();
 		expect(screen.getByTestId("loaded-models-llamacpp-table")).toBeTruthy();
 		expect(screen.getByTestId("loaded-models-llamacpp-row-running-a")).toBeTruthy();
+		// The Ollama in-memory section was removed from this page; nothing Ollama-specific may render.
+		expect(screen.queryByTestId("loaded-models-table")).toBeNull();
+		expect(screen.queryByText(/ollama/i)).toBeNull();
 	});
 
 	it("shows the empty state for the llama.cpp section when no processes are running", () => {

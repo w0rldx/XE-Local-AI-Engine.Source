@@ -10,8 +10,8 @@ import type { XeLocalAiEngineClientEndpointsAuthV1NodeLoginLockedOutResponse } f
 import { loginNodeAuth } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { getSafeRedirectPath } from "@/core/auth/utils/RedirectPath";
-import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
 
 // The node answers a locked account with a 401 carrying this body; a wrong password answers a body-less 401. Partial
 // of the generated contract type rather than a hand-written copy of it: a rename on the backend fails the typecheck
@@ -69,9 +69,7 @@ export function Login() {
 
 	return (
 		<Box pos="relative">
-			<Box pos="absolute" top={16} right={16} style={{ zIndex: 10 }}>
-				<LanguageMenu />
-			</Box>
+			<StandaloneScreenControls />
 			<Container size="xs" py="xl" className="min-h-dvh flex items-center">
 				<Card withBorder={true} radius="lg" p="xl" className="w-full">
 					<Stack gap="lg">

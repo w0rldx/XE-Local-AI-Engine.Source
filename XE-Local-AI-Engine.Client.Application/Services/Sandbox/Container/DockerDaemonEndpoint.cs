@@ -44,6 +44,19 @@ public sealed record DockerDaemonEndpoint
     /// </summary>
     public string? UnixSocketPath => Uri.Scheme.Equals("unix", StringComparison.OrdinalIgnoreCase) ? Uri.LocalPath : null;
 
+    /// <summary>
+    ///     For a local <c>npipe://./pipe/NAME</c> endpoint, NAME; null otherwise, a remote pipe included. The named-pipe
+    ///     counterpart of <see cref="UnixSocketPath" />, for the same "is anything there" question.
+    /// </summary>
+    internal string? NamedPipeName =>
+        Uri.Scheme.Equals("npipe", StringComparison.OrdinalIgnoreCase)
+        && Uri.Host == "."
+        && Uri.LocalPath.StartsWith(NamedPipePrefix, StringComparison.OrdinalIgnoreCase)
+            ? Uri.LocalPath[NamedPipePrefix.Length..]
+            : null;
+
+    private const string NamedPipePrefix = "/pipe/";
+
     /// <summary>A stable, log-safe rendering: scheme, host, port and path, and nothing else.</summary>
     /// <remarks>
     ///     An endpoint is not always a local socket — <c>tcp://user:secret@host:2375/?token=…</c> is a <c>DOCKER_HOST</c> an operator can

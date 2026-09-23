@@ -10,8 +10,8 @@ import { loginNodeAuth, setupNodeAuth } from "@/core/auth/api/NodeAuthApi";
 import type { NodeAuthErrorResponse } from "@/core/auth/models/NodeAuthModels";
 import { unmetPasswordRules } from "@/core/auth/models/PasswordPolicy";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
 
 interface SetupFormValues {
 	email: string;
@@ -123,9 +123,7 @@ export function Setup() {
 
 	return (
 		<Box pos="relative">
-			<Box pos="absolute" top={16} right={16} style={{ zIndex: 10 }}>
-				<LanguageMenu />
-			</Box>
+			<StandaloneScreenControls />
 			<Container size="xs" py="xl" className="min-h-dvh flex items-center">
 				<Card withBorder={true} radius="lg" p="xl" className="w-full">
 					<Stack gap="lg">

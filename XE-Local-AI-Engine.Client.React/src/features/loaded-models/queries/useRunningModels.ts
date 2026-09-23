@@ -9,8 +9,7 @@ import {
 } from "@/features/loaded-models/models/RunningModelsModels";
 
 // Server state for the llama.cpp running-models section on the Loaded Models page (relocated from the model-fit
-// advisor). This is a DIFFERENT runtime from the Ollama in-memory list (useLoadedModels): it lists llama.cpp server
-// processes. Reads use the generated hey-api `*Options()` (which wire the shared axios instance + TanStack Query
+// advisor): it lists llama.cpp server processes. Reads use the generated hey-api `*Options()` (which wire the shared axios instance + TanStack Query
 // AbortSignal automatically) wrapped in withResponseValidation so a zod response-shape failure surfaces as an
 // ApiError. The eject mutation invalidates the running-models list so the ejected entry disappears.
 
@@ -25,9 +24,8 @@ function runningModelsInvalidationKey(): readonly [{ _id: string }] {
 
 // Poll cadence (ms) while the section is mounted. llama.cpp server processes appear as chat sends warm models and
 // disappear via idle-TTL eviction or graceful ejects — none of which flow through a REST mutation this page could hang
-// an invalidation on — so without polling the list only refreshes on manual reload. Mirrors the 4s cadence of the
-// adjacent Ollama query (useLoadedModels); no unavailable back-off is needed here because this endpoint reads the
-// app's own in-process supervisor, never an optional external daemon.
+// an invalidation on — so without polling the list only refreshes on manual reload. No unavailable back-off is needed
+// because this endpoint reads the app's own in-process supervisor, never an optional external daemon.
 export const runningModelsPollIntervalMs = 4000;
 
 // Live running-models list backing the eject UI. enabled lets the page mount it lazily (e.g. only when the section is

@@ -11,6 +11,7 @@ import {
 	type ModelFitLatestRecommendations,
 	type ModelFitRecommendation,
 	type ModelFitUseCase,
+	modelFitUseCases,
 	modelRecommendationCheckTemplateId,
 	recommendationRefreshLimit,
 } from "@/features/model-fit/models/ModelFitModels";
@@ -101,30 +102,44 @@ export function useModelRecommendations(): UseModelRecommendationsResult {
 
 	useModelFitSchedulerEvents(refreshJob?.id);
 
-	const canRefresh = refreshJob !== undefined && !refreshMutation.isPending;
+	// The refresh-all loop spans several mutations; the mutation's own isPending drops between them, so track the whole run.
+	const [isRefreshingAll, setIsRefreshingAll] = useState(false);
+	const isRefreshing = isRefreshingAll || refreshMutation.isPending;
+	const canRefresh = refreshJob !== undefined && !isRefreshing;
 
-	const handleRefresh = (): void => {
+	// Refresh-now refreshes EVERY use case, one POST each (the request contract stays one use case per run). The POSTs are
+	// awaited one after another, never in parallel: each fire does real HuggingFace discovery. The selected use case goes
+	// first so the visible category updates soonest. A failed POST shows the error toast and stops the loop.
+	const handleRefresh = async (): Promise<void> => {
 		if (refreshJob === undefined) {
 			return;
 		}
-		refreshMutation.mutate(
-			{ scheduledJobId: refreshJob.id, useCase, limit: recommendationRefreshLimit },
-			{
-				// The refresh enqueues an async scheduler run, so there is no immediate result to show. Confirm the request
-				// landed with an info toast (keyed by a stable id so rapid clicks update one toast instead of stacking) — the
-				// terminal Succeeded/Failed/Cancelled toast arrives later from the scheduler hub (ModelFitRefreshNotifications).
-				onSuccess: () =>
-					toast.info(
-						t(
-							"pages.modelFit.recommendations.toasts.started",
-							"Checking for the latest model recommendations. We'll let you know when they're ready.",
-						),
-						{ title: t("pages.modelFit.recommendations.toasts.startedTitle", "Refresh started"), id: "model-fit-refresh-start" },
-					),
-				onError: (error) =>
-					toast.error(apiErrorMessage(error, t("pages.modelFit.recommendations.errors.refresh", "Could not start a refresh."))),
-			},
-		);
+		const ordered = [useCase, ...modelFitUseCases.filter((candidate) => candidate !== useCase)];
+		setIsRefreshingAll(true);
+		try {
+			for (const candidate of ordered) {
+				// biome-ignore lint/performance/noAwaitInLoops: each POST fires a real HuggingFace discovery run; sequential by design.
+				await refreshMutation.mutateAsync({
+					scheduledJobId: refreshJob.id,
+					useCase: candidate,
+					limit: recommendationRefreshLimit,
+				});
+			}
+			// The refresh enqueues async scheduler runs, so there is no immediate result to show. Confirm the requests landed
+			// with an info toast (stable id so rapid clicks update one toast) — the terminal Succeeded/Failed/Cancelled toasts
+			// arrive later from the scheduler hub (ModelFitRefreshNotifications).
+			toast.info(
+				t(
+					"pages.modelFit.recommendations.toasts.started",
+					"Checking for the latest model recommendations. We'll let you know when they're ready.",
+				),
+				{ title: t("pages.modelFit.recommendations.toasts.startedTitle", "Refresh started"), id: "model-fit-refresh-start" },
+			);
+		} catch (error) {
+			toast.error(apiErrorMessage(error, t("pages.modelFit.recommendations.errors.refresh", "Could not start a refresh.")));
+		} finally {
+			setIsRefreshingAll(false);
+		}
 	};
 
 	const handleUseCaseChange = (value: string | null): void => {
@@ -220,8 +235,11 @@ export function useModelRecommendations(): UseModelRecommendationsResult {
 		hasSchedule: refreshJob !== undefined,
 		isLoadingJobs: jobsQuery.isLoading,
 		canRefresh,
-		isRefreshing: refreshMutation.isPending,
-		onRefresh: handleRefresh,
+		isRefreshing,
+		// handleRefresh catches its own errors; the catch only satisfies the floating-promise rule.
+		onRefresh: () => {
+			handleRefresh().catch(() => undefined);
+		},
 		downloadingModelName: startDownload.isPending ? (startDownload.variables?.repoId ?? null) : null,
 		onDownload: handleRecommendationDownload,
 	};

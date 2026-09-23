@@ -3677,35 +3677,6 @@
 		"loadedModels": {
 			"title": "Loaded models",
 			"subtitle": "Models the local runtime is currently holding in memory (RAM/VRAM). Eject frees that memory — gracefully, after any in-flight generation completes.",
-			"loading": "Loading loaded models…",
-			"empty": "No models currently loaded.",
-			"unavailable": "Ollama isn't reachable right now. It's an optional secondary provider, so there may be nothing loaded to show here. llama.cpp models still appear below.",
-			"cpuOnly": "CPU only",
-			"expired": "Expired",
-			"sizeUnknown": "Unknown",
-			"columns": {
-				"model": "Model",
-				"memory": "Memory (RAM)",
-				"vram": "VRAM",
-				"expiresIn": "Expires in",
-				"action": "Action"
-			},
-			"errors": {
-				"load": "Could not load loaded models."
-			},
-			"eject": {
-				"button": "Eject",
-				"tooltip": "Frees memory after the current generation finishes",
-				"confirmTitle": "Eject model",
-				"confirmDescription": "Eject '{{modelName}}' from memory? Memory is freed after the current generation finishes; an in-flight response is not interrupted.",
-				"confirmAction": "Eject",
-				"success": "Ejecting '{{modelName}}' — memory frees after the current generation.",
-				"error": "Could not eject the model."
-			},
-			"ollama": {
-				"title": "Ollama (in-memory)",
-				"disabled": "The Ollama runtime is disabled on this node (XE_OLLAMA_RUNTIME_ENABLED=false), so nothing can be loaded here. llama.cpp models still appear below."
-			},
 			"llamaCpp": {
 				"title": "llama.cpp runtime",
 				"loading": "Loading running models…",

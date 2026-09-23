@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Containers.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Fake;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Tests.ContainerSandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -399,6 +400,26 @@ public sealed class ContainerRuntimeResolverTests
         // resolution reported, or the runtime the caller holds is not the daemon the resolution approved.
         AssertEx.Equal(expected: 2, harness.Factory.CreateRuntimeCallCount);
         AssertEx.Equal(LocalEndpoint, harness.Factory.RequestedEndpoints[^1].Display);
+    }
+
+    [Test]
+    public async Task ANamedPipeTimeout_ReadsAsStartDockerRatherThanACheckThatDidNotComplete()
+    {
+        // The Windows tester's stopped Docker Desktop: the npipe transport's TimeoutException, classified by the real
+        // client, must compose into the "nothing answered" prose rather than the catch-all "could not be used".
+        await using var production = new DockerDotNetRuntimeClient(
+            new DockerDaemonEndpoint { Uri = new Uri("npipe://./pipe/docker_engine"), Source = DockerDaemonEndpointSource.WindowsNamedPipe },
+            TimeSpan.FromSeconds(1),
+            TimeProvider.System);
+        var harness = new Harness();
+        harness.Client.ProbeFailure = production.Classify(new TimeoutException("The operation has timed out."));
+
+        var resolution = await harness.Resolver.ResolveAsync();
+
+        AssertEx.Equal(ContainerRuntimeStatus.DaemonUnreachable, resolution.Status);
+        AssertEx.Contains(resolution.Message, "Start Docker");
+        AssertEx.False(resolution.Message.Contains("could not be used", StringComparison.Ordinal), resolution.Message);
+        AssertEx.False(resolution.Message.Contains("did not complete", StringComparison.Ordinal), resolution.Message);
     }
 
     [Test]

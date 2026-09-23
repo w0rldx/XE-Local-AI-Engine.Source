@@ -3677,35 +3677,6 @@
 		"loadedModels": {
 			"title": "Geladene Modelle",
 			"subtitle": "Modelle, die die lokale Laufzeit derzeit im Speicher hält (RAM/VRAM). Auswerfen gibt diesen Speicher frei — kontrolliert, nachdem eine laufende Generierung abgeschlossen ist.",
-			"loading": "Geladene Modelle werden geladen…",
-			"empty": "Derzeit sind keine Modelle geladen.",
-			"unavailable": "Ollama ist derzeit nicht erreichbar. Es ist ein optionaler sekundärer Anbieter, daher gibt es hier möglicherweise nichts anzuzeigen. llama.cpp-Modelle erscheinen weiterhin unten.",
-			"cpuOnly": "Nur CPU",
-			"expired": "Abgelaufen",
-			"sizeUnknown": "Unbekannt",
-			"columns": {
-				"model": "Modell",
-				"memory": "Speicher (RAM)",
-				"vram": "VRAM",
-				"expiresIn": "Läuft ab in",
-				"action": "Aktion"
-			},
-			"errors": {
-				"load": "Geladene Modelle konnten nicht geladen werden."
-			},
-			"eject": {
-				"button": "Auswerfen",
-				"tooltip": "Gibt den Speicher frei, sobald die aktuelle Generierung abgeschlossen ist",
-				"confirmTitle": "Modell auswerfen",
-				"confirmDescription": "'{{modelName}}' aus dem Speicher auswerfen? Der Speicher wird freigegeben, sobald die aktuelle Generierung abgeschlossen ist; eine laufende Antwort wird nicht unterbrochen.",
-				"confirmAction": "Auswerfen",
-				"success": "'{{modelName}}' wird ausgeworfen — der Speicher wird nach der aktuellen Generierung freigegeben.",
-				"error": "Das Modell konnte nicht ausgeworfen werden."
-			},
-			"ollama": {
-				"title": "Ollama (im Arbeitsspeicher)",
-				"disabled": "Die Ollama-Laufzeit ist auf diesem Node deaktiviert (XE_OLLAMA_RUNTIME_ENABLED=false), daher kann hier nichts geladen werden. llama.cpp-Modelle erscheinen weiterhin unten."
-			},
 			"llamaCpp": {
 				"title": "llama.cpp-Laufzeit",
 				"loading": "Laufende Modelle werden geladen…",

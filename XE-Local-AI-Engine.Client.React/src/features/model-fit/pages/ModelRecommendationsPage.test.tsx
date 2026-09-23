@@ -2,7 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFitManagementStore";
@@ -359,39 +359,55 @@ describe("ModelRecommendationsPage", () => {
 		expect(screen.getByTestId("model-fit-recommendations-error")).toBeTruthy();
 	});
 
-	it("fires the existing model-recommendation-check job when Refresh now is clicked", () => {
-		const refreshMutation = makeMutation();
-		hooksMock.useRefreshRecommendations.mockReturnValue(refreshMutation);
+	it("refreshes every use case sequentially, selected first, keeping Refresh now disabled until the last request resolves", async () => {
+		// Each POST fires a real HuggingFace discovery run, so the page must await one before sending the next. Hold every
+		// request open on a gate the test controls and release them one at a time.
+		const gates: Array<() => void> = [];
+		const mutateAsync = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					gates.push(resolve);
+				}),
+		);
+		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation({ mutateAsync }));
 
 		renderPage();
 
 		const button = screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement;
 		expect(button.disabled).toBe(false);
-
 		fireEvent.click(button);
 
-		expect(refreshMutation.mutate).toHaveBeenCalledWith(
-			{ scheduledJobId: "job-mf", useCase: "coding", limit: 50 },
-			{ onSuccess: expect.any(Function), onError: expect.any(Function) },
+		const expectedOrder = ["coding", "general", "reasoning", "chat", "multimodal", "embedding"];
+		for (const [index, useCase] of expectedOrder.entries()) {
+			// biome-ignore lint/performance/noAwaitInLoops: the test releases each request in order to prove the loop is sequential.
+			await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(index + 1));
+			expect(mutateAsync).toHaveBeenLastCalledWith({ scheduledJobId: "job-mf", useCase, limit: 50 });
+			// The next request has not been sent while this one is still open, and the button stays disabled.
+			expect(mutateAsync).toHaveBeenCalledTimes(index + 1);
+			expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(true);
+			await act(async () => gates[index]?.());
+		}
+
+		await waitFor(() => expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(false));
+		expect(mutateAsync).toHaveBeenCalledTimes(expectedOrder.length);
+		expect(toastMock.info).toHaveBeenCalledWith(
+			expect.stringContaining("Checking for the latest model recommendations"),
+			expect.objectContaining({ id: "model-fit-refresh-start", title: "Refresh started" }),
 		);
 	});
 
-	it("shows a 'refresh started' info toast when the refresh request is accepted", () => {
-		// The refresh enqueues an async run with no immediate result, so the page confirms the request landed with an info
-		// toast (the terminal success/failure toast arrives later from the scheduler hub). Drive the mutate's onSuccess.
-		const refreshMutation = makeMutation({
-			mutate: vi.fn((_variables, options?: { onSuccess?: () => void }) => options?.onSuccess?.()),
-		});
-		hooksMock.useRefreshRecommendations.mockReturnValue(refreshMutation);
+	it("stops the refresh-all loop and shows the error toast when a request fails", async () => {
+		const mutateAsync = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("boom"));
+		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation({ mutateAsync }));
 
 		renderPage();
 
 		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
 
-		expect(toastMock.info).toHaveBeenCalledWith(
-			expect.stringContaining("Checking for the latest model recommendations"),
-			expect.objectContaining({ id: "model-fit-refresh-start", title: "Refresh started" }),
-		);
+		await waitFor(() => expect(toastMock.error).toHaveBeenCalledTimes(1));
+		expect(mutateAsync).toHaveBeenCalledTimes(2);
+		expect(toastMock.info).not.toHaveBeenCalled();
+		await waitFor(() => expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(false));
 	});
 
 	it("disables Refresh now and shows guidance when no model-recommendation-check job exists", () => {

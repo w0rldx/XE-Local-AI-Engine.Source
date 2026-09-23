@@ -338,9 +338,7 @@ XE-Local-AI-Engine.Tests.E2ETests/Tests/KnowledgeBaseRagE2ETests.cs|run|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/KnowledgeBaseRagE2ETests.cs|summary|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/LiveTranscriptionE2ETests.cs|run|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/LiveTranscriptionE2ETests.cs|summary|2
-XE-Local-AI-Engine.Tests.E2ETests/Tests/LoadedModelsPageE2ETests.cs|block|2
-XE-Local-AI-Engine.Tests.E2ETests/Tests/LoadedModelsPageE2ETests.cs|run|1
-XE-Local-AI-Engine.Tests.E2ETests/Tests/LoadedModelsPageE2ETests.cs|summary|2
+XE-Local-AI-Engine.Tests.E2ETests/Tests/LoadedModelsPageE2ETests.cs|summary|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/LocalImportAndBenchmarksE2ETests.cs|summary|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/McpServersPageE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/McpServersPageE2ETests.cs|summary|1

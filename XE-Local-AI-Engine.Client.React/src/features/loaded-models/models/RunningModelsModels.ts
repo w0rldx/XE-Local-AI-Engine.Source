@@ -3,11 +3,9 @@ import type {
 	XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse,
 } from "@/core/api/generated";
 
-// Domain view-model for one running (loaded) model the llama.cpp server-process supervisor reports. This is a
-// DIFFERENT runtime from the Ollama in-memory list (LoadedModel): it lists llama.cpp server processes, with a
-// role (chat/embedding), a liveness flag, and a free-form detail. Relocated from the model-fit advisor so the
-// Loaded Models page can surface both runtimes side by side. role distinguishes chat/embedding roles; isResponsive +
-// detail surface liveness for the eject UI.
+// Domain view-model for one running (loaded) model the llama.cpp server-process supervisor reports, with a role
+// (chat/embedding), a liveness flag, and a free-form detail. Relocated from the model-fit advisor to the Loaded
+// Models page. isResponsive + detail surface liveness for the eject UI.
 export interface RunningModel {
 	readonly modelName: string;
 	readonly role: string;
