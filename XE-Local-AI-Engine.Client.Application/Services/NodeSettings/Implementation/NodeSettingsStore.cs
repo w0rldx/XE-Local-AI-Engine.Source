@@ -333,7 +333,8 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             DefaultVoiceProfile = TrimToNull(settings.DefaultVoiceProfile),
             UsageRates = NormalizeUsageRates(settings.UsageRates),
             ExternalAccessProfile = NormalizeExternalAccessProfile(settings.ExternalAccessProfile),
-            UiMode = NormalizeUiMode(settings.UiMode)
+            UiMode = NormalizeUiMode(settings.UiMode),
+            UpdateChannel = NormalizeUpdateChannel(settings.UpdateChannel)
         };
     }
 
@@ -453,6 +454,22 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     {
         var trimmed = TrimToNull(value);
         return StoredNodeSettings.IsValidUiMode(trimmed) ? trimmed : null;
+    }
+
+    /// <summary>
+    ///     Unlike the external-access profile, an unrecognised value falls back to <see langword="null" /> rather than
+    ///     to an "ask again" literal.
+    /// </summary>
+    /// <remarks>
+    ///     Answering for the operator costs nothing here — the reader re-seeds the channel baked into the artifact,
+    ///     which is the update visibility this build has always had, so a junk value simply makes the node look like
+    ///     one that never chose. The comparison is ordinal, so <c>"Development"</c> is unrecognised and
+    ///     <c>"  development  "</c> is not.
+    /// </remarks>
+    private static string? NormalizeUpdateChannel(string? value)
+    {
+        var trimmed = TrimToNull(value);
+        return StoredNodeSettings.IsValidUpdateChannel(trimmed) ? trimmed : null;
     }
 
     private static string? NormalizeRecommendedTag(string? value)

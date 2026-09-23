@@ -70,6 +70,15 @@ public sealed record NodeSettingsResponse
     public string? UiMode { get; init; }
 
     /// <summary>
+    ///     Which application-update channel this node follows: <c>stable</c>, <c>preview</c> or <c>development</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> means the operator has never chosen; the node follows the channel baked into this
+    ///     build.
+    /// </remarks>
+    public string? UpdateChannel { get; init; }
+
+    /// <summary>
     ///     Whether the node checks for application updates on its own. <see langword="null" /> reads as on. The manual
     ///     check and apply flow are unaffected. The check runs once per process, so turning it back on takes effect at
     ///     the next node start.
@@ -274,6 +283,17 @@ public sealed record SaveNodeSettingsRequest
     ///     on its own — which is how both the first-run step and the Node Settings toggle save it.
     /// </remarks>
     public string? UiMode { get; init; }
+
+    /// <summary>
+    ///     Set the update channel: <c>stable</c>, <c>preview</c> or <c>development</c> ONLY; anything else is rejected
+    ///     with a 400.
+    /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> keeps the current stored value. The SPA uses the dedicated
+    ///     <c>PUT app-update/channel</c> endpoint instead, which also re-checks immediately; this member exists so the
+    ///     MCP and Node Settings surfaces stay consistent with it.
+    /// </remarks>
+    public string? UpdateChannel { get; init; }
 
     /// <summary>
     ///     Whether the node checks for application updates on its own.

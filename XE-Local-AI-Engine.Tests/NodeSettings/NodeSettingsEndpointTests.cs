@@ -10,6 +10,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
+using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
@@ -1173,6 +1174,75 @@ public sealed class NodeSettingsEndpointTests
             });
 
         AssertEx.Equal(StoredNodeSettings.UiModeSimple, settings.UiMode);
+        AssertEx.Equal(expected: 600, settings.MaxMessageRequestTimeoutSeconds);
+    }
+
+    [Test]
+    [Arguments(AppUpdateChannelNames.Stable)]
+    [Arguments(AppUpdateChannelNames.Preview)]
+    [Arguments(AppUpdateChannelNames.Development)]
+    public async Task SaveNodeSettings_WithAnUpdateChannel_PersistsAndReturnsIt(string channel)
+    {
+        // Both halves: the response the client reads back AND the record handed to the store, because
+        // ToStoredSettings builds a FRESH record and an omitted member would erase the value.
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            UpdateChannel = channel
+        });
+        using var response = await client.SendAsync(request);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(channel, settings.UpdateChannel);
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).UpdateChannel == channel),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments("nightly")]
+    [Arguments("Development")]
+    [Arguments("")]
+    public async Task SaveNodeSettings_WithAnUnknownUpdateChannel_Returns400AndPersistsNothing(string channel)
+    {
+        // The stored record must be untouched, not merely the status code right: a rejected save that still wrote
+        // would move the node onto another channel silently.
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            UpdateChannel = AppUpdateChannelNames.Stable
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            UpdateChannel = channel
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenASaveOmitsTheUpdateChannel_KeepsTheStoredOne()
+    {
+        var settings = await SaveAsync(new StoredNodeSettings
+            {
+                UpdateChannel = AppUpdateChannelNames.Development
+            },
+            new SaveNodeSettingsRequest
+            {
+                MaxMessageRequestTimeoutSeconds = 600
+            });
+
+        AssertEx.Equal(AppUpdateChannelNames.Development, settings.UpdateChannel);
         AssertEx.Equal(expected: 600, settings.MaxMessageRequestTimeoutSeconds);
     }
 

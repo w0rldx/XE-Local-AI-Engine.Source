@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>Orchestrates anonymous public-release checks and operator-initiated Velopack applies.</summary>
 public sealed class AppUpdateService : IAppUpdateService, IDisposable
@@ -12,8 +13,11 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
     private readonly AppUpdateHostContext _hostContext;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AppUpdateService> _logger;
+    private readonly INodeSettingsStore _settingsStore;
     internal const string DesktopShellLeaseFileName = "desktop-shell.lock";
     private IVelopackUpdateManager? _primedUpdateManager;
+    private AppUpdateFeed? _primedFeed;
+    private IVelopackUpdateManager? _winningUpdateManager;
     private FileStream? _standaloneUpdateLease;
     private readonly Action<FileStream>? _retainAcceptedLease;
     private bool _applyScheduled;
@@ -23,8 +27,10 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         IOptions<AppUpdateChannelOptions> channelOptions,
         AppUpdateHostContext hostContext,
         ILogger<AppUpdateService> logger,
-        TimeProvider timeProvider)
-        : this(updateManagerFactory, state, channelOptions, hostContext, logger, timeProvider, retainAcceptedLease: null)
+        TimeProvider timeProvider,
+        INodeSettingsStore settingsStore)
+        : this(updateManagerFactory, state, channelOptions, hostContext, logger, timeProvider, settingsStore,
+            retainAcceptedLease: null)
     {
     }
 
@@ -34,9 +40,11 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         AppUpdateHostContext hostContext,
         ILogger<AppUpdateService> logger,
         TimeProvider timeProvider,
+        INodeSettingsStore settingsStore,
         Action<FileStream>? retainAcceptedLease)
     {
         _retainAcceptedLease = retainAcceptedLease;
+        _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         _updateManagerFactory = updateManagerFactory ?? throw new ArgumentNullException(nameof(updateManagerFactory));
         _state = state ?? throw new ArgumentNullException(nameof(state));
         ArgumentNullException.ThrowIfNull(channelOptions);
@@ -57,6 +65,37 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         return CheckForUpdatesSerializedAsync(minInterval, ct);
     }
 
+    public async Task<AppUpdateSnapshot> GetStatusAsync(CancellationToken ct)
+    {
+        var selected = await ResolveChannelAsync(ct);
+        var current = _state.Current;
+
+        // The node-settings SAVE path writes the channel without checking, so the cached offer can belong to the
+        // channel the operator just left. Dropping it keeps AvailableChannel null exactly when nothing is offered.
+        var stale = selected != current.SelectedChannel;
+
+        // A record `with` on the cached snapshot: nothing is stored back, so a concurrent check cannot be clobbered.
+        return current with
+        {
+            SelectedChannel = selected,
+            DefaultChannel = _channelOptions.DefaultChannel,
+            AvailableVersion = stale ? null : current.AvailableVersion,
+            UpdateAvailable = !stale && current.UpdateAvailable,
+            AvailableChannel = stale ? null : current.AvailableChannel
+        };
+    }
+
+    public async Task<AppUpdateSnapshot> SetChannelAsync(AppUpdateChannel channel, CancellationToken ct)
+    {
+        // Through UpdateAsync so the mutation runs against the record the write lands on: a sibling writer's field
+        // is never lost. The persist is the authority — a check under a policy that was not stored would lie.
+        await _settingsStore.UpdateAsync(current => current with { UpdateChannel = AppUpdateChannelNames.ToWire(channel) }, ct);
+
+        // CheckForUpdatesAsync passes minInterval: null, i.e. NO rate floor: a check under a new policy is not a
+        // duplicate. The startup check and the manual refresh keep passing their own floors, unchanged.
+        return await CheckForUpdatesAsync(ct);
+    }
+
     public void Dispose()
     {
         _standaloneUpdateLease?.Dispose();
@@ -69,7 +108,12 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         try
         {
             var current = _state.Current;
-            if (minInterval is { } interval && !IsStale(current.LastCheckedUtc, interval, _timeProvider.GetUtcNow()))
+
+            // The channel is checked too, not only the clock: node settings expose UpdateChannel on a SAVE that
+            // runs no check, and a check under a new policy is never the duplicate the floor exists to suppress.
+            if (minInterval is { } interval
+                && !IsStale(current.LastCheckedUtc, interval, _timeProvider.GetUtcNow())
+                && current.SelectedChannel == await ResolveChannelAsync(ct))
             {
                 return current;
             }
@@ -82,55 +126,149 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         }
     }
 
+    /// <summary>The channel this node follows: the operator's stored choice, else the channel baked into the build.</summary>
+    /// <remarks>
+    ///     A null or unrecognised stored value reads as the baked default, which is the update visibility this
+    ///     artifact has always had. The load answers from the settings store's in-memory cache, so this is not a file
+    ///     read per poll.
+    /// </remarks>
+    private async Task<AppUpdateChannel> ResolveChannelAsync(CancellationToken ct)
+    {
+        var stored = (await _settingsStore.LoadAsync(ct)).UpdateChannel;
+        return AppUpdateChannelNames.TryParse(stored, out var channel) ? channel : _channelOptions.DefaultChannel;
+    }
+
     private async Task<AppUpdateSnapshot> CheckForUpdatesCoreAsync(CancellationToken ct)
     {
+        var selectedChannel = await ResolveChannelAsync(ct);
+
         if (!_hostContext.IsLocalMode)
         {
-            return StoreSnapshot(Snapshot("0.0.0", isConfigured: _channelOptions.IsConfigured));
+            return StoreSnapshot(Snapshot("0.0.0", selectedChannel, isConfigured: _channelOptions.IsConfigured));
         }
 
         if (!_channelOptions.IsConfigured)
         {
-            return StoreSnapshot(Snapshot("0.0.0", isConfigured: false));
+            return StoreSnapshot(Snapshot("0.0.0", selectedChannel, isConfigured: false));
         }
 
-        var manager = TakeUpdateManager();
-        var currentVersion = manager.CurrentVersion;
+        var feeds = _updateManagerFactory.ResolveFeeds(selectedChannel);
+        var results = new List<VelopackCheckResult>(feeds.Count);
+        var currentVersion = "0.0.0";
+        string? recommendedVersion = null;
+        VelopackCheckResult? winner = null;
+        AppUpdateFeed? winningFeed = null;
+        _winningUpdateManager = null;
 
-        VelopackCheckResult result;
-        try
+        foreach (var feed in feeds)
         {
-            result = await manager.CheckForUpdateAsync(ct);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            // Do not attach the exception: feed/parser messages can contain URLs or local paths.
-            _logger.LogWarning("The app self-update check failed ({FailureReason}).", AppUpdateFailureReason.Unexpected);
-            return StoreSnapshot(Snapshot(currentVersion, isConfigured: true, checkStatus: AppUpdateCheckStatus.Failed));
+            var manager = TakeUpdateManager(feed);
+
+            // Channel-independent: every manager wraps the same installation.
+            currentVersion = manager.CurrentVersion;
+
+            VelopackCheckResult result;
+            try
+            {
+                result = await manager.CheckForUpdateAsync(ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // No exception attached: feed messages can carry URLs or local paths. A thrown feed becomes one
+                // Failed result rather than ending the check, so a broken dev feed cannot hide a main-feed update.
+                _logger.LogWarning("The app self-update check failed ({FailureReason}).", AppUpdateFailureReason.Unexpected);
+                result = new VelopackCheckResult
+                {
+                    Outcome = VelopackCheckOutcome.Failed,
+                    AvailableVersion = null,
+                    FailureReason = AppUpdateFailureReason.Unexpected
+                };
+            }
+
+            results.Add(result);
+
+            // The main feed is the ONLY source of the recommended version, and the policy guarantees exactly one.
+            if (feed.IsMainFeed)
+            {
+                recommendedVersion = result.RecommendedVersion;
+            }
+
+            // Strictly higher, so a tie between two feeds keeps the earlier (main) one and produces one offer.
+            if (result.Outcome is VelopackCheckOutcome.UpdateAvailable
+                && AppUpdateVersions.IsHigher(result.AvailableVersion, winner?.AvailableVersion))
+            {
+                winner = result;
+                winningFeed = feed;
+                _winningUpdateManager = manager;
+            }
         }
 
-        var snapshot = result.Outcome switch
+        if (winner is not null && winningFeed is not null)
         {
-            VelopackCheckOutcome.UpdateAvailable => Snapshot(currentVersion,
-                availableVersion: result.AvailableVersion,
+            return StoreSnapshot(Snapshot(currentVersion,
+                selectedChannel,
+                availableVersion: winner.AvailableVersion,
                 updateAvailable: true,
                 isConfigured: true,
-                checkStatus: AppUpdateCheckStatus.Ready),
-            VelopackCheckOutcome.UpToDate => Snapshot(currentVersion,
-                isConfigured: true,
-                checkStatus: AppUpdateCheckStatus.Ready),
-            VelopackCheckOutcome.Offline => Snapshot(currentVersion,
-                isConfigured: true,
-                checkStatus: AppUpdateCheckStatus.Offline),
-            VelopackCheckOutcome.Failed => FailedSnapshot(currentVersion, result.FailureReason),
-            _ => FailedSnapshot(currentVersion, AppUpdateFailureReason.Unexpected)
-        };
+                checkStatus: AppUpdateCheckStatus.Ready,
+                recommendedVersion: recommendedVersion,
+                availableChannel: OfferingChannel(winningFeed, winner.AvailableVersion)));
+        }
 
-        return StoreSnapshot(snapshot);
+        var status = AggregateOutcome(results);
+        if (status is AppUpdateCheckStatus.Failed)
+        {
+            var reason = results.FirstOrDefault(result => result.Outcome is VelopackCheckOutcome.Failed)?.FailureReason
+                         ?? AppUpdateFailureReason.Unexpected;
+            return StoreSnapshot(FailedSnapshot(currentVersion, selectedChannel, reason, recommendedVersion));
+        }
+
+        return StoreSnapshot(Snapshot(currentVersion,
+            selectedChannel,
+            isConfigured: true,
+            checkStatus: status,
+            recommendedVersion: recommendedVersion));
+    }
+
+    /// <summary>
+    ///     The lowest channel that also offers this version, so the dialog can name the stream the build came from.
+    /// </summary>
+    /// <remarks>
+    ///     Derived from the VERSION, not from the operator's own channel: a Development user offered a plain stable
+    ///     release must be told it is a stable release.
+    /// </remarks>
+    private static AppUpdateChannel OfferingChannel(AppUpdateFeed winningFeed, string? availableVersion)
+    {
+        if (!winningFeed.IsMainFeed)
+        {
+            return AppUpdateChannel.Development;
+        }
+
+        return AppUpdateVersions.IsPrerelease(availableVersion) ? AppUpdateChannel.Preview : AppUpdateChannel.Stable;
+    }
+
+    /// <summary>The reported status when no feed offered an update.</summary>
+    /// <remarks>
+    ///     One successful feed decides it: a Development user whose dev feed is momentarily 404 must still be told
+    ///     the main feed answered, rather than being shown an offline node.
+    /// </remarks>
+    private static AppUpdateCheckStatus AggregateOutcome(IReadOnlyList<VelopackCheckResult> results)
+    {
+        if (results.Any(static result => result.Outcome is VelopackCheckOutcome.UpToDate or VelopackCheckOutcome.UpdateAvailable))
+        {
+            return AppUpdateCheckStatus.Ready;
+        }
+
+        if (results.Any(static result => result.Outcome is VelopackCheckOutcome.Failed))
+        {
+            return AppUpdateCheckStatus.Failed;
+        }
+
+        return results.Count is 0 ? AppUpdateCheckStatus.Failed : AppUpdateCheckStatus.Offline;
     }
 
     private static bool IsStale(DateTimeOffset? checkedAtUtc, TimeSpan minInterval, DateTimeOffset now) =>
@@ -152,12 +290,20 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
                 return false;
             }
 
+            // Re-check under the CURRENT policy so the apply uses the manager that found the winner: a dev-feed
+            // winner applied through a main-feed manager would find nothing. The core call does not re-take the gate.
+            await CheckForUpdatesCoreAsync(ct);
+            if (!_state.Current.UpdateAvailable || _winningUpdateManager is null)
+            {
+                return false;
+            }
+
 #pragma warning disable CA2000 // The async finally disposes this lease unless accepted update ownership transfers to the service or process-exit holder.
             shellLease = AcquireStandaloneShellLease();
 #pragma warning restore CA2000
             try
             {
-                var manager = TakeUpdateManager();
+                var manager = _winningUpdateManager;
                 var applying = await manager.PrepareUpdateAndRestartAsync(_hostContext.RestartArgs, ct);
                 if (applying)
                 {
@@ -171,9 +317,12 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
                     }
                 }
 
+                var applied = _state.Current;
                 StoreSnapshot(Snapshot(manager.CurrentVersion,
+                    applied.SelectedChannel,
                     isConfigured: true,
-                    checkStatus: AppUpdateCheckStatus.Ready));
+                    checkStatus: AppUpdateCheckStatus.Ready,
+                    recommendedVersion: applied.RecommendedVersion));
                 return applying;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -252,12 +401,16 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         {
             try
             {
-                _primedUpdateManager = _updateManagerFactory.Create();
+                // The constructor cannot await, so the STORED channel is not read here: only CurrentVersion is,
+                // and it is channel-independent. GetStatusAsync re-stamps the live channel before the SPA sees this.
+                _primedFeed = DefaultChannelMainFeed();
+                _primedUpdateManager = _updateManagerFactory.Create(_primedFeed);
                 currentVersion = _primedUpdateManager.CurrentVersion;
             }
             catch (Exception)
             {
                 _primedUpdateManager = null;
+                _primedFeed = null;
                 checkStatus = AppUpdateCheckStatus.Failed;
                 _logger.LogWarning("The app self-update version could not be determined ({FailureReason}).",
                     AppUpdateFailureReason.Unexpected);
@@ -272,22 +425,39 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             IsConfigured = _channelOptions.IsConfigured,
             IsDesktop = _hostContext.IsLocalMode,
             CheckStatus = checkStatus,
-            LastCheckedUtc = null
+            LastCheckedUtc = null,
+            SelectedChannel = _channelOptions.DefaultChannel,
+            DefaultChannel = _channelOptions.DefaultChannel
         });
     }
 
-    private IVelopackUpdateManager TakeUpdateManager()
+    /// <summary>The manager for one feed, reusing the primed instance only when it was primed for that same feed.</summary>
+    private IVelopackUpdateManager TakeUpdateManager(AppUpdateFeed feed)
     {
-        var manager = _primedUpdateManager;
-        _primedUpdateManager = null;
-        return manager ?? _updateManagerFactory.Create();
+        if (_primedUpdateManager is { } primed && _primedFeed == feed)
+        {
+            _primedUpdateManager = null;
+            _primedFeed = null;
+            return primed;
+        }
+
+        return _updateManagerFactory.Create(feed);
+    }
+
+    /// <summary>The main feed of the channel baked into this artifact.</summary>
+    private AppUpdateFeed DefaultChannelMainFeed()
+    {
+        return _updateManagerFactory.ResolveFeeds(_channelOptions.DefaultChannel)[0];
     }
 
     private AppUpdateSnapshot Snapshot(string currentVersion,
+        AppUpdateChannel selectedChannel,
         string? availableVersion = null,
         bool updateAvailable = false,
         bool isConfigured = false,
-        AppUpdateCheckStatus checkStatus = AppUpdateCheckStatus.NotChecked) =>
+        AppUpdateCheckStatus checkStatus = AppUpdateCheckStatus.NotChecked,
+        string? recommendedVersion = null,
+        AppUpdateChannel? availableChannel = null) =>
         new()
         {
             CurrentVersion = currentVersion,
@@ -296,13 +466,24 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             IsConfigured = isConfigured,
             IsDesktop = _hostContext.IsLocalMode,
             CheckStatus = checkStatus,
-            LastCheckedUtc = _timeProvider.GetUtcNow()
+            LastCheckedUtc = _timeProvider.GetUtcNow(),
+            SelectedChannel = selectedChannel,
+            DefaultChannel = _channelOptions.DefaultChannel,
+            RecommendedVersion = recommendedVersion,
+            AvailableChannel = availableChannel
         };
 
-    private AppUpdateSnapshot FailedSnapshot(string currentVersion, AppUpdateFailureReason reason)
+    private AppUpdateSnapshot FailedSnapshot(string currentVersion,
+        AppUpdateChannel selectedChannel,
+        AppUpdateFailureReason reason,
+        string? recommendedVersion)
     {
         var safeReason = reason is AppUpdateFailureReason.None ? AppUpdateFailureReason.Unexpected : reason;
         _logger.LogWarning("The app self-update check failed ({FailureReason}).", safeReason);
-        return Snapshot(currentVersion, isConfigured: true, checkStatus: AppUpdateCheckStatus.Failed);
+        return Snapshot(currentVersion,
+            selectedChannel,
+            isConfigured: true,
+            checkStatus: AppUpdateCheckStatus.Failed,
+            recommendedVersion: recommendedVersion);
     }
 }

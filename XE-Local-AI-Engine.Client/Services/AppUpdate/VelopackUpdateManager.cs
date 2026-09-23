@@ -7,11 +7,10 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Velopack;
 using Velopack.Exceptions;
-using Velopack.Sources;
 
 /// <summary>
 ///     The real Velopack-backed <see cref="IVelopackUpdateManager" />, wrapping an <see cref="UpdateManager" /> over a
-///     <see cref="GithubSource" /> for the baked public repo and explicit stable/RC track, with a null access token.
+///     <see cref="PaginatingGithubSource" /> for the baked public repo and one resolved feed, with a null access token.
 /// </summary>
 /// <remarks>
 ///     All Velopack types stay inside this class. Check failures are reduced to sanitized categories so transport
@@ -23,18 +22,23 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
     private readonly Action<UpdateManager, VelopackAsset, string[]> _scheduleApplyAfterExit;
     private readonly UpdateManager _updateManager;
 
-    internal VelopackUpdateManager(UpdateManager updateManager) : this(updateManager,
+    private readonly PaginatingGithubSource? _source;
+
+    internal VelopackUpdateManager(UpdateManager updateManager, PaginatingGithubSource? source = null) : this(updateManager,
         static (manager, release, restartArgs) =>
-            manager.WaitExitThenApplyUpdates(release, silent: false, restart: true, restartArgs))
+            manager.WaitExitThenApplyUpdates(release, silent: false, restart: true, restartArgs),
+        source)
     {
     }
 
     internal VelopackUpdateManager(UpdateManager updateManager,
-        Action<UpdateManager, VelopackAsset, string[]> scheduleApplyAfterExit)
+        Action<UpdateManager, VelopackAsset, string[]> scheduleApplyAfterExit,
+        PaginatingGithubSource? source = null)
     {
         _updateManager = updateManager ?? throw new ArgumentNullException(nameof(updateManager));
         _scheduleApplyAfterExit = scheduleApplyAfterExit
                                   ?? throw new ArgumentNullException(nameof(scheduleApplyAfterExit));
+        _source = source;
     }
 
     public bool IsInstalled => _updateManager.IsInstalled;
@@ -55,13 +59,22 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
             // Velopack 1.2.0's CheckForUpdatesAsync is parameterless — it takes no CancellationToken, so `ct` cannot be
             // flowed into the check itself (do not "fix" this by passing ct; the overload does not exist).
             var updateInfo = await _updateManager.CheckForUpdatesAsync();
+
+            // Read AFTER the check: the source only captures the feed while serving it, and no extra request is made.
+            var recommended = _source is null ? null : AppUpdateVersions.NewestStable(_source.LastFeedAssets);
             if (updateInfo is null)
             {
-                return new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null };
+                return new VelopackCheckResult
+                {
+                    Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null, RecommendedVersion = recommended
+                };
             }
 
             var version = updateInfo.TargetFullRelease.Version.ToString();
-            return new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpdateAvailable, AvailableVersion = version };
+            return new VelopackCheckResult
+            {
+                Outcome = VelopackCheckOutcome.UpdateAvailable, AvailableVersion = version, RecommendedVersion = recommended
+            };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -136,8 +149,9 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
 }
 
 /// <summary>
-///     Builds <see cref="VelopackUpdateManager" /> instances bound to the baked anonymous public source policy. Velopack
-///     continues to select its Windows/Linux feed channel from the installed package metadata.
+///     Builds <see cref="VelopackUpdateManager" /> instances bound to the baked anonymous public source policy, one per
+///     feed the operator's channel resolves to. The feed channel is passed explicitly on every check rather than read
+///     back from the installed package metadata.
 /// </summary>
 public sealed class VelopackUpdateManagerFactory : IVelopackUpdateManagerFactory
 {
@@ -149,15 +163,30 @@ public sealed class VelopackUpdateManagerFactory : IVelopackUpdateManagerFactory
         _options = options.Value;
     }
 
-    public IVelopackUpdateManager Create()
+    public IReadOnlyList<AppUpdateFeed> ResolveFeeds(AppUpdateChannel channel)
     {
-        return new VelopackUpdateManager(new UpdateManager(CreateGithubSource()));
+        return AppUpdateChannelPolicy.ResolveFeeds(channel, VelopackRuntimeInfo.SystemOs.GetOsShortName());
     }
 
-    internal GithubSource CreateGithubSource()
+    public IVelopackUpdateManager Create(AppUpdateFeed feed)
     {
+        var source = CreateGithubSource(feed);
+
+        // ExplicitChannel is the ONLY channel lever: the channel baked into the installed package is never trusted,
+        // so a node that once applied a -dev package still follows the operator's current choice.
+
+        // Velopack's version-downgrade option stays unassigned; its default of false is what makes every channel
+        // switch forward-only (research/velopack-1.2.0-verification.md section a, D6). Naming it here fails a guard.
+        return new VelopackUpdateManager(
+            new UpdateManager(source, new UpdateOptions { ExplicitChannel = feed.VelopackChannel }), source);
+    }
+
+    internal PaginatingGithubSource CreateGithubSource(AppUpdateFeed feed)
+    {
+        ArgumentNullException.ThrowIfNull(feed);
+
         var policy = _options.SourcePolicy
                      ?? throw new InvalidOperationException("App self-update is not configured for this build.");
-        return new GithubSource(policy.GitHubRepositoryUrl, accessToken: null, policy.IncludePrereleases);
+        return new PaginatingGithubSource(policy.GitHubRepositoryUrl, feed.IncludePrereleases, feed.VelopackChannel);
     }
 }

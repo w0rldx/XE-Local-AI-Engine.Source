@@ -20,6 +20,7 @@ internal static class NodeSettingsEndpointDtoMapper
             ToolRelevanceEnabled = settings.ToolRelevanceEnabled,
             ExternalAccessProfile = settings.ExternalAccessProfile,
             UiMode = settings.UiMode,
+            UpdateChannel = settings.UpdateChannel,
             AutoCheckApplicationUpdates = settings.AutoCheckApplicationUpdates,
             AutoCheckRuntimeUpdates = settings.AutoCheckRuntimeUpdates,
             AutoProvisionFirstRunModel = settings.AutoProvisionFirstRunModel,
@@ -116,6 +117,9 @@ internal static class NodeSettingsEndpointDtoMapper
             UiMode = request.UiMode is null
                 ? currentSettings.UiMode
                 : request.UiMode.Trim(),
+            UpdateChannel = request.UpdateChannel is null
+                ? currentSettings.UpdateChannel
+                : request.UpdateChannel.Trim(),
             AutoCheckApplicationUpdates = autoCheckApplicationUpdates,
             AutoCheckRuntimeUpdates = autoCheckRuntimeUpdates,
             AutoProvisionFirstRunModel = autoProvisionFirstRunModel,

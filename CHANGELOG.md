@@ -9,10 +9,15 @@ are `vX.Y.Z-rc.N` from `1.0.0` onward; the historical tester-repository line thr
 two-part `vX.Y.Z-rc.N.M` form, which is not reused. The section headings below use the bare version, matching the tag
 without its `v`.
 
+Automated Development snapshots of `develop` are tagged `dev/<version>` (e.g. `dev/1.0.0-rc.2.dev.20260922.1`). They
+are lightweight tags created by `.github/workflows/dev-build.yml`, are never deleted, and are not release tags — they
+carry no `v` prefix and are not listed in the sections below.
+
 **Repository & release home.** Source, `v<version>` tags, official binaries, and public update feeds live in
-`w0rldx/XE-Local-AI-Engine.Source`. The `main` flavor follows stable releases and the `tester` flavor also sees release
-candidates; Velopack independently selects the Windows or Linux package channel. Historical releases through
-`0.1.0-rc.5.1` used a separate tester-repository flow, recorded below for provenance only.
+`w0rldx/XE-Local-AI-Engine.Source`. An installed node picks one of three update channels: Stable sees stable tags,
+Preview also sees release candidates, and Development also sees the `dev/` snapshots published on the separate
+`win-dev` / `linux-dev` Velopack feeds. Velopack independently selects the Windows or Linux package channel.
+Historical releases through `0.1.0-rc.5.1` used a separate tester-repository flow, recorded below for provenance only.
 
 > **This file is hand-maintained.** `cliff.toml` drives git-cliff, which generates `RELEASE_NOTES.md` for the Velopack
 > package body — it does **not** generate this file. Update this file yourself when you cut a release; nothing will do

@@ -29,6 +29,12 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	applyAppUpdateMutation: vi.fn(() => ({ mutationFn: async () => ({ applying: true }) })),
 }));
 
+// This file is about the restart polling, so the channel picker is stubbed out rather than fed a fixture and a
+// channel mutation it would never use. AppUpdateChannelSelector.test.tsx covers the real one against MSW.
+vi.mock("@/features/app-update/components/AppUpdateChannelSelector", () => ({
+	AppUpdateChannelSelector: () => null,
+}));
+
 vi.mock("@/core/api/generated/sdk.gen", () => ({ getAppUpdateStatus: vi.fn() }));
 vi.mock("@/core/api/ResponseValidation", () => ({
 	withResponseValidation: (options: unknown) => options,

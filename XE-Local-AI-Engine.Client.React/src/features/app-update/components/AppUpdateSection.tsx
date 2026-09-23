@@ -3,6 +3,8 @@ import { IconInfoCircle, IconRefresh } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { AppUpdateButton } from "@/features/app-update/components/AppUpdateButton";
+import { AppUpdateChannelSelector } from "@/features/app-update/components/AppUpdateChannelSelector";
+import { channelName } from "@/features/app-update/models/AppUpdateChannelCopy";
 import { useAppUpdateStatus, useRefreshAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -42,6 +44,10 @@ export function AppUpdateSection() {
 				<Badge variant="light">{status.currentVersion}</Badge>
 			</Group>
 
+			{/* Above the check-status alerts: the channel is what those alerts are about. It hides itself when the
+			    build has no update source, so the not-configured alert below still reads alone. */}
+			<AppUpdateChannelSelector />
+
 			{!status.isConfigured ? (
 				<Alert icon={<IconInfoCircle size={16} />} color="gray">
 					{t("pages.about.appUpdate.notConfigured")}
@@ -70,6 +76,11 @@ export function AppUpdateSection() {
 							<Badge variant="dot" color="blue">
 								{status.availableVersion}
 							</Badge>
+							{status.availableChannel ? (
+								<Text size="sm" c="dimmed" data-testid="app-update-available-channel">
+									{t("pages.about.appUpdate.availableFromChannel", { channel: channelName(t, status.availableChannel) })}
+								</Text>
+							) : null}
 						</Group>
 					) : null}
 				</Stack>

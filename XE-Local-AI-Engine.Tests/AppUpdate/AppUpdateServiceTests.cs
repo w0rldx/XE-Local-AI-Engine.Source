@@ -9,6 +9,8 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -52,7 +54,7 @@ public sealed class AppUpdateServiceTests
         AssertEx.Equal(AppUpdateCheckStatus.NotChecked, state.Current.CheckStatus);
         AssertEx.Null(state.Current.LastCheckedUtc);
         AssertEx.False(state.Current.UpdateAvailable);
-        factory.Received(1).Create();
+        factory.Received(1).Create(Arg.Any<AppUpdateFeed>());
         manager.DidNotReceive().CheckForUpdateAsync(Arg.Any<CancellationToken>());
     }
 
@@ -60,8 +62,8 @@ public sealed class AppUpdateServiceTests
     public void Constructor_WhenVersionDiscoveryFails_KeepsDesktopStatusAvailableAndLogsNoSensitiveDetails()
     {
         const string sensitive = "Velopack metadata at /home/private with token=secret";
-        var factory = Substitute.For<IVelopackUpdateManagerFactory>();
-        factory.Create().Returns(_ => throw new InvalidOperationException(sensitive));
+        var factory = NewFactory();
+        factory.Create(Arg.Any<AppUpdateFeed>()).Returns(_ => throw new InvalidOperationException(sensitive));
         var logger = new CapturingLogger<AppUpdateService>();
         var state = new AppUpdateState();
 
@@ -88,7 +90,7 @@ public sealed class AppUpdateServiceTests
         AssertEx.True(snapshot.IsConfigured);
         AssertEx.False(snapshot.UpdateAvailable);
         AssertEx.Equal(AppUpdateCheckStatus.Ready, snapshot.CheckStatus);
-        factory.Received(1).Create();
+        factory.Received(1).Create(Arg.Any<AppUpdateFeed>());
     }
 
     [Test]
@@ -98,7 +100,7 @@ public sealed class AppUpdateServiceTests
     {
         var checkEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseCheck = new TaskCompletionSource<VelopackCheckResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.CurrentVersion.Returns("0.1.0");
         manager.CheckForUpdateAsync(Arg.Any<CancellationToken>()).Returns(_ =>
         {
@@ -133,7 +135,7 @@ public sealed class AppUpdateServiceTests
         await startupTask;
         var manualSnapshot = await manualTask;
 
-        factory.Received(1).Create();
+        factory.Received(1).Create(Arg.Any<AppUpdateFeed>());
         await manager.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
         AssertEx.Equal(AppUpdateCheckStatus.Ready, manualSnapshot.CheckStatus);
     }
@@ -141,13 +143,13 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task CheckForUpdates_WhenNotDesktop_DoesNotCreateManager()
     {
-        var factory = Substitute.For<IVelopackUpdateManagerFactory>();
+        var factory = NewFactory();
         using var service = CreateService(factory, isDesktop: false);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
 
         AssertEx.False(snapshot.IsDesktop);
-        factory.DidNotReceive().Create();
+        factory.DidNotReceive().Create(Arg.Any<AppUpdateFeed>());
     }
 
     [Test]
@@ -197,7 +199,7 @@ public sealed class AppUpdateServiceTests
     public async Task CheckForUpdates_WhenUnexpectedFailureEscapesManager_IsFailedAndLogsNoSensitiveDetails()
     {
         const string sensitive = "https://github.com/example/public-repo?token=secret at /home/operator/private";
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.CurrentVersion.Returns("0.1.0");
         manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
                .Returns<Task<VelopackCheckResult>>(_ => throw new FormatException(sensitive));
@@ -216,7 +218,7 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task Apply_PublicConfiguredBuild_UsesAnonymousManager()
     {
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.CurrentVersion.Returns("0.1.0");
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(false);
         var factory = FactoryReturning(manager);
@@ -239,14 +241,14 @@ public sealed class AppUpdateServiceTests
         AssertEx.False(state.Current.UpdateAvailable);
         AssertEx.Null(state.Current.AvailableVersion);
         AssertEx.Equal(AppUpdateCheckStatus.Ready, state.Current.CheckStatus);
-        factory.Received(1).Create();
+        factory.Received(1).Create(Arg.Any<AppUpdateFeed>());
     }
 
     [Test]
     public async Task Apply_ForwardsOnlyTheSanitizedStableRestartArguments()
     {
         IReadOnlyList<string> captured = [];
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.CurrentVersion.Returns("0.1.0");
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
                .Returns(call =>
@@ -268,7 +270,7 @@ public sealed class AppUpdateServiceTests
     public async Task Apply_WhenManagerThrows_SurfacesSanitizedError_AndLogsNoSensitiveDetails()
     {
         const string sensitive = "download failed at /home/secret/path with token";
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
                .Returns<Task<bool>>(_ => throw new InvalidOperationException(sensitive));
         var logger = new CapturingLogger<AppUpdateService>();
@@ -288,7 +290,7 @@ public sealed class AppUpdateServiceTests
     {
         var applyEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseApply = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.CurrentVersion.Returns("0.1.0");
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
                .Returns(_ =>
@@ -302,13 +304,13 @@ public sealed class AppUpdateServiceTests
         var first = service.ApplyAsync(CancellationToken.None);
         await applyEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var second = service.ApplyAsync(CancellationToken.None);
-        factory.Received(1).Create();
+        factory.Received(1).Create(Arg.Any<AppUpdateFeed>());
         await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
         releaseApply.SetResult(true);
 
         AssertEx.True(await first);
         AssertEx.False(await second);
-        factory.Received(1).Create();
+        factory.Received(1).Create(Arg.Any<AppUpdateFeed>());
         await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
     }
 
@@ -317,7 +319,7 @@ public sealed class AppUpdateServiceTests
     {
         var applyEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseApply = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.CurrentVersion.Returns("0.1.0");
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
                .Returns(_ =>
@@ -325,27 +327,28 @@ public sealed class AppUpdateServiceTests
                    applyEntered.TrySetResult();
                    return releaseApply.Task;
                });
-        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
-               .Returns(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null });
         var factory = FactoryReturning(manager);
         using var service = CreateService(factory, isDesktop: true, state: AvailableUpdateState());
 
         var apply = service.ApplyAsync(CancellationToken.None);
         await applyEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var check = service.CheckForUpdatesAsync(CancellationToken.None);
-        await manager.DidNotReceive().CheckForUpdateAsync(Arg.Any<CancellationToken>());
+
+        // Exactly one check has run while the apply holds the gate: its OWN re-check, which is how the apply finds
+        // the manager that offered the winner. The queued check must still be waiting.
+        await manager.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
         releaseApply.SetResult(false);
 
         AssertEx.False(await apply);
         AssertEx.Equal(AppUpdateCheckStatus.Ready, (await check).CheckStatus);
         await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
-        await manager.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
+        await manager.Received(2).CheckForUpdateAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task CheckForUpdates_WhenBuildIsNotConfigured_MakesNoGitHubCall()
     {
-        var factory = Substitute.For<IVelopackUpdateManagerFactory>();
+        var factory = NewFactory();
         using var service = CreateService(factory, isDesktop: true, repoUrl: "");
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
@@ -353,7 +356,7 @@ public sealed class AppUpdateServiceTests
         AssertEx.False(snapshot.IsConfigured);
         AssertEx.False(snapshot.UpdateAvailable);
         AssertEx.Equal(AppUpdateCheckStatus.NotChecked, snapshot.CheckStatus);
-        factory.DidNotReceive().Create();
+        factory.DidNotReceive().Create(Arg.Any<AppUpdateFeed>());
     }
 
     [Test]
@@ -363,7 +366,7 @@ public sealed class AppUpdateServiceTests
     {
         using var directory = new TempDirectory("xe-update-lease");
         using var shell = OpenShellLease(directory.Path);
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
         using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(),
             shellOwned: shellOwned, dataDirectory: directory.Path);
@@ -385,7 +388,7 @@ public sealed class AppUpdateServiceTests
     public async Task Apply_StandaloneRetainsLeaseUntilHostDisposesService()
     {
         using var directory = new TempDirectory("xe-update-lease");
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
         using (var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(),
                    shellOwned: false, dataDirectory: directory.Path))
@@ -406,7 +409,7 @@ public sealed class AppUpdateServiceTests
         using var directory = new TempDirectory("xe-update-lease");
         FileStream? retained = null;
         var transferCount = 0;
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
         try
         {
@@ -445,7 +448,7 @@ public sealed class AppUpdateServiceTests
     {
         using var directory = new TempDirectory("xe-update-lease");
         using var cancellation = new CancellationTokenSource();
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
                .Returns(async _ =>
                {
@@ -488,7 +491,7 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task Apply_StandaloneWithoutDataDirectoryFailsBeforeDownload()
     {
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(), shellOwned: false);
         var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(CancellationToken.None));
         AssertEx.Equal("The update could not verify the desktop lifetime. Restart XE and try again.", exception.Message);
@@ -499,7 +502,7 @@ public sealed class AppUpdateServiceTests
     public async Task Apply_WithoutAvailableUpdateDoesNotAcquireShellLease()
     {
         using var directory = new TempDirectory("xe-update-lease");
-        var manager = Substitute.For<IVelopackUpdateManager>();
+        var manager = NewManager();
         using var service = CreateService(FactoryReturning(manager), isDesktop: true,
             shellOwned: false, dataDirectory: directory.Path);
         AssertEx.False(await service.ApplyAsync(CancellationToken.None));
@@ -519,9 +522,21 @@ public sealed class AppUpdateServiceTests
 
     private static IVelopackUpdateManager ManagerReturning(VelopackCheckResult result)
     {
+        var manager = NewManager();
+        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>()).Returns(result);
+        return manager;
+    }
+
+    /// <summary>
+    ///     A manager substitute that answers a check by default, because ApplyAsync now re-checks under the current
+    ///     channel before applying. A test that cares about the outcome still configures its own.
+    /// </summary>
+    private static IVelopackUpdateManager NewManager()
+    {
         var manager = Substitute.For<IVelopackUpdateManager>();
         manager.CurrentVersion.Returns("0.1.0");
-        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>()).Returns(result);
+        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
+               .Returns(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpdateAvailable, AvailableVersion = "0.2.0" });
         return manager;
     }
 
@@ -541,10 +556,414 @@ public sealed class AppUpdateServiceTests
         return state;
     }
 
+    [Test]
+    [Arguments("1.0.0-rc.3", "1.0.0-rc.2.dev.20260922.1", "1.0.0-rc.3", AppUpdateChannel.Preview)]
+    [Arguments("1.0.0-rc.2", "1.0.0-rc.2.dev.20260922.1", "1.0.0-rc.2.dev.20260922.1", AppUpdateChannel.Development)]
+    [Arguments("1.0.0", null, "1.0.0", AppUpdateChannel.Stable)]
+    public async Task CheckForUpdates_ForDevelopment_OffersTheStrictlyHighestVersionAcrossBothFeeds(
+        string mainVersion, string? devVersion, string expectedVersion, AppUpdateChannel expectedChannel)
+    {
+        var factory = DevelopmentFactory(Offering(mainVersion), devVersion is null ? UpToDate() : Offering(devVersion));
+        using var service = CreateService(factory, isDesktop: true, settingsStore: StoreWith(AppUpdateChannelNames.Development));
+
+        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.True(snapshot.UpdateAvailable);
+        AssertEx.Equal(expectedVersion, snapshot.AvailableVersion);
+        AssertEx.Equal<AppUpdateChannel?>(expectedChannel, snapshot.AvailableChannel);
+        AssertEx.Equal(AppUpdateChannel.Development, snapshot.SelectedChannel);
+    }
+
+    [Test]
+    public async Task CheckForUpdates_ForDevelopment_WhenBothFeedsOfferTheSameVersion_ReportsOneOfferFromTheMainFeed()
+    {
+        // A win requires a STRICTLY higher version, so the tie keeps the earlier (main) feed and produces exactly
+        // one offer rather than two.
+        var factory = DevelopmentFactory(Offering("1.0.0-rc.3"), Offering("1.0.0-rc.3"));
+        using var service = CreateService(factory, isDesktop: true, settingsStore: StoreWith(AppUpdateChannelNames.Development));
+
+        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.True(snapshot.UpdateAvailable);
+        AssertEx.Equal("1.0.0-rc.3", snapshot.AvailableVersion);
+        AssertEx.Equal<AppUpdateChannel?>(AppUpdateChannel.Preview, snapshot.AvailableChannel);
+    }
+
+    [Test]
+    public async Task CheckForUpdates_ForDevelopment_WhenNeitherFeedIsNewer_ReportsNoUpdate()
+    {
+        var factory = DevelopmentFactory(UpToDate(), UpToDate());
+        using var service = CreateService(factory, isDesktop: true, settingsStore: StoreWith(AppUpdateChannelNames.Development));
+
+        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.False(snapshot.UpdateAvailable);
+        AssertEx.Null(snapshot.AvailableVersion);
+        AssertEx.Null(snapshot.AvailableChannel);
+        AssertEx.Equal(AppUpdateCheckStatus.Ready, snapshot.CheckStatus);
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Apply_ForDevelopment_GoesThroughTheManagerThatFoundTheWinner(bool devFeedWins)
+    {
+        // Applying a dev-feed winner through the main-feed manager would re-check the main feed, find nothing and
+        // return false — the update would silently never install.
+        var main = Offering(devFeedWins ? "1.0.0-rc.2" : "1.0.0-rc.3");
+        var dev = Offering("1.0.0-rc.2.dev.20260922.1");
+        main.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
+        dev.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
+        var factory = DevelopmentFactory(main, dev);
+        using var service = CreateService(factory, isDesktop: true,
+            state: AvailableUpdateState(),
+            settingsStore: StoreWith(AppUpdateChannelNames.Development));
+
+        AssertEx.True(await service.ApplyAsync(CancellationToken.None));
+
+        var winner = devFeedWins ? dev : main;
+        var loser = devFeedWins ? main : dev;
+        await winner.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        await loser.DidNotReceive().PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CheckForUpdates_ReportsTheRecommendedVersionFromTheMainFeed()
+    {
+        // Fails if anyone reads results.Last(): the dev feed reports a different recommended version.
+        var main = Offering("1.0.0-rc.3", recommendedVersion: "0.9.0");
+        var dev = Offering("1.0.0-rc.2.dev.20260922.1", recommendedVersion: "0.1.0");
+        var factory = DevelopmentFactory(main, dev);
+        using var service = CreateService(factory, isDesktop: true, settingsStore: StoreWith(AppUpdateChannelNames.Development));
+
+        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.Equal("0.9.0", snapshot.RecommendedVersion);
+    }
+
+    [Test]
+    public async Task CheckForUpdates_WhenTheDevelopmentFeedFails_StillOffersTheMainFeedUpdate()
+    {
+        var dev = NewManager();
+        dev.CheckForUpdateAsync(Arg.Any<CancellationToken>())
+           .Returns(new VelopackCheckResult
+           {
+               Outcome = VelopackCheckOutcome.Failed,
+               AvailableVersion = null,
+               FailureReason = AppUpdateFailureReason.Http
+           });
+        var factory = DevelopmentFactory(Offering("1.0.0-rc.3"), dev);
+        using var service = CreateService(factory, isDesktop: true, settingsStore: StoreWith(AppUpdateChannelNames.Development));
+
+        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.True(snapshot.UpdateAvailable);
+        AssertEx.Equal("1.0.0-rc.3", snapshot.AvailableVersion);
+        AssertEx.Equal(AppUpdateCheckStatus.Ready, snapshot.CheckStatus);
+    }
+
+    [Test]
+    [Arguments(AppUpdateChannel.Stable)]
+    [Arguments(AppUpdateChannel.Preview)]
+    [Arguments(AppUpdateChannel.Development)]
+    public async Task CheckForUpdates_WhenNotInstalled_EveryChannelReportsUpToDate(AppUpdateChannel channel)
+    {
+        // A raw-exe / dev run: every manager short-circuits, so no feed is read on any channel.
+        var factory = NewFactory();
+        factory.Create(Arg.Any<AppUpdateFeed>()).Returns(_ => UpToDate());
+        using var service = CreateService(factory, isDesktop: true,
+            settingsStore: StoreWith(AppUpdateChannelNames.ToWire(channel)));
+
+        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.False(snapshot.UpdateAvailable);
+        AssertEx.Null(snapshot.AvailableChannel);
+        AssertEx.Null(snapshot.RecommendedVersion);
+        AssertEx.Equal(AppUpdateCheckStatus.Ready, snapshot.CheckStatus);
+        AssertEx.Equal(channel, snapshot.SelectedChannel);
+    }
+
+    [Test]
+    [Arguments(AppUpdateChannel.Stable)]
+    [Arguments(AppUpdateChannel.Preview)]
+    public async Task CheckForUpdates_ForStableAndPreview_NeverCreatesADevelopmentManager(AppUpdateChannel channel)
+    {
+        var created = new List<AppUpdateFeed>();
+        var factory = NewFactory();
+        factory.Create(Arg.Any<AppUpdateFeed>()).Returns(call =>
+        {
+            created.Add(call.Arg<AppUpdateFeed>());
+            return UpToDate();
+        });
+        using var service = CreateService(factory, isDesktop: true,
+            settingsStore: StoreWith(AppUpdateChannelNames.ToWire(channel)));
+
+        await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.NotEmpty(created);
+        foreach (var feed in created)
+        {
+            AssertEx.False(feed.VelopackChannel.EndsWith(AppUpdateChannelPolicy.DevelopmentChannelSuffix, StringComparison.Ordinal),
+                $"{channel} created a manager for '{feed.VelopackChannel}'.");
+        }
+    }
+
+    [Test]
+    [Arguments(AppUpdateChannel.Stable, 1)]
+    [Arguments(AppUpdateChannel.Preview, 1)]
+    [Arguments(AppUpdateChannel.Development, 2)]
+    public async Task CheckForUpdates_WhenNoChannelIsStored_FollowsTheBakedDefault(AppUpdateChannel bakedDefault, int expectedFeeds)
+    {
+        var created = new List<AppUpdateFeed>();
+        var factory = NewFactory();
+        factory.Create(Arg.Any<AppUpdateFeed>()).Returns(call =>
+        {
+            created.Add(call.Arg<AppUpdateFeed>());
+            return UpToDate();
+        });
+        using var service = CreateService(factory, isDesktop: true,
+            settingsStore: new FakeNodeSettingsStore(new StoredNodeSettings { UpdateChannel = null }),
+            defaultChannel: bakedDefault);
+
+        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.Equal(bakedDefault, snapshot.SelectedChannel);
+        AssertEx.Equal(bakedDefault, snapshot.DefaultChannel);
+        AssertEx.Equal(expectedFeeds, created.Count);
+    }
+
+    [Test]
+    public async Task CheckForUpdates_WhenAChannelIsStored_OverridesTheBakedDefault()
+    {
+        var created = new List<AppUpdateFeed>();
+        var factory = NewFactory();
+        factory.Create(Arg.Any<AppUpdateFeed>()).Returns(call =>
+        {
+            created.Add(call.Arg<AppUpdateFeed>());
+            return UpToDate();
+        });
+        using var service = CreateService(factory, isDesktop: true,
+            settingsStore: StoreWith(AppUpdateChannelNames.Development),
+            defaultChannel: AppUpdateChannel.Stable);
+
+        // The constructor primes a manager for the BAKED channel's main feed. Clearing here scopes the assertion to
+        // the feeds the check itself asked for, which is the stored channel's plan, not the baked one's.
+        created.Clear();
+
+        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.Equal(AppUpdateChannel.Development, snapshot.SelectedChannel);
+        AssertEx.Equal(AppUpdateChannel.Stable, snapshot.DefaultChannel);
+        AssertEx.Equal("win,win-dev", string.Join(',', created.Select(feed => feed.VelopackChannel)));
+    }
+
+    [Test]
+    public async Task SetChannel_PersistsTheChoiceThroughTheStore()
+    {
+        // The real store over a real directory, then a FRESH store over the same directory: that is the
+        // node-settings.json round trip, not a fake's field.
+        using var root = new TempDirectory();
+        var factory = DevelopmentFactory(UpToDate(), UpToDate());
+        using (var store = NewNodeSettingsStore(root))
+        {
+            using var service = CreateService(factory, isDesktop: true, settingsStore: store);
+
+            await service.SetChannelAsync(AppUpdateChannel.Development, CancellationToken.None);
+        }
+
+        using var reader = NewNodeSettingsStore(root);
+        AssertEx.Equal(AppUpdateChannelNames.Development, (await reader.LoadAsync()).UpdateChannel);
+    }
+
+    [Test]
+    public async Task SetChannel_RunsAnImmediateCheckDespiteTheRateFloor()
+    {
+        // The primed snapshot was just checked, so RefreshIfStaleAsync(10 min) would serve the cache. The channel
+        // endpoint must not be routed through it: a check under a NEW policy is not a duplicate.
+        var main = UpToDate();
+        var dev = UpToDate();
+        var factory = DevelopmentFactory(main, dev);
+        using var service = CreateService(factory, isDesktop: true,
+            state: AvailableUpdateState(),
+            settingsStore: new FakeNodeSettingsStore(new StoredNodeSettings()));
+
+        await service.SetChannelAsync(AppUpdateChannel.Development, CancellationToken.None);
+
+        await main.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
+        await dev.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SetChannel_NeverApplies()
+    {
+        var manager = Offering("9.9.9");
+        var factory = FactoryReturning(manager);
+        using var service = CreateService(factory, isDesktop: true,
+            state: AvailableUpdateState(),
+            settingsStore: new FakeNodeSettingsStore(new StoredNodeSettings()));
+
+        await service.SetChannelAsync(AppUpdateChannel.Preview, CancellationToken.None);
+
+        await manager.DidNotReceive().PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SetChannel_WhenTheStoreWriteFails_DoesNotCheck()
+    {
+        // The persist is the authority: a check under a policy that was not stored would report a channel the node
+        // does not actually follow.
+        var manager = UpToDate();
+        var factory = FactoryReturning(manager);
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings());
+        store.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+             .Returns<Task<StoredNodeSettings>>(_ => throw new IOException("node-settings.json is read-only"));
+        using var service = CreateService(factory, isDesktop: true, settingsStore: store);
+
+        await AssertEx.ThrowsAsync<IOException>(
+            () => service.SetChannelAsync(AppUpdateChannel.Development, CancellationToken.None));
+
+        await manager.DidNotReceive().CheckForUpdateAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetStatus_ReportsTheStoredChannelBeforeAnyCheckHasRun()
+    {
+        // Fails if the endpoint goes back to reading IAppUpdateState.Current raw: the primed snapshot carries the
+        // BAKED channel, because the constructor cannot await the settings store.
+        var factory = FactoryReturning(UpToDate());
+        using var service = CreateService(factory, isDesktop: true,
+            settingsStore: StoreWith(AppUpdateChannelNames.Development),
+            defaultChannel: AppUpdateChannel.Preview);
+
+        var snapshot = await service.GetStatusAsync(CancellationToken.None);
+
+        AssertEx.Equal(AppUpdateChannel.Development, snapshot.SelectedChannel);
+        AssertEx.Equal(AppUpdateChannel.Preview, snapshot.DefaultChannel);
+    }
+
+    [Test]
+    public async Task GetStatus_WhenTheChannelChangedWithoutACheck_DropsTheOtherChannelsOffer()
+    {
+        // Node settings expose UpdateChannel for MCP and the settings surfaces (R7), and that path runs no check.
+        // Leaving the offer visible would hand a Stable operator an apply button for a Development build.
+        var store = StoreWith(AppUpdateChannelNames.Development);
+        var factory = DevelopmentFactory(UpToDate(), Offering("1.0.0-rc.2.dev.20260922.1"));
+        using var service = CreateService(factory, isDesktop: true, settingsStore: store);
+
+        var offered = await service.CheckForUpdatesAsync(CancellationToken.None);
+        AssertEx.True(offered.UpdateAvailable);
+        AssertEx.Equal(AppUpdateChannel.Development, offered.AvailableChannel);
+
+        await store.SaveAsync(new StoredNodeSettings { UpdateChannel = AppUpdateChannelNames.Stable });
+        var snapshot = await service.GetStatusAsync(CancellationToken.None);
+
+        AssertEx.Equal(AppUpdateChannel.Stable, snapshot.SelectedChannel);
+        AssertEx.False(snapshot.UpdateAvailable);
+        AssertEx.Null(snapshot.AvailableVersion);
+        AssertEx.Null(snapshot.AvailableChannel);
+    }
+
+    [Test]
+    public async Task RefreshIfStale_WhenTheStoredChannelChangedSinceTheCheck_ChecksAgainUnderTheNewPolicy()
+    {
+        // The node-settings SAVE path writes the channel and runs no check, so the floor would serve the previous
+        // channel's offer to `refresh=true` for up to ten minutes.
+        var store = StoreWith(AppUpdateChannelNames.Development);
+        var main = UpToDate();
+        var dev = Offering("1.0.0-rc.2.dev.20260922.1");
+        using var service = CreateService(DevelopmentFactory(main, dev), isDesktop: true, settingsStore: store);
+
+        var offered = await service.CheckForUpdatesAsync(CancellationToken.None);
+        AssertEx.Equal(AppUpdateChannel.Development, offered.AvailableChannel);
+
+        await store.SaveAsync(new StoredNodeSettings { UpdateChannel = AppUpdateChannelNames.Stable });
+        var refreshed = await service.RefreshIfStaleAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
+
+        // Well inside the floor: the check above stamped LastCheckedUtc with the real clock a moment ago.
+        AssertEx.Equal(AppUpdateChannel.Stable, refreshed.SelectedChannel);
+        AssertEx.False(refreshed.UpdateAvailable);
+        AssertEx.Null(refreshed.AvailableVersion);
+        AssertEx.Null(refreshed.AvailableChannel);
+        await main.Received(2).CheckForUpdateAsync(Arg.Any<CancellationToken>());
+        await dev.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RefreshIfStale_WhenTheStoredChannelIsUnchanged_KeepsTheRateFloor()
+    {
+        // The control for the test above: the floor must still suppress a genuine duplicate.
+        var main = UpToDate();
+        var dev = Offering("1.0.0-rc.2.dev.20260922.1");
+        using var service = CreateService(DevelopmentFactory(main, dev), isDesktop: true,
+            settingsStore: StoreWith(AppUpdateChannelNames.Development));
+
+        var first = await service.CheckForUpdatesAsync(CancellationToken.None);
+        var second = await service.RefreshIfStaleAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
+
+        AssertEx.Equal("1.0.0-rc.2.dev.20260922.1", first.AvailableVersion);
+        AssertEx.Equal("1.0.0-rc.2.dev.20260922.1", second.AvailableVersion);
+        AssertEx.Equal(AppUpdateChannel.Development, second.SelectedChannel);
+        await main.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
+        await dev.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>The REAL node-settings store over a throwaway directory, for the on-disk round trip.</summary>
+    private static NodeSettingsStore NewNodeSettingsStore(TempDirectory root)
+    {
+        return new NodeSettingsStore(new FakeNodeDataDirectory(root.Path), NullLogger<NodeSettingsStore>.Instance);
+    }
+
+    /// <summary>A store holding one channel literal, so the service resolves it rather than the baked default.</summary>
+    private static FakeNodeSettingsStore StoreWith(string channel)
+    {
+        return new FakeNodeSettingsStore(new StoredNodeSettings { UpdateChannel = channel });
+    }
+
+    /// <summary>A manager reporting an available version, and optionally a newest-stable one from its own feed.</summary>
+    private static IVelopackUpdateManager Offering(string availableVersion, string? recommendedVersion = null)
+    {
+        var manager = NewManager();
+        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
+               .Returns(new VelopackCheckResult
+               {
+                   Outcome = VelopackCheckOutcome.UpdateAvailable,
+                   AvailableVersion = availableVersion,
+                   RecommendedVersion = recommendedVersion
+               });
+        return manager;
+    }
+
+    private static IVelopackUpdateManager UpToDate()
+    {
+        var manager = NewManager();
+        manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
+               .Returns(new VelopackCheckResult { Outcome = VelopackCheckOutcome.UpToDate, AvailableVersion = null });
+        return manager;
+    }
+
+    /// <summary>A factory for the Development plan: the real feed list, the main feed's manager first.</summary>
+    private static IVelopackUpdateManagerFactory DevelopmentFactory(IVelopackUpdateManager main, IVelopackUpdateManager dev)
+    {
+        var factory = NewFactory();
+        factory.Create(Arg.Any<AppUpdateFeed>())
+               .Returns(call => call.Arg<AppUpdateFeed>().IsMainFeed ? main : dev);
+        return factory;
+    }
+
     private static IVelopackUpdateManagerFactory FactoryReturning(IVelopackUpdateManager manager)
     {
+        var factory = NewFactory();
+        factory.Create(Arg.Any<AppUpdateFeed>()).Returns(manager);
+        return factory;
+    }
+
+    /// <summary>A factory substitute whose feed plan is the REAL policy, so the tests exercise the shipped mapping.</summary>
+    private static IVelopackUpdateManagerFactory NewFactory()
+    {
         var factory = Substitute.For<IVelopackUpdateManagerFactory>();
-        factory.Create().Returns(manager);
+        factory.ResolveFeeds(Arg.Any<AppUpdateChannel>())
+               .Returns(call => AppUpdateChannelPolicy.ResolveFeeds(call.Arg<AppUpdateChannel>(), "win"));
         return factory;
     }
 
@@ -556,12 +975,14 @@ public sealed class AppUpdateServiceTests
         IReadOnlyList<string>? restartArgs = null,
         bool shellOwned = true,
         string? dataDirectory = null,
-        Action<FileStream>? retainAcceptedLease = null)
+        Action<FileStream>? retainAcceptedLease = null,
+        INodeSettingsStore? settingsStore = null,
+        AppUpdateChannel defaultChannel = AppUpdateChannel.Stable)
     {
         var options = Options.Create(new AppUpdateChannelOptions
         {
             GitHubRepositoryUrl = repoUrl,
-            ReleaseTrack = AppUpdateReleaseTrack.Stable
+            DefaultChannel = defaultChannel
         });
 
         return new AppUpdateService(factory,
@@ -576,6 +997,7 @@ public sealed class AppUpdateServiceTests
             },
             logger ?? NullLogger<AppUpdateService>.Instance,
             TimeProvider.System,
+            settingsStore ?? new FakeNodeSettingsStore(new StoredNodeSettings()),
             retainAcceptedLease);
     }
 }

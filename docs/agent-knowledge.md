@@ -833,11 +833,50 @@ Cold dynamic component imports inside a test count against timeout and become co
 - `release.yml` is official. `package-tester-win.ps1` and `package-rc.sh` are deprecated/reference-only.
 - Package on a quiet machine after `dotnet build-server shutdown`.
 - **Consolidated to one repo.** Source and releases live in `w0rldx/XE-Local-AI-Engine.Source`; the tester repository is retired. Historical tags may be bare or `v`-prefixed; lookup must support both. The deprecated script's retired-repo target is historical, not pending migration.
-- Both update channels target this repository anonymously. Do not restore client-id/device-flow requirements or redact the URL.
+- Every update channel targets this repository anonymously. Do not restore client-id/device-flow requirements or redact the URL.
 - Changelog path: `cliff.toml` → `RELEASE_NOTES.md` → `vpk pack --releaseNotes`. Root `CHANGELOG.md` is hand-maintained.
+- **One packaging matrix, two callers.** `.github/workflows/package-velopack.yml` is the only Velopack packaging job; `release.yml` and `dev-build.yml` both `uses:` it and differ only by inputs (`require-tag-binding`, `update-channel`, `velopack-channel-suffix`). Never copy a step out of it into a caller. *Prevents:* two drifting copies of a 17-step job whose divergence only shows up in a release. *Authority:* `scripts/tests/release-workflow-contract.test.py` `test_both_release_paths_call_the_shared_packaging_workflow` and `test_vpk_version_pin_is_consistent_across_every_release_surface` (which ties the `VPK_VERSION` in both workflows, the `vpk-version` input default and `Directory.Packages.props`'s `Velopack` pin to one string); 2026-09-22.
+- **A `dev/` tag must never influence official release notes.** Two places decide that. The "is HEAD tagged" probe in `scripts/generate-release-notes.sh` is `git describe --exact-match --match 'v*' --tags HEAD`. And `cliff.toml`'s `[git]` tag regexes are `tag_pattern = "^v[0-9]"` plus `ignore_tags = "^dev/"`. *Prevents:* a `dev/` tag on a release commit making the probe succeed so the script emits `--latest` against the Development tag's range. *Authority:* `scripts/tests/test_generate_release_notes.py` `test_head_tag_probe_is_restricted_to_v_tags`, `CliffTagBoundaryTests`; 2026-09-23.
+- **`cliff.toml`'s `tag_pattern` is an UNANCHORED regex, not a glob.** It has been a regex since git-cliff 1.4.0, and git-cliff matches it with `regex::Regex::is_match`, so the long-standing `"v?[0-9]*"` matched every refname in the repo — the empty string included. `dev/<version>` snapshots and `codex/...` branch tags therefore counted as release boundaries, and official `--unreleased`/`--latest` notes would start at the newest Development build. Anchor it (`^v[0-9]`) and pair it with `ignore_tags`, which folds the ignored tag's commits into the next tag instead of dropping them the way `skip_tags` would. *Prevents:* a daily Development snapshot silently truncating every official release body to the commits since last night. *Authority:* git-cliff `[git]` docs for the pinned 2.13.1; `scripts/tests/test_generate_release_notes.py` `CliffTagBoundaryTests`; 2026-09-23.
 
 
 Official packaging validates the selected update-policy file, not only publish exit code. `CopyToPublishDirectory="Always"` may leave a previously disturbed destination missing until the **source** timestamp changes. Both official and reference packagers must refuse a package with missing/wrong update channel. Historical manual tag lookup supports bare and `v` forms, but the public updater itself is anonymous and targets the consolidated source repository.
+
+### A Development build's version extends the anchor with DOTS ONLY — never a second hyphen
+
+**Rule:** a Development version extends the anchor tag's prerelease label with dots
+(`1.0.0-rc.2` → `1.0.0-rc.2.dev.<yyyymmdd>.<n>`), and after 1.0.0 ships it bumps the patch instead
+(`1.0.0` → `1.0.1-dev.<yyyymmdd>.<n>`). The anchor is the newest `v*` tag reachable from the built commit, never
+`eng/ReleaseVersion.props` (which names an already-published version). **Failure prevented:** Velopack's
+`SemanticVersion` splits the prerelease at the FIRST hyphen and ranks any non-numeric label above any numeric one,
+so `1.0.0-rc.2-dev.1` outranks `1.0.0-rc.9` and strands every Development tester permanently above the RC line; and
+a plain `1.0.0-dev.*` label sorts BELOW `1.0.0-rc.2`, which is the wrong window before 1.0.0 ships. **Authority:**
+Velopack 1.2.0 `SemanticVersion.TryParse` / `CompareTo` (commit `f2edcbca`) plus an executed comparison;
+`scripts/release/dev-build-identity.py` `compose_dev_version`, which asserts its own output carries exactly one
+hyphen, and `scripts/tests/test_dev_build_identity.py`
+`test_no_composed_version_ever_contains_two_hyphens`; 2026-09-22.
+
+### Development releases are capped at 30 because the stock GitHub source reads only the 10 newest releases
+
+**Rule:** one GitHub release per Development snapshot, capped by `dev-build.yml`'s `prune` job at the newest 30.
+Never publish Development payloads as an uncapped stream, and never merge them into a `win`/`linux` release.
+**Failure prevented:** Velopack's `GithubSource.GetReleases` hard-codes `per_page=10, page=1` and applies the
+prerelease filter AFTER that truncation, so 11+ Development releases evict every stable and RC release from the
+window and `CheckForUpdatesAsync` returns `null` to Stable and Preview users silently and indefinitely. The cap is
+damage control; the actual fix is the app's paginating source (ADR 0014 D2). **Authority:** Velopack 1.2.0
+`Sources/GithubSource.cs` `GetReleases`, `Sources/GitBase.cs` `GetReleaseFeed`;
+`XE-Local-AI-Engine.Client/Services/AppUpdate/PaginatingGithubSource.cs`; ADR 0014 D2/D3; 2026-09-22.
+
+### Deleting a superseded Development release is safe; deleting its tag is not
+
+**Rule:** prune with `gh release delete --yes` and never `--cleanup-tag`. A `dev/<version>` tag outlives its
+release, forever. **Failure prevented:** a reported Development version with no commit behind it, and a broken
+previous-Development lookup that makes the next scheduled run rebuild the same commit or misnumber the counter.
+A gap in the delta chain is harmless by comparison — Velopack falls back to a full package. **Authority:**
+Velopack 1.2.0 delta-strategy fallback in `UpdateManager.DownloadUpdatesAsync`;
+`.github/workflows/dev-build.yml` `prune` and its three independent non-`dev/` guards (the `jq` filter, the `case`
+guard, and `select_prune` raising); `scripts/tests/release-workflow-contract.test.py`
+`test_dev_build_prune_never_deletes_tags_or_official_releases`; 2026-09-22.
 
 ### Only the packaged main executable calls `VelopackApp.Build().Run()` — a second process of the same install must not
 

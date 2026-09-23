@@ -20,17 +20,22 @@ PINNED_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "velopack-1.2.0-
 class RemoteVelopackAssetTests(unittest.TestCase):
     VERSION = "1.2.3-rc.1"
 
-    def make_fixture(self) -> tuple[Path, dict[str, Path], Path]:
+    def portable_name(self, channel: str) -> str:
+        if MODULE.policy_for(channel).portable_suffix == "Portable.zip":
+            return f"XE-Local-AI-Engine-{channel}-Portable.zip"
+        return f"XE-Local-AI-Engine-{self.VERSION}-{channel}.AppImage"
+
+    def make_fixture(
+        self, channels: tuple[str, str] = ("win", "linux"), *, legacy_feeds: bool = True
+    ) -> tuple[Path, dict[str, Path], Path]:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
         remote = root / "remote"
         remote.mkdir()
         local_roots: dict[str, Path] = {}
-        for channel, portable_name in (
-            ("win", "XE-Local-AI-Engine-win-Portable.zip"),
-            ("linux", f"XE-Local-AI-Engine-{self.VERSION}-linux.AppImage"),
-        ):
+        for channel in channels:
+            portable_name = self.portable_name(channel)
             local = root / channel
             local.mkdir()
             local_roots[channel] = local
@@ -41,7 +46,7 @@ class RemoteVelopackAssetTests(unittest.TestCase):
             for name in [portable_name, *package_names]:
                 (local / name).write_bytes(f"{channel}:{name}".encode())
                 (remote / name).write_bytes((local / name).read_bytes())
-            policy = MODULE.POLICIES[channel]
+            policy = MODULE.policy_for(channel)
             assets = []
             legacy_lines = []
             for name in package_names:
@@ -63,10 +68,13 @@ class RemoteVelopackAssetTests(unittest.TestCase):
                     )
             (local / policy.feed).write_text(json.dumps({"Assets": assets}), encoding="utf-8")
             (remote / policy.feed).write_text(json.dumps({"Assets": assets}), encoding="utf-8")
-            (local / policy.legacy_feed).write_text("\n".join(legacy_lines) + "\n", encoding="utf-8")
+            # A suffixed channel (win-dev) may write no legacy Squirrel feed at all; the verifier treats it
+            # as optional, so the fixture can leave it out entirely.
+            if legacy_feeds:
+                (local / policy.legacy_feed).write_text("\n".join(legacy_lines) + "\n", encoding="utf-8")
             # vpk only publishes the legacy feed for the default (win) channel; the linux legacy feed is retained
             # locally but never uploaded, so it must not appear among the remote assets.
-            if policy.legacy_feed_published:
+            if legacy_feeds and policy.legacy_feed_published:
                 (remote / policy.legacy_feed).write_text("\n".join(legacy_lines) + "\n", encoding="utf-8")
             (local / f"assets.{channel}.json").write_text("[]", encoding="utf-8")
             (local / "CHECKSUMS.sha256").write_text("retained evidence", encoding="utf-8")
@@ -90,11 +98,53 @@ class RemoteVelopackAssetTests(unittest.TestCase):
         (local_roots[channel] / name).unlink()
         (remote / name).unlink()
         for root in (local_roots[channel], remote):
-            feed = root / MODULE.POLICIES[channel].feed
+            feed = root / MODULE.policy_for(channel).feed
             payload = json.loads(feed.read_text(encoding="utf-8"))
             payload["Assets"] = [asset for asset in payload["Assets"] if asset["FileName"] != name]
             feed.write_text(json.dumps(payload), encoding="utf-8")
         return name
+
+    def test_default_channels_still_require_their_legacy_feeds(self) -> None:
+        _, local_roots, remote = self.make_fixture()
+        (local_roots["win"] / MODULE.POLICIES["win"].legacy_feed).unlink()
+        (remote / MODULE.POLICIES["win"].legacy_feed).unlink()
+        with self.assertRaisesRegex(ValueError, "RELEASES"):
+            MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_dev_channels_verify_without_legacy_feeds(self) -> None:
+        _, local_roots, remote = self.make_fixture(("win-dev", "linux-dev"), legacy_feeds=False)
+        self.assertTrue((remote / "releases.win-dev.json").is_file())
+        self.assertTrue((remote / "releases.linux-dev.json").is_file())
+        self.assertFalse((remote / "RELEASES").exists())
+        MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_dev_channels_still_reject_a_stale_full_package(self) -> None:
+        _, local_roots, remote = self.make_fixture(("win-dev", "linux-dev"), legacy_feeds=False)
+        stale = "XE-Local-AI-Engine-1.0.0-rc.1-win-dev-full.nupkg"
+        (local_roots["win-dev"] / stale).write_bytes(b"stale")
+        (remote / stale).write_bytes(b"stale")
+        with self.assertRaisesRegex(ValueError, "previous full package"):
+            MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_dev_channel_feed_mismatch_is_rejected(self) -> None:
+        _, local_roots, remote = self.make_fixture(("win-dev", "linux-dev"), legacy_feeds=False)
+        feed = remote / "releases.win-dev.json"
+        payload = json.loads(feed.read_text(encoding="utf-8"))
+        payload["Assets"][0]["SHA256"] = "0" * 64
+        feed.write_text(json.dumps(payload), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "SHA-256 does not match"):
+            MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_unsupported_channel_name_is_rejected(self) -> None:
+        for channel in ("osx-dev", "nonsense", "windev"):
+            with self.subTest(channel=channel), self.assertRaises(ValueError):
+                MODULE.policy_for(channel)
+
+    def test_internal_local_files_are_ignored_for_every_channel(self) -> None:
+        _, local_roots, remote = self.make_fixture(("win-dev", "linux-dev"), legacy_feeds=False)
+        self.assertTrue((local_roots["win-dev"] / "assets.win-dev.json").is_file())
+        self.assertTrue((local_roots["win-dev"] / "CHECKSUMS.sha256").is_file())
+        MODULE.verify(self.VERSION, local_roots, remote)
 
     def test_internal_local_manifests_are_not_expected_remote_assets(self) -> None:
         _, local_roots, remote = self.make_fixture()

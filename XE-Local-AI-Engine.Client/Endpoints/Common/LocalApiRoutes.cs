@@ -593,6 +593,7 @@ public static class LocalApiRoutes
     {
         public const string Status = "app-update/status";
         public const string Apply = "app-update/apply";
+        public const string Channel = "app-update/channel";
     }
 
     /// <summary>

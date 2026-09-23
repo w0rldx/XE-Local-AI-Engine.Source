@@ -1,0 +1,506 @@
+name: dev-build
+
+# Publishes a validated `develop` snapshot as a Velopack Development build (win-dev + linux-dev) in one
+# GitHub prerelease, tagged dev/<version>. It never touches the win/linux feeds Stable and Preview read:
+# a release carrying only releases.<os>-dev.json is skipped silently by a win or linux feed read.
+# Packaging is the shared .github/workflows/package-velopack.yml, the same matrix release.yml uses.
+on:
+  schedule:
+    - cron: '17 3 * * *'      # 03:17 UTC daily; the odd minute keeps it off GitHub's busiest scheduling slots
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Shares the tag-release lane so a Development build and a real release never interleave their
+# delta-predecessor lookups. Never cancels, never is cancelled.
+concurrency:
+  group: official-release-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  VPK_VERSION: "1.2.0"
+
+jobs:
+  decide:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      skip: ${{ steps.identity.outputs.skip }}
+      dev_version: ${{ steps.identity.outputs.dev_version }}
+      dev_tag: ${{ steps.identity.outputs.dev_tag }}
+      source_sha: ${{ steps.identity.outputs.source_sha }}
+      previous_dev_tag: ${{ steps.identity.outputs.previous_dev_tag }}
+      previous_dev_sha: ${{ steps.identity.outputs.previous_dev_sha }}
+      anchor_tag: ${{ steps.identity.outputs.anchor_tag }}
+      notes_base_ref: ${{ steps.identity.outputs.notes_base_ref }}
+    steps:
+      - name: Refuse to build a Development snapshot off a non-develop ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A workflow_dispatch from any other ref fails the run red rather than skipping it: a Development
+          # build off a feature branch would publish a snapshot nobody can reproduce from develop.
+          test "$GITHUB_REF" = "refs/heads/develop"
+
+      - name: Checkout develop with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Tags are required: the anchor lookup and the previous-Development lookup both read them.
+          fetch-depth: 0
+
+      - name: Setup pinned Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Compute Development build identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          IDENTITY="$(python scripts/release/dev-build-identity.py identity \
+            --sha "$GITHUB_SHA" --date "$(date -u +%Y%m%d)")"
+          echo "$IDENTITY"
+          for key in skip dev_version dev_tag previous_dev_tag previous_dev_sha anchor_tag notes_base_ref source_sha; do
+            # `// ""` would swallow a false boolean, so null is tested explicitly.
+            value="$(jq -r --arg key "$key" 'if .[$key] == null then "" else (.[$key] | tostring) end' <<<"$IDENTITY")"
+            printf '%s=%s\n' "$key" "$value" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Report an unchanged develop tip
+        if: steps.identity.outputs.skip == 'true'
+        shell: bash
+        env:
+          PREVIOUS_DEV_TAG: ${{ steps.identity.outputs.previous_dev_tag }}
+        run: |
+          {
+            echo "## Development build skipped"
+            echo "- develop tip \`$GITHUB_SHA\` is already published as \`$PREVIOUS_DEV_TAG\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install git-cliff (pinned)
+        if: steps.identity.outputs.skip != 'true'
+        shell: bash
+        env:
+          GIT_CLIFF_VERSION: "2.13.1"
+          GIT_CLIFF_SHA256: "9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546"
+        run: |
+          set -euo pipefail
+          TARBALL="git-cliff-${GIT_CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          URL="https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION}/${TARBALL}"
+          curl -fsSL "$URL" -o "$TARBALL"
+          echo "${GIT_CLIFF_SHA256}  ${TARBALL}" | sha256sum -c -
+          tar xzf "$TARBALL"
+          sudo install -m 0755 "git-cliff-${GIT_CLIFF_VERSION}/git-cliff" /usr/local/bin/git-cliff
+          git-cliff --version
+
+      - name: Generate Development release notes
+        if: steps.identity.outputs.skip != 'true'
+        shell: bash
+        # Every computed string reaches the body through env and is dereferenced quoted: these values come from
+        # refnames, which may carry `$`, backticks and parentheses, and a direct expansion would execute them.
+        env:
+          NOTES_BASE_REF: ${{ steps.identity.outputs.notes_base_ref }}
+          DEV_VERSION: ${{ steps.identity.outputs.dev_version }}
+          ANCHOR_TAG: ${{ steps.identity.outputs.anchor_tag }}
+          PREVIOUS_DEV_TAG: ${{ steps.identity.outputs.previous_dev_tag }}
+          PREVIOUS_DEV_SHA: ${{ steps.identity.outputs.previous_dev_sha }}
+        run: |
+          set -euo pipefail
+          scripts/generate-release-notes.sh \
+            --since "$NOTES_BASE_REF" \
+            "$DEV_VERSION" RELEASE_NOTES.md
+          {
+            echo "> **Development build** — an automated snapshot of \`develop\`. Not a supported release."
+            echo ">"
+            echo "> - Source commit: \`$GITHUB_SHA\`"
+            echo "> - Anchor tag: \`$ANCHOR_TAG\`"
+            if [[ -n "$PREVIOUS_DEV_TAG" ]]; then
+              echo "> - Previous Development build: \`$PREVIOUS_DEV_TAG\` (\`$PREVIOUS_DEV_SHA\`)"
+            else
+              echo "> - Previous Development build: none — first build on this anchor"
+            fi
+            echo "> - Built: $(date -u +'%Y-%m-%d %H:%M UTC')"
+            echo
+            cat RELEASE_NOTES.md
+          } > RELEASE_NOTES.md.new
+          mv RELEASE_NOTES.md.new RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: Retain release notes
+        if: steps.identity.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+          retention-days: 30
+          if-no-files-found: error
+
+  validate:
+    needs: decide
+    if: needs.decide.outputs.skip != 'true'
+    uses: ./.github/workflows/build-and-test.yml
+    permissions:
+      contents: read
+
+  package:
+    # `needs: validate` already carries the skip decision, so no `if:` is needed here.
+    needs: [decide, validate]
+    uses: ./.github/workflows/package-velopack.yml
+    permissions:
+      contents: read
+    with:
+      pack-version: ${{ needs.decide.outputs.dev_version }}
+      update-channel: dev
+      velopack-channel-suffix: -dev
+      is-prerelease: 'true'
+      source-sha: ${{ needs.decide.outputs.source_sha }}
+      require-tag-binding: false
+
+  publish:
+    needs: [decide, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Deliberately NOT gated by the protected open-source-release deployment (ADR 0014 D7): a Development
+    # build publishes with GITHUB_TOKEN and no human approval, while every technical gate above and below stays.
+    permissions:
+      contents: write
+    steps:
+      - name: Remove stale drafts for this tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEV_TAG: ${{ needs.decide.outputs.dev_tag }}
+        run: |
+          set -euo pipefail
+          # A failed earlier run on this UTC date leaves an unpublished draft behind: `vpk upload` refuses an
+          # existing release name and the `length == 1` assertion below would fail, wedging every retry until
+          # the date rolls over. The tag itself is created only by a successful publish, so nothing else exists.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq -s --arg tag "$DEV_TAG" 'add | [.[] | select(.draft == true and .tag_name == $tag) | .id]' \
+            > "$RUNNER_TEMP/stale-drafts.json"
+          jq -r '.[]' "$RUNNER_TEMP/stale-drafts.json" | while IFS= read -r release_id; do
+            echo "Deleting stale draft release $release_id for $DEV_TAG"
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$release_id"
+          done
+
+      - name: Checkout the built source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 8 runtime for pinned release tooling
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Download Windows Velopack evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: velopack-win
+          path: release/win
+
+      - name: Download Linux Velopack evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: velopack-linux
+          path: release/linux
+
+      - name: Verify retained hashes and exact portable asset policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd release/win && sha256sum --check CHECKSUMS.sha256)
+          (cd release/linux && sha256sum --check CHECKSUMS.sha256)
+          test "$(find release/win -maxdepth 1 -type f -iname '*Portable.zip' | wc -l)" -eq 1
+          test "$(find release/win -maxdepth 1 -type f -iname '*Setup.exe' | wc -l)" -eq 0
+          test "$(find release/linux -maxdepth 1 -type f -iname '*.AppImage' | wc -l)" -eq 1
+
+      - name: Install pinned Velopack CLI
+        run: dotnet tool install -g vpk --version "${{ env.VPK_VERSION }}"
+
+      - name: Create one draft and merge both Development channels
+        shell: bash
+        env:
+          DEV_TAG: ${{ needs.decide.outputs.dev_tag }}
+          SOURCE_SHA: ${{ needs.decide.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          # Same order rule as release.yml: the first upload creates the draft unmerged, the second merges in.
+          # A -dev channel publishes no legacy Squirrel feed, so the "win first for the legacy feed" reason does
+          # not apply here, but keeping one order keeps one mental model. Neither upload publishes: the
+          # release stays a draft until verified, so a failed run leaves no release and no tag.
+          vpk upload github \
+            --outputDir release/win \
+            --repoUrl "https://github.com/${{ github.repository }}" \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            --channel win-dev \
+            --tag "$DEV_TAG" \
+            --targetCommitish "$SOURCE_SHA" \
+            --pre
+          vpk upload github \
+            --outputDir release/linux \
+            --repoUrl "https://github.com/${{ github.repository }}" \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            --channel linux-dev \
+            --tag "$DEV_TAG" \
+            --targetCommitish "$SOURCE_SHA" \
+            --merge \
+            --pre
+
+      - name: Download and verify complete remote draft primary assets
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEV_TAG: ${{ needs.decide.outputs.dev_tag }}
+          DEV_VERSION: ${{ needs.decide.outputs.dev_version }}
+          SOURCE_SHA: ${{ needs.decide.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq -s --arg tag "$DEV_TAG" \
+              'add | map(select(.tag_name == $tag)) | if length == 1 then .[0] else error("expected exactly one release for tag") end' \
+              > draft.json
+          jq -e --arg sha "$SOURCE_SHA" '.draft == true and .target_commitish == $sha' draft.json >/dev/null
+          echo "release-id=$(jq -r .id draft.json)" >> "$GITHUB_OUTPUT"
+          mkdir remote-primary
+          jq -r '.assets[] | [.url, .name] | @tsv' draft.json \
+            | while IFS=$'\t' read -r asset_url asset_name; do
+                gh api -H 'Accept: application/octet-stream' "$asset_url" > "remote-primary/$asset_name"
+              done
+          scripts/compliance/verify_remote_velopack_assets.py \
+            --version "$DEV_VERSION" \
+            --local win-dev=release/win \
+            --local linux-dev=release/linux \
+            --remote-dir remote-primary
+
+      - name: Generate detached release envelope from verified remote bytes
+        shell: bash
+        env:
+          DEV_TAG: ${{ needs.decide.outputs.dev_tag }}
+          DEV_VERSION: ${{ needs.decide.outputs.dev_version }}
+          ANCHOR_TAG: ${{ needs.decide.outputs.anchor_tag }}
+          PREVIOUS_DEV_TAG: ${{ needs.decide.outputs.previous_dev_tag }}
+          PREVIOUS_SOURCE_SHA: ${{ needs.decide.outputs.previous_dev_sha }}
+        run: |
+          set -euo pipefail
+          dotnet tool restore --tool-manifest dotnet-tools.json
+          # sbom-tool's -m (ManifestDirPath) must already exist; it writes _manifest/ under it but does not
+          # create the root. Same shape as release.yml's envelope step.
+          mkdir -p release-envelope
+          scripts/compliance/sbom-tool.sh Generate \
+            -b remote-primary \
+            -bc remote-primary \
+            -m release-envelope \
+            -pn XE-Local-AI-Engine-portable-release \
+            -pv "$DEV_VERSION" \
+            -ps "XE Local AI Engine contributors" \
+            -pm true \
+            -D true
+          scripts/compliance/sbom-tool.sh Validate \
+            -b remote-primary \
+            -m release-envelope \
+            -n true \
+            -mi SPDX:2.2 \
+            -o "$RUNNER_TEMP/release-envelope-validation.json"
+          cp release-envelope/_manifest/spdx_2.2/manifest.spdx.json remote-primary/RELEASE.spdx.json
+          PREVIOUS_VERSION="${PREVIOUS_DEV_TAG#dev/}"
+          export PREVIOUS_VERSION
+          python3 - <<'PY'
+          from datetime import datetime, timezone
+          from hashlib import sha256
+          from pathlib import Path
+          import json
+          import os
+
+          root = Path("remote-primary")
+          assets = []
+          for path in sorted(root.iterdir(), key=lambda item: item.name):
+              if path.is_file() and path.name not in {"RELEASE-MANIFEST.json", "CHECKSUMS.sha256"}:
+                  data = path.read_bytes()
+                  assets.append({"name": path.name, "size": len(data), "sha256": sha256(data).hexdigest()})
+          manifest = {
+              "schemaVersion": 1,
+              "tag": os.environ["DEV_TAG"],
+              "sourceSha": os.environ["GITHUB_SHA"],
+              "assets": assets,
+              "development": {
+                  "version": os.environ["DEV_VERSION"],
+                  "sourceSha": os.environ["GITHUB_SHA"],
+                  "previousVersion": os.environ["PREVIOUS_VERSION"] or None,
+                  "previousSourceSha": os.environ["PREVIOUS_SOURCE_SHA"] or None,
+                  "builtAtUtc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  "anchorTag": os.environ["ANCHOR_TAG"],
+              },
+              "signing": {
+                  "state": "unsigned",
+                  "decisionGate": "signing-risk-decision",
+                  "certificatePlanned": True,
+              },
+              "selfExclusions": ["RELEASE-MANIFEST.json", "CHECKSUMS.sha256"],
+          }
+          (root / "RELEASE-MANIFEST.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Add checksums derived from verified remote bytes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEV_TAG: ${{ needs.decide.outputs.dev_tag }}
+        run: |
+          set -euo pipefail
+          (cd remote-primary && find . -maxdepth 1 -type f ! -name 'CHECKSUMS.sha256' -print0 | sort -z | xargs -0 sha256sum > CHECKSUMS.sha256)
+          gh release upload "$DEV_TAG" \
+            remote-primary/RELEASE.spdx.json \
+            remote-primary/RELEASE-MANIFEST.json \
+            remote-primary/CHECKSUMS.sha256 \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Download and verify complete remote draft including metadata
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEV_TAG: ${{ needs.decide.outputs.dev_tag }}
+          SOURCE_SHA: ${{ needs.decide.outputs.source_sha }}
+          RELEASE_ID: ${{ steps.draft.outputs.release-id }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > final-draft.json
+          jq -e --arg tag "$DEV_TAG" --arg sha "$SOURCE_SHA" \
+            '.draft == true and .tag_name == $tag and .target_commitish == $sha' final-draft.json >/dev/null
+          mkdir remote-final
+          jq -r '.assets[] | [.url, .name] | @tsv' final-draft.json \
+            | while IFS=$'\t' read -r asset_url asset_name; do
+                gh api -H 'Accept: application/octet-stream' "$asset_url" > "remote-final/$asset_name"
+              done
+          test -f remote-final/CHECKSUMS.sha256
+          test -f remote-final/RELEASE.spdx.json
+          test -f remote-final/RELEASE-MANIFEST.json
+          test "$(find remote-final -maxdepth 1 -type f | wc -l)" -eq \
+               "$(( $(wc -l < remote-final/CHECKSUMS.sha256) + 1 ))"
+          (cd remote-final && sha256sum --check CHECKSUMS.sha256)
+          python3 scripts/release/verify-release-envelope.py \
+            --directory remote-final \
+            --tag "$DEV_TAG" \
+            --source-sha "$SOURCE_SHA"
+
+      - name: Publish the already verified draft and name it
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEV_TAG: ${{ needs.decide.outputs.dev_tag }}
+          DEV_VERSION: ${{ needs.decide.outputs.dev_version }}
+          SOURCE_SHA: ${{ needs.decide.outputs.source_sha }}
+          RELEASE_ID: ${{ steps.draft.outputs.release-id }}
+        run: |
+          set -euo pipefail
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false \
+            -F prerelease=true \
+            -f name="Development Build $DEV_VERSION" \
+            > published.json
+          jq -e --arg tag "$DEV_TAG" --arg sha "$SOURCE_SHA" \
+            '.draft == false and .prerelease == true and .tag_name == $tag and .target_commitish == $sha' \
+            published.json >/dev/null
+
+      - name: Guarantee the Development tag exists at the built commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEV_TAG: ${{ needs.decide.outputs.dev_tag }}
+          SOURCE_SHA: ${{ needs.decide.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          # Publishing a draft whose tag does not yet exist creates it at target_commitish. The next run's
+          # previous-Development lookup depends on that ref, so assert it and create it if GitHub did not.
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$DEV_TAG" >/dev/null 2>&1; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$DEV_TAG" -f sha="$SOURCE_SHA"
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$DEV_TAG" \
+            | jq -e --arg sha "$SOURCE_SHA" '.object.sha == $sha' >/dev/null
+
+      - name: Verify anonymous Development release and both -dev feeds
+        shell: bash
+        env:
+          DEV_TAG: ${{ needs.decide.outputs.dev_tag }}
+          DEV_VERSION: ${{ needs.decide.outputs.dev_version }}
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$DEV_TAG" > public-release.json
+          jq -e '.draft == false and .prerelease == true' public-release.json >/dev/null
+          for channel in win-dev linux-dev; do
+            feed_url=$(jq -r --arg name "releases.$channel.json" \
+              '.assets[] | select(.name == $name) | .browser_download_url' public-release.json)
+            test -n "$feed_url"
+            curl -fsSL "$feed_url" | grep -F "$DEV_VERSION" >/dev/null
+          done
+
+      - name: Record publication summary
+        shell: bash
+        env:
+          DEV_TAG: ${{ needs.decide.outputs.dev_tag }}
+          DEV_VERSION: ${{ needs.decide.outputs.dev_version }}
+          SOURCE_SHA: ${{ needs.decide.outputs.source_sha }}
+          PREVIOUS_DEV_TAG: ${{ needs.decide.outputs.previous_dev_tag }}
+        run: |
+          {
+            echo "## Development build published"
+            echo "- Version: $DEV_VERSION"
+            echo "- Tag: $DEV_TAG"
+            echo "- Source: $SOURCE_SHA"
+            echo "- Previous Development build: ${PREVIOUS_DEV_TAG:-none}"
+            echo "- Stable and Preview feeds untouched: this release carries only releases.win-dev.json and releases.linux-dev.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  prune:
+    needs: [decide, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the built source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pinned Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Delete superseded Development releases, never their tags
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The full paginated listing, never a capped one: once the repository carries more v* releases than
+          # the cap, the oldest dev/ rows fall outside the window and are never pruned.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq -s 'add | [.[] | select(.draft == false) | .tag_name | select(startswith("dev/"))]' > dev-releases.json
+          # Retention lives in the script's own default; this workflow deliberately never names the number.
+          PLAN="$(python scripts/release/dev-build-identity.py prune --releases dev-releases.json)"
+          echo "$PLAN"
+          echo "$PLAN" | jq -r '.delete[]' | while IFS= read -r tag; do
+            case "$tag" in
+              dev/*) ;;
+              *) echo "ERROR: refusing to delete non-Development release '$tag'." >&2; exit 1 ;;
+            esac
+            echo "Deleting superseded Development release $tag"
+            # The tag is deliberately left behind: a dev/<version> tag must outlive its release so every
+            # reported Development version still maps to a commit.
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes
+          done

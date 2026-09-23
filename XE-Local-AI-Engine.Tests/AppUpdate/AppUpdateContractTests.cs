@@ -3,13 +3,19 @@ namespace XE_Local_AI_Engine.Tests.AppUpdate;
 using System.Reflection;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Endpoints.AppUpdate.V1;
+using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Locks the credential-free public updater contract and endpoint authorization.</summary>
 [Category(TestCategories.Unit)]
 public sealed class AppUpdateContractTests
 {
-    private static readonly Type[] ResponseContracts = [typeof(AppUpdateStatusResponse), typeof(ApplyAppUpdateResponse)];
+    /// <summary>Every project that references Velopack, so the downgrade guard cannot be escaped by moving the call.</summary>
+    private static readonly string[] VelopackFacingProjects =
+        ["XE-Local-AI-Engine.Client", "XE-Local-AI-Engine.Desktop", "XE-Local-AI-Engine.WindowsLauncher"];
+
+    private static readonly Type[] ResponseContracts =
+        [typeof(AppUpdateStatusResponse), typeof(ApplyAppUpdateResponse), typeof(SetAppUpdateChannelRequest)];
 
     [Test]
     public void PublicAppUpdateContracts_ContainNoAuthenticationFields()
@@ -40,7 +46,8 @@ public sealed class AppUpdateContractTests
         foreach (var fileName in new[]
                  {
                      "GetAppUpdateStatusEndpoint.cs",
-                     "ApplyAppUpdateEndpoint.cs"
+                     "ApplyAppUpdateEndpoint.cs",
+                     "SetAppUpdateChannelEndpoint.cs"
                  })
         {
             var source = await File.ReadAllTextAsync(GetEndpointPath(fileName));
@@ -53,6 +60,45 @@ public sealed class AppUpdateContractTests
     {
         AssertEx.True(GetAppUpdateStatusEndpoint.MinRefreshInterval >= TimeSpan.FromMinutes(10));
         AssertEx.True(AppUpdateCheckService.DefaultStartupDelay >= TimeSpan.FromMinutes(10));
+    }
+
+    [Test]
+    public void AppUpdateStatus_ReportsEveryChannelTheOperatorMaySelect()
+    {
+        var response = GetAppUpdateStatusEndpoint.ToResponse(AppUpdateSnapshot.Empty);
+
+        AssertEx.Equal("stable,preview,development", string.Join(',', response.AvailableChannels));
+        foreach (var channel in response.AvailableChannels)
+        {
+            AssertEx.True(AppUpdateChannelNames.TryParse(channel, out _), $"'{channel}' is not a known literal.");
+        }
+    }
+
+    [Test]
+    public async Task AppUpdateNeverEnablesAVersionDowngrade()
+    {
+        // UpdateOptions.AllowVersionDowngrade defaults to false, and that default is the ONLY thing making a channel
+        // switch forward-only. D6 says "never true anywhere", so every project that can reach Velopack is scanned.
+        var sources = VelopackFacingProjects
+                      .Select(project => RepositoryPaths.Combine(project))
+                      .SelectMany(project => Directory.GetFiles(project, "*.cs", SearchOption.AllDirectories))
+                      .Where(file => !IsBuildOutput(file))
+                      .ToArray();
+
+        AssertEx.NotEmpty(sources);
+        foreach (var file in sources)
+        {
+            var source = await File.ReadAllTextAsync(file);
+            AssertEx.False(source.Contains("AllowVersionDowngrade", StringComparison.Ordinal),
+                $"'{Path.GetFileName(file)}' names AllowVersionDowngrade.");
+        }
+    }
+
+    private static bool IsBuildOutput(string file)
+    {
+        var separator = Path.DirectorySeparatorChar;
+        return file.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
+               || file.Contains($"{separator}bin{separator}", StringComparison.Ordinal);
     }
 
     private static string GetEndpointPath(string fileName)

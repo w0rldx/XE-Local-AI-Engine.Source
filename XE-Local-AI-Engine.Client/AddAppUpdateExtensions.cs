@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Registers anonymous public-release self-update.
@@ -52,6 +53,7 @@ internal static class AddAppUpdateExtensions
             services.GetRequiredService<AppUpdateHostContext>(),
             services.GetRequiredService<ILogger<AppUpdateService>>(),
             services.GetRequiredService<TimeProvider>(),
+            services.GetRequiredService<INodeSettingsStore>(),
             AppUpdateService.RetainLeaseUntilProcessExit));
         builder.Services.AddSingleton<AppUpdateShutdownCoordinator>();
 

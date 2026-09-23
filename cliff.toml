@@ -88,13 +88,22 @@ commit_parsers = [
   { message = ".*", group = "Miscellaneous" },
 ]
 
-# Tag matching. git-cliff only ever sees LOCAL refs, and every tag in this repo
-# is `v`-prefixed, so the optional `v?` is defensive permissiveness — not a rule
-# that any current tag depends on. (The tester release repo does carry bare tags,
-# but its refs are never fetched here; the code that must handle both spellings
-# is Find-GitHubRelease in publish/package-tester-win.ps1.) The commit range is
-# driven by --unreleased/--latest rather than by this pattern alone.
-tag_pattern = "v?[0-9]*"
+# Tag matching. `tag_pattern` is a REGEX (since git-cliff 1.4.0; a glob before) and it is
+# matched unanchored, so the old `v?[0-9]*` matched every refname in the repo —
+# it even matches the empty string. That made `dev/<version>` Development
+# snapshots and `codex/...` branch tags release boundaries, so official
+# --unreleased/--latest notes would start at the newest dev build. Anchored to
+# the release line instead; every tag in this repo is `v`-prefixed. (The retired
+# tester repo carries bare tags, but its refs are never fetched here; the code
+# that handles both spellings is Find-GitHubRelease in
+# publish/package-tester-win.ps1.)
+tag_pattern = "^v[0-9]"
+
+# Belt and braces over `tag_pattern`, and it survives a --tag-pattern override on
+# the command line: a `dev/` tag is never a boundary. `ignore_tags` (not
+# `skip_tags`) folds its commits into the next tag, so a Development snapshot's
+# commits still reach the next official release's notes.
+ignore_tags = "^dev/"
 
 # Sort newest-first inside each section.
 sort_commits = "newest"

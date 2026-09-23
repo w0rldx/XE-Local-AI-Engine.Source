@@ -46,7 +46,7 @@ XE-Local-AI-Engine.Client.Application/Services/Agents/Implementation/SkillArchiv
 XE-Local-AI-Engine.Client.Application/Services/Agents/Implementation/SkillFrontmatterReader.cs|2
 XE-Local-AI-Engine.Client.Application/Services/Agents/OrchestrationTopology.cs|3
 XE-Local-AI-Engine.Client.Application/Services/Analysis/IPlaybookAnalysisAgent.cs|2
-XE-Local-AI-Engine.Client.Application/Services/AppUpdate/AppUpdateChannelOptions.cs|3
+XE-Local-AI-Engine.Client.Application/Services/AppUpdate/AppUpdateChannelOptions.cs|2
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkBradleyTerry.cs|4
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkCancellationRegistry.cs|4
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkCapacityAdmission.cs|5

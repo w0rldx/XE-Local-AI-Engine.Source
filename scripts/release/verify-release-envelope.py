@@ -15,6 +15,9 @@ MANIFEST_NAME = "RELEASE-MANIFEST.json"
 SPDX_NAME = "RELEASE.spdx.json"
 METADATA_NAMES = {CHECKSUM_NAME, MANIFEST_NAME, SPDX_NAME}
 SELF_EXCLUSIONS = [MANIFEST_NAME, CHECKSUM_NAME]
+DEV_TAG_PREFIX = "dev/"
+DEVELOPMENT_STRING_FIELDS = ("version", "sourceSha", "builtAtUtc", "anchorTag")
+DEVELOPMENT_OPTIONAL_FIELDS = ("previousVersion", "previousSourceSha")
 
 
 def sha256(path: Path) -> str:
@@ -108,6 +111,27 @@ def parse_spdx_files(payload: dict[str, object]) -> dict[str, str]:
     return files
 
 
+def verify_development(payload: object, expected_tag: str, expected_source_sha: str) -> None:
+    """A Development release binds its version to its source commit and to the build it supersedes."""
+    if not isinstance(payload, dict):
+        raise ValueError("release manifest development block must be an object")
+    if set(payload) != set(DEVELOPMENT_STRING_FIELDS) | set(DEVELOPMENT_OPTIONAL_FIELDS):
+        raise ValueError("release manifest development block has an unexpected field set")
+    for field in DEVELOPMENT_STRING_FIELDS:
+        if not isinstance(payload[field], str) or not payload[field]:
+            raise ValueError(f"release manifest development.{field} must be a non-empty string")
+    for field in DEVELOPMENT_OPTIONAL_FIELDS:
+        value = payload[field]
+        if value is not None and (not isinstance(value, str) or not value):
+            raise ValueError(f"release manifest development.{field} must be a non-empty string or null")
+    if payload["sourceSha"] != expected_source_sha:
+        raise ValueError("release manifest development.sourceSha does not match the release source")
+    if not expected_tag.startswith(DEV_TAG_PREFIX) or payload["version"] != expected_tag.removeprefix(DEV_TAG_PREFIX):
+        raise ValueError("release manifest development.version does not match the dev tag")
+    if payload["previousSourceSha"] == expected_source_sha:
+        raise ValueError("release manifest development.previousSourceSha equals this build's source")
+
+
 def verify(root: Path, expected_tag: str, expected_source_sha: str) -> None:
     files = top_level_files(root)
     actual_names = set(files)
@@ -138,6 +162,12 @@ def verify(root: Path, expected_tag: str, expected_source_sha: str) -> None:
         raise ValueError("release manifest signing state is missing or invalid")
     if signing.get("state") == "unsigned" and signing.get("decisionGate") != "signing-risk-decision":
         raise ValueError("unsigned release manifest is missing its risk-decision gate")
+
+    development = manifest.get("development")
+    if development is not None:
+        verify_development(development, expected_tag, expected_source_sha)
+    elif expected_tag.startswith(DEV_TAG_PREFIX):
+        raise ValueError("a dev/ tagged release must carry a development block")
 
     manifest_assets = parse_manifest_assets(manifest)
     expected_manifest_names = actual_names - {MANIFEST_NAME, CHECKSUM_NAME}

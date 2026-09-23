@@ -39,6 +39,16 @@ public sealed class VelopackCheckResult
     public required string? AvailableVersion { get; init; }
 
     public AppUpdateFailureReason FailureReason { get; init; }
+
+    /// <summary>
+    ///     The newest STABLE version on the feed this check read, independent of what is being offered.
+    /// </summary>
+    /// <remarks>
+    ///     Null when the feed holds no stable release, when no feed was read (a raw-exe run, or a failure), and for
+    ///     every non-main feed. It is carried per result rather than computed once by the service because only the
+    ///     main feed's answer is meaningful.
+    /// </remarks>
+    public string? RecommendedVersion { get; init; }
 }
 
 /// <summary>
@@ -78,6 +88,9 @@ public interface IVelopackUpdateManager
 /// </summary>
 public interface IVelopackUpdateManagerFactory
 {
-    /// <summary>Creates a manager against the baked public source policy.</summary>
-    IVelopackUpdateManager Create();
+    /// <summary>The feeds a check must read for this channel on this OS, main feed first.</summary>
+    IReadOnlyList<AppUpdateFeed> ResolveFeeds(AppUpdateChannel channel);
+
+    /// <summary>Creates a manager bound to one feed of the baked public source policy.</summary>
+    IVelopackUpdateManager Create(AppUpdateFeed feed);
 }

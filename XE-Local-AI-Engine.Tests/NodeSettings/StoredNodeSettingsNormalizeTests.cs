@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -657,6 +658,55 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         await WriteSettingsJsonAsync("{ \"uiMode\": \"  simple  \" }");
 
         AssertEx.Equal(StoredNodeSettings.UiModeSimple, (await LoadAsync()).UiMode);
+    }
+
+    [Test]
+    [Arguments(AppUpdateChannelNames.Stable)]
+    [Arguments(AppUpdateChannelNames.Preview)]
+    [Arguments(AppUpdateChannelNames.Development)]
+    public async Task Normalize_WhenUpdateChannelIsValid_KeepsItVerbatim(string channel)
+    {
+        await WriteSettingsJsonAsync($"{{ \"updateChannel\": \"{channel}\" }}");
+
+        AssertEx.Equal(channel, (await LoadAsync()).UpdateChannel);
+    }
+
+    [Test]
+    [Arguments("nightly")]
+    [Arguments("")]
+    [Arguments("   ")]
+    public async Task Normalize_WhenUpdateChannelIsUnknown_FallsBackToNull(string channel)
+    {
+        // Junk falls back to null, not to an "ask again" literal: the reader re-seeds the channel baked into this
+        // artifact, which is the update visibility the build has always had, so answering for the operator is free.
+        await WriteSettingsJsonAsync($"{{ \"updateChannel\": \"{channel}\" }}");
+
+        AssertEx.Null((await LoadAsync()).UpdateChannel);
+    }
+
+    [Test]
+    public async Task Normalize_WhenUpdateChannelIsDifferentlyCasedOrPadded_TreatsPaddingButNotCasingAsValid()
+    {
+        // Pins the ORDINAL comparison: padding is normalised away, casing is not accepted. A later case-insensitive
+        // change has to edit this test, i.e. it becomes a visible decision.
+        await WriteSettingsJsonAsync("{ \"updateChannel\": \"  development  \" }");
+        AssertEx.Equal(AppUpdateChannelNames.Development, (await LoadAsync()).UpdateChannel);
+
+        await WriteSettingsJsonAsync("{ \"updateChannel\": \"Development\" }");
+        AssertEx.Null((await LoadAsync()).UpdateChannel);
+    }
+
+    [Test]
+    public async Task Normalize_WhenUpdateChannelIsJunk_KeepsEveryOtherMember()
+    {
+        // Per-field normalization is the whole point: one corrupt field must not wipe the rest of the file.
+        await WriteSettingsJsonAsync(
+            "{ \"updateChannel\": \"nightly\", \"maxMessageRequestTimeoutSeconds\": 120, \"uiMode\": \"simple\" }");
+        var loaded = await LoadAsync();
+
+        AssertEx.Null(loaded.UpdateChannel);
+        AssertEx.Equal(expected: 120, loaded.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal(StoredNodeSettings.UiModeSimple, loaded.UiMode);
     }
 
     [Test]

@@ -700,6 +700,26 @@
 				"applyError": "Update failed. Please try again.",
 				"upToDate": "You are up to date.",
 				"availableVersion": "Available:",
+				"availableFromChannel": "from {{channel}}",
+				"channelLabel": "Update channel",
+				"channelDescription": "Which builds this node offers you. Changing it only changes what it looks for — nothing is installed.",
+				"channels": {
+					"stable": "Stable — Recommended",
+					"preview": "Preview",
+					"development": "Development"
+				},
+				"channelNames": {
+					"stable": "Stable",
+					"preview": "Preview",
+					"development": "Development"
+				},
+				"channelDescriptions": {
+					"stable": "Released versions only. The right choice for everyday use.",
+					"preview": "Release candidates as well as released versions. Newer, and tested less.",
+					"development": "Daily builds from the development branch, on top of everything Preview offers. Less stable than Preview and not tested for release — expect defects."
+				},
+				"recommendedVersion": "Recommended (stable) version: {{version}}",
+				"channelChangeError": "Couldn't change the update channel. Please try again.",
 				"offline": "Couldn't reach the update service. Check your connection and try again.",
 				"checkFailed": "Couldn't process the update information. Please try again later.",
 				"notConfigured": "Automatic updates aren't available in this build. To move to a newer version, install it manually.",

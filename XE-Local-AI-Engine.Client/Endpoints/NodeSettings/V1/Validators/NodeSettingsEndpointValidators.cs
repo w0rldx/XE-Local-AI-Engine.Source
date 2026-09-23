@@ -50,6 +50,13 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => request.UiMode is not null)
             .WithMessage("Interface mode must be simple or advanced.");
 
+        // Same allow-list and same message as the dedicated PUT app-update/channel validator, so the two surfaces
+        // that may write the channel cannot drift apart.
+        RuleFor(static request => request.UpdateChannel)
+            .Must(StoredNodeSettings.IsValidUpdateChannel)
+            .When(static request => request.UpdateChannel is not null)
+            .WithMessage("Update channel must be stable, preview or development.");
+
         RuleFor(static request => request.LlamaMaxLoadedProcesses!.Value)
             .InclusiveBetween(StoredNodeSettings.MinLlamaMaxLoadedProcesses, StoredNodeSettings.MaxLlamaMaxLoadedProcesses)
             .When(static request => request.LlamaMaxLoadedProcesses is not null);

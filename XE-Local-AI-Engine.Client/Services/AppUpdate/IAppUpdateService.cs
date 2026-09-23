@@ -33,6 +33,19 @@ public interface IAppUpdateService
     /// <returns><see langword="true" /> when an apply was actually initiated; <see langword="false" /> when nothing was applied.</returns>
     /// <exception cref="AppUpdateException">The apply failed (sanitized message — no path or feed URL).</exception>
     Task<bool> ApplyAsync(CancellationToken ct);
+
+    /// <summary>The stored snapshot with the operator's CURRENT channel choice re-stamped. No network call.</summary>
+    /// <remarks>
+    ///     The primed snapshot carries the BAKED channel, because the constructor cannot await the settings store.
+    ///     Re-stamping here is what makes the reported channel correct before the first check has run.
+    /// </remarks>
+    Task<AppUpdateSnapshot> GetStatusAsync(CancellationToken ct);
+
+    /// <summary>
+    ///     Persists the operator's channel choice, then runs one immediate check under the new policy and returns the
+    ///     fresh snapshot. Never applies anything.
+    /// </summary>
+    Task<AppUpdateSnapshot> SetChannelAsync(AppUpdateChannel channel, CancellationToken ct);
 }
 
 /// <summary>An app-update apply failure surfaced to the endpoint as a sanitized, user-safe error.</summary>

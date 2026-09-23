@@ -26,6 +26,25 @@ public sealed record AppUpdateSnapshot
 
     public required DateTimeOffset? LastCheckedUtc { get; init; }
 
+    /// <summary>The channel this node follows now: the operator's stored choice, or the baked default.</summary>
+    /// <remarks>
+    ///     Deliberately NOT <c>required</c>, with a default, unlike the seven members above. The service's private
+    ///     snapshot factory is the only producer, and making these required would churn every construction site in
+    ///     the tests for no safety gain.
+    /// </remarks>
+    public AppUpdateChannel SelectedChannel { get; init; } = AppUpdateChannel.Stable;
+
+    /// <summary>The channel baked into this artifact; what an unset choice resolves to.</summary>
+    public AppUpdateChannel DefaultChannel { get; init; } = AppUpdateChannel.Stable;
+
+    /// <summary>The newest stable version on the main feed, or null when it holds none or no feed was read.</summary>
+    public string? RecommendedVersion { get; init; }
+
+    /// <summary>
+    ///     The LOWEST channel that also offers <see cref="AvailableVersion" />; null when no update is offered.
+    /// </summary>
+    public AppUpdateChannel? AvailableChannel { get; init; }
+
     /// <summary>The empty pre-check snapshot.</summary>
     public static AppUpdateSnapshot Empty { get; } = new()
     {

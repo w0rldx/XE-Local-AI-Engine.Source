@@ -363,6 +363,10 @@ Release notes are generated from conventional-commit history rather than hand-wr
 - **Two producers of `RELEASE_NOTES.md`, and they are not the same code path.** `scripts/generate-release-notes.sh` is the standalone/manual helper. `publish/package-tester-win.ps1` — the deprecated manual packaging path — **does not call that script**: it downloads a checksum-pinned git-cliff and invokes it directly. They also disagree on the empty-range case: the shell script falls back to writing a `## <version>` / "Maintenance release — no user-facing changelog entries." body (the fallback containing the quoted phrase `Maintenance release — no user-facing changelog entries.` in `scripts/generate-release-notes.sh`), while the packaging script **hard-throws** rather than shipping a release with no notes. Both share the one rule that matters: `--latest` when HEAD is already tagged, `--unreleased --tag` otherwise (a tagged HEAD makes `--unreleased` empty).
 - The repo-root `CHANGELOG.md` is **not** generated. git-cliff writes `RELEASE_NOTES.md` only; `CHANGELOG.md` is hand-maintained in Keep-a-Changelog form, which is why it drifts from the tags if nobody updates it at release time.
 - **Release tags are standardised on a `v` prefix.** All nine historical source release tags carry it (`v0.1.0-rc.1.0` … `v0.1.0-rc.5.1`) — there are **no unprefixed release/version tags in this repository**. The separate non-release tag `codex/rollback-prior-ai-pins` is outside this release convention. Bare release tags exist only on the historical **tester artifact repo** (`0.1.0-rc.4.1` and earlier; see §8), which is a different repository. `cliff.toml`'s `tag_pattern = "v?[0-9]*"` therefore accepts either release spelling defensively, but it only ever parses *this* repo's matching release tags: git-cliff runs against the local working tree, `origin` is the source repo, and no tester ref is ever fetched here. The range is driven by `--latest`/`--unreleased` rather than by the pattern alone. **The code that genuinely must handle both release spellings is `package-tester-win.ps1`'s `Find-GitHubRelease`**, which queries the tester repo over the GitHub API — not git-cliff.
+- **`scripts/generate-release-notes.sh` has a `--since <ref>` range mode**, used by the Development build: the base
+  is the previous `dev/` tag's commit, or the newest `v*` tag on the first build. Its "is HEAD tagged" probe is
+  restricted to `--match 'v*'`, so a `dev/` tag sitting on HEAD can never make an official release emit `--latest`
+  against the wrong range.
 - **`vpk pack` (1.2.0) has no `--pre` flag** — passing it fails with `'--pre' was not matched`. Prerelease state rides on the **SemVer suffix in `--packVersion`** (`0.1.0-rc.1.0` *is* a prerelease); the GitHub-release prerelease marker is set with `--pre` only on `vpk upload github` (the `vpk upload github` invocation in `.github/workflows/release.yml`).
 
 ### In-app self-update (Velopack)
@@ -371,17 +375,25 @@ The desktop app can update itself: `AddAppUpdateExtensions.cs` wires a Velopack 
 feed with a null access token. Update checks are anonymous; no GitHub device flow or stored update token remains. The
 update path is **desktop-only** (gated like every other desktop branch; see the endpoint desktop-gate tests under
 `XE-Local-AI-Engine.Tests/AppUpdate/`). Update-feed configuration lives in
-`appsettings.AppUpdate.{main,tester}.json`, selected at publish time by `-p:UpdateChannel=tester|main` (default `main`).
+`appsettings.AppUpdate.{main,tester,dev}.json`, selected at publish time by `-p:UpdateChannel=main|tester|dev`
+(default `main`).
 
-The two flavor files differ only in release-track visibility:
+The baked flavour now supplies only the node's **default** update channel. The effective channel is node-settings
+state, chosen in the About dialog, so a published build can move between channels without being repackaged:
 
-| File | `GitHubRepositoryUrl` | `ReleaseTrack` | Status |
+| File | `GitHubRepositoryUrl` | `DefaultChannel` | Sees |
 |---|---|---|---|
-| `appsettings.AppUpdate.tester.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — public, intentional, non-secret | `Rc` | live |
-| `appsettings.AppUpdate.main.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — public, intentional, non-secret | `Stable` | live |
+| `appsettings.AppUpdate.main.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — public, intentional, non-secret | `Stable` | stable tags only |
+| `appsettings.AppUpdate.tester.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — public, intentional, non-secret | `Preview` | stable + RC tags |
+| `appsettings.AppUpdate.dev.json` | `https://github.com/w0rldx/XE-Local-AI-Engine.Source` — public, intentional, non-secret | `Development` | stable + RC + Development snapshots |
 
-Both flavors point at the same public repository. `ReleaseTrack` controls stable-versus-RC visibility; Velopack's
-independent package metadata selects the `win` or `linux` OS feed. These URLs are public configuration, not secrets,
+All three flavours point at the same public repository. Velopack's `--channel` is the OS discriminator: `win` and
+`linux` carry the Stable and Preview payloads, `win-dev` and `linux-dev` carry the Development payloads. A
+Development release therefore carries only `releases.<os>-dev.json`, and a Stable or Preview feed read skips it
+silently — which is what keeps Development builds invisible to everyone who did not ask for them. Updates are
+forward-only in every channel; moving back down needs a reinstall. The packaging job asserts the flavour and its
+default channel agree before it packs (`Verify packaged update release track` in
+`.github/workflows/package-velopack.yml`). These URLs are public configuration, not secrets,
 and must not be replaced with placeholders. The manual packagers are deprecated, reference-only, and not release
 alternatives. See [`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md).
 
@@ -421,6 +433,11 @@ Source, `v<version>` tags, official binaries and the public update feeds all liv
 tag-triggered `.github/workflows/release.yml` publishes the `win-x64` and `linux-x64` Velopack packages to its
 GitHub Releases. Source tags are always `v`-prefixed; there are no bare release tags here.
 
+A second tag form exists alongside them: **`dev/<version>` lightweight tags** mark automated Development snapshots
+of `develop` (for example `dev/1.0.0-rc.2.dev.20260922.1`). They are created by the publish job of
+`.github/workflows/dev-build.yml`, are **never deleted** — so every reported Development version maps to a commit
+forever — and are deliberately not release tags: they carry no `v` prefix and never steer changelog generation.
+
 Releases through `0.1.0-rc.5.1` came out of a separate tester repository under a hand-run packaging flow with a
 different tag form. That provenance, including the tag-form change mid-flight, is recorded once in the
 [CHANGELOG](../../CHANGELOG.md) header — this page describes only the current path.
@@ -435,6 +452,19 @@ SPDX/release-manifest/checksum evidence, and re-verifies the complete draft. A s
 job re-downloads and verifies that same draft, then promotes it without rebuilding, repacking, re-uploading, or
 replacing any asset before anonymous public-feed verification. Windows packing is `--noInst`; Linux packing produces
 an AppImage. The workflow uses the built-in `GITHUB_TOKEN`, not a maintainer PAT.
+
+`.github/workflows/package-velopack.yml` is the shared `workflow_call` packaging matrix. `release.yml` calls it
+with `require-tag-binding: true`; `dev-build.yml` calls it with `require-tag-binding: false`,
+`update-channel: dev` and `velopack-channel-suffix: -dev`. Packaging behaviour for a tag release is unchanged by
+the extraction — the same 17 steps run against the same commit with the same values.
+
+`.github/workflows/dev-build.yml` runs daily at 03:17 UTC and on dispatch, only from `develop`. It skips the entire
+run when the previous `dev/` tag already points at the develop tip, reuses `build-and-test.yml` as its validation
+gate, and publishes with `GITHUB_TOKEN` and **no** `open-source-release` approval — an explicit posture decision
+([ADR 0014](../adr/0014-update-channels-and-development-builds.md), D7) — while keeping every technical gate an
+official release has: validation, license corpus, SBOM, artifact-shape verification, checksums, remote-asset
+verification and envelope verification. It keeps the newest 30 Development releases, deleting older **releases**
+but never their tags.
 
 The manual packagers are now deprecated, reference-only material: `publish/package-tester-win.ps1` was the RC path
 from `0.1.0-rc.4.0` through `0.1.0-rc.5.1`, run by hand on Windows against the tester repo; `publish/package-rc.sh`

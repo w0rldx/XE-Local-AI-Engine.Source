@@ -571,6 +571,11 @@ export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse =
 	isDesktop: z.boolean(),
 	checkStatus: z.string(),
 	lastCheckedUtc: z.int().nullish(),
+	selectedChannel: z.string(),
+	defaultChannel: z.string(),
+	availableChannels: z.array(z.string()),
+	recommendedVersion: z.string().nullish(),
+	availableChannel: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = z.object({
@@ -578,6 +583,10 @@ export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = 
 });
 
 export const zXeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1SetAppUpdateChannelRequest = z.object({
+	channel: z.string().min(1),
+});
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = z.object({
 	accessToken: z.string(),
@@ -6998,6 +7007,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	toolRelevanceEnabled: z.boolean().nullish(),
 	externalAccessProfile: z.string().nullish(),
 	uiMode: z.string().nullish(),
+	updateChannel: z.string().nullish(),
 	autoCheckApplicationUpdates: z.boolean().nullish(),
 	autoCheckRuntimeUpdates: z.boolean().nullish(),
 	autoProvisionFirstRunModel: z.boolean().nullish(),
@@ -7203,6 +7213,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	toolRelevanceEnabled: z.boolean().nullish(),
 	externalAccessProfile: z.string().nullish(),
 	uiMode: z.string().nullish(),
+	updateChannel: z.string().nullish(),
 	autoCheckApplicationUpdates: z.boolean().nullish(),
 	autoCheckRuntimeUpdates: z.boolean().nullish(),
 	autoProvisionFirstRunModel: z.boolean().nullish(),
@@ -8123,6 +8134,13 @@ export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndp
  * Success
  */
 export const zApplyAppUpdateResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse;
+
+export const zSetAppUpdateChannelBody = zXeLocalAiEngineClientEndpointsAppUpdateV1SetAppUpdateChannelRequest;
+
+/**
+ * Success
+ */
+export const zSetAppUpdateChannelResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
 
 export const zGetAppUpdateStatusQuery = z.object({
 	refresh: z.boolean().nullish(),

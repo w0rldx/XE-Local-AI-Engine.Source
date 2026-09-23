@@ -11,9 +11,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
-INTERNAL_LOCAL_FILES = {"CHECKSUMS.sha256", "assets.win.json", "assets.linux.json"}
-FEED_FILES = {"releases.win.json", "releases.linux.json", "RELEASES", "RELEASES-linux"}
-
 
 class ChannelPolicy(NamedTuple):
     feed: str
@@ -32,6 +29,33 @@ POLICIES = {
 }
 
 
+def policy_for(channel: str) -> ChannelPolicy:
+    """The asset policy for a Velopack channel, including the suffixed Development channels.
+
+    Only the default `win` channel publishes a legacy Squirrel feed, so every suffixed channel is
+    `legacy_feed_published=False` and its legacy feed is optional entirely.
+    """
+    if channel in POLICIES:
+        return POLICIES[channel]
+    if channel.startswith("win-"):
+        return ChannelPolicy(f"releases.{channel}.json", f"RELEASES-{channel}", False, "Portable.zip")
+    if channel.startswith("linux-"):
+        return ChannelPolicy(f"releases.{channel}.json", f"RELEASES-{channel}", False, ".AppImage")
+    raise ValueError(f"unsupported Velopack channel '{channel}'")
+
+
+def is_internal_local(name: str) -> bool:
+    """Build evidence vpk writes beside the payload and never uploads."""
+    return name == "CHECKSUMS.sha256" or (name.startswith("assets.") and name.endswith(".json"))
+
+
+def is_feed_file(name: str) -> bool:
+    """A feed document is regenerated per upload, so its remote bytes need not match the retained copy."""
+    return (
+        (name.startswith("releases.") and name.endswith(".json")) or name == "RELEASES" or name.startswith("RELEASES-")
+    )
+
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -39,7 +63,7 @@ def sha256(path: Path) -> str:
 def files_by_name(root: Path, *, ignore_internal: bool) -> dict[str, Path]:
     files: dict[str, Path] = {}
     for path in root.iterdir():
-        if not path.is_file() or (ignore_internal and path.name in INTERNAL_LOCAL_FILES):
+        if not path.is_file() or (ignore_internal and is_internal_local(path.name)):
             continue
         if path.name in files:
             raise ValueError(f"duplicate asset name in {root}: {path.name}")
@@ -55,7 +79,7 @@ def require_one(names: set[str], predicate: Callable[[str], bool], label: str) -
 
 
 def expected_channel_assets(channel: str, root: Path, version: str) -> dict[str, Path]:
-    policy = POLICIES[channel]
+    policy = policy_for(channel)
     files = files_by_name(root, ignore_internal=True)
     names = set(files)
     version_marker = f"-{version}-"
@@ -71,13 +95,16 @@ def expected_channel_assets(channel: str, root: Path, version: str) -> dict[str,
     if len(deltas) > 1 or any(version_marker not in name for name in deltas):
         raise ValueError(f"{channel} output has an invalid delta package set: {sorted(deltas)}")
     require_one(names, lambda name: name.endswith(policy.portable_suffix), f"{channel} portable artifact")
-    for required in (policy.feed, policy.legacy_feed):
+    required_feeds = [policy.feed] if channel not in POLICIES else [policy.feed, policy.legacy_feed]
+    for required in required_feeds:
         if required not in names:
             raise ValueError(f"{channel} output is missing {required}")
 
-    expected_count = 4 + len(deltas)
+    # Whether `vpk pack --channel win-dev` writes a legacy feed at all is the one behaviour this repo
+    # cannot execute locally, so a suffixed channel's legacy feed is counted when present and never required.
+    expected_count = 3 + len(deltas) + (1 if policy.legacy_feed in names else 0)
     if len(files) != expected_count:
-        expected_kinds = "portable, full, optional delta, JSON feed, and legacy feed"
+        expected_kinds = "portable, full, optional delta, JSON feed, and an optional legacy feed"
         raise ValueError(
             f"{channel} output contains unexpected assets; expected only {expected_kinds}: {sorted(names)}"
         )
@@ -158,7 +185,7 @@ def verify(version: str, local_roots: dict[str, Path], remote_root: Path) -> Non
     per_channel_files: dict[str, dict[str, Path]] = {}
     for channel, root in local_roots.items():
         channel_files = expected_channel_assets(channel, root, version)
-        policy = POLICIES[channel]
+        policy = policy_for(channel)
         # Reconcile the remote against only the assets vpk actually publishes: drop the unpublished legacy feed
         # (retained locally, never uploaded) so its absence from the release is not flagged as a mismatch.
         published = {
@@ -179,24 +206,29 @@ def verify(version: str, local_roots: dict[str, Path], remote_root: Path) -> Non
             f"extra={sorted(set(remote) - set(expected))}"
         )
     for name, local_path in expected.items():
-        if name not in FEED_FILES and sha256(local_path) != sha256(remote[name]):
+        if not is_feed_file(name) and sha256(local_path) != sha256(remote[name]):
             raise ValueError(f"remote asset bytes differ from retained build: {name}")
 
     for channel, channel_files in per_channel_files.items():
-        policy = POLICIES[channel]
+        policy = policy_for(channel)
         packages = {name: remote[name] for name in channel_files if name.endswith(".nupkg")}
         verify_json_feed(remote[policy.feed], version, packages)
-        # Verify the published legacy feed from the release; the unpublished one from its retained local copy.
-        legacy_feed_path = (
-            remote[policy.legacy_feed] if policy.legacy_feed_published else channel_files[policy.legacy_feed]
-        )
-        verify_legacy_feed(legacy_feed_path, version, packages)
+        # Verify the published legacy feed from the release; the unpublished one from its retained local
+        # copy. A suffixed channel may publish no legacy feed at all, and then there is nothing to verify.
+        if policy.legacy_feed_published:
+            verify_legacy_feed(remote[policy.legacy_feed], version, packages)
+        elif policy.legacy_feed in channel_files:
+            verify_legacy_feed(channel_files[policy.legacy_feed], version, packages)
 
 
 def parse_local(value: str) -> tuple[str, Path]:
     channel, separator, path = value.partition("=")
-    if not separator or channel not in POLICIES or not path:
-        raise argparse.ArgumentTypeError("--local must be win=<path> or linux=<path>")
+    if not separator or not path:
+        raise argparse.ArgumentTypeError("--local must be <win|linux>[-suffix]=<path>")
+    try:
+        policy_for(channel)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
     return channel, Path(path)
 
 
@@ -207,8 +239,10 @@ def main() -> int:
     parser.add_argument("--remote-dir", type=Path, required=True)
     args = parser.parse_args()
     local_roots = dict(args.local)
-    if set(local_roots) != set(POLICIES):
-        raise ValueError("both --local win=<path> and --local linux=<path> are required")
+    windows = [channel for channel in local_roots if channel.startswith("win")]
+    linux = [channel for channel in local_roots if channel.startswith("linux")]
+    if len(local_roots) != 2 or len(windows) != 1 or len(linux) != 1:
+        raise ValueError("exactly one --local win[-suffix]=<path> and one --local linux[-suffix]=<path> are required")
     verify(args.version, local_roots, args.remote_dir)
     print(f"verified {len(files_by_name(args.remote_dir, ignore_internal=False))} remote Velopack primary assets")
     return 0

@@ -6,6 +6,7 @@ import {
 	applyAppUpdateMutation,
 	getAppUpdateStatusOptions,
 	getAppUpdateStatusQueryKey,
+	setAppUpdateChannelMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { Options } from "@/core/api/generated/sdk.gen";
 import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
@@ -57,6 +58,23 @@ export function useApplyAppUpdate() {
 					current ? { ...current, availableVersion: null, updateAvailable: false, checkStatus: "ready" } : current,
 				);
 			}
+		},
+	});
+}
+
+export function useSetAppUpdateChannel() {
+	const queryClient = useQueryClient();
+	const statusKey = getAppUpdateStatusQueryKey({ query: { refresh: null } });
+	return useMutation({
+		...withResponseValidation(setAppUpdateChannelMutation()),
+		onSuccess: (fresh) => {
+			// The endpoint answers with the status it just recomputed, so seeding the key the About dialog observes
+			// renders the new channel on the next commit with no round-trip and no flicker.
+			queryClient.setQueryData<GetAppUpdateStatusResponse>(statusKey, fresh);
+			// Reconciles the 60 s poll, at the cost of one local GET. The `refresh: true` key differs in its second
+			// element so prefix matching leaves it alone; nothing subscribes to it as a query. Not awaited and not
+			// returned: `onSuccess` must not make `mutateAsync` wait for a refetch.
+			queryClient.invalidateQueries({ queryKey: statusKey }).catch(() => undefined);
 		},
 	});
 }

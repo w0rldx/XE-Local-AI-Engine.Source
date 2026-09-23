@@ -37,6 +37,31 @@ public sealed class AppUpdateStatusResponse
 
     /// <summary>Unix-ms instant the last check ran (UTC); null before the first check.</summary>
     public long? LastCheckedUtc { get; init; }
+
+    /// <summary>The channel this node follows now: <c>stable</c>, <c>preview</c> or <c>development</c>.</summary>
+    public required string SelectedChannel { get; init; }
+
+    /// <summary>The channel baked into this artifact; what an unset choice resolves to.</summary>
+    public required string DefaultChannel { get; init; }
+
+    /// <summary>The three channels an operator may select, in presentation order. Always all three.</summary>
+    public required IReadOnlyList<string> AvailableChannels { get; init; }
+
+    /// <summary>The newest stable version on the main feed; null when it holds none.</summary>
+    public string? RecommendedVersion { get; init; }
+
+    /// <summary>
+    ///     The lowest channel that also offers <see cref="AvailableVersion" />; null exactly when
+    ///     <see cref="UpdateAvailable" /> is false.
+    /// </summary>
+    public string? AvailableChannel { get; init; }
+}
+
+/// <summary>Request body for <c>PUT app-update/channel</c>.</summary>
+public sealed class SetAppUpdateChannelRequest
+{
+    /// <summary>The channel to follow: <c>stable</c>, <c>preview</c> or <c>development</c>. Required.</summary>
+    public required string Channel { get; init; }
 }
 
 /// <summary>

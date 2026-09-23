@@ -15,6 +15,12 @@ vi.mock("@/features/app-update/components/AppUpdateButton", () => ({
 	AppUpdateButton: () => <div data-testid="app-update-button" />,
 }));
 
+// Mocked here on purpose: this file proves the SECTION's layout and wiring, and the selector's own MSW test file
+// proves what the selector renders and when it hides itself. Each file proves one thing.
+vi.mock("@/features/app-update/components/AppUpdateChannelSelector", () => ({
+	AppUpdateChannelSelector: () => <div data-testid="app-update-channel-selector" />,
+}));
+
 import { useAppUpdateStatus, useRefreshAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
 import { AppUpdateSection } from "./AppUpdateSection";
 import { testMantineTheme } from "@/test/MantineTestRender";
@@ -29,6 +35,11 @@ function setup(overrides: Record<string, unknown> = {}) {
 			isDesktop: true,
 			checkStatus: "ready",
 			lastCheckedUtc: 1_700_000_000_000,
+			selectedChannel: "stable",
+			defaultChannel: "stable",
+			availableChannels: ["stable", "preview", "development"],
+			recommendedVersion: null,
+			availableChannel: null,
 			...overrides,
 		},
 	} as never);
@@ -130,5 +141,40 @@ describe("AppUpdateSection", () => {
 		);
 
 		expect(screen.queryByText(/^Updates$/)).toBeNull();
+	});
+
+	it("mounts the channel selector for a configured desktop build", () => {
+		setup();
+		render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<AppUpdateSection />
+			</MantineProvider>,
+		);
+
+		// Only the configured case is asserted here: the selector is a mock in this file, so the real hiding on an
+		// unconfigured build is proved by AppUpdateChannelSelector.test.tsx instead.
+		expect(screen.getByTestId("app-update-channel-selector")).toBeTruthy();
+	});
+
+	it("names the channel an offered version came from", () => {
+		setup({ updateAvailable: true, availableVersion: "0.1.0-rc.3.dev.20260922.1", availableChannel: "development" });
+		render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<AppUpdateSection />
+			</MantineProvider>,
+		);
+
+		expect(screen.getByTestId("app-update-available-channel").textContent).toContain("Development");
+	});
+
+	it("says nothing about a channel when the node reports none", () => {
+		setup({ updateAvailable: true, availableVersion: "0.1.0-rc.3", availableChannel: null });
+		render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<AppUpdateSection />
+			</MantineProvider>,
+		);
+
+		expect(screen.queryByTestId("app-update-available-channel")).toBeNull();
 	});
 });

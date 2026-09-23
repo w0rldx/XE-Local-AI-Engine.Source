@@ -88,8 +88,9 @@
 
   <!--
     App self-update build flavor (decision #12). UpdateChannel selects, at publish time, the baked-in public update repo
-    URL and stable/RC release track consumed by AppUpdateChannelOptions. There is no runtime
-    switch: a tester build can never point at the main repo and vice-versa. The active flavor's
+    URL and the node's DEFAULT update channel consumed by AppUpdateChannelOptions. The flavor is still fixed at publish
+    time — a tester build can never point at the main repo and vice-versa — but the channel it bakes is only a default:
+    the operator may select another channel at runtime, and that choice lives in node-settings.json. The active flavor's
     appsettings.AppUpdate.{flavor}.json is copied to the output as appsettings.AppUpdate.json so the host loads exactly
     one channel file regardless of UpdateChannel. Default flavor is main.
   -->
@@ -99,8 +100,8 @@
 
   <Target Name="ValidateAppUpdateChannel"
           BeforeTargets="PrepareForBuild;ComputeFilesToPublish">
-    <Error Condition="'$(UpdateChannel)' != 'main' and '$(UpdateChannel)' != 'tester'"
-           Text="Unsupported UpdateChannel '$(UpdateChannel)'. Expected 'main' or 'tester'."/>
+    <Error Condition="'$(UpdateChannel)' != 'main' and '$(UpdateChannel)' != 'tester' and '$(UpdateChannel)' != 'dev'"
+           Text="Unsupported UpdateChannel '$(UpdateChannel)'. Expected 'main', 'tester' or 'dev'."/>
     <Error Condition="!Exists('appsettings.AppUpdate.$(UpdateChannel).json')"
            Text="App-update configuration not found: appsettings.AppUpdate.$(UpdateChannel).json"/>
   </Target>

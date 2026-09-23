@@ -1149,6 +1149,9 @@ import type {
 	SelectTranscriptionModelData,
 	SelectTranscriptionModelErrors,
 	SelectTranscriptionModelResponses,
+	SetAppUpdateChannelData,
+	SetAppUpdateChannelErrors,
+	SetAppUpdateChannelResponses,
 	SetHfTokenData,
 	SetHfTokenErrors,
 	SetHfTokenResponses,
@@ -2071,6 +2074,8 @@ import {
 	zSelectLocalModelResponse,
 	zSelectTranscriptionModelBody,
 	zSelectTranscriptionModelResponse,
+	zSetAppUpdateChannelBody,
+	zSetAppUpdateChannelResponse,
 	zSetHfTokenBody,
 	zSetHfTokenResponse,
 	zSetMcpServerEnabledBody,
@@ -3330,6 +3335,40 @@ export const applyAppUpdate = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/app-update/apply",
 		...options,
+	});
+
+export const setAppUpdateChannel = <ThrowOnError extends boolean = false>(
+	options: Options<SetAppUpdateChannelData, ThrowOnError>,
+): RequestResult<SetAppUpdateChannelResponses, SetAppUpdateChannelErrors, ThrowOnError> =>
+	(options.client ?? client).put<SetAppUpdateChannelResponses, SetAppUpdateChannelErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zSetAppUpdateChannelBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zSetAppUpdateChannelResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/app-update/channel",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const getAppUpdateStatus = <ThrowOnError extends boolean = false>(

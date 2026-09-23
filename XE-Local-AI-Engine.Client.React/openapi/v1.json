@@ -1857,6 +1857,63 @@
         ]
       }
     },
+    "/api/local/v1/app-update/channel": {
+      "put": {
+        "tags": [
+          "App-Update"
+        ],
+        "operationId": "setAppUpdateChannel",
+        "requestBody": {
+          "x-name": "SetAppUpdateChannelRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1SetAppUpdateChannelRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1AppUpdateStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/app-update/status": {
       "get": {
         "tags": [
@@ -26045,7 +26102,10 @@
           "updateAvailable",
           "isConfigured",
           "isDesktop",
-          "checkStatus"
+          "checkStatus",
+          "selectedChannel",
+          "defaultChannel",
+          "availableChannels"
         ],
         "properties": {
           "currentVersion": {
@@ -26070,6 +26130,26 @@
           "lastCheckedUtc": {
             "type": "integer",
             "nullable": true
+          },
+          "selectedChannel": {
+            "type": "string"
+          },
+          "defaultChannel": {
+            "type": "string"
+          },
+          "availableChannels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recommendedVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "availableChannel": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -26088,6 +26168,20 @@
       "XE_Local_AI_EngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAppUpdateV1SetAppUpdateChannelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channel"
+        ],
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsAuthV1NodeAccessTokenResponse": {
         "type": "object",
@@ -40109,6 +40203,10 @@
             "type": "string",
             "nullable": true
           },
+          "updateChannel": {
+            "type": "string",
+            "nullable": true
+          },
           "autoCheckApplicationUpdates": {
             "type": "boolean",
             "nullable": true
@@ -40378,6 +40476,10 @@
             "nullable": true
           },
           "uiMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "updateChannel": {
             "type": "string",
             "nullable": true
           },

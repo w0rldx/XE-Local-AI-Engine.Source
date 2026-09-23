@@ -18,14 +18,11 @@ public sealed class GetAppUpdateStatusEndpoint : Endpoint<GetAppUpdateStatusRequ
     // Minimum spacing between anonymous live GitHub refreshes.
     internal static readonly TimeSpan MinRefreshInterval = TimeSpan.FromMinutes(10);
 
-    private readonly IAppUpdateState _updateState;
     private readonly IAppUpdateService _updateService;
 
-    public GetAppUpdateStatusEndpoint(IAppUpdateState updateState, IAppUpdateService updateService)
+    public GetAppUpdateStatusEndpoint(IAppUpdateService updateService)
     {
-        ArgumentNullException.ThrowIfNull(updateState);
         ArgumentNullException.ThrowIfNull(updateService);
-        _updateState = updateState;
         _updateService = updateService;
     }
 
@@ -41,12 +38,13 @@ public sealed class GetAppUpdateStatusEndpoint : Endpoint<GetAppUpdateStatusRequ
         // anonymous GitHub calls after observing the same cached snapshot.
         var snapshot = req.Refresh ?? false
             ? await _updateService.RefreshIfStaleAsync(MinRefreshInterval, ct)
-            : _updateState.Current;
+            : await _updateService.GetStatusAsync(ct);
 
         await Send.OkAsync(ToResponse(snapshot), ct);
     }
 
-    private static AppUpdateStatusResponse ToResponse(AppUpdateSnapshot snapshot)
+    /// <summary>The one snapshot-to-wire mapping; the channel endpoint returns this same shape.</summary>
+    internal static AppUpdateStatusResponse ToResponse(AppUpdateSnapshot snapshot)
     {
         return new AppUpdateStatusResponse
         {
@@ -63,7 +61,12 @@ public sealed class GetAppUpdateStatusEndpoint : Endpoint<GetAppUpdateStatusRequ
                 AppUpdateCheckStatus.Failed => "failed",
                 _ => "failed"
             },
-            LastCheckedUtc = snapshot.LastCheckedUtc?.ToUnixTimeMilliseconds()
+            LastCheckedUtc = snapshot.LastCheckedUtc?.ToUnixTimeMilliseconds(),
+            SelectedChannel = AppUpdateChannelNames.ToWire(snapshot.SelectedChannel),
+            DefaultChannel = AppUpdateChannelNames.ToWire(snapshot.DefaultChannel),
+            AvailableChannels = AppUpdateChannelNames.All,
+            RecommendedVersion = snapshot.RecommendedVersion,
+            AvailableChannel = snapshot.AvailableChannel is { } channel ? AppUpdateChannelNames.ToWire(channel) : null
         };
     }
 }

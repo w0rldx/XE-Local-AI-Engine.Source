@@ -8,6 +8,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
 	getAppUpdateStatusQueryKey: vi.fn(() => [{ _id: "getAppUpdateStatus" }]),
 	applyAppUpdateMutation: vi.fn(),
+	setAppUpdateChannelMutation: vi.fn(),
 }));
 
 vi.mock("@/core/api/ResponseValidation", () => ({
@@ -20,10 +21,17 @@ import {
 	applyAppUpdateMutation,
 	getAppUpdateStatusOptions,
 	getAppUpdateStatusQueryKey,
+	setAppUpdateChannelMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { getAppUpdateStatus } from "@/core/api/generated/sdk.gen";
 import { createProvidersWrapper, createTestQueryClient } from "@/test/RenderWithProviders";
-import { useApplyAppUpdate, useAppUpdateStatus, useProbeAppUpdateStatus, useRefreshAppUpdateStatus } from "./useAppUpdate";
+import {
+	useApplyAppUpdate,
+	useAppUpdateStatus,
+	useProbeAppUpdateStatus,
+	useRefreshAppUpdateStatus,
+	useSetAppUpdateChannel,
+} from "./useAppUpdate";
 
 const statusMock = vi.mocked(getAppUpdateStatusOptions);
 
@@ -156,5 +164,48 @@ describe("useApplyAppUpdate", () => {
 			updateAvailable: false,
 			checkStatus: "ready",
 		});
+	});
+});
+
+describe("useSetAppUpdateChannel", () => {
+	it("seeds the cached status with the channel endpoint's own response", async () => {
+		const fresh = {
+			currentVersion: "1.0.0",
+			availableVersion: null,
+			updateAvailable: false,
+			isConfigured: true,
+			isDesktop: true,
+			checkStatus: "ready",
+			lastCheckedUtc: 1_700_000_000_000,
+			selectedChannel: "development",
+			defaultChannel: "stable",
+			availableChannels: ["stable", "preview", "development"],
+			recommendedVersion: null,
+			availableChannel: null,
+		};
+		vi.mocked(setAppUpdateChannelMutation).mockReturnValue({ mutationFn: async () => fresh } as never);
+		const { wrapper, queryClient } = makeWrapper();
+		const key = getAppUpdateStatusQueryKey({ query: { refresh: null } });
+		const { result } = renderHook(() => useSetAppUpdateChannel(), { wrapper });
+
+		await result.current.mutateAsync({ body: { channel: "development" } } as never);
+
+		await waitFor(() => expect(queryClient.getQueryData(key)).toMatchObject({ selectedChannel: "development" }));
+	});
+
+	it("leaves the cached status alone when the channel change fails", async () => {
+		vi.mocked(setAppUpdateChannelMutation).mockReturnValue({
+			mutationFn: async () => {
+				throw new Error("refused");
+			},
+		} as never);
+		const { wrapper, queryClient } = makeWrapper();
+		const key = getAppUpdateStatusQueryKey({ query: { refresh: null } });
+		const { result } = renderHook(() => useSetAppUpdateChannel(), { wrapper });
+
+		result.current.mutate({ body: { channel: "development" } } as never);
+
+		await waitFor(() => expect(result.current.isError).toBe(true));
+		expect(queryClient.getQueryData(key)).toBeUndefined();
 	});
 });

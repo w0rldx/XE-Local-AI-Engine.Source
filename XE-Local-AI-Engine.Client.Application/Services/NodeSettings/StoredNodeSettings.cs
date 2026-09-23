@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -333,6 +334,20 @@ public sealed partial record StoredNodeSettings
         return mode is UiModeSimple or UiModeAdvanced;
     }
 
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="channel" /> is one of the three update-channel
+    ///     literals: <c>stable</c>, <c>preview</c> or <c>development</c>.
+    /// </summary>
+    /// <remarks>
+    ///     Delegates to <see cref="AppUpdateChannelNames.TryParse" /> so the literals are declared once, not re-listed
+    ///     here. The comparison is ordinal, so <c>"Stable"</c> is rejected rather than silently accepted.
+    ///     <see langword="null" /> is a state (never chosen), not a literal, and is <see langword="false" /> here.
+    /// </remarks>
+    public static bool IsValidUpdateChannel(string? channel)
+    {
+        return AppUpdateChannelNames.TryParse(channel, out _);
+    }
+
     public int MaxMessageRequestTimeoutSeconds { get; init; } = DefaultMaxMessageRequestTimeoutSeconds;
 
     /// <summary>
@@ -509,6 +524,17 @@ public sealed partial record StoredNodeSettings
     ///     reads it, and the compile-time capability flags still decide what exists at all.
     /// </remarks>
     public string? UiMode { get; init; }
+
+    /// <summary>
+    ///     Which application-update channel this node follows: <c>stable</c>, <c>preview</c> or <c>development</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> means the operator has never chosen, and reads as the channel baked into this
+    ///     artifact (<c>AppUpdateChannelOptions.DefaultChannel</c>) — so an upgraded node keeps exactly the update
+    ///     visibility its flavour always had. The backend is the only authority: the SPA renders what the status
+    ///     endpoint reports and never derives eligibility itself.
+    /// </remarks>
+    public string? UpdateChannel { get; init; }
 
     /// <summary>Whether the node checks for application updates on its own.</summary>
     /// <remarks>

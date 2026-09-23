@@ -1,0 +1,420 @@
+name: package-velopack
+
+# The one Velopack packaging matrix. Both release.yml (tag releases) and dev-build.yml (Development
+# snapshots) call it; they differ only by inputs. Windows packs a framework-dependent Portable.zip with
+# the repository-owned C# launcher, Linux packs an AppImage. This workflow never uploads a release.
+on:
+  workflow_call:
+    inputs:
+      pack-version:
+        required: true
+        type: string
+      update-channel:
+        description: Baked update flavour; one of main, tester or dev.
+        required: true
+        type: string
+      is-prerelease:
+        description: '"true" or "false"; passed through from the caller as a string.'
+        required: true
+        type: string
+      source-sha:
+        required: true
+        type: string
+      velopack-channel-suffix:
+        description: Appended to the OS short name to form the Velopack channel; "" or "-dev".
+        required: false
+        type: string
+        default: ""
+      require-tag-binding:
+        description: Assert the checked-out ref is the matching v* tag. Tag releases only.
+        required: false
+        type: boolean
+        default: true
+      release-notes-artifact:
+        required: false
+        type: string
+        default: release-notes
+      vpk-version:
+        # The single Velopack CLI pin both callers use; release.yml and dev-build.yml keep their own
+        # workflow-level VPK_VERSION for their publish jobs, and a contract test ties all of them together.
+        required: false
+        type: string
+        default: "1.2.0"
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-pack:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            os-short: win
+            main-exe: XE-Local-AI-Engine.WindowsLauncher.exe
+            publish-dir: XE-Local-AI-Engine.Client/bin/Release/net10.0/win-x64/publish
+            pack-args: "--noInst"
+            icon-args: ""
+          - rid: linux-x64
+            os: ubuntu-latest
+            os-short: linux
+            main-exe: XE-Local-AI-Engine.Desktop
+            publish-dir: XE-Local-AI-Engine.Client/bin/Release/net10.0/linux-x64/publish
+            pack-args: ""
+            icon-args: "--icon XE-Local-AI-Engine.Client.React/public/logo.png"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      # The Velopack channel is the OS discriminator plus the caller's suffix: win/linux for Stable and
+      # Preview payloads, win-dev/linux-dev for Development payloads.
+      VPK_CHANNEL: ${{ matrix.os-short }}${{ inputs.velopack-channel-suffix }}
+    steps:
+      - name: Checkout immutable release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pinned Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Verify checked-out source binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_SHA" = "${{ inputs.source-sha }}"
+          if [[ "${{ inputs.require-tag-binding }}" == "true" ]]; then
+            test "$GITHUB_REF" = "refs/tags/v${{ inputs.pack-version }}"
+          fi
+
+      - name: Verify channel suffix is a known shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.velopack-channel-suffix }}" in
+            ""|-dev) ;;
+            *) echo "ERROR: unsupported velopack-channel-suffix '${{ inputs.velopack-channel-suffix }}'." >&2; exit 1 ;;
+          esac
+          test -n "$VPK_CHANNEL"
+
+      - name: Setup .NET 8 runtime for pinned SBOM tooling
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # No NuGet cache here on purpose: the release path is built on immutability (source-SHA
+      # binding, SBOM, retained hashes) and a restored cache is mutable state entering a packaging
+      # job. build-and-test.yml keeps the cache; the release leg pays a full restore.
+
+      - name: Restore pinned repository tools
+        run: dotnet tool restore --tool-manifest dotnet-tools.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          # pnpm version is pinned via `packageManager` in the React subdir, not the (absent) repo-root package.json.
+          package_json_file: XE-Local-AI-Engine.Client.React/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
+
+      - name: Build SPA and fail-closed license disclosure
+        working-directory: XE-Local-AI-Engine.Client.React
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.template .env
+          pnpm install --frozen-lockfile
+          pnpm run licenses:check
+          pnpm run build
+          test -f dist/index.html
+
+      - name: Publish (${{ matrix.rid }})
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_BUNDLE_INPUTS="$RUNNER_TEMP/bundle-inputs-${{ matrix.rid }}.raw"
+          dotnet publish XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj \
+            --configuration Release \
+            -p:PublishProfile=${{ matrix.rid }} \
+            -p:UpdateChannel=${{ inputs.update-channel }} \
+            -p:CustomAfterMicrosoftCommonTargets="$GITHUB_WORKSPACE/scripts/compliance/capture_bundle_inputs.targets" \
+            -p:XeBundleInputEvidenceRaw="$RAW_BUNDLE_INPUTS"
+          python scripts/compliance/create_bundle_input_manifest.py \
+            --rid "${{ matrix.rid }}" \
+            --raw "$RAW_BUNDLE_INPUTS" \
+            --output "${{ matrix.publish-dir }}/bundle-inputs.json"
+
+      # The shell publishes into the SAME publish-dir as the Client payload on purpose: vpk packs one tree, so the
+      # window and the engine it supervises must ship as one install. package-rc.sh and package-tester-win.ps1
+      # layer the two publishes the same way.
+      - name: Publish native shell (${{ matrix.rid }})
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_DESKTOP_INPUTS="$RUNNER_TEMP/desktop-bundle-inputs-${{ matrix.rid }}.raw"
+          dotnet publish XE-Local-AI-Engine.Desktop/XE-Local-AI-Engine.Desktop.csproj \
+            --configuration Release \
+            -p:PublishProfile=${{ matrix.rid }} \
+            -p:CustomAfterMicrosoftCommonTargets="$GITHUB_WORKSPACE/scripts/compliance/capture_bundle_inputs.targets" \
+            -p:XeBundleInputEvidenceRaw="$RAW_DESKTOP_INPUTS" \
+            --output '${{ matrix.publish-dir }}'
+          python scripts/compliance/create_bundle_input_manifest.py \
+            --rid "${{ matrix.rid }}" \
+            --raw "$RAW_DESKTOP_INPUTS" \
+            --output "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"
+
+      - name: Build and test Windows framework launcher
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          dotnet publish XE-Local-AI-Engine.WindowsLauncher/XE-Local-AI-Engine.WindowsLauncher.csproj `
+            --configuration Release `
+            -p:PublishProfile=win-x64 `
+            --output '${{ matrix.publish-dir }}'
+          scripts/tests/windows-framework-launcher-smoke.ps1 -PublishDirectory '${{ matrix.publish-dir }}'
+
+      - name: Verify packaged update release track
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          # The baked flavour file carries the node's DEFAULT update channel; the effective channel is
+          # node-settings state. A packaged flavour whose default does not match the requested flavour
+          # would ship users onto the wrong feed, so the pairing is asserted here, once, per payload.
+          # is-prerelease is cross-checked too: the caller derives both from the tag, and without this the
+          # packaging-time guard would pass a stable tag packaged with update-channel: tester.
+          EXPECTED_DEFAULT_CHANNELS = {"main": "Stable", "tester": "Preview", "dev": "Development"}
+          EXPECTED_PRERELEASE = {"main": "false", "tester": "true", "dev": "true"}
+          expected_channel = "${{ inputs.update-channel }}"
+          if expected_channel not in EXPECTED_DEFAULT_CHANNELS:
+              raise SystemExit(
+                  f"unsupported update channel '{expected_channel}'; "
+                  f"expected one of {sorted(EXPECTED_DEFAULT_CHANNELS)}"
+              )
+          actual_prerelease = "${{ inputs.is-prerelease }}"
+          if actual_prerelease != EXPECTED_PRERELEASE[expected_channel]:
+              raise SystemExit(
+                  f"packaged prerelease flag mismatch: update-channel '{expected_channel}' expects "
+                  f"is-prerelease '{EXPECTED_PRERELEASE[expected_channel]}', got '{actual_prerelease}'"
+              )
+          expected_default = EXPECTED_DEFAULT_CHANNELS[expected_channel]
+          config = json.loads((Path("${{ matrix.publish-dir }}") / "appsettings.AppUpdate.json").read_text(encoding="utf-8"))
+          actual = config["AppUpdate"]
+          if actual.get("Channel") != expected_channel or actual.get("DefaultChannel") != expected_default:
+              raise SystemExit(
+                  f"packaged update policy mismatch: expected {expected_channel}/{expected_default}, "
+                  f"got {actual.get('Channel')}/{actual.get('DefaultChannel')}"
+              )
+          PY
+
+      - name: Generate exact backend NuGet legal corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_METADATA="$RUNNER_TEMP/nuget-license-${{ matrix.rid }}.raw"
+          JSON_METADATA="$RUNNER_TEMP/nuget-license-${{ matrix.rid }}.json"
+          dotnet nuget-license \
+            --input XE-Local-AI-Engine.slnx \
+            --output Json \
+            --include-transitive \
+            --exclude-publish-false \
+            --override-package-information scripts/compliance/nuget-license-overrides.json \
+            --exclude-projects-matching '*Tests*;*Testing*;*AppHost*' \
+            --ignored-packages 'Meziantou.Analyzer;SonarAnalyzer.CSharp;Microsoft.CodeAnalysis.BannedApiAnalyzers;NetArchTest.Rules' \
+            > "$RAW_METADATA"
+          python - "$RAW_METADATA" "$JSON_METADATA" <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+
+          raw = Path(sys.argv[1]).read_text(encoding="utf-8")
+          start = raw.find("[")
+          if start < 0:
+              raise SystemExit("nuget-license produced no JSON array")
+          payload, _ = json.JSONDecoder().raw_decode(raw[start:])
+          if not isinstance(payload, list) or not payload:
+              raise SystemExit("nuget-license produced an empty or invalid package array")
+          Path(sys.argv[2]).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
+          DESKTOP_INPUT_ARGS=(
+            --additional-deps-json "XE-Local-AI-Engine.Desktop/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Desktop.deps.json"
+            --additional-bundle-input-manifest "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"
+          )
+          python scripts/compliance/generate_backend_license_corpus.py \
+            --rid "${{ matrix.rid }}" \
+            --deps-json "XE-Local-AI-Engine.Client/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Client.deps.json" \
+            --bundle-input-manifest "${{ matrix.publish-dir }}/bundle-inputs.json" \
+            --metadata-json "$JSON_METADATA" \
+            "${DESKTOP_INPUT_ARGS[@]}" \
+            --output-directory "${{ matrix.publish-dir }}"
+
+      - name: Generate and validate payload SPDX
+        shell: bash
+        run: |
+          set -euo pipefail
+          DESKTOP_INPUT_ARGS=(
+            --additional-deps-json "XE-Local-AI-Engine.Desktop/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Desktop.deps.json"
+            --additional-bundle-input-manifest "${{ matrix.publish-dir }}/desktop-bundle-inputs.json"
+          )
+          WINDOWS_APPHOST_ARGS=()
+          if [[ "${{ matrix.rid }}" == "win-x64" ]]; then
+            WINDOWS_APPHOST_ARGS+=(
+              --windows-apphost-version "$(python scripts/read-release-version.py --dotnet-runtime)"
+              --windows-apphost-license "${{ matrix.publish-dir }}/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt"
+              --windows-apphost-notices "${{ matrix.publish-dir }}/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt"
+            )
+          fi
+          scripts/compliance/sbom-tool.sh Generate \
+            -b "${{ matrix.publish-dir }}" \
+            -bc "${{ matrix.publish-dir }}" \
+            -pn "XE-Local-AI-Engine-${{ matrix.rid }}" \
+            -pv "${{ inputs.pack-version }}" \
+            -ps "XE Local AI Engine contributors" \
+            -pm true \
+            -D true
+          python scripts/compliance/reconcile_payload_spdx.py \
+            --rid "${{ matrix.rid }}" \
+            --spdx "${{ matrix.publish-dir }}/_manifest/spdx_2.2/manifest.spdx.json" \
+            --deps-json "XE-Local-AI-Engine.Client/bin/Release/net10.0/${{ matrix.rid }}/XE-Local-AI-Engine.Client.deps.json" \
+            --bundle-input-manifest "${{ matrix.publish-dir }}/bundle-inputs.json" \
+            --backend-manifest "${{ matrix.publish-dir }}/backend-components.json" \
+            --frontend-manifest "${{ matrix.publish-dir }}/wwwroot/component-manifest.json" \
+            "${DESKTOP_INPUT_ARGS[@]}" \
+            "${WINDOWS_APPHOST_ARGS[@]}"
+          scripts/compliance/sbom-tool.sh Validate \
+            -b "${{ matrix.publish-dir }}" \
+            -n true \
+            -mi SPDX:2.2 \
+            -o "$RUNNER_TEMP/payload-sbom-validation-${{ matrix.rid }}.json"
+
+      - name: Install pinned Velopack CLI
+        shell: bash
+        run: dotnet tool install -g vpk --version "${{ inputs.vpk-version }}"
+
+      - name: Download release notes
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.release-notes-artifact }}
+
+      - name: Download previous release for deltas
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The predecessor is selected here rather than by the vpk CLI, which wraps the same Velopack
+          # GithubSource the app had to replace: it reads only the 10 newest releases, so after 10 Development
+          # prereleases a tag release would find no win/linux predecessor at all.
+          SEED_DIR="ReleaseSeed-${{ matrix.rid }}"
+          OUTPUT_DIR="Releases-${{ matrix.rid }}"
+          mkdir -p "$SEED_DIR" "$OUTPUT_DIR"
+          INCLUDE_PRERELEASE=false
+          if [[ "${{ inputs.is-prerelease }}" == "true" ]]; then
+            INCLUDE_PRERELEASE=true
+          fi
+          FEED_NAME="releases.$VPK_CHANNEL.json"
+          RELEASE_INDEX="$RUNNER_TEMP/published-releases-${{ matrix.rid }}.json"
+          PREVIOUS_RELEASE="$RUNNER_TEMP/previous-release-${{ matrix.rid }}.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -s 'add' > "$RELEASE_INDEX"
+          jq --arg feed "$FEED_NAME" --argjson include_pre "$INCLUDE_PRERELEASE" \
+            'map(select(.draft == false and ($include_pre or (.prerelease == false)) and any(.assets[]?; .name == $feed)))
+             | sort_by(.published_at) | last // empty' \
+            "$RELEASE_INDEX" > "$PREVIOUS_RELEASE"
+          if [[ -s "$PREVIOUS_RELEASE" ]]; then
+            FEED_URL="$(jq -r --arg feed "$FEED_NAME" 'first(.assets[] | select(.name == $feed) | .url)' "$PREVIOUS_RELEASE")"
+            gh api -H 'Accept: application/octet-stream' "$FEED_URL" > "$SEED_DIR/$FEED_NAME"
+            # Velopack feed schema: {"Assets":[{"Type","FileName","Version",...}]}. Exactly one Full entry is
+            # expected, because the pack step removes the seeded predecessor before upload.
+            PREVIOUS_NAME="$(jq -r '[.Assets[] | select(.Type == "Full")] as $full
+              | if ($full | length) == 1 then $full[0].FileName
+                else error("expected exactly one previous full package, found \($full | length)") end' \
+              "$SEED_DIR/$FEED_NAME")"
+            ASSET_URL="$(jq -r --arg name "$PREVIOUS_NAME" 'first(.assets[] | select(.name == $name) | .url)' "$PREVIOUS_RELEASE")"
+            test -n "$ASSET_URL"
+            gh api -H 'Accept: application/octet-stream' "$ASSET_URL" > "$OUTPUT_DIR/$PREVIOUS_NAME"
+            # The vpk CLI hash-checked its own seed. The pack step deletes this one before upload, so no later
+            # gate ever sees these bytes, and a corrupt base would ship a delta that cannot apply.
+            PREVIOUS_SHA256="$(jq -r --arg name "$PREVIOUS_NAME" \
+              'first(.Assets[] | select(.FileName == $name) | .SHA256) // "" | ascii_downcase' "$SEED_DIR/$FEED_NAME")"
+            if [[ ! "$PREVIOUS_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "ERROR: the previous feed entry for '$PREVIOUS_NAME' carries no usable SHA256." >&2
+              exit 1
+            fi
+            printf '%s  %s\n' "$PREVIOUS_SHA256" "$OUTPUT_DIR/$PREVIOUS_NAME" | sha256sum --check --strict -
+            printf '%s\n' "$PREVIOUS_NAME" > "$RUNNER_TEMP/previous-package-${{ matrix.rid }}.txt"
+          else
+            echo "No published $VPK_CHANNEL feed exists; packing the first release without a delta base."
+          fi
+
+      - name: Pack portable artifact with Velopack
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXTRA_ARGS=()
+          if [[ -n '${{ matrix.pack-args }}' ]]; then
+            EXTRA_ARGS+=(${{ matrix.pack-args }})
+          fi
+          if [[ -n '${{ matrix.icon-args }}' ]]; then
+            EXTRA_ARGS+=(${{ matrix.icon-args }})
+          fi
+          vpk pack \
+            --outputDir "Releases-${{ matrix.rid }}" \
+            --packId XE-Local-AI-Engine \
+            --packVersion "${{ inputs.pack-version }}" \
+            --packDir "${{ matrix.publish-dir }}" \
+            --mainExe "${{ matrix.main-exe }}" \
+            --runtime "${{ matrix.rid }}" \
+            --channel "$VPK_CHANNEL" \
+            --releaseNotes RELEASE_NOTES.md \
+            "${EXTRA_ARGS[@]}"
+          PREVIOUS_MARKER="$RUNNER_TEMP/previous-package-${{ matrix.rid }}.txt"
+          if [[ -f "$PREVIOUS_MARKER" ]]; then
+            PREVIOUS_NAME="$(cat "$PREVIOUS_MARKER")"
+            test -f "Releases-${{ matrix.rid }}/$PREVIOUS_NAME"
+            rm -- "Releases-${{ matrix.rid }}/$PREVIOUS_NAME"
+          fi
+
+      - name: Verify final portable artifact contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Call through `python` like the sibling compliance steps (create_bundle_input_manifest / legal-corpus /
+          # reconcile_payload_spdx); a bare-path call would use the script's versioned shebang, but the Windows runner
+          # only ships the unversioned `python`. (Enforced by scripts/tests/release-workflow-contract.test.py.)
+          python scripts/compliance/verify_release_artifacts.py \
+            --rid "${{ matrix.rid }}" \
+            --version "${{ inputs.pack-version }}" \
+            --publish-dir "${{ matrix.publish-dir }}" \
+            --release-dir "Releases-${{ matrix.rid }}"
+
+      - name: Hash retained release evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd "Releases-${{ matrix.rid }}" && find . -type f ! -name 'CHECKSUMS.sha256' -print0 | sort -z | xargs -0 sha256sum > CHECKSUMS.sha256)
+
+      - name: Retain packed release and compliance evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: velopack-${{ matrix.os-short }}
+          path: Releases-${{ matrix.rid }}
+          retention-days: 30
+          if-no-files-found: error

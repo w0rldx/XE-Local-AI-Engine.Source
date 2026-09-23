@@ -700,6 +700,26 @@
 				"applyError": "Update fehlgeschlagen. Bitte erneut versuchen.",
 				"upToDate": "Du bist auf dem neuesten Stand.",
 				"availableVersion": "Verfügbar:",
+				"availableFromChannel": "aus {{channel}}",
+				"channelLabel": "Update-Kanal",
+				"channelDescription": "Welche Builds dir dieser Node anbietet. Eine Änderung ändert nur, wonach gesucht wird — es wird nichts installiert.",
+				"channels": {
+					"stable": "Stabil — Empfohlen",
+					"preview": "Vorschau",
+					"development": "Entwicklung"
+				},
+				"channelNames": {
+					"stable": "Stabil",
+					"preview": "Vorschau",
+					"development": "Entwicklung"
+				},
+				"channelDescriptions": {
+					"stable": "Nur veröffentlichte Versionen. Die richtige Wahl für den täglichen Einsatz.",
+					"preview": "Zusätzlich zu veröffentlichten Versionen auch Release-Kandidaten. Neuer und weniger getestet.",
+					"development": "Tägliche Builds aus dem Entwicklungszweig, zusätzlich zu allem aus der Vorschau. Weniger stabil als die Vorschau und nicht für eine Veröffentlichung getestet — rechne mit Fehlern."
+				},
+				"recommendedVersion": "Empfohlene Version (stabil): {{version}}",
+				"channelChangeError": "Der Update-Kanal konnte nicht geändert werden. Bitte versuche es erneut.",
 				"offline": "Der Update-Dienst konnte nicht erreicht werden. Prüfe deine Verbindung und versuche es erneut.",
 				"checkFailed": "Die Update-Informationen konnten nicht verarbeitet werden. Bitte versuche es später erneut.",
 				"notConfigured": "Automatische Updates sind in diesem Build nicht verfügbar. Für eine neuere Version installiere sie bitte manuell.",

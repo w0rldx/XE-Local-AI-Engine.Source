@@ -18,9 +18,11 @@ public sealed class AppUpdateEndpointDesktopGateTests
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
     public required TestServerWebAppFactory Factory { get; init; }
 
-    private static readonly (HttpMethod Method, string Route)[] PostRoutes =
+    /// <summary>Every mutating app-update route (POST and PUT), each of which must be unmapped off desktop.</summary>
+    private static readonly (HttpMethod Method, string Route)[] MutatingRoutes =
     [
-        (HttpMethod.Post, "/api/local/v1/app-update/apply")
+        (HttpMethod.Post, "/api/local/v1/app-update/apply"),
+        (HttpMethod.Put, "/api/local/v1/app-update/channel")
     ];
 
     private static readonly string[] GetRoutes =
@@ -29,12 +31,12 @@ public sealed class AppUpdateEndpointDesktopGateTests
     ];
 
     [Test]
-    public async Task PostUpdateEndpoints_WhenNotDesktop_AreUnmapped()
+    public async Task MutatingUpdateEndpoints_WhenNotDesktop_AreUnmapped()
     {
         var factory = Factory;
         using var client = factory.CreateClient();
 
-        foreach (var (method, route) in PostRoutes)
+        foreach (var (method, route) in MutatingRoutes)
         {
             using var request = new HttpRequestMessage(method, route);
             factory.AddNodeBearerToken(request);
@@ -42,7 +44,7 @@ public sealed class AppUpdateEndpointDesktopGateTests
 
             using var response = await client.SendAsync(request);
 
-            // Unmapped POST path → routing rejects it. A registered endpoint with a valid operator token would have
+            // Unmapped POST/PUT path -> routing rejects it. A registered endpoint with a valid operator token would have
             // returned 200/400; 404/405 proves the endpoint was never mapped off the desktop flag.
             AssertEx.True(response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
                 $"{route} should be unmapped off desktop, but returned {response.StatusCode}");

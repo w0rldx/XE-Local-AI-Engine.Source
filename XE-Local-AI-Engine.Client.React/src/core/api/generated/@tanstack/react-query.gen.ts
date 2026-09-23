@@ -391,6 +391,7 @@ import {
 	searchKnowledge,
 	selectLocalModel,
 	selectTranscriptionModel,
+	setAppUpdateChannel,
 	setHfToken,
 	setMcpServerEnabled,
 	setNodeChatConversationMemoryExcluded,
@@ -1376,6 +1377,9 @@ import type {
 	SelectTranscriptionModelData,
 	SelectTranscriptionModelError,
 	SelectTranscriptionModelResponse,
+	SetAppUpdateChannelData,
+	SetAppUpdateChannelError,
+	SetAppUpdateChannelResponse,
 	SetHfTokenData,
 	SetHfTokenResponse,
 	SetMcpServerEnabledData,
@@ -2465,6 +2469,26 @@ export const applyAppUpdateMutation = (
 	const mutationOptions: UseMutationOptions<ApplyAppUpdateResponse, AxiosError<DefaultError>, Options<ApplyAppUpdateData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await applyAppUpdate({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const setAppUpdateChannelMutation = (
+	options?: Partial<Options<SetAppUpdateChannelData>>,
+): UseMutationOptions<SetAppUpdateChannelResponse, AxiosError<SetAppUpdateChannelError>, Options<SetAppUpdateChannelData>> => {
+	const mutationOptions: UseMutationOptions<
+		SetAppUpdateChannelResponse,
+		AxiosError<SetAppUpdateChannelError>,
+		Options<SetAppUpdateChannelData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setAppUpdateChannel({
 				...options,
 				...fnOptions,
 				throwOnError: true,

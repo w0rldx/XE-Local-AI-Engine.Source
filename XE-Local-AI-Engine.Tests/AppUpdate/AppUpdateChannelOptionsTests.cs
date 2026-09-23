@@ -48,26 +48,13 @@ public sealed class AppUpdateChannelOptionsTests
     }
 
     [Test]
-    public void SourcePolicy_StableTrack_ExcludesPrereleases()
+    public void DefaultChannel_WhenAbsentFromConfiguration_IsStable()
     {
         var options = new AppUpdateChannelOptions
         {
-            GitHubRepositoryUrl = ValidRepositoryUrl,
-            ReleaseTrack = AppUpdateReleaseTrack.Stable
+            GitHubRepositoryUrl = ValidRepositoryUrl
         };
 
-        AssertEx.False(AssertEx.NotNull(options.SourcePolicy).IncludePrereleases);
-    }
-
-    [Test]
-    public void SourcePolicy_RcTrack_IncludesPrereleases()
-    {
-        var options = new AppUpdateChannelOptions
-        {
-            GitHubRepositoryUrl = ValidRepositoryUrl,
-            ReleaseTrack = AppUpdateReleaseTrack.Rc
-        };
-
-        AssertEx.True(AssertEx.NotNull(options.SourcePolicy).IncludePrereleases);
+        AssertEx.Equal(AppUpdateChannel.Stable, options.DefaultChannel);
     }
 }

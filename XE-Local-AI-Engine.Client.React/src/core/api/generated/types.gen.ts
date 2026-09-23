@@ -619,6 +619,11 @@ export type XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = {
 	isDesktop: boolean;
 	checkStatus: string;
 	lastCheckedUtc?: number | null;
+	selectedChannel: string;
+	defaultChannel: string;
+	availableChannels: Array<string>;
+	recommendedVersion?: string | null;
+	availableChannel?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = {
@@ -627,6 +632,10 @@ export type XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = {
 
 export type XeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAppUpdateV1SetAppUpdateChannelRequest = {
+	channel: string;
 };
 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = {
@@ -4510,6 +4519,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	toolRelevanceEnabled?: boolean | null;
 	externalAccessProfile?: string | null;
 	uiMode?: string | null;
+	updateChannel?: string | null;
 	autoCheckApplicationUpdates?: boolean | null;
 	autoCheckRuntimeUpdates?: boolean | null;
 	autoProvisionFirstRunModel?: boolean | null;
@@ -4577,6 +4587,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	toolRelevanceEnabled?: boolean | null;
 	externalAccessProfile?: string | null;
 	uiMode?: string | null;
+	updateChannel?: string | null;
 	autoCheckApplicationUpdates?: boolean | null;
 	autoCheckRuntimeUpdates?: boolean | null;
 	autoProvisionFirstRunModel?: boolean | null;
@@ -7432,6 +7443,39 @@ export type ApplyAppUpdateResponses = {
 };
 
 export type ApplyAppUpdateResponse = ApplyAppUpdateResponses[keyof ApplyAppUpdateResponses];
+
+export type SetAppUpdateChannelData = {
+	body: XeLocalAiEngineClientEndpointsAppUpdateV1SetAppUpdateChannelRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/app-update/channel";
+};
+
+export type SetAppUpdateChannelErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SetAppUpdateChannelError = SetAppUpdateChannelErrors[keyof SetAppUpdateChannelErrors];
+
+export type SetAppUpdateChannelResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
+};
+
+export type SetAppUpdateChannelResponse = SetAppUpdateChannelResponses[keyof SetAppUpdateChannelResponses];
 
 export type GetAppUpdateStatusData = {
 	body?: never;
