@@ -77,7 +77,7 @@ public sealed class ServerPushHubTests
         await using var connection = Connect(LocalApiRoutes.KnowledgeBase.Hub);
         var received = new TaskCompletionSource<KnowledgeDocumentChangedHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
         _ = connection.On<KnowledgeDocumentChangedHubEvent>(KnowledgeBaseHubEvents.DocumentChanged, evt => received.TrySetResult(evt));
-        await connection.StartAsync();
+        await connection.StartAndAwaitRegistrationAsync();
 
         await Factory.Services.GetRequiredService<IKnowledgeIndexingNotifier>()
                      .NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Embedding);
@@ -94,7 +94,7 @@ public sealed class ServerPushHubTests
         await using var connection = Connect(LocalApiRoutes.ModelFit.DownloadHub);
         var received = new TaskCompletionSource<GgufDownloadStatusHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
         _ = connection.On<GgufDownloadStatusHubEvent>(GgufDownloadHubEvents.StatusChanged, evt => received.TrySetResult(evt));
-        await connection.StartAsync();
+        await connection.StartAndAwaitRegistrationAsync();
 
         var published = new GgufDownloadStatusHubEvent
         {
@@ -119,7 +119,7 @@ public sealed class ServerPushHubTests
         await using var connection = Connect(LocalApiRoutes.ModelFit.LlamaCppAcquisitionHub);
         var received = new TaskCompletionSource<RuntimeAcquisitionStatusHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
         _ = connection.On<RuntimeAcquisitionStatusHubEvent>(RuntimeAcquisitionHubEvents.StatusChanged, evt => received.TrySetResult(evt));
-        await connection.StartAsync();
+        await connection.StartAndAwaitRegistrationAsync();
 
         var published = new RuntimeAcquisitionStatusHubEvent
         {

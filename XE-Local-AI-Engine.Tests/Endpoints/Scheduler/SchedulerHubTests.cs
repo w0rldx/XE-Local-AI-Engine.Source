@@ -55,13 +55,13 @@ public sealed class SchedulerHubTests
         _ = connection.On<SchedulerDefinitionHubEvent>(SchedulerHubEvents.JobDefinitionChanged,
             evt => received.TrySetResult(evt));
 
-        await connection.StartAsync();
+        await connection.StartAndAwaitRegistrationAsync();
 
         // Publish through the host's hub-backed publisher (supersedes the no-op default in the Client host).
         var publisher = factory.Services.GetRequiredService<ISchedulerEventPublisher>();
         await publisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent { EventType = SchedulerHubEvents.JobDefinitionChanged, ScheduledJobId = scheduledJobId, Action = "created", OccurredAtUtc = 123L });
 
-        var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var evt = await received.Task.WaitAsync(TestBudgets.Contended);
 
         AssertEx.Equal(scheduledJobId, evt.ScheduledJobId);
         AssertEx.Equal("created", evt.Action);

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Testing;
 
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client;
@@ -20,5 +21,29 @@ internal static class NodeHubClient
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder.AddJsonProtocol(options => ConfigureServices.ConfigureJsonSerializerOptions(options.PayloadSerializerOptions));
+    }
+
+    /// <summary>
+    ///     Starts the connection and returns only once the server has registered it for broadcasts.
+    /// </summary>
+    /// <remarks>
+    ///     <see cref="HubConnection.StartAsync" /> completes on the handshake response, which the server writes BEFORE
+    ///     it registers the connection with the hub lifetime manager, so a <c>Clients.All</c> push in that window is
+    ///     silently dropped. The server reads client frames only after registration, so its error reply to a probe for
+    ///     a method that does not exist proves the connection is listed.
+    /// </remarks>
+    public static async Task StartAndAwaitRegistrationAsync(this HubConnection connection)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+
+        await connection.StartAsync();
+        try
+        {
+            await connection.InvokeAsync("RegistrationProbe");
+        }
+        catch (HubException)
+        {
+            // Expected: the reply to an unknown method, which the server sends only after registering the connection.
+        }
     }
 }
