@@ -20,13 +20,16 @@ import {
 	graphAcceptsAttachments,
 	isBusyWorkflowRun,
 	isLiveWorkflowRun,
+	liveWorkflowNode,
 	toWorkflowPath,
 	workflowNodeFailureReason,
 	workflowNodeLabel,
 	workflowNodeWithStatus,
 } from "@/features/chat/workflow/ChatWorkflowModels";
 import { useChatWorkflowStore } from "@/features/chat/workflow/ChatWorkflowStore";
+import { useGraphWorkflowNodeActivity } from "@/features/chat/workflow/useGraphWorkflowNodeActivity";
 import { WorkflowActivityBlock } from "@/features/chat/workflow/WorkflowActivityBlock";
+import { WorkflowNodeLiveDetail } from "@/features/chat/workflow/WorkflowNodeLiveDetail";
 import { WorkflowRunStatusCard } from "@/features/chat/workflow/WorkflowRunStatusCard";
 import { WorkflowSelectorCard } from "@/features/chat/workflow/WorkflowSelectorCard";
 import { graphWorkflowConflictTypes, readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
@@ -186,6 +189,11 @@ export function useChatWorkflow({
 		detailStatus && !isLiveWorkflowRun(detailStatus) ? detailStatus : (cardRun?.run.status ?? detailStatus ?? "");
 	const failedNode = narrowGraphWorkflowRunStatus(cardStatus) === "Failed" ? workflowNodeWithStatus(path, "Failed") : undefined;
 	const failedNodeQuery = useGraphWorkflowNodeRun(cardRunId, failedNode?.key);
+	// The live run's running Agent / LLM Call. The run detail re-reads on every `node` ping, so a new invocation (a retry,
+	// a steer) arrives as a new id here and the activity stream re-keys onto it.
+	const liveNode = liveRun && liveRun === cardRun ? liveWorkflowNode(path) : undefined;
+	const liveActivity = useGraphWorkflowNodeActivity(cardRunId, liveNode?.key, liveNode?.invocationId);
+	const liveDetail = liveNode ? <WorkflowNodeLiveDetail nodeKey={liveNode.key} stream={liveActivity.stream} /> : undefined;
 	const cancelMutation = useCancelGraphWorkflowRun();
 	const sendMutation = useSendGraphWorkflowChatMessage();
 
@@ -371,10 +379,11 @@ export function useChatWorkflow({
 					runId={run.run.id}
 					workflowName={run.definitionName ?? unnamed}
 					pollIntervalMs={run === liveRun ? pollIntervalMs : undefined}
+					{...(run === liveRun && liveNode ? { liveNodeKey: liveNode.key, liveDetail } : {})}
 				/>
 			));
 		},
-		[liveRun, pollIntervalMs, runsByTrigger, showActivity, unnamed],
+		[liveDetail, liveNode, liveRun, pollIntervalMs, runsByTrigger, showActivity, unnamed],
 	);
 
 	if (!enabled) {
@@ -445,6 +454,7 @@ export function useChatWorkflow({
 					stopping={cancelMutation.isPending}
 					onStop={stop}
 					onDismiss={() => dismissRun(conversationId, cardRun.run.id)}
+					liveDetail={liveDetail}
 				/>
 			) : null}
 			{runs.length >= GRAPH_WORKFLOW_CONVERSATION_RUN_PAGE_SIZE ? (

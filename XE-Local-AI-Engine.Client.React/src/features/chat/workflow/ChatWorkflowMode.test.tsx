@@ -82,6 +82,19 @@ vi.mock("@/features/graphWorkflows/hooks/useGraphWorkflowRunHub", async () => {
 	};
 });
 
+// The live stream is `useGraphWorkflowNodeActivity.test.ts`'s subject; here it records what the page asks for and
+// hands back whatever folded state a test sets.
+const nodeActivity = vi.hoisted(() => ({
+	state: { status: "idle" } as { status: string; stream?: unknown },
+	calls: [] as unknown[][],
+}));
+vi.mock("@/features/chat/workflow/useGraphWorkflowNodeActivity", () => ({
+	useGraphWorkflowNodeActivity: (...args: unknown[]) => {
+		nodeActivity.calls.push(args);
+		return nodeActivity.state;
+	},
+}));
+
 import i18next from "i18next";
 
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
@@ -247,6 +260,8 @@ describe("Chat workflow mode", () => {
 		localStorage.clear();
 		useChatWorkflowStore.setState(initialStore, true);
 		hubWatermark.set(0);
+		nodeActivity.state = { status: "idle" };
+		nodeActivity.calls = [];
 		adapter.listConversations.mockResolvedValue({ conversations: [conversation()] });
 		adapter.getConversation.mockResolvedValue(conversation());
 	});
@@ -575,6 +590,54 @@ describe("Chat workflow mode", () => {
 		fireEvent.click(await screen.findByTestId("chat-workflow-status-stop"));
 
 		await waitFor(() => expect(cancelled).toEqual([runId]));
+	});
+
+	it("streams the running node's live reasoning into the status card and its activity row", async () => {
+		const invocationId = graphWorkflowTestGuid(95);
+		nodeActivity.state = {
+			status: "live",
+			stream: { conversationId: "c", messageId: invocationId, content: "", reasoning: "Sketching the CLI", isActive: true },
+		};
+		adapter.getConversation.mockResolvedValue(conversation({ messages: [userTurn] }));
+		adapter.listConversations.mockResolvedValue({ conversations: [conversation({ messages: [userTurn] })] });
+		server.use(
+			runsRoute([graphWorkflowConversationRun({ run: graphWorkflowRunSummary({ status: "Running" }) })]),
+			...runRoutes("Running", [
+				makeNodeRun({ id: graphWorkflowTestGuid(1), nodeKey: "start", kind: "Start", status: "Succeeded" }),
+				makeNodeRun({
+					id: graphWorkflowTestGuid(2),
+					nodeKey: "code",
+					kind: "LlmCall",
+					status: "Running",
+					completedAtUtc: null,
+					invocationId,
+				}),
+			]),
+		);
+		renderChat();
+
+		const card = await screen.findByTestId("chat-workflow-status-card");
+		const summary = await within(card).findByTestId("chat-message-reasoning-summary-workflow-node-code");
+		expect(summary.textContent).toContain(`${i18next.t("chat.thoughts")} · 3 ${i18next.t("chat.words")}`);
+		expect(nodeActivity.calls.at(-1)).toEqual([runId, "code", invocationId]);
+		const row = await screen.findByTestId("chat-workflow-activity-node-code");
+		expect(within(row).getByTestId("chat-message-reasoning-summary-workflow-node-code")).toBeTruthy();
+	});
+
+	it("asks for no live stream while the running node has no invocation yet", async () => {
+		nodeActivity.state = {
+			status: "live",
+			stream: { conversationId: "c", messageId: "m", content: "", reasoning: "stale", isActive: true },
+		};
+		server.use(
+			runsRoute([graphWorkflowConversationRun({ run: graphWorkflowRunSummary({ status: "Running" }) })]),
+			...runRoutes("Running", [makeNodeRun({ nodeKey: "code", kind: "LlmCall", status: "Running", completedAtUtc: null })]),
+		);
+		renderChat();
+
+		await screen.findByTestId("chat-workflow-status-active");
+		expect(nodeActivity.calls.at(-1)).toEqual([runId, undefined, undefined]);
+		expect(screen.queryByTestId("chat-message-reasoning-summary-workflow-node-code")).toBeNull();
 	});
 
 	it("re-reads the conversation on every hub ping, so a mid-run publish shows up whatever the trail's length", async () => {

@@ -382,6 +382,8 @@ first with the parked input (`pendingInput { nodeKey, prompt }`) and the Agent/L
 (`steerable { nodeKey }`). A send in workflow mode bypasses `LocalChatHub` and goes to
 `POST graph-workflows/conversations/{conversationId}/messages` with `{ requestId, definitionId, content,
 attachmentFileIds?, confirmRerun? }` (1 MiB body cap), answered 202 `{ runId, messageId, action: started|answered }`.
+The running node's live reasoning and text come from `GraphWorkflowRunHub.StreamNodeActivity`, a pass-through of the
+chat resume registry ([Graph Workflows](21-graph-workflows.md) §5, "Live activity").
 
 `IGraphWorkflowChatService.SendAsync` runs in a fixed order:
 

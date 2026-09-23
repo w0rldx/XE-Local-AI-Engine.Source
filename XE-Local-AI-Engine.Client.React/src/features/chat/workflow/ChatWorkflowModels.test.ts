@@ -6,6 +6,7 @@ import {
 	graphAcceptsAttachments,
 	isBusyWorkflowRun,
 	isLiveWorkflowRun,
+	liveWorkflowNode,
 	toWorkflowActivity,
 	toWorkflowPath,
 	workflowNodeFailureReason,
@@ -71,6 +72,16 @@ describe("status helpers", () => {
 
 		expect(activeWorkflowNode(path)?.key).toBe("lookup");
 		expect(workflowNodeWithStatus(path, "WaitingForApproval")?.key).toBe("review");
+	});
+
+	it("streams the live output of a running Agent, LLM Call or DecisionModel that has an invocation, and nothing else", () => {
+		const running = (nodeKey: string, kind: string, invocationId: string | null) =>
+			toWorkflowPath(chatGraph, [makeNodeRun({ nodeKey, kind, status: "Running", invocationId })]);
+
+		expect(liveWorkflowNode(running("classify", "DecisionModel", "inv-1"))?.invocationId).toBe("inv-1");
+		expect(liveWorkflowNode(running("code", "LlmCall", "inv-2"))?.key).toBe("code");
+		expect(liveWorkflowNode(running("code", "LlmCall", null))).toBeUndefined();
+		expect(liveWorkflowNode(running("ask", "ChatInput", "inv-3"))).toBeUndefined();
 	});
 
 	it("treats a run parked on a ChatInput as live but not busy, and a Pause park as busy", () => {

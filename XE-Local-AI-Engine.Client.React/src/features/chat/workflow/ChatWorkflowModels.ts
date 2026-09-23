@@ -29,6 +29,8 @@ export interface WorkflowPathNode {
 	 * on the default. Absent for every other kind.
 	 */
 	readonly model?: string | null;
+	/** The node run's current model invocation (Agent / LLM Call while running); the key of its live activity stream. */
+	readonly invocationId?: string | null;
 }
 
 const modelNodeKinds: ReadonlySet<string> = new Set(["Agent", "LlmCall", "DecisionModel"]);
@@ -91,6 +93,7 @@ export function toWorkflowPath(
 			status: narrowGraphWorkflowNodeRunStatus(nodeRun?.status),
 			startedAtUtc: nodeRun?.startedAtUtc,
 			completedAtUtc: nodeRun?.completedAtUtc,
+			invocationId: nodeRun?.invocationId,
 			...modelOf(node),
 		});
 		placed.add(node.key);
@@ -104,6 +107,7 @@ export function toWorkflowPath(
 			status: narrowGraphWorkflowNodeRunStatus(nodeRun.status),
 			startedAtUtc: nodeRun.startedAtUtc,
 			completedAtUtc: nodeRun.completedAtUtc,
+			invocationId: nodeRun.invocationId,
 		}));
 	return [...ranks.filter((rank) => rank.length > 0), ...(orphans.length > 0 ? [orphans] : [])];
 }
@@ -137,6 +141,20 @@ export function activeWorkflowNode(path: WorkflowPath): WorkflowPathNode | undef
 		}
 	}
 	return undefined;
+}
+
+/** The node kinds that run a model invocation of their own (a DecisionModel is LlmCall-backed). */
+const liveNodeKinds: ReadonlySet<string> = new Set(["Agent", "LlmCall", "DecisionModel"]);
+
+/**
+ * The active node when it is a running Agent / LLM Call / DecisionModel with an invocation: the one node whose live output
+ * `useGraphWorkflowNodeActivity` can stream. Any other active node has nothing live to show.
+ */
+export function liveWorkflowNode(path: WorkflowPath): (WorkflowPathNode & { readonly invocationId: string }) | undefined {
+	const node = activeWorkflowNode(path);
+	return node?.status === "Running" && liveNodeKinds.has(node.kind) && node.invocationId
+		? { ...node, invocationId: node.invocationId }
+		: undefined;
 }
 
 /** The run is parked on a ChatInput (a question for the user), not on a Pause. */

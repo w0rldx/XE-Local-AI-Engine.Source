@@ -900,7 +900,8 @@ The snapshot carries the run status, the queued / running counts, `pendingDecisi
 input), the watermark, up to
 `EventReplayLimit` events, and a `replayTruncated` flag read from one row past the limit rather than inferred from a
 full page. There is **no in-memory buffer** — the store is the replay authority — and a disconnect cancels nothing,
-because a run outlives the tab.
+because a run outlives the tab. `UnsubscribeRun(runId)` leaves the group, and `StreamNodeActivity(runId, nodeKey)`
+streams one running node's live turn (below).
 
 The pushed event is `graphWorkflowChanged`, carrying `(runId, seq, kind)` and **no content at all**: the subscriber
 re-reads the named feed from its own watermark, so a dropped push degrades to a late read rather than to a wrong
@@ -922,6 +923,18 @@ The event vocabulary is the closed seventeen-token `GraphWorkflowEventTypes` cat
 `gate.decided`, and `node.published` (amendment 2026-09-23, Chat Workflows S1: a result became a chat message, §3.6). The feed is append-only and durable, so a token written once is a token every later reader must
 understand: extend it by amendment, never silently. Event details are small structured payloads — a failure summary,
 a decision outcome — and never a transcript.
+
+**Live activity** (Chat Workflows S2). `StreamNodeActivity(runId, nodeKey)` is a server stream over the node run's
+`InvocationId`, served straight from `IInvocationResumeRegistry.ResumeAsync`: a snapshot, then offset deltas for
+content, reasoning, tool calls and phases, then the terminal event — the same `ChatStreamEvent`s
+`LocalChatHub.ResumeMessage` serves, so the client reuses the chat stream folding. The registry already mirrors every
+invocation from `IWorkerEventDispatcher.InvocationStateChanged`, graph turns included, so there is no new publisher
+and no content-bearing group: `graphWorkflowChanged` stays content-free. The stream is **not** tracked as a chat
+attachment (`LocalChatHub.TrackAttachment`), which would mark the graph turn detached for the reaper. It refuses with a
+`HubException` when the run is unknown, the node key is not a row of this run, the row is not `Running`, it has no
+`InvocationId`, or the registry no longer holds the turn; a client re-subscribes when a `node` ping changes the
+running row's `InvocationId`. The registry is in memory, so a mid-node restart loses the live text: the row is failed
+`Interrupted` and retried by the existing rule (§3.5), and the node's durable output is what remains.
 
 ---
 

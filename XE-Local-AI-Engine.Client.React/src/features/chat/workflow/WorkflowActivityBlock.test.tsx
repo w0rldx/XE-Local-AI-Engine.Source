@@ -6,6 +6,7 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { fireEvent, screen, within } from "@testing-library/react";
+import i18next from "i18next";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
@@ -123,5 +124,73 @@ describe("WorkflowActivityBlock", () => {
 		fireEvent.click(await screen.findByTestId("chat-workflow-activity-output-toggle-code"));
 		expect(screen.getByTestId("chat-workflow-activity-output-code").textContent).toBe("fn main() {}");
 		queryClient.clear();
+	});
+
+	it("says a parked ChatInput waits for your input, not for a decision", async () => {
+		server.use(
+			jsonRoute(
+				"get",
+				`graph-workflows/runs/${runId}`,
+				graphWorkflowRun({
+					run: graphWorkflowRunSummary({ status: "WaitingForApproval" }),
+					graph: chatGraph,
+					nodeRuns: [
+						makeNodeRun({ id: graphWorkflowTestGuid(1), nodeKey: "start", kind: "Start", status: "Succeeded" }),
+						makeNodeRun({
+							id: graphWorkflowTestGuid(2),
+							nodeKey: "ask",
+							kind: "ChatInput",
+							status: "WaitingForApproval",
+							completedAtUtc: null,
+						}),
+					],
+				}),
+			),
+			jsonRoute("get", `graph-workflows/runs/${runId}/events`, chatWorkflowEvents()),
+		);
+
+		renderWithProviders(<WorkflowActivityBlock runId={runId} workflowName="Support triage" />);
+
+		const row = await screen.findByTestId("chat-workflow-activity-node-ask");
+		expect(row.textContent).toContain(i18next.t("pages.graphWorkflows.runStatus.WaitingForInput"));
+		expect(row.textContent).not.toContain(i18next.t("pages.graphWorkflows.nodeStatus.WaitingForApproval"));
+	});
+
+	it("renders the live output under the running node's row only", async () => {
+		server.use(
+			jsonRoute(
+				"get",
+				`graph-workflows/runs/${runId}`,
+				graphWorkflowRun({
+					run: graphWorkflowRunSummary({ status: "Running" }),
+					graph: chatGraph,
+					nodeRuns: [
+						makeNodeRun({ id: graphWorkflowTestGuid(1), nodeKey: "start", kind: "Start", status: "Succeeded" }),
+						makeNodeRun({
+							id: graphWorkflowTestGuid(4),
+							nodeKey: "code",
+							kind: "LlmCall",
+							status: "Running",
+							completedAtUtc: null,
+							invocationId: graphWorkflowTestGuid(40),
+						}),
+					],
+				}),
+			),
+			jsonRoute("get", `graph-workflows/runs/${runId}/events`, chatWorkflowEvents()),
+		);
+
+		renderWithProviders(
+			<WorkflowActivityBlock
+				runId={runId}
+				workflowName="Support triage"
+				liveNodeKey="code"
+				liveDetail={<span data-testid="live-detail">live</span>}
+			/>,
+		);
+
+		const row = await screen.findByTestId("chat-workflow-activity-node-code");
+		expect(within(row).getByTestId("live-detail")).toBeTruthy();
+		expect(screen.getAllByTestId("live-detail")).toHaveLength(1);
 	});
 });

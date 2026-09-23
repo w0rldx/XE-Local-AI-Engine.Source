@@ -1301,7 +1301,13 @@
 				"answerPlaceholder": "Beantworte die Frage des Workflows",
 				"attachmentsNotAccepted": "Dieser Workflow nimmt keine Anhänge an.",
 				"attachmentsNotWithAnswer": "Anhänge werden mit einer Antwort nicht gesendet.",
-				"runsCapped": "Aktivität der {{count}} neuesten Workflow-Läufe in dieser Unterhaltung."
+				"runsCapped": "Aktivität der {{count}} neuesten Workflow-Läufe in dieser Unterhaltung.",
+				"live": {
+					"queued": "Wartet auf das Modell",
+					"generating": "Generiert",
+					"tokens_one": "{{count}} Token",
+					"tokens_other": "{{count}} Token"
+				}
 			}
 		},
 		"clientNodes": {

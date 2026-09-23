@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tools;
@@ -225,6 +226,72 @@ public sealed class GraphWorkflowRunHubTests
         await fixture.Groups.Received(1).RemoveFromGroupAsync("connection", $"graph-workflow-run-{RunId:N}", Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    ///     The live tap is the resume registry's stream handed through untouched: the same snapshot and deltas the chat
+    ///     client already folds, for the invocation the RUNNING row names.
+    /// </summary>
+    [Test]
+    public async Task StreamNodeActivity_ForARunningRowWithALiveTurn_StreamsTheRegistrysEventsUnchanged()
+    {
+        var invocationId = Guid.NewGuid();
+        ChatStreamEvent[] expected = [StreamEvent(invocationId, "snapshot", 0), StreamEvent(invocationId, "delta", 1)];
+        var registry = Substitute.For<IInvocationResumeRegistry>();
+        registry.ResumeAsync(invocationId, Arg.Any<CancellationToken>()).Returns(Yield(expected));
+        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Running) with { InvocationId = invocationId }), registry);
+
+        var received = await Collect(fixture.Hub.StreamNodeActivity(RunId, "draft", CancellationToken.None));
+
+        AssertEx.Equal(expected.Length, received.Count);
+        AssertEx.True(expected.Zip(received).All(static pair => ReferenceEquals(pair.First, pair.Second)), "the hub hands the registry's events through, in order, as the same instances.");
+    }
+
+    [Test]
+    public async Task StreamNodeActivity_ForANodeKeyThisRunDoesNotHave_ThrowsWithoutAttaching()
+    {
+        var registry = Substitute.For<IInvocationResumeRegistry>();
+        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Running) with { InvocationId = Guid.NewGuid() }), registry);
+
+        _ = await AssertEx.ThrowsAsync<HubException>(() => Collect(fixture.Hub.StreamNodeActivity(RunId, "other-runs-node", CancellationToken.None)));
+
+        AssertEx.Empty(registry.ReceivedCalls());
+    }
+
+    [Test]
+    public async Task StreamNodeActivity_ForARowThatIsNotRunning_ThrowsWithoutAttaching()
+    {
+        var registry = Substitute.For<IInvocationResumeRegistry>();
+        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Succeeded) with { InvocationId = Guid.NewGuid() }), registry);
+
+        _ = await AssertEx.ThrowsAsync<HubException>(() => Collect(fixture.Hub.StreamNodeActivity(RunId, "draft", CancellationToken.None)));
+
+        AssertEx.Empty(registry.ReceivedCalls());
+    }
+
+    [Test]
+    public async Task StreamNodeActivity_ForARunningRowWithoutAnInvocation_ThrowsWithoutAttaching()
+    {
+        var registry = Substitute.For<IInvocationResumeRegistry>();
+        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Running)), registry);
+
+        _ = await AssertEx.ThrowsAsync<HubException>(() => Collect(fixture.Hub.StreamNodeActivity(RunId, "draft", CancellationToken.None)));
+
+        AssertEx.Empty(registry.ReceivedCalls());
+    }
+
+    /// <summary>The registry's refusal carries the invocation id; the caller gets a plain reason instead.</summary>
+    [Test]
+    public async Task StreamNodeActivity_WhenTheRegistrySaysTheTurnIsNotResumable_ThrowsAHubException()
+    {
+        var invocationId = Guid.NewGuid();
+        var registry = Substitute.For<IInvocationResumeRegistry>();
+        registry.ResumeAsync(invocationId, Arg.Any<CancellationToken>()).Throws(new InvalidOperationException($"Invocation {invocationId} is not resumable."));
+        using var fixture = CreateHub(StoreWithNodeRun(NodeRun("draft", GraphWorkflowNodeRunStatus.Running) with { InvocationId = invocationId }), registry);
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(() => Collect(fixture.Hub.StreamNodeActivity(RunId, "draft", CancellationToken.None)));
+
+        AssertEx.False(exception.Message.Contains(invocationId.ToString(), StringComparison.OrdinalIgnoreCase), "the registry's message names the invocation; the hub's reason stays plain.");
+    }
+
     [Test]
     public void Hub_RequiresOperatorAuthorization()
     {
@@ -315,10 +382,43 @@ public sealed class GraphWorkflowRunHubTests
             UpdatedAtUtc = 20
         };
 
+    private static IGraphWorkflowStore StoreWithNodeRun(GraphWorkflowNodeRunSnapshot nodeRun)
+    {
+        var store = Store();
+        store.ListNodeRunsAsync(RunId, Arg.Any<CancellationToken>()).Returns<IReadOnlyList<GraphWorkflowNodeRunSnapshot>>([nodeRun]);
+        return store;
+    }
+
+    private static ChatStreamEvent StreamEvent(Guid invocationId, string type, long sequence) =>
+        new() { Type = type, ConversationId = Guid.NewGuid(), MessageId = invocationId, RequestId = invocationId, Status = "Running", Sequence = sequence, OccurredAtUtc = 100 + sequence };
+
+    private static async IAsyncEnumerable<ChatStreamEvent> Yield(IEnumerable<ChatStreamEvent> events)
+    {
+        await Task.CompletedTask;
+        foreach (var @event in events)
+        {
+            yield return @event;
+        }
+    }
+
+    private static async Task<List<ChatStreamEvent>> Collect(IAsyncEnumerable<ChatStreamEvent> stream)
+    {
+        var events = new List<ChatStreamEvent>();
+        await foreach (var @event in stream)
+        {
+            events.Add(@event);
+        }
+
+        return events;
+    }
+
     private static GraphWorkflowRunEventSnapshot Event(long sequence) =>
         new() { Id = Guid.NewGuid(), RunId = RunId, Seq = sequence, EventType = "node.started", NodeKey = "draft", DetailJson = null, CreatedAtUtc = 100 };
 
-    private static HubFixture CreateHub(IGraphWorkflowStore store, bool enabled = true)
+    private static HubFixture CreateHub(IGraphWorkflowStore store, IInvocationResumeRegistry registry) =>
+        CreateHub(store, enabled: true, registry);
+
+    private static HubFixture CreateHub(IGraphWorkflowStore store, bool enabled = true, IInvocationResumeRegistry? registry = null)
     {
         var options = Options.Create(new GraphWorkflowOptions
         {
@@ -336,20 +436,21 @@ public sealed class GraphWorkflowRunHubTests
                 Substitute.For<IToolInvocationService>(),
                 options,
                 Options.Create(new SecurityOptions())),
+            registry ?? Substitute.For<IInvocationResumeRegistry>(),
             options);
     }
 
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",
         Justification = "HubFixture takes ownership of the constructed hub and every test disposes the fixture.")]
-    private static HubFixture CreateHub(IGraphWorkflowRunService runs, IOptions<GraphWorkflowOptions> options)
+    private static HubFixture CreateHub(IGraphWorkflowRunService runs, IInvocationResumeRegistry registry, IOptions<GraphWorkflowOptions> options)
     {
         var context = Substitute.For<HubCallerContext>();
         context.ConnectionId.Returns("connection");
         context.ConnectionAborted.Returns(CancellationToken.None);
         var groups = Substitute.For<IGroupManager>();
         var clients = Substitute.For<IHubCallerClients>();
-        var hub = new GraphWorkflowRunHub(runs, options)
+        var hub = new GraphWorkflowRunHub(runs, registry, options)
         {
             Context = context,
             Groups = groups,

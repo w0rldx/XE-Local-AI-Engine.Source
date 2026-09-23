@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
+import i18next from "i18next";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { toWorkflowPath } from "@/features/chat/workflow/ChatWorkflowModels";
+import { WorkflowNodeLiveDetail } from "@/features/chat/workflow/WorkflowNodeLiveDetail";
 import { WorkflowRunStatusCard } from "@/features/chat/workflow/WorkflowRunStatusCard";
 import { chatGraph, eightNodeGraph, makeNodeRun } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -150,5 +152,43 @@ describe("WorkflowRunStatusCard", () => {
 	it("does not offer Stop twice while the run is already cancelling", () => {
 		renderCard("Cancelling");
 		expect(screen.getByTestId("chat-workflow-status-stop")).toHaveProperty("disabled", true);
+	});
+
+	it("shows the active node's live reasoning collapsed behind the chat's Thoughts disclosure", () => {
+		const stream = { conversationId: "c", messageId: "m", content: "", reasoning: "Weighing three options", isActive: true };
+		renderCard("Running", { liveDetail: <WorkflowNodeLiveDetail nodeKey="lookup" stream={stream} /> });
+
+		const card = screen.getByTestId("chat-workflow-status-card");
+		const summary = within(card).getByTestId("chat-message-reasoning-summary-workflow-node-lookup");
+		expect(summary.textContent).toContain(`${i18next.t("chat.thoughts")} · 3 ${i18next.t("chat.words")}`);
+		expect(within(card).getByTestId("chat-message-reasoning-workflow-node-lookup").hasAttribute("open")).toBe(false);
+	});
+
+	it("shows only what the frames said while no reasoning has arrived, and nothing when they said nothing", () => {
+		const base = { conversationId: "c", messageId: "m", content: "", isActive: true };
+		const { unmount } = renderWithProviders(
+			<WorkflowNodeLiveDetail nodeKey="lookup" stream={{ ...base, runtimePhase: "loading_model", outputTokens: 12 }} />,
+		);
+		expect(screen.getByTestId("chat-workflow-live-lookup").textContent).toBe(
+			`${i18next.t("pages.chat.loadingModel")} · ${i18next.t("pages.chat.workflow.live.tokens", { count: 12 })}`,
+		);
+		unmount();
+
+		const { container } = renderWithProviders(<WorkflowNodeLiveDetail nodeKey="lookup" stream={base} />);
+		expect(screen.queryByTestId("chat-workflow-live-lookup")).toBeNull();
+		expect(container.textContent).not.toContain(i18next.t("chat.toolCall.thinkingLive"));
+	});
+
+	it("keeps saying Generating once content streams, because the fold clears the phase on every content delta", () => {
+		const base = { conversationId: "c", messageId: "m", isActive: true };
+		const { unmount } = renderWithProviders(
+			<WorkflowNodeLiveDetail nodeKey="lookup" stream={{ ...base, content: "", runtimePhase: "generating" }} />,
+		);
+		expect(screen.getByTestId("chat-workflow-live-lookup").textContent).toBe(i18next.t("pages.chat.workflow.live.generating"));
+		unmount();
+
+		// The next content delta arrives with the phase cleared: the streamed text is the evidence of generation.
+		renderWithProviders(<WorkflowNodeLiveDetail nodeKey="lookup" stream={{ ...base, content: "The invoice" }} />);
+		expect(screen.getByTestId("chat-workflow-live-lookup").textContent).toBe(i18next.t("pages.chat.workflow.live.generating"));
 	});
 });

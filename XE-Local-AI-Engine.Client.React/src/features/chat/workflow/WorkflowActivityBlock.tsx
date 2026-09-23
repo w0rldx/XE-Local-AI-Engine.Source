@@ -1,6 +1,6 @@
 import { Badge, Collapse, Group, Paper, Stack, Text, UnstyledButton } from "@mantine/core";
 import { IconChevronDown, IconSitemap } from "@tabler/icons-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -24,6 +24,9 @@ interface WorkflowActivityBlockProps {
 	readonly workflowName: string;
 	/** Polling cadence while the run hub is down; only the live run ever gets one. */
 	readonly pollIntervalMs?: number;
+	/** The live run's running node and its live output; rendered under that node's row. */
+	readonly liveNodeKey?: string;
+	readonly liveDetail?: ReactNode;
 }
 
 /** An Agent / LLM Call node's intermediate text, collapsed by default the way a reply's thoughts are. */
@@ -56,7 +59,7 @@ function IntermediateText({ nodeKey, text }: { nodeKey: string; text: string }) 
 	);
 }
 
-function ActivityRow({ entry }: { entry: WorkflowActivityEntry }) {
+function ActivityRow({ entry, liveDetail }: { entry: WorkflowActivityEntry; liveDetail?: ReactNode }) {
 	const { t } = useTranslation();
 	const dimmed = entry.status === "Skipped" || entry.status === "Cancelled";
 	return (
@@ -66,7 +69,9 @@ function ActivityRow({ entry }: { entry: WorkflowActivityEntry }) {
 					{`${workflowNodeGlyph(entry.status)} ${entry.label}`}
 				</Text>
 				<Text size="xs" c="dimmed">
-					{t(`pages.graphWorkflows.nodeStatus.${entry.status}`, entry.status)}
+					{entry.kind === "ChatInput" && entry.status === "WaitingForApproval"
+						? t("pages.graphWorkflows.runStatus.WaitingForInput", "Waiting for your input")
+						: t(`pages.graphWorkflows.nodeStatus.${entry.status}`, entry.status)}
 				</Text>
 				{entry.durationMs !== undefined ? (
 					<Text size="xs" c="dimmed">
@@ -110,6 +115,7 @@ function ActivityRow({ entry }: { entry: WorkflowActivityEntry }) {
 				</Text>
 			) : null}
 			{entry.text ? <IntermediateText nodeKey={entry.key} text={entry.text} /> : null}
+			{liveDetail}
 		</Stack>
 	);
 }
@@ -119,7 +125,13 @@ function ActivityRow({ entry }: { entry: WorkflowActivityEntry }) {
  * duration, tool summaries, the ChatInput question and answer, and publish markers. Built only from durable state (run
  * detail, node documents, events) — the live run's hub subscription is what keeps these queries fresh.
  */
-export function WorkflowActivityBlock({ runId, workflowName, pollIntervalMs }: WorkflowActivityBlockProps) {
+export function WorkflowActivityBlock({
+	runId,
+	workflowName,
+	pollIntervalMs,
+	liveNodeKey,
+	liveDetail,
+}: WorkflowActivityBlockProps) {
 	const { t } = useTranslation();
 	const feed = { pollIntervalMs };
 	const runQuery = useGraphWorkflowRun(runId, feed);
@@ -159,7 +171,13 @@ export function WorkflowActivityBlock({ runId, workflowName, pollIntervalMs }: W
 						{t("pages.chat.workflow.activity.empty", "Nothing has run yet.")}
 					</Text>
 				) : (
-					entries.map((entry) => <ActivityRow key={entry.key} entry={entry} />)
+					entries.map((entry) => (
+						<ActivityRow
+							key={entry.key}
+							entry={entry}
+							liveDetail={entry.key === liveNodeKey && entry.status === "Running" ? liveDetail : undefined}
+						/>
+					))
 				)}
 			</Stack>
 		</Paper>

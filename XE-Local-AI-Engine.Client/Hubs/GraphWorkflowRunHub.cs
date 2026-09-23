@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hubs;
 
+using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -9,6 +10,7 @@ using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 public static class GraphWorkflowHubEvents
@@ -69,13 +71,18 @@ public sealed class GraphWorkflowRunSubscriptionSnapshot
 public sealed class GraphWorkflowRunHub : Hub
 {
     private readonly GraphWorkflowOptions _options;
+    private readonly IInvocationResumeRegistry _resumeRegistry;
     private readonly IGraphWorkflowRunService _runs;
 
-    public GraphWorkflowRunHub(IGraphWorkflowRunService runs, IOptions<GraphWorkflowOptions> options)
+    public GraphWorkflowRunHub(IGraphWorkflowRunService runs,
+        IInvocationResumeRegistry resumeRegistry,
+        IOptions<GraphWorkflowOptions> options)
     {
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
         ArgumentNullException.ThrowIfNull(runs);
+        ArgumentNullException.ThrowIfNull(resumeRegistry);
         _runs = runs;
+        _resumeRegistry = resumeRegistry;
     }
 
     public async Task<GraphWorkflowRunSubscriptionSnapshot> SubscribeRun(Guid runId, long afterSeq)
@@ -127,6 +134,65 @@ public sealed class GraphWorkflowRunHub : Hub
             Events = [.. replay.Events.Select(static @event => @event.ToResponse())],
             ReplayTruncated = replay.ReplayTruncated
         };
+    }
+
+    /// <summary>The live text of one RUNNING node's turn: the resume registry's snapshot, deltas and terminal event.</summary>
+    /// <remarks>
+    ///     Served straight from <see cref="IInvocationResumeRegistry.ResumeAsync" /> and deliberately NOT tracked as a
+    ///     chat attachment: the graph turn has no chat client to detach from, so the reaper must never see one. The
+    ///     registry is in memory; after a restart the row is failed <c>Interrupted</c> and nothing is left to stream.
+    /// </remarks>
+    public async IAsyncEnumerable<ChatStreamEvent> StreamNodeActivity(Guid runId,
+        string nodeKey,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken)
+    {
+        if (!_options.Enabled)
+        {
+            throw new HubException("Graph workflows are disabled on this node.");
+        }
+
+        if (runId == Guid.Empty || string.IsNullOrWhiteSpace(nodeKey))
+        {
+            throw new HubException("Graph workflow run id and node key are required.");
+        }
+
+        GraphWorkflowRunDetail detail;
+        try
+        {
+            detail = await _runs.GetRunAsync(runId, cancellationToken);
+        }
+        catch (GraphWorkflowNotFoundException)
+        {
+            throw new HubException("Graph workflow run was not found.");
+        }
+
+        var nodeRun = detail.NodeRuns.FirstOrDefault(row => string.Equals(row.NodeKey, nodeKey, StringComparison.Ordinal))
+                      ?? throw new HubException("Graph workflow node is not part of this run.");
+        if (nodeRun.Status != GraphWorkflowNodeRunStatus.Running)
+        {
+            throw new HubException("Graph workflow node is not running.");
+        }
+
+        if (nodeRun.InvocationId is not { } invocationId)
+        {
+            throw new HubException("Graph workflow node has no live turn.");
+        }
+
+        IAsyncEnumerable<ChatStreamEvent> stream;
+        try
+        {
+            stream = _resumeRegistry.ResumeAsync(invocationId, cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            throw new HubException("Graph workflow node turn is no longer live.");
+        }
+
+        await foreach (var @event in stream.WithCancellation(cancellationToken))
+        {
+            yield return @event;
+        }
     }
 
     public Task UnsubscribeRun(Guid runId) =>

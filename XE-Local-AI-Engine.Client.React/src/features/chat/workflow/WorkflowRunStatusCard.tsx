@@ -33,7 +33,7 @@ interface WorkflowRunStatusCardProps {
 	readonly onStop: () => void;
 	/** Offered on a terminal run only: acknowledging it hides the card. */
 	readonly onDismiss: () => void;
-	/** Extension point for the active node's live output (S2). Rendered under the path while the run is live. */
+	/** The active node's live output (reasoning, phase, tokens). Rendered under the active line while the run is live. */
 	readonly liveDetail?: ReactNode;
 }
 

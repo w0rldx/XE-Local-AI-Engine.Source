@@ -1301,7 +1301,13 @@
 				"answerPlaceholder": "Answer the workflow's question",
 				"attachmentsNotAccepted": "This workflow does not accept attachments.",
 				"attachmentsNotWithAnswer": "Attachments are not sent with an answer.",
-				"runsCapped": "Showing activity for the {{count}} most recent workflow runs in this conversation."
+				"runsCapped": "Showing activity for the {{count}} most recent workflow runs in this conversation.",
+				"live": {
+					"queued": "Waiting for the model",
+					"generating": "Generating",
+					"tokens_one": "{{count}} token",
+					"tokens_other": "{{count}} tokens"
+				}
 			}
 		},
 		"clientNodes": {
