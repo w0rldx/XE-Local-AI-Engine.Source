@@ -26,17 +26,23 @@ internal sealed partial class WindowsWhisperJobObjectProcessHandle : IWhisperSer
 
     private readonly SafeJobHandle _job;
     private readonly Process _process;
+    private readonly WhisperServerStderrTail? _stderrTail;
     private int _disposed;
 
-    private WindowsWhisperJobObjectProcessHandle(Process process, SafeJobHandle job)
+    private WindowsWhisperJobObjectProcessHandle(Process process, SafeJobHandle job, WhisperServerStderrTail? stderrTail)
     {
         _process = process;
         _job = job;
+        _stderrTail = stderrTail;
     }
 
     public int ProcessId => _process.Id;
 
     public bool HasExited => SafeHasExited(_process);
+
+    public int? ExitCode => SafeExitCode(_process);
+
+    public string? StderrTail => _stderrTail?.Snapshot();
 
     public void TreeKill()
     {
@@ -68,7 +74,7 @@ internal sealed partial class WindowsWhisperJobObjectProcessHandle : IWhisperSer
     ///     Creates a job, marks it kill-on-close, assigns the already-started <paramref name="process" /> to it and
     ///     returns the handle. On any failure the job and the process are torn down and a sanitized error is surfaced.
     /// </summary>
-    public static WindowsWhisperJobObjectProcessHandle Wrap(Process process)
+    public static WindowsWhisperJobObjectProcessHandle Wrap(Process process, WhisperServerStderrTail? stderrTail = null)
     {
         ArgumentNullException.ThrowIfNull(process);
 
@@ -83,7 +89,7 @@ internal sealed partial class WindowsWhisperJobObjectProcessHandle : IWhisperSer
 
             ConfigureKillOnClose(job);
             AssignProcess(job, process);
-            return new WindowsWhisperJobObjectProcessHandle(process, job);
+            return new WindowsWhisperJobObjectProcessHandle(process, job, stderrTail);
         }
         catch (Exception ex)
         {
@@ -152,6 +158,19 @@ internal sealed partial class WindowsWhisperJobObjectProcessHandle : IWhisperSer
         catch (InvalidOperationException)
         {
             return true;
+        }
+    }
+
+    private static int? SafeExitCode(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch (InvalidOperationException)
+        {
+            // No associated process, or the handle is already disposed: the code is unknown.
+            return null;
         }
     }
 

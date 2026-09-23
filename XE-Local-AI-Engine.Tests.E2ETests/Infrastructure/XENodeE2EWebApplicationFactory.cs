@@ -40,6 +40,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 
@@ -600,6 +601,13 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.AddSingleton<FakeJfkWhisperTranscriber>();
             services.AddSingleton<IWhisperTranscriber>(provider => provider.GetRequiredService<FakeJfkWhisperTranscriber>());
 
+            // The live start warms whisper-server before the session goes live, and this node has no daemon to warm.
+            // Only that call is answered here; status, eviction and leases stay on the real supervisor.
+            var realSupervisor = services.Last(static descriptor => descriptor.ServiceType == typeof(IWhisperServerSupervisor));
+            services.Remove(realSupervisor);
+            services.AddSingleton<IWhisperServerSupervisor>(provider =>
+                new NoDaemonWhisperServerSupervisor((IWhisperServerSupervisor)realSupervisor.ImplementationFactory!(provider)));
+
             services.RemoveAll<IHttpClientFactory>();
             services.AddSingleton<IHttpClientFactory>(_ =>
             {
@@ -666,6 +674,31 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         {
             return $"(error: {ex.Message})";
         }
+    }
+
+    /// <summary>The real supervisor, except that warming the daemon succeeds at once without spawning one.</summary>
+    private sealed class NoDaemonWhisperServerSupervisor : IWhisperServerSupervisor
+    {
+        private readonly IWhisperServerSupervisor _inner;
+
+        public NoDaemonWhisperServerSupervisor(IWhisperServerSupervisor inner)
+        {
+            ArgumentNullException.ThrowIfNull(inner);
+            _inner = inner;
+        }
+
+        public Task<WhisperServerEndpoint> EnsureRunningAsync(string modelId, CancellationToken ct) =>
+            Task.FromResult(new WhisperServerEndpoint { ModelId = modelId, Generation = 1, BaseAddress = new Uri("http://127.0.0.1:9/") });
+
+        public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) => _inner.EvictAsync(ct);
+
+        public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation) =>
+            _inner.TryAcquireTranscriptionLease(modelId, generation);
+
+        public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>
+            _inner.ReportRequestFailureAsync(generation, cause, ct);
+
+        public WhisperRuntimeStatusSnapshot GetStatus() => _inner.GetStatus();
     }
 
     /// <summary>

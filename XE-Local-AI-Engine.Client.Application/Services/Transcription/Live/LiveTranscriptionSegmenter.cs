@@ -147,7 +147,18 @@ public sealed class LiveTranscriptionSegmenter
     /// <param name="pcm16">Raw little-endian samples. Any length is accepted, including one that is not a whole millisecond.</param>
     /// <param name="cancellationToken">Cancels an in-flight submission.</param>
     /// <exception cref="LiveSegmenterStalledException">Submissions stopped making progress.</exception>
-    public async ValueTask<LiveTick> PushAsync(ReadOnlyMemory<byte> pcm16, CancellationToken cancellationToken)
+    public ValueTask<LiveTick> PushAsync(ReadOnlyMemory<byte> pcm16, CancellationToken cancellationToken) =>
+        PushAsync(pcm16, catchingUp: false, cancellationToken);
+
+    /// <summary>Accepts one frame of 16 kHz mono int16 PCM and runs whatever submissions its arrival makes due.</summary>
+    /// <param name="pcm16">Raw little-endian samples. Any length is accepted, including one that is not a whole millisecond.</param>
+    /// <param name="catchingUp">
+    ///     More audio is queued behind this frame: only the cap submits, so a lagging lane drains at one inference per
+    ///     window, as whisper's per-request cost is fixed.
+    /// </param>
+    /// <param name="cancellationToken">Cancels an in-flight submission.</param>
+    /// <exception cref="LiveSegmenterStalledException">Submissions stopped making progress.</exception>
+    public async ValueTask<LiveTick> PushAsync(ReadOnlyMemory<byte> pcm16, bool catchingUp, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -157,7 +168,10 @@ public sealed class LiveTranscriptionSegmenter
 
         while (true)
         {
-            var boundaryMs = Math.Min(_nextTickMs, _committedEndMs + _maxWindowMs);
+            // Behind, the cap is the only boundary; a cap submission always moves the watermark or trips the stall
+            // detector, and a stale _nextTickMs fires at once on the first frame no longer catching up.
+            var capMs = _committedEndMs + _maxWindowMs;
+            var boundaryMs = catchingUp ? capMs : Math.Min(_nextTickMs, capMs);
             if (_audioEndMs >= boundaryMs)
             {
                 if (boundaryMs == _lastSubmittedBoundaryMs)

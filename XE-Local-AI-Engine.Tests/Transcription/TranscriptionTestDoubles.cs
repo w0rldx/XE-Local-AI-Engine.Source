@@ -95,9 +95,17 @@ internal sealed class FakeWhisperServerSupervisor : IWhisperServerSupervisor
 
     public IReadOnlyList<string> EnsureRunningCalls => _ensureRunningCalls;
 
+    /// <summary>When set, every ensure-running call is recorded and then fails with this, as a spawn that never became ready does.</summary>
+    public WhisperRuntimeException? Failure { get; set; }
+
     public Task<WhisperServerEndpoint> EnsureRunningAsync(string modelId, CancellationToken ct)
     {
         _ensureRunningCalls.Add(modelId);
+        if (Failure is not null)
+        {
+            return Task.FromException<WhisperServerEndpoint>(Failure);
+        }
+
         return Task.FromResult(new WhisperServerEndpoint { ModelId = modelId, Generation = 1, BaseAddress = new Uri("http://127.0.0.1:9/") });
     }
 
@@ -110,6 +118,9 @@ internal sealed class FakeWhisperServerSupervisor : IWhisperServerSupervisor
 
     public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation) =>
         null;
+
+    public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>
+        Task.FromResult<WhisperRuntimeException?>(null);
 
     public WhisperRuntimeStatusSnapshot GetStatus() =>
         new() { State = WhisperRuntimeState.Ready, LoadedModelId = "tiny", Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = true };

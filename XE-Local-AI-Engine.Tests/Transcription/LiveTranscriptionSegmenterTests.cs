@@ -453,6 +453,43 @@ public sealed class LiveTranscriptionSegmenterTests
         AssertEx.NotEmpty(ticks[^1].Partial, "The text is provisional, not lost.");
     }
 
+    [Test]
+    public async Task ACatchingUpFrameSpanningSeveralTicks_SubmitsOnceAtTheCap()
+    {
+        // A lane that is behind drains at one inference per window. Re-inferring at every tick while behind costs one
+        // fixed-price request per queued second, so a lane that fell behind could never catch up.
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
+
+        var tick = await segmenter.PushAsync(LivePcm.Range(0, 7_000), catchingUp: true, CancellationToken.None);
+
+        AssertEx.Equal(1, transcriber.CallCount, "Seven ticks of audio, one submission.");
+        AssertEx.Equal(new SubmittedWindow(0, 5_000), transcriber.Windows[0], "The one submission is the cap, carrying the whole window.");
+        AssertEx.Equal(5_000L, segmenter.CommittedEndMs, "The cap commits and moves the watermark, as it always does.");
+        AssertEx.Equal(7_000L, segmenter.AudioEndMs, "The rest of the frame is buffered, not dropped.");
+        AssertEx.Equal(1, tick.Commits.Count, "The window's speech is durable.");
+
+        // Caught up: the next frame that is not behind submits at once on the tick it had skipped.
+        _ = await segmenter.PushAsync(LivePcm.Range(7_000, 7_250), catchingUp: false, CancellationToken.None);
+
+        AssertEx.Equal(2, transcriber.CallCount, "The skipped tick fires on the first frame that is no longer behind.");
+        AssertEx.Equal(new SubmittedWindow(5_000, 7_000), transcriber.Windows[1], "It carries everything past the watermark.");
+    }
+
+    [Test]
+    public async Task ANonCatchingUpFrameSpanningSeveralTicks_StillSubmitsAtEveryTick()
+    {
+        // The control for the test above: the same frame, not behind, keeps the ordinary per-tick submissions.
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
+
+        _ = await segmenter.PushAsync(LivePcm.Range(0, 7_000), catchingUp: false, CancellationToken.None);
+
+        AssertEx.Equal(7, transcriber.CallCount, "One submission per tick: four ordinary, the cap, then two more.");
+        AssertEx.Equal(new SubmittedWindow(0, 1_000), transcriber.Windows[0], "The first is the ordinary one-second tick.");
+        AssertEx.Equal(5_000L, segmenter.CommittedEndMs, "The guard holds the tail after the cap.");
+    }
+
     private static LiveSegmenterSettings Settings(int maxWindowSeconds, int tailGuardMs = 800, int tickMs = 1_000) =>
         new()
         {

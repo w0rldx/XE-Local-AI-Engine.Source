@@ -943,6 +943,20 @@ during silence. **Authority:** upstream `NAudio` 3.1.0 `src/NAudio.Wasapi/Wasapi
 `XE-Local-AI-Engine.Client.Application/Services/Transcription/Capture/WindowsProcessAudioCaptureSource.cs`;
 `docs/wiki/24-audio-transcription.md`; `Plans/audio-transcription-2026-09-11/progress/S5-notes.md` §C2 deviations 4–5.
 
+### PROPOSED (awaiting operator approval): live transcription backpressure measures lag, and a lane that is behind skips ticks
+
+**Rule:** a whisper.cpp request costs roughly the same whatever its window holds, so a live lane that re-infers at every
+1 s tick while frames are queued behind it pays one request per queued second and can never catch up. While more
+audio is queued behind the frame being consumed, the segmenter submits only at the window cap, and the start path warms
+whisper-server before the session goes live. Every overload threshold must measure sustained lag, never one slow
+request: the node's pending-audio budget is four windows, and the browser's in-flight limit is a hub round-trip latency
+budget, not throughput control. **Prevents:** sessions ending `Overloaded` a few seconds into a recording because the
+first inference also spawned the daemon and loaded the model, then a backlog that grew for the rest of the session; and
+the browser aborting capture on a single hub round-trip over 500 ms. **Authority:** `LiveTranscriptionSegmenter.PushAsync`
+(`catchingUp`), `LiveTranscriptionSessionRegistry` (`ConsumeAsync`, `PendingBudgetBytes`), `TranscriptionService.StartLiveAsync`;
+`LiveTranscriptionSessionRegistryTests.ABurstQueuedBehindASlowInference_DrainsAtOneInferencePerWindow`;
+`docs/wiki/24-audio-transcription.md` ("The segmenter", "The registry").
+
 ---
 
 ### PROPOSED (awaiting operator approval): `TimeProvider` is registered once, in `Client/ConfigureServices.cs`
@@ -1576,6 +1590,10 @@ One process-wide `IGpuModelLoadAdmission` serializes GPU model/image loads. Acqu
 **Eject/lease tri-state:** `TryAcquireInferenceLease` returns granted, `refused-evicting`, or `refused-absent`. Absence may proceed to the normal ensure/spawn path; evicting must fail immediately as `LlamaServerModelEjectedException`, otherwise the request slips under the drain, is killed, and self-heals by respawning the model the operator just ejected. A force-ejected active request maps to Cancelled/operator-ejected, not provider failure. The eject mark is cleared on every path where teardown did not complete—including cancellation of the eject HTTP request mid-drain—or every later lease remains refused forever. Idle/cap reapers never kill an active lease.
 
 Provider unload calls `EvictAllRolesAsync` over `Enum.GetValues<ModelRole>()`; interactive warm/runtime-info remains chat-only. Readiness/liveness probes use a dedicated resilience-free `HttpClient`; app-wide retry handlers turn a one-second probe into multi-second uncertainty.
+
+### PROPOSED (awaiting operator approval): a GPU-vendor check is not a device check: pick a CUDA prebuilt only after `ICudaDeviceProbe` agrees
+
+**Rule:** a backend selector that serves a CUDA prebuilt consults `ICudaDeviceProbe` (`Providers.Abstractions.Capabilities`) on Windows + NVIDIA before choosing CUDA, logs one Warning naming the operator's fix when it degrades, and the supervisor reports a child that died with its exit code and stderr tail rather than a fixed sentence. The probe only sees a missing `nvcuda.dll`, not a present driver that enumerates zero devices, so a pinned CUDA daemon that dies latches a process-wide CPU fallback (`WhisperCudaFailureSignal`) or every respawn picks CUDA again. `GpuVendor.Nvidia` comes from `nvidia-smi` and proves the display driver, not that the CUDA driver API enumerates a device. **Failure prevented:** on a Windows tester box whose driver enumerated zero CUDA devices, `sd-server` exited within a second of every spawn (2026-09-22), and `whisper-server` reported ready, then died on its first `/inference` with a bare "could not be reached" at INF level (2026-09-23). **Authority:** `SdGpuBackendSelector.SelectBackendAsync`, `WhisperBackendSelector.SelectBackendAsync`, `WhisperServerProcessSupervisor.ReportRequestFailureAsync`; `SdGpuBackendSelectorTests`, `WhisperBackendSelectorTests`, `WhisperServerSupervisorTests`.
 
 ### Context allocation is a stable process decision, not a live-memory sample
 

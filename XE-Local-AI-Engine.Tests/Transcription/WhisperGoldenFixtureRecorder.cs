@@ -237,6 +237,9 @@ internal sealed class GoldenRecorderSupervisor : IWhisperServerSupervisor
     public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation) =>
         new NoOpLease();
 
+    public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>
+        Task.FromResult<WhisperRuntimeException?>(null);
+
     public WhisperRuntimeStatusSnapshot GetStatus() =>
         new() { State = WhisperRuntimeState.Ready, LoadedModelId = null, Backend = null, BinaryVersion = null, BinarySource = null, SupportsTranscode = false };
 

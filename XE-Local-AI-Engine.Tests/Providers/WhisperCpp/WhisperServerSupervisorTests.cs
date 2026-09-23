@@ -1,8 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 
 using System.Net;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
+using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -560,6 +562,111 @@ public sealed class WhisperServerSupervisorTests
         AssertEx.Equal(WhisperBackend.Cuda, status.Backend);
         AssertEx.Equal(WhisperBinarySource.BringYourOwn, status.BinarySource);
         AssertEx.Equal("byo", AssertEx.NotNull(status.BinaryVersion));
+    }
+
+    [Test]
+    public async Task ReportRequestFailure_DaemonExited_WarnsOnceWithExitCodeAndTail_AndRespawnsNext()
+    {
+        // The 2026-09-22 tester box: the daemon reported ready, then died on its first request. The operator-facing message
+        // names the exit; the stderr tail goes to the Warning only.
+        var logger = new RecordingLogger<WhisperServerProcessSupervisor>();
+        await using var harness = new WhisperSupervisorHarness(logger: logger);
+        var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        var handle = harness.Launcher.Handles.Single();
+        handle.SimulateExit(exitCode: -1073740791, stderrTail: "ggml_cuda_init: failed to initialize CUDA: no CUDA-capable device is detected");
+
+        var failure = await harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None);
+
+        var exception = AssertEx.NotNull(failure, "An exited daemon must yield the supervisor's exit verdict.");
+        AssertEx.Contains(exception.Message, "process exited (exit code -1073740791)", StringComparison.Ordinal);
+        AssertEx.False(exception.Message.Contains("ggml_cuda_init", StringComparison.Ordinal), "The stderr tail must stay in the log.");
+        var warnings = logger.Entries.Where(static entry => entry.Level == LogLevel.Warning).ToList();
+        AssertEx.Equal(expected: 1, warnings.Count);
+        AssertEx.Contains(warnings[0].Message, "-1073740791", StringComparison.Ordinal);
+        AssertEx.Contains(warnings[0].Message, "no CUDA-capable device", StringComparison.Ordinal);
+        AssertEx.Contains(warnings[0].Message, handle.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+
+        await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, harness.Launcher.LaunchCount);
+        AssertEx.Equal(expected: 1, logger.Entries.Count(static entry => entry.Level == LogLevel.Warning), "The respawn must not report the same death twice.");
+    }
+
+    [Test]
+    public async Task EnsureRunning_ResidentDaemonExited_WarnsWithExitCodeBeforeRespawning()
+    {
+        var logger = new RecordingLogger<WhisperServerProcessSupervisor>();
+        await using var harness = new WhisperSupervisorHarness(logger: logger);
+        await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        harness.Launcher.Handles.Single().SimulateExit(exitCode: 3, stderrTail: "whisper_init: failed");
+
+        await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, harness.Launcher.LaunchCount);
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "whisper_init: failed"), "A daemon found dead at hand-out must be reported with its stderr tail.");
+    }
+
+    [Test]
+    public async Task ReportRequestFailure_PinnedCudaDaemonExited_LatchesTheCpuFallbackWithTheExitCode()
+    {
+        // The tester box: the driver is present, so the nvcuda.dll probe passes, and only the daemon's death reveals that no
+        // device enumerates. The latch is what stops every respawn from picking the cuBLAS build again.
+        await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda, isPinnedFallback: true),
+            backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda));
+        var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        harness.Launcher.Handles.Single().SimulateExit(exitCode: -1073740791);
+
+        await harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None);
+
+        AssertEx.Contains(AssertEx.NotNull(harness.CudaFailureSignal.Reason), "exit code -1073740791", StringComparison.Ordinal);
+    }
+
+    [Test]
+    [Arguments("byo")]
+    [Arguments("0123abcd")]
+    public async Task ReportRequestFailure_OperatorChosenCudaDaemonExited_DoesNotLatchTheCpuFallback(string version)
+    {
+        // A bring-your-own override ("byo") or a managed source build is the operator's explicit choice: its crash is reported,
+        // never overridden by a silent switch to CPU.
+        await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda, isPinnedFallback: false, version),
+            backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda));
+        var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        harness.Launcher.Handles.Single().SimulateExit(exitCode: 1);
+
+        var failure = await harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None);
+
+        AssertEx.NotNull(failure, "The death itself must still be reported.");
+        AssertEx.Null(harness.CudaFailureSignal.Reason);
+    }
+
+    [Test]
+    public async Task ReportRequestFailure_PinnedCpuDaemonExited_DoesNotLatchTheCpuFallback()
+    {
+        await using var harness = new WhisperSupervisorHarness();
+        var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        harness.Launcher.Handles.Single().SimulateExit(exitCode: 1);
+
+        await harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("reset"), CancellationToken.None);
+
+        AssertEx.Null(harness.CudaFailureSignal.Reason);
+    }
+
+    [Test]
+    public async Task ReportRequestFailure_DaemonStillAlive_ReturnsNull_AndKeepsIt()
+    {
+        // A transport failure against a live daemon is not a crash: after the bounded grace the caller keeps its own message.
+        var clock = new ManualTimeProvider();
+        var logger = new RecordingLogger<WhisperServerProcessSupervisor>();
+        await using var harness = new WhisperSupervisorHarness(timeProvider: clock, logger: logger);
+        var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+
+        // The report arms its grace timer synchronously, so the advance below cannot land before it.
+        var report = harness.Supervisor.ReportRequestFailureAsync(endpoint.Generation, new HttpRequestException("refused"), CancellationToken.None);
+        clock.Advance(TimeSpan.FromSeconds(5));
+
+        AssertEx.Null(await report);
+        AssertEx.False(harness.Launcher.Handles.Single().WasTreeKilled, "A live daemon must not be torn down by a transport failure.");
+        AssertEx.False(logger.HasEntry(LogLevel.Warning, "exited unexpectedly"));
     }
 
     [Test]

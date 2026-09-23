@@ -32,12 +32,12 @@ import {
 const HUB_PATH = "transcription/hub";
 
 /**
- * At most two `PushAudioFrame` invocations awaited at once. `connection.invoke` resolves when the server METHOD
- * completes, and the node holds its lane semaphore across inference, so unbounded sends against a transcriber slower
- * than real time pile up in the client and as pending audio in the node. Two covers one 250 ms frame being processed
- * while the next is on the wire.
+ * At most eight `PushAudioFrame` invocations awaited at once: a LATENCY budget, not a throughput one. The node queues
+ * each frame and returns, so an invoke is outstanding for one hub round-trip; eight 250 ms frames tolerate a 2 s
+ * round-trip (1 s with microphone and system audio both sending) before capture stops as `overloaded`. The node owns
+ * the real backpressure: it drains a lane that is behind one window at a time and refuses sustained lag itself.
  */
-const MAX_FRAMES_IN_FLIGHT = 2;
+const MAX_FRAMES_IN_FLIGHT = 8;
 
 export interface CommittedSegment {
 	readonly seq: number;

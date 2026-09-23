@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,12 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     /// <summary>Poll cadence for noticing that a freshly spawned process exited during its readiness wait.</summary>
     private static readonly TimeSpan ProcessExitPollInterval = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>
+    ///     How long a transport failure waits for the daemon's exit to become observable: the connection reset reaches the client while
+    ///     the OS is still tearing the crashed process down.
+    /// </summary>
+    private static readonly TimeSpan RequestFailureExitGrace = TimeSpan.FromSeconds(1);
+
     private readonly IWhisperCppBinaryManager _binaryManager;
     private readonly IWhisperBackendSelector _backendSelector;
     private readonly SemaphoreSlim _ensureGate = new(initialCount: 1, maxCount: 1);
@@ -38,6 +45,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly Lock _stateGate = new();
     private readonly TimeProvider _timeProvider;
+    private readonly WhisperCudaFailureSignal _cudaFailureSignal;
 
     private RunningServer? _current;
     private int _disposed;
@@ -54,7 +62,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         TimeProvider timeProvider,
         ILogger<WhisperServerProcessSupervisor>? logger = null,
         IGpuModelLoadAdmission? loadAdmission = null,
-        IWhisperRuntimeActivityGate? runtimeActivityGate = null)
+        IWhisperRuntimeActivityGate? runtimeActivityGate = null,
+        WhisperCudaFailureSignal? cudaFailureSignal = null)
     {
         _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
@@ -65,6 +74,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? NullLogger<WhisperServerProcessSupervisor>.Instance;
         _runtimeActivityGate = runtimeActivityGate ?? new WhisperRuntimeActivityGate();
+        _cudaFailureSignal = cudaFailureSignal ?? new WhisperCudaFailureSignal();
 
         // Absent a wired gate (a provider-only host, or a test), default to the no-op floor so GPU-load serialization
         // is simply off. The composition root injects the real singleton shared with the other supervisors.
@@ -139,6 +149,11 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
                 {
                     return switched;
                 }
+            }
+
+            if (Current is { Handle.HasExited: true } exited)
+            {
+                TearDownExited(exited);
             }
 
             TearDownCurrent();
@@ -216,6 +231,44 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
         running.MarkUsed(_timeProvider.GetUtcNow());
         return new WhisperTranscriptionLease(running, activityLease, _timeProvider);
+    }
+
+    /// <inheritdoc />
+    public async Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(cause);
+
+        var running = Current;
+        if (running is null || running.Endpoint.Generation != generation)
+        {
+            return null;
+        }
+
+        if (!running.Handle.HasExited)
+        {
+            using var graceCts = new CancellationTokenSource(RequestFailureExitGrace, _timeProvider);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, graceCts.Token);
+            try
+            {
+                await WatchForExitAsync(running.Handle, linkedCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // The grace window elapsed with the daemon still alive: the failure is not a crash.
+            }
+
+            if (!running.Handle.HasExited)
+            {
+                return null;
+            }
+        }
+
+        // Composed before the teardown disposes the handle, after which the OS can no longer report the code.
+        var failure = running.Handle.ExitCode is { } exitCode
+            ? new WhisperRuntimeException(string.Create(CultureInfo.InvariantCulture, $"The transcription runtime process exited (exit code {exitCode})."), cause)
+            : new WhisperRuntimeException("The transcription runtime process exited.", cause);
+        TearDownExited(running);
+        return failure;
     }
 
     /// <inheritdoc />
@@ -433,6 +486,11 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
                 // There is no restart loop here, so a readiness timeout, an exit-while-loading or a missing model goes
                 // straight to the caller — log the cause before the sanitized message bubbles up.
                 _logger.LogError(ex, "whisper-server start failed for model {ModelId}.", modelId);
+            }
+
+            if (handle is { HasExited: true })
+            {
+                NoteCudaFailure(binary, handle.ExitCode);
             }
 
             handle?.TreeKill();
@@ -668,7 +726,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         // An EXITED process is always torn down, so a dead handle never leaks even while nominally leased.
         if (running.Handle.HasExited)
         {
-            TearDownCurrent();
+            TearDownExited(running);
             return;
         }
 
@@ -703,6 +761,48 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             _current = null;
             return running;
         }
+    }
+
+    /// <summary>
+    ///     Tears down a registered daemon that has exited on its own, logging its death once: only the caller that detaches it logs,
+    ///     so a transcriber report, a respawn and the reaper racing over the same corpse produce one Warning.
+    /// </summary>
+    /// <remarks>
+    ///     Without this line the only trace of a crash is the stderr the launcher forwards at Debug, and the operator sees a bare
+    ///     "could not be reached". The stderr tail stays in the log and never reaches an exception message.
+    /// </remarks>
+    private void TearDownExited(RunningServer running)
+    {
+        lock (_stateGate)
+        {
+            if (!ReferenceEquals(_current, running))
+            {
+                return;
+            }
+
+            _current = null;
+        }
+
+        _logger.LogWarning("whisper-server for model {ModelId} (pid {ProcessId}) exited unexpectedly with exit code {ExitCode}; it is respawned on the next request. Last stderr: {StderrTail}",
+            running.ModelId, running.Handle.ProcessId, running.Handle.ExitCode, running.Handle.StderrTail ?? "(none)");
+        NoteCudaFailure(running.Binary, running.Handle.ExitCode);
+        KillDetached(running);
+    }
+
+    /// <summary>
+    ///     Latches the process-wide CPU fallback when the daemon that died was the pinned CUDA prebuilt the vendor rule chose. A
+    ///     bring-your-own or managed source build is the operator's explicit choice and is never overridden.
+    /// </summary>
+    private void NoteCudaFailure(WhisperBinary binary, int? exitCode)
+    {
+        if (binary.Backend != WhisperBackend.Cuda || !binary.IsPinnedFallback)
+        {
+            return;
+        }
+
+        _cudaFailureSignal.Set(exitCode is { } code
+            ? string.Create(CultureInfo.InvariantCulture, $"The CUDA whisper-server exited unexpectedly (exit code {code})")
+            : "The CUDA whisper-server exited unexpectedly");
     }
 
     private void TearDownCurrent()

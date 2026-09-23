@@ -4,17 +4,17 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Transcription;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 
 /// <summary>
 ///     Starts live capture for an existing session: the row moves to <c>Transcribing</c> and its lanes are
 ///     registered, so the hub will accept audio for it. Operator-gated.
 /// </summary>
 /// <remarks>
-///     The client awaits this before it forwards a single frame — without it the hub refuses every push, since a
-///     session with no lanes has nowhere to put audio. Idempotent: a retry, a double-click or a reconnect that
-///     re-issues the start answers 200 with the same state rather than registering a second set of lanes. 404 for an
-///     unknown session, 409 for one that already finished (with the terminal status in the body, so the client can say
-///     which), and 400 for a source kind with no live capture path — a file session, where retrying can never work.
+///     The client awaits this before its first frame: a session with no lanes makes the hub refuse every push. Idempotent:
+///     a retry or reconnect answers 200 with the same state and never registers a second set of lanes. 404 for an unknown
+///     session, 409 for a finished one (terminal status in the body), 400 for a source kind with no live capture path or a
+///     whisper runtime that could not be warmed (the row is left untouched).
 /// </remarks>
 public sealed class StartLiveTranscriptionSessionEndpoint : Endpoint<TranscriptionSessionRouteRequest, StartLiveTranscriptionSessionResponse>
 {
@@ -54,6 +54,14 @@ public sealed class StartLiveTranscriptionSessionEndpoint : Endpoint<Transcripti
         {
             // A refusal about the session's own shape, not about anything the caller sent — but it is still the
             // caller's request that cannot be satisfied, and a 500 would invite a retry that can never work.
+            AddError(exception.Message);
+            await Send.ErrorsAsync(StatusCodes.Status400BadRequest, ct);
+            return;
+        }
+        catch (WhisperRuntimeException exception)
+        {
+            // The pre-warm failed before the row moved. The message is contractually sanitized, so it is the answer, as
+            // on the upload path, instead of a bare 500 from the global handler.
             AddError(exception.Message);
             await Send.ErrorsAsync(StatusCodes.Status400BadRequest, ct);
             return;

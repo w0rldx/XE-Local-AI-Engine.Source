@@ -51,7 +51,7 @@ public static class StableDiffusionCppServiceCollectionExtensions
 
         // The companion CUDA probe: nvidia-smi reporting an NVIDIA GPU proves the display driver, not that a CUDA build
         // finds a device. Without this the Windows NVIDIA branch picks CUDA blind and sd-server exits on every spawn.
-        services.TryAddSingleton<ICudaDeviceProbe, DefaultCudaDeviceProbe>();
+        services.TryAddSingleton<ICudaDeviceProbe>(static _ => new DefaultCudaDeviceProbe());
 
         services.TryAddSingleton<ISdGpuBackendSelector>(static sp =>
             new SdGpuBackendSelector(sp.GetRequiredService<IHardwareProfiler>(),

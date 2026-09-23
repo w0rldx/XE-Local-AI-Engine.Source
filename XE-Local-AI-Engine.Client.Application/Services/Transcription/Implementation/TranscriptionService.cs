@@ -286,6 +286,10 @@ public sealed class TranscriptionService : ITranscriptionService
             Persist = true
         };
 
+        // Warmed before the row moves, as the file path does: a lane whose first inference also spawns the daemon and
+        // loads the model queues seconds of audio behind it. A failed spawn throws here and leaves the row untouched.
+        _ = await _supervisor.EnsureRunningAsync(session.ModelId, cancellationToken);
+
         // Compare-and-set, not a blind write from the status read above. A start racing a graceful end would
         // otherwise overwrite the terminal status that end had just written and resurrect a finished session.
         var previousStatus = session.Status;

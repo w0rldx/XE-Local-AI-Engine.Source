@@ -351,16 +351,26 @@ describe("useTranscriptionHub", () => {
 	// pending-audio budget is 128 000 bytes, so the node can never complain about frames the client threw away — the
 	// operator would get a transcript with holes in it and no indication anything went wrong.
 	it("PushFrame_AtTheInFlightLimit_RejectsWithOverloaded", async () => {
-		pushHandler = () => new Promise<unknown>(() => undefined);
+		// Every send is held open, then settled at the end: sends left pending forever keep the test from finishing.
+		const settle: Array<() => void> = [];
+		pushHandler = () =>
+			new Promise<unknown>((resolve) => {
+				settle.push(() => resolve(undefined));
+			});
 		const { result } = renderHub();
 		await waitFor(() => expect(result.current.hub.connected).toBe(true));
 
-		result.current.hub.pushFrame("mono", Int16Array.of(1)).catch(() => undefined);
-		result.current.hub.pushFrame("mono", Int16Array.of(2)).catch(() => undefined);
-		const third = result.current.hub.pushFrame("mono", Int16Array.of(3));
+		const held = Array.from({ length: 8 }, (_, index) => result.current.hub.pushFrame("mono", Int16Array.of(index)));
+		const ninth = result.current.hub.pushFrame("mono", Int16Array.of(8));
 
-		await expect(third).rejects.toMatchObject({ name: "CaptureError", code: "overloaded" });
-		expect(pushFrameInvokes()).toHaveLength(2);
+		await expect(ninth).rejects.toMatchObject({ name: "CaptureError", code: "overloaded" });
+		expect(pushFrameInvokes()).toHaveLength(8);
+
+		await waitFor(() => expect(settle).toHaveLength(8));
+		for (const resolve of settle) {
+			resolve();
+		}
+		await Promise.all(held);
 	});
 
 	// R32a: no page cap. An earlier draft stopped at 20, which leaves a session past 10 000 rows permanently

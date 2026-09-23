@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Transcription;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -176,6 +177,25 @@ public sealed class StartLiveTranscriptionSessionEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Test]
+    public async Task Post_WhenTheRuntimeFailsToWarm_ReturnsBadRequestCarryingTheSanitizedMessage()
+    {
+        // The start warms whisper-server before the row moves. A spawn that fails is the operator's to fix, and the
+        // provider's message is display-safe, so it reaches the wire instead of a bare 500 from the global handler.
+        using var service = new StubTranscriptionService
+        {
+            StartLiveThrows = new WhisperRuntimeException("The transcription runtime did not become ready.")
+        };
+        await using var factory = FactoryWith(service);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, Guid.NewGuid());
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The transcription runtime did not become ready.");
     }
 
     private static HttpRequestMessage Request(Guid sessionId) =>

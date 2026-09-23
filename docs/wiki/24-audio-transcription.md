@@ -48,7 +48,20 @@ and `IWhisperServerSupervisor` and nothing else.
 `WhisperModelCatalog` is a static table of seven Whisper weights plus the pinned Silero VAD file
 (`ggml-silero-v6.2.0.bin` from the `ggml-org/whisper-vad` Hugging Face repository). Prebuilt binaries come from the
 pinned nightly tag in `WhisperCppReleasePins`; upstream publishes no Linux CUDA asset, so a Linux NVIDIA box resolves
-the CPU tarball and the CUDA lane is the managed source build or the `XE_WHISPERCPP_SERVER_PATH` override. Full
+the CPU tarball and the CUDA lane is the managed source build or the `XE_WHISPERCPP_SERVER_PATH` override.
+
+`WhisperBackendSelector` serves the Windows cuBLAS prebuilt only when the vendor is NVIDIA **and** the shared
+`ICudaDeviceProbe` (`nvcuda.dll` present in the system directory, the same probe the image runtime uses) does not rule a
+CUDA device out. A Windows NVIDIA box whose driver enumerates no CUDA device degrades to CPU with one Warning telling the
+operator to repair the NVIDIA driver or supply a bring-your-own binary, and the model recommendation follows the CPU
+tier. The override and a validated managed build short-circuit the probe. If the daemon still dies, for example on a
+driver too old for the bundled CUDA runtime, the launcher keeps a bounded, path-sanitized stderr tail on the process
+handle. The supervisor logs one Warning with model, pid, exit code and that tail, tears the dead daemon down so the next
+request respawns, and the transcription fails with "the transcription runtime process exited (exit code N)" instead of
+"could not be reached". The stderr tail stays in the log and never reaches the exception message. The probe only
+catches a missing driver, so when the pinned CUDA daemon dies anyway (at load or after readiness) the supervisor latches
+`WhisperCudaFailureSignal` and every later selection serves CPU until the node restarts, with one Warning; a
+bring-your-own or managed build is the operator's choice and never latches it. Full
 detail: [Local Runtime & Providers](03-local-runtime-and-providers.md#providerswhispercpp--the-supervised-speech-to-text-runtime).
 
 ## Sessions and transcripts
@@ -165,7 +178,7 @@ This is the feature's load-bearing privacy rule, and it is enforced in four plac
    ASP.NET Core temp directory stays empty on success, rejection, cancellation and handler failure.
 
 Live PCM lives only in the segmenter's in-memory ring buffer — the same rule, one layer up. In the browser it lives
-only in the worklet's current frame and the at most two frames in flight to the hub; nothing is written to disk or to
+only in the worklet's current frame and the at most eight frames in flight to the hub; nothing is written to disk or to
 any storage on either side.
 
 ## Endpoints
@@ -208,10 +221,17 @@ no body) reads only the session row and puts it on the live path:
 | Unknown session | 404 |
 | Session already finished | 409 |
 | A `File`-kind session | 400 |
+| whisper-server could not be started (`WhisperRuntimeException`) | 400 with the sanitized runtime message |
 
 The status move to `Transcribing` is a compare-and-set (`ITranscriptionSessionStore.TryTransitionStatusAsync`), so a
 start that raced a graceful end refuses with 409 rather than writing `Transcribing` over the terminal status that end
 had already recorded — a finished session is never resurrected by a start that arrived a moment too late.
+
+**The start warms the runtime first.** `StartLiveAsync` calls `EnsureRunningAsync` for the session's model before the
+compare-and-set, as the upload path does before its inference, so the daemon spawn and model load happen while the
+browser is still waiting on the start rather than while frames queue behind the first inference (the S4 live round
+measured about 7 s to the first commit without it). A spawn that fails leaves the row untouched. The request can take
+up to the supervisor's readiness budget; the SPA holds its starting state for as long as the request runs.
 
 The browser awaits a 200 from this endpoint before it forwards a single frame — a frame that arrives before the
 session is armed has nowhere to land.
@@ -254,6 +274,10 @@ calls into it per lane.
   millisecond, and each `2 / 32` truncates to nothing, so the lane would buffer forever). Re-deriving the time from
   the total makes the frame partition irrelevant, which is why the hub may accept any even frame length.
 - **A tick fires every second of audio** and asks whether a window is due.
+- **A lane that is behind skips the tick.** When the registry has more frames queued behind the one being consumed,
+  the segmenter's only boundary is the cap, so a backlog drains at one inference per window instead of one per queued
+  second. whisper.cpp's per-request cost is roughly fixed, so a lane re-inferring every tick while behind never catches
+  up. The first frame with nothing queued behind it fires the skipped tick at once, so partials resume.
 - **The watermark is the whole de-duplication mechanism, never text matching.** A returned segment commits when its
   end is at least `TailGuardMs` (800 ms) before the current audio end, its text is non-empty, and its start is at or
   after the watermark; a segment starting before the watermark is discarded because overlapping windows re-transcribe
@@ -294,7 +318,7 @@ calls into it per lane.
   `Transcription:AbandonedSessionGraceSeconds` (60 s) with no hub connection left (`Abandoned`); a 60 s
   producer-attachment deadline with **no producer ever attaching** — `AttachProducer` disarms it, not the first
   frame, so a silent native capture is not reaped (`NeverAttached`); the pending-audio budget —
-  two windows' worth, capped at 640 KB — exceeded (`Overloaded`); and a stalled lane (`Failed`). Only `Completed`
+  four windows' worth (20 s at the default window), capped at 640 KB — exceeded (`Overloaded`); and a stalled lane (`Failed`). Only `Completed`
   flushes the retained tail; every other reason aborts in-flight inference instead, so stopping stays prompt.
 - Graceful stopping gives all lanes **one shared 30-second drain-and-flush budget**. Lanes finalize independently,
   but each lane drains before flushing. Producer shutdown and terminal persistence are outside this budget.
@@ -408,8 +432,10 @@ diarization behind the labels. A stereo source is downmixed to mono by the audio
 
 ### Backpressure: refused, never dropped
 
-`pushFrame` allows at most **two** frames in flight and rejects with `CaptureError("overloaded", …)` beyond that;
-a transport that is not `Connected` rejects with `CaptureError("disconnected", …)`. Both stop capture identically, but
+`pushFrame` allows at most **eight** frames in flight and rejects with `CaptureError("overloaded", …)` beyond that.
+The limit is a latency budget: the node queues a frame and returns, so eight 250 ms frames tolerate a 2 s hub
+round-trip (1 s with two sources); the node's pending-audio budget is the real backpressure.
+A transport that is not `Connected` rejects with `CaptureError("disconnected", …)`. Both stop capture identically, but
 they are different diagnoses and the string the operator reads is the whole of what they act on — "this node could not
 keep up" sends them after a performance problem the node does not have. A rejected frame is speech the node did not
 receive, and a hole nobody is told about is worse than a stopped capture — so `useLiveCapture` stops every source, ends the session and shows the

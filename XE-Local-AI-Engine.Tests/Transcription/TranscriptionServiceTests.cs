@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Transcription;
 
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
@@ -475,5 +476,40 @@ public sealed class TranscriptionServiceTests
         // The session is untouched: a refused upload is not a failed transcription, and the file can be replaced.
         var session = AssertEx.NotNull(await harness.Service.GetSessionAsync(sessionId, CancellationToken.None));
         AssertEx.Equal(TranscriptionSessionStatus.Created, session.Status);
+    }
+
+    [Test]
+    public async Task StartLive_WarmsTheRuntimeBeforeRegisteringTheLanes()
+    {
+        // The file path warms the daemon before its first inference; the live path must too, or the first frames
+        // queue behind a process spawn and a model load and the session ends Overloaded seconds after it began.
+        var registry = Substitute.For<ILiveTranscriptionSessionRegistry>();
+        _ = registry.IsLive(Arg.Any<Guid>()).Returns(false);
+        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
+        var created = await harness.Service.CreateSessionAsync(new CreateTranscriptionSessionInput { SourceKind = "Microphone" }, CancellationToken.None);
+
+        var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None);
+
+        AssertEx.Equal(StartLiveOutcome.Started, result.Outcome);
+        AssertEx.Equal(1, harness.Supervisor.EnsureRunningCalls.Count, "The runtime is warmed exactly once.");
+        AssertEx.Contains(harness.Supervisor.EnsureRunningCalls, TranscriptionServiceHarness.EffectiveModelId, "It is the session's own model that is warmed.");
+    }
+
+    [Test]
+    public async Task StartLive_WhenTheRuntimeFailsToStart_LeavesTheRowUntouchedAndRegistersNothing()
+    {
+        var registry = Substitute.For<ILiveTranscriptionSessionRegistry>();
+        _ = registry.IsLive(Arg.Any<Guid>()).Returns(false);
+        await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
+        harness.Supervisor.Failure = new WhisperRuntimeException("The transcription runtime did not become ready.");
+        var created = await harness.Service.CreateSessionAsync(new CreateTranscriptionSessionInput { SourceKind = "Microphone" }, CancellationToken.None);
+
+        var thrown = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Service.StartLiveAsync(created.Id, CancellationToken.None));
+
+        AssertEx.Equal("The transcription runtime did not become ready.", thrown.Message, "The sanitized message is what the endpoint surfaces.");
+        AssertEx.NotEmpty(harness.Supervisor.EnsureRunningCalls, "The warm-up was attempted.");
+        var row = AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None));
+        AssertEx.Equal(TranscriptionSessionStatus.Created, row.Status, "The row never moved, so a retry starts from a clean Created.");
+        await registry.DidNotReceive().StartLiveSessionAsync(Arg.Any<Guid>(), Arg.Any<LiveSessionOptions>(), Arg.Any<CancellationToken>());
     }
 }

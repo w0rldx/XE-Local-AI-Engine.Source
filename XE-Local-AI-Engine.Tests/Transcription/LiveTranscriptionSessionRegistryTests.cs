@@ -462,8 +462,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
         await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
         producer.Token = fixture.Registry.AttachProducer(sessionId, producer).ProducerToken;
 
-        // One window of audio per frame, into a transcriber that never answers. The budget is two windows.
-        var budgetBytes = 2 * 2 * WavPcm16.SampleRate * 2;
+        // One second of audio per frame, into a transcriber that never answers. The budget is four two-second windows.
+        var budgetBytes = 4 * 2 * WavPcm16.SampleRate * 2;
         var frameBytes = 1_000 * WavPcm16.BytesPerMillisecond;
 
         // The first frame is allowed to reach the transcriber before the rest are pushed. Without this the whole
@@ -498,6 +498,36 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          "live-overloaded",
                          Arg.Any<string?>(),
                          Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ABurstQueuedBehindASlowInference_DrainsAtOneInferencePerWindow()
+    {
+        // The first inference is slow (a cold model load), so six 1 s frames queue behind it. Re-inferring at every
+        // tick would cost six requests for six seconds and never catch up; behind, the lane submits only at the cap.
+        var transcriber = new GatedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var published = fixture.RecordSegments();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(0, 1_000), CancellationToken.None);
+        await transcriber.Entered.WaitAsync(TestBudgets.Contended);
+        for (var frame = 1; frame < 6; frame++)
+        {
+            await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Mono, LivePcm.Range(frame * 1_000, (frame + 1) * 1_000), CancellationToken.None);
+        }
+
+        transcriber.Release();
+
+        // [0,1] is the parked tick; [1,3] and [3,5] are cap submissions while behind; [5,6] is the ordinary tick of
+        // the last frame, which has nothing queued behind it.
+        var segments = await WaitForSegmentsAsync(published, count: 4);
+        AssertEx.Equal("0-1000;1000-3000;3000-5000;5000-6000",
+            string.Join(';', segments.Select(segment => $"{segment.StartMs}-{segment.EndMs}")),
+            "Every millisecond is transcribed once, in cap-sized windows while the lane was behind.");
+        AssertEx.Equal(4, transcriber.CallCount, "Six queued frames cost four inferences, not six.");
+        AssertEx.True(fixture.Registry.IsLive(sessionId), "Catching up is not an overload.");
     }
 
     [Test]
@@ -1270,7 +1300,9 @@ public sealed class LiveTranscriptionSessionRegistryTests
                          }),
                          CancellationToken.None);
 
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 2_500);
+        // One frame, so nothing is ever queued behind it: a burst of small frames would read as a lane catching up,
+        // which skips ticks by design, and whether it did would depend on scheduling.
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 2_500, frameMs: 2_500);
         await AssertEx.EventuallyAsync(() => transcriber.CallCount == 2, TestBudgets.Contended, "Two ticks fired.");
         await AssertEx.SettleAsync();
 
@@ -1378,7 +1410,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 1_000);
         await WaitForSegmentsAsync(published, count: 1);
-        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 2_000);
+        // One frame spanning two ticks, so the lane is never behind and both ticks submit.
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 2_000, frameMs: 2_000);
         var segments = await WaitForSegmentsAsync(published, count: 3);
 
         // Sequence is commit order; start time is speech order. Both are right, for different readers.

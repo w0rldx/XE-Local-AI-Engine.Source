@@ -33,6 +33,13 @@ internal interface IWhisperServerProcessHandle : IDisposable
     /// <summary><see langword="true" /> once the process has exited, cleanly or otherwise.</summary>
     bool HasExited { get; }
 
+    /// <summary>The process exit code once it has exited; <see langword="null" /> while running or when the OS cannot report it.</summary>
+    int? ExitCode { get; }
+
+    /// <summary>The last lines the process wrote to stderr, or <see langword="null" /> when it wrote none.</summary>
+    /// <remarks>Bounded by the launcher; absolute paths are already reduced to file names. See <c>WhisperServerStderrTail</c>.</remarks>
+    string? StderrTail { get; }
+
     /// <summary>
     ///     Tree-kills the process and every descendant (Windows: close the Job Object; Linux: <c>kill(-pgid)</c>).
     ///     Idempotent and safe to call after the process has already exited.

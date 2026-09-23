@@ -10,17 +10,23 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 internal sealed class PlainWhisperProcessHandle : IWhisperServerProcessHandle
 {
     private readonly Process _process;
+    private readonly WhisperServerStderrTail? _stderrTail;
     private int _disposed;
 
-    public PlainWhisperProcessHandle(Process process)
+    public PlainWhisperProcessHandle(Process process, WhisperServerStderrTail? stderrTail = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         _process = process;
+        _stderrTail = stderrTail;
     }
 
     public int ProcessId => _process.Id;
 
     public bool HasExited => SafeHasExited(_process);
+
+    public int? ExitCode => SafeExitCode(_process);
+
+    public string? StderrTail => _stderrTail?.Snapshot();
 
     public void TreeKill()
     {
@@ -57,12 +63,12 @@ internal sealed class PlainWhisperProcessHandle : IWhisperServerProcessHandle
     }
 
     /// <summary>Takes ownership of an already-started process, disposing it if the wrap itself throws.</summary>
-    public static PlainWhisperProcessHandle Wrap(Process process)
+    public static PlainWhisperProcessHandle Wrap(Process process, WhisperServerStderrTail? stderrTail = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         try
         {
-            return new PlainWhisperProcessHandle(process);
+            return new PlainWhisperProcessHandle(process, stderrTail);
         }
         catch
         {
@@ -81,6 +87,19 @@ internal sealed class PlainWhisperProcessHandle : IWhisperServerProcessHandle
         {
             // No associated process — treat as exited.
             return true;
+        }
+    }
+
+    private static int? SafeExitCode(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch (InvalidOperationException)
+        {
+            // No associated process, or the handle is already disposed: the code is unknown.
+            return null;
         }
     }
 }

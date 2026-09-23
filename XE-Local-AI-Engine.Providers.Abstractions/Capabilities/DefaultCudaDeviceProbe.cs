@@ -1,15 +1,13 @@
-namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
-
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
 ///     Default <see cref="ICudaDeviceProbe" />: decides whether a CUDA device will enumerate from one cheap, host-local
 ///     signal, the CUDA driver library, with no native load and no child process.
 /// </summary>
 /// <remarks>
-///     Windows is the only OS with a prebuilt CUDA <c>sd-server</c> and so the only one inspected: present iff <c>nvcuda.dll</c> exists
+///     Windows is the only OS with prebuilt CUDA <c>sd-server</c>/<c>whisper-server</c> binaries and so the only one inspected: present iff <c>nvcuda.dll</c> exists
 ///     in the system directory, where the NVIDIA display driver installs the CUDA driver API. Elsewhere, and on any IO/permission
-///     error, the verdict is present, because a false "absent" drops a healthy box to Vulkan. <strong>Ceiling:</strong> it catches a
+///     error, the verdict is present, because a false "absent" drops a healthy box off its GPU. <strong>Ceiling:</strong> it catches a
 ///     missing driver, not one too old for the binary's CUDA runtime — that still reaches the supervisor, which reports the child's
 ///     exit code and stderr tail. The verdict is cached for the process lifetime via a thread-safe <see cref="Lazy{T}" />.
 /// </remarks>
@@ -27,8 +25,11 @@ public sealed class DefaultCudaDeviceProbe : ICudaDeviceProbe
     {
     }
 
-    /// <summary>Test seam: injects the OS and the driver-library signal so the decision runs without touching the real filesystem.</summary>
-    internal DefaultCudaDeviceProbe(bool isWindows, Func<bool> hasCudaDriverLibrary)
+    /// <summary>
+    ///     Test seam: injects the OS and the driver-library signal so the decision runs without touching the real filesystem.
+    ///     Public because the consuming selectors live in other provider assemblies.
+    /// </summary>
+    public DefaultCudaDeviceProbe(bool isWindows, Func<bool> hasCudaDriverLibrary)
     {
         _isWindows = isWindows;
         _hasCudaDriverLibrary = hasCudaDriverLibrary ?? throw new ArgumentNullException(nameof(hasCudaDriverLibrary));
@@ -54,7 +55,7 @@ public sealed class DefaultCudaDeviceProbe : ICudaDeviceProbe
         }
         catch (IOException)
         {
-            // Unknown → present: a false "absent" would strand a healthy NVIDIA box on Vulkan.
+            // Unknown → present: a false "absent" would strand a healthy NVIDIA box off CUDA.
             return true;
         }
         catch (UnauthorizedAccessException)

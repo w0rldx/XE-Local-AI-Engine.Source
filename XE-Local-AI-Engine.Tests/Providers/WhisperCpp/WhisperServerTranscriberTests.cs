@@ -226,6 +226,21 @@ public sealed class WhisperServerTranscriberTests
     }
 
     [Test]
+    public async Task Transcribe_WhenTheDaemonDiedMidRequest_SurfacesTheSupervisorsExitVerdict()
+    {
+        // The 2026-09-22 tester box: whisper-server reported ready, then died on the first /inference and the client saw a
+        // connection reset. The supervisor's "process exited" verdict replaces "could not be reached", keeping the reset as cause.
+        await using var harness = new TranscriberHarness(static _ => throw new HttpRequestException("An existing connection was forcibly closed by the remote host."));
+        harness.Supervisor.RequestFailureVerdict = new WhisperRuntimeException("The transcription runtime process exited (exit code -1073740791).");
+
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync());
+
+        AssertEx.Contains(exception.Message, "exit code -1073740791", StringComparison.Ordinal);
+        AssertEx.Equal(expected: (long?)1, harness.Supervisor.ReportedGeneration, "The failure must be reported against the leased endpoint's generation.");
+        AssertEx.Equal(expected: 1, harness.Supervisor.LeasesDisposed);
+    }
+
+    [Test]
     public async Task Transcribe_RewindsTheAudioAndLeavesTheCallersStreamOpen()
     {
         // The caller owns the stream: the adapter neither disposes it nor requires it positioned, because a retry or
@@ -381,6 +396,17 @@ public sealed class WhisperServerTranscriberTests
             }
 
             return new CountingLease(this);
+        }
+
+        /// <summary>What a transport-failure report answers: the supervisor's verdict that the daemon exited, or null.</summary>
+        public WhisperRuntimeException? RequestFailureVerdict { get; set; }
+
+        public long? ReportedGeneration { get; private set; }
+
+        public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct)
+        {
+            ReportedGeneration = generation;
+            return Task.FromResult(RequestFailureVerdict);
         }
 
         public WhisperRuntimeStatusSnapshot GetStatus() =>

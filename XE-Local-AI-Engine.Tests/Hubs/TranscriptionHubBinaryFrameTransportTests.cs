@@ -11,7 +11,9 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Transcription;
+using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Transcription;
 
 /// <summary>
 ///     The one wire fact the browser capture path is built on: a PCM frame reaches
@@ -227,6 +229,10 @@ public sealed class TranscriptionHubBinaryFrameTransportTests
             {
                 services.RemoveAll<ILiveTranscriptionSessionRegistry>();
                 services.AddSingleton(registry);
+
+                // The live start warms whisper-server first, and this host has no daemon.
+                services.RemoveAll<IWhisperServerSupervisor>();
+                services.AddSingleton<IWhisperServerSupervisor>(new FakeWhisperServerSupervisor());
             }
         };
 }

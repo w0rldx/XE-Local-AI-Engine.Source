@@ -112,8 +112,9 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             Abort = abort,
             Options = options,
             Lanes = lanes,
-            // Two windows of audio, so a lane one window behind is tolerated and a lane two behind is not.
-            PendingBudgetBytes = Math.Min((long)options.Settings.MaxWindowSeconds * 2 * WavPcm16.SampleRate * 2, MaxPendingBytes),
+            // Four windows of audio. A lane that is behind drains at one inference per window (see ConsumeAsync), so
+            // the budget measures sustained lag, not one slow request or the runtime's first model load.
+            PendingBudgetBytes = Math.Min((long)options.Settings.MaxWindowSeconds * 4 * WavPcm16.SampleRate * 2, MaxPendingBytes),
             Seq = options.StartingSeq
         };
 
@@ -178,6 +179,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             else
             {
                 session.PendingBytes += owned.Length;
+                lane.QueuedBytes += owned.Length;
                 lane.Chain = ConsumeAsync(session, lane, owned, lane.Chain);
             }
         }
@@ -592,9 +594,16 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             // Intentionally ignored.
         }
 
+        bool catchingUp;
+        lock (session.Gate)
+        {
+            // Another frame is already queued behind this one: the lane is behind real time.
+            catchingUp = lane.QueuedBytes > pcm16.Length;
+        }
+
         try
         {
-            var tick = await lane.Segmenter.PushAsync(pcm16, lane.Abort.Token);
+            var tick = await lane.Segmenter.PushAsync(pcm16, catchingUp, lane.Abort.Token);
             await CommitAsync(session, lane, tick);
             NoteProgress(session, lane, tick);
         }
@@ -616,6 +625,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             lock (session.Gate)
             {
                 session.PendingBytes -= pcm16.Length;
+                lane.QueuedBytes -= pcm16.Length;
             }
         }
     }
@@ -775,6 +785,9 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         ///     only under the owning session's <c>Gate</c>, together with the admission check.
         /// </remarks>
         public Task Chain { get; set; }
+
+        /// <summary>This lane's share of the session's <c>PendingBytes</c>. Guarded by the owning session's <c>Gate</c>.</summary>
+        public long QueuedBytes { get; set; }
 
         /// <summary>Read and written only from this lane's own chain.</summary>
         public string LastPartial { get; set; } = string.Empty;

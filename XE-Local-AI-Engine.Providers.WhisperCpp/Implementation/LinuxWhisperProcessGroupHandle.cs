@@ -17,17 +17,23 @@ internal sealed partial class LinuxWhisperProcessGroupHandle : IWhisperServerPro
     private const int Sigkill = 9;
 
     private readonly Process _process;
+    private readonly WhisperServerStderrTail? _stderrTail;
     private int _disposed;
 
-    public LinuxWhisperProcessGroupHandle(Process process)
+    public LinuxWhisperProcessGroupHandle(Process process, WhisperServerStderrTail? stderrTail = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         _process = process;
+        _stderrTail = stderrTail;
     }
 
     public int ProcessId => _process.Id;
 
     public bool HasExited => SafeHasExited(_process);
+
+    public int? ExitCode => SafeExitCode(_process);
+
+    public string? StderrTail => _stderrTail?.Snapshot();
 
     public void TreeKill()
     {
@@ -64,12 +70,12 @@ internal sealed partial class LinuxWhisperProcessGroupHandle : IWhisperServerPro
     }
 
     /// <summary>Takes ownership of an already-started process, disposing it if the wrap itself throws.</summary>
-    public static LinuxWhisperProcessGroupHandle Wrap(Process process)
+    public static LinuxWhisperProcessGroupHandle Wrap(Process process, WhisperServerStderrTail? stderrTail = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         try
         {
-            return new LinuxWhisperProcessGroupHandle(process);
+            return new LinuxWhisperProcessGroupHandle(process, stderrTail);
         }
         catch
         {
@@ -88,6 +94,19 @@ internal sealed partial class LinuxWhisperProcessGroupHandle : IWhisperServerPro
         {
             // No associated process — treat as exited.
             return true;
+        }
+    }
+
+    private static int? SafeExitCode(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch (InvalidOperationException)
+        {
+            // No associated process, or the handle is already disposed: the code is unknown.
+            return null;
         }
     }
 

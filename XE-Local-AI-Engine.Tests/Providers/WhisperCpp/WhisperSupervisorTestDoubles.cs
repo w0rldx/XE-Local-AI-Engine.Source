@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 
 using System.Collections.Concurrent;
 using System.Net;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -59,6 +60,10 @@ internal sealed class FakeWhisperProcessHandle : IWhisperServerProcessHandle
 
     public bool HasExited => Volatile.Read(ref _exited) != 0;
 
+    public int? ExitCode { get; private set; }
+
+    public string? StderrTail { get; private set; }
+
     public void TreeKill()
     {
         Interlocked.Exchange(ref _killed, value: 1);
@@ -71,8 +76,12 @@ internal sealed class FakeWhisperProcessHandle : IWhisperServerProcessHandle
     }
 
     /// <summary>Simulates a crash or exit, so the next ensure sees a dead process.</summary>
-    public void SimulateExit() =>
+    public void SimulateExit(int? exitCode = null, string? stderrTail = null)
+    {
+        ExitCode = exitCode;
+        StderrTail = stderrTail;
         Interlocked.Exchange(ref _exited, value: 1);
+    }
 }
 
 /// <summary>
@@ -247,7 +256,9 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
         FakeWhisperBinaryManager? binaryManager = null,
         IGpuModelLoadAdmission? loadAdmission = null,
         ScriptedWhisperHttpHandler? httpHandler = null,
-        string? modelsDirectory = null)
+        string? modelsDirectory = null,
+        ILogger<WhisperServerProcessSupervisor>? logger = null,
+        WhisperCudaFailureSignal? cudaFailureSignal = null)
     {
         Launcher = launcher ?? new FakeWhisperProcessLauncher();
         ReadinessProbe = readinessProbe ?? new FakeWhisperReadinessProbe();
@@ -265,6 +276,7 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
         Options.ModelsDirectory = ModelsDirectory;
 
         _httpClient = new HttpClient(HttpHandler, disposeHandler: false);
+        CudaFailureSignal = cudaFailureSignal ?? new WhisperCudaFailureSignal();
 
         Supervisor = new WhisperServerProcessSupervisor(BackendSelector,
             BinaryManager,
@@ -273,9 +285,10 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
             _httpClient,
             Options,
             timeProvider ?? TimeProvider.System,
-            logger: null,
+            logger,
             loadAdmission,
-            ActivityGate);
+            ActivityGate,
+            CudaFailureSignal);
     }
 
     public WhisperServerProcessSupervisor Supervisor { get; }
@@ -291,6 +304,8 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
     public ScriptedWhisperHttpHandler HttpHandler { get; }
 
     public WhisperRuntimeActivityGate ActivityGate { get; }
+
+    public WhisperCudaFailureSignal CudaFailureSignal { get; }
 
     public WhisperRuntimeOptions Options { get; }
 

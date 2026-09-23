@@ -114,7 +114,10 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         }
         catch (HttpRequestException exception)
         {
-            throw new WhisperRuntimeException("The transcription runtime could not be reached.", exception);
+            // A daemon that crashed mid-request surfaces here as a connection reset; the supervisor turns that into "the process
+            // exited" with its exit code, and logs the stderr tail.
+            throw await _supervisor.ReportRequestFailureAsync(endpoint.Generation, exception, ct).ConfigureAwait(false)
+                  ?? new WhisperRuntimeException("The transcription runtime could not be reached.", exception);
         }
 
         using (response)

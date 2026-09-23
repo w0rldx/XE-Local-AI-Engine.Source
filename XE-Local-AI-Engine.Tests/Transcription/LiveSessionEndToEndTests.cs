@@ -18,8 +18,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The slice's gate: one live session driven the way a browser drives it, over the WIRED host.
 ///     <para>
-///         Only <see cref="IWhisperTranscriber" /> is substituted, because a local whisper daemon is the one thing a
-///         test cannot have. The registry, the segmenter, the hub, the store and the column encryption are all real —
+///         Only <see cref="IWhisperTranscriber" /> and the <see cref="IWhisperServerSupervisor" /> the start warms
+///         it through are substituted, because a local whisper daemon is the one thing a test cannot have. The
+///         registry, the segmenter, the hub, the store and the column encryption are all real —
 ///         which is the point: every other live test in this slice hands the registry a
 ///         <see cref="LiveSessionOptions" /> itself, and that is precisely how a missing start path stays invisible.
 ///     </para>
@@ -267,10 +268,12 @@ public sealed class LiveSessionEndToEndTests
         {
             ConfigureAdditionalTestServices = services =>
             {
-                // The ONLY substitution in the default case: a local whisper daemon is the one thing this host cannot
-                // have. Everything the slice added stays real.
+                // The only default substitutions: this host cannot run a whisper daemon, so its transcriber and the
+                // supervisor the start warms are fakes. Everything the slice added stays real.
                 services.RemoveAll<IWhisperTranscriber>();
                 services.AddSingleton(transcriber);
+                services.RemoveAll<IWhisperServerSupervisor>();
+                services.AddSingleton<IWhisperServerSupervisor>(new FakeWhisperServerSupervisor());
                 extra?.Invoke(services);
             }
         };

@@ -96,6 +96,12 @@ public interface IWhisperServerSupervisor
     /// </summary>
     IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation);
 
+    /// <summary>
+    ///     Reports a transport failure against the daemon at <paramref name="generation" />. If it exited, logs it once, tears it
+    ///     down so the next request respawns and returns the operator-facing failure; otherwise <see langword="null" />.
+    /// </summary>
+    Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct);
+
     /// <summary>The current sanitized runtime status for the operator UI.</summary>
     WhisperRuntimeStatusSnapshot GetStatus();
 }

@@ -11,11 +11,10 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     orphan-free tree-kill.
 /// </summary>
 /// <remarks>
-///     On Windows the child is assigned to a Job Object with <c>JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE</c>; on Linux it starts a new session
-///     and process group via <c>setsid</c>, so <c>kill(-pgid)</c> reaps every descendant. Both of the child's streams are drained so a
-///     chatty server never stalls on a full pipe, and every line is forwarded at <b>Debug</b>, never Information, because
-///     whisper-server prints the multipart file name of each request and file names are user content. Framing is plain line reading:
-///     unlike stable-diffusion.cpp, whisper-server writes no carriage-return progress bar for a splitter to rescue.
+///     Windows contains the child in a kill-on-close Job Object; Linux starts it under <c>setsid</c> so <c>kill(-pgid)</c> reaps
+///     every descendant. Both streams are drained so a full pipe never stalls it, stderr also feeds a bounded tail for crash reports,
+///     and every line goes to <b>Debug</b> only, because the server echoes each request's file name. Framing is plain line reading:
+///     whisper-server writes no carriage-return progress bar.
 /// </remarks>
 internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLauncher
 {
@@ -33,20 +32,21 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
         ArgumentNullException.ThrowIfNull(spec);
 
         var label = spec.ModelId;
+        var stderrTail = new WhisperServerStderrTail();
 
         if (OperatingSystem.IsWindows())
         {
-            return LaunchWindows(BuildStartInfo(spec), label);
+            return LaunchWindows(BuildStartInfo(spec), label, stderrTail);
         }
 
         if (OperatingSystem.IsLinux())
         {
-            return LaunchLinux(BuildStartInfo(spec), label);
+            return LaunchLinux(BuildStartInfo(spec), label, stderrTail);
         }
 
         // macOS and other Unix: no Job Object and no setsid wrapper — a plain process whose own tree-kill tears down
         // the server keeps the launcher functional on the CPU floor elsewhere.
-        return LaunchPlain(BuildStartInfo(spec), label);
+        return LaunchPlain(BuildStartInfo(spec), label, stderrTail);
     }
 
     private static ProcessStartInfo BuildStartInfo(WhisperServerLaunchSpec spec)
@@ -70,14 +70,14 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
     }
 
     [SupportedOSPlatform("windows")]
-    private IWhisperServerProcessHandle LaunchWindows(ProcessStartInfo startInfo, string label)
+    private IWhisperServerProcessHandle LaunchWindows(ProcessStartInfo startInfo, string label, WhisperServerStderrTail stderrTail)
     {
-        var process = StartProcess(startInfo, label);
-        return WindowsWhisperJobObjectProcessHandle.Wrap(process);
+        var process = StartProcess(startInfo, label, stderrTail);
+        return WindowsWhisperJobObjectProcessHandle.Wrap(process, stderrTail);
     }
 
     [SupportedOSPlatform("linux")]
-    private IWhisperServerProcessHandle LaunchLinux(ProcessStartInfo startInfo, string label)
+    private IWhisperServerProcessHandle LaunchLinux(ProcessStartInfo startInfo, string label, WhisperServerStderrTail stderrTail)
     {
         // Run whisper-server under `setsid` so it leads a new process group; tree-kill is then kill(-pgid). The server
         // inherits setsid's redirected stdout/stderr, so the draining wired in StartProcess still captures its output.
@@ -86,18 +86,18 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return LinuxWhisperProcessGroupHandle.Wrap(StartProcess(startInfo, label));
+        return LinuxWhisperProcessGroupHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
 #pragma warning restore CA2000
     }
 
-    private IWhisperServerProcessHandle LaunchPlain(ProcessStartInfo startInfo, string label)
+    private IWhisperServerProcessHandle LaunchPlain(ProcessStartInfo startInfo, string label, WhisperServerStderrTail stderrTail)
     {
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return PlainWhisperProcessHandle.Wrap(StartProcess(startInfo, label));
+        return PlainWhisperProcessHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
 #pragma warning restore CA2000
     }
 
-    private Process StartProcess(ProcessStartInfo startInfo, string label)
+    private Process StartProcess(ProcessStartInfo startInfo, string label, WhisperServerStderrTail stderrTail)
     {
         var process = new Process
         {
@@ -112,8 +112,8 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
             }
 
             // Drain both streams so the pipes never fill and stall the child.
-            StartDrain(process.StandardOutput, label);
-            StartDrain(process.StandardError, label);
+            StartDrain(process.StandardOutput, label, stderrTail: null);
+            StartDrain(process.StandardError, label, stderrTail);
         }
         catch (WhisperRuntimeException)
         {
@@ -133,12 +133,12 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
     ///     Starts the detached drain loop for one of the child's streams. Detached on purpose: the handle owns the
     ///     process lifetime, and the loop ends by itself at EOF when the process exits or is tree-killed.
     /// </summary>
-    private void StartDrain(StreamReader reader, string label)
+    private void StartDrain(StreamReader reader, string label, WhisperServerStderrTail? stderrTail)
     {
-        _ = Task.Run(() => DrainAsync(reader, label), CancellationToken.None);
+        _ = Task.Run(() => DrainAsync(reader, label, stderrTail), CancellationToken.None);
     }
 
-    private async Task DrainAsync(StreamReader reader, string label)
+    private async Task DrainAsync(StreamReader reader, string label, WhisperServerStderrTail? stderrTail)
     {
         try
         {
@@ -148,6 +148,7 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
                 {
                     // Debug, not Information: the server echoes each request's multipart file name.
                     _logger.LogDebug("whisper-server[{Label}] {Line}", label, line);
+                    stderrTail?.Append(line);
                 }
             }
         }

@@ -50,10 +50,15 @@ public static class WhisperCppServiceCollectionExtensions
                 .RemoveAllResilienceHandlers();
 #pragma warning restore EXTEXP0001
 
+        services.TryAddSingleton<ICudaDeviceProbe>(static _ => new DefaultCudaDeviceProbe());
+        services.TryAddSingleton<WhisperCudaFailureSignal>();
         services.TryAddSingleton<IWhisperBackendSelector>(static sp =>
             new WhisperBackendSelector(sp.GetRequiredService<IHardwareProfiler>(),
                 sp.GetRequiredService<WhisperServerRuntimeOverrideOptions>(),
-                sp.GetRequiredService<IWhisperManagedSourceBuildSignal>()));
+                sp.GetRequiredService<IWhisperManagedSourceBuildSignal>(),
+                sp.GetRequiredService<ICudaDeviceProbe>(),
+                sp.GetRequiredService<WhisperCudaFailureSignal>(),
+                sp.GetService<ILogger<WhisperBackendSelector>>()));
 
         services.TryAddSingleton<IWhisperCppBinaryManager>(static sp =>
             new WhisperCppBinaryManager(sp.GetRequiredService<IHttpClientFactory>().CreateClient(BinaryHttpClientName),
@@ -83,7 +88,8 @@ public static class WhisperCppServiceCollectionExtensions
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ILogger<WhisperServerProcessSupervisor>>(),
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
-            sp.GetRequiredService<IWhisperRuntimeActivityGate>()));
+            sp.GetRequiredService<IWhisperRuntimeActivityGate>(),
+            sp.GetRequiredService<WhisperCudaFailureSignal>()));
         services.TryAddSingleton<IWhisperServerSupervisor>(static sp => sp.GetRequiredService<WhisperServerProcessSupervisor>());
 
         services.TryAddSingleton<IWhisperTranscriber>(static sp =>
