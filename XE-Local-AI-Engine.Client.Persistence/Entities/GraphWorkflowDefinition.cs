@@ -31,6 +31,9 @@ internal sealed class GraphWorkflowDefinition
     /// <summary>The graph document's schema version, denormalized for the same reason as the node count.</summary>
     public int SchemaVersion { get; set; }
 
+    /// <summary>The graph document's top-level <c>kind</c>, denormalized so the chat picker lists chat workflows without decrypting a blob.</summary>
+    public GraphWorkflowDefinitionKind Kind { get; set; }
+
     public int Version { get; set; }
     public long CreatedAtUtc { get; set; }
     public long UpdatedAtUtc { get; set; }

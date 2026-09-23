@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Tools;
@@ -20,6 +21,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     private const int MaxDecisionComment = 500;
 
     private readonly GraphWorkflowOptions _options;
+    private readonly SecurityOptions _security;
     private readonly IGraphWorkflowDispatcherSignal _signal;
     private readonly IGraphWorkflowStore _store;
     private readonly IToolInvocationService _tools;
@@ -28,9 +30,11 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         IGraphWorkflowStore store,
         IGraphWorkflowDispatcherSignal signal,
         IToolInvocationService tools,
-        IOptions<GraphWorkflowOptions> options)
+        IOptions<GraphWorkflowOptions> options,
+        IOptions<SecurityOptions> security)
     {
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        _security = (security ?? throw new ArgumentNullException(nameof(security))).Value;
         ArgumentNullException.ThrowIfNull(signal);
         _signal = signal;
         ArgumentNullException.ThrowIfNull(store);
@@ -143,7 +147,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     {
         if (string.IsNullOrWhiteSpace(nodeKey))
         {
-            throw new GraphWorkflowValidationException("A graph workflow decision names the pause it answers by node key.");
+            throw new GraphWorkflowValidationException("A graph workflow decision names the node it answers by node key.");
         }
 
         if (operationId == Guid.Empty)
@@ -155,7 +159,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         // this, one id reused across two pauses of a run passes every check below and violates that index inside the write, as a database error not the promised conflict.
         if (await _store.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken) is { } recorded)
         {
-            return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, recorded, cancellationToken);
+            return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, payloadJson, recorded, cancellationToken);
         }
 
         // 2. The row must be waiting — and one that is not gets the SAME resolution a lost write does, replay lookup first. Two identical requests both miss step 1,
@@ -163,7 +167,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         var nodeRun = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
         if (nodeRun.Status != GraphWorkflowNodeRunStatus.WaitingForApproval)
         {
-            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken);
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, payloadJson, cancellationToken);
         }
 
         // 3. The run must be live: a drain is already settling this row, and a terminal run has no tick left to route the answer. SAME resolution as step 2, replay
@@ -171,23 +175,32 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         var run = await _store.GetRunAsync(runId, cancellationToken);
         if (run.Status is GraphWorkflowRunStatus.Cancelling || GraphWorkflowStateMachine.IsTerminal(run.Status))
         {
-            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken);
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, payloadJson, cancellationToken);
         }
 
-        // 4. The answer must be one the PINNED graph offers. A graph that does not offer it is wrong, not the request.
+        // 4. The answer must be one the PINNED graph offers. A graph that does not offer it is wrong, not the request. The kind rule (a pause takes
+        // Approve/Reject, a chat input takes Answer) is the state machine's; a pause's own allowedDecisions narrows it further.
         var graph = GraphWorkflowGraph.Parse(run.GraphJson);
-        if (!graph.Nodes.TryGetValue(nodeKey, out var node) || node.Config is not GraphWorkflowPauseConfig pause)
+        if (!graph.Nodes.TryGetValue(nodeKey, out var node) || node.Config is not (GraphWorkflowPauseConfig or GraphWorkflowChatInputConfig))
         {
-            throw new GraphWorkflowRunConflictException($"The run's pinned graph no longer declares '{nodeKey}' as a Pause node.");
+            throw new GraphWorkflowRunConflictException($"The run's pinned graph no longer declares '{nodeKey}' as a Pause or ChatInput node.");
         }
 
-        if (!pause.AllowedDecisions.Contains(decision))
+        if (node.Config is GraphWorkflowPauseConfig offered
+            && (!GraphWorkflowStateMachine.IsDecidable(node.Kind, nodeRun.Status, decision) || !offered.AllowedDecisions.Contains(decision)))
         {
-            throw new GraphWorkflowRunConflictException($"The pause '{nodeKey}' offers {string.Join(", ", pause.AllowedDecisions)}, so it cannot be answered {decision}.");
+            throw new GraphWorkflowRunConflictException($"The pause '{nodeKey}' offers {string.Join(", ", offered.AllowedDecisions)}, so it cannot be answered {decision}.");
+        }
+
+        if (node.Config is GraphWorkflowChatInputConfig && !GraphWorkflowStateMachine.IsDecidable(node.Kind, nodeRun.Status, decision))
+        {
+            throw new GraphWorkflowRunConflictException($"The chat input '{nodeKey}' takes an Answer only, so it cannot be answered {decision}.");
         }
 
         // 5. Body rules. Everything here is about the REQUEST rather than about the run, which is what makes them 400s.
-        var payload = ValidateBody(nodeKey, pause, comment, payloadJson);
+        var output = node.Config is GraphWorkflowPauseConfig pause
+            ? GraphWorkflowDocuments.PauseOutput(decision, comment, ValidateBody(nodeKey, pause, comment, payloadJson))
+            : GraphWorkflowDocuments.ChatInputOutput(ValidateAnswer(nodeKey, comment, payloadJson));
 
         // 6. Composed through the one document writer, so a pause row gets the same envelope, the same branch derivation and the same size check as every other
         // kind — and the same `output.decision` spelling the definition-time pre-flight evaluated.
@@ -198,7 +211,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
                 node,
                 nodeRun.Attempt,
                 GraphWorkflowNodeOutputStatuses.Succeeded,
-                GraphWorkflowDocuments.PauseOutput(decision, comment, payload),
+                output,
                 _options.MaxOutputJsonBytes);
         }
         catch (GraphWorkflowOutputTooLargeException exception)
@@ -227,12 +240,12 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         }
         catch (GraphWorkflowInvalidTransitionException)
         {
-            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken);
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, payloadJson, cancellationToken);
         }
 
         if (written is null)
         {
-            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, cancellationToken);
+            return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, payloadJson, cancellationToken);
         }
 
         // 8. The run follows its rows, written against the version this read saw; then the dispatcher is told, AFTER
@@ -268,27 +281,29 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
 
     /// <summary>The same act arriving twice.</summary>
     /// <remarks>
-    ///     It IS the same act only if it names the same pause, the same answer and the same person — a reused id
-    ///     naming any of those differently would read as success for a decision nobody took. Comment and payload are
-    ///     deliberately not compared: free text around the act, not the act.
+    ///     It IS the same act only if it names the same node, the same answer and the same person — a reused id
+    ///     naming any of those differently would read as success for a decision nobody took. A pause's comment and
+    ///     payload are free text around the act and are not compared; a chat input's text IS the act, so it is.
     /// </remarks>
     private async Task<GraphWorkflowDecisionResult> ReplayAsync(Guid runId,
         string nodeKey,
         Guid operationId,
         GraphWorkflowDecisionKind decision,
         string? decidedBySubject,
+        string? payloadJson,
         GraphWorkflowNodeRunSnapshot recorded,
         CancellationToken cancellationToken)
     {
         if (!string.Equals(recorded.NodeKey, nodeKey, StringComparison.Ordinal))
         {
-            throw StandingConflict(recorded, $"Operation '{operationId}' already decided the pause '{recorded.NodeKey}' of this run.");
+            throw StandingConflict(recorded, $"Operation '{operationId}' already decided node '{recorded.NodeKey}' of this run.");
         }
 
         if (GraphWorkflowStateMachine.DecisionOf(recorded.OutputJson) != decision
-            || !string.Equals(recorded.DecidedBySubject, decidedBySubject, StringComparison.Ordinal))
+            || !string.Equals(recorded.DecidedBySubject, decidedBySubject, StringComparison.Ordinal)
+            || recorded.Kind == GraphWorkflowNodeKind.ChatInput && !string.Equals(TextAt(recorded.OutputJson, "output.text"), TextAt(payloadJson, "text"), StringComparison.Ordinal))
         {
-            throw StandingConflict(recorded, $"Operation '{operationId}' already recorded a different decision on the pause '{nodeKey}'.");
+            throw StandingConflict(recorded, $"Operation '{operationId}' already recorded a different answer on node '{nodeKey}'.");
         }
 
         return await ComposeDecisionAsync(runId, nodeKey, decision, cancellationToken);
@@ -308,11 +323,12 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         Guid operationId,
         GraphWorkflowDecisionKind decision,
         string? decidedBySubject,
+        string? payloadJson,
         CancellationToken cancellationToken)
     {
         if (await _store.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken) is { } settled)
         {
-            return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, settled, cancellationToken);
+            return await ReplayAsync(runId, nodeKey, operationId, decision, decidedBySubject, payloadJson, settled, cancellationToken);
         }
 
         // Before the row: the store also declines once the RUN stops being live, and answering that with a node-status refusal would name the pause when the cancel
@@ -320,7 +336,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         var run = await _store.GetRunAsync(runId, cancellationToken);
         if (run.Status is GraphWorkflowRunStatus.Cancelling || GraphWorkflowStateMachine.IsTerminal(run.Status))
         {
-            throw new GraphWorkflowRunConflictException($"This run is {run.Status}, so the pause '{nodeKey}' can no longer be answered.");
+            throw new GraphWorkflowRunConflictException($"This run is {run.Status}, so node '{nodeKey}' can no longer be answered.");
         }
 
         var current = await _store.GetNodeRunAsync(runId, nodeKey, cancellationToken);
@@ -383,6 +399,54 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         {
             throw new GraphWorkflowValidationException("A decision payload is a JSON object.");
         }
+    }
+
+    /// <summary>A string at <paramref name="path" /> in a stored or submitted document, or null when there is none.</summary>
+    private static string? TextAt(string? json, string path) =>
+        GraphWorkflowDocuments.Resolve(json, path) is { ValueKind: JsonValueKind.String } value ? value.GetString() : null;
+
+    /// <summary>
+    ///     A chat input's answer: <c>payload.text</c>, non-blank, and no comment beside it — the text IS the answer.
+    /// </summary>
+    /// <remarks>
+    ///     Capped at the smaller of the chat message cap and half the output envelope: the answer arrives as a chat
+    ///     message, and it must still fit the document it is embedded in, as a pause payload must.
+    /// </remarks>
+    private string ValidateAnswer(string nodeKey, string? comment, string? payloadJson)
+    {
+        if (!string.IsNullOrEmpty(comment))
+        {
+            throw new GraphWorkflowValidationException($"The chat input '{nodeKey}' takes its answer as 'payload.text' and no comment.");
+        }
+
+        string? text = null;
+        if (payloadJson is not null)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(payloadJson);
+                if (document.RootElement is { ValueKind: JsonValueKind.Object } root
+                    && root.TryGetProperty("text", out var value)
+                    && value.ValueKind == JsonValueKind.String)
+                {
+                    text = value.GetString();
+                }
+            }
+            catch (JsonException)
+            {
+                // Answered below with the same refusal as a missing text.
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            throw new GraphWorkflowValidationException($"The chat input '{nodeKey}' needs a non-empty 'payload.text' answer.");
+        }
+
+        var maxBytes = Math.Min(_security.MaxMessageSizeKb * 1024, _options.MaxOutputJsonBytes / 2);
+        return Encoding.UTF8.GetByteCount(text) <= maxBytes
+            ? text
+            : throw new GraphWorkflowValidationException($"The answer is larger than the {maxBytes} bytes a chat input answer may carry.");
     }
 
     /// <summary>The run status that follows its rows, written against the version it was read at.</summary>

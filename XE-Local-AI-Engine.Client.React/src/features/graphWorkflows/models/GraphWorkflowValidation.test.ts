@@ -12,7 +12,9 @@ import type {
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import {
 	agentConfigSchema,
+	chatInputConfigSchema,
 	conditionConfigSchema,
+	decisionModelConfigSchema,
 	edgeConditionSchema,
 	endConfigSchema,
 	type GraphWorkflowGraphRule,
@@ -26,7 +28,7 @@ import {
 	toolConfigSchema,
 	validateGraphWorkflowGraph,
 } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
-import { eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+import { chatGraph, eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 import en from "@/locales/en.json";
 
 function graph(nodes: GraphWorkflowGraphNode[], edges: GraphWorkflowGraphEdge[] = []): GraphWorkflowGraph {
@@ -368,6 +370,105 @@ describe("validateGraphWorkflowGraph reports one failing case per rule", () => {
 	});
 });
 
+describe("validateGraphWorkflowGraph mirrors the chat-contract refusals", () => {
+	/** `chatGraph` with one node's config replaced, so each case changes exactly one member. */
+	function chatWith(key: string, config: Record<string, unknown>, top: Partial<GraphWorkflowGraph> = {}): GraphWorkflowGraph {
+		return {
+			...chatGraph,
+			...top,
+			nodes: (chatGraph.nodes ?? []).map((node) => (node.key === key ? { ...node, config } : node)),
+		};
+	}
+
+	it("reports nothing for the shared Chat fixture", () => {
+		expect(rulesOf(chatGraph)).toEqual([]);
+	});
+
+	it("chatSettingsOnStandardGraph", () => {
+		expect(rulesOf({ ...eightNodeGraph, chat: { acceptsAttachments: false } })).toContain("chatSettingsOnStandardGraph");
+		expect(rulesOf({ ...eightNodeGraph, chat: null })).toEqual([]);
+	});
+
+	it("chatInputOutsideChatGraph, keyed to the node", () => {
+		const standard = { ...chatWith("code", { prompt: "Write the code." }), kind: undefined, chat: undefined };
+
+		expect(validateGraphWorkflowGraph(standard)).toContainEqual({ rule: "chatInputOutsideChatGraph", subject: "ask" });
+	});
+
+	it("chatInputPromptMissing", () => {
+		expect(rulesOf(chatWith("ask", { prompt: "  " }))).toEqual(["chatInputPromptMissing"]);
+	});
+
+	it("chatInputNeedsUnconditionalEdge, and not for a ChatInput with one", () => {
+		const conditional: GraphWorkflowGraph = {
+			...chatGraph,
+			edges: (chatGraph.edges ?? []).map((edge) =>
+				edge.key === "e2" ? { ...edge, condition: { path: "output.text", op: "Exists" } } : edge,
+			),
+		};
+
+		expect(validateGraphWorkflowGraph(conditional)).toContainEqual({ rule: "chatInputNeedsUnconditionalEdge", subject: "ask" });
+		expect(rulesOf(chatGraph)).not.toContain("chatInputNeedsUnconditionalEdge");
+	});
+
+	it("publishToChatOutsideChatGraph on Agent, LlmCall and End; false is fine anywhere", () => {
+		const onEnd = minimal().nodes?.map((node) =>
+			node.key === "done" ? { ...node, config: { outcome: "completed", publishToChat: true } } : node,
+		);
+		const offEnd = minimal().nodes?.map((node) =>
+			node.key === "done" ? { ...node, config: { outcome: "completed", publishToChat: false } } : node,
+		);
+
+		expect(validateGraphWorkflowGraph({ ...minimal(), nodes: onEnd })).toEqual([
+			{ rule: "publishToChatOutsideChatGraph", subject: "done" },
+		]);
+		expect(rulesOf({ ...minimal(), nodes: offEnd })).toEqual([]);
+	});
+
+	it("includeAttachmentsNotAccepted unless chat.acceptsAttachments is on", () => {
+		expect(rulesOf({ ...chatGraph, chat: { acceptsAttachments: false } })).toEqual(["includeAttachmentsNotAccepted"]);
+		expect(rulesOf({ ...chatGraph, chat: undefined })).toEqual(["includeAttachmentsNotAccepted"]);
+		expect(rulesOf(chatWith("code", { prompt: "Write the code.", includeAttachments: false }, { chat: undefined }))).toEqual([]);
+	});
+
+	it("decisionQuestionMissing", () => {
+		expect(rulesOf(chatWith("classify", { question: "", labels: ["coding", "general"] }))).toEqual(["decisionQuestionMissing"]);
+	});
+
+	it("decisionLabelsInvalid: too few, duplicated, blank, too long, too many", () => {
+		const q = "Which?";
+		for (const labels of [
+			["only"],
+			["a", "a"],
+			["a", " "],
+			["a", "x".repeat(65)],
+			Array.from({ length: 33 }, (_, index) => `l${index}`),
+			"coding",
+		]) {
+			expect(rulesOf(chatWith("classify", { question: q, labels })), JSON.stringify(labels)).toEqual(["decisionLabelsInvalid"]);
+		}
+		expect(rulesOf(chatWith("classify", { question: q, labels: ["a", "x".repeat(64)] }))).toEqual([]);
+	});
+
+	it("decisionProviderUnknown; an absent provider is the llm default", () => {
+		expect(rulesOf(chatWith("classify", { question: "Which?", labels: ["a", "b"], provider: "onnx" }))).toEqual([
+			"decisionProviderUnknown",
+		]);
+		expect(rulesOf(chatWith("classify", { question: "Which?", labels: ["a", "b"] }))).toEqual([]);
+	});
+
+	it("pauseOffersAnswer", () => {
+		const offered = liveGraph();
+		const nodes = offered.nodes?.map((node) =>
+			node.key === "review"
+				? { ...node, config: { prompt: "Look?", allowedDecisions: ["Approve", "Reject", "Answer"], requireComment: false } }
+				: node,
+		);
+
+		expect(validateGraphWorkflowGraph({ ...offered, nodes })).toContainEqual({ rule: "pauseOffersAnswer", subject: "review" });
+	});
+});
+
 describe("loadedGraphIssues", () => {
 	it("keeps only what the canvas cannot round-trip, and nothing else the graph is guilty of", () => {
 		const lossy = graph(
@@ -497,6 +598,17 @@ describe("config form schemas", () => {
 
 	it("answers an i18n KEY, not a sentence, for every field it refuses", () => {
 		const cases = [
+			[chatInputConfigSchema, { prompt: " " }, "pages.graphWorkflows.form.prompt.required"],
+			[
+				decisionModelConfigSchema,
+				{ question: "", labels: ["a", "b"], inputBindings: [] },
+				"pages.graphWorkflows.form.question.required",
+			],
+			[
+				decisionModelConfigSchema,
+				{ question: "Q", labels: ["a"], inputBindings: [] },
+				"pages.graphWorkflows.form.labels.invalid",
+			],
 			[nodeCommonSchema, { key: "not a key", label: "" }, "pages.graphWorkflows.form.key.invalid"],
 			[nodeCommonSchema, { key: "a", label: "", maxAttempts: 101 }, "pages.graphWorkflows.form.maxAttempts.range"],
 			[nodeCommonSchema, { key: "a", label: "", timeoutSeconds: 0 }, "pages.graphWorkflows.form.timeoutSeconds.min"],

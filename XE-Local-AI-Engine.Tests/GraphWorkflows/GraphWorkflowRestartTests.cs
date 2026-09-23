@@ -121,6 +121,20 @@ public sealed class GraphWorkflowRestartTests
         AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, failed.FailureClass);
     }
 
+    [Test]
+    [NotInParallel(RecoveryKey)]
+    public async Task AnInterruptedRunningDecisionModel_IsFailedInterruptedRatherThanResumed()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await RunningAgentNodeAsync(harness, DecisionModelGraph);
+
+        await RestartAsync(harness);
+
+        var failed = await harness.ReadNodeRunAsync(runId, "analyze");
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, failed.Status, "a decision is a model turn with no durable handle, so it is failed like one.");
+        AssertEx.Equal(GraphWorkflowFailureClass.Interrupted, failed.FailureClass);
+    }
+
     /// <summary>
     ///     And the other half of that ruling: the interrupted verdict is re-attempted by the dispatcher's retry stage
     ///     rather than by a second mechanism inside recovery. A work node gets three attempts by default, so the first
@@ -351,6 +365,15 @@ public sealed class GraphWorkflowRestartTests
                 Enabled = enabled
             }),
             NullLogger<GraphWorkflowStartupReconciler>.Instance);
+
+    private const string DecisionModelGraph = """
+                                              { "schemaVersion": 1,
+                                                "nodes": [{ "key": "start", "kind": "Start" },
+                                                          { "key": "analyze", "kind": "DecisionModel", "config": { "question": "Which?", "labels": ["a", "b"] } },
+                                                          { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+                                                "edges": [{ "key": "e1", "from": "start", "to": "analyze" },
+                                                          { "key": "e2", "from": "analyze", "to": "done" }] }
+                                              """;
 
     private const string LlmCallGraph = """
                                               { "schemaVersion": 1,

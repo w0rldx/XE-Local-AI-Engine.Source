@@ -89,6 +89,7 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             GraphHash = HashPayload(graph),
             NodeCount = command.NodeCount,
             SchemaVersion = command.SchemaVersion,
+            Kind = command.Kind,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -176,6 +177,7 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             // The schema version, unlike the node count, may be left to the stored one: this node understands exactly one version and the parser refuses every
             // other, so a graph that reached here IS it. The day a second version ships this becomes a lie, which is why it is spelled out rather than defaulted.
             definition.SchemaVersion = command.SchemaVersion ?? definition.SchemaVersion;
+            definition.Kind = command.Kind ?? definition.Kind;
         }
 
         definition.Version++;
@@ -209,6 +211,7 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                             GraphHash = entity.GraphHash,
                             NodeCount = entity.NodeCount,
                             SchemaVersion = entity.SchemaVersion,
+                            Kind = entity.Kind,
                             Version = entity.Version,
                             CreatedAtUtc = entity.CreatedAtUtc,
                             UpdatedAtUtc = entity.UpdatedAtUtc
@@ -1032,6 +1035,7 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             GraphHash = definition.GraphHash,
             NodeCount = definition.NodeCount,
             SchemaVersion = definition.SchemaVersion,
+            Kind = definition.Kind,
             Version = definition.Version,
             CreatedAtUtc = definition.CreatedAtUtc,
             UpdatedAtUtc = definition.UpdatedAtUtc

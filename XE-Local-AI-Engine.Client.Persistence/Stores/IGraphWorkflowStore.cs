@@ -17,6 +17,8 @@ public sealed class GraphWorkflowDefinitionSummary
 
     public required int SchemaVersion { get; init; }
 
+    public required GraphWorkflowDefinitionKind Kind { get; init; }
+
     public required int Version { get; init; }
 
     public required long CreatedAtUtc { get; init; }
@@ -43,6 +45,8 @@ public sealed class GraphWorkflowDefinitionSnapshot
     public required int NodeCount { get; init; }
 
     public required int SchemaVersion { get; init; }
+
+    public required GraphWorkflowDefinitionKind Kind { get; init; }
 
     public required int Version { get; init; }
 
@@ -409,6 +413,8 @@ public sealed class CreateGraphWorkflowDefinitionCommand
 
     public int SchemaVersion { get; init; } = 1;
 
+    public GraphWorkflowDefinitionKind Kind { get; init; } = GraphWorkflowDefinitionKind.Standard;
+
     public string? Description { get; init; }
 }
 
@@ -438,6 +444,9 @@ public sealed class UpdateGraphWorkflowDefinitionCommand
     public int? NodeCount { get; init; }
 
     public int? SchemaVersion { get; init; }
+
+    /// <summary>Derived from the graph like the node count, so it travels with <see cref="GraphJson" />; null leaves the stored kind alone.</summary>
+    public GraphWorkflowDefinitionKind? Kind { get; init; }
 }
 
 /// <summary>

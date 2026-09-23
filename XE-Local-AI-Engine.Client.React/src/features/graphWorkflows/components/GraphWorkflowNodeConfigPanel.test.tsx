@@ -26,7 +26,11 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { GraphWorkflowNodeConfigPanel } from "@/features/graphWorkflows/components/GraphWorkflowNodeConfigPanel";
-import { defaultNodeData, type GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import {
+	defaultNodeData,
+	type GraphWorkflowCanvasNodeData,
+	type GraphWorkflowGraphSettings,
+} from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { type GraphWorkflowNodeKind, graphWorkflowNodeKinds } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { graphWorkflowTools } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -37,6 +41,7 @@ interface Handlers {
 	readonly onChange?: (patch: Partial<GraphWorkflowCanvasNodeData>) => void;
 	readonly onRename?: (to: string) => "ok" | "collision" | "invalid";
 	readonly onRemove?: () => void;
+	readonly graphSettings?: GraphWorkflowGraphSettings;
 }
 
 function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {}) {
@@ -51,6 +56,7 @@ function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {})
 				tools={tools}
 				agentOptions={[{ value: "agent-id", label: "Reviewer" }]}
 				modelOptions={[{ value: "qwen3-8b", label: "Qwen3 8B" }]}
+				graphSettings={handlers.graphSettings}
 			/>
 		</ConfirmProvider>,
 	);
@@ -86,6 +92,8 @@ const bodyTestIdByKind: Record<GraphWorkflowNodeKind, string> = {
 	Join: "gw-node-config-passthrough",
 	Pause: "gw-node-config-prompt",
 	End: "gw-node-config-outcome",
+	ChatInput: "gw-node-config-chat-prompt",
+	DecisionModel: "gw-node-config-question",
 };
 
 describe("GraphWorkflowNodeConfigPanel", () => {
@@ -258,5 +266,145 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		fireEvent.click(screen.getByTestId("gw-node-config-binding-parameter-0"));
 
 		expect(await screen.findByRole("option", { name: "path", hidden: true })).toBeTruthy();
+	});
+
+	it("never offers Answer on a Pause: only a ChatInput takes it", () => {
+		renderPanel(defaultNodeData("Pause", "pause-1"));
+
+		expect(screen.getByTestId("gw-node-config-decision-Approve")).toBeTruthy();
+		expect(screen.queryByTestId("gw-node-config-decision-Answer")).toBeNull();
+	});
+
+	it("edits a ChatInput's question for the user", () => {
+		const onChange = vi.fn();
+		renderPanel(defaultNodeData("ChatInput", "chat-input-1"), { onChange, graphSettings: { kind: "Chat" } });
+
+		expect(screen.getByText("What to ask the user")).toBeTruthy();
+		fireEvent.change(screen.getByTestId("gw-node-config-chat-prompt"), { target: { value: "Which database?" } });
+
+		expect(onChange).toHaveBeenCalledWith({ prompt: "Which database?" });
+	});
+
+	describe("DecisionModel form", () => {
+		function decisionNode(labels: readonly string[]): GraphWorkflowCanvasNodeData {
+			return {
+				...defaultNodeData("DecisionModel", "decision-model-1"),
+				question: "Which?",
+				labels,
+			} as GraphWorkflowCanvasNodeData;
+		}
+
+		it("edits the question and appends an empty label row", () => {
+			const onChange = vi.fn();
+			renderPanel(decisionNode(["coding"]), { onChange });
+
+			fireEvent.change(screen.getByTestId("gw-node-config-question"), { target: { value: "Classify it" } });
+			fireEvent.click(screen.getByTestId("gw-node-config-label-add"));
+
+			expect(onChange).toHaveBeenCalledWith({ question: "Classify it" });
+			expect(onChange).toHaveBeenCalledWith({ labels: ["coding", ""] });
+		});
+
+		it("edits and removes one label, and says why the list is refused once touched", () => {
+			const onChange = vi.fn();
+			renderPanel(decisionNode(["coding", "general"]), { onChange });
+
+			expect(screen.queryByTestId("gw-node-config-labels-error")).toBeNull();
+			fireEvent.change(screen.getByTestId("gw-node-config-label-1"), { target: { value: "coding" } });
+			expect(onChange).toHaveBeenLastCalledWith({ labels: ["coding", "coding"] });
+			fireEvent.click(screen.getByTestId("gw-node-config-label-remove-0"));
+			expect(onChange).toHaveBeenLastCalledWith({ labels: ["general"] });
+		});
+
+		it("trims a label on blur, so an output.choice edge can match it", () => {
+			const onChange = vi.fn();
+			renderPanel(decisionNode(["coding ", "general"]), { onChange });
+
+			fireEvent.blur(screen.getByTestId("gw-node-config-label-0"));
+
+			expect(onChange).toHaveBeenLastCalledWith({ labels: ["coding", "general"] });
+			expect(screen.getByRole("group", { name: "Labels" })).toBeTruthy();
+		});
+
+		it("shows the labels message from the bundle for a list the parser refuses", () => {
+			renderPanel(decisionNode(["only"]));
+
+			fireEvent.change(screen.getByTestId("gw-node-config-label-0"), { target: { value: "solo" } });
+
+			expect(screen.getByTestId("gw-node-config-labels-error").textContent).toBe(
+				"Use between 2 and 32 distinct, non-empty labels of at most 64 characters.",
+			);
+		});
+
+		it("offers the llm provider under its readable name", async () => {
+			renderPanel(decisionNode(["a", "b"]));
+
+			const input = screen.getByTestId("gw-node-config-decision-provider");
+			fireEvent.click(input);
+			const dropdown = document.getElementById(input.getAttribute("aria-controls") ?? "");
+			const options = await within(dropdown as HTMLElement).findAllByRole("option", { hidden: true });
+
+			expect(options.map((option) => option.textContent)).toEqual(["Language model"]);
+		});
+	});
+
+	describe("chat switches", () => {
+		it("are absent on a Standard graph", () => {
+			renderPanel(defaultNodeData("Agent", "agent-1"));
+
+			expect(screen.queryByTestId("gw-node-config-publish-to-chat")).toBeNull();
+			expect(screen.queryByTestId("gw-node-config-include-attachments")).toBeNull();
+		});
+
+		it("stay reachable on a Standard graph while a refused flag is on, so it can be turned off", () => {
+			const onChange = vi.fn();
+			renderPanel({ ...defaultNodeData("End", "done"), publishToChat: true } as GraphWorkflowCanvasNodeData, { onChange });
+
+			fireEvent.click(screen.getByTestId("gw-node-config-publish-to-chat"));
+
+			// Off is the Standard-graph default, so it is written as absent rather than `false`.
+			expect(onChange).toHaveBeenCalledWith({ publishToChat: undefined });
+		});
+
+		it("writes an End's publish flag back as absent when it returns to the Chat-graph default", () => {
+			const onChange = vi.fn();
+			renderPanel({ ...defaultNodeData("End", "done"), publishToChat: false } as GraphWorkflowCanvasNodeData, {
+				onChange,
+				graphSettings: { kind: "Chat" },
+			});
+
+			fireEvent.click(screen.getByTestId("gw-node-config-publish-to-chat"));
+
+			expect(onChange).toHaveBeenCalledWith({ publishToChat: undefined });
+		});
+
+		it("shows an End's absent flag as the Chat-graph default, on", () => {
+			renderPanel(defaultNodeData("End", "done"), { graphSettings: { kind: "Chat" } });
+
+			expect(screen.getByText("Post the result to the chat")).toBeTruthy();
+			expect((screen.getByTestId("gw-node-config-publish-to-chat") as HTMLInputElement).checked).toBe(true);
+			expect(screen.queryByTestId("gw-node-config-include-attachments")).toBeNull();
+		});
+
+		it("keeps includeAttachments off and disabled until the graph accepts attachments", () => {
+			renderPanel(defaultNodeData("LlmCall", "llm-call-1"), { graphSettings: { kind: "Chat" } });
+
+			expect((screen.getByTestId("gw-node-config-publish-to-chat") as HTMLInputElement).checked).toBe(false);
+			const include = screen.getByTestId("gw-node-config-include-attachments") as HTMLInputElement;
+			expect(include.disabled).toBe(true);
+			expect(screen.getByText("Turn on “Accepts attachments” in the workflow settings first.")).toBeTruthy();
+		});
+
+		it("turns includeAttachments on once the graph accepts attachments", () => {
+			const onChange = vi.fn();
+			renderPanel(defaultNodeData("Agent", "agent-1"), {
+				onChange,
+				graphSettings: { kind: "Chat", chat: { acceptsAttachments: true } },
+			});
+
+			fireEvent.click(screen.getByTestId("gw-node-config-include-attachments"));
+
+			expect(onChange).toHaveBeenCalledWith({ includeAttachments: true });
+		});
 	});
 });

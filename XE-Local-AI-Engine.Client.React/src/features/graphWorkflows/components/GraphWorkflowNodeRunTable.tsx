@@ -107,7 +107,9 @@ export function GraphWorkflowNodeRunTable({ nodeRuns, selectedNodeKey, onSelectN
 											) : null}
 											{pending ? (
 												<Badge size="xs" variant="light" color="orange" data-testid={`graph-workflow-node-pending-${nodeKey}`}>
-													{t("pages.graphWorkflows.nodeTable.decisionPending", "needs your decision")}
+													{pending === "Answer"
+														? t("pages.graphWorkflows.nodeTable.answerPending", "needs your answer")
+														: t("pages.graphWorkflows.nodeTable.decisionPending", "needs your decision")}
 												</Badge>
 											) : null}
 										</Group>

@@ -27,8 +27,18 @@ public sealed class GraphWorkflowGraphContractTests
     [Arguments(GraphWorkflowNodeRunStatus.Cancelled, "")]
     public void AllowedDecisions_OffersOnlyWhatTheDecideEndpointWouldAccept(GraphWorkflowNodeRunStatus status, string expected) =>
         AssertEx.Equal(expected,
-            string.Join(",", GraphWorkflowGraphContract.AllowedDecisions(status)),
-            $"a {status} node run must advertise exactly the decisions the runtime can take from it.");
+            string.Join(",", GraphWorkflowGraphContract.AllowedDecisions(GraphWorkflowNodeKind.Pause, status)),
+            $"a {status} pause must advertise exactly the decisions the runtime can take from it.");
+
+    [Test]
+    [Arguments(GraphWorkflowNodeKind.ChatInput, "Answer")]
+    [Arguments(GraphWorkflowNodeKind.Pause, "Approve,Reject")]
+    [Arguments(GraphWorkflowNodeKind.Agent, "")]
+    [Arguments(GraphWorkflowNodeKind.DecisionModel, "")]
+    public void AllowedDecisions_AreTheParkedKindsOwn(GraphWorkflowNodeKind kind, string expected) =>
+        AssertEx.Equal(expected,
+            string.Join(",", GraphWorkflowGraphContract.AllowedDecisions(kind, GraphWorkflowNodeRunStatus.WaitingForApproval)),
+            $"a waiting {kind} advertises only the answers its kind takes.");
 
     /// <summary>
     ///     Made honest at the moment of the click: a rejection with nowhere to go ends the run, and the confirm dialog

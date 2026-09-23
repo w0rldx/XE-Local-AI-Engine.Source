@@ -173,7 +173,7 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
 
         await connection.StartAsync();
         var snapshot = await connection.InvokeAsync<GraphWorkflowRunSubscriptionSnapshot>("SubscribeRun", runId, 0L);
-        AssertEx.Equal(expected: 0, snapshot.PendingDecisionCount, "the run has not reached its pause yet, so nobody is being asked for anything.");
+        AssertEx.Equal(expected: 0, snapshot.PendingDecisions, "the run has not reached its pause yet, so nobody is being asked for anything.");
 
         await AdvanceUntilRunStatusAsync(harness, runId, "WaitingForApproval");
         await AssertEx.EventuallyAsync(() => !gates.IsEmpty, TestBudgets.Contended, "parking on a pause must announce a gate to whoever is watching.");

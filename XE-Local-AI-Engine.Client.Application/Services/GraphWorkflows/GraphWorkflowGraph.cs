@@ -40,6 +40,19 @@ internal sealed class GraphWorkflowGraph
     /// <remarks>Not an enum: this travels to the provider as the string it is written as.</remarks>
     private static readonly string[] ReasoningEfforts = ["none", "low", "medium", "high"];
 
+    /// <summary>The decision providers a <c>DecisionModel</c> node may name. Closed: a provider this build cannot run is refused at save.</summary>
+    internal static readonly string[] DecisionProviders = [Decisions.LlmDecisionProvider.ProviderName];
+
+    /// <summary>The label bounds of a <c>DecisionModel</c> node. Flat strings, so the enum grammar stays far below the repetition bound.</summary>
+    private const int MinDecisionLabels = 2;
+
+    private const int MaxDecisionLabels = 32;
+
+    private const int MaxDecisionLabelLength = 64;
+
+    /// <summary>The members a graph-level <c>chat</c> block may declare.</summary>
+    private static readonly string[] ChatMembers = ["acceptsAttachments", "requireRerunConfirmation"];
+
     /// <summary>
     ///     The config members each kind reads, and the whole of them. Anything else on a node's config is refused, which
     ///     is how a Tool node's <c>toolName</c> written on an Agent node becomes an author-time error rather than a
@@ -48,14 +61,16 @@ internal sealed class GraphWorkflowGraph
     private static readonly Dictionary<GraphWorkflowNodeKind, string[]> ConfigMembers = new()
     {
         [GraphWorkflowNodeKind.Start] = ["inputSchema", "defaultInput"],
-        [GraphWorkflowNodeKind.Agent] = ["agentDefinitionId", "instructions", "model", "reasoningEffort", "responseJsonSchema", "includeUpstreamOutputs"],
-        [GraphWorkflowNodeKind.LlmCall] = ["model", "systemPrompt", "prompt", "inputBindings", "reasoningEffort", "responseJsonSchema", "samplingOptions"],
+        [GraphWorkflowNodeKind.Agent] = ["agentDefinitionId", "instructions", "model", "reasoningEffort", "responseJsonSchema", "includeUpstreamOutputs", "publishToChat", "includeAttachments"],
+        [GraphWorkflowNodeKind.LlmCall] = ["model", "systemPrompt", "prompt", "inputBindings", "reasoningEffort", "responseJsonSchema", "samplingOptions", "publishToChat", "includeAttachments"],
         [GraphWorkflowNodeKind.Tool] = ["toolName", "arguments", "argumentBindings"],
         [GraphWorkflowNodeKind.Condition] = ["path"],
         [GraphWorkflowNodeKind.Parallel] = [],
         [GraphWorkflowNodeKind.Join] = [],
         [GraphWorkflowNodeKind.Pause] = ["prompt", "allowedDecisions", "requireComment"],
-        [GraphWorkflowNodeKind.End] = ["outcome", "resultPath"]
+        [GraphWorkflowNodeKind.End] = ["outcome", "resultPath", "publishToChat"],
+        [GraphWorkflowNodeKind.ChatInput] = ["prompt"],
+        [GraphWorkflowNodeKind.DecisionModel] = ["question", "labels", "provider", "model", "inputBindings"]
     };
 
     /// <summary>
@@ -121,8 +136,13 @@ internal sealed class GraphWorkflowGraph
 
     private IReadOnlyList<GraphWorkflowValidationError>? _responseSchemaWarnings;
 
-    private GraphWorkflowGraph(IReadOnlyDictionary<string, GraphWorkflowGraphNode> nodes, IReadOnlyList<GraphWorkflowGraphEdge> edges)
+    private GraphWorkflowGraph(GraphWorkflowDefinitionKind kind,
+        GraphWorkflowChatSettings? chat,
+        IReadOnlyDictionary<string, GraphWorkflowGraphNode> nodes,
+        IReadOnlyList<GraphWorkflowGraphEdge> edges)
     {
+        Kind = kind;
+        Chat = chat;
         Nodes = nodes;
         Edges = edges;
         _inbound = nodes.Keys.ToDictionary(key => key, _ => new List<GraphWorkflowGraphEdge>(), StringComparer.Ordinal);
@@ -143,6 +163,12 @@ internal sealed class GraphWorkflowGraph
                     .Distinct(StringComparer.Ordinal)
         ];
     }
+
+    /// <summary>The top-level <c>kind</c>: <c>Standard</c> when the document names none.</summary>
+    public GraphWorkflowDefinitionKind Kind { get; }
+
+    /// <summary>The <c>chat</c> block of a <c>Chat</c> graph, defaulted when omitted; always null on a <c>Standard</c> graph.</summary>
+    public GraphWorkflowChatSettings? Chat { get; }
 
     public IReadOnlyDictionary<string, GraphWorkflowGraphNode> Nodes { get; }
 
@@ -261,14 +287,18 @@ internal sealed class GraphWorkflowGraph
             throw new GraphWorkflowValidationException($"This node understands graph workflow schema version {SupportedSchemaVersion} only.");
         }
 
+        // Whole-document, so it throws like the schema version: every node's chat rules are read against it.
+        var kind = ParseGraphKind(root);
+        var chat = ParseChatSettings(root, kind);
+
         var errors = new List<GraphWorkflowValidationError>();
 
         // ONE namespace for node and edge keys: an edge key colliding with a node key makes an element lookup
         // ambiguous in the editor for no gain.
         var keys = new HashSet<string>(StringComparer.Ordinal);
-        var nodes = ParseNodes(root, maxNodes, keys, errors);
+        var nodes = ParseNodes(root, maxNodes, keys, kind, chat, errors);
         var edges = ParseEdges(root, nodes, keys, errors);
-        var graph = new GraphWorkflowGraph(nodes, edges);
+        var graph = new GraphWorkflowGraph(kind, chat, nodes, edges);
         graph.Validate(errors);
         if (errors.Count > 0)
         {
@@ -286,6 +316,68 @@ internal sealed class GraphWorkflowGraph
     {
         using var document = JsonDocument.Parse("{}");
         return document.RootElement.Clone();
+    }
+
+    /// <summary>The optional top-level <c>kind</c>, <c>Standard</c> when absent or null.</summary>
+    private static GraphWorkflowDefinitionKind ParseGraphKind(JsonElement root)
+    {
+        if (!root.TryGetProperty("kind", out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return GraphWorkflowDefinitionKind.Standard;
+        }
+
+        return value.ValueKind == JsonValueKind.String && GraphWorkflowTokens.TryParseName<GraphWorkflowDefinitionKind>(value.GetString(), out var kind)
+            ? kind
+            : throw new GraphWorkflowValidationException($"A graph workflow's 'kind' must be one of {string.Join(", ", Enum.GetNames<GraphWorkflowDefinitionKind>())}.");
+    }
+
+    /// <summary>
+    ///     The <c>chat</c> block: refused on a <c>Standard</c> graph, whose runs no conversation binds to, and defaulted
+    ///     on a <c>Chat</c> graph that omits it.
+    /// </summary>
+    private static GraphWorkflowChatSettings? ParseChatSettings(JsonElement root, GraphWorkflowDefinitionKind kind)
+    {
+        if (!root.TryGetProperty("chat", out var chat) || chat.ValueKind == JsonValueKind.Null)
+        {
+            return kind == GraphWorkflowDefinitionKind.Chat ? GraphWorkflowChatSettings.Default : null;
+        }
+
+        if (kind != GraphWorkflowDefinitionKind.Chat)
+        {
+            throw new GraphWorkflowValidationException("The 'chat' settings apply to a Chat graph only; set 'kind' to \"Chat\" or remove them.");
+        }
+
+        if (chat.ValueKind != JsonValueKind.Object)
+        {
+            throw new GraphWorkflowValidationException("A graph workflow's 'chat' settings must be an object.");
+        }
+
+        if (chat.EnumerateObject().Select(static member => member.Name).FirstOrDefault(member => !ChatMembers.Contains(member, StringComparer.Ordinal)) is { } stray)
+        {
+            throw new GraphWorkflowValidationException($"A graph workflow's 'chat' settings declare '{stray}', which nothing reads.");
+        }
+
+        return new GraphWorkflowChatSettings
+        {
+            AcceptsAttachments = ChatBool(chat, "acceptsAttachments", GraphWorkflowChatSettings.Default.AcceptsAttachments),
+            RequireRerunConfirmation = ChatBool(chat, "requireRerunConfirmation", GraphWorkflowChatSettings.Default.RequireRerunConfirmation)
+        };
+    }
+
+    /// <summary>One boolean of the <c>chat</c> block, refused in the block's own words rather than a node's.</summary>
+    private static bool ChatBool(JsonElement chat, string name, bool fallback)
+    {
+        if (!chat.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return fallback;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => throw new GraphWorkflowValidationException($"The 'chat.{name}' setting must be true or false.")
+        };
     }
 
     private static JsonDocument ParseDocument(string graphJson)
@@ -320,6 +412,8 @@ internal sealed class GraphWorkflowGraph
     private static Dictionary<string, GraphWorkflowGraphNode> ParseNodes(JsonElement root,
         int maxNodes,
         HashSet<string> keys,
+        GraphWorkflowDefinitionKind graphKind,
+        GraphWorkflowChatSettings? chat,
         List<GraphWorkflowValidationError> errors)
     {
         if (!root.TryGetProperty("nodes", out var nodesElement) || nodesElement.ValueKind != JsonValueKind.Array)
@@ -353,7 +447,7 @@ internal sealed class GraphWorkflowGraph
             }
 
             var kind = RequiredEnum<GraphWorkflowNodeKind>(element, "kind", $"node '{nodeKey}'");
-            nodes[nodeKey] = ParseNode(element, nodeKey, kind, errors);
+            nodes[nodeKey] = ParseNode(element, nodeKey, kind, graphKind, chat, errors);
         }
 
         if (nodes.Count == 0)
@@ -367,9 +461,11 @@ internal sealed class GraphWorkflowGraph
     private static GraphWorkflowGraphNode ParseNode(JsonElement element,
         string nodeKey,
         GraphWorkflowNodeKind kind,
+        GraphWorkflowDefinitionKind graphKind,
+        GraphWorkflowChatSettings? chat,
         List<GraphWorkflowValidationError> errors)
     {
-        var isWorkNode = kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.Tool or GraphWorkflowNodeKind.LlmCall;
+        var isWorkNode = kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.Tool or GraphWorkflowNodeKind.LlmCall or GraphWorkflowNodeKind.DecisionModel;
         return new GraphWorkflowGraphNode
         {
             NodeKey = nodeKey,
@@ -379,7 +475,7 @@ internal sealed class GraphWorkflowGraph
             MaxAttempts = Collect(errors, nodeKey, () => OptionalPositiveInt(element, "maxAttempts", nodeKey), null) ?? (isWorkNode ? DefaultWorkNodeMaxAttempts : 1),
             TimeoutSeconds = Collect(errors, nodeKey, () => OptionalPositiveInt(element, "timeoutSeconds", nodeKey), null),
             Position = Collect(errors, nodeKey, () => ParsePosition(element, nodeKey), null),
-            Config = Collect<GraphWorkflowNodeConfig>(errors, nodeKey, () => ParseConfig(element, nodeKey, kind), new GraphWorkflowEmptyConfig())
+            Config = Collect<GraphWorkflowNodeConfig>(errors, nodeKey, () => ParseConfig(element, nodeKey, kind, graphKind, chat), new GraphWorkflowEmptyConfig())
         };
     }
 
@@ -404,7 +500,11 @@ internal sealed class GraphWorkflowGraph
         return new GraphWorkflowPosition { X = xValue, Y = yValue };
     }
 
-    private static GraphWorkflowNodeConfig ParseConfig(JsonElement element, string nodeKey, GraphWorkflowNodeKind kind)
+    private static GraphWorkflowNodeConfig ParseConfig(JsonElement element,
+        string nodeKey,
+        GraphWorkflowNodeKind kind,
+        GraphWorkflowDefinitionKind graphKind,
+        GraphWorkflowChatSettings? chat)
     {
         var config = EmptyConfig;
         if (element.TryGetProperty("config", out var declared) && declared.ValueKind != JsonValueKind.Null)
@@ -435,7 +535,11 @@ internal sealed class GraphWorkflowGraph
                 TrimmedOptionalString(config, "model"),
                 ParseReasoningEffort(config, nodeKey),
                 ParseResponseJsonSchema(config, nodeKey),
-                OptionalBool(config, "includeUpstreamOutputs", nodeKey, fallback: true)),
+                OptionalBool(config, "includeUpstreamOutputs", nodeKey, fallback: true))
+            {
+                PublishToChat = ParsePublishToChat(config, nodeKey, graphKind, fallback: false),
+                IncludeAttachments = ParseIncludeAttachments(config, nodeKey, chat)
+            },
             GraphWorkflowNodeKind.LlmCall => new GraphWorkflowLlmCallConfig
             {
                 Model = StrictOptionalString(config, "model", nodeKey)?.Trim() is { Length: > 0 } model ? model : null,
@@ -444,7 +548,9 @@ internal sealed class GraphWorkflowGraph
                 InputBindings = ParseBindings(config, "inputBindings", nodeKey),
                 ReasoningEffort = ParseReasoningEffort(config, nodeKey),
                 ResponseJsonSchema = ParseResponseJsonSchema(config, nodeKey),
-                SamplingOptions = ParseSamplingOptions(config, nodeKey)
+                SamplingOptions = ParseSamplingOptions(config, nodeKey),
+                PublishToChat = ParsePublishToChat(config, nodeKey, graphKind, fallback: false),
+                IncludeAttachments = ParseIncludeAttachments(config, nodeKey, chat)
             },
             GraphWorkflowNodeKind.Tool => new GraphWorkflowToolConfig(RequiredString(config, "toolName", owner),
                 OptionalObject(config, "arguments", nodeKey),
@@ -453,9 +559,84 @@ internal sealed class GraphWorkflowGraph
             GraphWorkflowNodeKind.Pause => new GraphWorkflowPauseConfig(RequiredString(config, "prompt", owner),
                 ParseAllowedDecisions(config, nodeKey),
                 OptionalBool(config, "requireComment", nodeKey, fallback: false)),
-            GraphWorkflowNodeKind.End => new GraphWorkflowEndConfig(RequiredString(config, "outcome", owner), ParseDotPath(config, "resultPath", nodeKey)),
+            GraphWorkflowNodeKind.End => new GraphWorkflowEndConfig(RequiredString(config, "outcome", owner), ParseDotPath(config, "resultPath", nodeKey))
+            {
+                PublishToChat = ParsePublishToChat(config, nodeKey, graphKind, fallback: graphKind == GraphWorkflowDefinitionKind.Chat)
+            },
+            GraphWorkflowNodeKind.ChatInput => new GraphWorkflowChatInputConfig { Prompt = RequiredString(config, "prompt", owner) },
+            GraphWorkflowNodeKind.DecisionModel => new GraphWorkflowDecisionModelConfig
+            {
+                Question = RequiredString(config, "question", owner),
+                Labels = ParseLabels(config, nodeKey),
+                Provider = ParseDecisionProvider(config, nodeKey),
+                Model = StrictOptionalString(config, "model", nodeKey)?.Trim() is { Length: > 0 } decisionModel ? decisionModel : null,
+                InputBindings = ParseBindings(config, "inputBindings", nodeKey)
+            },
             _ => new GraphWorkflowEmptyConfig()
         };
+    }
+
+    /// <summary>
+    ///     <c>publishToChat</c>, refused as <see langword="true" /> outside a <c>Chat</c> graph: no conversation binds to a
+    ///     Standard run, so the flag would say something the runtime never does.
+    /// </summary>
+    private static bool ParsePublishToChat(JsonElement config, string nodeKey, GraphWorkflowDefinitionKind graphKind, bool fallback)
+    {
+        var publish = OptionalBool(config, "publishToChat", nodeKey, fallback);
+        return !publish || graphKind == GraphWorkflowDefinitionKind.Chat
+            ? publish
+            : throw new GraphWorkflowValidationException($"Node '{nodeKey}' sets 'publishToChat', which only a Chat graph reads.");
+    }
+
+    /// <summary><c>includeAttachments</c>, refused as <see langword="true" /> unless the graph's <c>chat.acceptsAttachments</c> is on.</summary>
+    private static bool ParseIncludeAttachments(JsonElement config, string nodeKey, GraphWorkflowChatSettings? chat)
+    {
+        var include = OptionalBool(config, "includeAttachments", nodeKey, fallback: false);
+        return !include || chat is { AcceptsAttachments: true }
+            ? include
+            : throw new GraphWorkflowValidationException($"Node '{nodeKey}' sets 'includeAttachments', but the graph does not accept attachments ('chat.acceptsAttachments').");
+    }
+
+    /// <summary>
+    ///     A <c>DecisionModel</c> node's labels: 2 to 32 distinct, non-blank strings of at most 64 characters. They become
+    ///     a grammar enum, so a flat, bounded list is what keeps it compilable.
+    /// </summary>
+    private static IReadOnlyList<string> ParseLabels(JsonElement config, string nodeKey)
+    {
+        if (!config.TryGetProperty("labels", out var value) || value.ValueKind != JsonValueKind.Array)
+        {
+            throw new GraphWorkflowValidationException($"Node '{nodeKey}' is a DecisionModel node and needs a 'labels' array in its config.");
+        }
+
+        var labels = new List<string>();
+        foreach (var entry in value.EnumerateArray())
+        {
+            var label = entry.ValueKind == JsonValueKind.String ? entry.GetString() : null;
+            if (string.IsNullOrWhiteSpace(label) || label.Length > MaxDecisionLabelLength)
+            {
+                throw new GraphWorkflowValidationException($"Node '{nodeKey}' declares a label that is not a non-empty string of at most {MaxDecisionLabelLength} characters.");
+            }
+
+            if (labels.Contains(label, StringComparer.Ordinal))
+            {
+                throw new GraphWorkflowValidationException($"Node '{nodeKey}' declares the label '{label}' twice.");
+            }
+
+            labels.Add(label);
+        }
+
+        return labels.Count is >= MinDecisionLabels and <= MaxDecisionLabels
+            ? labels
+            : throw new GraphWorkflowValidationException($"Node '{nodeKey}' declares {labels.Count} label(s); a DecisionModel node needs between {MinDecisionLabels} and {MaxDecisionLabels}.");
+    }
+
+    /// <summary>The decision provider, <c>llm</c> when the node names none; anything outside the closed vocabulary is refused.</summary>
+    private static string ParseDecisionProvider(JsonElement config, string nodeKey)
+    {
+        var provider = StrictOptionalString(config, "provider", nodeKey)?.Trim() is { Length: > 0 } named ? named : DecisionProviders[0];
+        return DecisionProviders.Contains(provider, StringComparer.Ordinal)
+            ? provider
+            : throw new GraphWorkflowValidationException($"Node '{nodeKey}' names the decision provider '{provider}'; expected one of {string.Join(", ", DecisionProviders)}.");
     }
 
     /// <summary>The node's reasoning-effort override, checked against the four the agent surface itself accepts.</summary>
@@ -615,7 +796,12 @@ internal sealed class GraphWorkflowGraph
             if (entry.ValueKind != JsonValueKind.String || !GraphWorkflowTokens.TryParseName<GraphWorkflowDecisionKind>(entry.GetString(), out var decision))
             {
                 throw new GraphWorkflowValidationException($"Node '{nodeKey}' names a decision this runtime does not offer; "
-                                                           + $"expected values from {string.Join(", ", Enum.GetNames<GraphWorkflowDecisionKind>())}.");
+                                                           + $"expected values from {string.Join(", ", GraphWorkflowStateMachine.DecisionsFor(GraphWorkflowNodeKind.Pause))}.");
+            }
+
+            if (decision == GraphWorkflowDecisionKind.Answer)
+            {
+                throw new GraphWorkflowValidationException($"Node '{nodeKey}' is a Pause node and offers 'Answer', which only a ChatInput node takes.");
             }
 
             if (!decisions.Contains(decision))
@@ -794,7 +980,35 @@ internal sealed class GraphWorkflowGraph
         {
             ValidatePause(node, pause, outbound, errors);
         }
+
+        if (node.Kind == GraphWorkflowNodeKind.ChatInput)
+        {
+            ValidateChatInput(node, outbound, errors);
+        }
     }
+
+    /// <summary>
+    ///     A <c>ChatInput</c> belongs to a <c>Chat</c> graph — only a conversation can answer it — and needs one
+    ///     unconditional way out, so whatever the user types, the run goes somewhere.
+    /// </summary>
+    private void ValidateChatInput(GraphWorkflowGraphNode node, IReadOnlyList<GraphWorkflowGraphEdge> outbound, List<GraphWorkflowValidationError> errors)
+    {
+        if (Kind != GraphWorkflowDefinitionKind.Chat)
+        {
+            errors.Add(new GraphWorkflowValidationError(node.NodeKey,
+                $"Node '{node.NodeKey}' is a ChatInput node, which only a Chat graph can carry: nothing but a conversation can answer it."));
+        }
+
+        if (outbound.Count > 0 && outbound.All(static edge => edge.Condition is not null))
+        {
+            errors.Add(new GraphWorkflowValidationError(node.NodeKey,
+                $"Node '{node.NodeKey}' is a ChatInput node with no unconditional outbound edge, so an answer no condition accepts would strand the run."));
+        }
+    }
+
+    /// <summary>The kinds that park a run on a person and whose output is the answer rather than the content before them.</summary>
+    internal static bool IsParkingKind(GraphWorkflowNodeKind kind) =>
+        kind is GraphWorkflowNodeKind.Pause or GraphWorkflowNodeKind.ChatInput;
 
     /// <summary>
     ///     A Condition node exists to choose, so it needs at least two ways out — and at most one of them may be the
@@ -837,8 +1051,8 @@ internal sealed class GraphWorkflowGraph
     }
 
     /// <summary>
-    ///     The one warning this parser raises: a node whose every inbound edge leaves a <c>Pause</c> receives the
-    ///     DECISION document and nothing else.
+    ///     The one warning this parser raises: a node whose every inbound edge leaves a <c>Pause</c> or a
+    ///     <c>ChatInput</c> receives the ANSWER document and nothing else.
     /// </summary>
     /// <remarks>
     ///     <c>GraphWorkflowDocuments.PauseOutput</c> writes <c>{decision, comment, payload}</c>, and a node's
@@ -852,7 +1066,7 @@ internal sealed class GraphWorkflowGraph
         var warnings = new List<GraphWorkflowValidationError>();
         foreach (var successor in Nodes.Keys
                                        .Where(key => InboundEdges(key).Count > 0
-                                                     && InboundEdges(key).All(edge => Nodes[edge.From].Kind == GraphWorkflowNodeKind.Pause)
+                                                     && InboundEdges(key).All(edge => IsParkingKind(Nodes[edge.From].Kind))
                                                      && !FiresOnOneBranch(key))
                                        .Order(StringComparer.Ordinal))
         {
@@ -861,10 +1075,14 @@ internal sealed class GraphWorkflowGraph
             var advice = ancestors is [var ancestor] && Nodes[ancestor].Kind != GraphWorkflowNodeKind.Condition
                 ? $"Add an edge from '{ancestor}' to '{successor}' to carry it."
                 : "Add an edge from a node before the pause to that node to carry it.";
-            warnings.Add(new GraphWorkflowValidationError(successor,
-                $"Node '{successor}' is reached only through the Pause node(s) {string.Join(", ", pauses.Select(static key => $"'{key}'"))}, "
-                + "so its input is the decision document {decision, comment, payload} rather than the content that was approved. "
-                + advice));
+            // The Pause wording is kept byte for byte when only pauses are involved; a ChatInput's answer document is {decision, text}.
+            var named = string.Join(", ", pauses.Select(static key => $"'{key}'"));
+            var message = pauses.All(key => Nodes[key].Kind == GraphWorkflowNodeKind.Pause)
+                ? $"Node '{successor}' is reached only through the Pause node(s) {named}, "
+                  + "so its input is the decision document {decision, comment, payload} rather than the content that was approved. "
+                : $"Node '{successor}' is reached only through the Pause or ChatInput node(s) {named}, "
+                  + "so its input is the answer document rather than the content that came before the wait. ";
+            warnings.Add(new GraphWorkflowValidationError(successor, message + advice));
         }
 
         return warnings;
@@ -1074,7 +1292,7 @@ internal sealed class GraphWorkflowGraph
         {
             foreach (var predecessor in InboundEdges(pending.Pop()).Select(static edge => edge.From).Where(seen.Add))
             {
-                if (Nodes[predecessor].Kind == GraphWorkflowNodeKind.Pause)
+                if (IsParkingKind(Nodes[predecessor].Kind))
                 {
                     pending.Push(predecessor);
                 }

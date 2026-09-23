@@ -705,19 +705,23 @@ public sealed class GraphWorkflowStateMachineTests
     ///     every button the panel draws answers "conflict".
     /// </summary>
     [Test]
-    public void IsDecidable_AcceptsOnlyApproveAndRejectAndOnlyFromWaitingForApproval()
+    public void IsDecidable_AcceptsOnlyTheKindsOwnAnswersAndOnlyFromWaitingForApproval()
     {
-        foreach (var status in Enum.GetValues<GraphWorkflowNodeRunStatus>())
+        foreach (var kind in Enum.GetValues<GraphWorkflowNodeKind>())
         {
-            foreach (var decision in Enum.GetValues<GraphWorkflowDecisionKind>())
+            foreach (var status in Enum.GetValues<GraphWorkflowNodeRunStatus>())
             {
-                AssertEx.Equal(status == GraphWorkflowNodeRunStatus.WaitingForApproval,
-                    GraphWorkflowStateMachine.IsDecidable(status, decision),
-                    $"{status} / {decision}");
+                foreach (var decision in Enum.GetValues<GraphWorkflowDecisionKind>())
+                {
+                    var expected = status == GraphWorkflowNodeRunStatus.WaitingForApproval
+                                   && (kind == GraphWorkflowNodeKind.Pause && decision is GraphWorkflowDecisionKind.Approve or GraphWorkflowDecisionKind.Reject
+                                       || kind == GraphWorkflowNodeKind.ChatInput && decision == GraphWorkflowDecisionKind.Answer);
+                    AssertEx.Equal(expected, GraphWorkflowStateMachine.IsDecidable(kind, status, decision), $"{kind} / {status} / {decision}");
+                }
             }
         }
 
-        AssertEx.Equal("Approve, Reject", string.Join(", ", GraphWorkflowStateMachine.DecisionAnswers));
+        AssertEx.Equal("Approve, Reject, Answer", string.Join(", ", GraphWorkflowStateMachine.DecisionAnswers));
     }
 
     /// <summary>

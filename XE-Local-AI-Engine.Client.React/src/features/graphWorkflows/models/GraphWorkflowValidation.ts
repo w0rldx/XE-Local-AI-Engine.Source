@@ -27,7 +27,9 @@ import {
 	type GraphWorkflowNodeKind,
 	type GraphWorkflowValidationErrorResponse,
 	graphWorkflowConditionOperators,
+	graphWorkflowDecisionProviders,
 	graphWorkflowNodeKinds,
+	narrowGraphWorkflowDefinitionKind,
 	narrowGraphWorkflowJoinPolicy,
 	normalizeGraphWorkflowConditionOperator,
 	toGraphWorkflowDecisionKinds,
@@ -74,6 +76,16 @@ export const graphWorkflowGraphRules = [
 	"pausePromptMissing",
 	"pauseNoDecisions",
 	"endOutcomeMissing",
+	"chatSettingsOnStandardGraph",
+	"chatInputOutsideChatGraph",
+	"chatInputPromptMissing",
+	"chatInputNeedsUnconditionalEdge",
+	"publishToChatOutsideChatGraph",
+	"includeAttachmentsNotAccepted",
+	"decisionQuestionMissing",
+	"decisionLabelsInvalid",
+	"decisionProviderUnknown",
+	"pauseOffersAnswer",
 	"serverRejected",
 	"serverWarned",
 ] as const;
@@ -187,8 +199,75 @@ function jsonObjectMembers(kind: GraphWorkflowNodeKind): readonly string[] {
 	}
 }
 
+/** The graph-level facts the chat rules read: is this a Chat graph, and does it accept attachments. */
+interface GraphWorkflowChatContext {
+	readonly isChat: boolean;
+	readonly acceptsAttachments: boolean;
+}
+
+/** `GraphWorkflowGraph.ParseLabels`: 2..32 distinct, non-blank strings of at most 64 characters. */
+function labelsAreValid(value: unknown): boolean {
+	if (!Array.isArray(value) || value.length < 2 || value.length > 32) {
+		return false;
+	}
+	const seen = new Set<string>();
+	for (const label of value) {
+		if (typeof label !== "string" || label.trim().length === 0 || label.length > 64 || seen.has(label)) {
+			return false;
+		}
+		seen.add(label);
+	}
+	return true;
+}
+
+/** The chat-contract refusals that live on one node's config (backend report "For the frontend worker"). */
+function chatNodeIssues(
+	kind: GraphWorkflowNodeKind,
+	key: string,
+	config: Record<string, unknown>,
+	chat: GraphWorkflowChatContext,
+): readonly GraphWorkflowGraphIssue[] {
+	const issues: GraphWorkflowGraphIssue[] = [];
+	if ((kind === "Agent" || kind === "LlmCall" || kind === "End") && config["publishToChat"] === true && !chat.isChat) {
+		issues.push({ rule: "publishToChatOutsideChatGraph", subject: key });
+	}
+	if ((kind === "Agent" || kind === "LlmCall") && config["includeAttachments"] === true && !chat.acceptsAttachments) {
+		issues.push({ rule: "includeAttachmentsNotAccepted", subject: key });
+	}
+	if (kind === "ChatInput") {
+		if (!chat.isChat) {
+			issues.push({ rule: "chatInputOutsideChatGraph", subject: key });
+		}
+		if (text(config["prompt"]).trim().length === 0) {
+			issues.push({ rule: "chatInputPromptMissing", subject: key });
+		}
+	}
+	if (kind === "DecisionModel") {
+		if (text(config["question"]).trim().length === 0) {
+			issues.push({ rule: "decisionQuestionMissing", subject: key });
+		}
+		if (!labelsAreValid(config["labels"])) {
+			issues.push({ rule: "decisionLabelsInvalid", subject: key });
+		}
+		const provider = text(config["provider"]).trim();
+		if (provider.length > 0 && !(graphWorkflowDecisionProviders as readonly string[]).includes(provider)) {
+			issues.push({ rule: "decisionProviderUnknown", subject: key });
+		}
+	}
+	if (kind === "Pause") {
+		const allowed = config["allowedDecisions"];
+		if (Array.isArray(allowed) && allowed.includes("Answer")) {
+			issues.push({ rule: "pauseOffersAnswer", subject: key });
+		}
+	}
+	return issues;
+}
+
 /** Node-level rules: keys, kinds, and the config members whose SHAPE the server enforces. */
-function nodeIssues(nodes: readonly GraphWorkflowGraphNode[]): readonly GraphWorkflowGraphIssue[] {
+function nodeIssues(
+	nodes: readonly GraphWorkflowGraphNode[],
+	chat: GraphWorkflowChatContext,
+): readonly GraphWorkflowGraphIssue[] {
 	const issues: GraphWorkflowGraphIssue[] = [];
 	const seen = new Set<string>();
 	for (const node of nodes) {
@@ -242,6 +321,7 @@ function nodeIssues(nodes: readonly GraphWorkflowGraphNode[]): readonly GraphWor
 		if (kind === "End" && text(config["outcome"]).trim().length === 0) {
 			issues.push({ rule: "endOutcomeMissing", subject: key });
 		}
+		issues.push(...chatNodeIssues(kind, key, config, chat));
 	}
 	return issues;
 }
@@ -401,6 +481,11 @@ function shapeIssues(
 				issues.push({ rule: "pauseDecisionUnroutable", subject: key });
 			}
 		}
+		// Zero out-edges is `danglingNonEnd` already; this is the ChatInput whose every way out is conditional, so an
+		// answer no condition accepts would strand the run.
+		if (kind === "ChatInput" && out.length > 0 && out.every((edge) => hasCondition(edge))) {
+			issues.push({ rule: "chatInputNeedsUnconditionalEdge", subject: key });
+		}
 	}
 	return issues;
 }
@@ -421,7 +506,18 @@ export function validateGraphWorkflowGraph(graph: GraphWorkflowGraph | undefined
 	if (nodes.length > GRAPH_WORKFLOW_MAX_NODES) {
 		issues.push({ rule: "tooManyNodes" });
 	}
-	issues.push(...nodeIssues(nodes));
+	const isChat = narrowGraphWorkflowDefinitionKind(graph.kind) === "Chat";
+	const chatBlock = graph.chat;
+	const hasChatBlock = chatBlock !== undefined && chatBlock !== null;
+	if (hasChatBlock && !isChat) {
+		issues.push({ rule: "chatSettingsOnStandardGraph" });
+	}
+	issues.push(
+		...nodeIssues(nodes, {
+			isChat,
+			acceptsAttachments: isChat && hasChatBlock && configRecord(chatBlock)["acceptsAttachments"] === true,
+		}),
+	);
 
 	// Keyed on the FIRST node with a key, so a duplicate key does not silently repoint every edge at the later node.
 	const nodeByKey = new Map<string, GraphWorkflowGraphNode>();
@@ -634,6 +730,22 @@ export const pauseConfigSchema = z.object({
 		.min(1, { message: messageKey("prompt", "required") }),
 	allowedDecisions: z.array(z.string()).min(1, { message: messageKey("allowedDecisions", "required") }),
 	requireComment: z.boolean(),
+});
+
+export const chatInputConfigSchema = z.object({
+	prompt: z
+		.string()
+		.trim()
+		.min(1, { message: messageKey("prompt", "required") }),
+});
+
+export const decisionModelConfigSchema = z.object({
+	question: z
+		.string()
+		.trim()
+		.min(1, { message: messageKey("question", "required") }),
+	labels: z.array(z.string()).refine(labelsAreValid, { message: messageKey("labels", "invalid") }),
+	inputBindings: llmCallConfigSchema.shape.inputBindings,
 });
 
 export const endConfigSchema = z.object({

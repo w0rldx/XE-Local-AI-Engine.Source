@@ -7,19 +7,24 @@ import {
 	GRAPH_WORKFLOW_MAX_NODES,
 	GRAPH_WORKFLOW_MAX_RENDERED_NODES,
 	GRAPH_WORKFLOW_MAX_RUN_INPUT_BYTES,
+	type GraphWorkflowNodeKind,
 	graphWorkflowConditionOperators,
 	graphWorkflowDecisionKinds,
+	graphWorkflowDecisionProviders,
 	graphWorkflowDefaultMaxAttempts,
+	graphWorkflowDefinitionKinds,
 	graphWorkflowEventTypeLabelKey,
 	graphWorkflowEventTypes,
 	graphWorkflowFailureClasses,
 	graphWorkflowJoinPolicies,
 	graphWorkflowNodeKinds,
 	graphWorkflowNodeRunStatuses,
+	graphWorkflowPauseDecisionKinds,
 	graphWorkflowRunStatuses,
 	graphWorkflowTabs,
 	isTerminalGraphWorkflowNodeRunStatus,
 	isTerminalGraphWorkflowRunStatus,
+	narrowGraphWorkflowDefinitionKind,
 	narrowGraphWorkflowFailureClass,
 	narrowGraphWorkflowJoinPolicy,
 	narrowGraphWorkflowNodeKind,
@@ -43,11 +48,16 @@ describe("graph-workflow vocabularies", () => {
 			"Join",
 			"Pause",
 			"End",
+			"ChatInput",
+			"DecisionModel",
 		]);
 		expect(graphWorkflowJoinPolicies).toEqual(["All", "Any"]);
 		expect(graphWorkflowRunStatuses).toHaveLength(7);
 		expect(graphWorkflowNodeRunStatuses).toHaveLength(8);
-		expect(graphWorkflowDecisionKinds).toEqual(["Approve", "Reject"]);
+		expect(graphWorkflowDecisionKinds).toEqual(["Approve", "Reject", "Answer"]);
+		expect(graphWorkflowPauseDecisionKinds).toEqual(["Approve", "Reject"]);
+		expect(graphWorkflowDefinitionKinds).toEqual(["Standard", "Chat"]);
+		expect(graphWorkflowDecisionProviders).toEqual(["llm"]);
 		expect(graphWorkflowFailureClasses).toHaveLength(9);
 		expect(graphWorkflowConditionOperators).toEqual(["Eq", "Ne", "Gt", "Gte", "Lt", "Lte", "Exists", "NotExists"]);
 		expect(graphWorkflowEventTypes).toHaveLength(19);
@@ -61,6 +71,7 @@ describe("graph-workflow vocabularies", () => {
 			graphWorkflowRunStatuses,
 			graphWorkflowNodeRunStatuses,
 			graphWorkflowDecisionKinds,
+			graphWorkflowDefinitionKinds,
 			graphWorkflowFailureClasses,
 			graphWorkflowConditionOperators,
 			graphWorkflowEventTypes,
@@ -97,7 +108,9 @@ describe("narrowing helpers", () => {
 			expect(narrowGraphWorkflowRunStatus(value)).toBe("Pending");
 			expect(narrowGraphWorkflowNodeRunStatus(value)).toBe("Pending");
 			expect(narrowGraphWorkflowFailureClass(value)).toBe("NodeFailed");
+			expect(narrowGraphWorkflowDefinitionKind(value)).toBe("Standard");
 		}
+		expect(narrowGraphWorkflowDefinitionKind("Chat")).toBe("Chat");
 	});
 
 	it("narrows case-sensitively — a lowercase status is not a member", () => {
@@ -117,6 +130,7 @@ describe("asMember helpers", () => {
 	it("recognises every real member", () => {
 		expect(asGraphWorkflowDecisionKind("Approve")).toBe("Approve");
 		expect(asGraphWorkflowDecisionKind("Reject")).toBe("Reject");
+		expect(asGraphWorkflowDecisionKind("Answer")).toBe("Answer");
 		for (const eventType of graphWorkflowEventTypes) {
 			expect(asGraphWorkflowEventType(eventType)).toBe(eventType);
 		}
@@ -194,13 +208,12 @@ describe("server-mirroring constants", () => {
 		expect(GRAPH_WORKFLOW_KEY_PATTERN.test("dot.path")).toBe(false);
 	});
 
-	it("defaults maxAttempts to 3 for the three kinds that call something fallible", () => {
-		expect(graphWorkflowDefaultMaxAttempts("Agent")).toBe(3);
-		expect(graphWorkflowDefaultMaxAttempts("LlmCall")).toBe(3);
-		expect(graphWorkflowDefaultMaxAttempts("Tool")).toBe(3);
-		for (const kind of graphWorkflowNodeKinds.filter(
-			(member) => member !== "Agent" && member !== "LlmCall" && member !== "Tool",
-		)) {
+	it("defaults maxAttempts to 3 for the four kinds that call something fallible", () => {
+		const fallible: readonly string[] = ["Agent", "LlmCall", "Tool", "DecisionModel"];
+		for (const kind of fallible) {
+			expect(graphWorkflowDefaultMaxAttempts(kind as GraphWorkflowNodeKind), kind).toBe(3);
+		}
+		for (const kind of graphWorkflowNodeKinds.filter((member) => !fallible.includes(member))) {
 			expect(graphWorkflowDefaultMaxAttempts(kind)).toBe(1);
 		}
 	});

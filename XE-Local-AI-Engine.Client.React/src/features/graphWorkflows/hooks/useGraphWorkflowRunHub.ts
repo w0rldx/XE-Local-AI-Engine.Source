@@ -33,7 +33,10 @@ export interface GraphWorkflowRunSubscriptionSnapshot {
 	readonly status: string;
 	readonly queuedNodeCount: number;
 	readonly runningNodeCount: number;
-	readonly pendingDecisionCount: number;
+	/** Parked Pause nodes (`PendingDecisionKind` Approve/Reject). */
+	readonly pendingDecisions: number;
+	/** Parked ChatInput nodes (`PendingDecisionKind` Answer). */
+	readonly pendingInputs: number;
 	readonly lastSeq: number;
 	readonly events: readonly GraphWorkflowRunEventResponse[];
 	readonly replayTruncated: boolean;
@@ -45,7 +48,8 @@ export interface GraphWorkflowRunLiveState {
 	readonly status?: string;
 	readonly queuedNodeCount?: number;
 	readonly runningNodeCount?: number;
-	readonly pendingDecisionCount?: number;
+	readonly pendingDecisions?: number;
+	readonly pendingInputs?: number;
 	/** Highest event sequence seen. Passed as `afterSeq` on every (re)subscribe. */
 	readonly watermark: number;
 	/** Polling cadence for the page's queries while the hub is down; `undefined` while it is live. */
@@ -174,7 +178,8 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 					status: snapshot.status,
 					queuedNodeCount: snapshot.queuedNodeCount,
 					runningNodeCount: snapshot.runningNodeCount,
-					pendingDecisionCount: snapshot.pendingDecisionCount,
+					pendingDecisions: snapshot.pendingDecisions,
+					pendingInputs: snapshot.pendingInputs,
 					watermark,
 					pollIntervalMs: undefined,
 				}));

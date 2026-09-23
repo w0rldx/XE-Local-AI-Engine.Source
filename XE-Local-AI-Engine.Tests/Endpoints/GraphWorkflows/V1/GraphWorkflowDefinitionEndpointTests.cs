@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -630,13 +631,14 @@ public sealed class GraphWorkflowDefinitionEndpointTests
             GraphHash = "graph-hash",
             NodeCount = nodeCount,
             SchemaVersion = 1,
+            Kind = GraphWorkflowDefinitionKind.Standard,
             Version = 4,
             CreatedAtUtc = 1,
             UpdatedAtUtc = 2
         };
 
     private static GraphWorkflowDefinitionSummary Summary() =>
-        new() { Id = DefinitionId, Name = "Triage", Description = "The one that triages.", GraphHash = "graph-hash", NodeCount = 3, SchemaVersion = 1, Version = 4, CreatedAtUtc = 1, UpdatedAtUtc = 2 };
+        new() { Id = DefinitionId, Name = "Triage", Description = "The one that triages.", GraphHash = "graph-hash", NodeCount = 3, SchemaVersion = 1, Kind = GraphWorkflowDefinitionKind.Standard, Version = 4, CreatedAtUtc = 1, UpdatedAtUtc = 2 };
 
     private static async Task<HttpResponseMessage> SendAsync(TestServerWebAppFactory factory, string method, string route, string? body = null)
     {

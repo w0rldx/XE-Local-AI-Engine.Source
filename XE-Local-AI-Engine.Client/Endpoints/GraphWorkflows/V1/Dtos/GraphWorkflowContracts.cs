@@ -67,7 +67,14 @@ public sealed class ValidateGraphWorkflowDefinitionRequest
 ///     the parser's version refusal. Absent means 1, and so does an explicit JSON <c>null</c> — the JSON spelling of
 ///     "I am not saying" rather than a version. Anything present travels verbatim and is answered by the parser.
 /// </remarks>
-public sealed record GraphWorkflowGraph(int? SchemaVersion, IReadOnlyList<GraphWorkflowGraphNode> Nodes, IReadOnlyList<GraphWorkflowGraphEdge> Edges)
+/// <param name="Kind"><c>Standard</c> or <c>Chat</c>; optional, and omitted from the stored document when absent.</param>
+/// <param name="Chat">Raw JSON like a node's config, so a member the parser should refuse is not silently dropped.</param>
+public sealed record GraphWorkflowGraph(
+    int? SchemaVersion,
+    IReadOnlyList<GraphWorkflowGraphNode> Nodes,
+    IReadOnlyList<GraphWorkflowGraphEdge> Edges,
+    string? Kind = null,
+    JsonElement? Chat = null)
 {
     public static GraphWorkflowGraph Empty { get; } = new(1, [], []);
 }
@@ -137,6 +144,9 @@ public sealed class GraphWorkflowDefinitionResponse
 
     public required int SchemaVersion { get; init; }
 
+    /// <summary>A <c>GraphWorkflowDefinitionKind</c> name: <c>Standard</c> or <c>Chat</c>.</summary>
+    public required string Kind { get; init; }
+
     public required int Version { get; init; }
 
     public required long CreatedAtUtc { get; init; }
@@ -158,6 +168,9 @@ public sealed class GraphWorkflowDefinitionSummaryResponse
     public required int NodeCount { get; init; }
 
     public required int SchemaVersion { get; init; }
+
+    /// <summary>A <c>GraphWorkflowDefinitionKind</c> name: <c>Standard</c> or <c>Chat</c>.</summary>
+    public required string Kind { get; init; }
 
     public required int Version { get; init; }
 

@@ -43,6 +43,46 @@ public sealed class GraphWorkflowStoreTests
     }
 
     /// <summary>
+    ///     The denormalized <c>kind</c>: written at create, reported by the list and the detail, re-derived only when a
+    ///     new graph travels with the edit, and left alone by a rename.
+    /// </summary>
+    [Test]
+    public async Task DefinitionKind_IsWrittenAtCreateAndTravelsWithTheGraph()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync();
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+
+        var standard = await GraphWorkflowTestFixture.SeedDefinitionAsync(store, "Standard by default");
+        var chat = await store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = "Chat",
+            GraphJson = GraphWorkflowTestFixture.SampleGraph,
+            NodeCount = 2,
+            Kind = GraphWorkflowDefinitionKind.Chat
+        });
+
+        AssertEx.Equal(GraphWorkflowDefinitionKind.Standard, standard.Kind, "a command that names no kind creates a Standard definition.");
+        AssertEx.Equal(GraphWorkflowDefinitionKind.Chat, chat.Kind);
+        var listed = await store.ListDefinitionsAsync();
+        AssertEx.Equal(GraphWorkflowDefinitionKind.Chat, listed.Single(entry => entry.Id == chat.Id).Kind, "the list reports the kind without a graph.");
+
+        var renamed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = chat.Id, ExpectedVersion = chat.Version, Name = "Renamed chat" });
+        AssertEx.Equal(GraphWorkflowDefinitionKind.Chat, renamed.Kind, "a rename carries no graph, so the kind stays.");
+
+        var regraphed = await store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = chat.Id,
+            ExpectedVersion = renamed.Version,
+            GraphJson = GraphWorkflowTestFixture.SampleGraph,
+            NodeCount = 2,
+            Kind = GraphWorkflowDefinitionKind.Standard
+        });
+        AssertEx.Equal(GraphWorkflowDefinitionKind.Standard, (await store.GetDefinitionAsync(regraphed.Id)).Kind);
+    }
+
+    /// <summary>
     ///     The list's promise, proved rather than asserted: with the graph blob corrupted beyond authentication the
     ///     list still answers, and only the read that genuinely needs the graph fails.
     /// </summary>

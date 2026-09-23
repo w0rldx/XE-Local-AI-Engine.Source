@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     The <c>Pause</c> lane, and the one lane that drives nothing: parking a node run on a human is two status
+///     The <c>Pause</c> and <c>ChatInput</c> lane, and the one lane that drives nothing: parking a node run on a human is two status
 ///     writes, so there is no work to hold, no slot to wait for and no answer to poll for.
 /// </summary>
 /// <remarks>
@@ -16,8 +16,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </remarks>
 internal sealed class GraphWorkflowPauseExecutor : IGraphWorkflowNodeExecutor
 {
+    /// <summary><c>Pause</c> and <c>ChatInput</c>: both park the row on a person, and differ only in the answer they take.</summary>
     public bool Owns(GraphWorkflowNodeKind kind) =>
-        kind == GraphWorkflowNodeKind.Pause;
+        GraphWorkflowGraph.IsParkingKind(kind);
 
     /// <summary>
     ///     Never. A parked pause is durable state on a row, not work this process is driving — which is exactly why a
@@ -64,7 +65,8 @@ internal sealed class GraphWorkflowPauseExecutor : IGraphWorkflowNodeExecutor
             NodeRunId = nodeRun.Id,
             ExpectedVersion = GraphWorkflowVersions.Any,
             TargetStatus = GraphWorkflowNodeRunStatus.WaitingForApproval,
-            PendingDecisionKind = GraphWorkflowDecisionKind.Approve
+            // Named from the kind: Approve for a pause, Answer for a chat input — which is how a reader tells a gate from a question without the graph.
+            PendingDecisionKind = GraphWorkflowStateMachine.PendingDecisionFor(node.Kind)
         },
                            cancellationToken);
         return 2;

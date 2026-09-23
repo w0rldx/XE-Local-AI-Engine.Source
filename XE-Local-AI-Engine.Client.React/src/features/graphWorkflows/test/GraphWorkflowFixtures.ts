@@ -154,6 +154,7 @@ export function graphWorkflowDefinition(
 		graphHash: graphWorkflowTestGraphHash,
 		nodeCount: 8,
 		schemaVersion: 1,
+		kind: "Standard",
 		version: 1,
 		createdAtUtc: 1_700_000_000_000,
 		updatedAtUtc: 1_700_000_100_000,
@@ -171,6 +172,7 @@ export function graphWorkflowDefinitionSummary(
 		graphHash: graphWorkflowTestGraphHash,
 		nodeCount: 8,
 		schemaVersion: 1,
+		kind: "Standard",
 		version: 1,
 		createdAtUtc: 1_700_000_000_000,
 		updatedAtUtc: 1_700_000_100_000,
@@ -296,6 +298,68 @@ export function pendingPauseNodeRun(overrides: Partial<GraphWorkflowNodeRunRespo
 		updatedAtUtc: 1_700_000_220_000,
 		...overrides,
 	};
+}
+
+/**
+ * A Chat graph that exercises every chat member: a ChatInput asking the user, a DecisionModel routing on
+ * `output.choice`, an LlmCall that publishes and reads attachments, and an End that takes the parser's publish default.
+ * Clean under the client mirror.
+ */
+export const chatGraph: GraphWorkflowGraph = {
+	schemaVersion: 1,
+	kind: "Chat",
+	chat: { acceptsAttachments: true },
+	nodes: [
+		{ key: "start", kind: "Start", label: "Start", position: { x: 0, y: 0 }, config: { inputSchema: null, defaultInput: null } },
+		{ key: "ask", kind: "ChatInput", label: "Ask", position: { x: 200, y: 0 }, config: { prompt: "What should I build?" } },
+		{
+			key: "classify",
+			kind: "DecisionModel",
+			label: "Classify",
+			position: { x: 400, y: 0 },
+			maxAttempts: 3,
+			config: {
+				question: "Is this a coding request?",
+				labels: ["coding", "general"],
+				provider: "llm",
+				inputBindings: { request: "input.text" },
+			},
+		},
+		{
+			key: "code",
+			kind: "LlmCall",
+			label: "Code",
+			position: { x: 600, y: -80 },
+			maxAttempts: 3,
+			config: { prompt: "Write the code.", publishToChat: true, includeAttachments: true },
+		},
+		{
+			key: "done",
+			kind: "End",
+			label: "Done",
+			position: { x: 800, y: 0 },
+			joinPolicy: "Any",
+			config: { outcome: "completed", resultPath: null },
+		},
+	],
+	edges: [
+		{ key: "e1", from: "start", to: "ask" },
+		{ key: "e2", from: "ask", to: "classify" },
+		{ key: "e3", from: "classify", to: "code", label: "coding", condition: { path: "output.choice", op: "Eq", value: "coding" } },
+		{
+			key: "e4",
+			from: "classify",
+			to: "done",
+			label: "general",
+			condition: { path: "output.choice", op: "Eq", value: "general" },
+		},
+		{ key: "e5", from: "code", to: "done" },
+	],
+};
+
+/** A ChatInput parked on the user: `pendingDecisionKind` is `Answer`, which is what switches the panel to a text form. */
+export function pendingChatInputNodeRun(overrides: Partial<GraphWorkflowNodeRunResponse> = {}): GraphWorkflowNodeRunResponse {
+	return pendingPauseNodeRun({ nodeKey: "ask", kind: "ChatInput", pendingDecisionKind: "Answer", ...overrides });
 }
 
 /** The Agent node's detail, with the envelope every node-run output carries: `{ status, attempt, branch?, output }`. */

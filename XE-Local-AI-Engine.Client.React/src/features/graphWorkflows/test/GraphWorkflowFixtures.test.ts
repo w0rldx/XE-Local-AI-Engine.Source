@@ -19,8 +19,10 @@ import {
 	graphWorkflowRunStatuses,
 	normalizeGraphWorkflowConditionOperator,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import { validateGraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import {
 	agentNodeRunDetail,
+	chatGraph,
 	eightNodeGraph,
 	graphWorkflowDefinition,
 	graphWorkflowDefinitionSummary,
@@ -32,6 +34,7 @@ import {
 	graphWorkflowTestIds,
 	graphWorkflowTools,
 	makeNodeRun,
+	pendingChatInputNodeRun,
 	pendingPauseNodeRun,
 } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 
@@ -99,6 +102,14 @@ describe("eightNodeGraph", () => {
 				expect(normalizeGraphWorkflowConditionOperator(op)).toBe(op);
 			}
 		}
+	});
+});
+
+describe("chatGraph", () => {
+	it("is a Chat graph the client mirror accepts, carrying both new kinds", () => {
+		expect(chatGraph.kind).toBe("Chat");
+		expect((chatGraph.nodes ?? []).map((node) => node.kind)).toEqual(["Start", "ChatInput", "DecisionModel", "LlmCall", "End"]);
+		expect(validateGraphWorkflowGraph(chatGraph)).toEqual([]);
 	});
 });
 
@@ -234,6 +245,8 @@ describe("every fixture satisfies its generated response validator", () => {
 		["definitionSummary", zDefinitionSummary, graphWorkflowDefinitionSummary()],
 		["run", zRun, graphWorkflowRun()],
 		["pendingPauseNodeRun", zNodeRun, pendingPauseNodeRun()],
+		["pendingChatInputNodeRun", zNodeRun, pendingChatInputNodeRun()],
+		["chat definition", zDefinition, graphWorkflowDefinition({ graph: chatGraph, kind: "Chat" })],
 		["agentNodeRunDetail", zNodeRun, agentNodeRunDetail()],
 		["events", zEvents, graphWorkflowEvents()],
 		["tools", zTools, graphWorkflowTools()],

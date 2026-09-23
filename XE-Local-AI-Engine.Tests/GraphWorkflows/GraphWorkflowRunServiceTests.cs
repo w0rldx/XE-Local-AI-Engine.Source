@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
@@ -128,6 +129,7 @@ public sealed class GraphWorkflowRunServiceTests
                      GraphHash = "graph-hash",
                      NodeCount = 3,
                      SchemaVersion = 1,
+                     Kind = GraphWorkflowDefinitionKind.Standard,
                      Version = 1,
                      CreatedAtUtc = 0,
                      UpdatedAtUtc = 0
@@ -160,7 +162,7 @@ public sealed class GraphWorkflowRunServiceTests
 
         // The graph carries no Tool node, so the tool gate never reads the catalog: the substitute is here to satisfy
         // the constructor, and a call on it would be a bug this test would rather fail on than hide.
-        var runs = new GraphWorkflowRunService(store, signals, Substitute.For<IToolInvocationService>(), Options.Create(new GraphWorkflowOptions()));
+        var runs = new GraphWorkflowRunService(store, signals, Substitute.For<IToolInvocationService>(), Options.Create(new GraphWorkflowOptions()), Options.Create(new SecurityOptions()));
 
         _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() =>
                               runs.StartAsync(definitionId, requestId, inputJson: null, definitionVersion: null));
@@ -195,7 +197,8 @@ public sealed class GraphWorkflowRunServiceTests
         var runs = new GraphWorkflowRunService(racing,
             new RecordingGraphWorkflowDispatcherSignal(),
             Substitute.For<IToolInvocationService>(),
-            Options.Create(harness.CurrentOptions()));
+            Options.Create(harness.CurrentOptions()),
+            Options.Create(new SecurityOptions()));
 
         var refusal = await AssertEx
                             .ThrowsAsync<GraphWorkflowGateAlreadyDecidedException>(() =>
@@ -298,7 +301,8 @@ public sealed class GraphWorkflowRunServiceTests
         new(new RacingGraphWorkflowStore(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), winningDecision, race, callerOperationId),
             new RecordingGraphWorkflowDispatcherSignal(),
             Substitute.For<IToolInvocationService>(),
-            Options.Create(harness.CurrentOptions()));
+            Options.Create(harness.CurrentOptions()),
+            Options.Create(new SecurityOptions()));
 
     /// <summary>A start against a version that has since been edited answers a conflict rather than running a graph the caller never saw.</summary>
     [Test]

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
 internal static class AddNodeGraphWorkflowsExtensions
@@ -55,6 +56,9 @@ internal static class AddNodeGraphWorkflowsExtensions
         // The shared model-invocation lane. Agent and LLM call paths share the node-wide invocation queue and lifecycle,
         // while their runtime-package construction stays separate inside it.
         builder.Services.AddSingleton<IGraphWorkflowNodeExecutor, GraphWorkflowInvocationExecutor>();
+
+        // The decision providers a DecisionModel node may name. Each lowers the node to an LLM call the lane above runs.
+        builder.Services.AddSingleton<IGraphWorkflowDecisionProvider, LlmDecisionProvider>();
 
         // The Pause lane. A lane that drives nothing: it parks the row on a person and the answer arrives through
         // DecideAsync, which is precisely what an inline kind never does.

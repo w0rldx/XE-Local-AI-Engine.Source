@@ -17,7 +17,13 @@ public enum GraphWorkflowNodeKind
     Join,
     Pause,
     End,
-    LlmCall
+    LlmCall,
+
+    /// <summary>Parks the run on the chat user's next message. Only legal in a <see cref="GraphWorkflowDefinitionKind.Chat" /> graph.</summary>
+    ChatInput,
+
+    /// <summary>Chooses one of a closed set of labels through a decision provider; its out-edges route on <c>output.choice</c>.</summary>
+    DecisionModel
 }
 
 /// <summary>
@@ -61,11 +67,15 @@ public enum GraphWorkflowNodeRunStatus
     Cancelled
 }
 
-/// <summary>The answers a <c>Pause</c> node accepts. Both land the node run on <c>Succeeded</c>; they part company in the graph.</summary>
+/// <summary>
+///     The answers a parked node run accepts. A <c>Pause</c> takes <c>Approve</c> or <c>Reject</c>, a <c>ChatInput</c>
+///     takes <c>Answer</c> and nothing else. Every one lands the node run on <c>Succeeded</c>; they part company in the graph.
+/// </summary>
 public enum GraphWorkflowDecisionKind
 {
     Approve,
-    Reject
+    Reject,
+    Answer
 }
 
 /// <summary>

@@ -65,7 +65,8 @@ function snapshot(overrides: Partial<GraphWorkflowRunSubscriptionSnapshot> = {})
 		status: "Running",
 		queuedNodeCount: 2,
 		runningNodeCount: 1,
-		pendingDecisionCount: 0,
+		pendingDecisions: 0,
+		pendingInputs: 0,
 		lastSeq: 5,
 		events: [],
 		replayTruncated: false,
@@ -135,6 +136,16 @@ describe("useGraphWorkflowRunHub", () => {
 		expect(result.current.runningNodeCount).toBe(1);
 		expect(result.current.watermark).toBe(5);
 		expect(result.current.pollIntervalMs).toBeUndefined();
+	});
+
+	it("paints the split pending counters: Pause decisions and ChatInput answers apart", async () => {
+		hubMock.connection.invoke.mockResolvedValue(snapshot({ pendingDecisions: 1, pendingInputs: 2 }));
+		const { wrapper } = harness();
+		const { result } = renderHook(() => useGraphWorkflowRunHub(runId), { wrapper });
+
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+		expect(result.current.pendingDecisions).toBe(1);
+		expect(result.current.pendingInputs).toBe(2);
 	});
 
 	it("maps each of the three LOWERCASE kinds to its own feeds, and every kind to the event trail", async () => {

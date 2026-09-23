@@ -87,6 +87,7 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
     private readonly ConcurrentBag<Guid> _wedged = [];
     private readonly ConcurrentDictionary<string, TaskCompletionSource> _running = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, GraphWorkflowScriptedTurn> _scripts = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, ConcurrentQueue<GraphWorkflowScriptedTurn>> _sequences = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<Guid> _cancelled = new();
     private readonly ConcurrentQueue<RuntimePackage> _packages = new();
 
@@ -114,6 +115,13 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
     /// <summary>Scripts what a turn whose seed prompt contains <paramref name="promptFragment" /> does.</summary>
     public void Script(string promptFragment, GraphWorkflowScriptedTurn turn) =>
         _scripts[promptFragment] = turn;
+
+    /// <summary>Scripts successive turns of one prompt — one per attempt, the last repeating — for a retry a test must steer.</summary>
+    public void ScriptSequence(string promptFragment, params GraphWorkflowScriptedTurn[] turns)
+    {
+        _sequences[promptFragment] = new ConcurrentQueue<GraphWorkflowScriptedTurn>(turns);
+        _scripts[promptFragment] = turns[^1];
+    }
 
     /// <summary>
     ///     Completes once a turn whose seed prompt contains <paramref name="promptFragment" /> has STARTED — which is
@@ -254,6 +262,14 @@ internal sealed class FakeGraphWorkflowInvocation : IInvocationRunner
     private GraphWorkflowScriptedTurn ScriptFor(RuntimePackage package)
     {
         var prompt = Prompt(package);
+        foreach (var (fragment, queue) in _sequences)
+        {
+            if (prompt.Contains(fragment, StringComparison.Ordinal) && (queue.Count > 1 ? queue.TryDequeue(out var next) : queue.TryPeek(out next)))
+            {
+                return next;
+            }
+        }
+
         foreach (var (fragment, turn) in _scripts)
         {
             if (prompt.Contains(fragment, StringComparison.Ordinal))

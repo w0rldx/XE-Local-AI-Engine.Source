@@ -27,7 +27,11 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 
 import { GraphWorkflowDecisionPanel } from "@/features/graphWorkflows/components/GraphWorkflowDecisionPanel";
 import type { GraphWorkflowNodeRunResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import { graphWorkflowTestIds, pendingPauseNodeRun } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+import {
+	graphWorkflowTestIds,
+	pendingChatInputNodeRun,
+	pendingPauseNodeRun,
+} from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -226,5 +230,80 @@ describe("GraphWorkflowDecisionPanel", () => {
 		expect((screen.getByTestId("graph-workflow-decision-Approve") as HTMLButtonElement).disabled).toBe(true);
 		fireEvent.click(screen.getByTestId("graph-workflow-decision-Approve"));
 		expect(bodies).toHaveLength(1);
+	});
+
+	describe("a parked ChatInput (pending kind Answer)", () => {
+		const answerPath = localApiPath(`graph-workflows/runs/${runId}/nodes/ask/decide`);
+
+		function recordAnswers(): DecideBody[] {
+			const bodies: DecideBody[] = [];
+			server.use(
+				http.post(answerPath, async ({ request }) => {
+					bodies.push((await request.json()) as DecideBody);
+					return serverError();
+				}),
+			);
+			return bodies;
+		}
+
+		it("shows the node's prompt and a text form instead of the Pause buttons", () => {
+			renderPanel(pendingChatInputNodeRun(), { prompt: "What should I build?", allowedDecisions: [] });
+
+			expect(screen.getByTestId("graph-workflow-answer-panel").textContent).toContain("Waiting for your answer");
+			expect(screen.getByTestId("graph-workflow-decision-prompt").textContent).toBe("What should I build?");
+			expect(screen.queryByTestId("graph-workflow-decision-Approve")).toBeNull();
+			expect(screen.queryByTestId("graph-workflow-decision-comment")).toBeNull();
+			// Nothing to send yet: a blank answer is a 400 server-side, so it is never posted.
+			expect((screen.getByTestId("graph-workflow-answer-submit") as HTMLButtonElement).disabled).toBe(true);
+		});
+
+		it("posts Answer with { text } as the payload and no comment", async () => {
+			const bodies = recordAnswers();
+			renderPanel(pendingChatInputNodeRun(), { allowedDecisions: [] });
+
+			fireEvent.change(screen.getByTestId("graph-workflow-answer-text"), { target: { value: "A CLI tool" } });
+			fireEvent.click(screen.getByTestId("graph-workflow-answer-submit"));
+			await waitFor(() => expect(bodies).toHaveLength(1));
+
+			expect(bodies[0]).toEqual({ operationId: bodies[0]?.operationId, decision: "Answer", payload: { text: "A CLI tool" } });
+			expect(bodies[0]?.operationId).toMatch(/^[0-9a-f-]{36}$/i);
+			expect("comment" in (bodies[0] ?? {})).toBe(false);
+			expect(await screen.findByTestId("graph-workflow-decision-error")).toBeTruthy();
+		});
+
+		it("says the question was already answered on a 409 and keeps the form closed", async () => {
+			const bodies: DecideBody[] = [];
+			server.use(
+				http.post(answerPath, async ({ request }) => {
+					bodies.push((await request.json()) as DecideBody);
+					return alreadyDecided("Answer");
+				}),
+			);
+			renderPanel(pendingChatInputNodeRun(), { allowedDecisions: [] });
+
+			fireEvent.change(screen.getByTestId("graph-workflow-answer-text"), { target: { value: "Postgres" } });
+			fireEvent.click(screen.getByTestId("graph-workflow-answer-submit"));
+
+			const alert = await screen.findByTestId("graph-workflow-decision-already-decided");
+			expect(alert.textContent).toBe("This question was already answered.");
+			expect((screen.getByTestId("graph-workflow-answer-submit") as HTMLButtonElement).disabled).toBe(true);
+			expect((screen.getByTestId("graph-workflow-answer-text") as HTMLTextAreaElement).disabled).toBe(true);
+			fireEvent.click(screen.getByTestId("graph-workflow-answer-submit"));
+			expect(bodies).toHaveLength(1);
+		});
+
+		it("reuses the operation id when a failed answer is sent again", async () => {
+			const bodies = recordAnswers();
+			renderPanel(pendingChatInputNodeRun(), { allowedDecisions: [] });
+
+			fireEvent.change(screen.getByTestId("graph-workflow-answer-text"), { target: { value: "Postgres" } });
+			fireEvent.click(screen.getByTestId("graph-workflow-answer-submit"));
+			await waitFor(() => expect(bodies).toHaveLength(1));
+			await waitFor(() => expect((screen.getByTestId("graph-workflow-answer-submit") as HTMLButtonElement).disabled).toBe(false));
+			fireEvent.click(screen.getByTestId("graph-workflow-answer-submit"));
+			await waitFor(() => expect(bodies).toHaveLength(2));
+
+			expect(bodies[1]?.operationId).toBe(bodies[0]?.operationId);
+		});
 	});
 });

@@ -18,24 +18,32 @@ import type { ZodType } from "zod";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { GraphWorkflowAgentConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowAgentConfigForm";
+import { GraphWorkflowDecisionModelConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowDecisionModelConfigForm";
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
 import { GraphWorkflowLlmCallConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowLlmCallConfigForm";
 import { GraphWorkflowToolConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowToolConfigForm";
-import type { GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import {
+	type GraphWorkflowCanvasNodeData,
+	type GraphWorkflowGraphSettings,
+	graphWorkflowChatDefaults,
+	standardGraphSettings,
+} from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import {
 	GRAPH_WORKFLOW_KEY_PATTERN,
 	type GraphWorkflowDecisionKind,
 	type GraphWorkflowNodeKind,
 	type GraphWorkflowToolResponse,
-	graphWorkflowDecisionKinds,
 	graphWorkflowDefaultMaxAttempts,
 	graphWorkflowJoinPolicies,
+	graphWorkflowPauseDecisionKinds,
 	narrowGraphWorkflowJoinPolicy,
 	toGraphWorkflowDecisionKinds,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import {
 	agentConfigSchema,
+	chatInputConfigSchema,
 	conditionConfigSchema,
+	decisionModelConfigSchema,
 	endConfigSchema,
 	type GraphWorkflowGraphIssue,
 	llmCallConfigSchema,
@@ -57,6 +65,8 @@ export interface GraphWorkflowNodeConfigPanelProps {
 	readonly agentOptions: readonly { readonly value: string; readonly label: string }[];
 	readonly modelOptions: readonly { readonly value: string; readonly label: string }[];
 	readonly llmModelOptions?: readonly { readonly value: string; readonly label: string }[];
+	/** The graph's `kind` and `chat` block: they decide which chat switches apply and what End publishes by default. */
+	readonly graphSettings?: GraphWorkflowGraphSettings;
 	readonly readOnly?: boolean;
 }
 
@@ -77,6 +87,10 @@ function configSchemaFor(kind: GraphWorkflowNodeKind): ZodType | undefined {
 			return pauseConfigSchema;
 		case "End":
 			return endConfigSchema;
+		case "ChatInput":
+			return chatInputConfigSchema;
+		case "DecisionModel":
+			return decisionModelConfigSchema;
 		default:
 			return undefined;
 	}
@@ -109,6 +123,7 @@ export function GraphWorkflowNodeConfigPanel({
 	agentOptions,
 	modelOptions,
 	llmModelOptions = modelOptions,
+	graphSettings = standardGraphSettings,
 	readOnly = false,
 }: GraphWorkflowNodeConfigPanelProps) {
 	const { t } = useTranslation();
@@ -280,7 +295,7 @@ export function GraphWorkflowNodeConfigPanel({
 							data-testid="gw-node-config-decisions"
 						>
 							<Group gap="md" mt={6}>
-								{graphWorkflowDecisionKinds.map((decision: GraphWorkflowDecisionKind) => (
+								{graphWorkflowPauseDecisionKinds.map((decision: GraphWorkflowDecisionKind) => (
 									<Checkbox
 										key={decision}
 										value={decision}
@@ -323,6 +338,36 @@ export function GraphWorkflowNodeConfigPanel({
 							data-testid="gw-node-config-result-path"
 						/>
 					</>
+				);
+			case "ChatInput":
+				return (
+					<Textarea
+						label={t("pages.graphWorkflows.config.chatInputPrompt", "What to ask the user")}
+						description={t(
+							"pages.graphWorkflows.config.chatInputPromptHelp",
+							"The run waits here until the user answers in the conversation.",
+						)}
+						value={node.prompt}
+						autosize={true}
+						minRows={2}
+						maxRows={8}
+						disabled={readOnly}
+						error={errorFor("prompt")}
+						onBlur={() => touch("prompt")}
+						onChange={(event) => onChange({ prompt: event.currentTarget.value })}
+						data-testid="gw-node-config-chat-prompt"
+					/>
+				);
+			case "DecisionModel":
+				return (
+					<GraphWorkflowDecisionModelConfigForm
+						node={node}
+						onChange={onChange}
+						errorFor={errorFor}
+						onTouch={touch}
+						modelOptions={llmModelOptions}
+						readOnly={readOnly}
+					/>
 				);
 			// `default` IS the Parallel/Join case: neither configures anything, so the panel says what the node does
 			// instead of offering controls it has none of.
@@ -467,6 +512,68 @@ export function GraphWorkflowNodeConfigPanel({
 			</Group>
 
 			{body}
+			<ChatSwitches node={node} graphSettings={graphSettings} onChange={onChange} readOnly={readOnly} />
 		</Stack>
+	);
+}
+
+/**
+ * `publishToChat` (Agent, LlmCall, End) and `includeAttachments` (Agent, LlmCall). Shown on a Chat graph, and on any
+ * graph where the flag is already on — the parser refuses that outside a Chat graph, so the operator needs the switch
+ * to turn it off. An absent flag shows the parser's default: `true` for an End in a Chat graph, `false` otherwise.
+ */
+function ChatSwitches({
+	node,
+	graphSettings,
+	onChange,
+	readOnly,
+}: {
+	readonly node: GraphWorkflowCanvasNodeData;
+	readonly graphSettings: GraphWorkflowGraphSettings;
+	readonly onChange: (patch: Partial<GraphWorkflowCanvasNodeData>) => void;
+	readonly readOnly: boolean;
+}) {
+	const { t } = useTranslation();
+	if (node.kind !== "Agent" && node.kind !== "LlmCall" && node.kind !== "End") {
+		return null;
+	}
+	const isChat = graphSettings.kind === "Chat";
+	const acceptsAttachments = isChat && (graphSettings.chat?.acceptsAttachments ?? graphWorkflowChatDefaults.acceptsAttachments);
+	const publishDefault = node.kind === "End" && isChat;
+	const publish = node.publishToChat ?? publishDefault;
+	const include = node.kind === "End" ? undefined : node.includeAttachments;
+	return (
+		<>
+			{isChat || node.publishToChat === true ? (
+				<Switch
+					label={t("pages.graphWorkflows.config.publishToChat", "Post the result to the chat")}
+					checked={publish}
+					disabled={readOnly}
+					// The parser default is written as ABSENT, so an End toggled off and on again saves byte for byte.
+					onChange={(event) =>
+						onChange({ publishToChat: event.currentTarget.checked === publishDefault ? undefined : event.currentTarget.checked })
+					}
+					data-testid="gw-node-config-publish-to-chat"
+				/>
+			) : null}
+			{node.kind !== "End" && (isChat || include === true) ? (
+				<Switch
+					label={t("pages.graphWorkflows.config.includeAttachments", "Include the chat attachments")}
+					description={
+						acceptsAttachments
+							? undefined
+							: t(
+									"pages.graphWorkflows.config.includeAttachmentsDisabled",
+									"Turn on “Accepts attachments” in the workflow settings first.",
+								)
+					}
+					checked={include ?? false}
+					// Enabled while ON even when the graph refuses attachments, so a refused flag can still be turned off.
+					disabled={readOnly || (!acceptsAttachments && include !== true)}
+					onChange={(event) => onChange({ includeAttachments: event.currentTarget.checked ? true : undefined })}
+					data-testid="gw-node-config-include-attachments"
+				/>
+			) : null}
+		</>
 	);
 }

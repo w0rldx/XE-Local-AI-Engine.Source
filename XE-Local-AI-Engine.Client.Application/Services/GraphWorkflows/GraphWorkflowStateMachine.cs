@@ -71,6 +71,12 @@ internal static class GraphWorkflowStateMachine
     /// <summary>The answers a pause REFUSES with. Approve continues; a rejection is what ends the run.</summary>
     private static readonly GraphWorkflowDecisionKind[] PauseRefusals = [GraphWorkflowDecisionKind.Reject];
 
+    /// <summary>The answers a <c>Pause</c> can be given at all, before its own <c>allowedDecisions</c> narrows them.</summary>
+    private static readonly GraphWorkflowDecisionKind[] PauseDecisions = [GraphWorkflowDecisionKind.Approve, GraphWorkflowDecisionKind.Reject];
+
+    /// <summary>The one answer a <c>ChatInput</c> takes: the user's text.</summary>
+    private static readonly GraphWorkflowDecisionKind[] ChatInputDecisions = [GraphWorkflowDecisionKind.Answer];
+
     /// <summary>
     ///     The output document a pause produces for one answer — the document its out-edge conditions are then
     ///     evaluated against.
@@ -84,12 +90,10 @@ internal static class GraphWorkflowStateMachine
     public static string PauseOutputJson(GraphWorkflowDecisionKind decision) =>
         JsonSerializer.Serialize(new PauseOutput { Status = GraphWorkflowNodeOutputStatuses.Succeeded, Output = new PauseDecision { Decision = decision.ToString() } }, JsonOptions);
 
-    /// <summary>Every answer a pause SUCCEEDS on — the ones that part company in the graph rather than on the row.</summary>
+    /// <summary>Every answer a parked node SUCCEEDS on — the ones that part company in the graph rather than on the row.</summary>
     /// <remarks>
-    ///     Derived from <see cref="TargetFor" /> rather than listed by hand. With two decision kinds that is trivially
-    ///     the whole enum, and it is kept anyway for one reason: the parser's own pre-flight rule iterates it, as does
-    ///     the decide endpoint when it advertises the answers, so a third kind cannot be added in one place and
-    ///     forgotten in the other.
+    ///     Derived from <see cref="TargetFor" /> rather than listed by hand, so a decision kind that did not succeed its
+    ///     node could not be added without this list saying so. Which KIND takes which answer is <see cref="DecisionsFor" />.
     /// </remarks>
     public static IReadOnlyList<GraphWorkflowDecisionKind> DecisionAnswers { get; } =
     [
@@ -394,7 +398,7 @@ internal static class GraphWorkflowStateMachine
     public static GraphWorkflowNodeRunStatus TargetFor(GraphWorkflowDecisionKind decision) =>
         decision switch
         {
-            GraphWorkflowDecisionKind.Approve or GraphWorkflowDecisionKind.Reject => GraphWorkflowNodeRunStatus.Succeeded,
+            GraphWorkflowDecisionKind.Approve or GraphWorkflowDecisionKind.Reject or GraphWorkflowDecisionKind.Answer => GraphWorkflowNodeRunStatus.Succeeded,
             _ => GraphWorkflowNodeRunStatus.Failed
         };
 
@@ -403,8 +407,28 @@ internal static class GraphWorkflowStateMachine
     ///     by the decide endpoint and by the surface that advertises the answers, so what is offered and what is
     ///     accepted cannot drift.
     /// </summary>
-    public static bool IsDecidable(GraphWorkflowNodeRunStatus status, GraphWorkflowDecisionKind decision) =>
-        status == GraphWorkflowNodeRunStatus.WaitingForApproval && IsLegal(status, TargetFor(decision));
+    /// <remarks>
+    ///     The node KIND is part of the question, so the refusal lives in one place: a <c>Pause</c> takes
+    ///     <c>Approve</c>/<c>Reject</c> (narrowed further by its own <c>allowedDecisions</c>), a <c>ChatInput</c> takes
+    ///     <c>Answer</c>, and every other kind takes nothing.
+    /// </remarks>
+    public static bool IsDecidable(GraphWorkflowNodeKind kind, GraphWorkflowNodeRunStatus status, GraphWorkflowDecisionKind decision) =>
+        status == GraphWorkflowNodeRunStatus.WaitingForApproval
+        && Array.IndexOf(DecisionsFor(kind), decision) >= 0
+        && IsLegal(status, TargetFor(decision));
+
+    /// <summary>The answers a parked node of <paramref name="kind" /> can take at all.</summary>
+    public static GraphWorkflowDecisionKind[] DecisionsFor(GraphWorkflowNodeKind kind) =>
+        kind switch
+        {
+            GraphWorkflowNodeKind.Pause => PauseDecisions,
+            GraphWorkflowNodeKind.ChatInput => ChatInputDecisions,
+            _ => []
+        };
+
+    /// <summary>What a parked node run of <paramref name="kind" /> is waiting for, stamped on the row as <c>PendingDecisionKind</c>.</summary>
+    public static GraphWorkflowDecisionKind PendingDecisionFor(GraphWorkflowNodeKind kind) =>
+        kind == GraphWorkflowNodeKind.ChatInput ? GraphWorkflowDecisionKind.Answer : GraphWorkflowDecisionKind.Approve;
 
     /// <summary>The run transition table.</summary>
     /// <remarks>

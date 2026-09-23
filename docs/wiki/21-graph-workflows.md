@@ -58,6 +58,8 @@ opinion. Save time and run start call the same parser, so a graph accepted at sa
 ```jsonc
 {
   "schemaVersion": 1,
+  "kind": "Standard",          // optional: "Standard" (default) | "Chat"
+  "chat": { "acceptsAttachments": false, "requireRerunConfirmation": true },  // only with kind "Chat"
   "nodes": [ /* … */ ],
   "edges": [ /* … */ ]
 }
@@ -65,15 +67,24 @@ opinion. Save time and run start call the same parser, so a graph accepted at sa
 
 `schemaVersion` is optional but, when present, must be `1`. Anything else is refused outright.
 
+`kind` says what the definition is for. A `Chat` graph is one the Chat page can bind a conversation to (Chat
+Workflows); it may carry `ChatInput` nodes and `publishToChat` flags. An unknown
+kind is refused outright, as is a `chat` block on a graph that is not `Chat` and any member of `chat` other than the
+two above. A `Chat` graph without the block reads the defaults shown. The kind is **denormalised** onto the
+definition row (`graph_workflow_definitions.kind`, plaintext, indexed, migration `AddChatWorkflowNodes`) at every
+save that carries a graph, and the definition list and detail report it, so a picker filters chat workflows without
+decrypting a blob. A Standard graph that names no kind is stored and returned exactly as before — the wire mapper
+omits both members when they are absent.
+
 ### 2.1 Nodes
 
 | Member | Required | Meaning |
 |---|---|---|
 | `key` | yes | 1–64 characters of letters, digits, `_` and `-`. Node and edge keys share **one** namespace. |
-| `kind` | yes | One of `Start`, `LlmCall`, `Agent`, `Tool`, `Condition`, `Parallel`, `Join`, `Pause`, `End`, by NAME. |
+| `kind` | yes | One of `Start`, `LlmCall`, `Agent`, `Tool`, `Condition`, `Parallel`, `Join`, `Pause`, `End`, `ChatInput`, `DecisionModel`, by NAME. |
 | `label` | no | Display text. Defaults to the key. |
 | `joinPolicy` | no | `All` (default) or `Any`. A property of **every** node — see §2.3. |
-| `maxAttempts` | no | Positive. Defaults to **3** for `LlmCall`, `Agent` and `Tool`, **1** for every other kind. |
+| `maxAttempts` | no | Positive. Defaults to **3** for `LlmCall`, `Agent`, `Tool` and `DecisionModel`, **1** for every other kind. |
 | `timeoutSeconds` | no | Positive. Overrides `DefaultNodeTimeoutSeconds` for this node only. |
 | `position` | no | `{ x, y }`, both numeric. Authoring metadata the runtime never reads. |
 | `config` | no | The per-kind settings, discriminated by `kind` — see §4. |
@@ -81,6 +92,12 @@ opinion. Save time and run start call the same parser, so a graph accepted at sa
 `config` is closed per kind. `GraphWorkflowGraph.ConfigMembers` lists exactly what each kind reads, and a member no
 node of that kind reads is an author-time error rather than a setting that silently does nothing. Writing a Tool
 node's `toolName` on an Agent node fails the save.
+
+Two chat members sit on several kinds and follow the same closed rule. `publishToChat` (Agent, LlmCall, End) marks a
+node whose answer a chat-bound run posts into the conversation; it defaults to **true on an `End` of a `Chat` graph**
+and false everywhere else, and `true` is refused outside a `Chat` graph, where no conversation could receive it.
+`includeAttachments` (Agent, LlmCall) hands the run's chat attachments to the node, and `true` is refused unless the
+graph's `chat.acceptsAttachments` is on. Neither is read by routing; both are carried for the chat surface.
 
 A node without a `position` is laid out client-side when the definition is opened
 (`features/graphWorkflows/models/GraphWorkflowLayout.ts`). That matters for §9: imported graphs carry no positions.
@@ -162,6 +179,8 @@ Accumulated, per element:
 - a `Condition` node with fewer than two out-edges, or more than one unconditional out-edge;
 - a `Pause` node offering a decision no out-edge fires on — checked through the state machine's own routing over the
   document a pause actually produces, so the pre-flight rule and the routing cannot disagree;
+- a `ChatInput` node in a graph that is not `Chat`, or one with no **unconditional** out-edge (whatever the user
+  types, the run must go somewhere);
 - a second unconditional edge between one pair of nodes.
 
 **Warnings are a second list, and they never refuse.** `GraphWorkflowGraph.Warnings` is computed on the first ask
@@ -405,7 +424,7 @@ a better answer and sometimes win by milliseconds.
 `GraphWorkflowStartupReconciler` is an `IHostedService` registered **before** the dispatcher, so its pumps cannot
 admit a row recovery has not judged. It reads the interrupted set — exactly `Queued ∪ Running`, which the store
 scopes and the reconciler never widens. `WaitingForApproval` is deliberately outside it: it is a durable human wait
-rather than in-flight work, and a reconciler that took it would destroy every pause on the node on every boot. The
+rather than in-flight work, and a reconciler that took it would destroy every pause and chat input on the node on every boot. The
 reconciler hands its verdicts to the store
 to apply in one transaction. Exactly-once survives a crash during recovery: a host that dies before that commit
 leaves the rows as it found them, and the next boot judges them from the same evidence. Recovery makes at most three
@@ -415,7 +434,7 @@ The verdicts:
 
 - A `Queued` row, or a `Running` **inline** row, collapses to `Pending` without touching `Attempt`. Neither is a
   failure, so neither costs an attempt.
-- A `Running` **`LlmCall`, `Agent` or `Tool`** row is **failed** `Interrupted`. The work was an in-process task with no durable
+- A `Running` **`LlmCall`, `Agent`, `DecisionModel` or `Tool`** row is **failed** `Interrupted`. The work was an in-process task with no durable
   handle, so its partial output died with the host. Recovery never re-attempts it; the dispatcher's retry stage does
   on its first tick, if and only if the node and run budgets allow. The class written is the plain `Interrupted`
   rather than anything `GraphWorkflowFailures.Classify` would decide, because recovery deliberately never parses the
@@ -461,6 +480,8 @@ went. The composed document is capped at `MaxOutputJsonBytes` in **UTF-8 bytes**
 text through at four times the cap — and a node whose document exceeds it fails `OutputTooLarge`, which is not
 retryable.
 
+`Pause` and `ChatInput` park on a person (`GraphWorkflowPauseExecutor`); `Agent`, `LlmCall` and `DecisionModel` share
+the model-invocation lane (`GraphWorkflowInvocationExecutor`); `Tool` has its own lane.
 `Start`, `End`, `Condition`, `Parallel` and `Join` are **inline** (`GraphWorkflowInlineExecutor`): their work is a
 pure function of rows the tick has already read, so they run inside the tick with no `Queued` hop. They still write
 two rows each, which is what makes the timing of a fan-out visible in the event log.
@@ -655,7 +676,7 @@ sees every branch rather than whichever one the single-predecessor shortcut woul
 | Config member | Meaning |
 |---|---|
 | `prompt` | **Required.** What the person is being asked. |
-| `allowedDecisions` | **Required**, non-empty, distinct, from `Approve` / `Reject`. Empty would be a question nobody could answer. |
+| `allowedDecisions` | **Required**, non-empty, distinct, from `Approve` / `Reject`. Empty would be a question nobody could answer. `Answer` is refused: it belongs to `ChatInput` (§4.8). |
 | `requireComment` | Defaults false. |
 
 `GraphWorkflowPauseExecutor` is the one lane that drives nothing: parking a row on a human is two status writes, so
@@ -712,6 +733,7 @@ replayed.
 |---|---|
 | `outcome` | **Required.** The declared outcome string. |
 | `resultPath` | Optional dot path into the End node's input document. |
+| `publishToChat` | Defaults true in a `Chat` graph, false otherwise; `true` is refused outside a `Chat` graph (§2.1). |
 
 Output: `{ "outcome": …, "result": … }` — the resolved path, or the whole input document when the author named none.
 A path the document does not carry resolves to `null`; failing the node instead would end a run that did all of its
@@ -719,6 +741,57 @@ work over a projection nobody reads.
 
 An `End` node is a terminal node by construction (nothing may leave it), and a run is `Completed` only once one of
 them **succeeded**.
+
+### 4.8 `ChatInput`
+
+| Config member | Meaning |
+|---|---|
+| `prompt` | **Required.** What the chat surface shows while the run waits for the user's next message. |
+
+Legal only in a `Chat` graph, and it needs at least one **unconditional** out-edge (§2.4). It rides the pause lane:
+`GraphWorkflowPauseExecutor` owns `Pause` and `ChatInput` alike and writes `PendingDecisionKind` from the node kind —
+`Approve` for a pause, **`Answer`** for a chat input — so a reader tells a gate from a question off the row, without
+the graph. The run reads `WaitingForApproval` (the wording is the surface's, derived from the pending kind); a restart
+leaves the row alone exactly as it leaves a pause, and the cancel drain cancels it the same way.
+
+The answer arrives through the same decide route with `decision: "Answer"` and `payload: { "text": "…" }`.
+`GraphWorkflowStateMachine.IsDecidable(kind, status, decision)` is the one place the pairing lives: a `ChatInput`
+takes `Answer` and nothing else (409 for `Approve` / `Reject`), and a `Pause` refuses `Answer` (409). A missing, blank
+or non-string `payload.text`, or a `comment` beside it, is a 400; so is text over
+`min(Security:MaxMessageSizeKb × 1024, MaxOutputJsonBytes / 2)` UTF-8 bytes — the answer is a chat message, and it must
+still fit the envelope it is embedded in. `operationId` idempotency and the 409 `GraphWorkflowGateAlreadyDecided`
+naming the standing answer work exactly as for a pause.
+
+Output (`GraphWorkflowDocuments.ChatInputOutput`): `{ "decision": "Answer", "text": … }`. `decision` is kept because
+the replay and standing-conflict checks read `output.decision` structurally. An edge may condition on `output.text`.
+The §2.4 pause-context warning and the editor's `pauseContextEdges` gesture treat a `ChatInput` like a `Pause`: a
+successor reached only through one receives the answer document, not the content before the wait.
+
+### 4.9 `DecisionModel`
+
+| Config member | Meaning |
+|---|---|
+| `question` | **Required.** What is being decided. |
+| `labels` | **Required.** 2–32 distinct, non-blank strings of at most 64 characters. Flat on purpose: they become a grammar enum, far below the repetition bound. |
+| `provider` | Optional closed vocabulary, `llm` only (and the default). A provider this build cannot run is refused at save. |
+| `model` | Optional, as on `LlmCall`: an installed node-managed GGUF chat model, else the local default. |
+| `inputBindings` | Optional, exactly as on `LlmCall` (§4.2a). |
+
+A classifier node on the invocation lane. The named `IGraphWorkflowDecisionProvider`
+(`Services/GraphWorkflows/Decisions/`) **lowers** the node to an `LlmCall` config — a fixed classifier system prompt,
+the question plus the label list as the prompt, the same bindings, `reasoningEffort: "none"`, `temperature: 0` (so the
+same input routes the same way on a re-run) and the response schema
+`{ type: object, properties: { choice: { type: string, enum: labels } }, required: [choice] }` — which runs through
+`RunLlmTurnAsync` unchanged, model gate, capacity and binding rules included. The provider then **interprets** the
+answer, and the executor holds the choice to the labels: an answer that is not a JSON object, or names anything
+outside them, fails `NodeFailed` (retryable, so `AttemptsExhausted` on the last attempt), and the reason never repeats
+the model's text. `LlmDecisionProvider` is the one provider; Laya/ONNX classifiers are later providers of the same
+seam.
+
+Output: `{ "choice": "<label>", "confidence": null, "probabilities": null, "provider": "llm", "usage": { … } }`.
+`confidence` and `probabilities` are always null from the `llm` provider — a grammar-constrained answer carries no
+calibrated score, and inventing one would route on noise. Out-edges route on `output.choice`, directly or through a
+`Condition`. An interrupted `Running` DecisionModel row is failed `Interrupted` at startup like every model turn (§3.5).
 
 ---
 
@@ -731,7 +804,7 @@ Every route is Operator-gated.
 
 | Route | Notes |
 |---|---|
-| `graph-workflows/definitions` | GET lists **without** the graph blob (it is the encrypted column); POST creates. |
+| `graph-workflows/definitions` | GET lists **without** the graph blob (it is the encrypted column), each row carrying its denormalised `kind`; POST creates. |
 | `graph-workflows/definitions/{definitionId}` | GET / PUT with the version it was edited from / DELETE, which 409s while a live run pins the definition. |
 | `graph-workflows/definitions/validate` | POST a graph and get its errors **and warnings** back without saving. The editor asks the runtime's own parser. `valid` is still zero ERRORS: a graph that only warns passes here and saves. |
 | `graph-workflows/tools` | The Tool node picker's feed (§4.3). |
@@ -740,7 +813,7 @@ Every route is Operator-gated.
 | `graph-workflows/runs/{runId}` | One run, its node-run **summaries**, the run's own resolved `output`, and the **graph this run pinned at start**. No node-run documents — those are a per-node read. |
 | `graph-workflows/runs/{runId}/cancel` | 202. Live node runs drain first, so the run reads `Cancelling`. A repeat cancel is an idempotent 202. |
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}` | One node run in full, input and output documents included. |
-| `graph-workflows/runs/{runId}/nodes/{nodeKey}/decide` | Answers a pause (§4.6). |
+| `graph-workflows/runs/{runId}/nodes/{nodeKey}/decide` | Answers a pause (§4.6) or a chat input (§4.8). |
 | `graph-workflows/runs/{runId}/events` | The event log, paged from an **exclusive** `afterSeq`, capped at `EventReplayLimit` — which the response reports rather than leaving a client to infer it from a full page. |
 
 Four routes cap the request body at **1 MiB** (`GraphWorkflowRequestSizeLimit`): create, update and validate, which
@@ -778,7 +851,9 @@ behaves exactly as it did before it existed.
 `GraphWorkflowRunHub` at `/api/local/v1/graph-workflows/hub`. `SubscribeRun(runId, afterSeq)` joins the per-run group
 `graph-workflow-run-{runId:N}` **before** reading the replay, so a change published between the read and the join
 cannot reach nobody; the overlap that creates is harmless, because every push is idempotent and keyed by sequence.
-The snapshot carries the run status, the queued / running / pending-decision counts, the watermark, up to
+The snapshot carries the run status, the queued / running counts, `pendingDecisions` (parked rows whose
+`PendingDecisionKind` is not `Answer` — a pause) and `pendingInputs` (parked rows waiting on an `Answer` — a chat
+input), the watermark, up to
 `EventReplayLimit` events, and a `replayTruncated` flag read from one row past the limit rather than inferred from a
 full page. There is **no in-memory buffer** — the store is the replay authority — and a disconnect cancels nothing,
 because a run outlives the tab.
@@ -817,8 +892,8 @@ component is a thin adapter; `GraphWorkflowsPage` itself is router-free and is r
 |---|---|
 | `models/` | `GraphWorkflowModels.ts` (the one file naming generated DTOs, plus the closed vocabularies and narrowers), `GraphWorkflowCanvasModels.ts` (the discriminated node union and the `graphToCanvas` / `canvasToGraph` round trip), `GraphWorkflowLayout.ts`, `GraphWorkflowValidation.ts` (the client mirror of the graph rules), `GraphWorkflowRunGraph.ts`. |
 | `queries/` | Every read and mutation over the generated adapters, including the forward-paged events feed. |
-| `hooks/` | `useGraphWorkflowEditor` (controlled React Flow state, per-handle connect prefill, refusal of a second unconditional edge, and the `context` edge added around a Pause on connect — §4.6) and `useGraphWorkflowRunHub`. |
-| `components/` | Editor: the per-kind node cards, the canvas with its palette and Auto-arrange, the validation strip, the node and edge config panels, the definition list and meta dialog. Run view: the status badge, the read-only run graph, the node-run table, the run list, the events tab, the node panel and the decision panel. |
+| `hooks/` | `useGraphWorkflowEditor` (controlled React Flow state, per-handle connect prefill, refusal of a second unconditional edge, and the `context` edge added around a Pause or ChatInput on connect — §4.6) and `useGraphWorkflowRunHub`. |
+| `components/` | Editor: the per-kind node cards, the canvas with its palette and Auto-arrange, the validation strip, the node and edge config panels (the DecisionModel body and the input-bindings list shared with LlmCall under `config/`), the workflow settings popover (graph `kind` and the `chat` block, saved with the graph), the definition list and meta dialog. Run view: the status badge, the read-only run graph, the node-run table, the run list, the events tab, the node panel and the decision panel (Approve/Reject buttons for a Pause, a text-answer form for a ChatInput). |
 | `pages/` | `GraphWorkflowsPage` — editor mode without a `runId`, run mode with one. |
 | `api/` | `GraphWorkflowConflict.ts`, which reads the three `NodeConflictProblemType` members by name. |
 
@@ -918,7 +993,7 @@ environment variable such as `GraphWorkflows__MaxConcurrentRuns`.
 | `DefaultNodeTimeoutSeconds` | 600 | One node run's attempt, when its node names no `timeoutSeconds`. Unlike Dev Workflows, a node that declares nothing still has a deadline. |
 | `MaxOutputJsonBytes` | 262 144 | One node run's composed output document, in UTF-8 bytes, checked before it is encrypted and stored. |
 | `DispatchIntervalMilliseconds` | 500 | The sweep cadence, independent of the change signals the dispatcher also listens for. Floored at 100 ms. |
-| `MaxConcurrentRuns` | 4 | Live runs at once, and the size of both the shared Agent/LLM Call invocation lane and the Tool lane. Runs above the cap **wait**; they are not refused. |
+| `MaxConcurrentRuns` | 4 | Live runs at once, and the size of both the shared Agent/LLM Call/DecisionModel invocation lane and the Tool lane. Runs above the cap **wait**; they are not refused. |
 | `MaxRunInputBytes` | 65 536 | A run-start input document, checked in `GraphWorkflowRunService.StartAsync` (§3.1) rather than at the endpoint, so every caller of the service is held to it. Also the budget for the inlined `upstream` map in an Agent prompt and the complete user prompt with bound JSON data in an LLM Call. |
 | `EventReplayLimit` | 200 | Events one replay may return, hub snapshot and events route alike. Ceiling 1000 — one replay is one response body. |
 

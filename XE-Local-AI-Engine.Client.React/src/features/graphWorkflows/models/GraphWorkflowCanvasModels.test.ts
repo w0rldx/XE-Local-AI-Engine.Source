@@ -27,7 +27,7 @@ import type {
 	GraphWorkflowNodeKind,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { agentConfigSchema } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
-import { eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+import { chatGraph, eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 
 /** The Agent members `agentConfigSchema` needs beyond the one under test. */
 const canvasAgentConfig = {
@@ -89,6 +89,53 @@ describe("graphToCanvas / canvasToGraph round trip", () => {
 		expect(graphWorkflowsEqual(result, eightNodeGraph)).toBe(true);
 		expect(result.nodes).toHaveLength(8);
 		expect(result.edges).toHaveLength(9);
+	});
+
+	it("saves a Standard graph byte for byte: no kind, no chat block, no chat flags", () => {
+		// The document an editor save stores, then opened and saved again: the second save must not change a byte.
+		const first = graphToCanvas(eightNodeGraph);
+		const saved = canvasToGraph(first.nodes, first.edges, first.settings).graph;
+		const reopened = graphToCanvas(saved);
+		const { graph: result } = canvasToGraph(reopened.nodes, reopened.edges, reopened.settings);
+
+		expect(reopened.settings).toEqual({ kind: "Standard" });
+		expect(JSON.stringify(result)).toBe(JSON.stringify(saved));
+		expect(JSON.stringify(saved)).not.toMatch(/"kind":"(Standard|Chat)"|"chat"|publishToChat|includeAttachments/);
+	});
+
+	it("carries a Chat graph's kind, chat block and every chat member through the round trip", () => {
+		const canvas = graphToCanvas(chatGraph);
+		const { graph: result, issues } = canvasToGraph(canvas.nodes, canvas.edges, canvas.settings);
+
+		expect(issues).toEqual([]);
+		expect(canvas.settings).toEqual({ kind: "Chat", chat: { acceptsAttachments: true } });
+		expect(JSON.stringify(result)).toBe(JSON.stringify(chatGraph));
+		expect(dataOfKind(canvas, "ask", "ChatInput").prompt).toBe("What should I build?");
+		expect(dataOfKind(canvas, "classify", "DecisionModel")).toMatchObject({
+			question: "Is this a coding request?",
+			labels: ["coding", "general"],
+			provider: "llm",
+			model: null,
+			inputBindings: [{ parameter: "request", path: "input.text" }],
+		});
+		expect(dataOfKind(canvas, "code", "LlmCall")).toMatchObject({ publishToChat: true, includeAttachments: true });
+		// Absent stays absent: the End takes the parser's Chat-graph default rather than a written `true`.
+		expect(dataOfKind(canvas, "done", "End").publishToChat).toBeUndefined();
+	});
+
+	it("writes kind without a chat block when the Chat graph never set one, and drops both for Standard", () => {
+		const canvas = graphToCanvas(eightNodeGraph);
+
+		expect(canvasToGraph(canvas.nodes, canvas.edges, { kind: "Chat" }).graph).toMatchObject({ kind: "Chat" });
+		expect("chat" in canvasToGraph(canvas.nodes, canvas.edges, { kind: "Chat" }).graph).toBe(false);
+		const standard = canvasToGraph(canvas.nodes, canvas.edges, { kind: "Standard", chat: { acceptsAttachments: true } }).graph;
+		expect("kind" in standard || "chat" in standard).toBe(false);
+	});
+
+	it("reads an absent kind and an explicit Standard as one graph, and a kind change as an edit", () => {
+		expect(graphWorkflowsEqual(eightNodeGraph, { ...eightNodeGraph, kind: "Standard" })).toBe(true);
+		expect(graphWorkflowsEqual(eightNodeGraph, { ...eightNodeGraph, kind: "Chat" })).toBe(false);
+		expect(graphWorkflowsEqual(chatGraph, { ...chatGraph, chat: { acceptsAttachments: false } })).toBe(false);
 	});
 
 	it("keeps the node key as the React Flow id and the edge key as the edge id", () => {
@@ -595,6 +642,12 @@ describe("pauseContextEdges", () => {
 		expect(addedPairs(nodes, ["start>a", "a>first", "first>second", "second>b", "b>done"])).toEqual(["a>b", "a>second"]);
 	});
 
+	it("routes the content around a ChatInput exactly as around a Pause", () => {
+		const nodes = ["start:Start", "a:Agent", "ask:ChatInput", "b:Agent", "done:End"];
+
+		expect(addedPairs(nodes, ["start>a", "a>ask", "ask>b", "b>done"])).toEqual(["a>b"]);
+	});
+
 	it("treats Start as a fine ancestor, because its output is the run's input", () => {
 		expect(addedPairs(["start:Start", "hold:Pause", "b:Agent", "done:End"], ["start>hold", "hold>b", "b>done"])).toEqual([
 			"start>b",
@@ -747,6 +800,8 @@ describe("renameNodeKey", () => {
 
 describe("defaultNodeData and key minting", () => {
 	it("starts Agent and Tool nodes on three attempts and every other kind on one", () => {
+		expect(defaultNodeData("DecisionModel", "decision-model-1").maxAttempts).toBe(3);
+		expect(defaultNodeData("ChatInput", "chat-input-1").maxAttempts).toBe(1);
 		expect(defaultNodeData("Agent", "agent-1").maxAttempts).toBe(3);
 		expect(defaultNodeData("Tool", "tool-1").maxAttempts).toBe(3);
 		expect(defaultNodeData("Condition", "condition-1").maxAttempts).toBe(1);
@@ -761,6 +816,16 @@ describe("defaultNodeData and key minting", () => {
 		expect(defaultNodeData("Start", "start")).toMatchObject({ inputSchema: null, defaultInput: null });
 		expect(defaultNodeData("Join", "merge")).toMatchObject({ kind: "Join", joinPolicy: "All", label: "" });
 		expect(defaultNodeData("Condition", "condition-1")).toMatchObject({ path: null });
+		expect(defaultNodeData("ChatInput", "chat-input-1")).toMatchObject({ kind: "ChatInput", prompt: "" });
+		expect(defaultNodeData("DecisionModel", "decision-model-1")).toMatchObject({
+			question: "",
+			labels: [],
+			provider: null,
+			model: null,
+			inputBindings: [],
+		});
+		// No chat flag on a fresh node: absent is the parser's default, and a Standard graph must not grow one.
+		expect("publishToChat" in defaultNodeData("End", "done")).toBe(false);
 	});
 
 	it("mints the lowest free integer over the ONE key namespace", () => {

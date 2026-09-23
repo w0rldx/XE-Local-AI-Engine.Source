@@ -23,7 +23,7 @@ export interface GraphWorkflowNodePanelProps {
 	readonly nodeKey: string;
 	/** Only for the currency line: a node that failed stays failed after the run has moved past it. */
 	readonly runStatus: string | undefined;
-	/** The Pause node's config, read off the definition graph by the page. Absent for every other kind. */
+	/** The Pause (or ChatInput) node's config, read off the pinned graph by the page. Absent for every other kind. */
 	readonly pauseConfig?: {
 		readonly prompt: string;
 		readonly allowedDecisions: readonly GraphWorkflowDecisionKind[];
@@ -221,6 +221,18 @@ export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig,
 										</Text>
 									) : null}
 								</Stack>
+							) : null}
+							{kind === "ChatInput" && typeof field(inner, "text") === "string" ? (
+								<Text size="sm" style={{ whiteSpace: "pre-wrap" }} data-testid="graph-workflow-node-panel-answer">
+									{field(inner, "text") as string}
+								</Text>
+							) : null}
+							{kind === "DecisionModel" && typeof field(inner, "choice") === "string" ? (
+								<Text size="sm" data-testid="graph-workflow-node-panel-choice">
+									{t("pages.graphWorkflows.nodePanel.decisionChoice", "Chose {{choice}}", {
+										choice: field(inner, "choice") as string,
+									})}
+								</Text>
 							) : null}
 							{passThrough ? (
 								<Text size="xs" c="dimmed" data-testid="graph-workflow-node-panel-pass-through">

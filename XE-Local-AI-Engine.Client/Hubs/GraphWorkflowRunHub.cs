@@ -43,7 +43,11 @@ public sealed class GraphWorkflowRunSubscriptionSnapshot
 
     public required int RunningNodeCount { get; init; }
 
-    public required int PendingDecisionCount { get; init; }
+    /// <summary>Parked rows waiting on an operator's Approve/Reject (a <c>Pause</c>).</summary>
+    public required int PendingDecisions { get; init; }
+
+    /// <summary>Parked rows waiting on the chat user's answer (a <c>ChatInput</c>).</summary>
+    public required int PendingInputs { get; init; }
 
     public required long LastSeq { get; init; }
 
@@ -115,7 +119,10 @@ public sealed class GraphWorkflowRunHub : Hub
             Status = detail.Run.Status.ToString(),
             QueuedNodeCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Queued),
             RunningNodeCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.Running),
-            PendingDecisionCount = detail.NodeRuns.Count(static nodeRun => nodeRun.Status == GraphWorkflowNodeRunStatus.WaitingForApproval),
+            // Split by the pending ACT the row names, not by the graph: the row carries it precisely so a reader need not parse the graph.
+            PendingDecisions = detail.NodeRuns.Count(static nodeRun => nodeRun is { Status: GraphWorkflowNodeRunStatus.WaitingForApproval }
+                                                                         && nodeRun.PendingDecisionKind != GraphWorkflowDecisionKind.Answer),
+            PendingInputs = detail.NodeRuns.Count(static nodeRun => nodeRun is { Status: GraphWorkflowNodeRunStatus.WaitingForApproval, PendingDecisionKind: GraphWorkflowDecisionKind.Answer }),
             LastSeq = replay.LastSeq,
             Events = [.. replay.Events.Select(static @event => @event.ToResponse())],
             ReplayTruncated = replay.ReplayTruncated

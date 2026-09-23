@@ -69,6 +69,10 @@ export function GraphWorkflowRunMode({ selection, onSelectionChange, isNarrow }:
 		}
 		// Cached on the graph: without it every node click re-parsed and re-laid-out the whole pinned document.
 		const node = cachedGraphToCanvas(pauseGraph).nodes.find((candidate) => candidate.id === selection.nodeKey)?.data;
+		if (node?.kind === "ChatInput") {
+			// A ChatInput offers exactly one decision, `Answer`, and its prompt is the question the answer form shows.
+			return { prompt: node.prompt, allowedDecisions: [], requireComment: false };
+		}
 		return node?.kind === "Pause"
 			? { prompt: node.prompt, allowedDecisions: node.allowedDecisions, requireComment: node.requireComment }
 			: undefined;

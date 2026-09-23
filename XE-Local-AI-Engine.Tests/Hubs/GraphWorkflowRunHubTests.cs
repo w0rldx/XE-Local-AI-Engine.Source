@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -60,10 +61,36 @@ public sealed class GraphWorkflowRunHubTests
         AssertEx.Equal("Running", snapshot.Status);
         AssertEx.Equal(expected: 1, snapshot.QueuedNodeCount);
         AssertEx.Equal(expected: 1, snapshot.RunningNodeCount);
-        AssertEx.Equal(expected: 0, snapshot.PendingDecisionCount, "S1 writes no human wait: the counter is carried for S2 and reads zero until then.");
+        AssertEx.Equal(expected: 0, snapshot.PendingDecisions, "nothing in this run parks on a person, so nobody is being asked to decide.");
+        AssertEx.Equal(expected: 0, snapshot.PendingInputs, "and nobody is being asked for input.");
         AssertEx.Equal(expected: 9L, snapshot.LastSeq);
         AssertEx.Equal(expected: 2, snapshot.Events.Count);
         AssertEx.False(snapshot.ReplayTruncated);
+    }
+
+    /// <summary>
+    ///     Parked rows split by the pending ACT they name: a pause waits on a decision, a chat input on the user's
+    ///     answer, and the two counters are what lets a surface say "needs your approval" and "needs your input" apart.
+    /// </summary>
+    [Test]
+    public async Task SubscribeRun_SplitsParkedRowsIntoPendingDecisionsAndPendingInputs()
+    {
+        var store = Store();
+        store.ListNodeRunsAsync(RunId, Arg.Any<CancellationToken>())
+             .Returns<IReadOnlyList<GraphWorkflowNodeRunSnapshot>>(
+             [
+                 NodeRun("review", GraphWorkflowNodeRunStatus.WaitingForApproval) with { Kind = GraphWorkflowNodeKind.Pause, PendingDecisionKind = GraphWorkflowDecisionKind.Approve },
+                 NodeRun("ask", GraphWorkflowNodeRunStatus.WaitingForApproval) with { Kind = GraphWorkflowNodeKind.ChatInput, PendingDecisionKind = GraphWorkflowDecisionKind.Answer },
+                 NodeRun("ask-again", GraphWorkflowNodeRunStatus.WaitingForApproval) with { Kind = GraphWorkflowNodeKind.ChatInput, PendingDecisionKind = GraphWorkflowDecisionKind.Answer },
+                 NodeRun("answered", GraphWorkflowNodeRunStatus.Succeeded) with { Kind = GraphWorkflowNodeKind.ChatInput },
+                 NodeRun("draft", GraphWorkflowNodeRunStatus.Running)
+             ]);
+        using var fixture = CreateHub(store);
+
+        var snapshot = await fixture.Hub.SubscribeRun(RunId, afterSeq: 0);
+
+        AssertEx.Equal(expected: 1, snapshot.PendingDecisions, "one pause is waiting on an operator's decision.");
+        AssertEx.Equal(expected: 2, snapshot.PendingInputs, "two chat inputs are waiting on the user's answer; an answered one is not.");
     }
 
     /// <summary>
@@ -307,7 +334,8 @@ public sealed class GraphWorkflowRunHubTests
         return CreateHub(new GraphWorkflowRunService(store,
                 new RecordingGraphWorkflowDispatcherSignal(),
                 Substitute.For<IToolInvocationService>(),
-                options),
+                options,
+                Options.Create(new SecurityOptions())),
             options);
     }
 

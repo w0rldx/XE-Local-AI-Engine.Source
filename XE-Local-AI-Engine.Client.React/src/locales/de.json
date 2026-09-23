@@ -5777,7 +5777,7 @@
 				"notice": {
 					"dismiss": "Ausblenden",
 					"parallelEdgesBothUnconditional": "Diese beiden Knoten sind bereits durch eine Verbindung ohne Bedingung verbunden. Geben Sie der neuen Verbindung zuerst eine Bedingung.",
-					"pauseContextEdgeAdded": "Eine Pause gibt nur ihre Entscheidung weiter. Die Antwort des vorherigen Knotens wird deshalb jetzt über eine Verbindung mit der Beschriftung „context“ daran vorbeigeführt. Löschen Sie diese Verbindung, wenn Sie sie nicht möchten.",
+					"pauseContextEdgeAdded": "Eine Pause oder eine Chat-Eingabe gibt nur ihre Entscheidung bzw. Antwort weiter. Die Antwort des vorherigen Knotens wird deshalb jetzt über eine Verbindung mit der Beschriftung „context“ daran vorbeigeführt. Löschen Sie diese Verbindung, wenn Sie sie nicht möchten.",
 					"tooManyNodes": "Dieser Graph hat bereits so viele Knoten, wie ein Lauf zulässt."
 				},
 				"validation": {
@@ -5810,7 +5810,9 @@
 				"Parallel": "Verzweigung",
 				"Join": "Zusammenführung",
 				"Pause": "Pause",
-				"End": "Ende"
+				"End": "Ende",
+				"ChatInput": "Chat-Eingabe",
+				"DecisionModel": "Modellentscheidung"
 			},
 			"nodeStatus": {
 				"Pending": "Nicht gestartet",
@@ -5845,7 +5847,12 @@
 				"payloadNotObject": "Geben Sie ein JSON-Objekt ein oder lassen Sie das Feld leer.",
 				"alreadyDecided": "Das wurde bereits mit „{{decision}}“ beantwortet.",
 				"runMovedOn": "Dieser Lauf ist weitergelaufen — er wartet nicht mehr auf diese Entscheidung.",
-				"failed": "Diese Entscheidung konnte nicht aufgezeichnet werden."
+				"failed": "Diese Entscheidung konnte nicht aufgezeichnet werden.",
+				"Answer": "Antwort",
+				"answerTitle": "Wartet auf Ihre Antwort",
+				"answerLabel": "Ihre Antwort",
+				"answerSubmit": "Antwort senden",
+				"alreadyAnswered": "Diese Frage wurde bereits beantwortet."
 			},
 			"joinPolicy": {
 				"All": "Auf jeden eingehenden Zweig warten",
@@ -5928,7 +5935,17 @@
 					"pauseNoDecisions": "„{{subject}}“ ist ein Pausenknoten, der keine Entscheidung anbietet.",
 					"endOutcomeMissing": "„{{subject}}“ ist ein End-Knoten ohne Ergebnisnamen.",
 					"serverRejected": "Der Node hat diesen Graphen abgelehnt.",
-					"serverWarned": "Der Node hat etwas Prüfenswertes gemeldet."
+					"serverWarned": "Der Node hat etwas Prüfenswertes gemeldet.",
+					"chatSettingsOnStandardGraph": "Chat-Einstellungen gelten nur für einen Chat-Workflow. Stellen Sie die Workflow-Art auf Chat oder entfernen Sie sie.",
+					"chatInputOutsideChatGraph": "„{{subject}}“ ist eine Chat-Eingabe, die nur ein Chat-Workflow enthalten kann: Nur eine Unterhaltung kann sie beantworten.",
+					"chatInputPromptMissing": "„{{subject}}“ ist eine Chat-Eingabe ohne Frage an den Benutzer.",
+					"chatInputNeedsUnconditionalEdge": "„{{subject}}“ ist eine Chat-Eingabe, deren ausgehende Verbindungen alle eine Bedingung haben. Fügen Sie eine ohne Bedingung hinzu, damit jede Antwort weiterführt.",
+					"publishToChatOutsideChatGraph": "„{{subject}}“ veröffentlicht sein Ergebnis im Chat, was nur ein Chat-Workflow tut.",
+					"includeAttachmentsNotAccepted": "„{{subject}}“ bezieht die Chat-Anhänge ein, aber dieser Workflow nimmt keine Anhänge an.",
+					"decisionQuestionMissing": "„{{subject}}“ ist eine Modellentscheidung ohne Frage.",
+					"decisionLabelsInvalid": "„{{subject}}“ braucht 2 bis 32 verschiedene, nicht leere Labels mit höchstens 64 Zeichen.",
+					"decisionProviderUnknown": "„{{subject}}“ nennt einen Entscheidungsanbieter, den diese Version nicht kennt.",
+					"pauseOffersAnswer": "„{{subject}}“ ist eine Pause, die „Antwort“ anbietet; das nimmt nur eine Chat-Eingabe an."
 				}
 			},
 			"form": {
@@ -5990,6 +6007,12 @@
 				"name": {
 					"required": "Bitte einen Namen eingeben.",
 					"tooLong": "Höchstens 200 Zeichen verwenden."
+				},
+				"question": {
+					"required": "Geben Sie die Frage ein, über die das Modell entscheidet."
+				},
+				"labels": {
+					"invalid": "Verwenden Sie 2 bis 32 verschiedene, nicht leere Labels mit höchstens 64 Zeichen."
 				}
 			},
 			"config": {
@@ -6052,7 +6075,24 @@
 				"resultPath": "Ergebnispfad",
 				"resultPathPlaceholder": "Das gesamte Dokument",
 				"parallelHelp": "Ein Parallel-Knoten gibt seine Eingabe an jede ausgehende Kante weiter.",
-				"joinHelp": "Ein Join-Knoten sammelt seine eingehenden Zweige in einer Zuordnung nach Quellknoten."
+				"joinHelp": "Ein Join-Knoten sammelt seine eingehenden Zweige in einer Zuordnung nach Quellknoten.",
+				"chatInputPrompt": "Was der Benutzer gefragt wird",
+				"chatInputPromptHelp": "Der Lauf wartet hier, bis der Benutzer in der Unterhaltung antwortet.",
+				"question": "Frage",
+				"questionHelp": "Worüber das Modell entscheidet. Ausgehende Kanten verzweigen nach output.choice.",
+				"labels": "Labels",
+				"labelsHelp": "2 bis 32 verschiedene Labels mit je höchstens 64 Zeichen.",
+				"addLabel": "Label hinzufügen",
+				"removeLabel": "Label entfernen",
+				"labelValue": "Label {{index}}",
+				"decisionProvider": "Anbieter",
+				"decisionProviderPlaceholder": "Sprachmodell (Standard)",
+				"decisionProviderName": {
+					"llm": "Sprachmodell"
+				},
+				"publishToChat": "Ergebnis im Chat veröffentlichen",
+				"includeAttachments": "Chat-Anhänge einbeziehen",
+				"includeAttachmentsDisabled": "Aktivieren Sie zuerst „Nimmt Anhänge an“ in den Workflow-Einstellungen."
 			},
 			"edge": {
 				"title": "Kante {{key}}",
@@ -6108,7 +6148,8 @@
 				"columnAttempt": "Versuch",
 				"columnStarted": "Gestartet",
 				"columnDuration": "Dauer",
-				"decisionPending": "wartet auf Ihre Entscheidung"
+				"decisionPending": "wartet auf Ihre Entscheidung",
+				"answerPending": "braucht Ihre Antwort"
 			},
 			"events": {
 				"empty": "In diesem Lauf ist noch nichts passiert.",
@@ -6133,7 +6174,8 @@
 				"emptyDocument": "Die Laufzeit hat hier nichts aufgezeichnet.",
 				"pauseDecision": "Beantwortet mit {{decision}}",
 				"passThrough": "Ein Bedingungs- und ein Parallel-Knoten reichen die Ausgabe ihrer Eingabe unverändert weiter; eine Ausgabe, die dem vorherigen Knoten gleicht, ist also richtig.",
-				"joinOutput": "Ein Zusammenführungs-Knoten gibt eine Zuordnung aus, geschlüsselt nach dem Knoten, aus dem der jeweilige Zweig kam."
+				"joinOutput": "Ein Zusammenführungs-Knoten gibt eine Zuordnung aus, geschlüsselt nach dem Knoten, aus dem der jeweilige Zweig kam.",
+				"decisionChoice": "Gewählt: {{choice}}"
 			},
 			"startRun": {
 				"title": "Einen Lauf starten",
@@ -6186,6 +6228,17 @@
 				"validationFailed": "Der Graph konnte nicht geprüft werden.",
 				"validationPassed": "Dieser Graph hat die Prüfung bestanden.",
 				"validationPassedWithWarnings": "Dieser Graph ist gültig. Prüfen Sie vor dem Start die Hinweise unten."
+			},
+			"settings": {
+				"open": "Workflow-Einstellungen",
+				"kind": "Workflow-Art",
+				"kindOption": {
+					"Standard": "Standard",
+					"Chat": "Chat"
+				},
+				"kindHelp": "Ein Chat-Workflow läuft in einer Unterhaltung und kann dem Benutzer Fragen stellen.",
+				"acceptsAttachments": "Nimmt Anhänge an",
+				"requireRerunConfirmation": "Vor erneutem Ausführen bestätigen"
 			}
 		},
 		"integrations": {

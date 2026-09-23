@@ -67,7 +67,7 @@ export type {
 	ValidateGraphWorkflowDefinitionResponse,
 };
 
-/** The nine v1 node kinds. A closed vocabulary: an unknown `kind` is a save-time validation error server-side. */
+/** The eleven node kinds. A closed vocabulary: an unknown `kind` is a save-time validation error server-side. */
 export const graphWorkflowNodeKinds = [
 	"Start",
 	"Agent",
@@ -78,6 +78,8 @@ export const graphWorkflowNodeKinds = [
 	"Join",
 	"Pause",
 	"End",
+	"ChatInput",
+	"DecisionModel",
 ] as const;
 export type GraphWorkflowNodeKind = (typeof graphWorkflowNodeKinds)[number];
 
@@ -110,9 +112,22 @@ export const graphWorkflowNodeRunStatuses = [
 ] as const;
 export type GraphWorkflowNodeRunStatus = (typeof graphWorkflowNodeRunStatuses)[number];
 
-/** What a Pause node's gate accepts. The server computes the offered set per node; never widen it client-side. */
-export const graphWorkflowDecisionKinds = ["Approve", "Reject"] as const;
+/**
+ * What a parked node's gate accepts. `Answer` is a ChatInput's only decision and never a Pause's; the server computes
+ * the offered set per node, so never widen it client-side.
+ */
+export const graphWorkflowDecisionKinds = ["Approve", "Reject", "Answer"] as const;
 export type GraphWorkflowDecisionKind = (typeof graphWorkflowDecisionKinds)[number];
+
+/** The decisions a Pause node may offer: the parser refuses `Answer` there. */
+export const graphWorkflowPauseDecisionKinds = ["Approve", "Reject"] as const satisfies readonly GraphWorkflowDecisionKind[];
+
+/** A graph's top-level `kind`. Absent means `Standard`; only a `Chat` graph may carry ChatInput nodes and `chat` settings. */
+export const graphWorkflowDefinitionKinds = ["Standard", "Chat"] as const;
+export type GraphWorkflowDefinitionKind = (typeof graphWorkflowDefinitionKinds)[number];
+
+/** `GraphWorkflowGraph.DecisionProviders`: the closed set a DecisionModel node may name. Absent means `llm`. */
+export const graphWorkflowDecisionProviders = ["llm"] as const;
 
 /** A real C# enum persisted as text, so it crosses the wire as a member name. `None` means "nothing went wrong". */
 export const graphWorkflowFailureClasses = [
@@ -189,6 +204,11 @@ function asMember<T extends string>(values: readonly T[], value: string | undefi
 /** An unknown kind reads as `End`: the one shape with no outbound edges and no configuration to mis-offer. */
 export function narrowGraphWorkflowNodeKind(value: string | undefined | null): GraphWorkflowNodeKind {
 	return narrow(graphWorkflowNodeKinds, value, "End");
+}
+
+/** Absent means `Standard`, the parser's own default. An unknown token also reads as `Standard`: the inert kind. */
+export function narrowGraphWorkflowDefinitionKind(value: string | undefined | null): GraphWorkflowDefinitionKind {
+	return narrow(graphWorkflowDefinitionKinds, value, "Standard");
 }
 
 /** Absent means `All` — the parser's own default, so the editor and the runtime agree on an unset field. */
@@ -275,9 +295,9 @@ export const GRAPH_WORKFLOW_MAX_RUN_INPUT_BYTES = 65_536;
 export const GRAPH_WORKFLOW_KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
- * The `maxAttempts` a new node starts on (F-1 ruling): 3 for the two kinds that call something fallible, 1 for the
- * structural kinds, where a retry would re-evaluate the same inputs to the same answer.
+ * The `maxAttempts` a new node starts on (F-1 ruling): 3 for the kinds that call something fallible, 1 for the
+ * structural kinds and ChatInput, where a retry would re-evaluate the same inputs to the same answer.
  */
 export function graphWorkflowDefaultMaxAttempts(kind: GraphWorkflowNodeKind): number {
-	return kind === "Agent" || kind === "LlmCall" || kind === "Tool" ? 3 : 1;
+	return kind === "Agent" || kind === "LlmCall" || kind === "Tool" || kind === "DecisionModel" ? 3 : 1;
 }

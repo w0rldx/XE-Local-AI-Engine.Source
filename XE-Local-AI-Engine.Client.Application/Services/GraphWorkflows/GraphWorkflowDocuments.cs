@@ -140,6 +140,14 @@ internal static class GraphWorkflowDocuments
     public static JsonElement PauseOutput(GraphWorkflowDecisionKind decision, string? comment, JsonElement? payload) =>
         JsonSerializer.SerializeToElement(new PauseOutputPayload { Decision = decision.ToString(), Comment = comment, Payload = payload ?? NullValue }, JsonOptions);
 
+    /// <summary><c>ChatInput</c>: the user's answer.</summary>
+    /// <remarks>
+    ///     <c>decision</c> is written — always <c>Answer</c> — because the decide path's replay and standing-conflict
+    ///     checks read <c>output.decision</c> structurally, exactly as they do for a pause.
+    /// </remarks>
+    public static JsonElement ChatInputOutput(string text) =>
+        JsonSerializer.SerializeToElement(new ChatInputOutputPayload { Decision = nameof(GraphWorkflowDecisionKind.Answer), Text = text }, JsonOptions);
+
     /// <summary><c>Tool</c>: the invocation's answer under <c>result</c>.</summary>
     /// <remarks>
     ///     Embedded as JSON when the tool answered with an object or an array, and as a string otherwise. That one
@@ -306,6 +314,13 @@ internal static class GraphWorkflowDocuments
         public required string Outcome { get; init; }
 
         public required JsonElement Result { get; init; }
+    }
+
+    private sealed record ChatInputOutputPayload
+    {
+        public required string Decision { get; init; }
+
+        public required string Text { get; init; }
     }
 
     private sealed record PauseOutputPayload

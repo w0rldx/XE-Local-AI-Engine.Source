@@ -2731,6 +2731,7 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitio
 	graphHash: string;
 	nodeCount: number;
 	schemaVersion: number;
+	kind: string;
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
@@ -2743,6 +2744,7 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitio
 	graphHash: string;
 	nodeCount: number;
 	schemaVersion: number;
+	kind: string;
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
@@ -2758,6 +2760,8 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph = {
 	schemaVersion?: number | null;
 	nodes?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode>;
 	edges?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge>;
+	kind?: string | null;
+	chat?: unknown;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge = {

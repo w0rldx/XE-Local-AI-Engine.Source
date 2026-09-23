@@ -21,6 +21,7 @@ import {
 	GRAPH_WORKFLOW_KEY_PATTERN,
 	type GraphWorkflowConditionOperator,
 	type GraphWorkflowDecisionKind,
+	type GraphWorkflowDefinitionKind,
 	type GraphWorkflowFailureClass,
 	type GraphWorkflowGraph,
 	type GraphWorkflowGraphEdge,
@@ -28,8 +29,9 @@ import {
 	type GraphWorkflowJoinPolicy,
 	type GraphWorkflowNodeKind,
 	type GraphWorkflowNodeRunStatus,
-	graphWorkflowDecisionKinds,
 	graphWorkflowDefaultMaxAttempts,
+	graphWorkflowPauseDecisionKinds,
+	narrowGraphWorkflowDefinitionKind,
 	narrowGraphWorkflowJoinPolicy,
 	narrowGraphWorkflowNodeKind,
 	normalizeGraphWorkflowConditionOperator,
@@ -65,6 +67,35 @@ export interface GraphWorkflowArgumentBinding {
 export type GraphWorkflowInputBinding = GraphWorkflowArgumentBinding;
 export type GraphWorkflowSamplingOptions = Omit<ChatSamplingOptions, "seed"> & { seed?: string };
 
+/**
+ * The chat flags. `undefined` is "absent on the wire", which the parser reads as its own default (`false`, or `true`
+ * for an End in a Chat graph) — held as absent rather than defaulted so a Standard graph saves byte for byte as it was.
+ */
+interface GraphWorkflowChatFlags {
+	readonly publishToChat?: boolean;
+}
+
+interface GraphWorkflowAttachmentFlags extends GraphWorkflowChatFlags {
+	readonly includeAttachments?: boolean;
+}
+
+/** The graph-level `chat` block, member by member as stored: an absent member is the parser's default. */
+export interface GraphWorkflowChatSettings {
+	readonly acceptsAttachments?: boolean;
+	readonly requireRerunConfirmation?: boolean;
+}
+
+/** What the graph says about itself, outside its nodes and edges. `chat` is only written for a Chat graph. */
+export interface GraphWorkflowGraphSettings {
+	readonly kind: GraphWorkflowDefinitionKind;
+	readonly chat?: GraphWorkflowChatSettings;
+}
+
+export const standardGraphSettings: GraphWorkflowGraphSettings = { kind: "Standard" };
+
+/** The parser's defaults for an absent `chat` member. */
+export const graphWorkflowChatDefaults = { acceptsAttachments: false, requireRerunConfirmation: true } as const;
+
 export type GraphWorkflowCanvasNodeData =
 	| (GraphWorkflowNodeBase & {
 			readonly kind: "Start";
@@ -80,7 +111,7 @@ export type GraphWorkflowCanvasNodeData =
 			readonly reasoningEffort: string | null;
 			readonly responseJsonSchema: string | null;
 			readonly samplingOptions: GraphWorkflowSamplingOptions;
-	  })
+	  } & GraphWorkflowAttachmentFlags)
 	| (GraphWorkflowNodeBase & {
 			readonly kind: "Agent";
 			readonly agentDefinitionId: string | null;
@@ -89,7 +120,7 @@ export type GraphWorkflowCanvasNodeData =
 			readonly reasoningEffort: string | null;
 			readonly responseJsonSchema: string | null;
 			readonly includeUpstreamOutputs: boolean;
-	  })
+	  } & GraphWorkflowAttachmentFlags)
 	| (GraphWorkflowNodeBase & {
 			readonly kind: "Tool";
 			readonly toolName: string | null;
@@ -104,7 +135,20 @@ export type GraphWorkflowCanvasNodeData =
 			readonly allowedDecisions: readonly GraphWorkflowDecisionKind[];
 			readonly requireComment: boolean;
 	  })
-	| (GraphWorkflowNodeBase & { readonly kind: "End"; readonly outcome: string; readonly resultPath: string | null });
+	| (GraphWorkflowNodeBase & { readonly kind: "ChatInput"; readonly prompt: string })
+	| (GraphWorkflowNodeBase & {
+			readonly kind: "DecisionModel";
+			readonly question: string;
+			readonly labels: readonly string[];
+			readonly provider: string | null;
+			readonly model: string | null;
+			readonly inputBindings: readonly GraphWorkflowInputBinding[];
+	  })
+	| (GraphWorkflowNodeBase & {
+			readonly kind: "End";
+			readonly outcome: string;
+			readonly resultPath: string | null;
+	  } & GraphWorkflowChatFlags);
 
 export interface GraphWorkflowCanvasEdgeCondition {
 	readonly path?: string;
@@ -126,6 +170,11 @@ export interface GraphWorkflowCanvas {
 	readonly edges: GraphWorkflowCanvasEdge[];
 }
 
+/** A canvas read off a wire graph, with the graph-level settings that are not nodes or edges. */
+export interface GraphWorkflowLoadedCanvas extends GraphWorkflowCanvas {
+	readonly settings: GraphWorkflowGraphSettings;
+}
+
 /** React Flow type keys — the keys the canvas registers in its `nodeTypes` map, one component per kind. */
 export const graphWorkflowNodeTypeByKind: Record<GraphWorkflowNodeKind, string> = {
 	Start: "start",
@@ -137,6 +186,8 @@ export const graphWorkflowNodeTypeByKind: Record<GraphWorkflowNodeKind, string> 
 	Join: "join",
 	Pause: "pause",
 	End: "end",
+	ChatInput: "chat-input",
+	DecisionModel: "decision-model",
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -157,6 +208,27 @@ function stringOrEmpty(value: unknown): string {
 
 function booleanOr(value: unknown, fallback: boolean): boolean {
 	return typeof value === "boolean" ? value : fallback;
+}
+
+function booleanOrUndefined(value: unknown): boolean | undefined {
+	return typeof value === "boolean" ? value : undefined;
+}
+
+/** Only the members that are present, so an absent flag stays absent through the round trip. */
+function chatFlagsFromWire(config: Record<string, unknown>, withAttachments: boolean): GraphWorkflowAttachmentFlags {
+	const publishToChat = booleanOrUndefined(config["publishToChat"]);
+	const includeAttachments = withAttachments ? booleanOrUndefined(config["includeAttachments"]) : undefined;
+	return {
+		...(publishToChat === undefined ? {} : { publishToChat }),
+		...(includeAttachments === undefined ? {} : { includeAttachments }),
+	};
+}
+
+function chatFlagsToWire(data: GraphWorkflowAttachmentFlags): GraphWorkflowAttachmentFlags {
+	return {
+		...(data.publishToChat === undefined ? {} : { publishToChat: data.publishToChat }),
+		...(data.includeAttachments === undefined ? {} : { includeAttachments: data.includeAttachments }),
+	};
 }
 
 function numberOrUndefined(value: unknown): number | undefined {
@@ -254,6 +326,7 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				reasoningEffort: stringOrNull(config["reasoningEffort"]),
 				responseJsonSchema: jsonText(config["responseJsonSchema"]),
 				includeUpstreamOutputs: booleanOr(config["includeUpstreamOutputs"], true),
+				...chatFlagsFromWire(config, true),
 			};
 		case "LlmCall":
 			return {
@@ -266,6 +339,7 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				reasoningEffort: stringOrNull(config["reasoningEffort"]),
 				responseJsonSchema: jsonText(config["responseJsonSchema"]),
 				samplingOptions: samplingFromWire(config["samplingOptions"]),
+				...chatFlagsFromWire(config, true),
 			};
 		case "Tool":
 			return {
@@ -293,7 +367,21 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				),
 				requireComment: booleanOr(config["requireComment"], false),
 			};
-		// `default` IS the End case: `narrowGraphWorkflowNodeKind` answers one of the eight members and the seven above
+		case "ChatInput":
+			return { ...base, kind: "ChatInput", prompt: stringOrEmpty(config["prompt"]) };
+		case "DecisionModel":
+			return {
+				...base,
+				kind: "DecisionModel",
+				question: stringOrEmpty(config["question"]),
+				labels: Array.isArray(config["labels"])
+					? config["labels"].filter((entry): entry is string => typeof entry === "string")
+					: [],
+				provider: stringOrNull(config["provider"]),
+				model: stringOrNull(config["model"]),
+				inputBindings: bindingsFromWire(config["inputBindings"]),
+			};
+		// `default` IS the End case: `narrowGraphWorkflowNodeKind` answers one of the members and the others above
 		// are handled, so TypeScript narrows `node` here exactly as a `case "End"` would. It also catches an UNKNOWN
 		// kind, which the narrowing turns into `End` — lossy, and `loadedGraphIssues` is what keeps that visible.
 		default:
@@ -302,8 +390,28 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				kind: "End",
 				outcome: stringOrEmpty(config["outcome"]),
 				resultPath: stringOrNull(config["resultPath"]),
+				...chatFlagsFromWire(config, false),
 			};
 	}
+}
+
+/** The graph-level `kind` and `chat` block. A `chat` member that is not a boolean reads as absent (the default). */
+function graphSettingsFromWire(graph: GraphWorkflowGraph | undefined): GraphWorkflowGraphSettings {
+	const kind = narrowGraphWorkflowDefinitionKind(graph?.kind);
+	const raw: unknown = graph?.chat;
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+		return { kind };
+	}
+	const record = raw as Record<string, unknown>;
+	const acceptsAttachments = booleanOrUndefined(record["acceptsAttachments"]);
+	const requireRerunConfirmation = booleanOrUndefined(record["requireRerunConfirmation"]);
+	return {
+		kind,
+		chat: {
+			...(acceptsAttachments === undefined ? {} : { acceptsAttachments }),
+			...(requireRerunConfirmation === undefined ? {} : { requireRerunConfirmation }),
+		},
+	};
 }
 
 /**
@@ -364,7 +472,7 @@ function sourceHandleFor(
 		return operand === true || operand === "true" ? "true" : operand === false || operand === "false" ? "false" : undefined;
 	}
 	if (sourceKind === "Pause") {
-		const decisions: readonly string[] = graphWorkflowDecisionKinds;
+		const decisions: readonly string[] = graphWorkflowPauseDecisionKinds;
 		if (decisions.includes(label)) {
 			return label;
 		}
@@ -381,7 +489,7 @@ function sourceHandleFor(
 export function graphToCanvas(
 	graph: GraphWorkflowGraph | undefined,
 	options?: { readonly relayout?: boolean },
-): GraphWorkflowCanvas {
+): GraphWorkflowLoadedCanvas {
 	const wireNodes = graph?.nodes ?? [];
 	const wireEdges = graph?.edges ?? [];
 	const kindByKey = new Map<string, GraphWorkflowNodeKind>(
@@ -422,7 +530,7 @@ export function graphToCanvas(
 		};
 	});
 
-	return { nodes, edges };
+	return { nodes, edges, settings: graphSettingsFromWire(graph) };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -499,6 +607,7 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 				reasoningEffort: data.reasoningEffort,
 				responseJsonSchema: parseJsonField(data.responseJsonSchema, data.key, issues, true),
 				includeUpstreamOutputs: data.includeUpstreamOutputs,
+				...chatFlagsToWire(data),
 			};
 		case "LlmCall": {
 			const bindings = llmBindingsToWire(data.inputBindings, data.key, issues);
@@ -513,6 +622,7 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 					? {}
 					: { responseJsonSchema: parseJsonField(data.responseJsonSchema, data.key, issues, true) }),
 				...(samplingOptions ? { samplingOptions } : {}),
+				...chatFlagsToWire(data),
 			};
 		}
 		case "Tool": {
@@ -534,9 +644,21 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 				allowedDecisions: data.allowedDecisions,
 				requireComment: data.requireComment,
 			};
+		case "ChatInput":
+			return { prompt: data.prompt };
+		case "DecisionModel": {
+			const bindings = llmBindingsToWire(data.inputBindings, data.key, issues);
+			return {
+				question: data.question,
+				labels: data.labels,
+				...(data.provider === null ? {} : { provider: data.provider }),
+				...(data.model === null ? {} : { model: data.model }),
+				...(bindings ? { inputBindings: bindings } : {}),
+			};
+		}
 		// `default` IS the End case — see `nodeDataFromWire`.
 		default:
-			return { outcome: data.outcome, resultPath: data.resultPath };
+			return { outcome: data.outcome, resultPath: data.resultPath, ...chatFlagsToWire(data) };
 	}
 }
 
@@ -566,6 +688,7 @@ export interface GraphWorkflowCanvasConversion {
 export function canvasToGraph(
 	nodes: readonly GraphWorkflowCanvasNode[],
 	edges: readonly GraphWorkflowCanvasEdge[],
+	settings: GraphWorkflowGraphSettings = standardGraphSettings,
 ): GraphWorkflowCanvasConversion {
 	const issues: GraphWorkflowGraphIssue[] = [];
 	const graphNodes: GraphWorkflowGraphNode[] = nodes.map((node) => {
@@ -610,7 +733,11 @@ export function canvasToGraph(
 		};
 	});
 
-	return { graph: { schemaVersion: 1, nodes: graphNodes, edges: graphEdges }, issues };
+	// A Standard graph writes neither member, so it saves byte for byte as it did before chat graphs existed. The `chat`
+	// block is written only when the graph carries one: an absent block is the parser's defaults.
+	const graphLevel =
+		settings.kind === "Chat" ? { kind: "Chat" as const, ...(settings.chat === undefined ? {} : { chat: settings.chat }) } : {};
+	return { graph: { schemaVersion: 1, ...graphLevel, nodes: graphNodes, edges: graphEdges }, issues };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -655,6 +782,10 @@ export function defaultNodeData(kind: GraphWorkflowNodeKind, key: string): Graph
 			return { ...base, kind };
 		case "Pause":
 			return { ...base, kind, prompt: "", allowedDecisions: ["Approve", "Reject"], requireComment: false };
+		case "ChatInput":
+			return { ...base, kind, prompt: "" };
+		case "DecisionModel":
+			return { ...base, kind, question: "", labels: [], provider: null, model: null, inputBindings: [] };
 		// `default` IS the End case — see `nodeDataFromWire`.
 		default:
 			return { ...base, kind, outcome: "completed", resultPath: null };
@@ -787,7 +918,10 @@ export function pauseContextEdges(
 	connection?: { readonly from: string; readonly to: string },
 ): readonly GraphWorkflowCanvasEdge[] {
 	const kindByKey = new Map(nodes.map((node) => [node.id, node.data.kind]));
-	const pauseKeys = new Set(nodes.filter((node) => node.data.kind === "Pause").map((node) => node.id));
+	// A ChatInput parks like a Pause and hands on only its answer, so it is walked exactly as one (plan §3.2).
+	const pauseKeys = new Set(
+		nodes.filter((node) => node.data.kind === "Pause" || node.data.kind === "ChatInput").map((node) => node.id),
+	);
 	// EVERY kind, not just `Join`: the policy is a member of the node base and the run reads it off whichever node it
 	// is admitting. An `End` or an `Agent` set to `Any` joins exactly as a `Join` does.
 	const anyPolicy = new Set(nodes.filter((node) => node.data.joinPolicy === "Any").map((node) => node.id));
@@ -935,7 +1069,15 @@ function normalizedGraph(graph: GraphWorkflowGraph | undefined): string {
 				: null,
 		}))
 		.toSorted((left, right) => left.key.localeCompare(right.key));
-	return JSON.stringify({ schemaVersion: graph?.schemaVersion ?? 1, nodes, edges });
+	// Absent `kind` and `Standard` are one graph; the `chat` block compares member by member as stored.
+	const settings = graphSettingsFromWire(graph);
+	return JSON.stringify({
+		schemaVersion: graph?.schemaVersion ?? 1,
+		kind: settings.kind,
+		chat: settings.chat === undefined ? null : canonicalize(settings.chat),
+		nodes,
+		edges,
+	});
 }
 
 /**

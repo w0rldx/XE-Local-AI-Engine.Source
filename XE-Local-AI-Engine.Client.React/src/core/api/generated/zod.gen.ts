@@ -3070,6 +3070,7 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinit
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	kind: z.string(),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -3125,6 +3126,8 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph =
 		.nullish(),
 	nodes: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode).optional(),
 	edges: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge).optional(),
+	kind: z.string().nullish(),
+	chat: z.unknown().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest = z.object({
@@ -3147,6 +3150,7 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinit
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	kind: z.string(),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

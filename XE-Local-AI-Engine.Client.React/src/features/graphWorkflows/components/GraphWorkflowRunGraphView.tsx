@@ -4,8 +4,10 @@ import {
 	IconArrowsSplit2,
 	IconFlag,
 	IconGitBranch,
+	IconMessageQuestion,
 	IconPlayerPlay,
 	IconRobot,
+	IconRoute,
 	IconSparkles,
 	IconTool,
 	IconUserCheck,
@@ -48,6 +50,8 @@ const kindIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
 	Join: IconArrowsJoin2,
 	Pause: IconUserCheck,
 	End: IconFlag,
+	ChatInput: IconMessageQuestion,
+	DecisionModel: IconRoute,
 };
 
 /**

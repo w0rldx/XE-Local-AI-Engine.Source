@@ -22,6 +22,7 @@ import {
 	type GraphWorkflowCanvasNode,
 	type GraphWorkflowCanvasNodeData,
 	type GraphWorkflowEdgeData,
+	type GraphWorkflowGraphSettings,
 	graphToCanvas,
 	graphWorkflowNodeTypeByKind,
 	graphWorkflowsEqual,
@@ -63,7 +64,9 @@ export type GraphWorkflowRenameOutcome = "ok" | "collision" | "invalid";
 export interface GraphWorkflowEditorState {
 	readonly nodes: readonly GraphWorkflowCanvasNode[];
 	readonly edges: readonly GraphWorkflowCanvasEdge[];
-	/** `canvasToGraph(nodes, edges).graph`, memoised — what a save would send. */
+	/** The graph-level `kind` and `chat` block. Part of the graph document, so an edit here dirties the canvas. */
+	readonly settings: GraphWorkflowGraphSettings;
+	/** `canvasToGraph(nodes, edges, settings).graph`, memoised — what a save would send. */
 	readonly graph: GraphWorkflowGraph;
 	/**
 	 * What the LOADED graph carried that the canvas cannot round-trip, plus the conversion's own issues, plus the
@@ -83,6 +86,7 @@ export interface GraphWorkflowEditorState {
 	readonly updateNodeData: (key: string, patch: Partial<GraphWorkflowCanvasNodeData>) => void;
 	readonly renameNode: (from: string, to: string) => GraphWorkflowRenameOutcome;
 	readonly updateEdgeData: (edgeId: string, patch: Partial<GraphWorkflowEdgeData>) => void;
+	readonly updateSettings: (next: GraphWorkflowGraphSettings) => void;
 	readonly removeNode: (key: string) => void;
 	readonly removeEdge: (edgeId: string) => void;
 	readonly autoArrange: () => void;
@@ -163,6 +167,7 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 	const [initialCanvas] = useState(() => graphToCanvas(initial));
 	const [nodes, setNodes] = useState<readonly GraphWorkflowCanvasNode[]>(initialCanvas.nodes);
 	const [edges, setEdges] = useState<readonly GraphWorkflowCanvasEdge[]>(initialCanvas.edges);
+	const [settings, setSettings] = useState<GraphWorkflowGraphSettings>(initialCanvas.settings);
 	const [baseline, setBaseline] = useState<GraphWorkflowGraph | undefined>(initial);
 	const [lastNotice, setLastNotice] = useState<GraphWorkflowEditorNotice | undefined>(undefined);
 	// Held in state, not derived: `graphToCanvas` has already dropped the unreadable `op` and narrowed the unknown kind
@@ -173,7 +178,7 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		setLastNotice((previous) => ({ rule, seq: (previous?.seq ?? 0) + 1 }));
 	}, []);
 
-	const conversion = useMemo(() => canvasToGraph(nodes, edges), [nodes, edges]);
+	const conversion = useMemo(() => canvasToGraph(nodes, edges, settings), [nodes, edges, settings]);
 	// The loaded-graph issues outlive every edit: moving a node does not make an unreadable operator token readable, and
 	// Save has to stay refused until the graph is loaded again or written over.
 	const issues = useMemo(
@@ -225,7 +230,11 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 			// Wiring a Pause is the only gesture that can leave a node reading an approval where its author meant an
 			// answer, so the `context` edges are computed HERE and never on a render or a validate, and only for what
 			// THIS connection can have broken. An edge the operator deletes has to stay deleted.
-			const touchesPause = [source, target].some((end) => nodes.find((node) => node.id === end)?.data.kind === "Pause");
+			// A ChatInput hands on only its answer, exactly as a Pause hands on only its decision.
+			const touchesPause = [source, target].some((end) => {
+				const kind = nodes.find((node) => node.id === end)?.data.kind;
+				return kind === "Pause" || kind === "ChatInput";
+			});
 			const context = touchesPause ? pauseContextEdges(nodes, [...edges, connected], { from: source, to: target }) : [];
 			setEdges((current) => [...current, connected, ...context]);
 			if (context.length > 0) {
@@ -342,6 +351,7 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		const canvas = graphToCanvas(graph);
 		setNodes(canvas.nodes);
 		setEdges(canvas.edges);
+		setSettings(canvas.settings);
 		setBaseline(graph);
 		setLoadedIssues(loadedGraphIssues(graph));
 		setLastNotice(undefined);
@@ -361,6 +371,7 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 	return {
 		nodes,
 		edges,
+		settings,
 		graph: conversion.graph,
 		issues,
 		isDirty: !graphWorkflowsEqual(conversion.graph, baseline),
@@ -373,6 +384,7 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		updateNodeData,
 		renameNode,
 		updateEdgeData,
+		updateSettings: setSettings,
 		removeNode,
 		removeEdge,
 		autoArrange,

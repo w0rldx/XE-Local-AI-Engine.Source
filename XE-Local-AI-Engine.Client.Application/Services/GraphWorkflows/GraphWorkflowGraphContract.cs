@@ -37,18 +37,18 @@ public static class GraphWorkflowGraphContract
         GraphWorkflowGraph.Parse(graphJson, maxNodes);
 
     /// <summary>
-    ///     Which decisions a node run in <paramref name="status" /> can take: a pause's two answers from
-    ///     <c>WaitingForApproval</c>, and nothing at all from anywhere else.
+    ///     Which decisions a node run of <paramref name="kind" /> in <paramref name="status" /> can take: a pause's two
+    ///     answers or a chat input's <c>Answer</c> from <c>WaitingForApproval</c>, and nothing at all from anywhere else.
     /// </summary>
     /// <remarks>
     ///     Asked of the state machine rather than listed again here, so what the panel offers and what the decide
     ///     endpoint accepts cannot drift — a status that is not decidable at all must advertise NOTHING, or every
     ///     button it draws answers "conflict".
     /// </remarks>
-    public static IReadOnlyList<string> AllowedDecisions(GraphWorkflowNodeRunStatus status) =>
+    public static IReadOnlyList<string> AllowedDecisions(GraphWorkflowNodeKind kind, GraphWorkflowNodeRunStatus status) =>
     [
         .. Enum.GetValues<GraphWorkflowDecisionKind>()
-               .Where(decision => GraphWorkflowStateMachine.IsDecidable(status, decision))
+               .Where(decision => GraphWorkflowStateMachine.IsDecidable(kind, status, decision))
                .Select(static decision => decision.ToString())
     ];
 

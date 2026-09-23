@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -65,10 +66,13 @@ internal sealed class GraphWorkflowAgentTurn
     public required JsonElement? Json { get; init; }
 
     public required GraphWorkflowAgentUsage? Usage { get; init; }
+
+    /// <summary>The node's <c>output</c> when its kind shapes one of its own (a <c>DecisionModel</c>); null means the Agent shape.</summary>
+    public JsonElement? Output { get; init; }
 }
 
 /// <summary>
-///     The shared model-invocation lane for <c>Agent</c> and <c>LlmCall</c> nodes, driven off the tick through
+///     The shared model-invocation lane for <c>Agent</c>, <c>LlmCall</c> and <c>DecisionModel</c> nodes, driven off the tick through
 ///     <see cref="GraphWorkflowInFlightLane{TResult}" /> and never inside it.
 /// </summary>
 /// <remarks>
@@ -103,6 +107,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    private readonly IReadOnlyList<IGraphWorkflowDecisionProvider> _decisionProviders;
     private readonly IInvocationRunner _invocationRunner;
     private readonly GraphWorkflowInFlightLane<GraphWorkflowAgentTurn> _lane;
     private readonly ILogger<GraphWorkflowInvocationExecutor> _logger;
@@ -112,8 +117,10 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     public GraphWorkflowInvocationExecutor(IServiceScopeFactory scopeFactory,
         IInvocationRunner invocationRunner,
         IOptions<GraphWorkflowOptions> options,
+        IEnumerable<IGraphWorkflowDecisionProvider> decisionProviders,
         ILogger<GraphWorkflowInvocationExecutor> logger)
     {
+        _decisionProviders = [.. decisionProviders ?? throw new ArgumentNullException(nameof(decisionProviders))];
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 
@@ -132,7 +139,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     }
 
     public bool Owns(GraphWorkflowNodeKind kind) =>
-        kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.LlmCall;
+        kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.LlmCall or GraphWorkflowNodeKind.DecisionModel;
 
     public bool IsInFlight(Guid nodeRunId) =>
         _lane.IsInFlight(nodeRunId);
@@ -165,7 +172,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 : 0;
         }
 
-        if (node.Config is not GraphWorkflowAgentConfig and not GraphWorkflowLlmCallConfig)
+        if (node.Config is not GraphWorkflowAgentConfig and not GraphWorkflowLlmCallConfig and not GraphWorkflowDecisionModelConfig)
         {
             // Unreachable through the parser, which types a node's config by its kind. Refused rather than assumed,
             // because the alternative is a NullReferenceException inside a detached task nobody is watching.
@@ -346,6 +353,11 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             return await RunLlmTurnAsync(runId, nodeRunId, node, llmConfig, invocationId, inputJson, leaseAcquired, cancellationToken);
         }
 
+        if (config is GraphWorkflowDecisionModelConfig decisionConfig)
+        {
+            return await RunDecisionTurnAsync(runId, nodeRunId, node, decisionConfig, invocationId, inputJson, leaseAcquired, cancellationToken);
+        }
+
         var agentConfig = (GraphWorkflowAgentConfig)config;
         IDisposable? reservation = null;
         try
@@ -474,6 +486,9 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         CancellationToken cancellationToken)
     {
         IDisposable? reservation = null;
+
+        // The DecisionModel lane lowers onto this path, so the operator-facing reasons name the kind the author drew.
+        var callName = node.Kind == GraphWorkflowNodeKind.DecisionModel ? "decision model" : "LLM call";
         try
         {
             if (!TryBuildBoundPrompt(config, inputJson, _options.MaxRunInputBytes, out var prompt, out var bindingError))
@@ -488,7 +503,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                                                        .ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);
             if (string.IsNullOrWhiteSpace(effectiveModel))
             {
-                return Invalid("No local chat model is available to run this LLM call node. Install a local chat model or pin one on the node.");
+                return Invalid($"No local chat model is available to run this {callName} node. Install a local chat model or pin one on the node.");
             }
 
             if (!await NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(effectiveModel,
@@ -497,13 +512,13 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                     services.GetRequiredService<ILocalModelProviderResolver>(),
                     cancellationToken))
             {
-                return Invalid("Graph workflow LLM call nodes require an installed node-managed GGUF chat model.");
+                return Invalid($"Graph workflow {callName} nodes require an installed node-managed GGUF chat model.");
             }
 
             var classification = await services.GetRequiredService<IModelClassificationStore>().GetByNameAsync(effectiveModel, cancellationToken);
             if (!IsChatModel(effectiveModel, classification))
             {
-                return Invalid("Graph workflow LLM call nodes require a model classified for chat.");
+                return Invalid($"Graph workflow {callName} nodes require a model classified for chat.");
             }
 
             var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
@@ -547,12 +562,68 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 nodeRunId,
                 node.NodeKey,
                 invocationId);
-            return Failure(GraphWorkflowFailureClass.NodeFailed, "This node run's LLM call did not complete. See the node logs for details.");
+            return Failure(GraphWorkflowFailureClass.NodeFailed, $"This node run's {callName} did not complete. See the node logs for details.");
         }
         finally
         {
             reservation?.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     A <c>DecisionModel</c> turn: the provider lowers the node to an LLM call, which runs through
+    ///     <see cref="RunLlmTurnAsync" /> unchanged, and its answer is held to the node's labels.
+    /// </summary>
+    /// <remarks>
+    ///     A choice outside the labels fails <c>NodeFailed</c>, the RETRYABLE class: the grammar should make it
+    ///     impossible, and a re-ask is the cheap answer when a runtime did not enforce it. The raw answer is never
+    ///     repeated in the row's reason — it is model output, not an operator-facing sentence.
+    /// </remarks>
+    private async Task<GraphWorkflowAgentTurn> RunDecisionTurnAsync(Guid runId,
+        Guid nodeRunId,
+        GraphWorkflowGraphNode node,
+        GraphWorkflowDecisionModelConfig config,
+        Guid invocationId,
+        string inputJson,
+        StrongBox<bool> leaseAcquired,
+        CancellationToken cancellationToken)
+    {
+        var provider = _decisionProviders.FirstOrDefault(candidate => string.Equals(candidate.Name, config.Provider, StringComparison.Ordinal));
+        if (provider is null)
+        {
+            return Invalid($"Node '{node.NodeKey}' names the decision provider '{config.Provider}', which this build does not run.");
+        }
+
+        var turn = await RunLlmTurnAsync(runId, nodeRunId, node, provider.Lower(config), invocationId, inputJson, leaseAcquired, cancellationToken);
+        if (!turn.Succeeded)
+        {
+            return turn;
+        }
+
+        var decision = provider.Interpret(turn.Text, turn.Json);
+        if (decision.Choice is not { } choice || !config.Labels.Contains(choice, StringComparer.Ordinal))
+        {
+            return Failure(GraphWorkflowFailureClass.NodeFailed, "The decision model answered with something that is not one of this node's labels.");
+        }
+
+        return new GraphWorkflowAgentTurn
+        {
+            Succeeded = true,
+            FailureClass = GraphWorkflowFailureClass.None,
+            SanitizedReason = null,
+            Text = turn.Text,
+            Json = turn.Json,
+            Usage = turn.Usage,
+            Output = JsonSerializer.SerializeToElement(new DecisionOutputPayload
+            {
+                Choice = choice,
+                Confidence = decision.Confidence,
+                Probabilities = decision.Probabilities,
+                Provider = provider.Name,
+                Usage = turn.Usage
+            },
+                JsonOptions)
+        };
     }
 
     internal static bool TryBuildBoundPrompt(GraphWorkflowLlmCallConfig config,
@@ -846,7 +917,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     /// </summary>
     private static GraphWorkflowAgentTurn SchemaFailure(string? finishReason) =>
         Failure(GraphWorkflowFailureClass.NodeFailed,
-            $"The agent did not answer with the JSON object its response schema requires (finish reason '{Known(finishReason)}').");
+            $"The model did not answer with the JSON object its response schema requires (finish reason '{Known(finishReason)}').");
 
     private static string Known(string? finishReason) =>
         Array.Find(KnownFinishReasons, known => string.Equals(known, finishReason, StringComparison.Ordinal)) ?? "unknown";
@@ -1083,11 +1154,25 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
     /// <summary>The Agent <c>output</c> shape, per the binding document contract.</summary>
     private static JsonElement Output(GraphWorkflowAgentTurn turn) =>
-        JsonSerializer.SerializeToElement(new AgentOutputPayload { Text = turn.Text, Json = turn.Json, Usage = turn.Usage }, JsonOptions);
+        turn.Output ?? JsonSerializer.SerializeToElement(new AgentOutputPayload { Text = turn.Text, Json = turn.Json, Usage = turn.Usage }, JsonOptions);
 
     /// <summary>Tells the runner to unwind a turn. A cancel for an invocation it no longer knows about is a no-op.</summary>
     private void CancelInvocation(Guid invocationId) =>
         _invocationRunner.Cancel(invocationId);
+
+    /// <summary>The <c>DecisionModel</c> <c>output</c> shape. Conditions route on <c>output.choice</c>.</summary>
+    private sealed record DecisionOutputPayload
+    {
+        public required string Choice { get; init; }
+
+        public required double? Confidence { get; init; }
+
+        public required IReadOnlyDictionary<string, double>? Probabilities { get; init; }
+
+        public required string Provider { get; init; }
+
+        public required GraphWorkflowAgentUsage? Usage { get; init; }
+    }
 
     private sealed record AgentOutputPayload
     {

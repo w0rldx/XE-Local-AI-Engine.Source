@@ -15,8 +15,10 @@ import {
 	IconFlagCheck,
 	IconGitBranch,
 	IconLayoutDistributeVertical,
+	IconMessageQuestion,
 	IconPlayerPause,
 	IconRobot,
+	IconRoute,
 	IconSparkles,
 	IconTool,
 } from "@tabler/icons-react";
@@ -63,6 +65,8 @@ const paletteIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
 	Join: IconArrowsJoin2,
 	Pause: IconPlayerPause,
 	End: IconFlagCheck,
+	ChatInput: IconMessageQuestion,
+	DecisionModel: IconRoute,
 };
 
 /**
@@ -186,7 +190,7 @@ function GraphWorkflowEditorCanvasInner({
 						)
 					: t(
 							"pages.graphWorkflows.editor.notice.pauseContextEdgeAdded",
-							"A Pause passes on only its decision, so a connection labelled “context” now carries the earlier node’s answer around it. Delete that connection if you do not want it.",
+							"A Pause or a chat input passes on only its decision or answer, so a connection labelled “context” now carries the earlier node’s answer around it. Delete that connection if you do not want it.",
 						);
 
 	return (

@@ -12,7 +12,7 @@ import {
 	asGraphWorkflowDecisionKind,
 	type GraphWorkflowDecisionKind,
 	type GraphWorkflowNodeRunResponse,
-	graphWorkflowDecisionKinds,
+	graphWorkflowPauseDecisionKinds,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { useDecideGraphWorkflowNodeRun } from "@/features/graphWorkflows/queries/useGraphWorkflows";
 
@@ -20,7 +20,10 @@ export interface GraphWorkflowDecisionPanelProps {
 	readonly runId: string;
 	/** The node run as the server last described it. Nothing renders unless it carries a `pendingDecisionKind`. */
 	readonly nodeRun: GraphWorkflowNodeRunResponse;
-	/** From the Pause node's config. Empty falls back to the two v1 kinds rather than offering no control at all. */
+	/**
+	 * From the Pause node's config. Empty falls back to the two Pause kinds rather than offering no control at all.
+	 * Ignored for a ChatInput, whose one decision is `Answer`.
+	 */
 	readonly allowedDecisions: readonly GraphWorkflowDecisionKind[];
 	readonly requireComment: boolean;
 	readonly prompt?: string;
@@ -72,6 +75,7 @@ export function GraphWorkflowDecisionPanel({
 	const [payloadText, setPayloadText] = useState("");
 	const [payloadError, setPayloadError] = useState(false);
 	const [advancedOpen, setAdvancedOpen] = useState(false);
+	const [answer, setAnswer] = useState("");
 
 	const pendingDecisionKind = nodeRun.pendingDecisionKind ?? undefined;
 	const nodeKey = nodeRun.nodeKey ?? "";
@@ -92,18 +96,87 @@ export function GraphWorkflowDecisionPanel({
 		setComment("");
 		setPayloadText("");
 		setPayloadError(false);
+		setAnswer("");
 	}
 
 	const conflict = readGraphWorkflowConflict(decide.error);
 	const standingDecision = asGraphWorkflowDecisionKind(conflict?.standingDecision);
 	const alreadyDecided = conflict?.conflictType === graphWorkflowConflictTypes.gateAlreadyDecided;
-	const offered = allowedDecisions.length > 0 ? allowedDecisions : graphWorkflowDecisionKinds;
+	const offered = allowedDecisions.length > 0 ? allowedDecisions : graphWorkflowPauseDecisionKinds;
 	const trimmedComment = comment.trim();
 	const commentMissing = requireComment && trimmedComment.length === 0;
 	const commentTooLong = comment.length > COMMENT_MAX;
 
 	if (!pendingDecisionKind) {
 		return null;
+	}
+
+	const outcome = alreadyDecided ? (
+		<Alert color="yellow" variant="light" data-testid="graph-workflow-decision-already-decided">
+			{/* A ChatInput's standing decision is always `Answer`, so naming it would say nothing; the text is what stands. */}
+			{pendingDecisionKind === "Answer"
+				? t("pages.graphWorkflows.decision.alreadyAnswered", "This question was already answered.")
+				: t("pages.graphWorkflows.decision.alreadyDecided", "This was already answered with “{{decision}}”.", {
+						decision: standingDecision
+							? t(`pages.graphWorkflows.decision.${standingDecision}`, standingDecision)
+							: (conflict?.standingDecision ?? ""),
+					})}
+		</Alert>
+	) : conflict?.conflictType === graphWorkflowConflictTypes.runConflict ? (
+		<Alert color="yellow" variant="light" data-testid="graph-workflow-decision-stale">
+			{t("pages.graphWorkflows.decision.runMovedOn", "This run has moved on — it is no longer waiting for this decision.")}
+		</Alert>
+	) : decide.error ? (
+		<InlineErrorAlert
+			message={apiErrorMessage(decide.error, t("pages.graphWorkflows.decision.failed", "That decision could not be recorded."))}
+			variant="light"
+			data-testid="graph-workflow-decision-error"
+		/>
+	) : null;
+
+	if (pendingDecisionKind === "Answer") {
+		// A ChatInput: the answer IS the decision. No comment (the server refuses one here) and no free payload — the
+		// body is `Answer` with `{ text }`, which is what the node's output and every successor read.
+		const trimmedAnswer = answer.trim();
+		return (
+			<SectionCard
+				title={t("pages.graphWorkflows.decision.answerTitle", "Waiting for your answer")}
+				gap="sm"
+				data-testid="graph-workflow-answer-panel"
+			>
+				{prompt ? (
+					<Text size="sm" style={{ whiteSpace: "pre-wrap" }} data-testid="graph-workflow-decision-prompt">
+						{prompt}
+					</Text>
+				) : null}
+				<Textarea
+					label={t("pages.graphWorkflows.decision.answerLabel", "Your answer")}
+					value={answer}
+					autosize={true}
+					minRows={3}
+					disabled={decide.isPending || alreadyDecided}
+					onChange={(event) => setAnswer(event.currentTarget.value)}
+					data-testid="graph-workflow-answer-text"
+				/>
+				{outcome}
+				<Group gap="xs" wrap="wrap">
+					<Button
+						size="xs"
+						loading={decide.isPending}
+						disabled={decide.isPending || alreadyDecided || trimmedAnswer.length === 0}
+						onClick={() =>
+							decide.mutate({
+								path: { runId, nodeKey },
+								body: { operationId: operation.id, decision: "Answer", payload: { text: answer } },
+							})
+						}
+						data-testid="graph-workflow-answer-submit"
+					>
+						{t("pages.graphWorkflows.decision.answerSubmit", "Send answer")}
+					</Button>
+				</Group>
+			</SectionCard>
+		);
 	}
 
 	const submit = (decision: GraphWorkflowDecisionKind): void => {
@@ -197,28 +270,7 @@ export function GraphWorkflowDecisionPanel({
 				</Stack>
 			</Collapse>
 
-			{alreadyDecided ? (
-				<Alert color="yellow" variant="light" data-testid="graph-workflow-decision-already-decided">
-					{t("pages.graphWorkflows.decision.alreadyDecided", "This was already answered with “{{decision}}”.", {
-						decision: standingDecision
-							? t(`pages.graphWorkflows.decision.${standingDecision}`, standingDecision)
-							: (conflict?.standingDecision ?? ""),
-					})}
-				</Alert>
-			) : conflict?.conflictType === graphWorkflowConflictTypes.runConflict ? (
-				<Alert color="yellow" variant="light" data-testid="graph-workflow-decision-stale">
-					{t("pages.graphWorkflows.decision.runMovedOn", "This run has moved on — it is no longer waiting for this decision.")}
-				</Alert>
-			) : decide.error ? (
-				<InlineErrorAlert
-					message={apiErrorMessage(
-						decide.error,
-						t("pages.graphWorkflows.decision.failed", "That decision could not be recorded."),
-					)}
-					variant="light"
-					data-testid="graph-workflow-decision-error"
-				/>
-			) : null}
+			{outcome}
 
 			{/* Wraps on a narrow viewport on purpose: a non-wrapping action row makes a decision visible but
 			    unanswerable at 390px. */}

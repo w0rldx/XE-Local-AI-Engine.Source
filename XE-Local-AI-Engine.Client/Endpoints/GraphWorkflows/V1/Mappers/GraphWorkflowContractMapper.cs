@@ -86,6 +86,7 @@ internal static class GraphWorkflowContractMapper
             GraphHash = value.GraphHash,
             NodeCount = value.NodeCount,
             SchemaVersion = value.SchemaVersion,
+            Kind = value.Kind.ToString(),
             Version = value.Version,
             CreatedAtUtc = value.CreatedAtUtc,
             UpdatedAtUtc = value.UpdatedAtUtc
@@ -103,6 +104,7 @@ internal static class GraphWorkflowContractMapper
             GraphHash = value.GraphHash,
             NodeCount = value.NodeCount,
             SchemaVersion = value.SchemaVersion,
+            Kind = value.Kind.ToString(),
             Version = value.Version,
             CreatedAtUtc = value.CreatedAtUtc,
             UpdatedAtUtc = value.UpdatedAtUtc

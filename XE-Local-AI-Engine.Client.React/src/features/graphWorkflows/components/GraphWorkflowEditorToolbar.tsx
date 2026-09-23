@@ -1,4 +1,5 @@
 import { Button, Text } from "@mantine/core";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 export interface GraphWorkflowEditorToolbarProps {
@@ -16,6 +17,8 @@ export interface GraphWorkflowEditorToolbarProps {
 	readonly onSave: () => void;
 	readonly onSaveAs: () => void;
 	readonly onStartRun: () => void;
+	/** The graph-level settings control, rendered beside Check. */
+	readonly settings?: ReactNode;
 }
 
 /** The canvas's own toolbar: what an operator can do to the open definition, and why a Save is being asked for. */
@@ -32,6 +35,7 @@ export function GraphWorkflowEditorToolbar({
 	onSave,
 	onSaveAs,
 	onStartRun,
+	settings,
 }: GraphWorkflowEditorToolbarProps) {
 	const { t } = useTranslation();
 
@@ -43,6 +47,7 @@ export function GraphWorkflowEditorToolbar({
 			<Button size="xs" variant="default" disabled={!hasDefinition || isDirty} onClick={onRename} data-testid="gw-page-rename">
 				{t("pages.graphWorkflows.page.rename", "Rename")}
 			</Button>
+			{settings}
 			<Button
 				size="xs"
 				variant="default"

@@ -33,7 +33,14 @@ internal sealed record GraphWorkflowAgentConfig(
     string? Model,
     string? ReasoningEffort,
     JsonElement? ResponseJsonSchema,
-    bool IncludeUpstreamOutputs) : GraphWorkflowNodeConfig;
+    bool IncludeUpstreamOutputs) : GraphWorkflowNodeConfig
+{
+    /// <summary>Whether a chat-bound run posts this node's answer into the conversation. Read by the chat publisher, never by routing.</summary>
+    public bool PublishToChat { get; init; }
+
+    /// <summary>Whether the run's chat attachments reach this node's turn. Only legal when the graph's <c>chat.acceptsAttachments</c> is on.</summary>
+    public bool IncludeAttachments { get; init; }
+}
 
 internal sealed record GraphWorkflowLlmCallConfig : GraphWorkflowNodeConfig
 {
@@ -50,6 +57,48 @@ internal sealed record GraphWorkflowLlmCallConfig : GraphWorkflowNodeConfig
     public required JsonElement? ResponseJsonSchema { get; init; }
 
     public required SamplingOptions? SamplingOptions { get; init; }
+
+    /// <summary>See <see cref="GraphWorkflowAgentConfig.PublishToChat" />.</summary>
+    public bool PublishToChat { get; init; }
+
+    /// <summary>See <see cref="GraphWorkflowAgentConfig.IncludeAttachments" />.</summary>
+    public bool IncludeAttachments { get; init; }
+}
+
+/// <summary>
+///     A parked wait on the chat user's next message. <see cref="Prompt" /> is what the chat surface shows while the run
+///     waits; the answer is the user's text, recorded as <c>{ decision: "Answer", text }</c>.
+/// </summary>
+internal sealed record GraphWorkflowChatInputConfig : GraphWorkflowNodeConfig
+{
+    public required string Prompt { get; init; }
+}
+
+/// <summary>
+///     A classifier node: <see cref="Question" /> asked of a decision provider, answered with exactly one of
+///     <see cref="Labels" />. <see cref="Provider" /> is a closed vocabulary; <c>llm</c> lowers to an LLM call.
+/// </summary>
+internal sealed record GraphWorkflowDecisionModelConfig : GraphWorkflowNodeConfig
+{
+    public required string Question { get; init; }
+
+    public required IReadOnlyList<string> Labels { get; init; }
+
+    public required string Provider { get; init; }
+
+    public required string? Model { get; init; }
+
+    public required IReadOnlyDictionary<string, string> InputBindings { get; init; }
+}
+
+/// <summary>The graph-level <c>chat</c> block. Only a <c>Chat</c> graph may declare one; a Chat graph that omits it reads these defaults.</summary>
+internal sealed record GraphWorkflowChatSettings
+{
+    public static GraphWorkflowChatSettings Default { get; } = new() { AcceptsAttachments = false, RequireRerunConfirmation = true };
+
+    public required bool AcceptsAttachments { get; init; }
+
+    public required bool RequireRerunConfirmation { get; init; }
 }
 
 internal sealed record GraphWorkflowToolConfig(string ToolName, JsonElement? Arguments, IReadOnlyDictionary<string, string> ArgumentBindings) : GraphWorkflowNodeConfig;
@@ -62,7 +111,11 @@ internal sealed record GraphWorkflowConditionConfig(string? Path) : GraphWorkflo
 
 internal sealed record GraphWorkflowPauseConfig(string Prompt, IReadOnlyList<GraphWorkflowDecisionKind> AllowedDecisions, bool RequireComment) : GraphWorkflowNodeConfig;
 
-internal sealed record GraphWorkflowEndConfig(string Outcome, string? ResultPath) : GraphWorkflowNodeConfig;
+internal sealed record GraphWorkflowEndConfig(string Outcome, string? ResultPath) : GraphWorkflowNodeConfig
+{
+    /// <summary>Defaults to true in a <c>Chat</c> graph and false otherwise. See <see cref="GraphWorkflowAgentConfig.PublishToChat" />.</summary>
+    public bool PublishToChat { get; init; }
+}
 
 /// <summary>The config of a kind that has none — <c>Parallel</c> and <c>Join</c> are shape, not settings.</summary>
 internal sealed record GraphWorkflowEmptyConfig : GraphWorkflowNodeConfig;

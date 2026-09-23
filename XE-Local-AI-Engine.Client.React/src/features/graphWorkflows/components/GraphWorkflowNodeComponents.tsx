@@ -16,8 +16,10 @@ import {
 	IconFlag,
 	IconFlagCheck,
 	IconGitBranch,
+	IconMessageQuestion,
 	IconPlayerPause,
 	IconRobot,
+	IconRoute,
 	IconSparkles,
 	IconTool,
 } from "@tabler/icons-react";
@@ -41,6 +43,8 @@ const nodeKindIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
 	Join: IconArrowsJoin2,
 	Pause: IconPlayerPause,
 	End: IconFlagCheck,
+	ChatInput: IconMessageQuestion,
+	DecisionModel: IconRoute,
 };
 
 /**

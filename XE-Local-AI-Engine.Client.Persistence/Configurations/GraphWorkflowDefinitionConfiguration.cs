@@ -21,6 +21,13 @@ internal sealed class GraphWorkflowDefinitionConfiguration : IEntityTypeConfigur
         builder.Property(entity => entity.NodeCount).HasColumnName("node_count");
         builder.Property(entity => entity.SchemaVersion).HasColumnName("schema_version");
 
+        // Plaintext and defaulted, so a definition saved before chat workflows reads as Standard and an older binary's inserts still succeed.
+        builder.Property(entity => entity.Kind)
+               .HasColumnName("kind")
+               .HasConversion<string>()
+               .HasMaxLength(32)
+               .HasDefaultValue(GraphWorkflowDefinitionKind.Standard);
+
         // A concurrency token, exactly as the run row is: the store's read-then-check is a fast answer for the common stale PUT, but two edits that both read the
         // same version pass it together, and without the token the later one would silently overwrite the earlier instead of being told it lost.
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
@@ -29,5 +36,6 @@ internal sealed class GraphWorkflowDefinitionConfiguration : IEntityTypeConfigur
 
         // Name is a human label, not a key: index it for list/search but do not enforce uniqueness.
         builder.HasIndex(entity => entity.Name).HasDatabaseName("ix_graph_workflow_definitions_name");
+        builder.HasIndex(entity => entity.Kind).HasDatabaseName("ix_graph_workflow_definitions_kind");
     }
 }

@@ -33861,6 +33861,7 @@
           "graphHash",
           "nodeCount",
           "schemaVersion",
+          "kind",
           "version",
           "createdAtUtc",
           "updatedAtUtc"
@@ -33891,6 +33892,9 @@
             "type": "integer",
             "format": "int32"
           },
+          "kind": {
+            "type": "string"
+          },
           "version": {
             "type": "integer",
             "format": "int32"
@@ -33913,6 +33917,7 @@
           "graphHash",
           "nodeCount",
           "schemaVersion",
+          "kind",
           "version",
           "createdAtUtc",
           "updatedAtUtc"
@@ -33939,6 +33944,9 @@
           "schemaVersion": {
             "type": "integer",
             "format": "int32"
+          },
+          "kind": {
+            "type": "string"
           },
           "version": {
             "type": "integer",
@@ -33986,6 +33994,13 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphEdge"
             }
+          },
+          "kind": {
+            "type": "string",
+            "nullable": true
+          },
+          "chat": {
+            "nullable": true
           }
         }
       },

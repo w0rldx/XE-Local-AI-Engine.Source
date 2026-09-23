@@ -12,6 +12,7 @@ import { GraphWorkflowEdgeConfigPanel } from "@/features/graphWorkflows/componen
 import { GraphWorkflowEditorCanvas } from "@/features/graphWorkflows/components/GraphWorkflowEditorCanvas";
 import { GraphWorkflowEditorToolbar } from "@/features/graphWorkflows/components/GraphWorkflowEditorToolbar";
 import { GraphWorkflowNodeConfigPanel } from "@/features/graphWorkflows/components/GraphWorkflowNodeConfigPanel";
+import { GraphWorkflowSettingsPopover } from "@/features/graphWorkflows/components/GraphWorkflowSettingsPopover";
 import { GraphWorkflowStartRunDialog } from "@/features/graphWorkflows/components/GraphWorkflowStartRunDialog";
 import { GraphWorkflowValidationStrip } from "@/features/graphWorkflows/components/GraphWorkflowValidationStrip";
 import { useGraphWorkflowEditorPage } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditorPage";
@@ -99,6 +100,13 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 			}}
 			onSaveAs={() => setMetaDialog("saveAs")}
 			onStartRun={() => setStartOpened(true)}
+			settings={
+				<GraphWorkflowSettingsPopover
+					settings={editor.settings}
+					onChange={editor.updateSettings}
+					disabled={definition === undefined}
+				/>
+			}
 		/>
 	);
 
@@ -184,6 +192,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 			agentOptions={agentOptionsQuery.data ?? []}
 			modelOptions={modelOptionsQuery.data ?? []}
 			llmModelOptions={llmModelOptionsQuery.data ?? []}
+			graphSettings={editor.settings}
 		/>
 	) : selectedEdge ? (
 		<GraphWorkflowEdgeConfigPanel

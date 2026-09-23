@@ -56,8 +56,17 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         string graphJson,
         CancellationToken cancellationToken = default)
     {
-        var nodeCount = (await ValidateAndParseAsync(graphJson, cancellationToken)).Nodes.Count;
-        return await _store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand { DefinitionId = Guid.NewGuid(), Name = name, GraphJson = graphJson, NodeCount = nodeCount, Description = description },
+        // Node count and kind are denormalized from the SAME parse, so the list and the picker never decrypt a blob.
+        var graph = await ValidateAndParseAsync(graphJson, cancellationToken);
+        return await _store.CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = name,
+            GraphJson = graphJson,
+            NodeCount = graph.Nodes.Count,
+            Kind = graph.Kind,
+            Description = description
+        },
                                cancellationToken);
     }
 
@@ -68,10 +77,19 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         string? graphJson,
         CancellationToken cancellationToken = default)
     {
-        // A null graph leaves the stored one alone, so the node count must stay null with it: writing a count for a
+        // A null graph leaves the stored one alone, so the node count and kind must stay null with it: writing either for a
         // graph nobody sent would denormalize a lie the definition list then reports.
-        int? nodeCount = graphJson is null ? null : (await ValidateAndParseAsync(graphJson, cancellationToken)).Nodes.Count;
-        return await _store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand { DefinitionId = definitionId, ExpectedVersion = expectedVersion, Name = name, Description = description, GraphJson = graphJson, NodeCount = nodeCount },
+        var graph = graphJson is null ? null : await ValidateAndParseAsync(graphJson, cancellationToken);
+        return await _store.UpdateDefinitionAsync(new UpdateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = definitionId,
+            ExpectedVersion = expectedVersion,
+            Name = name,
+            Description = description,
+            GraphJson = graphJson,
+            NodeCount = graph?.Nodes.Count,
+            Kind = graph?.Kind
+        },
                                cancellationToken);
     }
 

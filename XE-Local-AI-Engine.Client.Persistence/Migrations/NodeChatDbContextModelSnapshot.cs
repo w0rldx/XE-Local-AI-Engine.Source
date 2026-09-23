@@ -15,7 +15,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", b =>
                 {
@@ -3871,6 +3871,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("BLOB")
                         .HasColumnName("graph_json");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Standard")
+                        .HasColumnName("kind");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -3895,6 +3903,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnName("version");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Kind")
+                        .HasDatabaseName("ix_graph_workflow_definitions_kind");
 
                     b.HasIndex("Name")
                         .HasDatabaseName("ix_graph_workflow_definitions_name");

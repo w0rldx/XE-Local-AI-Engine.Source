@@ -887,4 +887,46 @@ internal static class GraphWorkflowGraphs
 
         return $$"""{ "schemaVersion": 1, "nodes": [{{string.Join(", ", nodes)}}], "edges": [{{string.Join(", ", edges)}}] }""";
     }
+
+    /// <summary>The smallest chat workflow: a <c>ChatInput</c> answering into an End, plus a conditional edge on <c>output.text</c>.</summary>
+    public const string ChatInputAnswer = """
+                                          {
+                                            "schemaVersion": 1,
+                                            "kind": "Chat",
+                                            "chat": { "acceptsAttachments": false, "requireRerunConfirmation": true },
+                                            "nodes": [
+                                              { "key": "start", "kind": "Start" },
+                                              { "key": "ask", "kind": "ChatInput", "config": { "prompt": "Which database?" } },
+                                              { "key": "stopped", "kind": "End", "config": { "outcome": "stopped" } },
+                                              { "key": "done", "kind": "End", "config": { "outcome": "completed", "resultPath": "input.output.text" } }
+                                            ],
+                                            "edges": [
+                                              { "key": "e1", "from": "start", "to": "ask" },
+                                              { "key": "e2", "from": "ask", "to": "done" },
+                                              { "key": "e3", "from": "ask", "to": "stopped", "condition": { "path": "output.text", "op": "eq", "value": "stop" } }
+                                            ]
+                                          }
+                                          """;
+
+    /// <summary>A <c>DecisionModel</c> (one attempt unless told otherwise) routing on <c>output.choice</c> from its own out-edges.</summary>
+    /// <remarks><paramref name="question" /> is what the fake runner scripts on, so each test names its own.</remarks>
+    public static string DecisionModelRouting(string question, int maxAttempts = 1) =>
+        $$"""
+          {
+            "schemaVersion": 1,
+            "nodes": [
+              { "key": "start", "kind": "Start" },
+              { "key": "classify", "kind": "DecisionModel", "maxAttempts": {{maxAttempts}},
+                "config": { "question": "{{question}}", "labels": ["coding", "research", "general"], "provider": "llm",
+                            "inputBindings": { "request": "run.input.message" } } },
+              { "key": "coding", "kind": "End", "config": { "outcome": "coding" } },
+              { "key": "other", "kind": "End", "config": { "outcome": "other" } }
+            ],
+            "edges": [
+              { "key": "e1", "from": "start", "to": "classify" },
+              { "key": "e2", "from": "classify", "to": "coding", "label": "coding", "condition": { "path": "output.choice", "op": "eq", "value": "coding" } },
+              { "key": "e3", "from": "classify", "to": "other", "label": "other", "condition": { "path": "output.choice", "op": "ne", "value": "coding" } }
+            ]
+          }
+          """;
 }

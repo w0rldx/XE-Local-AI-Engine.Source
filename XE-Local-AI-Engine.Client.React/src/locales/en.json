@@ -5777,7 +5777,7 @@
 				"notice": {
 					"dismiss": "Dismiss",
 					"parallelEdgesBothUnconditional": "These two nodes are already joined by a connection without a condition. Give the new one a condition first.",
-					"pauseContextEdgeAdded": "A Pause passes on only its decision, so a connection labelled “context” now carries the earlier node’s answer around it. Delete that connection if you do not want it.",
+					"pauseContextEdgeAdded": "A Pause or a chat input passes on only its decision or answer, so a connection labelled “context” now carries the earlier node’s answer around it. Delete that connection if you do not want it.",
 					"tooManyNodes": "This graph already has as many nodes as a run accepts."
 				},
 				"validation": {
@@ -5810,7 +5810,9 @@
 				"Parallel": "Parallel",
 				"Join": "Join",
 				"Pause": "Pause",
-				"End": "End"
+				"End": "End",
+				"ChatInput": "Chat input",
+				"DecisionModel": "Model decision"
 			},
 			"nodeStatus": {
 				"Pending": "Not started",
@@ -5845,7 +5847,12 @@
 				"payloadNotObject": "Enter a JSON object, or leave it empty.",
 				"alreadyDecided": "This was already answered with “{{decision}}”.",
 				"runMovedOn": "This run has moved on — it is no longer waiting for this decision.",
-				"failed": "That decision could not be recorded."
+				"failed": "That decision could not be recorded.",
+				"Answer": "Answer",
+				"answerTitle": "Waiting for your answer",
+				"answerLabel": "Your answer",
+				"answerSubmit": "Send answer",
+				"alreadyAnswered": "This question was already answered."
 			},
 			"joinPolicy": {
 				"All": "Wait for every incoming branch",
@@ -5928,7 +5935,17 @@
 					"pauseNoDecisions": "“{{subject}}” is a Pause node that offers no decision.",
 					"endOutcomeMissing": "“{{subject}}” is an End node with no outcome name.",
 					"serverRejected": "The node refused this graph.",
-					"serverWarned": "The node flagged something worth checking."
+					"serverWarned": "The node flagged something worth checking.",
+					"chatSettingsOnStandardGraph": "Chat settings apply to a Chat workflow only. Set the workflow kind to Chat, or remove them.",
+					"chatInputOutsideChatGraph": "“{{subject}}” is a chat input, which only a Chat workflow can carry: nothing but a conversation can answer it.",
+					"chatInputPromptMissing": "“{{subject}}” is a chat input with no question for the user.",
+					"chatInputNeedsUnconditionalEdge": "“{{subject}}” is a chat input whose every outgoing connection has a condition. Add one without a condition, so every answer leads somewhere.",
+					"publishToChatOutsideChatGraph": "“{{subject}}” posts its result to the chat, which only a Chat workflow does.",
+					"includeAttachmentsNotAccepted": "“{{subject}}” includes the chat attachments, but this workflow does not accept attachments.",
+					"decisionQuestionMissing": "“{{subject}}” is a model decision with no question.",
+					"decisionLabelsInvalid": "“{{subject}}” needs between 2 and 32 distinct, non-empty labels of at most 64 characters.",
+					"decisionProviderUnknown": "“{{subject}}” names a decision provider this version does not know.",
+					"pauseOffersAnswer": "“{{subject}}” is a Pause that offers “Answer”, which only a chat input takes."
 				}
 			},
 			"form": {
@@ -5990,6 +6007,12 @@
 				"name": {
 					"required": "Enter a name.",
 					"tooLong": "Use at most 200 characters."
+				},
+				"question": {
+					"required": "Enter the question the model decides."
+				},
+				"labels": {
+					"invalid": "Use between 2 and 32 distinct, non-empty labels of at most 64 characters."
 				}
 			},
 			"config": {
@@ -6052,7 +6075,24 @@
 				"resultPath": "Result path",
 				"resultPathPlaceholder": "The whole document",
 				"parallelHelp": "A Parallel node hands its input to every outgoing edge.",
-				"joinHelp": "A Join node collects its incoming branches into a map keyed by source node."
+				"joinHelp": "A Join node collects its incoming branches into a map keyed by source node.",
+				"chatInputPrompt": "What to ask the user",
+				"chatInputPromptHelp": "The run waits here until the user answers in the conversation.",
+				"question": "Question",
+				"questionHelp": "What the model decides. Outgoing edges route on output.choice.",
+				"labels": "Labels",
+				"labelsHelp": "Between 2 and 32 distinct labels, each up to 64 characters.",
+				"addLabel": "Add label",
+				"removeLabel": "Remove label",
+				"labelValue": "Label {{index}}",
+				"decisionProvider": "Provider",
+				"decisionProviderPlaceholder": "Language model (default)",
+				"decisionProviderName": {
+					"llm": "Language model"
+				},
+				"publishToChat": "Post the result to the chat",
+				"includeAttachments": "Include the chat attachments",
+				"includeAttachmentsDisabled": "Turn on “Accepts attachments” in the workflow settings first."
 			},
 			"edge": {
 				"title": "Edge {{key}}",
@@ -6108,7 +6148,8 @@
 				"columnAttempt": "Attempt",
 				"columnStarted": "Started",
 				"columnDuration": "Duration",
-				"decisionPending": "needs your decision"
+				"decisionPending": "needs your decision",
+				"answerPending": "needs your answer"
 			},
 			"events": {
 				"empty": "Nothing has happened in this run yet.",
@@ -6133,7 +6174,8 @@
 				"emptyDocument": "The runtime recorded nothing here.",
 				"pauseDecision": "Answered {{decision}}",
 				"passThrough": "A Condition and a Parallel node hand their input's output on unchanged, so an output that matches the node before it is correct.",
-				"joinOutput": "A Join node emits one map, keyed by the node each incoming branch came from."
+				"joinOutput": "A Join node emits one map, keyed by the node each incoming branch came from.",
+				"decisionChoice": "Chose {{choice}}"
 			},
 			"startRun": {
 				"title": "Start a run",
@@ -6186,6 +6228,17 @@
 				"validationFailed": "The graph could not be checked.",
 				"validationPassed": "This graph passed validation.",
 				"validationPassedWithWarnings": "This graph is valid. Check the notes below before you run it."
+			},
+			"settings": {
+				"open": "Workflow settings",
+				"kind": "Workflow kind",
+				"kindOption": {
+					"Standard": "Standard",
+					"Chat": "Chat"
+				},
+				"kindHelp": "A Chat workflow runs inside a conversation and may ask the user questions.",
+				"acceptsAttachments": "Accepts attachments",
+				"requireRerunConfirmation": "Confirm before running again"
 			}
 		},
 		"integrations": {
