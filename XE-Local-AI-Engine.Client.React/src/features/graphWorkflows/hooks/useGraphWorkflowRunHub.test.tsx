@@ -5,7 +5,7 @@
 // (the second is the client's watermark, re-sent on every reconnect), and `kind` being one of exactly three LOWERCASE
 // values — a `"Node"` would match no switch arm and silently stop invalidating anything.
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -172,6 +172,59 @@ describe("useGraphWorkflowRunHub", () => {
 			sequence += 1;
 			expect(invalidatedKeys(invalidate), `kind "${expectation.kind}"`).toEqual(expectation.keys);
 		}
+	});
+
+	it("does not re-read a settled node document on a node ping, but does re-read a Failed one", async () => {
+		hubMock.connection.invoke.mockResolvedValue(snapshot({ lastSeq: 0 }));
+		const { queryClient, wrapper } = harness();
+		const nodeKey = (key: string) => graphWorkflowInvalidationKey(graphWorkflowQueryIds.node, { runId, nodeKey: key });
+		const reads: string[] = [];
+		const { result } = renderHook(
+			() => {
+				// Three observed node documents: one settled, one still running, one Failed. A Failed node may be retried in
+				// place (same node run, next attempt), so it re-reads alongside the running one; only the settled one stays.
+				const observe = (key: string, status: string) =>
+					useQuery({
+						queryKey: nodeKey(key),
+						queryFn: () => {
+							reads.push(key);
+							return { status };
+						},
+						staleTime: Number.POSITIVE_INFINITY,
+					});
+				observe("done", "Succeeded");
+				observe("work", "Running");
+				observe("failed", "Failed");
+				return useGraphWorkflowRunHub(runId);
+			},
+			{ wrapper },
+		);
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+		await waitFor(() => expect(reads.toSorted()).toEqual(["done", "failed", "work"]));
+		expect(queryClient.getQueryData(nodeKey("done"))).toEqual({ status: "Succeeded" });
+
+		emit({ runId, seq: 1, kind: "node" });
+
+		await waitFor(() => expect(reads.filter((key) => key === "work")).toHaveLength(2));
+		await waitFor(() => expect(reads.filter((key) => key === "failed")).toHaveLength(2));
+		expect(reads.filter((key) => key === "done")).toHaveLength(1);
+	});
+
+	it("moves lifecycleSeq on run and gate pings and the snapshot, never on a node ping", async () => {
+		hubMock.connection.invoke.mockResolvedValue(snapshot({ lastSeq: 3 }));
+		const { queryClient, wrapper } = harness();
+		const { result } = renderHook(() => useGraphWorkflowRunHub(runId), { wrapper });
+		await waitFor(() => expect(result.current.lifecycleSeq).toBe(3));
+		vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+
+		emit({ runId, seq: 4, kind: "node" });
+		expect(result.current.watermark).toBe(4);
+		expect(result.current.lifecycleSeq).toBe(3);
+
+		emit({ runId, seq: 5, kind: "gate" });
+		expect(result.current.lifecycleSeq).toBe(5);
+		emit({ runId, seq: 6, kind: "run" });
+		expect(result.current.lifecycleSeq).toBe(6);
 	});
 
 	it("treats a capitalised kind as unknown and refreshes everything rather than silently no-opping", async () => {

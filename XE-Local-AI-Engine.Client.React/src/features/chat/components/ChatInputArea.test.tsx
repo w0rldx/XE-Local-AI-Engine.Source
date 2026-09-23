@@ -220,6 +220,35 @@ describe("ChatInputArea image attachment gate", () => {
 		expect(fileInput?.getAttribute("tabindex")).toBe("-1");
 	});
 
+	it("blocks adding attachments in a workflow that refuses them but still lets a chip be removed", () => {
+		const onRemoveAttachment = vi.fn();
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={attachmentCapabilities()}
+				onUploadFiles={vi.fn()}
+				onRemoveAttachment={onRemoveAttachment}
+				attachments={[
+					{
+						fileId: "file-1",
+						originalFileName: "notes.md",
+						mimeType: "text/markdown",
+						extension: ".md",
+						sizeBytes: 12,
+						status: "extracted",
+						extractedChars: 12,
+					},
+				]}
+				workflow={{ attachmentsDisabledHint: "This workflow does not accept attachments." }}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-attach-file-trigger").hasAttribute("disabled")).toBe(true);
+		expect(screen.getByTestId("chat-attachments-disabled-hint").textContent).toBe("This workflow does not accept attachments.");
+		fireEvent.click(screen.getByTestId("chat-attachment-remove"));
+		expect(onRemoveAttachment).toHaveBeenCalledWith("file-1");
+	});
+
 	it("still shows the paperclip trigger for image-only attachments when file attachments are off", () => {
 		renderWithProviders(
 			<ChatInputArea

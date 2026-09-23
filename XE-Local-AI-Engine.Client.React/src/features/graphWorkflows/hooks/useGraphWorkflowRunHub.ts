@@ -52,11 +52,28 @@ export interface GraphWorkflowRunLiveState {
 	readonly pendingInputs?: number;
 	/** Highest event sequence seen. Passed as `afterSeq` on every (re)subscribe. */
 	readonly watermark: number;
+	/**
+	 * The watermark at the last LIFECYCLE move — a snapshot, a `run` or `gate` ping, or an unknown kind — and 0 before
+	 * the first. A `node` ping leaves it alone, so a consumer that only cares about status and parking (the chat's
+	 * bound-run list) re-reads on this instead of on every node transition.
+	 */
+	readonly lifecycleSeq: number;
 	/** Polling cadence for the page's queries while the hub is down; `undefined` while it is live. */
 	readonly pollIntervalMs?: number;
 }
 
-const emptyState: GraphWorkflowRunLiveState = { connectionState: "idle", watermark: 0 };
+const emptyState: GraphWorkflowRunLiveState = { connectionState: "idle", watermark: 0, lifecycleSeq: 0 };
+
+/**
+ * A node run whose cached document already reads as settled. Its input, output and error never change again, so a node
+ * ping has nothing to refresh there — and re-reading every settled node of a long run on each transition is the refetch
+ * storm a chat activity block would otherwise cause. `Failed` is NOT settled: the dispatcher retries a retryable failure
+ * in place (same node run, attempt + 1), so an open Failed document must re-read on the ping that re-queues it.
+ */
+function isSettledNodeDocument(data: unknown): boolean {
+	const status = (data as { status?: unknown } | undefined)?.status;
+	return status === "Succeeded" || status === "Skipped" || status === "Cancelled";
+}
 
 function isChangeKind(kind: string): kind is GraphWorkflowChangeKind {
 	return (graphWorkflowChangeKinds as readonly string[]).includes(kind);
@@ -97,7 +114,14 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 		};
 
 		const invalidateRun = (): void => invalidate(graphWorkflowInvalidationKey(graphWorkflowQueryIds.run, { runId }));
-		const invalidateNodes = (): void => invalidate(graphWorkflowInvalidationKey(graphWorkflowQueryIds.node, { runId }));
+		const invalidateNodes = (): void => {
+			queryClient
+				.invalidateQueries({
+					queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.node, { runId }),
+					predicate: (query) => !isSettledNodeDocument(query.state.data),
+				})
+				.catch(() => undefined);
+		};
 		const invalidateRunList = (): void => invalidate(graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs));
 
 		const invalidateEveryFeed = (): void => {
@@ -123,6 +147,7 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 			// Every kind moves the append-only event feed, which is why there is no `event` kind to miss.
 			invalidate(graphWorkflowInvalidationKey(graphWorkflowQueryIds.events, { runId }));
 			const kind = isChangeKind(change.kind) ? change.kind : undefined;
+			const lifecycle = kind !== "node";
 			switch (kind) {
 				case "run":
 					// The list shows this run's status, so a lifecycle move belongs there as much as on the run itself.
@@ -145,7 +170,7 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 					invalidateEveryFeed();
 					break;
 			}
-			setState((current) => ({ ...current, watermark }));
+			setState((current) => ({ ...current, watermark, ...(lifecycle ? { lifecycleSeq: watermark } : {}) }));
 		};
 
 		const onChanged = (change: GraphWorkflowChanged): void => {
@@ -181,6 +206,7 @@ export function useGraphWorkflowRunHub(runId: string | undefined): GraphWorkflow
 					pendingDecisions: snapshot.pendingDecisions,
 					pendingInputs: snapshot.pendingInputs,
 					watermark,
+					lifecycleSeq: watermark,
 					pollIntervalMs: undefined,
 				}));
 				if (missedSomething) {

@@ -737,6 +737,18 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
     public Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default) =>
         _inner.CountActiveRunsAsync(probeLimit, cancellationToken);
 
+    public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default) =>
+        _inner.ListRunsByConversationAsync(conversationId, limit, cancellationToken);
+
+    public Task<GraphWorkflowNodeRunSnapshot?> FindConversationDecisionAsync(Guid conversationId, Guid operationId, CancellationToken cancellationToken = default) =>
+        _inner.FindConversationDecisionAsync(conversationId, operationId, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListUnpublishedNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        _inner.ListUnpublishedNodeRunsAsync(runId, cancellationToken);
+
+    public Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default) =>
+        _inner.MarkNodeRunPublishedAsync(runId, nodeRunId, messageId, cancellationToken);
+
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
         _inner.TransitionRunAsync(command, cancellationToken);
 

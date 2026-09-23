@@ -101,7 +101,7 @@ describe("graph-workflow enum label maps are complete", () => {
 
 	// Event tokens are dotted (`run.created`), and i18next reads `.` as a key separator, so their labels are keyed with
 	// underscores. `graphWorkflowEventTypeLabelKey` owns that mapping and this is the assertion that it resolves.
-	it("eventType has a label for every one of the nineteen tokens", () => {
+	it("eventType has a label for every one of the twenty tokens", () => {
 		for (const eventType of graphWorkflowEventTypes) {
 			expect(resolvePath(en as LocaleShape, graphWorkflowEventTypeLabelKey(eventType)), eventType).toBeTypeOf("string");
 		}

@@ -220,7 +220,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         var flight = await _lane.TryStartAsync(nodeRun.Id,
                                     nodeRun.Attempt,
                                     invocationId,
-                                    (leaseAcquired, token) => RunTurnAsync(run.Id, nodeRun.Id, node, node.Config, invocationId, inputJson, leaseAcquired, token),
+                                    (leaseAcquired, token) => RunTurnAsync(run.Id, nodeRun.Id, node, node.Config, invocationId, inputJson, graph.Kind == GraphWorkflowDefinitionKind.Chat, leaseAcquired, token),
                                     cancellationToken);
         if (flight is null)
         {
@@ -345,6 +345,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         GraphWorkflowNodeConfig config,
         Guid invocationId,
         string inputJson,
+        bool chatGraph,
         StrongBox<bool> leaseAcquired,
         CancellationToken cancellationToken)
     {
@@ -413,7 +414,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
             // The seed prompt is also the retrieval query below, so it is built before the resolve rather than beside the package: a playbook gated on a blank
             // query injects its full static prepend instead of the relevant slice, and that difference is a different resolved prompt.
-            var seedPrompt = SeedPrompt(agentConfig, inputJson);
+            var seedPrompt = SeedPrompt(agentConfig, inputJson, chatGraph);
 
             // 5. The agent's COMPLETE runtime. honorModelProfile is FALSE exactly when this node names its own model: with a bare true, a node overriding a
             //    cloud-pinned agent to a local one would pass step 3 on its own choice while the resolver gated the offer against — and returned — the cloud pin.
@@ -938,11 +939,13 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     ///     own input carries, and truncated with an explicit marker rather than silently: a prompt that lost half its
     ///     evidence without saying so is how a node produces a confident wrong answer.
     /// </remarks>
-    private string SeedPrompt(GraphWorkflowAgentConfig config, string inputJson)
+    private string SeedPrompt(GraphWorkflowAgentConfig config, string inputJson, bool chatGraph)
     {
+        // Every Agent of a Chat graph sees the user's request: after a router its upstream is the router's choice, not the message.
+        var prompt = chatGraph && ConversationRequest(inputJson) is { } request ? $"{config.Instructions}\n\n{request}" : config.Instructions;
         if (!config.IncludeUpstreamOutputs)
         {
-            return config.Instructions;
+            return prompt;
         }
 
         JsonElement upstream;
@@ -954,18 +957,51 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 || element.ValueKind != JsonValueKind.Object
                 || !element.EnumerateObject().Any())
             {
-                return config.Instructions;
+                return prompt;
             }
 
             upstream = element.Clone();
         }
         catch (JsonException)
         {
-            return config.Instructions;
+            return prompt;
         }
 
         var rendered = TruncateUtf8(upstream.GetRawText(), _options.MaxRunInputBytes);
-        return $"{config.Instructions}\n\nThe nodes before this one produced:\n\n```json\n{rendered}\n```";
+        return $"{prompt}\n\nThe nodes before this one produced:\n\n```json\n{rendered}\n```";
+    }
+
+    /// <summary>
+    ///     The chat send that started the run — <c>run.input.message</c>, under the run-input budget — and the names of its
+    ///     attachments on one line (their content is a later slice). Null when the run input carries no message.
+    /// </summary>
+    private string? ConversationRequest(string inputJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(inputJson);
+            if (GraphWorkflowDocuments.Resolve(document.RootElement, "run.input") is not { ValueKind: JsonValueKind.Object } input
+                || !input.TryGetProperty("message", out var message)
+                || message.ValueKind != JsonValueKind.String
+                || string.IsNullOrWhiteSpace(message.GetString()))
+            {
+                return null;
+            }
+
+            var section = $"## Conversation request\n\n{TruncateUtf8(message.GetString()!, _options.MaxRunInputBytes)}";
+            var names = input.TryGetProperty("attachments", out var attachments) && attachments.ValueKind == JsonValueKind.Array
+                ? attachments.EnumerateArray()
+                             .Where(static attachment => attachment.ValueKind == JsonValueKind.Object)
+                             .Select(static attachment => attachment.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String ? name.GetString() : null)
+                             .OfType<string>()
+                             .ToList()
+                : [];
+            return names.Count == 0 ? section : $"{section}\n\nAttachments: {string.Join(", ", names)}";
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

@@ -45,4 +45,10 @@ internal sealed class GraphWorkflowNodeRun
     public long? StartedAtUtc { get; set; }
     public long? CompletedAtUtc { get; set; }
     public long UpdatedAtUtc { get; set; }
+
+    /// <summary>
+    ///     The chat message this node run's result was published as — the publish outbox stamp. Null until the
+    ///     dispatcher has published it, and forever on a node that does not publish.
+    /// </summary>
+    public Guid? PublishedMessageId { get; set; }
 }

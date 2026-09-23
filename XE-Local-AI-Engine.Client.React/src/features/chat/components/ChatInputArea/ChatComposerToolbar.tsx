@@ -8,7 +8,7 @@ import {
 	IconPlayerStopFilled,
 	IconSend,
 } from "@tabler/icons-react";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
@@ -45,6 +45,8 @@ interface ChatComposerToolbarProps {
 	selectedAgentId: string;
 	agentSelectorDisabled: boolean;
 	onSelectAgent?: (agentId: string) => void;
+	/** Chat workflow mode's picker, rendered beside the agent picker. */
+	workflowSelector?: ReactNode;
 	attachmentControlsAvailable: boolean;
 	attachmentControlsDisabled: boolean;
 	attachmentAccept: string;
@@ -91,6 +93,7 @@ export function ChatComposerToolbar({
 	selectedAgentId,
 	agentSelectorDisabled,
 	onSelectAgent,
+	workflowSelector,
 	attachmentControlsAvailable,
 	attachmentControlsDisabled,
 	attachmentAccept,
@@ -202,6 +205,7 @@ export function ChatComposerToolbar({
 						onSelectAgent={onSelectAgent ?? (() => undefined)}
 					/>
 				) : null}
+				{workflowSelector}
 				{/* The ActionIcon below IS the labelled control; FileButton's own input is display:none and exists only to
 				    open the OS picker. Marked hidden so it is not reported as an unnamed form control. */}
 				{attachmentControlsAvailable ? (

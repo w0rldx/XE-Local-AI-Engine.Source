@@ -21,15 +21,16 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
     private readonly NodeChatReadModel _readModel;
     private readonly NodeChatVariantBranchService _variants;
 
-    // The blob stores are optional: production injects the real singletons so a conversation delete also tears down
-    // on-disk attachments and artifact bytes, while a null store simply skips that cleanup for a test construction.
+    // All optional: production injects the blob stores (a delete tears down on-disk bytes) and the deletion observers (a
+    // feature winds down work bound to the conversation first); a test construction without them skips that work.
     public NodeChatPersistenceService(NodeChatPersistenceWriter writer,
         IConversationUploadedFileStore? uploadedFileStore = null,
-        IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore = null)
+        IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore = null,
+        IEnumerable<IConversationDeletionObserver>? deletionObservers = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
-        _conversations = new NodeChatConversationCommands(writer, uploadedFileStore, workSessionArtifactBlobStore);
+        _conversations = new NodeChatConversationCommands(writer, uploadedFileStore, workSessionArtifactBlobStore, deletionObservers);
         _readModel = new NodeChatReadModel(writer);
         _messages = new NodeChatMessageCommands(writer);
         _variants = new NodeChatVariantBranchService(writer, _readModel);
@@ -74,6 +75,26 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
     public Task<IReadOnlyDictionary<Guid, Guid>> SetSelectedPathAsync(NodeChatSetSelectedPathRequest request, CancellationToken cancellationToken = default)
     {
         return _conversations.SetSelectedPathAsync(request, cancellationToken);
+    }
+
+    public Task<string?> GetConversationKindAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return _conversations.GetConversationKindAsync(conversationId, cancellationToken);
+    }
+
+    public Task<NodeChatInsertMessageIfAbsentResult> InsertMessageIfAbsentAsync(NodeChatInsertMessageIfAbsentRequest request, CancellationToken cancellationToken = default)
+    {
+        return _messages.InsertMessageIfAbsentAsync(request, cancellationToken);
+    }
+
+    public Task DeleteMessageAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)
+    {
+        return _messages.DeleteMessageAsync(conversationId, messageId, cancellationToken);
+    }
+
+    public Task<Guid?> GetMessageConversationIdAsync(Guid messageId, CancellationToken cancellationToken = default)
+    {
+        return _messages.GetMessageConversationIdAsync(messageId, cancellationToken);
     }
 
     public Task<NodeChatPersistedMessageDto> PersistUserMessageAsync(NodeChatPersistUserMessageRequest request, CancellationToken cancellationToken = default)

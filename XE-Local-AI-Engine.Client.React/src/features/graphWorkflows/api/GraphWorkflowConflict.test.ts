@@ -1,4 +1,4 @@
-// The three 409 discriminators this module can receive, read off the thrown `ApiError` rather than off a message
+// The 409 discriminators this module can receive, read off the thrown `ApiError` rather than off a message
 // string. A conflictType that stops being recognised here does not throw — it degrades to a generic "conflict" toast
 // and the panel keeps offering a decision the server has already refused, so the member names are asserted literally.
 
@@ -43,6 +43,16 @@ describe("readGraphWorkflowConflict", () => {
 			conflictType: graphWorkflowConflictTypes.gateAlreadyDecided,
 			standingDecision: "Approve",
 		});
+	});
+
+	it("reads the three chat-send refusals by their exact member names", () => {
+		// `NodeConflictProblemType` serializes the enum NAME, so a rename server-side must fail here, not in the chat.
+		expect(graphWorkflowConflictTypes.runBusy).toBe("GraphWorkflowRunBusy");
+		expect(graphWorkflowConflictTypes.rerunConfirmationRequired).toBe("GraphWorkflowRerunConfirmationRequired");
+		expect(graphWorkflowConflictTypes.attachmentsNotAccepted).toBe("GraphWorkflowAttachmentsNotAccepted");
+		expect(readGraphWorkflowConflict(conflict(409, { conflictType: "GraphWorkflowRunBusy" }))?.conflictType).toBe(
+			graphWorkflowConflictTypes.runBusy,
+		);
 	});
 
 	it("reads nothing off anything that is not a 409 conflict envelope", () => {

@@ -32,6 +32,26 @@ internal sealed class GraphWorkflowRunConfiguration : IEntityTypeConfiguration<G
         builder.Property(entity => entity.StartedAtUtc).HasColumnName("started_at_utc");
         builder.Property(entity => entity.CompletedAtUtc).HasColumnName("completed_at_utc");
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
+        builder.Property(entity => entity.ConversationId).HasColumnName("conversation_id");
+        builder.Property(entity => entity.TriggerMessageId).HasColumnName("trigger_message_id");
+
+        // A real foreign key, unlike the definition's: a run bound to a conversation that no longer exists has nobody to
+        // answer it, and SET NULL keeps the run as history while the conversation's own purge stays the only delete path.
+        builder.HasOne<NodeConversation>().WithMany().HasForeignKey(entity => entity.ConversationId).OnDelete(DeleteBehavior.SetNull);
+
+        // One LIVE run per conversation, enforced by the database rather than a check-then-insert in the chat service. The
+        // status column is text, so the filter names the four non-terminal members by their stored spelling.
+        builder.HasIndex(entity => entity.ConversationId)
+               .IsUnique()
+               .HasFilter("\"conversation_id\" IS NOT NULL AND \"status\" IN ('Pending', 'Running', 'WaitingForApproval', 'Cancelling')")
+               .HasDatabaseName("ux_graph_workflow_runs_live_conversation");
+
+        // The chat page's bound-run list, newest first, and the lookup the SET NULL above does on every conversation delete.
+        builder.HasIndex(entity => new
+        {
+            entity.ConversationId,
+            entity.CreatedAtUtc
+        }).HasDatabaseName("ix_graph_workflow_runs_conversation_created");
 
         // The idempotency key is a database constraint rather than a check-then-insert in the service: SQLite supports
         // it and a unique index cannot lose a race the way a read-modify-write can.

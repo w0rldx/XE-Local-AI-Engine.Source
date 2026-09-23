@@ -1,6 +1,6 @@
 import { Button, Loader, ScrollArea, Stack, Text } from "@mantine/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Fragment, useMemo, useRef } from "react";
+import { Fragment, type ReactNode, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -58,6 +58,8 @@ interface ChatMessageListProps {
 	// The conversation is owned by a work session. Only used to render a step that ended on its own provider-call
 	// cap as a neutral notice rather than a failure (see ChatMessage).
 	isWorkSessionConversation?: boolean;
+	// Rendered right after a persisted message row (chat workflow mode's activity blocks). Absent = nothing extra.
+	renderAfterMessage?: (messageId: string) => ReactNode;
 }
 
 function bySortOrder(left: ChatMessageModel, right: ChatMessageModel): number {
@@ -87,6 +89,7 @@ export function ChatMessageList({
 	onRetryLoadMessages,
 	reasoningEffort,
 	isWorkSessionConversation = false,
+	renderAfterMessage,
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
 	// Owned here rather than by useStickToBottomScroll: the row virtualizer below reads the viewport ref, and the
@@ -196,6 +199,7 @@ export function ChatMessageList({
 		onSubmitFeedback,
 		reasoningEffort,
 		isWorkSessionConversation,
+		renderAfterMessage,
 	};
 
 	return (

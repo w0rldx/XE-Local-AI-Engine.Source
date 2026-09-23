@@ -670,6 +670,113 @@ public sealed class GraphWorkflowAgentExecutorTests
     }
 
     /// <summary>
+    ///     Every Agent of a Chat graph sees the chat request, whatever its upstream carries: after a router the upstream is
+    ///     the router's choice, and an agent that never saw the message answers about nothing. Attachments by name only.
+    /// </summary>
+    [Test]
+    [Arguments("chat-request-with-upstream", "true")]
+    [Arguments("chat-request-without-upstream", "false")]
+    public async Task AChatGraphAgent_SeesTheConversationRequestAndItsAttachmentNames(string instructions, string include)
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await StartToTheAgentAsync(harness,
+            ChatGraph(Graph(instructions, $$"""
+                                            , "includeUpstreamOutputs": {{include}}
+                                            """)),
+            ChatInput("please sort the overnight logs"));
+
+        _ = await AdvanceUntilTerminalAsync(harness, runId);
+
+        var prompt = Prompt(harness.Invocations.PackageFor(instructions));
+        AssertEx.Contains(prompt, $"{instructions}\n\n## Conversation request\n\nplease sort the overnight logs\n\nAttachments: a.pdf, b.png");
+    }
+
+    /// <summary>A second Agent downstream of the first still sees the original request, not only the first agent's answer.</summary>
+    [Test]
+    public async Task ADownstreamChatGraphAgent_StillSeesTheOriginalRequest()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        const string first = "chat-request-first-agent";
+        const string second = "chat-request-second-agent";
+        var runId = await harness.StartRunAsync($$"""
+                                                  {
+                                                    "schemaVersion": 1,
+                                                    "kind": "Chat",
+                                                    "nodes": [
+                                                      { "key": "start", "kind": "Start" },
+                                                      { "key": "first", "kind": "Agent", "config": { "instructions": "{{first}}" } },
+                                                      { "key": "analyze", "kind": "Agent", "config": { "instructions": "{{second}}" } },
+                                                      { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                    ],
+                                                    "edges": [
+                                                      { "key": "e1", "from": "start", "to": "first" },
+                                                      { "key": "e2", "from": "first", "to": "analyze" },
+                                                      { "key": "e3", "from": "analyze", "to": "done" }
+                                                    ]
+                                                  }
+                                                  """,
+            ChatInput("the original request"));
+
+        _ = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Contains(Prompt(harness.Invocations.PackageFor(second)), "## Conversation request\n\nthe original request");
+    }
+
+    /// <summary>The request section is budgeted like the upstream map, and says so when it is cut.</summary>
+    [Test]
+    public async Task AChatRequestOverTheBudget_IsTruncatedWithAMarker()
+    {
+        const string instructions = "chat-request-truncated";
+
+        // A private host: the budget is host-level configuration. The run is started through the store, which is the only way
+        // to pin a run input over the budget the run service itself enforces.
+        await using var harness = GraphWorkflowHarness.PrivateAgentHost(("GraphWorkflows:MaxRunInputBytes", "1024"));
+        var graph = ChatGraph(Graph(instructions));
+        var definitionId = await harness.SeedDefinitionAsync(graph);
+        var runId = await harness.StartRunThroughTheStoreAsync(definitionId,
+            graph,
+            [("start", GraphWorkflowNodeKind.Start), ("analyze", GraphWorkflowNodeKind.Agent), ("done", GraphWorkflowNodeKind.End)],
+            ChatInput(new string('a', count: 2000)));
+
+        _ = await AdvanceUntilTerminalAsync(harness, runId);
+
+        var prompt = Prompt(harness.Invocations.PackageFor(instructions));
+        AssertEx.Contains(prompt, "## Conversation request");
+        AssertEx.Contains(prompt, "bytes omitted");
+    }
+
+    /// <summary>The queue reason a row carried while it waited for the lane is cleared once it runs, so a succeeded node reads no reason.</summary>
+    [Test]
+    public async Task ASucceededInvocationNode_CarriesNoQueueReason()
+    {
+        const string instructions = "succeeded-no-queue-reason";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status);
+        AssertEx.Null(analyze.Error, "awaiting-agent-slot described the wait, not the outcome.");
+    }
+
+    /// <summary>A Standard graph's prompt is byte-for-byte what it was: the request section is a Chat graph's only.</summary>
+    [Test]
+    public async Task AStandardGraphAgent_PromptIsUnchanged()
+    {
+        const string instructions = "standard-graph-no-request-section";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await StartToTheAgentAsync(harness,
+            Graph(instructions, """
+                                , "includeUpstreamOutputs": false
+                                """),
+            ChatInput("a message a standard graph must not surface"));
+
+        _ = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(instructions, Prompt(harness.Invocations.PackageFor(instructions)));
+    }
+
+    /// <summary>
     ///     The inlined upstream is BUDGETED, and says so when it is cut. A prompt that quietly lost half its evidence
     ///     is how a node produces a confident wrong answer.
     /// </summary>
@@ -856,6 +963,20 @@ public sealed class GraphWorkflowAgentExecutorTests
             ]
           }
           """;
+
+    /// <summary>The same graph as a Chat one: the <c>kind</c> member is all that differs.</summary>
+    private static string ChatGraph(string graphJson) =>
+        graphJson.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"kind\": \"Chat\",", StringComparison.Ordinal);
+
+    /// <summary>The run input a chat send writes, with two attachment references.</summary>
+    private static string ChatInput(string message) =>
+        JsonSerializer.Serialize(new
+        {
+            message,
+            attachments = new[] { new { fileId = Guid.NewGuid(), name = "a.pdf", kind = "text" }, new { fileId = Guid.NewGuid(), name = "b.png", kind = "image" } },
+            conversationId = Guid.NewGuid(),
+            messageId = Guid.NewGuid()
+        });
 
     private static string LlmGraph(string config, string? nodeExtras = null) =>
         $$"""

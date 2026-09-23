@@ -64,6 +64,26 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
     public Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default) =>
         _inner.CountActiveRunsAsync(probeLimit, cancellationToken);
 
+    public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default) =>
+        _inner.ListRunsByConversationAsync(conversationId, limit, cancellationToken);
+
+    public Task<GraphWorkflowNodeRunSnapshot?> FindConversationDecisionAsync(Guid conversationId, Guid operationId, CancellationToken cancellationToken = default) =>
+        _inner.FindConversationDecisionAsync(conversationId, operationId, cancellationToken);
+
+    public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListUnpublishedNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        _inner.ListUnpublishedNodeRunsAsync(runId, cancellationToken);
+
+    /// <summary>A publish is a node change a watching chat page repaints for; a stamp that matched no row announces nothing.</summary>
+    public async Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default)
+    {
+        if (await _inner.MarkNodeRunPublishedAsync(runId, nodeRunId, messageId, cancellationToken) is not { } result)
+        {
+            return null;
+        }
+
+        return await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Node, cancellationToken);
+    }
+
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.TransitionRunAsync(command, cancellationToken), GraphWorkflowChangeKind.Run, cancellationToken);
 

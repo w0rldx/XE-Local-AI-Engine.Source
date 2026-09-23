@@ -289,6 +289,7 @@ import {
 	listExternalAppInstances,
 	listExternalProviderConnections,
 	listGoldenConversations,
+	listGraphWorkflowConversationRuns,
 	listGraphWorkflowDefinitions,
 	listGraphWorkflowRunEvents,
 	listGraphWorkflowRuns,
@@ -391,6 +392,7 @@ import {
 	searchKnowledge,
 	selectLocalModel,
 	selectTranscriptionModel,
+	sendGraphWorkflowChatMessage,
 	setAppUpdateChannel,
 	setHfToken,
 	setMcpServerEnabled,
@@ -1123,6 +1125,9 @@ import type {
 	ListExternalProviderConnectionsResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
+	ListGraphWorkflowConversationRunsData,
+	ListGraphWorkflowConversationRunsError,
+	ListGraphWorkflowConversationRunsResponse,
 	ListGraphWorkflowDefinitionsData,
 	ListGraphWorkflowDefinitionsResponse,
 	ListGraphWorkflowRunEventsData,
@@ -1377,6 +1382,9 @@ import type {
 	SelectTranscriptionModelData,
 	SelectTranscriptionModelError,
 	SelectTranscriptionModelResponse,
+	SendGraphWorkflowChatMessageData,
+	SendGraphWorkflowChatMessageError,
+	SendGraphWorkflowChatMessageResponse,
 	SetAppUpdateChannelData,
 	SetAppUpdateChannelError,
 	SetAppUpdateChannelResponse,
@@ -5994,6 +6002,52 @@ export const probeExternalProviderMutation = (
 	};
 	return mutationOptions;
 };
+
+export const sendGraphWorkflowChatMessageMutation = (
+	options?: Partial<Options<SendGraphWorkflowChatMessageData>>,
+): UseMutationOptions<
+	SendGraphWorkflowChatMessageResponse,
+	AxiosError<SendGraphWorkflowChatMessageError>,
+	Options<SendGraphWorkflowChatMessageData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SendGraphWorkflowChatMessageResponse,
+		AxiosError<SendGraphWorkflowChatMessageError>,
+		Options<SendGraphWorkflowChatMessageData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await sendGraphWorkflowChatMessage({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listGraphWorkflowConversationRunsQueryKey = (options: Options<ListGraphWorkflowConversationRunsData>) =>
+	createQueryKey("listGraphWorkflowConversationRuns", options);
+
+export const listGraphWorkflowConversationRunsOptions = (options: Options<ListGraphWorkflowConversationRunsData>) =>
+	queryOptions<
+		ListGraphWorkflowConversationRunsResponse,
+		AxiosError<ListGraphWorkflowConversationRunsError>,
+		ListGraphWorkflowConversationRunsResponse,
+		ReturnType<typeof listGraphWorkflowConversationRunsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listGraphWorkflowConversationRuns({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listGraphWorkflowConversationRunsQueryKey(options),
+	});
 
 export const listGraphWorkflowDefinitionsQueryKey = (options?: Options<ListGraphWorkflowDefinitionsData>) =>
 	createQueryKey("listGraphWorkflowDefinitions", options);

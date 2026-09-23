@@ -65,6 +65,42 @@ public sealed class NodeChatPersistUserMessageRequest
     public string Origin { get; init; } = NodeChatOriginValues.Local;
 }
 
+/// <summary>
+///     A finished message written under a caller-DETERMINED id, and written at most once: a second insert of the same id is
+///     a no-op answering the row that already stands. What makes a replayed graph-workflow send or a re-ticked publish safe.
+/// </summary>
+/// <remarks>
+///     <see cref="Role" /> is <c>user</c> or <c>assistant</c>; the row is always <c>Completed</c>, with no request id,
+///     reasoning or parts. <see cref="Model" />, <see cref="AgentDefinitionId" /> and <see cref="AgentName" /> attribute an
+///     assistant row and are ignored on a user one.
+/// </remarks>
+public sealed class NodeChatInsertMessageIfAbsentRequest
+{
+    public required Guid ConversationId { get; init; }
+
+    public required Guid MessageId { get; init; }
+
+    public required string Role { get; init; }
+
+    public required string Content { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public string? Model { get; init; }
+
+    public Guid? AgentDefinitionId { get; init; }
+
+    public string? AgentName { get; init; }
+}
+
+/// <summary>The row an if-absent insert answers with, and whether THIS call wrote it — what a compensating delete keys on.</summary>
+public sealed class NodeChatInsertMessageIfAbsentResult
+{
+    public required NodeChatPersistedMessageDto Message { get; init; }
+
+    public required bool Inserted { get; init; }
+}
+
 public sealed class NodeChatCreateAssistantPlaceholderRequest
 {
     public required Guid ConversationId { get; init; }

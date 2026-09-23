@@ -13,14 +13,16 @@ const { authApiMock, routerMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/core/auth/api/NodeAuthApi", () => authApiMock);
-vi.mock("@/core/integrations/tanstack-router/Router", () => ({ router: routerMock }));
 
 import {
 	addAuthRequestInterceptor,
 	addFormDataContentTypeInterceptor,
 	addUnauthorizedErrorInterceptor,
 } from "@/core/api/axios/Interceptors";
+import { registerLoginNavigator } from "@/core/api/axios/LoginNavigation";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+
+registerLoginNavigator((redirect) => routerMock.navigate({ to: "/login", search: { redirect } }));
 
 function okResponse(config: InternalAxiosRequestConfig): AxiosResponse {
 	return {

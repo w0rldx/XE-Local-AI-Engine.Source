@@ -85,6 +85,7 @@ export function ChatDisplayShell({
 	messagesLoadFailed = false,
 	messagesLoadErrorText,
 	onRetryLoadMessages,
+	workflow,
 }: ChatDisplayShellProps) {
 	const { t } = useTranslation();
 	const conversation = conversations.find((item) => item.id === selectedConversationId);
@@ -261,19 +262,21 @@ export function ChatDisplayShell({
 					onRetryLoadMessages={onRetryLoadMessages}
 					reasoningEffort={reasoningEffort}
 					isWorkSessionConversation={isWorkSessionConversation}
+					renderAfterMessage={workflow?.renderAfterMessage}
 				/>
+				{workflow?.composerHeader}
 				<ChatInputArea
 					availableReasoningEfforts={availableReasoningEfforts}
 					capabilities={capabilities}
 					contextUsage={contextUsage}
 					maxMessageSizeKb={maxMessageSizeKb}
-					disabled={inputStatus.chatInputDisabled}
+					disabled={inputStatus.chatInputDisabled || workflow?.composerDisabled === true}
 					isSending={inputStatus.isSending}
 					modelOptions={modelOptions}
 					cloudModelOptions={cloudModelOptions}
 					modelSelectorDisabled={inputStatus.modelSelectorDisabled}
 					agentSelectorDisabled={inputStatus.agentSelectorDisabled}
-					sendDisabled={inputStatus.sendDisabled}
+					sendDisabled={inputStatus.sendDisabled || workflow?.sendDisabled === true}
 					selectedModel={selectedModel}
 					reasoningEffort={reasoningEffort}
 					activeModelToolCapable={activeModelToolCapable}
@@ -297,6 +300,7 @@ export function ChatDisplayShell({
 					onToggleKnowledgeBase={onToggleKnowledgeBase}
 					onSelectAgent={onSelectAgent}
 					onSend={onSend}
+					workflow={workflow}
 				/>
 			</Stack>
 		</Paper>

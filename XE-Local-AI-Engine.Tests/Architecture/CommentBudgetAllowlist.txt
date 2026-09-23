@@ -176,7 +176,7 @@ XE-Local-AI-Engine.Client.Persistence.Tests/GoldenHarvestSourceStoreTests.cs|sum
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/AddGraphWorkflowsMigrationTests.cs|summary|2
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/CanvasWorkflowImportReadTests.cs|summary|3
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowEncryptionTests.cs|summary|2
-XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowPurgeCoverageTests.cs|summary|2
+XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowPurgeCoverageTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowRunStoreTests.cs|summary|5
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowStoreTests.cs|run|1
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowStoreTests.cs|summary|4

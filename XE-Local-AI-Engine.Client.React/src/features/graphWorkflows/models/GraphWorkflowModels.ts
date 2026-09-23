@@ -14,6 +14,7 @@
 import type {
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest as CreateGraphWorkflowDefinitionRequest,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1DecideGraphWorkflowNodeRunRequest as DecideGraphWorkflowNodeRunRequest,
+	XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowConversationRunResponse as GraphWorkflowConversationRunResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDecisionResultResponse as GraphWorkflowDecisionResultResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse as GraphWorkflowDefinitionResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionSummaryResponse as GraphWorkflowDefinitionSummaryResponse,
@@ -29,10 +30,13 @@ import type {
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse as GraphWorkflowRunSummaryResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse as GraphWorkflowToolResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse as GraphWorkflowValidationErrorResponse,
+	XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowConversationRunsResponse as ListGraphWorkflowConversationRunsResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowDefinitionsResponse as ListGraphWorkflowDefinitionsResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunEventsResponse as ListGraphWorkflowRunEventsResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsResponse as ListGraphWorkflowRunsResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowToolsResponse as ListGraphWorkflowToolsResponse,
+	XeLocalAiEngineClientEndpointsGraphWorkflowsV1SendGraphWorkflowChatMessageRequest as SendGraphWorkflowChatMessageRequest,
+	XeLocalAiEngineClientEndpointsGraphWorkflowsV1SendGraphWorkflowChatMessageResponse as SendGraphWorkflowChatMessageResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunRequest as StartGraphWorkflowRunRequest,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse as StartGraphWorkflowRunResponse,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest as UpdateGraphWorkflowDefinitionRequest,
@@ -42,6 +46,7 @@ import type {
 export type {
 	CreateGraphWorkflowDefinitionRequest,
 	DecideGraphWorkflowNodeRunRequest,
+	GraphWorkflowConversationRunResponse,
 	GraphWorkflowDecisionResultResponse,
 	GraphWorkflowDefinitionResponse,
 	GraphWorkflowDefinitionSummaryResponse,
@@ -57,10 +62,13 @@ export type {
 	GraphWorkflowRunSummaryResponse,
 	GraphWorkflowToolResponse,
 	GraphWorkflowValidationErrorResponse,
+	ListGraphWorkflowConversationRunsResponse,
 	ListGraphWorkflowDefinitionsResponse,
 	ListGraphWorkflowRunEventsResponse,
 	ListGraphWorkflowRunsResponse,
 	ListGraphWorkflowToolsResponse,
+	SendGraphWorkflowChatMessageRequest,
+	SendGraphWorkflowChatMessageResponse,
 	StartGraphWorkflowRunRequest,
 	StartGraphWorkflowRunResponse,
 	UpdateGraphWorkflowDefinitionRequest,
@@ -151,7 +159,7 @@ export type GraphWorkflowFailureClass = (typeof graphWorkflowFailureClasses)[num
 export const graphWorkflowConditionOperators = ["Eq", "Ne", "Gt", "Gte", "Lt", "Lte", "Exists", "NotExists"] as const;
 export type GraphWorkflowConditionOperator = (typeof graphWorkflowConditionOperators)[number];
 
-/** The nineteen event types the run trail can carry. Dotted tokens — see `graphWorkflowEventTypeLabelKey`. */
+/** The twenty event types the run trail can carry. Dotted tokens — see `graphWorkflowEventTypeLabelKey`. */
 export const graphWorkflowEventTypes = [
 	"run.created",
 	"run.started",
@@ -172,6 +180,7 @@ export const graphWorkflowEventTypes = [
 	"node.interrupted",
 	"gate.requested",
 	"gate.decided",
+	"node.published",
 ] as const;
 export type GraphWorkflowEventType = (typeof graphWorkflowEventTypes)[number];
 

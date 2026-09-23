@@ -4,7 +4,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
@@ -49,6 +51,12 @@ internal static class AddNodeGraphWorkflowsExtensions
 
         // The run command surface, scoped for the same reason.
         builder.Services.AddScoped<IGraphWorkflowRunService, GraphWorkflowRunService>();
+
+        // The chat surface over runs (send, bound-run list, cancel on conversation delete), and the dispatcher's publish outbox
+        // pass, which the tick resolves from its own scope.
+        builder.Services.AddScoped<IGraphWorkflowChatService, GraphWorkflowChatService>();
+        builder.Services.AddSingleton<GraphWorkflowChatPublisher>();
+        builder.Services.AddSingleton<IConversationDeletionObserver, GraphWorkflowConversationDeletionObserver>();
 
         // The five kinds that run inside the tick. A singleton because it holds nothing per run — only the output cap.
         builder.Services.AddSingleton<GraphWorkflowInlineExecutor>();

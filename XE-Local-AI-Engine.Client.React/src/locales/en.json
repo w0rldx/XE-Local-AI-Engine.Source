@@ -1253,7 +1253,56 @@
 			"remoteImage": {
 				"load": "Load remote image"
 			},
-			"loadingModelElapsed": "· {{elapsed}}"
+			"loadingModelElapsed": "· {{elapsed}}",
+			"workflow": {
+				"selector": {
+					"none": "No workflow",
+					"noneHint": "Messages go to the model or agent as usual",
+					"triggerLabel": "Workflow",
+					"empty": "No chat workflows yet. Create one on the Graph Workflows page."
+				},
+				"status": {
+					"completed": "Completed",
+					"cancelledDuring": "Cancelled during {{node}}",
+					"cancelled": "Cancelled",
+					"failedAt": "Failed at {{node}}: {{reason}}",
+					"unknownReason": "no reason was recorded",
+					"view": "View workflow",
+					"dismiss": "Dismiss",
+					"stop": "Stop",
+					"defaultModel": "default model"
+				},
+				"activity": {
+					"title": "Workflow: {{name}}",
+					"empty": "Nothing has run yet.",
+					"output": "Output",
+					"route": "→ {{route}}",
+					"published": "Published to chat",
+					"inputAsked": "Asked: {{prompt}}",
+					"inputAnswered": "Asked: {{prompt}} — Answer: {{answer}}",
+					"toolResult": "{{tool}}: {{summary}}"
+				},
+				"rerun": {
+					"title": "Run the workflow again?",
+					"description": "This workflow has completed. Sending this message will start '{{name}}' again.",
+					"confirm": "Start again"
+				},
+				"notice": {
+					"busy": "The workflow is still running. Stop it or wait for it to finish.",
+					"attachments": "This workflow does not accept attachments. Remove them and send again.",
+					"selectionChanged": "A different workflow is waiting for your answer. Select it again to answer, or Stop it first.",
+					"runsFailed": "Could not load this conversation's workflow runs, so sending is paused. Retry to continue."
+				},
+				"inputBanner": "Workflow needs your input — {{node}}: {{prompt}}",
+				"lockedHint": "Workflow running — Stop it or wait.",
+				"showActivity": "Show workflow activity",
+				"deletedWorkflow": "Deleted workflow",
+				"placeholder": "Message {{name}}",
+				"answerPlaceholder": "Answer the workflow's question",
+				"attachmentsNotAccepted": "This workflow does not accept attachments.",
+				"attachmentsNotWithAnswer": "Attachments are not sent with an answer.",
+				"runsCapped": "Showing activity for the {{count}} most recent workflow runs in this conversation."
+			}
 		},
 		"clientNodes": {
 			"fields": {
@@ -5831,7 +5880,8 @@
 				"Cancelling": "Cancelling…",
 				"Completed": "Completed",
 				"Failed": "Failed",
-				"Cancelled": "Cancelled"
+				"Cancelled": "Cancelled",
+				"WaitingForInput": "Waiting for your input"
 			},
 			"decision": {
 				"Approve": "Approve",
@@ -5898,7 +5948,8 @@
 				"node_cancelled": "Node cancelled",
 				"node_interrupted": "Node interrupted by a restart",
 				"gate_requested": "A decision was requested",
-				"gate_decided": "A decision was made"
+				"gate_decided": "A decision was made",
+				"node_published": "Result published to the chat"
 			},
 			"definition": {
 				"issues": {

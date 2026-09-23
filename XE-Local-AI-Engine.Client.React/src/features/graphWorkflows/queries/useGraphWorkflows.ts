@@ -7,7 +7,7 @@
 // matches them by PARTIAL DEEP equality. So `[{ _id, path: { runId } }]` invalidates every cached variant of one
 // endpoint for one run while leaving the other runs' caches alone.
 
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { listGraphWorkflowRunEvents } from "@/core/api/generated";
 import {
@@ -19,11 +19,13 @@ import {
 	getGraphWorkflowNodeRunOptions,
 	getGraphWorkflowRunOptions,
 	listAgentDefinitionsOptions,
+	listGraphWorkflowConversationRunsOptions,
 	listGraphWorkflowDefinitionsOptions,
 	listGraphWorkflowRunEventsQueryKey,
 	listGraphWorkflowRunsOptions,
 	listGraphWorkflowToolsOptions,
 	listLocalModelsOptions,
+	sendGraphWorkflowChatMessageMutation,
 	startGraphWorkflowRunMutation,
 	updateGraphWorkflowDefinitionMutation,
 	validateGraphWorkflowDefinitionMutation,
@@ -44,6 +46,7 @@ export const graphWorkflowQueryIds = {
 	node: "getGraphWorkflowNodeRun",
 	events: "listGraphWorkflowRunEvents",
 	tools: "listGraphWorkflowTools",
+	conversationRuns: "listGraphWorkflowConversationRuns",
 } as const;
 
 export type GraphWorkflowQueryId = (typeof graphWorkflowQueryIds)[keyof typeof graphWorkflowQueryIds];
@@ -66,6 +69,9 @@ export function graphWorkflowInvalidationKey(
  * filter, so a definition's runs are picked out of this page client-side and a short page would hide them.
  */
 export const GRAPH_WORKFLOW_RUN_PAGE_SIZE = 200;
+
+/** The chat reads a conversation's newest bound runs only; the endpoint's own default page. Older runs show no activity. */
+export const GRAPH_WORKFLOW_CONVERSATION_RUN_PAGE_SIZE = 20;
 
 interface FeedOptions {
 	/** Polling cadence while the hub is unavailable. `undefined` (the live case) means no polling at all. */
@@ -126,6 +132,40 @@ export function useGraphWorkflowNodeRun(runId: string | undefined, nodeKey: stri
 	return useQuery({
 		...withResponseValidation(getGraphWorkflowNodeRunOptions({ path: { runId: runId ?? "", nodeKey: nodeKey ?? "" } })),
 		...feedQuerySettings(runId && nodeKey ? nodeKey : undefined, options),
+	});
+}
+
+/**
+ * The documents of several SETTLED node runs of one run — what the chat's activity block reads for the nodes that
+ * produced something worth showing. Same cache entries as {@link useGraphWorkflowNodeRun}. A settled node's document
+ * never changes again within one attempt, so each is read once per attempt: no refetch on a remount (hiding and showing
+ * the activity), no poll, and the hub skips it on a node ping. Answers the documents that have landed, keyed by node key.
+ */
+export function useSettledGraphWorkflowNodeRuns(
+	runId: string | undefined,
+	nodeRuns: readonly { readonly nodeKey: string; readonly attempt: number }[],
+) {
+	// "Settled" is per ATTEMPT: the dispatcher retries a retryable failure IN PLACE (same node run, attempt + 1), so a
+	// cached Failed document goes out of date the moment the run detail reports a later attempt. Such a document counts
+	// as stale — refetched on the next mount (the node leaves these keys while it re-runs, so the query unmounts) and on
+	// an options change while mounted — and is withheld until the new attempt's document lands.
+	const isCurrent = (data: { attempt: number } | undefined, attempt: number): boolean =>
+		data !== undefined && data.attempt >= attempt;
+	return useQueries({
+		queries: nodeRuns.map(({ nodeKey, attempt }) => ({
+			...withResponseValidation(getGraphWorkflowNodeRunOptions({ path: { runId: runId ?? "", nodeKey } })),
+			enabled: Boolean(runId),
+			staleTime: (query: { state: { data?: { attempt: number } } }) =>
+				isCurrent(query.state.data, attempt) ? Number.POSITIVE_INFINITY : 0,
+		})),
+		combine: (results) =>
+			new Map(
+				results.flatMap((result, index) =>
+					result.data?.nodeKey && isCurrent(result.data, nodeRuns[index]?.attempt ?? 0)
+						? [[result.data.nodeKey, result.data] as const]
+						: [],
+				),
+			),
 	});
 }
 
@@ -297,6 +337,46 @@ export function useStartGraphWorkflowRun() {
 			if (data.runId) {
 				await queryClient.invalidateQueries({
 					queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.run, { runId: data.runId }),
+				});
+			}
+			await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) });
+		},
+	});
+}
+
+/**
+ * The runs bound to one chat conversation, newest first, each with what the chat page renders it from (definition
+ * name, trigger message, a parked ChatInput's prompt). This is what puts a reloaded conversation back into workflow
+ * mode. A node with Graph Workflows switched off answers 404, which the chat reads as "no bound runs".
+ */
+export function useGraphWorkflowConversationRuns(conversationId: string | undefined, options: FeedOptions = {}) {
+	return useQuery({
+		...withResponseValidation(
+			listGraphWorkflowConversationRunsOptions({
+				path: { conversationId: conversationId ?? "" },
+				query: { limit: GRAPH_WORKFLOW_CONVERSATION_RUN_PAGE_SIZE },
+			}),
+		),
+		...feedQuerySettings(conversationId, options),
+		select: (data) => data.runs ?? [],
+	});
+}
+
+/**
+ * A chat message into workflow mode: starts the selected Chat workflow, or answers the bound run's parked ChatInput.
+ * The server persists the user message itself, so the conversation and its bound-run list are re-read rather than
+ * primed. Refusals arrive as 409s (`runBusy`, `rerunConfirmationRequired`, `attachmentsNotAccepted`) that the caller
+ * reads with `readGraphWorkflowConflict`.
+ */
+export function useSendGraphWorkflowChatMessage() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...withResponseValidation(sendGraphWorkflowChatMessageMutation()),
+		onSuccess: async (_data, variables) => {
+			const conversationId = variables.path?.conversationId;
+			if (conversationId) {
+				await queryClient.invalidateQueries({
+					queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.conversationRuns, { conversationId }),
 				});
 			}
 			await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) });

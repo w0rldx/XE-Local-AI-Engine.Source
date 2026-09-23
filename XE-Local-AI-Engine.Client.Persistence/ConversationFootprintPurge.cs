@@ -37,6 +37,15 @@ public static class ConversationFootprintPurge
     ];
 
     /// <summary>
+    ///     Tables that carry a conversation binding the purge NULLS instead of deleting: history that outlives its
+    ///     conversation. Listed beside <see cref="CoveredChildTables" /> so the coverage test can tell them from an omission.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> UnboundChildTables =
+    [
+        "graph_workflow_runs"
+    ];
+
+    /// <summary>
     ///     Deletes every child row and the conversation row for <paramref name="conversationId" /> on
     ///     <paramref name="dbContext" />'s connection. Runs within the caller's transaction; the conversation row is
     ///     deleted last.
@@ -89,6 +98,10 @@ public static class ConversationFootprintPurge
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM integration_sessions WHERE conversation_id = {0};", [conversationId], cancellationToken);
 
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_sessions WHERE conversation_id = {0};", [conversationId], cancellationToken);
+
+        // A graph workflow run is an audit that outlives its chat: unbound, never deleted. Written out rather than left to the
+        // foreign key's SET NULL, so the unbinding holds on a connection whatever its foreign-key pragma says.
+        await dbContext.Database.ExecuteSqlRawAsync("UPDATE graph_workflow_runs SET conversation_id = NULL WHERE conversation_id = {0};", [conversationId], cancellationToken);
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversations WHERE conversation_id = {0};", [conversationId], cancellationToken);
     }
 }

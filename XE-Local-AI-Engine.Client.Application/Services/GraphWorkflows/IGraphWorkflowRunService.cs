@@ -63,6 +63,14 @@ public sealed class GraphWorkflowRunConflictException : InvalidOperationExceptio
     }
 }
 
+/// <summary>The chat conversation a run starts bound to, and the user message that started it.</summary>
+public sealed class GraphWorkflowRunBinding
+{
+    public required Guid ConversationId { get; init; }
+
+    public required Guid TriggerMessageId { get; init; }
+}
+
 /// <summary>Every way a caller changes or reads a graph workflow run.</summary>
 /// <remarks>
 ///     <b>The commands are fire-and-forget.</b> Each validates, commits a durable intent, signals the dispatcher and
@@ -87,6 +95,17 @@ public interface IGraphWorkflowRunService
         Guid requestId,
         string? inputJson,
         int? definitionVersion,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The same start, bound to a chat conversation. A conversation that already has a live bound run answers
+    ///     <see cref="GraphWorkflowRunBusyException" />; the database's partial unique index is the lock.
+    /// </summary>
+    Task<GraphWorkflowRunDetail> StartAsync(Guid definitionId,
+        Guid requestId,
+        string? inputJson,
+        int? definitionVersion,
+        GraphWorkflowRunBinding? binding,
         CancellationToken cancellationToken = default);
 
     /// <summary>

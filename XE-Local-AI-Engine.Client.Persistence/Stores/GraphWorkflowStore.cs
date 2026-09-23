@@ -44,9 +44,9 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
     ///     The run statuses that occupy a concurrency slot — the ones a node is actually carrying.
     /// </summary>
     /// <remarks>
-    ///     <c>Running</c> has work in flight; <c>WaitingForApproval</c> holds a run's rows and lane state open and
-    ///     resumes without asking to be admitted again, so a node that stopped counting it could carry arbitrarily
-    ///     many; <c>Cancelling</c> is still draining. <b><c>Pending</c> is deliberately absent</b>, which separates
+    ///     <c>Running</c> has work in flight and <c>Cancelling</c> is still draining. <c>WaitingForApproval</c> counts
+    ///     only while a row of it is queued or running: a PARKED run releases its slot (the query's second filter).
+    ///     <b><c>Pending</c> is deliberately absent</b>, which separates
     ///     this from <see cref="LiveRunStatuses" />: Pending is the queue admission draws FROM, so counting it would
     ///     count the run asking to start against its own admission and a cap of one would admit nothing at all.
     /// </remarks>
@@ -296,6 +296,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                 FailureClass = GraphWorkflowFailureClass.None,
                 GraphJson = Utf8(command.GraphJson),
                 InputJson = Utf8OrNull(command.InputJson),
+                ConversationId = command.ConversationId,
+                TriggerMessageId = command.TriggerMessageId,
                 Seq = 0,
                 Version = 1,
                 CreatedAtUtc = now
@@ -330,9 +332,20 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             // ux_graph_workflow_runs_request_id: another start with the same caller-minted id beat this one. The index IS the lock — the caller's earlier lookup is
             // a fast path, not a gate — so the loser answers with the run that won rather than an error the caller would have to translate back into a replay.
             await RollbackAsync(transaction);
-            return await FindRunByRequestAsync(command.RequestId, cancellationToken)
-                   ?? throw new GraphWorkflowInvalidTransitionException($"Graph workflow run '{command.RunId}' could not be started and no run holds "
-                                                                        + $"request id '{command.RequestId}'.", exception);
+            if (await FindRunByRequestAsync(command.RequestId, cancellationToken) is { } winner)
+            {
+                return winner;
+            }
+
+            // No run holds the request id, so the index that refused this insert was the other unique one on the row: the
+            // conversation already has a live bound run. Told apart by elimination rather than by parsing SQLite's message.
+            if (command.ConversationId is { } conversationId)
+            {
+                throw new GraphWorkflowRunBusyException($"Conversation '{conversationId}' already has a live graph workflow run.", exception);
+            }
+
+            throw new GraphWorkflowInvalidTransitionException($"Graph workflow run '{command.RunId}' could not be started and no run holds "
+                                                              + $"request id '{command.RequestId}'.", exception);
         }
         catch
         {
@@ -381,11 +394,83 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             throw new ArgumentOutOfRangeException(nameof(probeLimit), "An active-run probe limit must be positive.");
         }
 
+        // A PARKED run — rows waiting on a person, none queued or running — releases its slot, or four waiting chats would hold
+        // every slot. Cancelling always counts: it is draining work. A parked run that resumes does not re-pass admission (accepted).
+        var nodeRuns = _dbContext.GraphWorkflowNodeRuns.AsNoTracking();
         return await _dbContext.GraphWorkflowRuns.AsNoTracking()
                                .Where(entity => ExecutingRunStatuses.Contains(entity.Status))
+                               .Where(entity => entity.Status == GraphWorkflowRunStatus.Cancelling
+                                                || !nodeRuns.Any(nodeRun => nodeRun.RunId == entity.Id && nodeRun.Status == GraphWorkflowNodeRunStatus.WaitingForApproval)
+                                                || nodeRuns.Any(nodeRun => nodeRun.RunId == entity.Id
+                                                                           && (nodeRun.Status == GraphWorkflowNodeRunStatus.Queued
+                                                                               || nodeRun.Status == GraphWorkflowNodeRunStatus.Running)))
                                .Take(probeLimit)
                                .CountAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default)
+    {
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit), "A run list limit must be positive.");
+        }
+
+        var runs = await _dbContext.GraphWorkflowRuns.AsNoTracking()
+                                   .Where(entity => entity.ConversationId == conversationId)
+                                   .OrderByDescending(entity => entity.CreatedAtUtc)
+                                   .ThenByDescending(entity => entity.Id)
+                                   .Take(limit)
+                                   .ToListAsync(cancellationToken);
+        return [.. runs.Select(RunSnapshot)];
+    }
+
+    public async Task<GraphWorkflowNodeRunSnapshot?> FindConversationDecisionAsync(Guid conversationId, Guid operationId, CancellationToken cancellationToken = default)
+    {
+        var runs = _dbContext.GraphWorkflowRuns.AsNoTracking().Where(entity => entity.ConversationId == conversationId).Select(static entity => entity.Id);
+        var nodeRun = await _dbContext.GraphWorkflowNodeRuns.AsNoTracking()
+                                      .Where(entity => entity.DecisionOperationId == operationId && runs.Contains(entity.RunId))
+                                      .OrderBy(entity => entity.RunId)
+                                      .FirstOrDefaultAsync(cancellationToken);
+        return nodeRun is null ? null : NodeRunSnapshot(nodeRun);
+    }
+
+    public async Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListUnpublishedNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        var nodeRuns = await _dbContext.GraphWorkflowNodeRuns.AsNoTracking()
+                                       .Where(entity => entity.RunId == runId
+                                                        && entity.Status == GraphWorkflowNodeRunStatus.Succeeded
+                                                        && entity.PublishedMessageId == null)
+                                       .OrderBy(entity => entity.CompletedAtUtc)
+                                       .ThenBy(entity => entity.NodeKey)
+                                       .ToListAsync(cancellationToken);
+        return [.. nodeRuns.Select(NodeRunSnapshot)];
+    }
+
+    public Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default) =>
+        TryExecuteMutationAsync(runId,
+            GraphWorkflowVersions.Any,
+            async run =>
+            {
+                // The compare-and-set: a row somebody already stamped is simply not found, and the mutation writes nothing.
+                var nodeRun = await _dbContext.GraphWorkflowNodeRuns
+                                              .SingleOrDefaultAsync(entity => entity.Id == nodeRunId && entity.RunId == run.Id && entity.PublishedMessageId == null,
+                                                  cancellationToken);
+                if (nodeRun is null)
+                {
+                    return null;
+                }
+
+                nodeRun.PublishedMessageId = messageId;
+                return new MutationOutcome
+                {
+                    EventType = GraphWorkflowEventTypes.NodePublished,
+                    NodeKey = nodeRun.NodeKey,
+                    DetailJson = Utf8(JsonSerializer.Serialize(new PublishedDetailPayload { MessageId = messageId }, JsonOptions))
+                };
+            },
+            cancellationToken,
+            // The stamp moves no run state, so no run-level write needs to lose a race to it: it takes a watermark, not a version.
+            bumpVersion: false);
 
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default)
     {
@@ -707,7 +792,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
     private async Task<GraphWorkflowMutationResult?> TryExecuteMutationAsync(Guid runId,
         long expectedVersion,
         Func<GraphWorkflowRun, Task<MutationOutcome?>> mutate,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool bumpVersion = true)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
@@ -725,7 +811,11 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             // The watermark is allocated per COMMIT, not per event row: a mutation that records no event — the settle from Cancelling to Cancelled is the only one —
             // still MOVED the run. The events feed pages WHERE seq > afterSeq over event ROWS, so the number this skips is simply a number no row ever carried.
             var sequence = outcome.EventType is { } eventType ? AddEvent(run, eventType, outcome.NodeKey, outcome.DetailJson) : ++run.Seq;
-            run.Version++;
+            if (bumpVersion)
+            {
+                run.Version++;
+            }
+
             _ = await _dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new GraphWorkflowMutationResult { RunId = runId, Sequence = sequence };
@@ -803,6 +893,12 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
         if ((command.QueueReason ?? command.TerminalReason) is { } reason)
         {
             nodeRun.Error = Utf8(reason);
+        }
+        else if (command.TargetStatus is GraphWorkflowNodeRunStatus.Running or GraphWorkflowNodeRunStatus.Succeeded)
+        {
+            // A queue reason says why a row WAITED; once it runs, and above all once it succeeded, it is stale and a reader
+            // would show it beside a finished node. A failure writes its own reason, so nothing a failure says is lost here.
+            nodeRun.Error = null;
         }
 
         if (command.InvocationId is { } invocationId)
@@ -966,7 +1062,9 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             CancelRequestedAtUtc = run.CancelRequestedAtUtc,
             StartedAtUtc = run.StartedAtUtc,
             CompletedAtUtc = run.CompletedAtUtc,
-            CreatedAtUtc = run.CreatedAtUtc
+            CreatedAtUtc = run.CreatedAtUtc,
+            ConversationId = run.ConversationId,
+            TriggerMessageId = run.TriggerMessageId
         };
 
     private static GraphWorkflowNodeRunSnapshot NodeRunSnapshot(GraphWorkflowNodeRun nodeRun) =>
@@ -988,7 +1086,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             InvocationId = nodeRun.InvocationId,
             StartedAtUtc = nodeRun.StartedAtUtc,
             CompletedAtUtc = nodeRun.CompletedAtUtc,
-            UpdatedAtUtc = nodeRun.UpdatedAtUtc
+            UpdatedAtUtc = nodeRun.UpdatedAtUtc,
+            PublishedMessageId = nodeRun.PublishedMessageId
         };
 
     private async Task RollbackAsync(IDbContextTransaction transaction)
@@ -1020,6 +1119,12 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
 
     /// <summary>The gate.decided detail: which pause, and what was answered. Read by name, so camelCase like every other.</summary>
     private sealed record GateDecidedDetailPayload(string NodeKey, string Decision);
+
+    /// <summary>The node.published detail: which chat message the result became.</summary>
+    private sealed class PublishedDetailPayload
+    {
+        public required Guid MessageId { get; init; }
+    }
 
     private async Task<GraphWorkflowDefinition> LoadAsync(Guid definitionId, CancellationToken cancellationToken) =>
         await _dbContext.GraphWorkflowDefinitions.SingleOrDefaultAsync(entity => entity.Id == definitionId, cancellationToken)

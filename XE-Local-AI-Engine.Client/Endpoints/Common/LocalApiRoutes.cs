@@ -986,6 +986,15 @@ public static class LocalApiRoutes
         /// </summary>
         public const string RunEvents = "graph-workflows/runs/{runId}/events";
 
+        /// <summary>
+        ///     A chat message into workflow mode: starts a run bound to the conversation, or answers its parked ChatInput.
+        ///     202; the caller's <c>requestId</c> is the idempotency key.
+        /// </summary>
+        public const string ConversationMessages = "graph-workflows/conversations/{conversationId}/messages";
+
+        /// <summary>The runs bound to one conversation, newest first — what puts the chat page back into workflow mode on a reload.</summary>
+        public const string ConversationRuns = "graph-workflows/conversations/{conversationId}/runs";
+
         /// <summary>SignalR notification hub. Full path (mapped via MapHub, not the FastEndpoints prefix).</summary>
         public const string Hub = "/api/local/v1/graph-workflows/hub";
     }

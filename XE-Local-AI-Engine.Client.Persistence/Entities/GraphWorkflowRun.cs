@@ -43,4 +43,13 @@ internal sealed class GraphWorkflowRun
     public long? StartedAtUtc { get; set; }
     public long? CompletedAtUtc { get; set; }
     public long CreatedAtUtc { get; set; }
+
+    /// <summary>
+    ///     The chat conversation this run is bound to, or null for a run started from the Graph Workflows page. A real
+    ///     foreign key with ON DELETE SET NULL: a deleted conversation leaves its runs as history, unbound.
+    /// </summary>
+    public Guid? ConversationId { get; set; }
+
+    /// <summary>The user message that started a chat-bound run. Loose reference, no foreign key.</summary>
+    public Guid? TriggerMessageId { get; set; }
 }

@@ -49,6 +49,18 @@ public interface INodeChatPersistenceService
     /// </summary>
     Task<IReadOnlyDictionary<Guid, Guid>> SetSelectedPathAsync(NodeChatSetSelectedPathRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>The conversation's <c>kind</c> (<c>NodeConversationKind</c>), or null when it does not exist or was deleted.</summary>
+    Task<string?> GetConversationKindAsync(Guid conversationId, CancellationToken cancellationToken = default);
+
+    /// <summary>Writes a Completed user or assistant message under a deterministic id at most once; a repeat answers the standing row.</summary>
+    Task<NodeChatInsertMessageIfAbsentResult> InsertMessageIfAbsentAsync(NodeChatInsertMessageIfAbsentRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a message the caller inserted itself (a compensating write for a send that lost its second commit).</summary>
+    Task DeleteMessageAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>The conversation a message id belongs to, or null when no message carries it.</summary>
+    Task<Guid?> GetMessageConversationIdAsync(Guid messageId, CancellationToken cancellationToken = default);
+
     Task<NodeChatPersistedMessageDto> PersistUserMessageAsync(NodeChatPersistUserMessageRequest request, CancellationToken cancellationToken = default);
 
     Task<NodeChatPersistedMessageDto> CreateAssistantPlaceholderAsync(NodeChatCreateAssistantPlaceholderRequest request, CancellationToken cancellationToken = default);

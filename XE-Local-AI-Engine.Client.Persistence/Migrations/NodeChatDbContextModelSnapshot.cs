@@ -3975,6 +3975,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("pending_decision_kind");
 
+                    b.Property<Guid?>("PublishedMessageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("published_message_id");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("TEXT")
                         .HasColumnName("run_id");
@@ -4024,6 +4028,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<long?>("CompletedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("completed_at_utc");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("conversation_id");
 
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER")
@@ -4080,6 +4088,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("status");
 
+                    b.Property<Guid?>("TriggerMessageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("trigger_message_id");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER")
@@ -4087,12 +4099,20 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ConversationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_graph_workflow_runs_live_conversation")
+                        .HasFilter("\"conversation_id\" IS NOT NULL AND \"status\" IN ('Pending', 'Running', 'WaitingForApproval', 'Cancelling')");
+
                     b.HasIndex("DefinitionId")
                         .HasDatabaseName("ix_graph_workflow_runs_definition");
 
                     b.HasIndex("RequestId")
                         .IsUnique()
                         .HasDatabaseName("ux_graph_workflow_runs_request_id");
+
+                    b.HasIndex("ConversationId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_graph_workflow_runs_conversation_created");
 
                     b.HasIndex("Status", "CreatedAtUtc")
                         .HasDatabaseName("ix_graph_workflow_runs_status_created");
@@ -7677,6 +7697,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GraphWorkflowRun", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.NodeConversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GraphWorkflowRunEvent", b =>

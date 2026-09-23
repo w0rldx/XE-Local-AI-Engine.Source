@@ -90,6 +90,9 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
 
     public IServiceProvider Services => _factory.Services;
 
+    /// <summary>The host itself, for a test that sends through the routes of a private host.</summary>
+    public TestServerWebAppFactory Factory => _factory;
+
     /// <summary>The faked invocation runner, on a host built by <see cref="GraphWorkflowAgentHostFixture" />.</summary>
     public FakeGraphWorkflowInvocation Invocations => (FakeGraphWorkflowInvocation)Services.GetRequiredService<IInvocationRunner>();
 
@@ -260,7 +263,10 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     ///     A run started through the STORE, so a test can pin a graph, or a set of node runs, the run service would
     ///     never produce — a graph that no longer parses, or a node key the graph does not declare.
     /// </summary>
-    public async Task<Guid> StartRunThroughTheStoreAsync(Guid definitionId, string pinnedGraphJson, IReadOnlyList<(string NodeKey, GraphWorkflowNodeKind Kind)> nodeRuns)
+    public async Task<Guid> StartRunThroughTheStoreAsync(Guid definitionId,
+        string pinnedGraphJson,
+        IReadOnlyList<(string NodeKey, GraphWorkflowNodeKind Kind)> nodeRuns,
+        string? inputJson = null)
     {
         ArgumentNullException.ThrowIfNull(nodeRuns);
 
@@ -275,7 +281,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
             DefinitionVersion = definition.Version,
             GraphHash = definition.GraphHash,
             GraphJson = pinnedGraphJson,
-            InputJson = null,
+            InputJson = inputJson,
             NodeRuns = [.. nodeRuns.Select(seed => new GraphWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = seed.NodeKey, Kind = seed.Kind })]
         });
         return run.Id;
@@ -305,6 +311,12 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetRunAsync(runId);
+    }
+
+    public async Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ReadConversationRunsAsync(Guid conversationId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().ListRunsByConversationAsync(conversationId, limit: 50);
     }
 
     public async Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ReadNodeRunsAsync(Guid runId)

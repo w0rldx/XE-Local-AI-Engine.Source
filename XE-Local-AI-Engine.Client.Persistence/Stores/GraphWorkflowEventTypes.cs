@@ -50,4 +50,10 @@ public static class GraphWorkflowEventTypes
 
     /// <summary>Written by the pause node.</summary>
     public const string GateDecided = "gate.decided";
+
+    /// <summary>
+    ///     A succeeded node's result became a chat message in the run's bound conversation. Amendment 2026-09-23 (Chat
+    ///     Workflows S1): written by the dispatcher's publish outbox pass, detail <c>{ messageId }</c>.
+    /// </summary>
+    public const string NodePublished = "node.published";
 }

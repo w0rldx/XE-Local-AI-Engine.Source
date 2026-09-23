@@ -99,6 +99,9 @@ public sealed record GraphWorkflowNodeRunSnapshot
     public required long? CompletedAtUtc { get; init; }
 
     public required long UpdatedAtUtc { get; init; }
+
+    /// <summary>The chat message this row's result was published as; null until published and on every row that never publishes.</summary>
+    public Guid? PublishedMessageId { get; init; }
 }
 
 /// <summary>
@@ -152,6 +155,12 @@ public sealed class GraphWorkflowRunSnapshot
     public required long? CompletedAtUtc { get; init; }
 
     public required long CreatedAtUtc { get; init; }
+
+    /// <summary>The chat conversation the run is bound to; null for an unbound run and for one whose conversation was deleted.</summary>
+    public Guid? ConversationId { get; init; }
+
+    /// <summary>The user message that started a chat-bound run.</summary>
+    public Guid? TriggerMessageId { get; init; }
 }
 
 /// <summary>One entry of a run's append-only change log. <see cref="Seq" /> is its order as well as its watermark.</summary>
@@ -233,6 +242,14 @@ public sealed class StartGraphWorkflowRunCommand
     public required string? InputJson { get; init; }
 
     public required IReadOnlyList<GraphWorkflowNodeRunSeed> NodeRuns { get; init; }
+
+    /// <summary>
+    ///     The chat conversation to bind the run to. At most one live run per conversation: a second one loses to the
+    ///     partial unique index and answers <see cref="GraphWorkflowRunBusyException" />.
+    /// </summary>
+    public Guid? ConversationId { get; init; }
+
+    public Guid? TriggerMessageId { get; init; }
 }
 
 /// <summary>
@@ -508,12 +525,34 @@ public interface IGraphWorkflowStore
     ///     further than <paramref name="probeLimit" /> rows.
     /// </summary>
     /// <remarks>
+    ///     A parked run (rows waiting on a person, none queued or running) is not executing and holds no slot.
     ///     The concurrency cap asks "are there already N of them", so counting past N is work nobody reads.
     ///     <c>Pending</c> is NOT counted, which makes this a different question from "does a live run pin this
     ///     definition": Pending is the queue admission draws from, so counting it would count the run asking to start
     ///     against its own admission, a cap of one would admit nothing, and a Pending backlog would block every start.
     /// </remarks>
     Task<int> CountActiveRunsAsync(int probeLimit, CancellationToken cancellationToken = default);
+
+    /// <summary>The runs bound to one chat conversation, newest first, every status.</summary>
+    Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsByConversationAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The node run one operation id decided on ANY run bound to <paramref name="conversationId" />, or
+    ///     <see langword="null" /> — the chat send's replay lookup, which cannot know which run a replayed answer landed on.
+    /// </summary>
+    Task<GraphWorkflowNodeRunSnapshot?> FindConversationDecisionAsync(Guid conversationId, Guid operationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The publish outbox's candidates: every <c>Succeeded</c> node run of the run with no published message yet.
+    ///     Whether a node publishes at all is the pinned graph's answer, which this assembly cannot read.
+    /// </summary>
+    Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListUnpublishedNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Stamps a node run's published message and appends <c>node.published</c>, in one transaction — only while the
+    ///     stamp is still empty. <see langword="null" /> means another tick already stamped it: nothing was written.
+    /// </summary>
+    Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default);
 
     Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default);
 
@@ -576,6 +615,17 @@ public interface IGraphWorkflowStore
         IReadOnlyList<GraphWorkflowNodeRunVerdict> verdicts,
         GraphWorkflowUnjudgedNodeRunSettlement? unjudged = null,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+///     A chat conversation already has a live bound run, so a second one cannot start — the partial unique index on
+///     <c>conversation_id</c> refused it. Maps to 409 <c>GraphWorkflowRunBusy</c>.
+/// </summary>
+public sealed class GraphWorkflowRunBusyException : InvalidOperationException
+{
+    public GraphWorkflowRunBusyException(string message, Exception? innerException = null) : base(message, innerException)
+    {
+    }
 }
 
 public sealed class GraphWorkflowNotFoundException : InvalidOperationException

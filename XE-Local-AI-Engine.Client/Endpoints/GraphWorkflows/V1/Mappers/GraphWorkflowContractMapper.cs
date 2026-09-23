@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 
 /// <summary>
 ///     Projects the store's snapshots onto the wire contracts. Entities never reach an endpoint: their text columns
@@ -127,6 +128,21 @@ internal static class GraphWorkflowContractMapper
             StartedAtUtc = value.StartedAtUtc,
             CompletedAtUtc = value.CompletedAtUtc,
             CreatedAtUtc = value.CreatedAtUtc
+        };
+    }
+
+    public static GraphWorkflowConversationRunResponse ToResponse(this GraphWorkflowChatBoundRun value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        return new GraphWorkflowConversationRunResponse
+        {
+            Run = value.Run.ToResponse(),
+            DefinitionId = value.Run.DefinitionId,
+            DefinitionName = value.DefinitionName,
+            TriggerMessageId = value.Run.TriggerMessageId,
+            PendingInput = value.PendingInput is { } input ? new GraphWorkflowPendingInputResponse { NodeKey = input.NodeKey, Prompt = input.Prompt } : null,
+            Steerable = value.SteerableNodeKey is { } nodeKey ? new GraphWorkflowSteerableNodeResponse { NodeKey = nodeKey } : null
         };
     }
 

@@ -46,11 +46,26 @@ interface GraphWorkflowStatusBadgeProps {
 	readonly "data-testid"?: string;
 }
 
-export function GraphWorkflowRunStatusBadge({ status, "data-testid": testId }: GraphWorkflowStatusBadgeProps) {
+interface GraphWorkflowRunStatusBadgeProps extends GraphWorkflowStatusBadgeProps {
+	/**
+	 * The run is parked on a ChatInput rather than a Pause. `WaitingForApproval` covers both on the wire, but a person
+	 * asked a question is not being asked to approve anything, so the label says so.
+	 */
+	readonly waitingForInput?: boolean;
+}
+
+export function GraphWorkflowRunStatusBadge({
+	status,
+	waitingForInput = false,
+	"data-testid": testId,
+}: GraphWorkflowRunStatusBadgeProps) {
 	const { t } = useTranslation();
 	const reduced = useReducedMotion();
 	const narrowed = narrowGraphWorkflowRunStatus(status);
-	const label = t(`pages.graphWorkflows.runStatus.${narrowed}`, narrowed);
+	const label =
+		narrowed === "WaitingForApproval" && waitingForInput
+			? t("pages.graphWorkflows.runStatus.WaitingForInput", "Waiting for your input")
+			: t(`pages.graphWorkflows.runStatus.${narrowed}`, narrowed);
 	return (
 		<StatusBadge
 			color={graphWorkflowRunStatusColors[narrowed]}

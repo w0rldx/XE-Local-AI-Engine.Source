@@ -6,6 +6,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 
 /// <summary>
 ///     The run engine's one loop, advancing a persisted run by transitioning persisted node runs and holding no
@@ -37,6 +38,9 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     /// </remarks>
     private const int SweepPageSize = 500;
 
+    /// <summary>How many ticks a failing publish may hold a run's recompute back before the run completes without it.</summary>
+    private const int MaxPublishRetries = 3;
+
     /// <summary>
     ///     What a drained row and the run above it say for themselves. ONE spelling, because the two are read side by
     ///     side and a run that explained its cancellation differently from its own node runs would read like two
@@ -65,6 +69,9 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     ///     would otherwise pay for nothing.
     /// </remarks>
     private readonly ConcurrentDictionary<Guid, GraphWorkflowGraph> _graphs = new();
+
+    /// <summary>Ticks a run's recompute was held back for a failing publish. In memory: a restart grants a fresh budget.</summary>
+    private readonly ConcurrentDictionary<Guid, int> _publishRetries = new();
 
     private readonly IReadOnlyList<IGraphWorkflowNodeExecutor> _executors;
     private readonly GraphWorkflowInlineExecutor _inline;
@@ -162,7 +169,10 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
-            return await AdvanceCoreAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(), runId, cancellationToken);
+            return await AdvanceCoreAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>(),
+                scope.ServiceProvider.GetService<GraphWorkflowChatPublisher>(),
+                runId,
+                cancellationToken);
         }
         finally
         {
@@ -175,7 +185,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     ///     anything reads the rows, a drain admits nothing, and the run's own status is recomputed last, against the
     ///     version it was read at.
     /// </summary>
-    private async Task<int> AdvanceCoreAsync(IGraphWorkflowStore store, Guid runId, CancellationToken cancellationToken)
+    private async Task<int> AdvanceCoreAsync(IGraphWorkflowStore store, GraphWorkflowChatPublisher? publisher, Guid runId, CancellationToken cancellationToken)
     {
         var run = await store.GetRunAsync(runId, cancellationToken);
         if (GraphWorkflowStateMachine.IsTerminal(run.Status))
@@ -216,6 +226,27 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
 
         written += await RetryFailedNodesAsync(store, graph, run, cancellationToken);
         written += await AdmitAsync(store, graph, run, cancellationToken);
+
+        // After admit, which settles the inline kinds (End among them), and before the recompute that may end the run: a result
+        // published here is in the conversation before the run reads Completed. A no-op without a bound conversation.
+        if (publisher is not null)
+        {
+            var (published, failed) = await publisher.PublishAsync(store, run, graph, cancellationToken);
+            written += published;
+
+            // A failed publish holds the recompute back — which may be the one that ends the run, after which nothing ticks it
+            // again — and counts as work so the tick re-signals. Bounded per run, then the run completes as it would have.
+            if (failed > 0 && _publishRetries.AddOrUpdate(run.Id, 1, static (_, count) => count + 1) <= MaxPublishRetries)
+            {
+                return written + 1;
+            }
+
+            if (failed == 0)
+            {
+                _ = _publishRetries.TryRemove(run.Id, out _);
+            }
+        }
+
         written += await RecomputeRunStatusAsync(store, graph, run, cancellationToken);
         return written;
     }
@@ -717,8 +748,11 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         _graphs.GetOrAdd(run.Id, _ => GraphWorkflowGraph.Parse(run.GraphJson));
 
     /// <summary>Drops the parsed graph of a run that has ended. A run that turns out to be live again re-parses.</summary>
-    private void Forget(Guid runId) =>
-        _graphs.TryRemove(runId, out _);
+    private void Forget(Guid runId)
+    {
+        _ = _graphs.TryRemove(runId, out _);
+        _ = _publishRetries.TryRemove(runId, out _);
+    }
 
     /// <summary>
     ///     The run's version as of right now, for a run-level write that follows this tick's own node-run writes.

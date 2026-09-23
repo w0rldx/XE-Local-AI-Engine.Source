@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -103,6 +104,26 @@ public sealed class ConflictExceptionHandlerTests
         AssertEx.Equal(expected: 409, body.Status);
         AssertEx.Equal(exception.Message, body.Detail);
         AssertEx.Equal("Reject", body.StandingDecision);
+    }
+
+    /// <summary>The three chat-workflow refusals each reach the client under a discriminator of their own, which the chat page branches on.</summary>
+    [Test]
+    [Arguments("busy")]
+    [Arguments("rerun")]
+    [Arguments("attachments")]
+    public async Task TryHandleAsync_ForAChatWorkflowRefusal_WritesItsOwnConflictType(string refusal)
+    {
+        var (exception, expected) = refusal switch
+        {
+            "busy" => ((Exception)new GraphWorkflowRunBusyException("busy"), "GraphWorkflowRunBusy"),
+            "rerun" => (new GraphWorkflowRerunConfirmationRequiredException("confirm"), "GraphWorkflowRerunConfirmationRequired"),
+            _ => (new GraphWorkflowAttachmentsNotAcceptedException("no files"), "GraphWorkflowAttachmentsNotAccepted")
+        };
+
+        var body = await HandleAsync(exception);
+
+        AssertEx.Equal(expected, body.ConflictType);
+        AssertEx.Equal(expected: 409, body.Status);
     }
 
     /// <summary>

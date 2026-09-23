@@ -147,6 +147,81 @@ internal sealed class NodeChatMessageCommands
             cancellationToken);
     }
 
+    /// <summary>Inserts a Completed user or assistant message under the caller's deterministic id, or answers the row already standing under it.</summary>
+    /// <remarks>
+    ///     Idempotency is that id plus an existence check inside the conversation-exclusive section: the <c>request_id</c>
+    ///     index is non-unique, and a bare insert would read a duplicate id as a sequence collision.
+    /// </remarks>
+    public Task<NodeChatInsertMessageIfAbsentResult> InsertMessageIfAbsentAsync(NodeChatInsertMessageIfAbsentRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(request.Content))
+        {
+            throw new ArgumentException("Message content must be provided.", nameof(request));
+        }
+
+        var isAssistant = string.Equals(request.Role, AssistantRole, StringComparison.Ordinal);
+        if (!isAssistant && !string.Equals(request.Role, UserRole, StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"Role '{request.Role}' is neither '{UserRole}' nor '{AssistantRole}'.", nameof(request));
+        }
+
+        return InsertMessageCoreAsync(request.ConversationId,
+            request.MessageId,
+            requestId: null,
+            request.Role,
+            isAssistant ? request.Content : request.Content.Trim(),
+            reasoning: null,
+            NodeChatMessageStatusValues.Completed,
+            request.CreatedAtUtc,
+            request.CreatedAtUtc,
+            isAssistant ? request.Model : null,
+            error: null,
+            metadataJson: null,
+            NodeChatOriginValues.Local,
+            cancellationToken,
+            agentDefinitionId: isAssistant ? request.AgentDefinitionId : null,
+            agentName: isAssistant ? request.AgentName : null,
+            ifAbsent: true,
+            // A finished assistant row carries its run envelope from the start, in the insert's transaction, so the restart
+            // reconcile never backfills it as a chat run. Thin, like the cancel path's, and never clobbering an existing one.
+            envelope: isAssistant ? new AgentRunEnvelopeMetadata { InvocationId = null, DurationMs = 0L, TraceId = CurrentTraceId() } : null);
+    }
+
+    /// <summary>Removes one message the caller itself inserted, with any run envelope it carries — a compensating write, never a chat delete.</summary>
+    public Task DeleteMessageAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default) =>
+        _writer.ExecuteConversationExclusiveAsync(conversationId,
+            async (dbContext, token) =>
+            {
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.Transaction = transaction.GetDbTransaction();
+                command.CommandText = """
+                                      DELETE FROM agent_execution_logs WHERE message_id = $message_id AND conversation_id = $conversation_id;
+                                      DELETE FROM messages WHERE message_id = $message_id AND conversation_id = $conversation_id;
+                                      """;
+                AddParameter(command, "$message_id", messageId);
+                AddParameter(command, "$conversation_id", conversationId);
+                await OpenIfNeededAsync(command.Connection, token);
+                _ = await command.ExecuteNonQueryAsync(token);
+                await transaction.CommitAsync(token);
+                return true;
+            },
+            cancellationToken);
+
+    /// <summary>The conversation a message id belongs to, or null when no message carries it.</summary>
+    public Task<Guid?> GetMessageConversationIdAsync(Guid messageId, CancellationToken cancellationToken = default) =>
+        _writer.ExecuteConversationSharedAsync(Guid.Empty,
+            async (dbContext, token) =>
+            {
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "SELECT conversation_id FROM messages WHERE message_id = $message_id;";
+                AddParameter(command, "$message_id", messageId);
+                await OpenIfNeededAsync(command.Connection, token);
+                return await command.ExecuteScalarAsync(token) is string owner ? Guid.Parse(owner) : (Guid?)null;
+            },
+            cancellationToken);
+
     public Task<NodeChatPersistedMessageDto> CreateAssistantPlaceholderAsync(NodeChatCreateAssistantPlaceholderRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -321,7 +396,31 @@ internal sealed class NodeChatMessageCommands
         Guid? variantGroupId = null,
         Guid? agentDefinitionId = null,
         string? agentName = null,
-        string? reasoningEffort = null)
+        string? reasoningEffort = null) =>
+        (await InsertMessageCoreAsync(conversationId, messageId, requestId, role, content, reasoning, status, createdAtUtc, updatedAtUtc, model, error, metadataJson, origin,
+            cancellationToken, parentMessageId, variantGroupId, agentDefinitionId, agentName, reasoningEffort)).Message;
+
+    private async Task<NodeChatInsertMessageIfAbsentResult> InsertMessageCoreAsync(Guid conversationId,
+        Guid messageId,
+        Guid? requestId,
+        string role,
+        string content,
+        string? reasoning,
+        string status,
+        long createdAtUtc,
+        long updatedAtUtc,
+        string? model,
+        string? error,
+        string? metadataJson,
+        string origin,
+        CancellationToken cancellationToken,
+        Guid? parentMessageId = null,
+        Guid? variantGroupId = null,
+        Guid? agentDefinitionId = null,
+        string? agentName = null,
+        string? reasoningEffort = null,
+        bool ifAbsent = false,
+        AgentRunEnvelopeMetadata? envelope = null)
     {
         var metadata = SerializeMetadata(metadataJson, reasoning, model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null, agentDefinitionId,
             agentName, reasoningEffort);
@@ -331,6 +430,12 @@ internal sealed class NodeChatMessageCommands
         return await _writer.ExecuteConversationExclusiveAsync(conversationId,
             async (dbContext, token) =>
             {
+                // Inside the exclusive section, so no concurrent insert of the same id can land between this read and the write below.
+                if (ifAbsent && await ReadExistingAsync(dbContext, conversationId, messageId, token) is { } existing)
+                {
+                    return new NodeChatInsertMessageIfAbsentResult { Message = existing, Inserted = false };
+                }
+
                 var attempt = 0;
                 while (true)
                 {
@@ -366,10 +471,16 @@ internal sealed class NodeChatMessageCommands
                         await OpenIfNeededAsync(command.Connection, token);
                         await command.ExecuteNonQueryAsync(token);
 
+                        if (envelope is not null)
+                        {
+                            await WriteRunEnvelopeRowAsync(dbContext, dbTransaction, conversationId, messageId, requestId, agentDefinitionId, status, model,
+                                promptTokens: null, completionTokens: null, reasoningTokens: null, totalTokens: null, envelope, createdAtUtc, RunEnvelopeWriteMode.InsertIfAbsent, token);
+                        }
+
                         await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token);
                         await transaction.CommitAsync(token);
 
-                        return new NodeChatPersistedMessageDto
+                        var message = new NodeChatPersistedMessageDto
                         {
                             MessageId = messageId,
                             ConversationId = conversationId,
@@ -391,6 +502,7 @@ internal sealed class NodeChatMessageCommands
                             AgentName = agentName,
                             ReasoningEffort = reasoningEffort
                         };
+                        return new NodeChatInsertMessageIfAbsentResult { Message = message, Inserted = true };
                     }
                     catch (Exception exception) when (IsUniqueConstraintViolation(exception) && attempt < MaxSequenceAllocationAttempts)
                     {
@@ -529,7 +641,9 @@ internal sealed class NodeChatMessageCommands
                     // can never disagree with the row; the write mode governs reconciliation with an existing envelope.
                     await WriteRunEnvelopeRowAsync(dbContext,
                         transaction?.GetDbTransaction(),
-                        correlation,
+                        correlation.ConversationId,
+                        correlation.MessageId,
+                        correlation.RequestId,
                         current.AgentDefinitionId,
                         nextStatus,
                         nextModel,
@@ -576,7 +690,9 @@ internal sealed class NodeChatMessageCommands
     // Metadata ONLY: no prompt, completion or tool-argument content. See docs/wiki/05-chat.md, "The run envelope".
     private static async Task WriteRunEnvelopeRowAsync(NodeChatDbContext dbContext,
         DbTransaction? transaction,
-        NodeChatMessageCorrelation correlation,
+        Guid conversationId,
+        Guid messageId,
+        Guid? requestId,
         Guid? agentDefinitionId,
         string terminalStatus,
         string? model,
@@ -608,10 +724,10 @@ internal sealed class NodeChatMessageCommands
         // Bound agent id when the row carries one; Guid.Empty otherwise so agentless envelope rows share one retention
         // bucket and never surface in the per-agent diagnostics view.
         AddParameter(command, "$agent_definition_id", agentDefinitionId ?? Guid.Empty);
-        AddParameter(command, "$conversation_id", correlation.ConversationId);
-        AddParameter(command, "$message_id", correlation.MessageId);
+        AddParameter(command, "$conversation_id", conversationId);
+        AddParameter(command, "$message_id", messageId);
         AddParameter(command, "$invocation_id", envelope.InvocationId);
-        AddParameter(command, "$request_id", correlation.RequestId);
+        AddParameter(command, "$request_id", requestId);
         AddParameter(command, "$model_name", model ?? string.Empty);
         AddParameter(command, "$provider", envelope.Provider);
         AddParameter(command, "$config_hash", string.Empty);
@@ -638,6 +754,24 @@ internal sealed class NodeChatMessageCommands
 
         await OpenIfNeededAsync(command.Connection, cancellationToken);
         _ = await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    // The row an if-absent insert finds already standing. The id is looked up across EVERY conversation first: message_id
+    // is the table's key, so the same id in another conversation is a caller bug the insert must refuse, not retry.
+    private static async Task<NodeChatPersistedMessageDto?> ReadExistingAsync(NodeChatDbContext dbContext, Guid conversationId, Guid messageId, CancellationToken cancellationToken)
+    {
+        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "SELECT conversation_id FROM messages WHERE message_id = $message_id;";
+        AddParameter(command, "$message_id", messageId);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
+        if (await command.ExecuteScalarAsync(cancellationToken) is not string owner)
+        {
+            return null;
+        }
+
+        return Guid.Parse(owner) == conversationId
+            ? await ReadMessageAsync(dbContext, conversationId, messageId, cancellationToken)
+            : throw new InvalidOperationException($"Message '{messageId}' already belongs to another conversation.");
     }
 
     // W3C trace id of the ambient activity, for cross-correlation with exported traces, or null when no activity is in

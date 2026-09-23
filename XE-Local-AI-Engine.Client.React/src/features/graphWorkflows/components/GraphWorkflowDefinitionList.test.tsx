@@ -24,6 +24,16 @@ describe("GraphWorkflowDefinitionList", () => {
 		expect(screen.queryByTestId("gw-definition-list-empty")).toBeNull();
 	});
 
+	it("marks a Chat definition with a Chat badge and leaves a Standard one unmarked", () => {
+		const chat = graphWorkflowDefinitionSummary({ id: "def-3", name: "Support triage", kind: "Chat" });
+		renderWithProviders(
+			<GraphWorkflowDefinitionList definitions={[first, chat]} onSelect={vi.fn()} onCreate={vi.fn()} onDelete={vi.fn()} />,
+		);
+
+		expect(screen.getByTestId("gw-definition-chat-badge-def-3").textContent).toBe("Chat");
+		expect(screen.queryByTestId("gw-definition-chat-badge-def-1")).toBeNull();
+	});
+
 	it("reports the row the operator opened and the row they deleted", () => {
 		const onSelect = vi.fn();
 		const onDelete = vi.fn();

@@ -9,6 +9,7 @@
 // Timestamps are epoch MILLISECONDS (numbers), as every Graph Workflows DTO carries them.
 
 import type {
+	GraphWorkflowConversationRunResponse,
 	GraphWorkflowDefinitionResponse,
 	GraphWorkflowDefinitionSummaryResponse,
 	GraphWorkflowGraph,
@@ -422,6 +423,46 @@ export function graphWorkflowEvents(
 			graphWorkflowRunEvent({ id: graphWorkflowTestGuid(38), seq: 8, eventType: "run.waiting" }),
 		],
 		lastSeq: 8,
+		replayTruncated: false,
+		...overrides,
+	};
+}
+
+/**
+ * One run bound to a chat conversation, as `GET graph-workflows/conversations/{id}/runs` lists it. Defaults to a live
+ * run of a Chat definition with no parked input; `pendingInput` set is what puts the chat composer into "answer" mode.
+ */
+export function graphWorkflowConversationRun(
+	overrides: Partial<GraphWorkflowConversationRunResponse> = {},
+): GraphWorkflowConversationRunResponse {
+	return {
+		run: graphWorkflowRunSummary(),
+		definitionId: graphWorkflowTestIds.definition,
+		definitionName: "Support triage",
+		triggerMessageId: graphWorkflowTestGuid(90),
+		pendingInput: null,
+		steerable: null,
+		...overrides,
+	};
+}
+
+/** A chat-bound run's trail: a published LLM Call result is announced by `node.published` with the message id. */
+export function chatWorkflowEvents(
+	overrides: Partial<ListGraphWorkflowRunEventsResponse> = {},
+): ListGraphWorkflowRunEventsResponse {
+	return {
+		events: [
+			graphWorkflowRunEvent({ id: graphWorkflowTestGuid(41), seq: 1, eventType: "run.created" }),
+			graphWorkflowRunEvent({ id: graphWorkflowTestGuid(42), seq: 2, eventType: "node.completed", nodeKey: "code" }),
+			graphWorkflowRunEvent({
+				id: graphWorkflowTestGuid(43),
+				seq: 3,
+				eventType: "node.published",
+				nodeKey: "code",
+				detail: { messageId: graphWorkflowTestGuid(91) },
+			}),
+		],
+		lastSeq: 3,
 		replayTruncated: false,
 		...overrides,
 	};

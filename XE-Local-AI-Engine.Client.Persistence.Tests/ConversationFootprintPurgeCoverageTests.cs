@@ -62,14 +62,16 @@ public sealed class ConversationFootprintPurgeCoverageTests : IDisposable
             "enumeration above is likely broken, which would make the coverage assertions below vacuously pass.");
 
         var covered = new HashSet<string>(ConversationFootprintPurge.CoveredChildTables, StringComparer.Ordinal);
+        var unbound = new HashSet<string>(ConversationFootprintPurge.UnboundChildTables, StringComparer.Ordinal);
+        AssertEx.Empty(covered.Intersect(unbound, StringComparer.Ordinal), "A table is either deleted or unbound by the purge, never both.");
 
-        var uncovered = discovered.Except(covered, StringComparer.Ordinal).ToArray();
+        var uncovered = discovered.Except(covered, StringComparer.Ordinal).Except(unbound, StringComparer.Ordinal).ToArray();
         AssertEx.Empty(uncovered,
             $"Table(s) keyed by conversation_id/message_id are not deleted by ConversationFootprintPurge, so a retention " +
             $"purge would orphan their rows: {string.Join(", ", uncovered)}. Add the missing delete(s) to " +
             $"ConversationFootprintPurge.DeleteAsync and list the table(s) in CoveredChildTables.");
 
-        var stale = covered.Except(discovered, StringComparer.Ordinal).ToArray();
+        var stale = covered.Union(unbound, StringComparer.Ordinal).Except(discovered, StringComparer.Ordinal).ToArray();
         AssertEx.Empty(stale,
             $"ConversationFootprintPurge.CoveredChildTables lists table(s) that are no longer keyed by " +
             $"conversation_id/message_id in the model: {string.Join(", ", stale)}. Update the list to match.");

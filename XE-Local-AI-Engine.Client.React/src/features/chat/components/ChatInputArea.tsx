@@ -16,6 +16,7 @@ import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapability
 import type {
 	AgentOption,
 	ChatUiCapabilities,
+	ChatWorkflowSlots,
 	ContextUsageModel,
 	ModelOption,
 	ReasoningEffort,
@@ -97,6 +98,8 @@ interface ChatInputAreaProps {
 	onSelectAgent?: (agentId: string) => void;
 	// A returned promise defers the draft clear until it RESOLVES; a rejection keeps the draft (see ChatModels).
 	onSend: (content: string, effort: ReasoningEffort, model: string) => void | Promise<void>;
+	// Chat workflow mode: the picker, the placeholder and the attachment gate. Absent = normal chat, unchanged.
+	workflow?: Pick<ChatWorkflowSlots, "selector" | "composerPlaceholder" | "attachmentsDisabledHint">;
 }
 
 function isEffortAvailable(effort: ReasoningEffort, availableEfforts: ReasoningEffort[]): boolean {
@@ -138,6 +141,7 @@ export function ChatInputArea({
 	onToggleKnowledgeBase,
 	onSelectAgent,
 	onSend,
+	workflow,
 }: ChatInputAreaProps) {
 	const { t } = useTranslation();
 	const [content, setContent] = useState("");
@@ -182,7 +186,10 @@ export function ChatInputArea({
 	// handler still differ per attachment kind via imageAttachmentsEnabled below.
 	const attachmentControlsAvailable = fileAttachmentsEnabled || imageAttachmentsEnabled;
 	const attachmentAccept = imageAttachmentsEnabled ? `${ATTACHMENT_ACCEPT},${IMAGE_ATTACHMENT_ACCEPT}` : ATTACHMENT_ACCEPT;
-	const attachmentControlsDisabled = disabled || isSending;
+	const attachmentsDisabledHint = workflow?.attachmentsDisabledHint;
+	// A workflow that refuses attachments blocks adding one (picker, drop) but never removing a chip already there.
+	const attachmentControlsDisabled = disabled || isSending || attachmentsDisabledHint !== undefined;
+	const attachmentChipsDisabled = disabled || isSending;
 	// Voice controls require only the operator-owned node gate (capabilities.showVoiceControls, derived from
 	// manifest.Enabled). The leaf components additionally self-gate on the runtime context.
 	const showVoiceControls = capabilities.showVoiceControls;
@@ -324,6 +331,7 @@ export function ChatInputArea({
 			selectedAgentId={selectedAgentId}
 			agentSelectorDisabled={agentSelectorDisabled}
 			onSelectAgent={onSelectAgent}
+			workflowSelector={workflow?.selector}
 			attachmentControlsAvailable={attachmentControlsAvailable}
 			attachmentControlsDisabled={attachmentControlsDisabled}
 			attachmentAccept={attachmentAccept}
@@ -366,8 +374,13 @@ export function ChatInputArea({
 					attachments={[...attachments]}
 					pendingUploads={[...pendingUploads]}
 					onRemove={onRemoveAttachment ?? (() => undefined)}
-					disabled={attachmentControlsDisabled}
+					disabled={attachmentChipsDisabled}
 				/>
+			) : null}
+			{attachmentControlsAvailable && attachmentsDisabledHint && attachments.length > 0 ? (
+				<Text size="xs" c="dimmed" mb={4} data-testid="chat-attachments-disabled-hint">
+					{attachmentsDisabledHint}
+				</Text>
 			) : null}
 			{/* Size pre-check notice. One row covers both states: a dimmed readout once the draft passes 80% of the cap,
 			    turning into the red over-limit sentence past it. It sits above the input (beside the attachment chips)
@@ -403,7 +416,7 @@ export function ChatInputArea({
 					<Textarea
 						ref={inputRef}
 						data-testid="chat-input"
-						placeholder={t("pages.chat.inputPlaceholder", "Type your message")}
+						placeholder={workflow?.composerPlaceholder ?? t("pages.chat.inputPlaceholder", "Type your message")}
 						// The placeholder is the only visible naming of the composer, and a placeholder is not an
 						// accessible name — it disappears the moment there is a draft. Same string, as a real name.
 						aria-label={t("pages.chat.inputPlaceholder", "Type your message")}

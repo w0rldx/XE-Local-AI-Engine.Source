@@ -1253,7 +1253,56 @@
 			"remoteImage": {
 				"load": "Externes Bild laden"
 			},
-			"loadingModelElapsed": "· {{elapsed}}"
+			"loadingModelElapsed": "· {{elapsed}}",
+			"workflow": {
+				"selector": {
+					"none": "Kein Workflow",
+					"noneHint": "Nachrichten gehen wie gewohnt an das Modell oder den Agenten",
+					"triggerLabel": "Workflow",
+					"empty": "Noch keine Chat-Workflows. Lege einen auf der Seite Graph-Workflows an."
+				},
+				"status": {
+					"completed": "Abgeschlossen",
+					"cancelledDuring": "Abgebrochen bei {{node}}",
+					"cancelled": "Abgebrochen",
+					"failedAt": "Fehlgeschlagen bei {{node}}: {{reason}}",
+					"unknownReason": "kein Grund erfasst",
+					"view": "Workflow ansehen",
+					"dismiss": "Ausblenden",
+					"stop": "Stoppen",
+					"defaultModel": "Standardmodell"
+				},
+				"activity": {
+					"title": "Workflow: {{name}}",
+					"empty": "Noch nichts ausgeführt.",
+					"output": "Ausgabe",
+					"route": "→ {{route}}",
+					"published": "Im Chat veröffentlicht",
+					"inputAsked": "Gefragt: {{prompt}}",
+					"inputAnswered": "Gefragt: {{prompt}} — Antwort: {{answer}}",
+					"toolResult": "{{tool}}: {{summary}}"
+				},
+				"rerun": {
+					"title": "Workflow erneut ausführen?",
+					"description": "Dieser Workflow ist abgeschlossen. Mit dieser Nachricht wird „{{name}}“ erneut gestartet.",
+					"confirm": "Erneut starten"
+				},
+				"notice": {
+					"busy": "Der Workflow läuft noch. Stoppe ihn oder warte, bis er fertig ist.",
+					"attachments": "Dieser Workflow nimmt keine Anhänge an. Entferne sie und sende erneut.",
+					"selectionChanged": "Ein anderer Workflow wartet auf deine Antwort. Wähle ihn erneut aus, um zu antworten, oder stoppe ihn zuerst.",
+					"runsFailed": "Die Workflow-Läufe dieser Unterhaltung konnten nicht geladen werden, daher ist das Senden pausiert. Versuche es erneut, um fortzufahren."
+				},
+				"inputBanner": "Der Workflow braucht deine Eingabe — {{node}}: {{prompt}}",
+				"lockedHint": "Workflow läuft — stoppe ihn oder warte.",
+				"showActivity": "Workflow-Aktivität anzeigen",
+				"deletedWorkflow": "Gelöschter Workflow",
+				"placeholder": "Nachricht an {{name}}",
+				"answerPlaceholder": "Beantworte die Frage des Workflows",
+				"attachmentsNotAccepted": "Dieser Workflow nimmt keine Anhänge an.",
+				"attachmentsNotWithAnswer": "Anhänge werden mit einer Antwort nicht gesendet.",
+				"runsCapped": "Aktivität der {{count}} neuesten Workflow-Läufe in dieser Unterhaltung."
+			}
 		},
 		"clientNodes": {
 			"fields": {
@@ -5831,7 +5880,8 @@
 				"Cancelling": "Bricht ab…",
 				"Completed": "Abgeschlossen",
 				"Failed": "Fehlgeschlagen",
-				"Cancelled": "Abgebrochen"
+				"Cancelled": "Abgebrochen",
+				"WaitingForInput": "Wartet auf deine Eingabe"
 			},
 			"decision": {
 				"Approve": "Freigeben",
@@ -5898,7 +5948,8 @@
 				"node_cancelled": "Knoten abgebrochen",
 				"node_interrupted": "Knoten durch einen Neustart unterbrochen",
 				"gate_requested": "Eine Entscheidung wurde angefordert",
-				"gate_decided": "Eine Entscheidung wurde getroffen"
+				"gate_decided": "Eine Entscheidung wurde getroffen",
+				"node_published": "Ergebnis im Chat veröffentlicht"
 			},
 			"definition": {
 				"issues": {

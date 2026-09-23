@@ -19,6 +19,15 @@ export const graphWorkflowConflictTypes = {
 	 * carries the decision that stands, and the UI can say "someone already approved this" instead of "conflict".
 	 */
 	gateAlreadyDecided: "GraphWorkflowGateAlreadyDecided",
+	/**
+	 * A chat send found the conversation's bound run busy: running, cancelling, parked on a Pause, or a normal chat
+	 * reply still streaming. Nothing was persisted; Stop the run or wait.
+	 */
+	runBusy: "GraphWorkflowRunBusy",
+	/** A chat send would start a workflow whose previous run in this conversation has finished. Resend with `confirmRerun`. */
+	rerunConfirmationRequired: "GraphWorkflowRerunConfirmationRequired",
+	/** Attachments were sent to a workflow that does not accept them, or with an answer to a parked ChatInput. */
+	attachmentsNotAccepted: "GraphWorkflowAttachmentsNotAccepted",
 } as const;
 
 export interface GraphWorkflowConflict {

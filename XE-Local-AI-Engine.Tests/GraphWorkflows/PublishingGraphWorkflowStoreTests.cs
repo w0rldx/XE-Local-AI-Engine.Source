@@ -115,6 +115,19 @@ public sealed class PublishingGraphWorkflowStoreTests
         AssertEx.Empty(publisher.ReceivedCalls());
     }
 
+    /// <summary>A publish stamp another tick already wrote matched no row, and announces nothing for the same reason.</summary>
+    [Test]
+    public async Task APublishStampThatMatchedNoRow_AnnouncesNothing()
+    {
+        var inner = Substitute.For<IGraphWorkflowStore>();
+        inner.MarkNodeRunPublishedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((GraphWorkflowMutationResult?)null);
+        var publisher = Substitute.For<IGraphWorkflowEventPublisher>();
+        var store = new PublishingGraphWorkflowStore(inner, publisher, NullLogger<PublishingGraphWorkflowStore>.Instance);
+
+        AssertEx.Null(await store.MarkNodeRunPublishedAsync(RunId, NodeRunId, Guid.NewGuid()));
+        AssertEx.Empty(publisher.ReceivedCalls());
+    }
+
     /// <summary>
     ///     The write is already committed when the announcement is attempted, so failing the caller over a notification
     ///     would turn a late repaint into a lost transition.
@@ -162,7 +175,10 @@ public sealed class PublishingGraphWorkflowStoreTests
 
         // An answered pause is the change a watching client most needs told: it is what removes the badge asking for
         // a person, so it announces a gate rather than an ordinary node repaint.
-        new() { Method = nameof(IGraphWorkflowStore.DecideNodeRunAsync), Kind = GraphWorkflowChangeKind.Gate, Invoke = store => store.DecideNodeRunAsync(Decision()) }
+        new() { Method = nameof(IGraphWorkflowStore.DecideNodeRunAsync), Kind = GraphWorkflowChangeKind.Gate, Invoke = store => store.DecideNodeRunAsync(Decision()) },
+
+        // A result published into the run's chat conversation: the node's row changed, so the client repaints it.
+        new() { Method = nameof(IGraphWorkflowStore.MarkNodeRunPublishedAsync), Kind = GraphWorkflowChangeKind.Node, Invoke = store => store.MarkNodeRunPublishedAsync(RunId, NodeRunId, Guid.NewGuid()) }
     ];
 
     private static IReadOnlyList<Func<IGraphWorkflowStore, Task>> Reads() =>
@@ -177,7 +193,10 @@ public sealed class PublishingGraphWorkflowStoreTests
         store => store.GetNodeRunAsync(RunId, "draft"),
         store => store.ListEventsAsync(RunId),
         store => store.ListInterruptedNodeRunsAsync(),
-        store => store.FindNodeRunByDecisionOperationAsync(RunId, Guid.NewGuid())
+        store => store.FindNodeRunByDecisionOperationAsync(RunId, Guid.NewGuid()),
+        store => store.ListRunsByConversationAsync(Guid.NewGuid(), limit: 5),
+        store => store.FindConversationDecisionAsync(Guid.NewGuid(), Guid.NewGuid()),
+        store => store.ListUnpublishedNodeRunsAsync(RunId)
     ];
 
     private static IReadOnlyList<Func<IGraphWorkflowStore, Task>> SilentWrites() =>
@@ -222,6 +241,7 @@ public sealed class PublishingGraphWorkflowStoreTests
         inner.TransitionNodeRunAsync(Arg.Any<TransitionGraphWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.AppendEventAsync(Arg.Any<AppendGraphWorkflowEventCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.DecideNodeRunAsync(Arg.Any<DecideGraphWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.MarkNodeRunPublishedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(result);
 
         var publisher = Substitute.For<IGraphWorkflowEventPublisher>();
         var store = new PublishingGraphWorkflowStore(inner, publisher, NullLogger<PublishingGraphWorkflowStore>.Instance);

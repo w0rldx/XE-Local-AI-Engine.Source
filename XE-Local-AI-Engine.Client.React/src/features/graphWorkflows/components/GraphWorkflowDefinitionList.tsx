@@ -2,7 +2,7 @@
 // mutation — this file only reports which row the operator picked. Same division as Preview's `WorkflowList`, which it
 // is copy-adapted from (features never import each other).
 
-import { ActionIcon, Button, Group, Loader, Stack, Table, Text } from "@mantine/core";
+import { ActionIcon, Badge, Button, Group, Loader, Stack, Table, Text } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
@@ -92,15 +92,22 @@ export function GraphWorkflowDefinitionList({
 										<Table.Td>
 											{/* The row's own control, not an onClick on the <tr>: a table row is not focusable and a
 											    definition has to be reachable from the keyboard. */}
-											<Button
-												variant="subtle"
-												size="compact-sm"
-												px={0}
-												onClick={() => onSelect(id)}
-												data-testid={`gw-definition-open-${id}`}
-											>
-												{name}
-											</Button>
+											<Group gap={6} wrap="nowrap">
+												<Button
+													variant="subtle"
+													size="compact-sm"
+													px={0}
+													onClick={() => onSelect(id)}
+													data-testid={`gw-definition-open-${id}`}
+												>
+													{name}
+												</Button>
+												{definition.kind === "Chat" ? (
+													<Badge size="xs" variant="light" data-testid={`gw-definition-chat-badge-${id}`}>
+														{t("pages.graphWorkflows.settings.kindOption.Chat", "Chat")}
+													</Badge>
+												) : null}
+											</Group>
 											{definition.description ? (
 												<Text size="xs" c="dimmed">
 													{definition.description}

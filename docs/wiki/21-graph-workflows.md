@@ -411,7 +411,17 @@ One tick, in order, and the order is load-bearing:
    run no tick looks at again.
 3. **Retry** the failed rows that still have budget.
 4. **Admit** the eligible `Pending` rows, and skip the ones every path into which is dead.
-5. **Recompute** the run's own status, against the version it was read at.
+5. **Publish** (chat-bound runs only, §3.6): every `Succeeded` row whose node has `publishToChat` and no
+   `published_message_id` yet becomes one chat message. After admit, which settles the inline kinds (End among them),
+   and before the recompute that may end the run.
+6. **Recompute** the run's own status, against the version it was read at.
+
+**The concurrency cap counts working runs, not parked ones.** Admission of a `Pending` run asks
+`CountActiveRunsAsync` whether `MaxConcurrentRuns` are already executing. A run whose live rows wait on a person —
+at least one `WaitingForApproval` row, none `Queued` or `Running` — is **parked** and holds no slot, so four chats
+waiting on their users cannot freeze every new start at `Pending` behind a 202. `Cancelling` always counts. A parked
+run that resumes does not re-pass the admission gate (accepted: the lanes still bound real work). This applies to a
+Standard run parked on a `Pause` too.
 
 Deadlines are re-derived from the row every tick — `started_at_utc` plus the node's `timeoutSeconds` or
 `DefaultNodeTimeoutSeconds` — never armed in memory, so they survive the restart that would otherwise leave a node run
@@ -447,6 +457,31 @@ event log rather than in a second row.
 
 The reconciler touches no run row. The dispatcher's first sweep — `PumpSweepAsync` runs one immediately rather than
 waiting out an interval — recomputes the run's status from the rows recovery left behind.
+
+### 3.6 Chat binding and publishing
+
+A run started from the Chat page (`POST graph-workflows/conversations/{conversationId}/messages`, [Chat](05-chat.md)
+"Chat workflow mode") is **bound** to that conversation: `graph_workflow_runs.conversation_id` is a real foreign key to
+`conversations` with `ON DELETE SET NULL`, and `trigger_message_id` names the user message that started it (migration
+`AddChatWorkflowBinding`). A **partial unique index** on `conversation_id` over the four live statuses
+(`ux_graph_workflow_runs_live_conversation`) makes one live run per conversation a database rule; the store answers the
+losing insert with `GraphWorkflowRunBusyException`. `IGraphWorkflowRunService.StartAsync` has an overload taking a
+`GraphWorkflowRunBinding`; an unbound run (the Graph Workflows page) publishes nothing. Every Agent of a Chat graph sees
+the chat message in its prompt (§4.2, "Conversation request"). A conversation purge
+(`ConversationFootprintPurge`) unbinds the conversation's runs explicitly and never deletes one.
+
+Publishing is an **outbox pass** in the tick (§3.4 step 5), `GraphWorkflowChatPublisher`: one query for the candidates
+(`ListUnpublishedNodeRunsAsync`: `Succeeded` and `published_message_id IS NULL`), the node's `publishToChat` read off
+the pinned graph, an insert-if-absent of the assistant message under the deterministic id
+`GraphWorkflowChatIds.PublishedMessage(runId, nodeKey, attempt)`, then `MarkNodeRunPublishedAsync` — a compare-and-set
+that stamps `graph_workflow_node_runs.published_message_id` and appends `node.published` (detail `{ messageId }`) in one
+transaction. The stamp does not bump the run's version — it moves no run state, so no run-level write should lose a
+race to it. Either crash order ends as one message: an insert that landed before a crash is found by its id, and a
+stamp that landed is never repeated. The message is written with a thin run envelope in the same transaction, so the
+restart reconcile never backfills it as a chat run. A publish failure is logged and never fails the node; while one
+fails, the tick **skips the recompute** (which could be the one that ends the run, after which nothing ticks it again)
+and counts as work so it re-signals, at most three ticks per run (`GraphWorkflowDispatcher.MaxPublishRetries`, in
+memory) — after that the run completes without the message. A run that is cancelled drains without publishing.
 
 ---
 
@@ -517,6 +552,13 @@ is long gone by the time the turn lands.
 | `reasoningEffort` | Optional, one of `none`, `low`, `medium`, `high`. Checked at **save** — its vocabulary is closed and cannot go stale. |
 | `responseJsonSchema` | Optional. Must be an **object** schema (`"type": "object"`), because the parsed answer lands at `output.json` and a condition reads a property off it. |
 | `includeUpstreamOutputs` | Defaults **true**. Inlines the `upstream` map into the prompt, budgeted at `MaxRunInputBytes` and truncated with an explicit marker rather than silently. |
+
+**In a `Chat` graph every Agent's seed prompt also carries the chat request**, whatever `includeUpstreamOutputs` says:
+after the instructions and before the upstream map, a `## Conversation request` section with `run.input.message` (same
+`MaxRunInputBytes` budget and truncation marker) and, when the run input lists attachments, one `Attachments: a.pdf,
+b.png` line (names only; content is a later slice). Agent nodes have no `inputBindings`, and after a router the upstream is
+the router's choice rather than the message, so without it an agent downstream of a DecisionModel or Condition never sees
+what the user asked (live-round finding, 2026-09-23). A `Standard` graph's prompt is unchanged byte for byte.
 
 Output: `{ "text": …, "json": … | null, "usage": { inputTokens, outputTokens, totalTokens, reasoningTokens,
 durationMs, finishReason, model } }`. Every usage member is nullable: the runner reports what its provider gave it,
@@ -815,9 +857,11 @@ Every route is Operator-gated.
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}` | One node run in full, input and output documents included. |
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}/decide` | Answers a pause (§4.6) or a chat input (§4.8). |
 | `graph-workflows/runs/{runId}/events` | The event log, paged from an **exclusive** `afterSeq`, capped at `EventReplayLimit` — which the response reports rather than leaving a client to infer it from a full page. |
+| `graph-workflows/conversations/{conversationId}/messages` | POST a chat send into workflow mode → 202 `{ runId, messageId, action }` (§3.6, [Chat](05-chat.md)). 409s: `GraphWorkflowRunBusy`, `GraphWorkflowRerunConfirmationRequired`, `GraphWorkflowAttachmentsNotAccepted`. |
+| `graph-workflows/conversations/{conversationId}/runs` | GET the conversation's bound runs newest first (`?limit=`, default 20): run summary, `definitionId`, `definitionName` (null once deleted), `triggerMessageId`, `pendingInput`, `steerable`. |
 
-Four routes cap the request body at **1 MiB** (`GraphWorkflowRequestSizeLimit`): create, update and validate, which
-carry a graph, and start-run, which carries an input document. Without it they would inherit Kestrel's 30 MB default
+Five routes cap the request body at **1 MiB** (`GraphWorkflowRequestSizeLimit`): create, update and validate, which
+carry a graph, start-run, which carries an input document, and the chat send. Without it they would inherit Kestrel's 30 MB default
 and a body that size would be parsed, walked and hashed before the node cap could refuse it. Kestrel enforces the cap
 as it reads, inside model binding, so the 413 comes from `RequestBodyTooLargeExceptionHandler` rather than from the
 endpoint. A name is capped at 200 characters, a description at 1024.
@@ -872,10 +916,10 @@ the startup reconciler `ReconcileNonTerminalNodeRunsAsync`. [API & Hubs](09-api-
 depends only on `IGraphWorkflowEventPublisher`; the host swaps the hub-backed implementation in over a registered
 no-op, so a host without the hub stays resolvable.
 
-The event vocabulary is the closed sixteen-token `GraphWorkflowEventTypes` catalog — `run.created`, `run.started`,
+The event vocabulary is the closed seventeen-token `GraphWorkflowEventTypes` catalog — `run.created`, `run.started`,
 `run.waiting`, `run.completed`, `run.failed`, `run.cancelled`, `node.queued`, `node.started`, `node.completed`,
 `node.failed`, `node.skipped`, `node.cancelled`, `node.interrupted`, `node.retried`, `gate.requested`,
-`gate.decided`. The feed is append-only and durable, so a token written once is a token every later reader must
+`gate.decided`, and `node.published` (amendment 2026-09-23, Chat Workflows S1: a result became a chat message, §3.6). The feed is append-only and durable, so a token written once is a token every later reader must
 understand: extend it by amendment, never silently. Event details are small structured payloads — a failure summary,
 a decision outcome — and never a transcript.
 
@@ -891,11 +935,12 @@ component is a thin adapter; `GraphWorkflowsPage` itself is router-free and is r
 | Directory | Holds |
 |---|---|
 | `models/` | `GraphWorkflowModels.ts` (the one file naming generated DTOs, plus the closed vocabularies and narrowers), `GraphWorkflowCanvasModels.ts` (the discriminated node union and the `graphToCanvas` / `canvasToGraph` round trip), `GraphWorkflowLayout.ts`, `GraphWorkflowValidation.ts` (the client mirror of the graph rules), `GraphWorkflowRunGraph.ts`. |
-| `queries/` | Every read and mutation over the generated adapters, including the forward-paged events feed. |
+| `queries/` | Every read and mutation over the generated adapters, including the forward-paged events feed, the several-node-runs read (`useSettledGraphWorkflowNodeRuns`) and the two chat routes (`useGraphWorkflowConversationRuns`, `useSendGraphWorkflowChatMessage`). |
 | `hooks/` | `useGraphWorkflowEditor` (controlled React Flow state, per-handle connect prefill, refusal of a second unconditional edge, and the `context` edge added around a Pause or ChatInput on connect — §4.6) and `useGraphWorkflowRunHub`. |
 | `components/` | Editor: the per-kind node cards, the canvas with its palette and Auto-arrange, the validation strip, the node and edge config panels (the DecisionModel body and the input-bindings list shared with LlmCall under `config/`), the workflow settings popover (graph `kind` and the `chat` block, saved with the graph), the definition list and meta dialog. Run view: the status badge, the read-only run graph, the node-run table, the run list, the events tab, the node panel and the decision panel (Approve/Reject buttons for a Pause, a text-answer form for a ChatInput). |
 | `pages/` | `GraphWorkflowsPage` — editor mode without a `runId`, run mode with one. |
-| `api/` | `GraphWorkflowConflict.ts`, which reads the three `NodeConflictProblemType` members by name. |
+| `api/` | `GraphWorkflowConflict.ts`, which reads the `NodeConflictProblemType` members by name — the three run/definition/gate refusals and the three chat-send ones (`GraphWorkflowRunBusy`, `GraphWorkflowRerunConfirmationRequired`, `GraphWorkflowAttachmentsNotAccepted`). |
+| `features/chat/workflow/` (the chat side, not this folder) | `useChatWorkflow` (the chat page's workflow mode: picker state, send routing, 409 handling, the live bound run's hub subscription), `WorkflowSelectorCard`, `WorkflowRunStatusCard`, `WorkflowActivityBlock`, `ChatWorkflowModels.ts` (taken path by layout rank, activity rows), `ChatWorkflowStore` (UI state only). It imports this feature's queries, hub hook, layout, models, status badge and conflict reader — ten reviewed `no-cross-feature` fingerprints in `config/dependency-baseline.json`. See [Chat](05-chat.md#chat-workflow-mode-in-the-client). |
 
 **The editor** mirrors the server's rules rather than inventing its own, and the mirror is a mirror on purpose: the
 authoritative answer comes from `graph-workflows/definitions/validate`, which runs the parser a run would run, and
@@ -993,7 +1038,7 @@ environment variable such as `GraphWorkflows__MaxConcurrentRuns`.
 | `DefaultNodeTimeoutSeconds` | 600 | One node run's attempt, when its node names no `timeoutSeconds`. Unlike Dev Workflows, a node that declares nothing still has a deadline. |
 | `MaxOutputJsonBytes` | 262 144 | One node run's composed output document, in UTF-8 bytes, checked before it is encrypted and stored. |
 | `DispatchIntervalMilliseconds` | 500 | The sweep cadence, independent of the change signals the dispatcher also listens for. Floored at 100 ms. |
-| `MaxConcurrentRuns` | 4 | Live runs at once, and the size of both the shared Agent/LLM Call/DecisionModel invocation lane and the Tool lane. Runs above the cap **wait**; they are not refused. |
+| `MaxConcurrentRuns` | 4 | Executing runs at once — a run parked on a person holds no slot (§3.4) — and the size of both the shared Agent/LLM Call/DecisionModel invocation lane and the Tool lane. Runs above the cap **wait**; they are not refused. |
 | `MaxRunInputBytes` | 65 536 | A run-start input document, checked in `GraphWorkflowRunService.StartAsync` (§3.1) rather than at the endpoint, so every caller of the service is held to it. Also the budget for the inlined `upstream` map in an Agent prompt and the complete user prompt with bound JSON data in an LLM Call. |
 | `EventReplayLimit` | 200 | Events one replay may return, hub snapshot and events route alike. Ceiling 1000 — one replay is one response body. |
 
@@ -1002,8 +1047,8 @@ budget (a `MaxNodesPerDefinition` of 1 passes `[Range(1, …)]` and still admits
 Start and an End), the `MaxNodeRunsPerRun ≥ MaxNodesPerDefinition` relation, and the replay ceiling. An operator meets
 these at boot rather than once per node run.
 
-Two limits that are **not** options, because they are not runtime budgets: the 1 MiB request-body cap on the four
-routes that carry one (create, update, validate and start-run), and the 200-row cap on a run list page.
+Two limits that are **not** options, because they are not runtime budgets: the 1 MiB request-body cap on the five
+routes that carry one (create, update, validate, start-run and the chat send), and the 200-row cap on a run list page.
 
 One ceiling that lives outside this module: an `Agent` node's `responseJsonSchema` goes down the same llama.cpp GBNF
 path as a tool schema, which has an empirical combined repetition bound

@@ -23,15 +23,20 @@ internal sealed class NodeChatConversationCommands
     // Optional for the same reason: a test composition that owns no work session has no artifact bytes to tear down.
     private readonly IWorkSessionArtifactBlobStore? _workSessionArtifactBlobStore;
 
+    // Told before a delete, so work bound to the conversation winds down first. Empty in a test composition.
+    private readonly IReadOnlyList<IConversationDeletionObserver> _deletionObservers;
+
     public NodeChatConversationCommands(
         NodeChatPersistenceWriter writer,
         IConversationUploadedFileStore? uploadedFileStore,
-        IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore)
+        IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore,
+        IEnumerable<IConversationDeletionObserver>? deletionObservers = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         _writer = writer;
         _uploadedFileStore = uploadedFileStore;
         _workSessionArtifactBlobStore = workSessionArtifactBlobStore;
+        _deletionObservers = [.. deletionObservers ?? []];
     }
 
     public async Task<NodeChatConversationDto> CreateConversationAsync(NodeChatCreateConversationRequest request, CancellationToken cancellationToken = default)
@@ -170,6 +175,22 @@ internal sealed class NodeChatConversationCommands
             cancellationToken);
     }
 
+    /// <summary>The conversation's <c>kind</c>, or null when it does not exist or was soft-deleted.</summary>
+    public async Task<string?> GetConversationKindAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return await _writer.ExecuteConversationSharedAsync(conversationId,
+            async (dbContext, token) =>
+            {
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "SELECT kind FROM conversations WHERE conversation_id = $conversation_id AND purged = 0;";
+                AddParameter(command, "$conversation_id", conversationId);
+
+                await OpenIfNeededAsync(command.Connection, token);
+                return await command.ExecuteScalarAsync(token) as string;
+            },
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, Guid>?> GetSelectedPathAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         return await _writer.ExecuteConversationSharedAsync(conversationId,
@@ -214,6 +235,12 @@ internal sealed class NodeChatConversationCommands
     public async Task<NodeChatDeleteResultDto> DeleteConversationAsync(NodeChatDeleteConversationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        // BEFORE the delete, outside the conversation lock: an observer may write elsewhere (a graph workflow run it cancels).
+        foreach (var observer in _deletionObservers)
+        {
+            await observer.OnDeletingAsync(request.ConversationId, request.PurgeImmediately, cancellationToken);
+        }
 
         // Captured inside the transaction, used after it: the artifact blobs are keyed by session id and the only
         // record of the conversation → session mapping is the row the purge below deletes.

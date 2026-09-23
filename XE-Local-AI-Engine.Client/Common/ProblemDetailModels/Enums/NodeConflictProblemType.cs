@@ -126,6 +126,18 @@ public enum NodeConflictProblemType
     GraphWorkflowGateAlreadyDecided,
 
     /// <summary>
+    ///     The conversation's workflow is busy — a bound run that is not parked on a ChatInput, a second live run, or a
+    ///     normal chat reply still streaming. Stop it, or wait, and resend.
+    /// </summary>
+    GraphWorkflowRunBusy,
+
+    /// <summary>The conversation already ran a workflow whose settings ask to confirm a rerun. Resend with <c>confirmRerun</c>.</summary>
+    GraphWorkflowRerunConfirmationRequired,
+
+    /// <summary>Attachments sent to a workflow that does not accept them, or with the answer to an input request.</summary>
+    GraphWorkflowAttachmentsNotAccepted,
+
+    /// <summary>
     ///     A second lifecycle command on an external-app instance whose per-instance gate is already held — wait, or
     ///     cancel the operation that holds it.
     /// </summary>

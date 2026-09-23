@@ -2246,6 +2246,10 @@ This is also why `Condition` and `Parallel` nodes pass their predecessor's `outp
 
 `WaitingForApproval → Skipped` is deliberately not a legal transition: skipping an open pause would be an operator walking past a decision instead of giving one. The startup reconciler leaves `WaitingForApproval` rows alone for the same reason — a durable human wait is not in-flight work, and taking it would destroy every pause on the node on every boot.
 
+### PROPOSED (awaiting operator approval): Graph Workflows: a PARKED run holds no concurrency slot, and a resuming run does not re-pass admission
+
+**Rule:** `GraphWorkflowStore.CountActiveRunsAsync` counts a `WaitingForApproval` run only while one of its rows is `Queued` or `Running`; a run whose rows wait on a person (a `Pause` or a `ChatInput`) and run nothing is parked and releases its `MaxConcurrentRuns` slot. `Cancelling` always counts. A parked run that is answered resumes without asking admission again, so the cap can be briefly exceeded by resumed runs — accepted, because the lanes still bound the real work. **Prevents:** four chat conversations waiting on their users freezing every new run at `Pending` behind a 202 "started" (the pre-S1 rule counted every `WaitingForApproval` run), and "fixing" the overshoot by re-gating resumption, which would strand an answered run behind strangers' runs. **Authority:** `GraphWorkflowStore.CountActiveRunsAsync`, `GraphWorkflowChatBindingStoreTests.CountActiveRuns_SkipsParkedRuns_AndCountsRunningAndCancellingOnes`, `GraphWorkflowChatPublishTests.ParkedRuns_DoNotHoldAConcurrencySlot`, `docs/wiki/21-graph-workflows.md` §3.4, register row "Concurrency cap vs a run waiting on a person".
+
 ### Graph Workflows: a `Tool` node passes TWO gates, and the run-start check is the one that wins
 
 **Rule:** a Tool node may run only a **built-in** tool that is `ToolCategory.ReadLocal` **and** whose composed effective approval is `false`. Both are asked of the same catalog when the definition is saved AND again when a run starts. **Prevents:** a tool that was read-only when the graph was saved executing unattended after a node policy tightened — and the mirror error of treating an out-of-envelope tool as a warning, when it is an error keyed to the offending node. **Authority:** `ToolInvocationService.TryAdmit` (gate 1 risk class, gate 2 `IToolApprovalPolicy.RequiresApproval`, plus the structural `ApprovalRequiredAIFunction` floor), `GraphWorkflowToolGate.ErrorsAsync`, `GraphWorkflowRunService.EnsureToolNodesAreRunnableAsync`; ADR 0006.
@@ -2602,6 +2606,24 @@ list replaces an earlier one's, and the existing `**/*.js` override sets `global
 and a worklet file that cannot pass `lint/correctness/noUndeclaredVariables` on `AudioWorkletProcessor` /
 `registerProcessor` / `sampleRate`. **Authority:** `scripts/CheckDependencyBaseline.mjs`; `.dependency-cruiser.cjs`;
 `biome.json`'s last override; S4 plan §1a.3 and the C2 gate output in the local S4 progress notes (untracked).
+
+### PROPOSED (awaiting operator approval): nothing on the axios instance's import path may import the router
+
+**Rule:** `core/api/axios/Interceptors.ts` reaches the login page through `LoginNavigation.ts`
+(`navigateToLogin`), which `Router.tsx` fills with `registerLoginNavigator` when the router is created; it never
+imports `@/core/integrations/tanstack-router/Router`. A static import closes a cycle: `AxiosInstance` → `Interceptors`
+→ `Router` → the route tree → feature routes → the generated client (`client.gen.ts`) → `Generated.runtime.ts` →
+`AxiosInstance`. Whichever module enters that cycle from the axios side first builds the hey-api client while
+`axiosInstance` is still unset, and hey-api then silently uses a bare axios instance with **none** of the
+interceptors: no auth header, no ProblemDetails mapping, so every non-2xx arrives as a plain `AxiosError` and
+`readGraphWorkflowConflict` / `isNodeChatReadOnlyConflict` read nothing. It surfaced in a Vitest file that mocked
+`NodeChatAdapter` (which changed which module loaded first); the app's own entry order happened to avoid it. A lazy
+`import()` of the router also cuts the edge but re-splits the bundle (+~60 kB measured, over
+`config/bundle-budget.json`), so registration is the cut. **Prevents:** a 409 `conflictType` that is "never there"
+in one test file but present in another, and a production entry-order change that quietly strips auth and error
+mapping from every generated call. **Authority:** `LoginNavigation.ts`; `Interceptors.ts` `redirectToLoginOnce`;
+`Router.tsx`'s `registerLoginNavigator` call; `features/chat/workflow/ChatWorkflowMode.test.tsx` (409 cases with no
+import-order workaround); S1 frontend report (Plans, untracked).
 
 ---
 

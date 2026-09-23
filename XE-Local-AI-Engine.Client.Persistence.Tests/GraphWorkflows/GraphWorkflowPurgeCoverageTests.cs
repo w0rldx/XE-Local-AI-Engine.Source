@@ -10,9 +10,8 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class GraphWorkflowPurgeCoverageTests
 {
     /// <summary>
-    ///     No <c>graph_workflow_*</c> table may declare <c>conversation_id</c> or <c>message_id</c>. A chat purge
-    ///     deletes every table keyed by those columns, so one such column would put the whole workflow audit — the
-    ///     thing the design exists to keep — inside the blast radius of deleting a conversation.
+    ///     No <c>graph_workflow_*</c> table may declare <c>conversation_id</c> or <c>message_id</c> — a chat purge deletes
+    ///     tables keyed by them — except the run's chat binding, which the purge unbinds (<c>UnboundChildTables</c>).
     /// </summary>
     [Test]
     public async Task NoWorkflowTable_IsKeyedByAConversationOrMessage()
@@ -32,7 +31,8 @@ public sealed class GraphWorkflowPurgeCoverageTests
 
             inspected++;
             var storeObject = StoreObjectIdentifier.Table(tableName, entityType.GetSchema());
-            if (entityType.GetProperties().Any(property => property.GetColumnName(storeObject) is "conversation_id" or "message_id"))
+            if (entityType.GetProperties().Any(property => property.GetColumnName(storeObject) is "conversation_id" or "message_id")
+                && !ConversationFootprintPurge.UnboundChildTables.Contains(tableName))
             {
                 offenders.Add(tableName);
             }

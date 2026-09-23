@@ -4,10 +4,10 @@ import { toast } from "@/core/ui/notifications/Toast";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { NetworkError } from "@/core/api/errors/NetworkError";
+import { navigateToLogin } from "@/core/api/axios/LoginNavigation";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import { router } from "@/core/integrations/tanstack-router/Router";
 
 const retriedRequests = new WeakSet<InternalAxiosRequestConfig>();
 let isRedirectingToLogin = false;
@@ -23,14 +23,8 @@ function redirectToLoginOnce(): void {
 
 	isRedirectingToLogin = true;
 
-	Promise.resolve(
-		router.navigate({
-			to: "/login",
-			search: {
-				redirect: globalThis.location.pathname + globalThis.location.search,
-			},
-		}),
-	)
+	// Through the registered navigator, never a router import: see LoginNavigation.ts for the cycle that would close.
+	Promise.resolve(navigateToLogin(globalThis.location.pathname + globalThis.location.search))
 		.finally(() => {
 			isRedirectingToLogin = false;
 		})

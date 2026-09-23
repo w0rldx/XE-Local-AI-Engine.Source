@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { ChatMessage } from "@/features/chat/components/ChatMessage";
 import { StreamingIndicator } from "@/features/chat/components/StreamingIndicator";
 import type { ListRow } from "@/features/chat/models/ChatMessageListRow";
@@ -30,6 +32,7 @@ interface ChatMessageRowProps {
 	onSubmitFeedback?: (messageId: string, rating: ChatFeedbackRating, comment: string | undefined) => void;
 	reasoningEffort?: ReasoningEffort;
 	isWorkSessionConversation: boolean;
+	renderAfterMessage?: (messageId: string) => ReactNode;
 }
 
 // The single row renderer shared by the plain and the virtualized paths, so the two can never disagree on
@@ -52,6 +55,7 @@ export function ChatMessageRow({
 	onSubmitFeedback,
 	reasoningEffort,
 	isWorkSessionConversation,
+	renderAfterMessage,
 }: ChatMessageRowProps) {
 	if (row.kind === "streaming") {
 		return conversation && scopedStreamingMessage ? (
@@ -117,7 +121,7 @@ export function ChatMessageRow({
 				}
 			: undefined;
 
-	return (
+	const messageRow = (
 		<ChatMessage
 			key={message.id}
 			message={message}
@@ -147,5 +151,15 @@ export function ChatMessageRow({
 				) : undefined
 			}
 		/>
+	);
+	const after = renderAfterMessage?.(message.id);
+	// Only a row something follows gets a wrapper: the plain path keeps its exact DOM otherwise.
+	return after ? (
+		<>
+			{messageRow}
+			{after}
+		</>
+	) : (
+		messageRow
 	);
 }

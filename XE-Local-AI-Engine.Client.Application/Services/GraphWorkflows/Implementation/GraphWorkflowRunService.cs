@@ -43,10 +43,18 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         _tools = tools;
     }
 
+    public Task<GraphWorkflowRunDetail> StartAsync(Guid definitionId,
+        Guid requestId,
+        string? inputJson,
+        int? definitionVersion,
+        CancellationToken cancellationToken = default) =>
+        StartAsync(definitionId, requestId, inputJson, definitionVersion, binding: null, cancellationToken);
+
     public async Task<GraphWorkflowRunDetail> StartAsync(Guid definitionId,
         Guid requestId,
         string? inputJson,
         int? definitionVersion,
+        GraphWorkflowRunBinding? binding,
         CancellationToken cancellationToken = default)
     {
         if (requestId == Guid.Empty)
@@ -101,7 +109,9 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
             GraphHash = definition.GraphHash,
             GraphJson = definition.GraphJson,
             InputJson = inputJson,
-            NodeRuns = [.. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = node.NodeKey, Kind = node.Kind })]
+            NodeRuns = [.. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed { NodeRunId = Guid.NewGuid(), NodeKey = node.NodeKey, Kind = node.Kind })],
+            ConversationId = binding?.ConversationId,
+            TriggerMessageId = binding?.TriggerMessageId
         },
                                   cancellationToken);
 

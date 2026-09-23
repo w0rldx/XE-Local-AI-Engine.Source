@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
@@ -57,6 +58,9 @@ public class ConflictExceptionHandler : IExceptionHandler
             GraphWorkflowDefinitionConflictException => NodeConflictProblemType.GraphWorkflowDefinitionConflict,
             GraphWorkflowRunConflictException => NodeConflictProblemType.GraphWorkflowRunConflict,
             GraphWorkflowGateAlreadyDecidedException => NodeConflictProblemType.GraphWorkflowGateAlreadyDecided,
+            GraphWorkflowRunBusyException => NodeConflictProblemType.GraphWorkflowRunBusy,
+            GraphWorkflowRerunConfirmationRequiredException => NodeConflictProblemType.GraphWorkflowRerunConfirmationRequired,
+            GraphWorkflowAttachmentsNotAcceptedException => NodeConflictProblemType.GraphWorkflowAttachmentsNotAccepted,
             ExternalAppOperationInFlightException => NodeConflictProblemType.ExternalAppOperationInFlight,
             ExternalAppInvalidTransitionException => NodeConflictProblemType.ExternalAppInvalidTransition,
             ExternalAppAlreadyInstalledException => NodeConflictProblemType.ExternalAppAlreadyInstalled,

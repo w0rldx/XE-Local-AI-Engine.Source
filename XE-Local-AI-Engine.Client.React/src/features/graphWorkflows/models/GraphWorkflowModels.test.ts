@@ -60,7 +60,7 @@ describe("graph-workflow vocabularies", () => {
 		expect(graphWorkflowDecisionProviders).toEqual(["llm"]);
 		expect(graphWorkflowFailureClasses).toHaveLength(9);
 		expect(graphWorkflowConditionOperators).toEqual(["Eq", "Ne", "Gt", "Gte", "Lt", "Lte", "Exists", "NotExists"]);
-		expect(graphWorkflowEventTypes).toHaveLength(19);
+		expect(graphWorkflowEventTypes).toHaveLength(20);
 		expect(graphWorkflowTabs).toEqual(["editor", "runs", "events"]);
 	});
 
@@ -169,7 +169,7 @@ describe("graphWorkflowEventTypeLabelKey", () => {
 		expect(graphWorkflowEventTypeLabelKey("gate.decided")).toBe("pages.graphWorkflows.eventType.gate_decided");
 	});
 
-	it("produces a distinct leaf key for each of the nineteen event types", () => {
+	it("produces a distinct leaf key for each of the twenty event types", () => {
 		const keys = graphWorkflowEventTypes.map(graphWorkflowEventTypeLabelKey);
 		expect(new Set(keys).size).toBe(graphWorkflowEventTypes.length);
 		expect(keys.every((key) => !key.slice("pages.graphWorkflows.eventType.".length).includes("."))).toBe(true);

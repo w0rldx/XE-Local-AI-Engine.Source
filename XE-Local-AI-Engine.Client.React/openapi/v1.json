@@ -11373,6 +11373,164 @@
         ]
       }
     },
+    "/api/local/v1/graph-workflows/conversations/{conversationId}/messages": {
+      "post": {
+        "tags": [
+          "Graph-Workflows"
+        ],
+        "operationId": "sendGraphWorkflowChatMessage",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SendGraphWorkflowChatMessageRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1SendGraphWorkflowChatMessageRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1SendGraphWorkflowChatMessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/graph-workflows/conversations/{conversationId}/runs": {
+      "get": {
+        "tags": [
+          "Graph-Workflows"
+        ],
+        "operationId": "listGraphWorkflowConversationRuns",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowConversationRunsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/graph-workflows/definitions": {
       "get": {
         "tags": [
@@ -33826,6 +33984,52 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowConversationRunResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "run",
+          "definitionId",
+          "definitionName",
+          "triggerMessageId",
+          "pendingInput",
+          "steerable"
+        ],
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSummaryResponse"
+          },
+          "definitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "definitionName": {
+            "type": "string",
+            "nullable": true
+          },
+          "triggerMessageId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "pendingInput": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowPendingInputResponse"
+              }
+            ]
+          },
+          "steerable": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteerableNodeResponse"
+              }
+            ]
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowDecisionResultResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -34230,6 +34434,22 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowPendingInputResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nodeKey",
+          "prompt"
+        ],
+        "properties": {
+          "nodeKey": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunEventFeedRequest": {
         "type": "object",
         "additionalProperties": false
@@ -34358,6 +34578,18 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteerableNodeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nodeKey"
+        ],
+        "properties": {
+          "nodeKey": {
+            "type": "string"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -34392,6 +34624,25 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowConversationRunsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowConversationRunsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runs"
+        ],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowConversationRunResponse"
+            }
           }
         }
       },
@@ -34464,6 +34715,68 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse"
             }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1SendGraphWorkflowChatMessageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestId",
+          "definitionId",
+          "content"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "definitionId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          },
+          "attachmentFileIds": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          "confirmRerun": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1SendGraphWorkflowChatMessageResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId",
+          "messageId",
+          "action"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "action": {
+            "type": "string"
           }
         }
       },

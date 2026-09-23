@@ -846,6 +846,9 @@ import type {
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
+	ListGraphWorkflowConversationRunsData,
+	ListGraphWorkflowConversationRunsErrors,
+	ListGraphWorkflowConversationRunsResponses,
 	ListGraphWorkflowDefinitionsData,
 	ListGraphWorkflowDefinitionsErrors,
 	ListGraphWorkflowDefinitionsResponses,
@@ -1149,6 +1152,9 @@ import type {
 	SelectTranscriptionModelData,
 	SelectTranscriptionModelErrors,
 	SelectTranscriptionModelResponses,
+	SendGraphWorkflowChatMessageData,
+	SendGraphWorkflowChatMessageErrors,
+	SendGraphWorkflowChatMessageResponses,
 	SetAppUpdateChannelData,
 	SetAppUpdateChannelErrors,
 	SetAppUpdateChannelResponses,
@@ -1875,6 +1881,9 @@ import {
 	zListExternalProviderConnectionsResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
+	zListGraphWorkflowConversationRunsPath,
+	zListGraphWorkflowConversationRunsQuery,
+	zListGraphWorkflowConversationRunsResponse,
 	zListGraphWorkflowDefinitionsResponse,
 	zListGraphWorkflowRunEventsPath,
 	zListGraphWorkflowRunEventsQuery,
@@ -2074,6 +2083,9 @@ import {
 	zSelectLocalModelResponse,
 	zSelectTranscriptionModelBody,
 	zSelectTranscriptionModelResponse,
+	zSendGraphWorkflowChatMessageBody,
+	zSendGraphWorkflowChatMessagePath,
+	zSendGraphWorkflowChatMessageResponse,
 	zSetAppUpdateChannelBody,
 	zSetAppUpdateChannelResponse,
 	zSetHfTokenBody,
@@ -8379,6 +8391,74 @@ export const probeExternalProvider = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const sendGraphWorkflowChatMessage = <ThrowOnError extends boolean = false>(
+	options: Options<SendGraphWorkflowChatMessageData, ThrowOnError>,
+): RequestResult<SendGraphWorkflowChatMessageResponses, SendGraphWorkflowChatMessageErrors, ThrowOnError> =>
+	(options.client ?? client).post<SendGraphWorkflowChatMessageResponses, SendGraphWorkflowChatMessageErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zSendGraphWorkflowChatMessageBody,
+					path: zSendGraphWorkflowChatMessagePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zSendGraphWorkflowChatMessageResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/conversations/{conversationId}/messages",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listGraphWorkflowConversationRuns = <ThrowOnError extends boolean = false>(
+	options: Options<ListGraphWorkflowConversationRunsData, ThrowOnError>,
+): RequestResult<ListGraphWorkflowConversationRunsResponses, ListGraphWorkflowConversationRunsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListGraphWorkflowConversationRunsResponses,
+		ListGraphWorkflowConversationRunsErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListGraphWorkflowConversationRunsPath,
+					query: zListGraphWorkflowConversationRunsQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListGraphWorkflowConversationRunsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/conversations/{conversationId}/runs",
+		...options,
 	});
 
 export const listGraphWorkflowDefinitions = <ThrowOnError extends boolean = false>(

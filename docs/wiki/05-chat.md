@@ -373,6 +373,58 @@ system prompt plus the JSON frame plus one whole synopsis, and that floor is val
 with a small cap that used to bind now **refuses to start the host** rather than failing every fold at run time. The
 shipped defaults clear it with room to spare.
 
+## Chat workflow mode
+
+A Graph Workflow of kind `Chat` ([Graph Workflows](21-graph-workflows.md) §3.6) runs from an ordinary chat
+conversation. The conversation stores nothing about it: "workflow mode" is derived from the runs bound to it through
+`graph_workflow_runs.conversation_id`, which `GET graph-workflows/conversations/{conversationId}/runs` lists newest
+first with the parked input (`pendingInput { nodeKey, prompt }`) and the Agent/LLM call node currently running
+(`steerable { nodeKey }`). A send in workflow mode bypasses `LocalChatHub` and goes to
+`POST graph-workflows/conversations/{conversationId}/messages` with `{ requestId, definitionId, content,
+attachmentFileIds?, confirmRerun? }` (1 MiB body cap), answered 202 `{ runId, messageId, action: started|answered }`.
+
+`IGraphWorkflowChatService.SendAsync` runs in a fixed order:
+
+1. **Validate.** Content is non-blank and within `Security:MaxMessageSizeKb` (the hub is the only other place that
+   cap is enforced); the composed run input is within `GraphWorkflows:MaxRunInputBytes`; the definition exists (404)
+   and is a `Chat` one (400); the conversation exists (404), is `Kind == chat` (400) and is local
+   (`NodeChatMutationGuard`, 409 `ReadOnlyConversation`); attachments are refused with 409
+   `GraphWorkflowAttachmentsNotAccepted` unless the graph's `chat.acceptsAttachments` is on, and then travel as
+   `{ fileId, name, kind }` references only; a normal chat reply still streaming on the conversation
+   (`InvocationResumeRegistry`) is 409 `GraphWorkflowRunBusy`.
+2. **Replay** by `requestId`: a run it started, or a ChatInput answer it recorded on any of the conversation's runs,
+   answers the same 202 and re-inserts the user message if absent.
+3. **Dispatch** on the conversation's newest bound run:
+
+| Newest bound run | Send does |
+|---|---|
+| none, or terminal | 409 `GraphWorkflowRerunConfirmationRequired` when a previous run's pinned `chat.requireRerunConfirmation` is on and `confirmRerun` is not (nothing persisted); otherwise persist the user message, then start a run bound to the conversation with `trigger_message_id` = that message. Input `{ message, attachments: [{ fileId, name, kind }], conversationId, messageId }`. |
+| `WaitingForApproval`, parked on a `ChatInput`, nothing queued or running | persist the user message, then `DecideAsync(Answer, operationId: requestId, payload { text })`. Attachments here are 409 `GraphWorkflowAttachmentsNotAccepted`. |
+| `Pending`, `Running`, `Cancelling`, or parked on a `Pause` | 409 `GraphWorkflowRunBusy` — the client offers Stop (and Steer, S3). |
+
+The user message and the start/answer are two commits. Its id is deterministic —
+`GraphWorkflowChatIds.UserMessage(requestId)`, an RFC 4122 version 5 UUID — and it is written through
+`NodeChatMessageCommands.InsertMessageIfAbsentAsync`, so a retried half-done send re-inserts nothing and completes the
+missing half. A second live run on one conversation is refused by the database (the partial unique index on
+`conversation_id`), mapped to the same 409 `GraphWorkflowRunBusy`. When the second commit loses such a race (busy,
+already answered, moved), a message THIS send inserted is deleted again before the 409, so a refused send leaves no
+orphan turn. A `requestId` whose user message already lives in another conversation is 409
+`GraphWorkflowRunConflict` before anything is written, and so is an answer whose `definitionId` is not the parked run's.
+
+**Publishing.** A succeeded `publishToChat` node (Agent, LLM Call, or End — End defaults to on in a Chat graph) becomes
+one Completed assistant message: `output.text` for Agent/LLM Call, `output.result` for End when it is a string and
+fenced JSON otherwise; `agentName` is the node label, `model` the node's `usage.model`, the agent id the Agent node's
+`agentDefinitionId`; no reasoning, no parts. The dispatcher's outbox pass writes it (Graph Workflows §3.4) under the
+deterministic id `GraphWorkflowChatIds.PublishedMessage(runId, nodeKey, attempt)`, so published messages are ordinary
+chat history that later normal turns see. **Deleting the conversation** first tells every registered
+`IConversationDeletionObserver` (a seam in `Services/Chat`; chat does not know who listens). Graph Workflows registers one
+that cancels the live bound run (`IGraphWorkflowChatService.CancelBoundRunAsync`, re-read and retried up to three times
+when a tick moves the run under it); a purge then unbinds every run (`ConversationFootprintPurge`). The observer runs
+before, and outside, the conversation's delete transaction, so a send that lands between the cancel and the delete can
+still start a run; on a purge that run is unbound and has nobody to answer it, and on a soft delete it stays bound to a
+hidden conversation. Accepted: it needs a send racing its own conversation's delete, and the run is cancellable from the
+Graph Workflows page.
+
 ## Persistence
 
 `NodeChatPersistenceService` (`Services/Chat/Implementation/NodeChatPersistenceService.cs`) is a facade over focused collaborators (`NodeChatConversationCommands`, `NodeChatReadModel`, `NodeChatMessageCommands`, `NodeChatVariantBranchService`, `NodeChatFeedbackStore`), all composed from one `NodeChatPersistenceWriter` that owns per-conversation/per-message write-key serialization. It uses a **raw-ADO** path (`NodeChatPersistenceSql`) for the hot streaming writes.
@@ -440,6 +492,32 @@ Organized by concern:
 | `pages/` | `Chat.tsx` (top-level orchestration), model-picker filters/options |
 | `queries/` | `NodeChatQueryKeys`, `useCodexModelOptions` |
 | `stores/` | `NodeChatPreferencesStore` (model/effort/local-tools selection + `clampReasoningEffort`), `ChatSamplingPreferencesStore` |
+| `workflow/` | Chat workflow mode: `useChatWorkflow`, `WorkflowSelectorCard`, `WorkflowRunStatusCard`, `WorkflowActivityBlock`, `ChatWorkflowModels`, `ChatWorkflowStore` |
+
+### Chat workflow mode in the client
+
+`useChatWorkflow` (behind `nodeCapabilities.graphWorkflows`, off for a scoped conversation) adds a workflow picker
+beside the agent picker listing `kind === "Chat"` definitions. A pick is UI state keyed by conversation id
+(`ChatWorkflowStore`; only an explicit "No workflow" is persisted, so a reload does not re-enter the mode the operator
+left); without one, a conversation whose bound-run list is non-empty reopens in its newest run's workflow, which is
+how a reload restores the mode. The mode needs the workflow to still exist: a run of a deleted definition keeps its
+status card and activity while the composer returns to normal chat. The picker is locked while any bound run is live. In workflow mode `Chat.tsx` hands the composer's send
+to the hook instead of the stream controller: create-or-load the conversation (titled from the first message like a
+normal first send, since the server does not title it), then post the messages route with a client-minted `requestId`
+and the attachment chips only when the selected graph's `chat.acceptsAttachments` is on and no ChatInput is waiting.
+An answer to a parked ChatInput always names the parked run's definition. One send is in flight at a time.
+The returned promise keeps the draft on a refusal: `GraphWorkflowRerunConfirmationRequired` opens a confirm and resends
+with `confirmRerun`; `GraphWorkflowRunBusy`, `GraphWorkflowAttachmentsNotAccepted` and `GraphWorkflowRunConflict` (an
+answer naming another workflow than the parked run's) render inline notices. Above the
+composer sit the input-request banner, the "workflow running" lock hint (the composer is read-only while the newest
+bound run is busy), the `WorkflowRunStatusCard` (taken path by layout rank, active node and elapsed time, Stop, View
+workflow; a finished run stays until dismissed, persisted per conversation) and the "Show workflow activity" toggle
+(per viewer, `localStorage`). Each bound run's `WorkflowActivityBlock` renders right after its trigger message from
+run detail, node documents and events. The newest live run is subscribed through `useGraphWorkflowRunHub`: a lifecycle move
+(`lifecycleSeq`: the snapshot, a `run` or `gate` ping) re-reads the bound-run list and the conversation, and a new
+`node.published` in the run's event trail re-reads the conversation, so published messages appear as ordinary
+assistant messages without a re-read per node transition. Settled node documents are read once and skipped by the
+hub's node invalidation. The normal stream path is untouched when no workflow is selected.
 
 ### The streaming bridge & transparent resume
 

@@ -515,4 +515,24 @@ export interface ChatDisplayShellProps {
 	messagesLoadErrorText?: string;
 	// Re-runs the selected-conversation query (refetch). Wired to the Retry action in the message list error state.
 	onRetryLoadMessages?: () => void;
+	// Chat workflow mode (features/chat/workflow). Absent when Graph Workflows is off or the chat is scoped, and then
+	// every surface below renders exactly as it did before workflow mode existed.
+	workflow?: ChatWorkflowSlots;
+}
+
+/** What workflow mode adds to the chat surfaces. Every member is optional; an absent one changes nothing. */
+export interface ChatWorkflowSlots {
+	/** The workflow picker, rendered beside the agent picker in the composer toolbar. */
+	readonly selector?: ReactNode;
+	/** Status card, input-request banner and send refusals, rendered between the message list and the composer. */
+	readonly composerHeader?: ReactNode;
+	readonly composerPlaceholder?: string;
+	/** The bound run is busy: the composer is read-only (the conversation list stays usable). */
+	readonly composerDisabled?: boolean;
+	/** A workflow message is on its way: Send and Enter are refused, the draft stays editable. */
+	readonly sendDisabled?: boolean;
+	/** Set when the attachment chips must not be sent; the chips are disabled and this hint explains why. */
+	readonly attachmentsDisabledHint?: string;
+	/** Rendered right after a message row: the activity of the runs that message triggered. */
+	readonly renderAfterMessage?: (messageId: string) => ReactNode;
 }

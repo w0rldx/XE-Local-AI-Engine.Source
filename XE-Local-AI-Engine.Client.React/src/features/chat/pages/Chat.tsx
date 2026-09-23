@@ -31,6 +31,7 @@ import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { useChatWorkflow } from "@/features/chat/workflow/useChatWorkflow";
 import { useCommands } from "@/features/commands/queries/useCommands";
 import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { useVoicePlayback } from "@/features/voice/useVoicePlayback";
@@ -351,6 +352,16 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	});
 
 	const isSending = Boolean(streamingMessage?.isActive);
+	// Chat workflow mode. Off for a scoped (owner-pinned) conversation: its owner is the single writer of that thread.
+	const workflow = useChatWorkflow({
+		enabled: nodeCapabilities.graphWorkflows && !isScoped,
+		conversationId: selectedConversationId,
+		resolveSendConversation,
+		cacheConversation,
+		markConversationTitled,
+		attachmentFileIds,
+		isSending,
+	});
 
 	const runConversationMutation = useCallback(
 		async (conversationId: string, mutate: () => Promise<ChatConversationModel>): Promise<void> => {
@@ -669,8 +680,9 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 					isSending,
 					chatInputDisabled: isCreatingConversation || isRemoteConversation || scope?.composerDisabled === true,
 					// A scoped session pins the agent, and the agent pins the model — both selectors read-only.
-					modelSelectorDisabled: isRemoteConversation || isScoped,
-					agentSelectorDisabled: isScoped,
+					// In workflow mode the workflow's nodes pick their own models and agents.
+					modelSelectorDisabled: isRemoteConversation || isScoped || workflow.active,
+					agentSelectorDisabled: isScoped || workflow.active,
 					sendDisabled: selectedConversationIsLoading || isRemoteConversation || scope?.composerDisabled === true,
 				}}
 				conversationSearchQuery={conversationSearchQuery}
@@ -703,7 +715,18 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 					if (scope?.onSendOverride) {
 						return scope.onSendOverride(content);
 					}
-					handleSend(content, effort, model).catch((error: unknown) => setStreamError(errorMessage(error)));
+					// Workflow mode posts to the bound workflow and hands back the promise, so a refused send keeps the draft.
+					if (workflow.active) {
+						return workflow.send(content);
+					}
+					const normalSend = (): void => {
+						handleSend(content, effort, model).catch((error: unknown) => setStreamError(errorMessage(error)));
+					};
+					// Not yet known whether this conversation is bound to a workflow: the send waits for that answer.
+					if (workflow.bindingUnresolved) {
+						return workflow.sendWhenResolved(content, normalSend);
+					}
+					normalSend();
 					return undefined;
 				}}
 				onCancel={() => {
@@ -728,6 +751,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 				feedbackByMessageId={feedbackByMessageId}
 				pendingFeedbackMessageId={pendingFeedbackMessageId}
 				onSubmitFeedback={isScoped || isRemoteConversation ? undefined : handleSubmitFeedback}
+				workflow={workflow.slots}
 			/>
 		</ChatFrame>
 	);
